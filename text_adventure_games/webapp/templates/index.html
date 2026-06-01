@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Action Castle</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+  <h1>Action Castle</h1>
+  <div id="output">
+{% for msg in messages %}
+    <div class="msg-{{ msg.type }}">{{ msg.text }}</div>
+{% endfor %}
+  </div>
+  {% if not game_over %}
+  <form method="post">
+    <span class="prompt-label">&gt;</span>
+    <input name="command" autofocus placeholder="What do you do?" autocomplete="off" />
+    <input type="submit" value="Enter" />
+  </form>
+  {% else %}
+  <div class="game-over">
+    <p>{{ game_over_description }}</p>
+    <a href="{{ url_for('reset') }}">Play Again</a>
+  </div>
+  {% endif %}
+  </div>
+  <script>
+    (function() {
+      var output = document.getElementById('output');
+      requestAnimationFrame(function() {
+        output.scrollTop = output.scrollHeight;
+      });
+
+      var history = {{ command_history | tojson }};
+      var historyIndex = history.length;
+      var input = document.querySelector('input[name="command"]');
+      if (input) {
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+              historyIndex--;
+              input.value = history[historyIndex];
+            }
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex < history.length - 1) {
+              historyIndex++;
+              input.value = history[historyIndex];
+            } else {
+              historyIndex = history.length;
+              input.value = '';
+            }
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

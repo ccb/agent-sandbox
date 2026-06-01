@@ -1,0 +1,118 @@
+# agent-sandbox
+
+A research test bed for **multi-agent simulated environments**. We take a classic
+text-adventure engine, give its non-player characters their own minds, and let
+multiple AI agents perceive, plan, and act in a shared world — first as text,
+later as a 2D game in [Godot](https://godotengine.org/).
+
+This is the summer 2026 research project for Chris Callison-Burch's group. The
+inspiration is the Stanford [*Generative Agents: Interactive Simulacra of Human
+Behavior*](https://arxiv.org/abs/2304.03442) paper (the "Smallville" demo) and
+the [ReAct](https://arxiv.org/abs/2210.03629) (Reason + Act) agent pattern.
+
+## The idea
+
+We build **one shared framework** that everyone contributes to, then each person
+builds **their own application** on top of it. The framework supplies the world
+model, the agents, the turn loop, and the planning machinery. The applications
+take it in two broad directions:
+
+1. **Games** — LLM-driven NPCs as believable characters in a playable game.
+2. **Simulations** — SimCity / *The Sims*-style worlds where the goal is to model
+   realistic group and social dynamics, not "fun."
+
+Both run on the same engine. The bet behind the simulation direction: putting AI
+agents through realistic simulated environments may be a way to teach them about
+the world before they're deployed in it.
+
+## Why a text adventure?
+
+Because it already solves the hard representational question cleanly. The engine
+models a world as **locations**, **items**, and **characters**, and — crucially —
+every action is governed by a **classical-planning action schema**: an action has
+**preconditions** that must hold and **effects** it applies. You can't unlock a
+door without the key. That gate is exactly what keeps an LLM agent honest: instead
+of narrating "I take out a key and open the door," the agent must choose from the
+actions actually available, and the engine decides whether they're allowed.
+
+We start in text because it's the fastest way to prototype the agent layer. The
+world model is presentation-agnostic, so the same simulation can later be rendered
+as a 2D JRPG-style game.
+
+## What's in here
+
+```
+text_adventure_games/      The engine (the shared framework)
+  things/                  Thing -> Location / Item / Character hierarchy
+  actions/                 Action system: check_preconditions() -> apply_effects()
+  blocks/                  Obstacles that gate movement until a condition is met
+  parsing.py               Keyword command parser
+  games.py                 Game loop, world state, turn-based NPC rounds
+  npc.py                   ReAct NPC behavior (SKELETON — see Roadmap)
+  llm_client.py            Provider-agnostic LLM client (OpenAI / Anthropic)
+  llm_parser.py            LLM-backed parser (keyword-first, LLM fallback)
+  webapp/                  Flask web UI for playing in the browser
+homeworks/                 HW1 "Action Castle" — the onboarding assignment
+test_npc_behaviors.py      Tests for the turn-based NPC system (all passing)
+FEATURE-ROADMAP.md         Technical specs for the framework features to build
+ROADMAP.md                 The summer plan: phases, who owns what
+ONBOARDING.md              Start here on day one
+```
+
+## What already works vs. what we're building
+
+**Works today:** the full text-adventure engine; a real **turn-based loop** where
+NPCs take a turn each round (`do_command()` → `end_turn()` → `Character.take_turn()`),
+with NPC actions correctly gated through `check_preconditions()`; scripted NPC
+behaviors (troll, guard, ghost); a provider-agnostic LLM client and an
+LLM-backed parser; terminal, Jupyter, and Flask front ends.
+
+**We're building** (this is the summer): promoting NPCs to **first-class agents**
+with goals and memory; a real **ReAct loop with a Reflect step** (today `npc.py` is
+an untested skeleton with no reflection and isn't wired into the live game); an
+**event/trigger** system; a **time** model; **agent-to-agent** interaction; and a
+**Godot 2D bridge**. See [`ROADMAP.md`](ROADMAP.md) and
+[`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md).
+
+## Setup
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .            # editable install of the engine
+pip install -e .[dev]       # + black, nbformat (for the dev team)
+pip install -e .[llm]       # + openai, anthropic, tiktoken (for the agent layer)
+```
+
+### Run the game in your browser
+
+```bash
+source venv/bin/activate
+python -m text_adventure_games.webapp.app
+# open http://localhost:8080
+```
+
+To enable the LLM-backed parser and LLM NPCs, set a provider before launching:
+
+```bash
+export LLM_PROVIDER=anthropic        # or: openai
+export ANTHROPIC_API_KEY=sk-...      # or: OPENAI_API_KEY
+```
+
+### Run the tests
+
+```bash
+source venv/bin/activate
+python test_npc_behaviors.py         # the turn-based NPC behavior suite
+```
+
+### Onboarding assignment
+
+The HW1 "Action Castle" notebook in [`homeworks/`](homeworks/) is the day-one ramp.
+See [`ONBOARDING.md`](ONBOARDING.md).
+
+## Credits
+
+Engine adapted from the UPenn Interactive Fiction class
+([interactive-fiction-class.org](https://interactive-fiction-class.org/)),
+itself inspired by the Adventuron Classroom design by Chris Ainsley. Licensed MIT.
