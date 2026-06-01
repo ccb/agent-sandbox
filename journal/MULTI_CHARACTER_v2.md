@@ -1,186 +1,213 @@
-# Multi-Character Play — v2: Meshing with the Team Roadmap
+# Multi-Character / Multi-Agent System Design (v2)
 
-*Personal working notes. Reconciles my earlier [MULTI_CHARACTER.md](./MULTI_CHARACTER.md)
-brainstorm with the team's [ROADMAP.md](../ROADMAP.md),
-[FEATURE-ROADMAP.md](../FEATURE-ROADMAP.md), and the GitHub issues (#1–#10).*
-
----
-
-## TL;DR — the one insight
-
-My v1 design and the team roadmap are mostly **two different layers** of the same
-system, not two competing plans:
-
-| Layer | What it decides | Owner doc |
-|-------|-----------------|-----------|
-| **Agent layer** | *How* a character decides what to do (LLM ReAct, persona, memory) | Roadmap / issues #2–#5 |
-| **Orchestration + presentation layer** | *Who* acts, *when*, in what *order*, and *what each character sees* | My MULTI_CHARACTER.md |
-
-My v1 explicitly said "**No LLMs**." The roadmap is LLM-first. That's not a conflict —
-it means my layer sits *underneath/around* theirs. The team builds the brain; my
-design builds the **turn structure, the actor-threading, the per-viewer observations,
-and the event log** that the brain plugs into.
-
-So the move is: **don't build my `Session` framework now.** Instead, contribute the
-pieces of it that the shared framework *already needs* (issues #8 and #9 especially),
-and save the rest (slash commands, party control, conflict resolution) for my own
-Phase 4 simulation app.
+*A unified design for turning `text_adventure_games` into a multi-agent simulated
+environment. Supersedes the v1 brainstorm in [MULTI_CHARACTER.md](./MULTI_CHARACTER.md);
+sequenced to the team plan in [ROADMAP.md](../ROADMAP.md) /
+[FEATURE-ROADMAP.md](../FEATURE-ROADMAP.md) and GitHub issues #1–#10.*
 
 ---
 
-## Vocabulary reconciliation (do this first to avoid two rival systems)
+## 1. What we're building
 
-My v1 invented words that overlap with words the team is about to standardize. I
-should adopt theirs and map mine onto them, so we don't end up with two competing
-abstractions.
+A world where **every character can act** — the human-controlled one and any number
+of AI-driven ones — all moving through the **same action pipeline**
+(`check_preconditions()` → `apply_effects()`). Each character decides for itself, sees
+only what it could plausibly see, and the world advances in discrete turns. The same
+world state can be rendered three ways: as text for a human, as an observation prompt
+for an LLM agent, and as a structured feed for a 2D renderer.
 
-| My v1 term | Team term (issue) | Resolution |
-|------------|-------------------|------------|
-| `controller = "npc"` + `NPCController.plan()` | first-class **`Agent`** (#3) | An `Agent` is *what drives* a character whose `controller != "human"`. My `plan()` seam **is** the agent's decision call. Don't ship a rival `NPCController` protocol — fold it into `Agent`. |
-| `ScriptedController` / `IdleController` (no-LLM) | "non-LLM NPCs via callables" (FEATURE #1) + mockable client (#2) | Scripted controllers become the **offline/test** implementation of the same `Agent` interface. This is literally what #2 (mockable LLM client) wants for testing. |
-| `Session.run_tick()` phased loop | turn-based loop restructure (FEATURE #1, wired in #5) | **One loop, not two.** My gather→validate→resolve→narrate phases are a *refinement* of the team's player-then-NPC loop, not a parallel engine. |
-| `View` / `describe_viewer()` | "structured observations" (Phase 2) + world-state export (#9) | My `View.build(game, viewer)` **is** the structured-observation API. Same thing, two names. |
-| `GameEvent` event log | events/triggers (#6) + export feed (#9) | My append-only log is the data source both #6 and #9/#10 need. |
-| `Intent` (structured command) | (no direct equivalent) | Useful internal plumbing for #8; introduce only if it earns its keep. |
+The design has four layers. They stack cleanly; you can build the lower ones and run a
+playable game before the upper ones exist.
 
-**Action item:** when issue #3 design discussion happens, raise that
-`controller`/`Agent` should be one concept, and that scripted behaviors are the
-mock path for #2. Coordinate *before* building (the issue explicitly says so).
-
----
-
-## Crosswalk: my v1 concepts → required issues
-
-What in my v1 maps onto already-required work, and how I should treat each.
-
-| v1 concept | Maps to issue | Relationship | My stance |
-|------------|---------------|--------------|-----------|
-| Actor-centric `Character` (`controller`, `has_acted_this_tick`, `action_budget`) | #3 Agent, FEATURE #1 loop | **Overlap** | Contribute during Phase 1. Keep it minimal; let `Agent` own persona/goals/memory. |
-| Phased tick (gather/validate/resolve/narrate) | #5 wire ReAct, FEATURE #1 | **Extends** | Offer phases as the structure that makes #5's "reason → act → gated by preconditions" clean. Don't over-engineer; start with player-first, NPC-after. |
-| `parse_action(..., actor=)` — thread actor through actions | **#8 agent-to-agent** | **Direct overlap** | This is the single biggest win. #8 *is* "stop defaulting targets to the player." My actor-threading notes are a ready-made design for #8. |
-| `View` / `describe_viewer` / visibility rules | **#9 export API** + Phase 2 observations | **Direct overlap** | Champion `View` as the structured-observation layer. One viewer-centric builder serves both the human UI and the Godot feed. |
-| `GameEvent` append-only log | #6 triggers, #9 export, #10 Godot | **Enables** | Build a small, serializable event record. #9 explicitly complains that current to/from_primitive drops history — the log fixes that. |
-| Conflict resolution policy (initiative/order) | emerges from #8 + multi-actor | **Builds on** | Defer to Phase 4 unless two agents contend in Phase 2 demos. |
-| `Session.turn` counter | **#7 time model** | **Overlap** | The turn counter belongs to #7. My session reads it, doesn't own a second clock. |
-| Slash/meta commands (`/switch`, `/who`, `/party`) | *(none)* | **New, mine** | Pure addition. **Phase 4 app layer.** Do not push into shared framework. |
-| Party / hot-seat human control | *(none)* | **New, mine** | Core to my Sims-style sim. **Phase 4.** |
-| Save/load session blob | *(none, save/load is broken)* | **Out of scope** | Defer. CLAUDE.md flags save/load as incomplete; not my battle. |
+```
+┌─────────────────────────────────────────────────────────┐
+│  Presentation     human terminal · agent prompt · Godot   │  ← Views, export API
+├─────────────────────────────────────────────────────────┤
+│  Agents           Agent: persona, goals, memory, ReAct    │  ← decides actions
+├─────────────────────────────────────────────────────────┤
+│  Orchestration    turn loop · phases · events · time      │  ← who acts, when, order
+├─────────────────────────────────────────────────────────┤
+│  World model      Location · Item · Character · Action     │  ← exists today
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Where my design is genuinely useful to the *shared* framework
+## 2. World model (today, lightly extended)
 
-Two issues are where I can contribute multi-character thinking *without jumping the
-queue*, because the team already needs them in Phase 2:
+The existing `Thing` hierarchy and `Action` system stay as the single source of truth.
+Two small additions make characters first-class actors:
 
-### Issue #8 — agent-to-agent interaction  ← my actor-threading
-The issue: actions resolve targets against the player by default; agents need to act
-on each other. My v1 already worked this out:
-- Pass `actor` explicitly into `parse_action` / action constructors instead of
-  re-scanning the command string for names.
-- `determine_intent` uses `actor.location`, not `game.player.location`.
-- Keep the `name, verb` author override (`gravedigger, go north`) as a secondary path.
+- **`Character` gains actor fields** used by the loop:
+  | Field | Purpose |
+  |-------|---------|
+  | `controller` | `"human"`, `"agent"`, or `"none"` (scenery/corpses) — who supplies the command |
+  | `has_acted_this_turn` | reset each turn; set when an action resolves |
+  | `action_budget` | actions per turn (default 1) |
+- **Actions take an explicit actor.** Action constructors and parsing accept the acting
+  character instead of defaulting targets to `game.player`. This is the backbone of
+  agent-to-agent interaction (talk/give/attack between any two characters).
 
-This is the cleanest, most reusable slice of my v1. I should volunteer for / lean into #8.
-
-### Issue #9 — world-state export API  ← my View / split world-vs-presentation
-The issue: Godot needs a structured feed of locations/agents/items/recent events; the
-current serializer drops blocks and history. My v1's two ideas land directly:
-- **Split world truth from presentation.** The world graph is canonical; each
-  consumer (human terminal, Godot, an agent's prompt) gets a *view* built on demand.
-- **`View.build(game, viewer)`** with visibility rules = "structured observations."
-  The same builder feeds (a) the human's room description, (b) an LLM agent's
-  observation prompt, and (c) the Godot per-entity state.
-- The **event log** is the "recent events" half of the feed.
-
-Framing `View` as "one observation builder, three consumers" is a strong argument to
-make when #9 is designed — it avoids three bespoke serializers.
+Everything else — preconditions, effects, blocks, the `Thing` property bag — is unchanged.
 
 ---
 
-## Tensions / things to NOT do
+## 3. Orchestration: the turn loop
 
-1. **Don't build a second game loop.** My `Session.run_tick` must be *the* loop from
-   FEATURE #1 / #5, refined — not a parallel engine bolted on. Two loops = chaos.
-2. **Don't ship `NPCController` as a rival to `Agent`.** Same seam, one name (`Agent`).
-   Scripted = the offline/mock implementation (helps #2).
-3. **Don't introduce a second clock.** Turn counter is #7's. Session reads it.
-4. **Don't front-load slash commands / party / conflict rules.** Those are my Phase 4
-   app, not shared framework. Building them in Phase 1–2 jumps the professor's order
-   and bloats the shared core.
-5. **Validate-without-mutating (dry-run preconditions)** from my v1 is a real refactor
-   the team hasn't scoped. Propose it as *optional/incremental*; don't make it a
-   blocker. Current `check_preconditions()` is fine to start.
-6. **Save/load session** — drop it. Save/load is already broken (CLAUDE.md), not worth
-   coupling my design to.
+One loop drives the whole world. A **turn** is one unit of simulation time: the human
+(or active character) acts, then every AI character acts, then the world reacts.
 
----
+```
+each turn:
+  1. gather   collect one intended command per acting character
+                - human: from input
+                - agents: from Agent.decide(observation)
+  2. resolve  for each actor in order: route command through the parser,
+                run check_preconditions(); if it passes, apply_effects()
+  3. react    fire any triggers whose conditions are now true (§7)
+  4. advance  increment turn / clock, reset has_acted_this_turn, narrate results
+```
 
-## Phase-aligned plan (respects issue order)
-
-What I actually do, when, without getting ahead of the roadmap.
-
-### Phase 0 (now) — onboarding
-- Do #1 (`get_property` → False) and HW1 like everyone.
-- Keep these notes; don't build yet.
-
-### Phase 1 (whole team) — agents + ReAct (#2–#5)
-- Contribute the **minimal actor fields** on `Character` (`controller`,
-  `has_acted_this_tick`) where they help the turn loop (#5) — *coordinated with #3*.
-- Argue in the #3 design chat for: `Agent`-drives-controller unification; scripted
-  agents as the #2 mock path.
-- Resist building `Session`/slash commands. Note them here as "Phase 4."
-
-### Phase 2 (split ownership) — framework features (#6–#9)
-- **Lean into #8** with my actor-threading design. This is my highest-leverage,
-  on-roadmap contribution.
-- **Lean into #9** with `View`/split-world as the structured-observation layer.
-- Let the event log fall out of #6/#9 naturally.
-- Read the world-state through #7's turn clock; don't duplicate it.
-
-### Phase 3 (parallel) — Godot (#10)
-- My event log + `View` feed the websocket protocol. Support whoever owns #10.
-
-### Phase 4 (mine) — Sims/SimCity-style social simulation
-This is where the *rest* of MULTI_CHARACTER.md becomes my app, built **on top of** the
-shared framework:
-- `Session` orchestration object, **party + hot-seat `/switch`/`/who`/`/party`**.
-- **Conflict resolution** (initiative, contested pickups) — exactly the "group
-  dynamics" my ownership row calls for.
-- Multi-character control as the interface to a social sim where many agents act and
-  the human steers a household/party.
-- This is the natural home for my v1's meta layer, tick modes, and conflict policy.
+Key rules:
+- **Player/active character acts first**, then AI characters in a fixed order.
+- **Preconditions are never bypassed.** An agent's chosen action is gated exactly like a
+  human's; an illegal choice simply fails (and is fed back to the agent — §4).
+- **One action per character per turn** to start; `action_budget` allows more later.
+- A `gather → resolve` split lets two characters target the same thing in one turn;
+  conflicts are settled at resolve time (§8).
 
 ---
 
-## What stays uniquely mine (Phase 4 app, not shared framework)
+## 4. Agents
 
-- The `Session` object and tick *modes* (immediate vs plan-then-`/endturn`).
-- All slash/meta commands and the command router.
-- Party management and hot-seat switching.
-- Conflict resolution policy between contending actors.
-- The "social & group dynamics" simulation itself.
+An **`Agent`** is the decision-maker attached to a character whose `controller` is not
+`"human"`. It owns the character's *mind*: persona, goals, memory, and the decision loop.
 
-These build *on* the shared agent layer, structured observations (#9), and event log —
-they don't need to live in the common core, and pushing them there early would
-overstep the roadmap.
+```
+class Agent:
+    persona: str            # who they are, how they talk/act
+    goals: list             # what they want, optionally prioritized
+    memory: Memory          # what they've observed/done (Phase 2)
+    def decide(observation) -> command   # returns a raw command string
+```
+
+**Decision loop (ReAct + Reflect):**
+
+1. **Observe** — build the agent's `View` (§5): its location, visible items/characters,
+   recent events it would know about, plus persona and goals.
+2. **Think** — ask the LLM what to do and why.
+3. **Act** — return a command; the turn loop routes it through the parser and the
+   precondition gate.
+4. **Reflect** — if preconditions fail, feed the failure message back and retry (cap
+   2–3 attempts) so the agent can recover instead of wasting the turn.
+
+**Pluggable backends behind one interface:**
+- **LLM backend** — real reasoning via the provider-agnostic client.
+- **Mock/scripted backend** — deterministic rules (`if at churchyard: "take shovel"`),
+  used for tests and for cheap NPCs that don't need an LLM.
+
+Both implement the same `decide()` seam, so the loop, tests, and games don't care which
+is driving a character. This is what makes the agent layer testable without API calls.
 
 ---
 
-## Concrete next steps
+## 5. Observations & presentation (split world from view)
 
-1. **Phase 0:** finish onboarding + #1; leave this doc as my north star.
-2. **Before #3 is built:** post the vocabulary-reconciliation point (controller =
-   Agent; scripted = mock) in the design discussion.
-3. **When Phase 2 opens:** volunteer for **#8** (actor-threading) and contribute the
-   **`View`-as-observations** framing to **#9**.
-4. **Keep a running list** here of any v1 idea I'm tempted to build early, and check it
-   against "is this on the roadmap yet?" before writing code.
+The world graph is canonical truth. What anyone *perceives* is a **`View`** built on
+demand for a viewer — and the same builder serves all three consumers.
+
+```
+View.build(game, viewer) -> {
+    location, visible_exits, visible_items,
+    visible_characters, inventory, recent_events
+}
+```
+
+Visibility rules (defaults): you see your room, items there + your inventory, other
+characters in the room, and events you'd have witnessed; you do **not** see distant
+rooms or others' inventories unless something reveals them.
+
+One builder, three renderings:
+
+| Consumer | Rendering of the View |
+|----------|----------------------|
+| Human terminal | prose room description (`describe_viewer(viewer)`) |
+| LLM agent | the "Observe" block of its prompt |
+| 2D renderer (Godot) | structured per-entity JSON over the export feed |
+
+This replaces the hard-coded `game.player` description path and is the foundation of the
+world-state export API the renderer subscribes to.
 
 ---
 
-*Summary: my v1 is ~30% already-required shared framework (most valuably #8 actor
-threading and #9 structured observations/event log) and ~70% my own Phase 4
-simulation app (Session, slash commands, party, conflict rules). Mesh = contribute the
-former on the team's schedule, defer the latter to Phase 4, and never build a rival
-loop, agent abstraction, or clock.*
+## 6. Time
+
+A turn counter advances once per loop. On top of it, an optional clock maps turns to
+in-game time (e.g. start 8:00 AM, 15 min/turn) or named periods (dawn/day/dusk/night).
+Time is opt-in: with no clock configured the counter still increments. Time feeds
+schedules and time-of-day in descriptions.
+
+---
+
+## 7. Events & triggers
+
+Two related mechanisms record and react to change:
+
+- **Event log** — an append-only list of small records (`turn, actor, action, summary,
+  payload`). It is the "recent events" half of every `View`, the source for "what did I
+  miss?" summaries, and the change feed the renderer streams.
+- **Triggers** — `(condition, action, repeatable)` rules evaluated in the *react* phase,
+  after all characters have acted. Built-in conditions: timer (`turn >= N`), location
+  (a character entered X), property (`is_X` became true), and compound `and`/`or`.
+  Trigger actions either mutate state directly or instantiate a normal `Action` (so they
+  too pass through the precondition gate). Cap cascading at a fixed depth.
+
+---
+
+## 8. Multiple human-controlled characters (the simulation layer)
+
+For richer simulations the human can steer more than one character. This is a thin
+**session** on top of the loop — it changes *who you control*, never the world directly.
+
+- **`active_character`** — receives unprefixed commands; the prompt shows it
+  (`[gravedigger@churchyard] >`).
+- **Meta commands** (prefix `/`, handled before the turn loop, no preconditions):
+  `/who`, `/switch <name>`, `/party [add|remove] <name>`, `/status`, `/log`.
+- **Conflict resolution** — when two characters' commands contend for the same target in
+  one turn, settle by an `initiative` order (fallback: gather order); the loser's action
+  fails with a clear reason.
+
+This layer is what makes a *Sims/SimCity-style* social simulation playable: many agents
+living their lives while the human nudges one or several of them.
+
+---
+
+## 9. Build order
+
+Sequenced to the issues so the lower layers are solid before the upper ones build on them.
+
+| Stage | Issues | Deliverable |
+|-------|--------|-------------|
+| **Foundation** | #1 | `get_property` returns `False`; warm-up. |
+| **Agents + ReAct** | #2–#5 | `Agent` with persona/goals; mock + LLM backends; ReAct **with Reflect**; LLM agents wired into the live turn loop, precondition-gated, in a full playthrough. |
+| **Framework features** | #6–#9 | Event log + triggers (#6); time model (#7); **actor-threaded actions** for agent-to-agent (#8); `View`/export API as structured observations (#9). |
+| **Renderer** | #10 | Godot subscribes to the export feed + event log and draws world + agents. |
+| **Simulation app** | Phase 4 | Session/active-character, meta commands, party control, conflict resolution → a social/group-dynamics sim on the shared framework. |
+
+Each stage keeps single-character games working: with no agents, no session, and
+`party == [player]`, the loop behaves like today's game.
+
+---
+
+## 10. Design invariants
+
+- **One pipeline for all actors.** Humans and agents change the world only through
+  `check_preconditions()` → `apply_effects()`. No actor cheats the gate.
+- **One loop, one clock.** A single turn loop and a single turn counter; no parallel
+  engines or duplicate time sources.
+- **World vs. view stay split.** State lives in the world graph; everything anyone sees
+  is a `View` built from it.
+- **The decision seam is pluggable.** Mock/scripted and LLM agents are interchangeable
+  behind `decide()`, so the system is testable offline.
+- **Layers are opt-in.** A game can use the world model alone, add agents, then add the
+  session layer — each is additive and backward compatible.
