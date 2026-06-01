@@ -1,9 +1,9 @@
 """Offline tests for the agent layer (issue #2).
 
-The agent layer — the LLM client (``llm_client.py``), the LLM-enhanced parser
-(``llm_parser.py``), and the ReAct NPC loop (``npc.py``) — used to be untestable
+The agent layer — the LLM client (`llm_client.py`), the LLM-enhanced parser
+(`llm_parser.py`), and the ReAct NPC loop (`npc.py`) — used to be untestable
 because every code path called a real OpenAI/Anthropic API. This suite uses
-``MockLlmClient`` to exercise all of that deterministically, offline, and without
+`MockLlmClient` to exercise all of that deterministically, offline, and without
 an API key.
 
 Run with pytest::
@@ -31,7 +31,7 @@ from text_adventure_games.webapp.web_parser import WebParser
 def tiny_game():
     """A small, isolated 2-room world: Field --north--> Forest.
 
-    Contains a ``player`` (in the Field) and a ``troll`` NPC (also in the Field),
+    Contains a `player` (in the Field) and a `troll` NPC (also in the Field),
     so tests don't depend on the Action Castle geography. Each test gets a fresh
     game so state (e.g. the troll's location) stays clean.
     """
@@ -48,12 +48,12 @@ def tiny_game():
 
 
 def pick_option_containing(keyword):
-    """Return a MockLlmClient responder that simulates LlmParser._pick_option.
+    """Return a `MockLlmClient` responder that simulates `LlmParser._pick_option`.
 
     The parser sends the LLM a numbered list of options in the system message
     and asks it to "Return just the number." This responder scans those numbered
-    lines and returns the index of the first one whose text contains *keyword*
-    (case-insensitive), or None if there's no match.
+    lines and returns the index of the first one whose text contains keyword
+    (case-insensitive), or `None` if there's no match.
     """
 
     def responder(messages, max_tokens, temperature):

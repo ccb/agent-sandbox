@@ -203,27 +203,24 @@ class AnthropicClient:
 
 
 class MockLlmClient:
-    """A fake :class:`LlmClient` that returns scripted responses.
+    """A fake `LlmClient` that returns scripted responses, used to unit-test the agent layer,
+      deterministically and for free -- no SDK, no network, no API key.
 
-    Use this to unit-test the agent layer (the LLM parser, the ReAct loop, and
-    agents) deterministically and for free -- no SDK, no network, no API key.
-
-    The ``responses`` argument may be either:
-
-    * a **list** of strings (or ``None``) -- returned one per :meth:`chat` call
-      in order (first-in, first-out). Once the list is exhausted, :meth:`chat`
-      returns ``default``.
-    * a **callable** ``(messages, max_tokens, temperature) -> str | None`` --
+    The `responses` argument may be either:
+    * a list of strings (or `None`) -- returned one per `chat` call
+      in order (first-in, first-out). Once the list is exhausted, `chat`
+      returns `default`.
+    * a callable `(messages, max_tokens, temperature) -> str | None` --
       called to compute the response each time. Use this when a test needs to
       react to the prompt, e.g. to pick one of several numbered options.
 
-    Returning ``None`` simulates an API failure, which exercises the
+    Returning `None` simulates an API failure, which exercises the
     graceful-fallback paths in the parser and the ReAct loop.
 
-    Every call is recorded in :attr:`calls` so tests can assert on what was
+    Every call is recorded in `calls` so tests can assert on what was
     sent to the model.
 
-    Example::
+    Example:
 
         client = MockLlmClient(["go north"])
         client.chat([{"role": "user", "content": "what do you do?"}])  # -> "go north"
