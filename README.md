@@ -108,12 +108,38 @@ python -m text_adventure_games.webapp.app
 # open http://localhost:8080
 ```
 
-To enable the LLM-backed parser and LLM NPCs, set a provider before launching:
+### Running the LLM version (LLM-driven NPCs + natural-language parser)
+
+By default the NPCs use hand-scripted behaviors and the parser is keyword-based.
+Set a provider before launching and the troll/guard/ghost become **LLM-driven**
+and the player's parser accepts **natural language**.
+
+You need a pay-as-you-go **API key** (from console.anthropic.com or
+platform.openai.com) — this is *separate* from a Claude Code subscription; the SDK
+bills per token.
 
 ```bash
-export LLM_PROVIDER=anthropic        # or: openai
-export ANTHROPIC_API_KEY=sk-...      # or: OPENAI_API_KEY
+export LLM_PROVIDER=anthropic        # the on-switch: "anthropic" or "openai"
+export ANTHROPIC_API_KEY=sk-ant-...  # or OPENAI_API_KEY=sk-... for openai
+export LLM_VERBOSE=1                  # optional: print every LLM call (great for debugging)
+python -m text_adventure_games.webapp.app
 ```
+
+Optional env vars: `LLM_MODEL` (defaults: Anthropic → `claude-sonnet-4-20250514`,
+OpenAI → `gpt-4o-mini`), `LLM_NARRATION_STYLE` (a tone hint for the narrator),
+`LLM_BASE_URL` (for an OpenAI-compatible endpoint).
+
+Then walk to the **Drawbridge** and loiter near the troll; with `LLM_VERBOSE=1`
+you'll see the prompts and the NPC's chosen commands in the terminal. Try
+natural-language commands too, e.g. *"give the fish to the troll."*
+
+**What this is (and isn't):** with a provider set, each NPC uses
+`make_hybrid_behavior` (`npc.py`) — it asks the LLM for an action, runs it through
+the same `check_preconditions()` gate as the player, retries once on failure, and
+**falls back to the scripted behavior** if the LLM errors. It's a thin hybrid: no
+memory, no goals, and the retry is *not* a real Reflect step. Building that out
+(first-class agents, memory, a proper ReAct loop) is the summer's work — see
+issues **#3–#5** and [`ROADMAP.md`](ROADMAP.md).
 
 ### Run the tests
 
