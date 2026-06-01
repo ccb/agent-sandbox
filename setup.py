@@ -25,7 +25,8 @@ setup(
     extras_require={
         'dev': [
             'black',
-            'nbformat'
+            'nbformat',
+            'pytest',
         ],
         'openai': [
             'openai>=1.0',
