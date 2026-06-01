@@ -20,17 +20,46 @@ engine works, so we can start extending it together.
 
 ## 1. Get the code running
 
+Work inside an **isolated virtual environment** — don't install into your system
+or Anaconda Python (that's the #1 source of "it won't import" headaches; see
+Troubleshooting below).
+
 ```bash
 git clone https://github.com/ccb/agent-sandbox.git
 cd agent-sandbox
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .[llm]
+python3 -m venv venv             # create an isolated environment
+source venv/bin/activate         # activate it — your prompt should now show (venv)
+pip install -e ".[llm]"          # install the engine + LLM SDKs into the venv
 python -m text_adventure_games.webapp.app   # then open http://localhost:8080
 ```
 
+Every time you come back to work, re-activate first: `source venv/bin/activate`.
+Stop the server with `Ctrl+C`.
+
 Play through a bit of Action Castle in the browser so you know what the engine
 *does* before you read how it works.
+
+### Troubleshooting setup
+
+- **`ModuleNotFoundError: No module named 'flask'` even though pip said it installed.**
+  Your `pip` and your `python` are different interpreters. Always install with
+  `python -m pip install -e ".[llm]"` (note the `python -m`) so pip installs into
+  the *same* Python you run with. And make sure your venv is activated — the prompt
+  should show `(venv)`.
+- **You use Anaconda/Miniconda.** Anaconda's `python -m venv` is often broken
+  (`ensurepip` errors), and bare `pip` may target a different interpreter than
+  `python`. Use a conda env instead of a venv:
+  ```bash
+  conda create -n agent-sandbox python=3.11 -y
+  conda activate agent-sandbox
+  pip install -e ".[llm]"
+  ```
+- **`error: externally-managed-environment`.** You're trying to install into a
+  Python that isn't yours to modify (system / Homebrew / uv-managed). Make and
+  activate a venv (or conda env) first, then install — never use
+  `--break-system-packages`.
+- **Quote the extras** as `".[llm]"`. In some shells (zsh) the bare `.[llm]` is
+  interpreted as a glob and fails.
 
 ## 2. Do HW1: Action Castle
 

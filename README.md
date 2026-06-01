@@ -76,13 +76,29 @@ an untested skeleton with no reflection and isn't wired into the live game); an
 
 ## Setup
 
+Always work inside an **isolated virtual environment** so you don't fight your
+system / Anaconda / Homebrew Python.
+
 ```bash
 python3 -m venv venv
-source venv/bin/activate
-pip install -e .            # editable install of the engine
-pip install -e .[dev]       # + black, nbformat (for the dev team)
-pip install -e .[llm]       # + openai, anthropic, tiktoken (for the agent layer)
+source venv/bin/activate              # prompt should now show (venv)
+pip install -e ".[llm]"               # engine + openai, anthropic, tiktoken
+# or: pip install -e "."              # engine only
+# or: pip install -e ".[dev]"         # + black, nbformat (dev team)
 ```
+
+**If you use Anaconda/Miniconda**, use a conda env instead (Anaconda's `venv` is
+often broken):
+
+```bash
+conda create -n agent-sandbox python=3.11 -y && conda activate agent-sandbox
+pip install -e ".[llm]"
+```
+
+> **`ModuleNotFoundError` after install?** Your `pip` and `python` are different
+> interpreters. Install with `python -m pip install -e ".[llm]"` so it lands in the
+> same Python you run with, and confirm your venv/conda env is activated. See
+> `ONBOARDING.md` for the full troubleshooting list.
 
 ### Run the game in your browser
 
