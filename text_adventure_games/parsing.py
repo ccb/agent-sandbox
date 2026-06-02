@@ -42,6 +42,9 @@ class Parser:
         # Print the user's commands
         self.echo_commands = echo_commands
 
+        # Set by fail() so the ReAct loop can read the reason without side-effects
+        self.last_fail_message: str | None = None
+
     def ok(self, description: str):
         """
         In the next homework, we'll replace this with a call to the OpenAI API
@@ -55,6 +58,7 @@ class Parser:
         In the next homework, we'll replace this with a call to the OpenAI API
         in order to create more evocative descriptions.
         """
+        self.last_fail_message = description
         print(Parser.wrap_text(description))
 
     @staticmethod

@@ -180,12 +180,13 @@ def _route(character, game, command: str) -> bool:
     return game.parser.parse_command(command)
 
 
-def _reflect(observation: str, command: str) -> str:
-    """Append the failure to the observation so the next decide() sees what
-    went wrong. The honest seam for the real Reflect step (issue #4)."""
+def _reflect(observation: str, command: str, failure_reason: str) -> str:
+    """Append the parser's failure reason to the observation so the next
+    decide() sees *why* the action was rejected, not just that it was."""
     return (
         f"{observation}\n\n"
-        f"Your previous command '{command}' failed. Choose a different action."
+        f"Your previous command '{command}' failed: {failure_reason}\n"
+        "Reflect on why it failed and choose a different action."
     )
 
 
@@ -193,7 +194,8 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
 
     Observe (build the observation), let the agent decide a command, route it
-    through the parser; on failure, reflect and retry up to *max_retries* times.
+    through the parser; on failure, read the parser's last failure message and
+    feed it back via :func:`_reflect`, then retry up to *max_retries* times.
     Returns ``True`` if a command succeeded, else ``False``.
     """
     base = build_npc_context(character, game)
@@ -205,7 +207,10 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
             return False
         if _route(character, game, command):
             return True
-        observation = _reflect(base, command)
+        failure_reason = (
+            getattr(game.parser, "last_fail_message", None) or "action failed"
+        )
+        observation = _reflect(base, command, failure_reason)
 
     return False
 
