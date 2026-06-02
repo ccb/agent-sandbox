@@ -1,7 +1,7 @@
 from .things import Location, Character
 from . import parsing, actions, blocks
 from .events import GameEvent
-from .triggers import Trigger
+from .triggers import Trigger, MAX_CASCADE_PASSES
 
 import json
 import inspect
@@ -129,13 +129,28 @@ class Game:
         return trigger
 
     def _run_triggers(self):
-        """React phase: fire every trigger whose condition is now true."""
-        for trigger in self.triggers:
-            if trigger.fired and not trigger.repeatable:
-                continue
-            if trigger.condition(self):
-                trigger.action(self)
-                trigger.fired = True
+        """React phase: fire triggers whose conditions are now true.
+
+        Re-evaluates in bounded passes so a trigger can enable another one
+        (cascading), but each trigger fires at most once per round and the chain
+        is capped at MAX_CASCADE_PASSES to prevent infinite loops.
+        """
+        fired_this_round = set()
+        for _ in range(MAX_CASCADE_PASSES):
+            newly_fired = False
+            for trigger in self.triggers:
+                if trigger in fired_this_round:
+                    continue
+                if trigger.fired and not trigger.repeatable:
+                    continue
+                if trigger.condition(self):
+                    trigger.action(self)
+                    trigger.fired = True
+                    fired_this_round.add(trigger)
+                    self.log_event("trigger", trigger.name, f"{trigger.name} fired")
+                    newly_fired = True
+            if not newly_fired:
+                break
 
     def game_loop(self):
         """
