@@ -166,3 +166,9 @@ homeworks/hw3_solution/fine_tuning_location_descriptions.jsonl
 homeworks/hw3_solution/games-updated.zip
 
 homeworks/hw4_solution/dalle
+
+# Local scratch — not part of the engine
+engine-overview.html
+
+# superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
+docs/superpowers/
