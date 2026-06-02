@@ -34,6 +34,7 @@ class Character(Thing):
         self.inventory = {}
         self.location = None
         self.behavior = None
+        self.agent = None
 
     def to_primitive(self):
         """
@@ -106,10 +107,19 @@ class Character(Thing):
         """
         self.behavior = fn
 
+    def set_agent(self, agent):
+        """
+        Attach a first-class Agent (issue #3). Takes precedence over a
+        behavior callable when both are set.
+        """
+        self.agent = agent
+
     def take_turn(self, game):
         """
-        Called by Game.end_turn() for each living NPC. Delegates to the
-        behavior function if one has been set.
+        Called by Game.end_turn() for each living NPC. Prefers a first-class
+        Agent if one is set; otherwise falls back to a legacy behavior callable.
         """
-        if self.behavior is not None:
+        if self.agent is not None:
+            self.agent.take_turn(self, game)
+        elif self.behavior is not None:
             self.behavior(self, game)

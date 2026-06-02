@@ -115,3 +115,20 @@ def test_llmagent_falls_back_when_llm_returns_nothing():
     agent = LLMAgent(FakeLlmClient([]), fallback=fallback)  # LLM yields None
     agent.take_turn(make_npc(), StubGame(StubParser()))
     assert fb_seen == ["rat"]
+
+
+def test_character_take_turn_prefers_agent_over_behavior():
+    npc = make_npc()
+    order = []
+    npc.set_behavior(lambda c, g: order.append("behavior"))
+    npc.set_agent(ScriptedAgent(lambda c, g: order.append("agent")))
+    npc.take_turn(StubGame(StubParser()))
+    assert order == ["agent"]
+
+
+def test_character_take_turn_falls_back_to_behavior():
+    npc = make_npc()
+    order = []
+    npc.set_behavior(lambda c, g: order.append("behavior"))
+    npc.take_turn(StubGame(StubParser()))
+    assert order == ["behavior"]
