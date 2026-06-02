@@ -166,3 +166,7 @@ homeworks/hw3_solution/fine_tuning_location_descriptions.jsonl
 homeworks/hw3_solution/games-updated.zip
 
 homeworks/hw4_solution/dalle
+
+# Superpowers brainstorming specs (local design docs, not committed)
+docs/superpowers/specs/
+docs/superpowers/plans/
