@@ -1,5 +1,6 @@
 from .things import Location, Character
 from . import parsing, actions, blocks
+from .events import GameEvent
 
 import json
 import inspect
@@ -66,6 +67,9 @@ class Game:
         # Turn counter
         self.turn = 0
 
+        # Event log (issue #6): append-only record of what happened each round
+        self.events = []
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
@@ -107,6 +111,10 @@ class Game:
             character.take_turn(self)
             if self.is_game_over():
                 break
+
+    def log_event(self, actor, action, summary="", payload=None):
+        """Append a GameEvent to the event log (issue #6)."""
+        self.events.append(GameEvent(self.turn, actor, action, summary, payload))
 
     def game_loop(self):
         """
