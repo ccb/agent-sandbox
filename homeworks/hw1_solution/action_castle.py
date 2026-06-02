@@ -1,5 +1,5 @@
 from text_adventure_games import games, things, actions, blocks
-from text_adventure_games.npc import make_hybrid_behavior
+from text_adventure_games.agents import LLMAgent, ScriptedAgent
 
 
 class ActionCastle(games.Game):
@@ -878,15 +878,15 @@ def build_game(llm_client=None) -> ActionCastle:
     crown.add_command_hint("wear crown")
     ghost.add_to_inventory(crown)
 
-    # NPC Behaviors
+    # NPC Behaviors (issue #3: first-class Agents)
     if llm_client:
-        troll.set_behavior(make_hybrid_behavior(llm_client, make_troll_behavior()))
-        guard.set_behavior(make_hybrid_behavior(llm_client, make_guard_behavior()))
-        ghost.set_behavior(make_hybrid_behavior(llm_client, make_ghost_behavior()))
+        troll.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_troll_behavior())))
+        guard.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_guard_behavior())))
+        ghost.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_ghost_behavior())))
     else:
-        troll.set_behavior(make_troll_behavior())
-        guard.set_behavior(make_guard_behavior())
-        ghost.set_behavior(make_ghost_behavior())
+        troll.set_agent(ScriptedAgent(make_troll_behavior()))
+        guard.set_agent(ScriptedAgent(make_guard_behavior()))
+        ghost.set_agent(ScriptedAgent(make_ghost_behavior()))
 
     # Map of Characters
     drawbridge.add_character(troll)
