@@ -170,3 +170,6 @@ homeworks/hw4_solution/dalle
 # Superpowers brainstorming specs (local design docs, not committed)
 docs/superpowers/specs/
 docs/superpowers/plans/
+
+# Local scratch artifact, not for committing
+engine-overview.html
