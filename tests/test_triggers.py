@@ -98,3 +98,65 @@ def test_from_command_calls_parser(tiny_game):
     action = from_command("troll go north")
     action(tiny_game)
     assert troll.location is tiny_game.locations["Forest"]
+
+
+def test_at_turn_trigger_fires_once(tiny_game):
+    fired = []
+    tiny_game.add_trigger("boom", at_turn(2), lambda g: fired.append(g.turn))
+    tiny_game.end_turn()        # turn 1 -> condition false
+    assert fired == []
+    tiny_game.end_turn()        # turn 2 -> fires
+    assert fired == [2]
+    tiny_game.end_turn()        # turn 3 -> non-repeatable, already fired
+    assert fired == [2]
+
+
+def test_every_repeatable_trigger_fires_each_period(tiny_game):
+    ticks = []
+    tiny_game.add_trigger(
+        "tick", every(2), lambda g: ticks.append(g.turn), repeatable=True
+    )
+    for _ in range(4):
+        tiny_game.end_turn()    # turns 1, 2, 3, 4
+    assert ticks == [2, 4]
+
+
+def test_in_location_trigger_fires_via_player_move(tiny_game):
+    forest = tiny_game.locations["Forest"]
+    player = tiny_game.player
+    entered = []
+    tiny_game.add_trigger(
+        "reached", in_location(player, forest), lambda g: entered.append(g.turn)
+    )
+    tiny_game.do_command("go north")   # player moves; react phase fires the trigger
+    assert entered == [1]
+
+
+def test_compound_trigger(tiny_game):
+    troll = tiny_game.characters["troll"]
+    fired = []
+    tiny_game.add_trigger(
+        "ambush",
+        all_of(at_turn(1), has_property(troll, "is_angry")),
+        lambda g: fired.append(True),
+        repeatable=True,
+    )
+    tiny_game.end_turn()               # turn 1 but troll not angry -> no fire
+    assert fired == []
+    troll.set_property("is_angry", True)
+    tiny_game.end_turn()               # turn 2, angry -> fires
+    assert fired == [True]
+
+
+def test_from_command_trigger_respects_precondition_gate(tiny_game):
+    troll = tiny_game.characters["troll"]
+    tiny_game.add_trigger("flee", at_turn(1), from_command("troll go south"))
+    tiny_game.end_turn()               # fires, but Field has no south exit
+    assert troll.location is tiny_game.locations["Field"]   # did not move
+
+
+def test_from_command_trigger_runs_valid_command(tiny_game):
+    troll = tiny_game.characters["troll"]
+    tiny_game.add_trigger("advance", at_turn(1), from_command("troll go north"))
+    tiny_game.end_turn()
+    assert troll.location is tiny_game.locations["Forest"]

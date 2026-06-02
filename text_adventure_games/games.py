@@ -1,6 +1,7 @@
 from .things import Location, Character
 from . import parsing, actions, blocks
 from .events import GameEvent
+from .triggers import Trigger
 
 import json
 import inspect
@@ -70,6 +71,9 @@ class Game:
         # Event log (issue #6): append-only record of what happened each round
         self.events = []
 
+        # Triggers (issue #6): rules fired in the post-round react phase
+        self.triggers = []
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
@@ -111,10 +115,27 @@ class Game:
             character.take_turn(self)
             if self.is_game_over():
                 break
+        if not self.is_game_over():
+            self._run_triggers()
 
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def add_trigger(self, name, condition, action, repeatable=False):
+        """Register a Trigger evaluated in the post-round react phase (issue #6)."""
+        trigger = Trigger(name, condition, action, repeatable)
+        self.triggers.append(trigger)
+        return trigger
+
+    def _run_triggers(self):
+        """React phase: fire every trigger whose condition is now true."""
+        for trigger in self.triggers:
+            if trigger.fired and not trigger.repeatable:
+                continue
+            if trigger.condition(self):
+                trigger.action(self)
+                trigger.fired = True
 
     def game_loop(self):
         """
