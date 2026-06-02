@@ -3,8 +3,7 @@
 A GameEvent is a small, serializable record of one thing that happened during
 play: who did it (actor), what they did (action), a human-readable summary, and
 an optional structured payload. The log itself lives on Game (Game.events); this
-module just defines the record type. See
-docs/superpowers/specs/2026-06-02-trigger-system-design.md (issue #6).
+module just defines the record type (issue #6).
 """
 
 

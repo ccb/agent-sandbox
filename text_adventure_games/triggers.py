@@ -3,8 +3,7 @@
 A Trigger pairs a condition (game -> bool) with an action (game -> None). The
 game evaluates triggers after every round (see Game._run_triggers); a trigger
 whose condition is true runs its action. This module also provides small factory
-functions for the common conditions and a from_command action helper. See
-docs/superpowers/specs/2026-06-02-trigger-system-design.md (issue #6).
+functions for the common conditions and a from_command action helper (issue #6).
 """
 
 MAX_CASCADE_PASSES = 2  # initial pass + one cascade level, then stop
