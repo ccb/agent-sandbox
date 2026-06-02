@@ -1,3 +1,4 @@
+## 2026-06-02
 **Focus:** read the ReAct paper and work on PR #4
 
 **Done today:**
