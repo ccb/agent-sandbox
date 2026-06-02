@@ -188,12 +188,12 @@ def test_cascade_fires_dependent_trigger_one_level(tiny_game):
 
 
 def test_cascade_cap_terminates(tiny_game):
-    counts = {"n": 0}
-    bump = lambda g: counts.__setitem__("n", counts["n"] + 1)
-    # Two always-true repeatable triggers. Without a per-round guard they would
-    # fire on every pass; the per-round guard caps each at one firing and the
-    # pass loop then terminates.
+    fires = []
+    bump = lambda g: fires.append(1)
+    # Two always-true repeatable triggers. Without the per-round guard they would
+    # re-fire on the second cascade pass (4 fires total); the guard caps each at
+    # one firing per round, so the count stays 2 and the pass loop then stops.
     tiny_game.add_trigger("X", every(1), bump, repeatable=True)
     tiny_game.add_trigger("Y", every(1), bump, repeatable=True)
     tiny_game.end_turn()
-    assert counts["n"] == 2
+    assert len(fires) == 2
