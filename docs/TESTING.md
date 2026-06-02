@@ -14,7 +14,7 @@ assert mock.chat([{"role": "user", "content": "what do you do?"}]) == "go north"
 Run the reference suite:
 
 ```bash
-pytest test_agent_layer.py -v
+pytest tests/test_agent_layer.py -v
 ```
 
 That file shows end-to-end patterns for the parser and NPC behaviors.
@@ -51,7 +51,7 @@ def pick_first(messages, max_tokens, temperature):
 client = MockLlmClient(pick_first)
 ```
 
-`test_agent_layer.py` includes `pick_option_containing(keyword)`, which scans numbered lines in the system message and returns the matching index—the same shape of answer `LlmParser` expects when it asks the model to “return just the number.”
+`tests/test_agent_layer.py` includes `pick_option_containing(keyword)`, which scans numbered lines in the system message and returns the matching index—the same shape of answer `LlmParser` expects when it asks the model to “return just the number.”
 
 ## Simulating failures
 
@@ -85,4 +85,4 @@ Production code uses `create_llm_client(LlmConfig(...))` instead; tests swap in 
 ## Further reading
 
 - Implementation and docstring examples: `text_adventure_games/llm_client.py` (`MockLlmClient`)
-- Full worked tests: `test_agent_layer.py`
+- Full worked tests: `tests/test_agent_layer.py`

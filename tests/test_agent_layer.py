@@ -8,7 +8,7 @@ an API key.
 
 Run with pytest::
 
-    pytest test_agent_layer.py -v
+    pytest tests/test_agent_layer.py -v
 
 Sections:
   A. MockLlmClient itself.
