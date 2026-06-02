@@ -40,6 +40,10 @@ def test_trigger_holds_its_fields():
     assert trigger.repeatable is True
     assert trigger.fired is False
 
+    # repeatable defaults to False
+    default_trigger = Trigger("quiet", cond, act)
+    assert default_trigger.repeatable is False
+
 
 def test_at_turn(tiny_game):
     cond = at_turn(2)
@@ -59,6 +63,8 @@ def test_every(tiny_game):
     assert cond(tiny_game) is True
     tiny_game.turn = 3
     assert cond(tiny_game) is False
+    # n=0 is guarded (never true), so it can't ZeroDivisionError
+    assert every(0)(tiny_game) is False
 
 
 def test_in_location(tiny_game):
@@ -71,7 +77,7 @@ def test_in_location(tiny_game):
 
 def test_has_property_truthiness(tiny_game):
     troll = tiny_game.characters["troll"]
-    # an unset property reads False (get_property returns None for unset)
+    # an unset property reads False (get_property returns False for unset)
     assert has_property(troll, "is_angry")(tiny_game) is False
     troll.set_property("is_angry", True)
     assert has_property(troll, "is_angry")(tiny_game) is True

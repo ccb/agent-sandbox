@@ -23,7 +23,11 @@ class Trigger:
 
 
 def at_turn(n):
-    """True once the game has reached turn n (turn >= n)."""
+    """True on turn n and every turn after (turn >= n).
+
+    The condition itself is not one-shot; pair it with a non-repeatable Trigger
+    (repeatable=False, the default) if you want it to fire only once.
+    """
     return lambda game: game.turn >= n
 
 
@@ -40,8 +44,10 @@ def in_location(character, location):
 def has_property(thing, name, value=True):
     """True when thing's property matches value, compared by truthiness.
 
-    Truthiness handling means an unset property (get_property returns None)
-    reads as False instead of mismatching.
+    The engine's get_property returns False for an unset property, so an unset
+    property reads as False here instead of mismatching. Because the comparison
+    is by truthiness, any two truthy values are treated as equal (e.g. value=2
+    matches a stored 3); use a custom condition lambda for exact-value checks.
     """
     return lambda game: bool(thing.get_property(name)) == bool(value)
 
