@@ -21,7 +21,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
-
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
@@ -172,9 +171,7 @@ class AnthropicClient:
                     # Anthropic rejects assistant messages with trailing whitespace
                     if msg["role"] == "assistant":
                         content = content.rstrip()
-                    chat_messages.append(
-                        {"role": msg["role"], "content": content}
-                    )
+                    chat_messages.append({"role": msg["role"], "content": content})
 
             if self._verbose:
                 print(json.dumps(messages, indent=2))
@@ -197,6 +194,75 @@ class AnthropicClient:
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token
+        return len(text) // 4
+
+
+# ---------------------------------------------------------------------------
+# Mock adapter (for offline tests and local development)
+# ---------------------------------------------------------------------------
+
+
+class MockLlmClient:
+    """A fake `LlmClient` that returns scripted responses, used to unit-test the agent layer,
+      deterministically and for free -- no SDK, no network, no API key.
+
+    The `responses` argument may be either:
+    * a list of strings (or `None`) -- returned one per `chat` call
+      in order (first-in, first-out). Once the list is exhausted, `chat`
+      returns `default`.
+    * a callable `(messages, max_tokens, temperature) -> str | None` --
+      called to compute the response each time. Use this when a test needs to
+      react to the prompt, e.g. to pick one of several numbered options.
+
+    Returning `None` simulates an API failure, which exercises the
+    graceful-fallback paths in the parser and the ReAct loop.
+
+    Every call is recorded in `calls` so tests can assert on what was
+    sent to the model.
+
+    Example:
+
+        client = MockLlmClient(["go north"])
+        client.chat([{"role": "user", "content": "what do you do?"}])  # -> "go north"
+
+        # React to the prompt:
+        def pick_first(messages, max_tokens, temperature):
+            return "0"
+        client = MockLlmClient(pick_first)
+    """
+
+    def __init__(self, responses=None, default: str | None = ""):
+        if callable(responses):
+            self._responder = responses
+            self._queue = None
+        else:
+            self._responder = None
+            self._queue = list(responses) if responses is not None else []
+        self._default = default
+        # A log of every chat() call, for test assertions.
+        self.calls: list[dict] = []
+
+    def chat(
+        self,
+        messages: list[dict],
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> str | None:
+        self.calls.append(
+            {
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        if self._responder is not None:
+            return self._responder(messages, max_tokens, temperature)
+        if self._queue:
+            return self._queue.pop(0)
+        return self._default
+
+    def count_tokens(self, text: str) -> int:
+        # Heuristic: ~4 chars per token (matches the Anthropic adapter).
         return len(text) // 4
 
 
