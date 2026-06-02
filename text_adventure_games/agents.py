@@ -54,7 +54,7 @@ class Agent:
             for entry in history:
                 prefix = "  Player:" if entry.get("role") == "user" else "  Game:"
                 lines.append(f"{prefix} {entry.get('content', '')[:200]}")
-        recent = self.memory[-self.memory_window:]
+        recent = self.memory[-self.memory_window :]
         if recent:
             lines += ["", "Your recent actions:"]
             for e in recent:

@@ -880,9 +880,15 @@ def build_game(llm_client=None) -> ActionCastle:
 
     # NPC Behaviors (issue #3: first-class Agents)
     if llm_client:
-        troll.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_troll_behavior())))
-        guard.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_guard_behavior())))
-        ghost.set_agent(LLMAgent(llm_client, fallback=ScriptedAgent(make_ghost_behavior())))
+        troll.set_agent(
+            LLMAgent(llm_client, fallback=ScriptedAgent(make_troll_behavior()))
+        )
+        guard.set_agent(
+            LLMAgent(llm_client, fallback=ScriptedAgent(make_guard_behavior()))
+        )
+        ghost.set_agent(
+            LLMAgent(llm_client, fallback=ScriptedAgent(make_ghost_behavior()))
+        )
     else:
         troll.set_agent(ScriptedAgent(make_troll_behavior()))
         guard.set_agent(ScriptedAgent(make_guard_behavior()))
