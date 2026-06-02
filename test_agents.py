@@ -132,3 +132,15 @@ def test_character_take_turn_falls_back_to_behavior():
     npc.set_behavior(lambda c, g: order.append("behavior"))
     npc.take_turn(StubGame(StubParser()))
     assert order == ["behavior"]
+
+
+def test_npc_shim_exposes_agents_and_hybrid_falls_back():
+    from text_adventure_games import npc
+
+    assert hasattr(npc, "LLMAgent") and hasattr(npc, "ScriptedAgent")
+    fb_seen = []
+    behavior = npc.make_hybrid_behavior(
+        FakeLlmClient([]), lambda c, g: fb_seen.append(c.name)
+    )
+    behavior(make_npc(), StubGame(StubParser()))
+    assert fb_seen == ["rat"]
