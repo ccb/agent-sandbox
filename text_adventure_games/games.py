@@ -307,9 +307,7 @@ class Game:
                 lines.append(f" * {item.name} - {item.description}")
 
         # Other characters present
-        others = [
-            c for name, c in loc.characters.items() if name != character.name
-        ]
+        others = [c for name, c in loc.characters.items() if name != character.name]
         if others:
             lines.append("Characters here:")
             for c in others:

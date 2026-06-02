@@ -103,11 +103,11 @@ def test_from_command_calls_parser(tiny_game):
 def test_at_turn_trigger_fires_once(tiny_game):
     fired = []
     tiny_game.add_trigger("boom", at_turn(2), lambda g: fired.append(g.turn))
-    tiny_game.end_turn()        # turn 1 -> condition false
+    tiny_game.end_turn()  # turn 1 -> condition false
     assert fired == []
-    tiny_game.end_turn()        # turn 2 -> fires
+    tiny_game.end_turn()  # turn 2 -> fires
     assert fired == [2]
-    tiny_game.end_turn()        # turn 3 -> non-repeatable, already fired
+    tiny_game.end_turn()  # turn 3 -> non-repeatable, already fired
     assert fired == [2]
 
 
@@ -117,7 +117,7 @@ def test_every_repeatable_trigger_fires_each_period(tiny_game):
         "tick", every(2), lambda g: ticks.append(g.turn), repeatable=True
     )
     for _ in range(4):
-        tiny_game.end_turn()    # turns 1, 2, 3, 4
+        tiny_game.end_turn()  # turns 1, 2, 3, 4
     assert ticks == [2, 4]
 
 
@@ -128,7 +128,7 @@ def test_in_location_trigger_fires_via_player_move(tiny_game):
     tiny_game.add_trigger(
         "reached", in_location(player, forest), lambda g: entered.append(g.turn)
     )
-    tiny_game.do_command("go north")   # player moves; react phase fires the trigger
+    tiny_game.do_command("go north")  # player moves; react phase fires the trigger
     assert entered == [1]
 
 
@@ -141,7 +141,7 @@ def test_compound_trigger(tiny_game):
         lambda g: fired.append(True),
         repeatable=True,
     )
-    tiny_game.end_turn()               # turn 1 but troll not angry -> no fire
+    tiny_game.end_turn()  # turn 1 but troll not angry -> no fire
     assert fired == []
     troll.set_property("is_angry", True)
     # turn 2: at_turn(1) is still true (turn >= 1), so anger is the only gate -> fires
@@ -152,8 +152,8 @@ def test_compound_trigger(tiny_game):
 def test_from_command_trigger_respects_precondition_gate(tiny_game):
     troll = tiny_game.characters["troll"]
     tiny_game.add_trigger("flee", at_turn(1), from_command("troll go south"))
-    tiny_game.end_turn()               # fires, but Field has no south exit
-    assert troll.location is tiny_game.locations["Field"]   # did not move
+    tiny_game.end_turn()  # fires, but Field has no south exit
+    assert troll.location is tiny_game.locations["Field"]  # did not move
 
 
 def test_from_command_trigger_runs_valid_command(tiny_game):
@@ -166,9 +166,7 @@ def test_from_command_trigger_runs_valid_command(tiny_game):
 def test_trigger_firing_is_logged(tiny_game):
     tiny_game.add_trigger("boom", at_turn(1), lambda g: None)
     tiny_game.end_turn()
-    assert any(
-        e.actor == "trigger" and e.action == "boom" for e in tiny_game.events
-    )
+    assert any(e.actor == "trigger" and e.action == "boom" for e in tiny_game.events)
 
 
 def test_cascade_fires_dependent_trigger_one_level(tiny_game):
@@ -178,9 +176,7 @@ def test_cascade_fires_dependent_trigger_one_level(tiny_game):
     tiny_game.add_trigger(
         "B", has_property(troll, "awake"), lambda g: order.append("B")
     )
-    tiny_game.add_trigger(
-        "A", at_turn(1), lambda g: troll.set_property("awake", True)
-    )
+    tiny_game.add_trigger("A", at_turn(1), lambda g: troll.set_property("awake", True))
     tiny_game.end_turn()
     # pass 1: B sees awake=False (no fire), A fires and sets awake.
     # pass 2: B now sees awake=True and fires.

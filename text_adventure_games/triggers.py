@@ -13,8 +13,8 @@ MAX_CASCADE_PASSES = 2  # initial pass + one cascade level, then stop
 class Trigger:
     def __init__(self, name, condition, action, repeatable=False):
         self.name = name
-        self.condition = condition      # (game) -> bool
-        self.action = action            # (game) -> None
+        self.condition = condition  # (game) -> bool
+        self.action = action  # (game) -> None
         self.repeatable = repeatable
         self.fired = False
 
