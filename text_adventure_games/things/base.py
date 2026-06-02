@@ -76,7 +76,7 @@ class Thing:
         """
         Gets the value of this property for this item (defaults to False)
         """
-        return self.properties.get(property_name, None)
+        return self.properties.get(property_name, False)
 
     def add_command_hint(self, command: str):
         """
