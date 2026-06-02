@@ -144,7 +144,8 @@ def test_compound_trigger(tiny_game):
     tiny_game.end_turn()               # turn 1 but troll not angry -> no fire
     assert fired == []
     troll.set_property("is_angry", True)
-    tiny_game.end_turn()               # turn 2, angry -> fires
+    # turn 2: at_turn(1) is still true (turn >= 1), so anger is the only gate -> fires
+    tiny_game.end_turn()
     assert fired == [True]
 
 
