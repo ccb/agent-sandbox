@@ -63,3 +63,42 @@ def test_action_accepts_and_stores_actor(action_cls, command):
     alice = game.characters["alice"]
     action = action_cls(game, command, actor=alice)
     assert action.actor is alice
+
+
+def _get_game_with_items():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    npc = things.Character("guard", "a guard", "I patrol.")
+    key = things.Item("key", "a brass key")
+    coin = things.Item("coin", "a gold coin")
+    game = games.Game(room, player, characters=[npc])
+    room.add_character(npc)
+    room.add_item(key)
+    room.add_item(coin)
+    return game, npc, player
+
+
+def test_explicit_actor_gets_item():
+    game, npc, player = _get_game_with_items()
+    game.parser.parse_command("get key", actor=npc)
+    assert "key" in npc.inventory
+    assert "key" not in player.inventory
+
+
+def test_default_actor_is_player():
+    game, npc, player = _get_game_with_items()
+    game.parser.parse_command("get key")
+    assert "key" in player.inventory
+
+
+def test_legacy_name_prefix_still_resolves():
+    game, npc, player = _get_game_with_items()
+    game.parser.parse_command("guard get key")
+    assert "key" in npc.inventory
+
+
+def test_action_sequence_threads_actor():
+    game, npc, player = _get_game_with_items()
+    game.parser.parse_command("get key, get coin", actor=npc)
+    assert "key" in npc.inventory
+    assert "coin" in npc.inventory

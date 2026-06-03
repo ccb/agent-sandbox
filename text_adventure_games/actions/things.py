@@ -10,9 +10,7 @@ class Get(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
-            command, hint="wants to get something"
-        )
+        self.character = self.acting_character(command, hint="wants to get something")
         self.location = self.character.location
         self.item = self.parser.match_item(
             command, self.location.items, hint="thing to get"
@@ -69,9 +67,7 @@ class Drop(base.Action):
         actor=None,
     ):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
-            command, hint="wants to drop something"
-        )
+        self.character = self.acting_character(command, hint="wants to drop something")
         self.location = self.character.location
         self.item = self.parser.match_item(
             command, self.character.inventory, hint="thing being dropped"

@@ -102,14 +102,14 @@ class Parser:
                 if not attr == actions.Action:
                     self.add_action(attr)
 
-    def determine_intent(self, command: str):
+    def determine_intent(self, command: str, actor=None):
         """
         This function determines what command the player wants to do.
         Here we have implemented it with a simple keyword match. Later
         we will use AI to do more flexible matching.
         """
         # check which character is acting (defaults to the player)
-        character = self.get_character(command)
+        character = actor if actor is not None else self.get_character(command)
         command = command.lower()
         if "," in command:
             # Let the player type in a comma separted sequence of commands
@@ -156,7 +156,7 @@ class Parser:
                         best_match = special_command
             return best_match
 
-    def parse_action(self, command: str) -> actions.Action:
+    def parse_action(self, command: str, actor=None) -> actions.Action:
         """
         Routes an action described in a command to the right action class for
         performing the action.
@@ -166,10 +166,10 @@ class Parser:
         command = command.lower().strip()
         if command == "":
             return None
-        intent = self.determine_intent(command)
+        intent = self.determine_intent(command, actor=actor)
         if intent in self.actions:
             action = self.actions[intent]
-            return action(self.game, command)
+            return action(self.game, command, actor=actor)
         return None
 
     def npc_ok(self, description: str):
@@ -177,10 +177,10 @@ class Parser:
         print(msg)
         self.add_description_to_history(description)
 
-    def parse_command(self, command: str) -> bool:
+    def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
         self.add_command_to_history(command)
-        action = self.parse_action(command)
+        action = self.parse_action(command, actor=actor)
         if not action:
             self.fail("I'm not sure what you want to do.")
             return False

@@ -258,7 +258,7 @@ class ActionSequence(Action):
         responses = []
         for cmd in self.command.split(","):
             cmd = cmd.strip()
-            responses.append(self.parser.parse_command(cmd))
+            responses.append(self.parser.parse_command(cmd, actor=self.actor))
         return responses
 
 

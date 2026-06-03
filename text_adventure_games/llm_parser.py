@@ -191,9 +191,9 @@ class LlmParser(parsing.Parser):
     # Intent detection (keyword-first, LLM fallback)
     # ------------------------------------------------------------------
 
-    def determine_intent(self, command: str):
+    def determine_intent(self, command: str, actor=None):
         """Try keyword matching first; fall back to LLM if no match."""
-        intent = super().determine_intent(command)
+        intent = super().determine_intent(command, actor=actor)
         if intent is not None:
             return intent
         # LLM fallback
