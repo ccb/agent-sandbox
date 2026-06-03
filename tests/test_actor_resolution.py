@@ -122,3 +122,12 @@ def test_actor_gives_to_other_character():
     game.parser.parse_command("give sword to thief", actor=guard)
     assert "sword" not in guard.inventory
     assert "sword" in thief.inventory
+
+
+def test_recipient_excludes_actor_giver():
+    # Actor (guard) is also named in the recipient slot; exclude must keep the
+    # recipient from resolving back to the giver, so there is no self-give.
+    game, guard, thief = _give_game()
+    action = a_things.Give(game, "give sword to guard", actor=guard)
+    assert action.giver is guard
+    assert action.recipient is not guard
