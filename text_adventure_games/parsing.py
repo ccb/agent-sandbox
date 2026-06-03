@@ -108,12 +108,22 @@ class Parser:
         Here we have implemented it with a simple keyword match. Later
         we will use AI to do more flexible matching.
         """
-        # check which character is acting (defaults to the player)
+        # Resolve the acting character (the actor, else a player-default scan).
+        # Used below only to interpret directions relative to where they stand.
         character = actor if actor is not None else self.get_character(command)
         command = command.lower()
         if "," in command:
             # Let the player type in a comma separted sequence of commands
             return "sequence"
+        elif (
+            command.startswith("say ")
+            or command.startswith("speak ")
+            or command in ("say", "speak")
+        ):
+            # Speech routes here regardless of message content (a message may
+            # contain other command words), and this also handles the "speak"
+            # alias, which is not auto-registered.
+            return "say"
         elif self.get_direction(command, character.location):
             # Check for the direction intent
             return "go"

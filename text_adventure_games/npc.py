@@ -174,12 +174,11 @@ def build_npc_context(character, game) -> str:
 
 
 def _route(character, game, command: str) -> bool:
-    """Prepend the character's name so the parser attributes the command to it,
-    then route it through the parser (and its precondition gate). Returns
-    whether the command succeeded."""
-    if not command.lower().startswith(character.name.lower()):
-        command = f"{character.name} {command}"
-    return game.parser.parse_command(command)
+    """Route a command through the parser (and its precondition gate),
+    attributed to *character* via the explicit actor seam. The name-prefix
+    hack is gone: with the actor explicit, prepending the name would let the
+    target scan mis-hit the actor's own name. Returns whether it succeeded."""
+    return game.parser.parse_command(command, actor=character)
 
 
 def _reflect(observation: str, command: str, failure_reason: str) -> str:
