@@ -1,7 +1,8 @@
 from .things import Location, Character
+from .clock import GameClock
 from . import parsing, actions, blocks
 from .events import GameEvent
-from .triggers import Trigger, MAX_CASCADE_PASSES
+from .triggers import Trigger, MAX_CASCADE_PASSES, at_turn
 
 import json
 import inspect
@@ -26,6 +27,7 @@ class Game:
         player: Character,
         characters=None,
         custom_actions=None,
+        time_config=None,
     ):
         self.start_at = start_at
         self.player = player
@@ -74,6 +76,19 @@ class Game:
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
 
+        # Optional in-game clock (issue #7). Time is opt-in: with no
+        # time_config the turn counter still increments but no clock exists.
+        # Accepts a GameClock, a dict of GameClock kwargs, or None.
+        if time_config is None:
+            self.clock = None
+        elif isinstance(time_config, GameClock):
+            self.clock = time_config
+        elif isinstance(time_config, dict):
+            self.clock = GameClock(**time_config)
+        else:
+            err_msg = f"ERROR: invalid time_config ({time_config})"
+            raise Exception(err_msg)
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
@@ -99,8 +114,10 @@ class Game:
 
     def end_turn(self):
         """
-        Called after a successful player command. Increments the turn counter
-        and gives each living, conscious NPC a chance to act.
+        Called after a successful player command. Increments the turn counter,
+        gives each living, conscious NPC a chance to act, and then runs the
+        react phase: triggers (including scheduled events) whose conditions
+        are now true.
         """
         self.turn += 1
         for character in list(self.characters.values()):
@@ -152,6 +169,47 @@ class Game:
             if not newly_fired:
                 break
 
+    def schedule_event(self, turn: int, callback, name=None):
+        """
+        Schedule a one-shot event: `callback(game)` will run in the react phase
+        of the round in which the turn counter reaches `turn` (after all
+        characters have acted). Scheduling for a turn that has already passed
+        fires the event in the next round's react phase.
+
+        This is convenience sugar for the trigger system (issue #6): it
+        registers a non-repeatable trigger with an `at_turn(turn)` condition,
+        so scheduled events follow trigger semantics — they fire at most once,
+        run in the react phase, and are recorded in the event log. Returns the
+        underlying Trigger.
+
+        For a recurring event, schedule a future turn from the callback:
+
+            def every_morning(game):
+                ...do something...
+                game.schedule_event(game.turn + 4, every_morning)
+
+        (Or use `add_trigger` with the `every(n)` condition and
+        `repeatable=True` for a fixed cadence.)
+        """
+        if not isinstance(turn, int) or turn < 0:
+            err_msg = f"ERROR: invalid schedule turn ({turn})"
+            raise Exception(err_msg)
+        if not callable(callback):
+            err_msg = f"ERROR: schedule callback is not callable ({callback})"
+            raise Exception(err_msg)
+        if name is None:
+            name = f"scheduled@turn{turn}"
+        return self.add_trigger(name, at_turn(turn), callback, repeatable=False)
+
+    def current_time(self):
+        """
+        The in-game time as a string, e.g. '8:45 AM (morning)', or None if
+        this game has no clock configured.
+        """
+        if self.clock is None:
+            return None
+        return self.clock.describe(self.turn)
+
     def game_loop(self):
         """
         A simple loop that starts the game, loops over commands from the user,
@@ -160,7 +218,10 @@ class Game:
         self.parser.parse_command("look")
 
         while True:
-            command = input("\n> ")
+            # When a clock is configured, show the in-game time in the prompt.
+            time_str = self.current_time()
+            prompt = f"\n[{time_str}] > " if time_str else "\n> "
+            command = input(prompt)
             self.do_command(command)
             if self.is_game_over():
                 break
@@ -204,6 +265,8 @@ class Game:
         in the current location.
         """
         description = self.player.location.name.upper() + "\n"
+        if self.clock is not None:
+            description += f"({self.current_time()})\n"
         description += self.describe_current_location() + "\n"
         description += self.describe_exits() + "\n"
         description += self.describe_items() + "\n"
@@ -325,8 +388,11 @@ class Game:
         action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")
 
-        # Turn
-        lines.append(f"Turn: {self.turn}")
+        # Turn (with the in-game time when a clock is configured)
+        if self.clock is not None:
+            lines.append(f"Turn: {self.turn} ({self.current_time()})")
+        else:
+            lines.append(f"Turn: {self.turn}")
 
         return "\n".join(lines)
 
@@ -347,11 +413,17 @@ class Game:
     def to_primitive(self):
         """
         Serialize a game to json.
+
+        Note: the clock's configuration is saved, but triggers (including
+        scheduled events) are not — their conditions and actions are arbitrary
+        functions and can't be serialized. Games that rely on them should
+        re-register them after loading.
         """
         data = {
             "player": self.player.name,
             "start_at": self.start_at.name,
             "turn": self.turn,
+            "time_config": self.clock.to_primitive() if self.clock else None,
             "game_history": self.game_history,  # TODO this is empty?
             "game_over": self.game_over,
             "game_over_description": self.game_over_description,
@@ -530,6 +602,9 @@ class Game:
 
         instance = cls(start_at, player, custom_actions=action_map.values())
         instance.turn = data.get("turn", 0)
+        time_config = data.get("time_config")
+        if time_config:
+            instance.clock = GameClock.from_primitive(time_config)
         instance.game_history = data["game_history"]
         instance.game_over = data["game_over"]
         instance.game_over_description = data["game_over_description"]
