@@ -61,8 +61,6 @@ the game from `homeworks/hw1_solution/action_castle.py`.
 
 ## Known issues / good first fixes
 
-- `Thing.get_property()` returns `None` (not `False`) for unset properties, despite
-  the docstring and the `defaultdict(bool)` intent. Benign but confusing.
 - `Game.from_primitive()` has commented-out block deserialization, so save/load
   silently drops blocks. Save/load is incomplete — don't rely on it.
 - Mild Python 3.9-vs-3.10 syntax tension (PEP 604 `X | None` works only via
