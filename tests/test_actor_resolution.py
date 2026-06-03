@@ -131,3 +131,30 @@ def test_recipient_excludes_actor_giver():
     action = a_things.Give(game, "give sword to guard", actor=guard)
     assert action.giver is guard
     assert action.recipient is not guard
+
+
+def _fight_game():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    troll = things.Character("troll", "a troll", "I smash.")
+    skeleton = things.Character("skeleton", "a skeleton", "I rattle.")
+    club = things.Item("club", "a heavy club")
+    club.set_property("is_weapon", True)
+    game = games.Game(room, player, characters=[troll, skeleton])
+    room.add_character(troll)
+    room.add_character(skeleton)
+    troll.add_to_inventory(club)
+    return game, troll, skeleton
+
+
+def test_actor_attacks_other_character():
+    game, troll, skeleton = _fight_game()
+    game.parser.parse_command("attack skeleton with club", actor=troll)
+    assert skeleton.get_property("is_unconscious") is True
+
+
+def test_attacker_does_not_target_self_via_exclude():
+    game, troll, skeleton = _fight_game()
+    action = fight.Attack(game, "attack troll", actor=troll)
+    assert action.attacker is troll
+    assert action.victim is not troll
