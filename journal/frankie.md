@@ -1,3 +1,15 @@
+## 2026-06-03
+**Focus:** rebasing issue #4 onto main and looking into implementation of #9
+
+**Done today:**
+- Finished rebase of issue #4, adding reflections to the ReAct loop implementation on top of the Agent framework
+- Discussed possible implementation details of emergent behavior with Alistair
+
+**Blockers / questions:**
+- Uncertain of which repository I should use for studying smallville's websocket implementation (both the original [Generative Agents](https://github.com/joonspk-research/generative_agents) repo and a separate [smallville](https://github.com/nmatter1/smallville) repo didn't use websocket)
+
+**Next:**
+- Finish issue #9
 ## 2026-06-02
 **Focus:** read the ReAct paper and work on PR #4
 
