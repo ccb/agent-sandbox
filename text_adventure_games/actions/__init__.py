@@ -12,7 +12,6 @@ from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
 from .things import Get, Drop, Inventory, Examine, Give
 
-
 __all__ = [
     Action,
     ActionSequence,
