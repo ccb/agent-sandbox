@@ -23,82 +23,47 @@ class Say(base.Action):
         self.recipient, self.message = self._parse(command)
 
     def _parse(self, command):
-        """Return (recipient_or_None, message). The text after the verb is the
-        message; a leading ``to <name>`` (a known character) is a directed
-        recipient and is stripped from the message.
+        """Return ``(recipient_or_None, message)``.
 
-        Detection and matching are done on a lowercased copy; the returned
-        message is recovered from the most-recent command_history entry so
-        that the player original capitalization is preserved.
+        The text after the ``say``/``speak`` verb is the message. A leading
+        ``to <name>`` that names a known character makes the speech directed at
+        that character (and the name is removed from the message); otherwise the
+        speech is a broadcast and the whole text after the verb is the message.
 
-        Recipient matching requires a whole-token (word-boundary) match:
-        character name "thief" does NOT match the token "thiefery".
+        Recipient names are matched one whole word at a time, so the character
+        "thief" is not matched by the word "thiefery".
         """
-        # Recover the original-cased command from history. parse_command()
-        # stores it there before calling parse_action(), which lowercases
-        # the command before passing it here.
-        history = self.parser.command_history
-        original = command  # fallback if history is empty
-        for entry in reversed(history):
+        # ``command`` arrives lowercased: parse_action lowercases every command
+        # so keyword matching is case-insensitive. To keep the speaker's
+        # original capitalization in the spoken message, recover the untouched
+        # text from the command history, where parse_command recorded it
+        # verbatim just before parse_action lowercased it.
+        original = command
+        for entry in reversed(self.parser.command_history):
             if entry.get("role") == "user":
                 original = entry["content"]
                 break
 
-        lower = command.lower()  # command is already lowercased by parse_action
-        original_lower = original.lower()
-
-        # Strip the verb; track the byte offset in the original string so we
-        # can later slice the original-cased message.
-        verb_end_lower = 0  # end index in lower
-        verb_end_orig = 0  # corresponding end index in original
-        for verb in ("say", "speak"):
-            idx = lower.find(verb)
-            if idx != -1:
-                verb_end_lower = idx + len(verb)
-                # Find the same verb in the original (case-insensitive).
-                idx_orig = original_lower.find(verb, idx)
-                verb_end_orig = (
-                    (idx_orig + len(verb)) if idx_orig != -1 else verb_end_lower
-                )
-                break
-
-        # after_lower: text after the verb, with leading spaces stripped.
-        after_lower = lower[verb_end_lower:].lstrip()
-        spaces_after_verb = len(lower[verb_end_lower:]) - len(after_lower)
-        after_orig_start = verb_end_orig + spaces_after_verb
+        words = original.split()
+        # Drop the leading verb ("say" or "speak").
+        if words and words[0].lower() in ("say", "speak"):
+            words = words[1:]
 
         recipient = None
-        msg_orig_start = after_orig_start  # start of message in original
-
-        if after_lower.startswith("to "):
-            to_prefix = "to "
-            after_to = after_lower[len(to_prefix) :]
-            after_to_stripped = after_to.lstrip()
-            spaces_after_to = len(after_to) - len(after_to_stripped)
-            rest_lower = after_to_stripped
-            # Corresponding start of rest in original string.
-            rest_orig_start = after_orig_start + len(to_prefix) + spaces_after_to
-
-            # Match a character name as whole tokens (word-boundary safe).
-            rest_tokens = rest_lower.split()
+        # An optional leading "to <name>" makes the speech directed.
+        if words and words[0].lower() == "to":
+            after_to = words[1:]
             for name in self.game.characters:
-                name_tokens = name.lower().split()
-                if (
-                    len(rest_tokens) >= len(name_tokens)
-                    and rest_tokens[: len(name_tokens)] == name_tokens
-                ):
+                name_words = name.lower().split()
+                head = [w.lower() for w in after_to[: len(name_words)]]
+                if name_words and head == name_words:
                     recipient = self.game.characters[name]
-                    # Advance past the matched tokens in rest_lower.
-                    pos = 0
-                    for tok in name_tokens:
-                        pos = rest_lower.index(tok, pos) + len(tok)
-                    after_name = rest_lower[pos:].lstrip()
-                    spaces_after_name = len(rest_lower[pos:]) - len(after_name)
-                    msg_orig_start = rest_orig_start + pos + spaces_after_name
+                    words = after_to[len(name_words) :]
                     break
+            # If no known character followed "to", leave the words untouched so
+            # the message is broadcast and simply starts with the word "to".
 
-        # Slice the message from the original string so casing is preserved.
-        message = original[msg_orig_start:].strip()
+        message = " ".join(words).strip()
         return recipient, message
 
     def check_preconditions(self) -> bool:
