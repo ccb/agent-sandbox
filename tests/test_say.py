@@ -69,3 +69,30 @@ def test_route_attributes_say_to_actor_not_named_target():
     game, guard, thief = _say_game()
     _route(guard, game, "say to thief hello")
     assert "guard says to thief: hello" in _history_text(game)
+
+
+def test_say_broadcast_preserves_casing():
+    """Bug fix: the spoken message must keep the player original capitalization."""
+    game, guard, thief = _say_game()
+    ok = game.parser.parse_command("say Hello There", actor=guard)
+    assert ok is True
+    assert "guard says: Hello There" in _history_text(game)
+
+
+def test_say_to_unknown_name_is_broadcast():
+    """Bug fix: 'to <unknown>' falls through to a broadcast, message preserved."""
+    game, guard, thief = _say_game()
+    # No character named "arms" exists, so this is a broadcast.
+    ok = game.parser.parse_command("say to arms everyone", actor=guard)
+    assert ok is True
+    assert "guard says: to arms everyone" in _history_text(game)
+
+
+def test_say_word_boundary_recipient_match():
+    """Bug fix: 'thief' must NOT match a word that merely starts with 'thief'."""
+    game, guard, thief = _say_game()
+    # 'thiefery' is not a known character name, so this is a broadcast.
+    ok = game.parser.parse_command("say to thiefery is doomed", actor=guard)
+    assert ok is True
+    # Must be a broadcast (not directed at thief) with the full message intact.
+    assert "guard says: to thiefery is doomed" in _history_text(game)
