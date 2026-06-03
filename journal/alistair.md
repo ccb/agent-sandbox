@@ -11,15 +11,16 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 **Done today:**
 - Addressed review on #13: rebased onto `main` to resolve the duplicate `pytest` entry in `setup.py`, and moved `test_agent_layer.py` into `tests/` to standardize test location.
 - Merged #13 (squash) after #11; closed #12 in favor of the journal convention now on `main`.
-- Started #7 (time model) — it only depends on the existing `Game.turn` counter, so it can proceed in parallel with the agent-layer issues. Opened **draft PR #15** (WIP, not ready to merge): new stateless `GameClock` (`clock.py`, turn → in-game time + named day periods), opt-in `Game(time_config=...)`, `schedule_event(turn, callback)` fired post-round in `end_turn()`, time shown in prompt/`describe()`/`describe_for()`, clock config serialization, and 31 offline tests (`tests/test_time_model.py`; full suite 67 passing).
+- Continued #7 (time model) on **draft PR #15** (still WIP, not merged). Reworked it later in the day to build on the #6 trigger system instead of being a parallel mechanism: rebased/stacked the branch on PR #16 (#6 event log + triggers), which must merge first. `schedule_event` is now **sugar for a non-repeatable `at_turn(turn)` trigger** rather than its own post-round hook, so scheduled events follow trigger semantics (fire once in the react phase, recorded in the event log) — one loop, one clock, one react phase. Recurring events re-schedule themselves or use `add_trigger` with `every(n)`.
+- Current shape on the branch: stateless `GameClock` (`clock.py`, turn → in-game time + named day periods), opt-in `Game(time_config=...)`, time shown in prompt/`describe()`/`describe_for()`, clock config serialization, now 34 offline tests in `tests/test_time_model.py` (full branch suite 91 passing).
 - Deliberately deferred in #15: time-of-day in location descriptions (blocked on the `View` work, #9), webapp time display, and an NPC-schedule example.
 
 **Blockers / questions:**
-- Design question on #15 for whoever picks up #6: scheduled events fire in the same post-round phase the trigger system will use — should `schedule_event` stay its own mechanism or become sugar for #6's timer triggers (`turn >= N`)? Want agreement before merging so we don't ship two overlapping time mechanisms.
+- (Resolved) Had a design question on whether `schedule_event` should stay its own mechanism or become sugar for #6's timer triggers — settled on building it on the #6 trigger system (`at_turn(turn)`), so we don't ship two overlapping time mechanisms. #15 now stacked on #16; **#16 needs to merge first**, then rebase #15 onto `main` and retarget before it can land.
 
 **Next:**
 - Start issue #3 (Agent class on the agent layer), on its own branch.
-- Iterate on #15 based on review feedback / the #6 seam decision.
+- Land #15 once #16 merges (rebase onto `main`, retarget, final review).
 
 ## 2026-06-01
 
