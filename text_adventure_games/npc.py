@@ -158,6 +158,8 @@ def build_npc_context(character, game) -> str:
     lines.append(game.describe_for(character))
 
     # Recent command history (last 5 exchanges)
+    # "Last 5" is a bit misleading, since llm_parser and parser respond differently to failure
+    # Could be something to look into
     history = game.parser.command_history[-10:]
     if history:
         lines.append("")
