@@ -11,13 +11,15 @@ mock = MockLlmClient(["go north"])
 assert mock.chat([{"role": "user", "content": "what do you do?"}]) == "go north"
 ```
 
-Run the reference suite:
+Run the reference suites:
 
 ```bash
-pytest tests/test_agent_layer.py -v
+pytest tests/test_agent_layer.py -v      # unit patterns: parser + NPC behaviors
+pytest tests/test_react_live_game.py -v  # ReAct NPCs vs the real Action Castle game
 ```
 
-That file shows end-to-end patterns for the parser and NPC behaviors.
+The first file shows end-to-end patterns for the parser and NPC behaviors; the
+second runs the full Observe → Decide → Act → Reflect loop against the live game.
 
 ## Response modes
 
@@ -52,6 +54,17 @@ client = MockLlmClient(pick_first)
 ```
 
 `tests/test_agent_layer.py` includes `pick_option_containing(keyword)`, which scans numbered lines in the system message and returns the matching index—the same shape of answer `LlmParser` expects when it asks the model to “return just the number.”
+
+### The mock ReAct brain (`MockReActClient`)
+
+For driving the **whole game** rather than a single test, `MockReActClient` (registered as provider `"mock"`) is a callable-responder client with Action Castle rules built in: it reads the agent's system message (persona + goals) and observation, and picks an in-character command — escalating from the NPC's own action history, standing down when the player leaves, and demonstrating the Reflect step by first issuing an `attack` that fails `check_preconditions()`. Because it is a real registered provider, `LLM_PROVIDER=mock` exercises the live terminal game and webapp at no cost:
+
+```bash
+LLM_PROVIDER=mock python -m homeworks.hw1_llm.play           # pure ReAct NPCs
+LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # hybrid NPCs + LLM parser
+```
+
+It inherits `calls` recording from `MockLlmClient`, so tests can assert on the exact prompts the agents sent (see `tests/test_react_live_game.py`).
 
 ## Simulating failures
 

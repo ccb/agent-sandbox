@@ -267,12 +267,133 @@ class MockLlmClient:
 
 
 # ---------------------------------------------------------------------------
+# Mock ReAct adapter (a fake "brain" that can drive the live game for free)
+# ---------------------------------------------------------------------------
+
+
+def _player_present(observation: str) -> bool:
+    """Check whether the player is listed in the observation's
+    'Characters here:' section.
+
+    game.describe_for() lists the section as::
+
+        Characters here:
+         * The player - ...
+        Inventory: ...
+
+    We only look between the two headers, because 'the player' also shows up
+    in the 'Recent events:' history even after the player has left the room.
+    """
+    if "characters here:" not in observation:
+        return False
+    section = observation.split("characters here:", 1)[1].split("inventory", 1)[0]
+    return "the player" in section
+
+
+def _mock_brain_choose(system: str, observation: str) -> str | None:
+    """Pick a command for an Action Castle NPC, the way an LLM would.
+
+    This is the 'reasoning' behind :class:`MockReActClient`: an ordered list
+    of substring rules over the same two prompts a real model would see --
+    the system message (persona + goals) and the observation (location,
+    characters present, recent events, and any reflected failure reason).
+    First matching rule wins. Returns ``None`` (act on nothing) when the
+    prompt isn't an NPC decision or the player isn't there to menace.
+
+    Each NPC escalates by reading its own past actions in the observation's
+    'Recent events:' history -- the mock has no memory between calls, just
+    like the real agent (memory is Phase 2).
+    """
+    system = system.lower()
+    observation = observation.lower()
+
+    # Only answer the NPC decision prompt built by LLMAgent. Anything else
+    # (e.g. the LLM parser asking for narration) gets None, which the callers
+    # treat as a graceful fallback to their non-LLM path.
+    if "you are an npc in a text adventure game" not in system:
+        return None
+
+    player_here = _player_present(observation)
+    # react_behavior's Reflect step appends this line after a failed command.
+    reflecting = "' failed:" in observation
+
+    # Who am I? Match the "I am the {name}." prefix that homeworks/hw1_llm
+    # adds, or a distinctive phrase from the original Action Castle personas
+    # (so the webapp's hybrid NPCs are recognized too).
+    # Troll: growl -> snarl -> attack. The first attack deliberately omits
+    # the weapon, so check_preconditions() rejects it ("troll doesn't have a
+    # weapon.") and the Reflect step feeds the reason back; only then does
+    # the troll name its club. This demonstrates the precondition gate.
+    if "i am the troll" in system or "guard the drawbridge" in system:
+        if not player_here:
+            return None
+        if "eats the fish" in observation:  # recently fed -> stand down
+            return None
+        if reflecting and "doesn't have a weapon" in observation:
+            return "attack player with club"
+        if "snarls" in observation:  # already snarled -> time to attack
+            return "attack player"
+        if "growls" in observation:  # already growled -> escalate
+            return "snarl player"
+        return "growl player"
+
+    # Guard: warn -> threaten -> attack with sword.
+    if "i am the guard" in system or "suspicious of anyone" in system:
+        if not player_here:
+            return None
+        if "last warning" in observation:  # already threatened
+            return "attack player with sword"
+        if "you don't belong here" in observation:  # already warned
+            return "threaten player"
+        return "warn player"
+
+    # Ghost: haunt once, then the killing touch.
+    if "i am the ghost" in system or "i will haunt" in system:
+        if not player_here:
+            return None
+        if "leave this place, mortal" in observation:  # already haunted
+            return "ghost touch player"
+        return "haunt player"
+
+    return None  # unknown NPC: safest move is no move
+
+
+class MockReActClient(MockLlmClient):
+    """A free, offline stand-in for an LLM, smart enough to drive the ReAct loop.
+
+    Registered as provider ``"mock"``, so ``LLM_PROVIDER=mock`` runs the real
+    game end-to-end with LLM-driven NPCs -- no SDK, no API key, no cost. It is
+    *not* a language model: it reads the prompts the agent sends and picks an
+    in-character command via :func:`_mock_brain_choose`. Deterministic, so the
+    integration tests can rely on it.
+
+    Inherits ``calls`` recording from :class:`MockLlmClient`, so tests can
+    assert on exactly what the agent sent.
+    """
+
+    def __init__(self, config: LlmConfig | None = None):
+        # create_llm_client() constructs providers as cls(config); tests may
+        # also construct this directly with no config.
+        super().__init__(responses=self._decide)
+        self._verbose = bool(config and config.verbose)
+
+    def _decide(self, messages, max_tokens, temperature) -> str | None:
+        system = messages[0]["content"] if messages else ""
+        observation = messages[-1]["content"] if messages else ""
+        command = _mock_brain_choose(system, observation)
+        if self._verbose:
+            print(f"[mock-react] -> {command!r}")
+        return command
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
 _PROVIDERS = {
     "openai": OpenAIClient,
     "anthropic": AnthropicClient,
+    "mock": MockReActClient,
 }
 
 
@@ -284,6 +405,32 @@ def create_llm_client(config: LlmConfig) -> LlmClient:
             f"Unknown provider '{provider}'. Choose from: {list(_PROVIDERS.keys())}"
         )
     return _PROVIDERS[provider](config)
+
+
+def client_from_env() -> LlmClient | None:
+    """Create an LLM client from environment variables, or return None.
+
+    Reads ``LLM_PROVIDER`` ("anthropic", "openai", or "mock" -- the free,
+    offline stand-in), plus optional ``LLM_API_KEY``, ``LLM_MODEL``,
+    ``LLM_BASE_URL``, and ``LLM_VERBOSE``. Returns ``None`` when no provider
+    is set or the client can't be created, so callers can fall back to their
+    non-LLM path.
+    """
+    provider = os.environ.get("LLM_PROVIDER")
+    if not provider:
+        return None
+    try:
+        config = LlmConfig(
+            provider=provider,
+            api_key=os.environ.get("LLM_API_KEY"),
+            model=os.environ.get("LLM_MODEL"),
+            base_url=os.environ.get("LLM_BASE_URL"),
+            verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+        )
+        return create_llm_client(config)
+    except (ImportError, ValueError) as e:
+        print(f"Warning: Could not create LLM client: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------

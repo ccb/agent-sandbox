@@ -174,6 +174,7 @@ class LlmParser(parsing.Parser):
         self.add_description_to_history(narrated)
 
     def fail(self, description: str):
+        self.last_fail_message = description  # the ReAct Reflect step reads this
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._fail_system_instructions())
         if self.verbose:
@@ -363,6 +364,7 @@ class WebLlmParser(LlmParser):
         self.add_description_to_history(narrated)
 
     def fail(self, description: str):
+        self.last_fail_message = description  # the ReAct Reflect step reads this
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._fail_system_instructions())
         self.messages.append({"type": "error", "text": self.wrap_text(narrated)})

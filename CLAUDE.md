@@ -22,11 +22,15 @@ pip install -e .[llm]       # + openai, anthropic, tiktoken
 
 python -m text_adventure_games.webapp.app   # Flask web UI at localhost:8080
 python test_npc_behaviors.py                 # turn-based NPC behavior suite
+pytest tests/ -v                             # offline agent-layer + live-game suites
 black .                                       # format
+
+LLM_PROVIDER=mock python -m homeworks.hw1_llm.play  # ReAct NPCs, free + offline
 ```
 
-To enable the LLM layer: set `LLM_PROVIDER` (`anthropic` or `openai`) and the
-matching `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` before launching.
+To enable the LLM layer: set `LLM_PROVIDER` (`anthropic`, `openai`, or `mock` —
+a free deterministic stand-in) and, for the real providers, the matching
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` before launching.
 
 ## Architecture
 
@@ -45,14 +49,20 @@ matching `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` before launching.
 - **Blocks** (`blocks/`): obstacles that prevent movement until a condition is met.
 - **Parser** (`parsing.py`): keyword matching. `llm_parser.py` adds an LLM fallback.
 
-### Agent layer (work in progress — see ROADMAP)
+### Agent layer (see ROADMAP for what's next)
 
-- `npc.py`: a **ReAct skeleton** (Observe→Think→Act). It has **no Reflect step**, is
-  **untested**, and is **not wired into the live game** (shipped NPCs use scripted
-  behaviors in `homeworks/hw1_solution/action_castle.py`). Building this out is the
-  summer's central task — do not assume it works as-is.
-- `llm_client.py`: provider-agnostic LLM client (OpenAI / Anthropic adapters).
+- `npc.py`: the **ReAct loop** (Observe→Decide→Act→Reflect). `Agent.decide(observation)`
+  is the decision seam; `react_behavior()` routes commands through the parser's
+  precondition gate and feeds failure reasons back on retry. Wired into the live game
+  two ways: `homeworks/hw1_llm/` (pure ReAct, no fallback) and the webapp via
+  `build_game(llm_client=...)` (hybrid: ReAct with scripted fallback). No memory yet —
+  that's Phase 2.
+- `llm_client.py`: provider-agnostic LLM client (OpenAI / Anthropic adapters), plus
+  `MockReActClient` (provider `"mock"`) — a deterministic offline stand-in that drives
+  the full ReAct loop for free — and `client_from_env()` for env-var gating.
 - `llm_parser.py`: keyword-first, LLM-fallback parser. Preconditions stay hard-gated.
+- Offline tests: `tests/test_agent_layer.py` (unit), `tests/test_react_live_game.py`
+  (ReAct vs the real Action Castle game).
 
 ### Web app: `text_adventure_games/webapp/`
 
