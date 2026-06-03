@@ -9,7 +9,7 @@ class Eat(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command, hint="eater")
+        self.character = self.acting_character(command, hint="eater")
         self.item = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="food"
         )
@@ -68,7 +68,7 @@ class Drink(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command, hint="drinker")
+        self.character = self.acting_character(command, hint="drinker")
         self.item = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="drink"
         )
@@ -136,7 +136,7 @@ class Light(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command, hint="lighting fire")
+        self.character = self.acting_character(command, hint="lighting fire")
         self.item = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="flamable"
         )

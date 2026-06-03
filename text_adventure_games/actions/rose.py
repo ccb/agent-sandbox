@@ -10,7 +10,7 @@ class Pick_Rose(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command, hint="picker")
+        self.character = self.acting_character(command, hint="picker")
         self.rosebush = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="rosebush"
         )
@@ -62,7 +62,7 @@ class Smell_Rose(base.Action):
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command, hint="smeller")
+        self.character = self.acting_character(command, hint="smeller")
         self.rose = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="rose"
         )

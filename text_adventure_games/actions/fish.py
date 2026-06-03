@@ -10,7 +10,7 @@ class Catch_Fish(base.Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.command = command.lower()
-        self.character = self.parser.get_character(command, hint="fisherman")
+        self.character = self.acting_character(command, hint="fisherman")
         self.pond = self.character.location
         self.pole = self.parser.match_item(
             command,

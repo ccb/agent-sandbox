@@ -158,3 +158,29 @@ def test_attacker_does_not_target_self_via_exclude():
     action = fight.Attack(game, "attack troll", actor=troll)
     assert action.attacker is troll
     assert action.victim is not troll
+
+
+def test_actor_moves_through_exit():
+    field = things.Location("Field", "An open field.")
+    forest = things.Location("Forest", "A dark forest.")
+    field.add_connection("north", forest)
+    player = things.Character("player", "the player", "I explore.")
+    npc = things.Character("guard", "a guard", "I patrol.")
+    game = games.Game(field, player, characters=[npc])
+    field.add_character(npc)
+    game.parser.parse_command("go north", actor=npc)
+    assert npc.location is forest
+
+
+def test_actor_eats_own_food():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    npc = things.Character("guard", "a guard", "I patrol.")
+    bread = things.Item("bread", "a loaf of bread")
+    bread.set_property("is_food", True)
+    game = games.Game(room, player, characters=[npc])
+    room.add_character(npc)
+    npc.add_to_inventory(bread)
+    game.parser.parse_command("eat bread", actor=npc)
+    assert "bread" not in npc.inventory
+    assert npc.get_property("is_hungry") is False
