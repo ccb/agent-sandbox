@@ -195,7 +195,11 @@ class Parser:
         return success
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None,
+        self,
+        command: str,
+        hint: str = None,
+        split_words=None,
+        position=None,
         exclude=None,
     ) -> Character:
         """

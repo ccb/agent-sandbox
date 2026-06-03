@@ -101,9 +101,7 @@ class LlmParser(parsing.Parser):
         for i, option in enumerate(options_list):
             choices_str += f"{i}. {option}\n"
 
-        system_content = (
-            f"{instructions}\n\n{choices_str}\nReturn just the number."
-        )
+        system_content = f"{instructions}\n\n{choices_str}\nReturn just the number."
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": input_str},
@@ -210,7 +208,11 @@ class LlmParser(parsing.Parser):
     # ------------------------------------------------------------------
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None,
+        self,
+        command: str,
+        hint: str = None,
+        split_words=None,
+        position=None,
         exclude=None,
     ) -> Character:
         """Try keyword matching first; fall back to LLM for character matching."""
