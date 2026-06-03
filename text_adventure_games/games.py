@@ -1,5 +1,7 @@
 from .things import Location, Character
 from . import parsing, actions, blocks
+from .events import GameEvent
+from .triggers import Trigger, MAX_CASCADE_PASSES
 
 import json
 import inspect
@@ -66,6 +68,12 @@ class Game:
         # Turn counter
         self.turn = 0
 
+        # Event log (issue #6): append-only record of what happened each round
+        self.events = []
+
+        # Triggers (issue #6): rules fired in the post-round react phase
+        self.triggers = []
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
@@ -106,6 +114,42 @@ class Game:
                 continue
             character.take_turn(self)
             if self.is_game_over():
+                break
+        if not self.is_game_over():
+            self._run_triggers()
+
+    def log_event(self, actor, action, summary="", payload=None):
+        """Append a GameEvent to the event log (issue #6)."""
+        self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def add_trigger(self, name, condition, action, repeatable=False):
+        """Register a Trigger evaluated in the post-round react phase (issue #6)."""
+        trigger = Trigger(name, condition, action, repeatable)
+        self.triggers.append(trigger)
+        return trigger
+
+    def _run_triggers(self):
+        """React phase: fire triggers whose conditions are now true.
+
+        Re-evaluates in bounded passes so a trigger can enable another one
+        (cascading), but each trigger fires at most once per round and the chain
+        is capped at MAX_CASCADE_PASSES to prevent infinite loops.
+        """
+        fired_this_round = set()
+        for _ in range(MAX_CASCADE_PASSES):
+            newly_fired = False
+            for trigger in self.triggers:
+                if trigger in fired_this_round:
+                    continue
+                if trigger.fired and not trigger.repeatable:
+                    continue
+                if trigger.condition(self):
+                    trigger.action(self)
+                    trigger.fired = True
+                    fired_this_round.add(trigger)
+                    self.log_event("trigger", trigger.name, f"{trigger.name} fired")
+                    newly_fired = True
+            if not newly_fired:
                 break
 
     def game_loop(self):
@@ -263,9 +307,7 @@ class Game:
                 lines.append(f" * {item.name} - {item.description}")
 
         # Other characters present
-        others = [
-            c for name, c in loc.characters.items() if name != character.name
-        ]
+        others = [c for name, c in loc.characters.items() if name != character.name]
         if others:
             lines.append("Characters here:")
             for c in others:

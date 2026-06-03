@@ -167,7 +167,10 @@ homeworks/hw3_solution/games-updated.zip
 
 homeworks/hw4_solution/dalle
 
-# Local scratch — not part of the engine
+# macOS
+.DS_Store
+
+# Local scratch — not part of the engine (never commit)
 engine-overview.html
 
 # superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
