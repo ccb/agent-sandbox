@@ -181,7 +181,14 @@ class Parser:
             self.fail("I'm not sure what you want to do.")
             return False
         action()
-        return getattr(action, "_preconditions_passed", False)
+        success = getattr(action, "_preconditions_passed", False)
+        if success:
+            # An ActionSequence re-enters parse_command per sub-command, so one
+            # comma-separated command logs each sub-command plus the wrapping
+            # "sequence" action — a future event-log consumer (#9) should expect that.
+            actor = self.get_character(command)
+            self.game.log_event(actor.name, action.action_name(), command)
+        return success
 
     def get_character(
         self, command: str, hint: str = None, split_words=None, position=None
