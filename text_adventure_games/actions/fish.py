@@ -7,8 +7,8 @@ class Catch_Fish(base.Action):
     ACTION_DESCRIPTION = "Catch fish with a pole"
     ACTION_ALIASES = ["go fishing"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command.lower()
         self.character = self.parser.get_character(command, hint="fisherman")
         self.pond = self.character.location
@@ -33,9 +33,7 @@ class Catch_Fish(base.Action):
         if not self.pond.get_property("has_fish"):
             self.parser.fail("The pond has no fish.")
             return False
-        no_pole_msg = (
-            f"{self.character.name} does not have a fishing pole."
-        )
+        no_pole_msg = f"{self.character.name} does not have a fishing pole."
 
         hands_msg = "".join(
             [

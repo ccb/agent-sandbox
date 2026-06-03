@@ -8,8 +8,8 @@ class Pick_Rose(base.Action):
     ACTION_NAME = "pick rose"
     ACTION_DESCRIPTION = "Pick a rose from a rosebush"
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command, hint="picker")
         self.rosebush = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="rosebush"
@@ -60,8 +60,8 @@ class Smell_Rose(base.Action):
     ACTION_NAME = "smell rose"
     ACTION_DESCRIPTION = "Smell the rose"
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command, hint="smeller")
         self.rose = self.parser.match_item(
             command, self.parser.get_items_in_scope(self.character), hint="rose"

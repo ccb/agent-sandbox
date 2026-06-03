@@ -28,8 +28,9 @@ class Go(base.Action):
         game,
         command: str,
         # location: Location, direction: str
+        actor=None,
     ):
-        super().__init__(game)
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command, hint="traveler")
         self.location = self.character.location
         self.direction = self.parser.get_direction(command, self.location)

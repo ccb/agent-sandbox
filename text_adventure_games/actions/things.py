@@ -8,8 +8,8 @@ class Get(base.Action):
     ACTION_DESCRIPTION = "Get something and add it to the inventory"
     ACTION_ALIASES = ["take"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, hint="wants to get something"
         )
@@ -66,8 +66,9 @@ class Drop(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, hint="wants to drop something"
         )
@@ -113,8 +114,9 @@ class Inventory(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
 
     def check_preconditions(self) -> bool:
@@ -143,8 +145,9 @@ class Examine(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command, hint="looker")
         self.matched_item = self.parser.match_item(
             command,
@@ -173,8 +176,8 @@ class Give(base.Action):
     ACTION_DESCRIPTION = "Give something to someone"
     ACTION_ALIASES = ["hand"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         give_words = ["give", "hand"]
         self.giver = self.parser.get_character(
             command, hint="giver", split_words=give_words, position="before"
@@ -245,8 +248,8 @@ class Unlock_Door(base.Action):
     ACTION_NAME = "unlock door"
     ACTION_DESCRIPTION = "Unlock a door"
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command
         self.character = self.parser.get_character(command)
         self.key = self.parser.match_item(

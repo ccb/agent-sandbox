@@ -1,4 +1,8 @@
+import pytest
+
 from text_adventure_games import games, things
+from text_adventure_games.actions import things as a_things
+from text_adventure_games.actions import fight, consume, locations, rose, fish
 from text_adventure_games.actions.base import Action
 
 
@@ -33,3 +37,29 @@ def test_get_character_exclude_skips_named_candidate():
     bob = game.characters["bob"]
     assert game.parser.get_character("alice and bob") is alice
     assert game.parser.get_character("alice and bob", exclude=alice) is bob
+
+
+@pytest.mark.parametrize(
+    "action_cls,command",
+    [
+        (a_things.Get, "get key"),
+        (a_things.Drop, "drop key"),
+        (a_things.Inventory, "inventory"),
+        (a_things.Examine, "examine key"),
+        (a_things.Give, "give key to bob"),
+        (a_things.Unlock_Door, "unlock door"),
+        (fight.Attack, "attack bob"),
+        (consume.Eat, "eat bread"),
+        (consume.Drink, "drink water"),
+        (consume.Light, "light lamp"),
+        (locations.Go, "north"),
+        (rose.Pick_Rose, "pick rose"),
+        (rose.Smell_Rose, "smell rose"),
+        (fish.Catch_Fish, "catch fish with pole"),
+    ],
+)
+def test_action_accepts_and_stores_actor(action_cls, command):
+    game = _two_char_game()
+    alice = game.characters["alice"]
+    action = action_cls(game, command, actor=alice)
+    assert action.actor is alice

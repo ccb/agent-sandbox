@@ -7,8 +7,8 @@ class Attack(base.Action):
     ACTION_DESCRIPTION = "Attack someone with a weapon"
     ACTION_ALIASES = ["hit"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         attack_words = ["attack", "hit"]
         self.attacker = self.parser.get_character(
             command, hint="attacker", split_words=attack_words, position="before"
