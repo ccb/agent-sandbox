@@ -102,3 +102,23 @@ def test_action_sequence_threads_actor():
     game.parser.parse_command("get key, get coin", actor=npc)
     assert "key" in npc.inventory
     assert "coin" in npc.inventory
+
+
+def _give_game():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    guard = things.Character("guard", "a guard", "I guard.")
+    thief = things.Character("thief", "a thief", "I sneak.")
+    sword = things.Item("sword", "a sharp sword")
+    game = games.Game(room, player, characters=[guard, thief])
+    room.add_character(guard)
+    room.add_character(thief)
+    guard.add_to_inventory(sword)
+    return game, guard, thief
+
+
+def test_actor_gives_to_other_character():
+    game, guard, thief = _give_game()
+    game.parser.parse_command("give sword to thief", actor=guard)
+    assert "sword" not in guard.inventory
+    assert "sword" in thief.inventory
