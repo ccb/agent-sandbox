@@ -28,7 +28,15 @@ from text_adventure_games.llm_client import (
     client_from_env,
     create_llm_client,
 )
+from text_adventure_games.npc import _parse_decision
 from text_adventure_games.webapp.web_parser import WebParser
+
+
+def action_of(reply):
+    """The command in a labeled 'Reasoning: ...\\nAction: ...' mock reply --
+    parsed with the same helper LLMAgent.decide() uses, so the mock's output
+    format and the agent's parser are tested as a pair."""
+    return _parse_decision(reply)[1]
 
 
 @pytest.fixture
@@ -101,23 +109,37 @@ DRAWBRIDGE_OBS = (
 
 def test_mock_brain_troll_escalates_from_history():
     # First contact: growl.
-    assert _mock_brain_choose(TROLL_SYSTEM, DRAWBRIDGE_OBS) == "growl player"
+    assert action_of(_mock_brain_choose(TROLL_SYSTEM, DRAWBRIDGE_OBS)) == "growl player"
     # Its own growl shows up in the observation history: escalate to snarl.
     growled = (
         DRAWBRIDGE_OBS
         + "\n\nRecent events:\n  Game: Troll growls menacingly at The player."
     )
-    assert _mock_brain_choose(TROLL_SYSTEM, growled) == "snarl player"
+    assert action_of(_mock_brain_choose(TROLL_SYSTEM, growled)) == "snarl player"
     # After snarling: attack -- deliberately without naming a weapon.
     snarled = growled + "\n  Game: Troll snarls and bares its teeth at The player."
-    assert _mock_brain_choose(TROLL_SYSTEM, snarled) == "attack player"
+    assert action_of(_mock_brain_choose(TROLL_SYSTEM, snarled)) == "attack player"
     # The Reflect step appended the parser's failure reason: name the club.
     reflected = (
         snarled
         + "\n\nYour previous command 'attack player' failed: troll doesn't have a weapon.\n"
         "Reflect on why it failed and choose a different action."
     )
-    assert _mock_brain_choose(TROLL_SYSTEM, reflected) == "attack player with club"
+    assert (
+        action_of(_mock_brain_choose(TROLL_SYSTEM, reflected))
+        == "attack player with club"
+    )
+
+
+def test_mock_brain_replies_are_labeled():
+    """Every mock decision uses the labeled two-line format the real LLM is
+    instructed to use, so the reasoning is visible in the agent trace."""
+    reply = _mock_brain_choose(TROLL_SYSTEM, DRAWBRIDGE_OBS)
+    reasoning, command = _parse_decision(reply)
+    assert reply.startswith("Reasoning: ")
+    assert "\nAction: " in reply
+    assert reasoning, "mock reply has no reasoning"
+    assert command == "growl player"
 
 
 def test_mock_brain_idles_when_player_absent():
@@ -160,7 +182,7 @@ def test_mock_brain_recognizes_original_personas():
         "Persona: I am hungry. The guard promised to feed me if I guard the "
         "drawbridge and keep people out of the castle."
     )
-    assert _mock_brain_choose(original, DRAWBRIDGE_OBS) == "growl player"
+    assert action_of(_mock_brain_choose(original, DRAWBRIDGE_OBS)) == "growl player"
 
 
 def test_mock_brain_troll_stands_down_when_fed():
@@ -216,6 +238,22 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
     # The corrected command passed the gate and applied real effects.
     assert any("attacked" in m for m in by_type(messages, "output"))
     assert game.player.get_property("is_unconscious") is True
+
+    # Every decision was traced with explicit reasoning/action labels,
+    # including the failed attempt and the post-Reflect correction.
+    trace = by_type(messages, "npc_log")
+    assert any(m.startswith("troll [reasoning]") for m in trace), "no reasoning label"
+    assert "troll [action] growl player" in trace
+    assert "troll [action] attack player" in trace
+    assert "troll [action] attack player with club" in trace
+    assert any("which weapon" in m for m in trace), "reflect reasoning missing"
+
+    # The trace is private: none of it leaked into command_history (which
+    # feeds other NPCs' observations).
+    assert not any(
+        "[reasoning]" in e["content"] or "[action]" in e["content"]
+        for e in game.parser.command_history
+    )
 
 
 def test_react_guard_warns_then_escalates(live_game):
@@ -316,8 +354,9 @@ def test_npcs_idle_when_player_absent(live_game):
 
     # All three ReAct NPCs consulted the LLM this turn...
     assert len(mock.calls) == 3
-    # ...but none of them acted.
+    # ...but none of them acted, so there is nothing to trace either.
     assert by_type(messages, "npc_action") == []
+    assert by_type(messages, "npc_log") == []
     npc_commands = [
         entry["content"]
         for entry in game.parser.command_history

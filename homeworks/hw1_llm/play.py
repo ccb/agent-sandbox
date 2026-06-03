@@ -19,11 +19,16 @@ Run it from the repo root::
 The ``mock`` provider is a deterministic stand-in that picks in-character
 commands from the same prompts a real model would see (see
 ``MockReActClient`` in ``text_adventure_games/llm_client.py``), so the whole
-loop runs at no cost. Try walking to the drawbridge (``go out``, ``go
-north``, ``go east``) and typing ``wait`` a few times: the troll growls,
-snarls, then tries ``attack player`` -- which *fails* the precondition check
-("troll doesn't have a weapon.") -- reflects on the failure, and retries with
-``attack player with club``.
+loop runs at no cost. Every decision is traced with explicit labels::
+
+    troll [reasoning] My growl didn't scare the intruder off. Escalate.
+    troll [action] snarl player
+
+Try walking to the drawbridge (``go out``, ``go north``, ``go east``) and
+typing ``wait`` a few times: the troll growls, snarls, then tries ``attack
+player`` -- which *fails* the precondition check ("troll doesn't have a
+weapon.") -- reflects on the failure, and retries with ``attack player with
+club``.
 """
 
 from homeworks.hw1_solution import build_game

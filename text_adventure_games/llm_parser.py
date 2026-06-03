@@ -376,6 +376,11 @@ class WebLlmParser(LlmParser):
         self.messages.append({"type": "npc_action", "text": self.wrap_text(narrated)})
         self.add_description_to_history(narrated)
 
+    def npc_log(self, message: str):
+        # Agent trace (labeled reasoning/action): buffered like WebParser's,
+        # not narrated, and never added to history.
+        self.messages.append({"type": "npc_log", "text": self.wrap_text(message)})
+
     def get_messages(self):
         msgs = list(self.messages)
         self.messages = []

@@ -24,7 +24,6 @@ from text_adventure_games.npc import (
     make_react_behavior,
 )
 
-
 # ----------------------------------------------------------------------
 # The seam in isolation (no game, no parser)
 # ----------------------------------------------------------------------
@@ -61,9 +60,39 @@ def test_llmagent_decide_puts_persona_and_goals_in_system_message():
 
 
 def test_llmagent_decide_takes_first_line_only():
+    """Unlabeled replies keep working: the first line is the command."""
     mock = MockLlmClient(["go north\nthen I will eat the player"])
     agent = LLMAgent(mock)
     assert agent.decide("obs") == "go north"
+
+
+def test_llmagent_decide_parses_labeled_reasoning_and_action():
+    """The labeled format _DECISION_INSTRUCTION asks for: the Action line is
+    the command, and the Reasoning line is recorded on the agent so the ReAct
+    loop can trace it."""
+    mock = MockLlmClient(["Reasoning: The forest looks safer.\nAction: go north"])
+    agent = LLMAgent(mock)
+    assert agent.decide("obs") == "go north"
+    assert agent.last_reasoning == "The forest looks safer."
+
+
+def test_llmagent_decide_accepts_thought_label_and_reset():
+    """'Thought:' is a synonym, and last_reasoning resets on every decide()."""
+    mock = MockLlmClient(["Thought: hungry.\nAction: eat fish", "go south"])
+    agent = LLMAgent(mock)
+    assert agent.decide("obs") == "eat fish"
+    assert agent.last_reasoning == "hungry."
+    assert agent.decide("obs") == "go south"  # unlabeled reply
+    assert agent.last_reasoning is None
+
+
+def test_llmagent_decide_reasoning_only_means_no_action():
+    """A reply with reasoning but no Action line is a decision to do nothing
+    -- the reasoning line must not be mistaken for a command."""
+    mock = MockLlmClient(["Reasoning: Nothing to do here."])
+    agent = LLMAgent(mock)
+    assert agent.decide("obs") is None
+    assert agent.last_reasoning == "Nothing to do here."
 
 
 def test_llmagent_decide_returns_none_on_llm_failure():

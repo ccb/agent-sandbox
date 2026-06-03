@@ -153,11 +153,18 @@ LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # browser
 
 `homeworks/hw1_llm/` is a thin wrapper around the HW1 game: same world, but
 troll/guard/ghost are driven by **pure ReAct** (`make_react_behavior`, no
-scripted fallback), so every NPC action you see was reasoned by the agent. Walk
-to the Drawbridge (`go out`, `go north`, `go east`) and `wait` a few times: the
-troll growls, snarls, then tries `attack player` — which **fails the
-precondition check** ("troll doesn't have a weapon.") — reflects on the failure,
-and retries with `attack player with club`.
+scripted fallback), so every NPC action you see was reasoned by the agent.
+Each decision is traced with explicit labels. Walk to the Drawbridge (`go
+out`, `go north`, `go east`) and `wait` a few times:
+
+```
+troll [reasoning] Growling and snarling didn't drive the intruder off. Attack.
+troll [action] attack player
+troll doesn't have a weapon.                <- rejected by check_preconditions()
+troll [reasoning] My attack failed because I never said which weapon to use.
+troll [action] attack player with club      <- the Reflect step fed the reason back
+troll attacked The player with the club.
+```
 
 ### Run the tests
 

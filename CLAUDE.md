@@ -53,7 +53,10 @@ a free deterministic stand-in) and, for the real providers, the matching
 
 - `npc.py`: the **ReAct loop** (Observe→Decide→Act→Reflect). `Agent.decide(observation)`
   is the decision seam; `react_behavior()` routes commands through the parser's
-  precondition gate and feeds failure reasons back on retry. Wired into the live game
+  precondition gate and feeds failure reasons back on retry. Agents reply in a labeled
+  `Reasoning:`/`Action:` format; each decision is traced as `name [reasoning] ...` /
+  `name [action] ...` lines via `parser.npc_log` (kept out of `command_history` so one
+  NPC's thoughts never leak into another's observations). Wired into the live game
   two ways: `homeworks/hw1_llm/` (pure ReAct, no fallback) and the webapp via
   `build_game(llm_client=...)` (hybrid: ReAct with scripted fallback). No memory yet —
   that's Phase 2.

@@ -290,6 +290,12 @@ def _player_present(observation: str) -> bool:
     return "the player" in section
 
 
+def _decision(reasoning: str, command: str) -> str:
+    """Format a reply the way ``_DECISION_INSTRUCTION`` asks a real LLM to:
+    a labeled Reasoning line, then a labeled Action line."""
+    return f"Reasoning: {reasoning}\nAction: {command}"
+
+
 def _mock_brain_choose(system: str, observation: str) -> str | None:
     """Pick a command for an Action Castle NPC, the way an LLM would.
 
@@ -297,8 +303,11 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
     of substring rules over the same two prompts a real model would see --
     the system message (persona + goals) and the observation (location,
     characters present, recent events, and any reflected failure reason).
-    First matching rule wins. Returns ``None`` (act on nothing) when the
-    prompt isn't an NPC decision or the player isn't there to menace.
+    First matching rule wins. Replies use the same labeled two-line format a
+    real model is instructed to use ("Reasoning: ...\\nAction: ..."), so the
+    agent's trace shows *why* each command was chosen. Returns ``None`` (act
+    on nothing) when the prompt isn't an NPC decision or the player isn't
+    there to menace.
 
     Each NPC escalates by reading its own past actions in the observation's
     'Recent events:' history -- the mock has no memory between calls, just
@@ -330,30 +339,57 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
         if "eats the fish" in observation:  # recently fed -> stand down
             return None
         if reflecting and "doesn't have a weapon" in observation:
-            return "attack player with club"
+            return _decision(
+                "My attack failed because I never said which weapon to use.",
+                "attack player with club",
+            )
         if "snarls" in observation:  # already snarled -> time to attack
-            return "attack player"
+            return _decision(
+                "Growling and snarling didn't drive the intruder off. Attack.",
+                "attack player",
+            )
         if "growls" in observation:  # already growled -> escalate
-            return "snarl player"
-        return "growl player"
+            return _decision(
+                "My growl didn't scare the intruder off. Escalate.",
+                "snarl player",
+            )
+        return _decision(
+            "An intruder is on my drawbridge. Warn them off.",
+            "growl player",
+        )
 
     # Guard: warn -> threaten -> attack with sword.
     if "i am the guard" in system or "suspicious of anyone" in system:
         if not player_here:
             return None
         if "last warning" in observation:  # already threatened
-            return "attack player with sword"
+            return _decision(
+                "The stranger ignored my last warning. Draw my sword.",
+                "attack player with sword",
+            )
         if "you don't belong here" in observation:  # already warned
-            return "threaten player"
-        return "warn player"
+            return _decision(
+                "The stranger ignored my warning. Make a real threat.",
+                "threaten player",
+            )
+        return _decision(
+            "A stranger is in the courtyard. Warn them away from the castle.",
+            "warn player",
+        )
 
     # Ghost: haunt once, then the killing touch.
     if "i am the ghost" in system or "i will haunt" in system:
         if not player_here:
             return None
         if "leave this place, mortal" in observation:  # already haunted
-            return "ghost touch player"
-        return "haunt player"
+            return _decision(
+                "The mortal ignored my warning. Stop their heart.",
+                "ghost touch player",
+            )
+        return _decision(
+            "A living soul has entered my dungeon. Frighten them away.",
+            "haunt player",
+        )
 
     return None  # unknown NPC: safest move is no move
 
