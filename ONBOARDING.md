@@ -63,7 +63,7 @@ Play through a bit of Action Castle in the browser so you know what the engine
 
 ## 2. Do HW1: Action Castle
 
-Open `homeworks/hw1.ipynb`. It's a mostly-complete text adventure with a few holes
+Open `notebooks/hw1.ipynb`. It's a mostly-complete text adventure with a few holes
 marked for you to fill in. Completing it teaches you the four core concepts the
 whole project is built on:
 
@@ -72,7 +72,7 @@ whole project is built on:
 - **Actions** with **preconditions** and **effects** (the rules of the world)
 - **Blocks** (obstacles that gate movement until you solve them)
 
-If you get stuck, `homeworks/hw1_solution/` has a complete version — but try first.
+If you get stuck, `notebooks/hw1_solution/` has a complete version — but try first.
 
 ## 3. Learn to use Claude Code as a study partner
 

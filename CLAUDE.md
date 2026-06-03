@@ -25,7 +25,7 @@ python test_npc_behaviors.py                 # turn-based NPC behavior suite
 pytest tests/ -v                             # offline agent-layer + live-game suites
 black .                                       # format
 
-LLM_PROVIDER=mock python -m homeworks.hw1_llm.play  # ReAct NPCs, free + offline
+LLM_PROVIDER=mock python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
 ```
 
 To enable the LLM layer: set `LLM_PROVIDER` (`anthropic`, `openai`, or `mock` —
@@ -57,7 +57,7 @@ a free deterministic stand-in) and, for the real providers, the matching
   `Reasoning:`/`Action:` format; each decision is traced as `name [reasoning] ...` /
   `name [action] ...` lines via `parser.npc_log` (kept out of `command_history` so one
   NPC's thoughts never leak into another's observations). Wired into the live game
-  two ways: `homeworks/hw1_llm/` (pure ReAct, no fallback) and the webapp via
+  two ways: `notebooks/hw1_llm/` (pure ReAct, no fallback) and the webapp via
   `build_game(llm_client=...)` (hybrid: ReAct with scripted fallback). No memory yet —
   that's Phase 2.
 - `llm_client.py`: provider-agnostic LLM client (OpenAI / Anthropic adapters), plus
@@ -70,7 +70,7 @@ a free deterministic stand-in) and, for the real providers, the matching
 ### Web app: `text_adventure_games/webapp/`
 
 Flask app with a `WebParser` that buffers messages for the HTTP response. Imports
-the game from `homeworks/hw1_solution/action_castle.py`.
+the game from `notebooks/hw1_solution/action_castle.py`.
 
 ## Known issues / good first fixes
 
