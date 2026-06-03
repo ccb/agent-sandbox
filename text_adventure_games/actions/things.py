@@ -8,11 +8,9 @@ class Get(base.Action):
     ACTION_DESCRIPTION = "Get something and add it to the inventory"
     ACTION_ALIASES = ["take"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
-        self.character = self.parser.get_character(
-            command, hint="wants to get something"
-        )
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to get something")
         self.location = self.character.location
         self.item = self.parser.match_item(
             command, self.location.items, hint="thing to get"
@@ -66,11 +64,10 @@ class Drop(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
-        self.character = self.parser.get_character(
-            command, hint="wants to drop something"
-        )
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to drop something")
         self.location = self.character.location
         self.item = self.parser.match_item(
             command, self.character.inventory, hint="thing being dropped"
@@ -113,9 +110,10 @@ class Inventory(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
-        self.character = self.parser.get_character(command)
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command)
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No character was matched."):
@@ -143,9 +141,10 @@ class Examine(base.Action):
         self,
         game,
         command: str,
+        actor=None,
     ):
-        super().__init__(game)
-        self.character = self.parser.get_character(command, hint="looker")
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="looker")
         self.matched_item = self.parser.match_item(
             command,
             self.parser.get_items_in_scope(self.character),
@@ -173,14 +172,18 @@ class Give(base.Action):
     ACTION_DESCRIPTION = "Give something to someone"
     ACTION_ALIASES = ["hand"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         give_words = ["give", "hand"]
-        self.giver = self.parser.get_character(
+        self.giver = self.acting_character(
             command, hint="giver", split_words=give_words, position="before"
         )
         self.recipient = self.parser.get_character(
-            command, hint="recipient", split_words=give_words, position="after"
+            command,
+            hint="recipient",
+            split_words=give_words,
+            position="after",
+            exclude=self.giver,
         )
         self.item = self.parser.match_item(
             command, self.giver.inventory, hint="item being given"
@@ -245,10 +248,10 @@ class Unlock_Door(base.Action):
     ACTION_NAME = "unlock door"
     ACTION_DESCRIPTION = "Unlock a door"
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command
-        self.character = self.parser.get_character(command)
+        self.character = self.acting_character(command)
         self.key = self.parser.match_item(
             "key", self.parser.get_items_in_scope(self.character), hint="key"
         )

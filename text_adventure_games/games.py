@@ -107,7 +107,12 @@ class Game:
         and, if successful, runs the end-of-turn phase (increment turn counter,
         run NPC behaviors).
         """
-        success = self.parser.parse_command(command)
+        # The player is the subject of any command entered here, so pass them as
+        # the explicit actor. This keeps the event log correct even when the
+        # command names another character (e.g. "attack troll") — without it the
+        # parser falls back to scanning the command for a name and would mis-log
+        # the event under the named target instead of the player.
+        success = self.parser.parse_command(command, actor=self.player)
         if success:
             self.end_turn()
         return success

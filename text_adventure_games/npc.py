@@ -94,6 +94,12 @@ class LLMAgent(Agent):
         return command or None
 
     def _system_message(self) -> str:
+        # The character's name is deliberately left out of this prompt: an
+        # agent's identity rides on its first-person persona string (and the
+        # observation already names the scene and the other characters in it),
+        # so the model speaks as "I" without being told its own name. Add the
+        # name here only if a future persona needs the model to refer to itself
+        # by name.
         lines = ["You are an NPC in a text adventure game."]
         if self.persona:
             lines.append(f"Persona: {self.persona}")
@@ -174,12 +180,11 @@ def build_npc_context(character, game) -> str:
 
 
 def _route(character, game, command: str) -> bool:
-    """Prepend the character's name so the parser attributes the command to it,
-    then route it through the parser (and its precondition gate). Returns
-    whether the command succeeded."""
-    if not command.lower().startswith(character.name.lower()):
-        command = f"{character.name} {command}"
-    return game.parser.parse_command(command)
+    """Route a command through the parser (and its precondition gate),
+    attributed to *character* via the explicit actor seam. The name-prefix
+    hack is gone: with the actor explicit, prepending the name would let the
+    target scan mis-hit the actor's own name. Returns whether it succeeded."""
+    return game.parser.parse_command(command, actor=character)
 
 
 def _reflect(observation: str, command: str, failure_reason: str) -> str:
@@ -238,6 +243,12 @@ def make_react_behavior(llm_client, max_retries: int = 1, goals=None):
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
     """
+    # One agent is created per factory call and captured by the returned
+    # closure, so this agent (its persona today, its memory in Phase 2) belongs
+    # to a single character. Attach the result to ONE character; to drive
+    # several NPCs, call this factory once per character rather than sharing a
+    # behavior, or they would share an identity. The first turn lazily adopts
+    # the running character's persona.
     agent = LLMAgent(llm_client, goals=goals)
 
     def behavior(character, game):
@@ -264,6 +275,8 @@ def make_hybrid_behavior(
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
     """
+    # As in make_react_behavior, this single agent belongs to one character;
+    # call the factory once per NPC rather than sharing the returned behavior.
     agent = LLMAgent(llm_client, goals=goals)
 
     def behavior(character, game):

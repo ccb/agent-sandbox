@@ -101,9 +101,7 @@ class LlmParser(parsing.Parser):
         for i, option in enumerate(options_list):
             choices_str += f"{i}. {option}\n"
 
-        system_content = (
-            f"{instructions}\n\n{choices_str}\nReturn just the number."
-        )
+        system_content = f"{instructions}\n\n{choices_str}\nReturn just the number."
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": input_str},
@@ -193,9 +191,9 @@ class LlmParser(parsing.Parser):
     # Intent detection (keyword-first, LLM fallback)
     # ------------------------------------------------------------------
 
-    def determine_intent(self, command: str):
+    def determine_intent(self, command: str, actor=None):
         """Try keyword matching first; fall back to LLM if no match."""
-        intent = super().determine_intent(command)
+        intent = super().determine_intent(command, actor=actor)
         if intent is not None:
             return intent
         # LLM fallback
@@ -210,10 +208,17 @@ class LlmParser(parsing.Parser):
     # ------------------------------------------------------------------
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None
+        self,
+        command: str,
+        hint: str = None,
+        split_words=None,
+        position=None,
+        exclude=None,
     ) -> Character:
         """Try keyword matching first; fall back to LLM for character matching."""
-        result = super().get_character(command, hint, split_words, position)
+        result = super().get_character(
+            command, hint, split_words, position, exclude=exclude
+        )
         # If keyword matching returned the player (default), try LLM for a better match
         if result is self.game.player and hint:
             llm_result = self._llm_get_character(command, hint)

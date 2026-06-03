@@ -7,14 +7,18 @@ class Attack(base.Action):
     ACTION_DESCRIPTION = "Attack someone with a weapon"
     ACTION_ALIASES = ["hit"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         attack_words = ["attack", "hit"]
-        self.attacker = self.parser.get_character(
+        self.attacker = self.acting_character(
             command, hint="attacker", split_words=attack_words, position="before"
         )
         self.victim = self.parser.get_character(
-            command, hint="victim", split_words=attack_words, position="after"
+            command,
+            hint="victim",
+            split_words=attack_words,
+            position="after",
+            exclude=self.attacker,
         )
         self.weapon = self.parser.match_item(
             command, self.attacker.inventory, hint="weapon"
@@ -50,7 +54,7 @@ class Attack(base.Action):
         ):
             return False
         if not self.attacker.is_in_inventory(self.weapon):
-            description = "{name} doesn't have the {weapom}.".format(
+            description = "{name} doesn't have the {weapon}.".format(
                 name=self.attacker.name, weapon=self.weapon.name
             )
             self.parser.fail(description)

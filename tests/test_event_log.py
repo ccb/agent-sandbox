@@ -55,6 +55,25 @@ def test_player_command_is_logged(tiny_game):
     assert event.turn == 0
 
 
+def test_player_command_naming_another_character_logs_player(tiny_game):
+    # Regression for the actor-conflation bug Chris flagged on PR #16: the event
+    # log must record the *subject* of a command, not a character merely named as
+    # its object. Before actors were threaded explicitly (#8), parse_command
+    # derived the actor with get_character(command), so a player command that
+    # mentions another character ("attack troll ...") was mis-logged with
+    # actor="troll". do_command now passes the player as the explicit actor.
+    player = tiny_game.player
+    sword = things.Item("sword", "a sharp sword")
+    sword.set_property("is_weapon", True)
+    player.add_to_inventory(sword)
+
+    tiny_game.do_command("attack troll with sword")
+
+    assert tiny_game.events, "a successful command should be logged"
+    assert tiny_game.events[0].actor == "player"
+    assert tiny_game.events[0].action == "attack"
+
+
 def test_npc_command_is_logged(tiny_game):
     troll = tiny_game.characters["troll"]
     troll.set_behavior(lambda c, g: g.parser.parse_command("troll go north"))
