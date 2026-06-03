@@ -4,6 +4,23 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-03
+
+**Focus:** landed the time model (#7); notebooks reorg + multi-agent demo; wired ReAct into the live game (#5)
+
+**Done today:**
+- Landed **PR #18** (issue #7, time model): stateless `GameClock` (`clock.py`), opt-in `Game(time_config=...)`, `schedule_event` as sugar for a non-repeatable `at_turn(turn)` trigger, time in prompt/`describe()`, clock-config serialization, 378-line offline test suite (`tests/test_time_model.py`). Closed the old WIP #15 in favor of the clean stacked version.
+- Opened **PR #20**: renamed `homeworks/` → `notebooks/` and added `multi_agent_action_castle.ipynb`, a multi-agent Action Castle demo. Iterated to stream the transcript live and make the play cell safely re-runnable; re-ran for clean committed output.
+- Opened **PR #21** (issue #5): wired ReAct LLM behavior into the live game end-to-end. Added `MockReActClient` (provider `"mock"`) — a free, deterministic stand-in that drives the full ReAct loop offline — plus `client_from_env()` gating, a pure-ReAct `homeworks/hw1_llm/play.py` entry point, and webapp wiring via `build_game(llm_client=...)` (hybrid: ReAct with scripted fallback). Fixed an `LlmParser.fail` bug that broke the Reflect step. New `tests/test_react_live_game.py` runs ReAct against the real Action Castle game.
+- Follow-up commit on #21: agents now reply in a labeled `Reasoning:`/`Action:` format and each decision is traced as `name [reasoning] ...` / `name [action] ...` via `parser.npc_log`, kept out of `command_history` so one NPC's thoughts never leak into another's observations.
+
+**Blockers / questions:**
+- The mock ReAct brain is string-coupled to Action Castle's room/item names — fine for tests, worth noting before anyone reuses it for another game.
+
+**Next:**
+- Get #20 and #21 reviewed/merged.
+- Phase 2: agent memory.
+
 ## 2026-06-02
 
 **Focus:** addressing review feedback and landing yesterday's PRs; started #7 (time model)
