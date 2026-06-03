@@ -260,5 +260,66 @@ def test_hybrid_uses_llm_when_available(tiny_game):
     assert scripted_calls == []
 
 
+# ----------------------------------------------------------------------
+# Section D: Reflect step (failure reason fed back to LLM)
+# ----------------------------------------------------------------------
+
+
+def test_react_reflect_prompt_contains_failure_reason(tiny_game):
+    """On retry the prompt must include the parser's actual failure message."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+    # "go south" fails (no south exit); "go north" succeeds
+    mock = MockLlmClient(["go south", "go north"])
+    troll.set_behavior(make_react_behavior(mock, max_retries=2))
+
+    troll.take_turn(tiny_game)
+
+    assert troll.location is tiny_game.locations["Forest"]
+    assert len(mock.calls) == 2
+    # The second call's user message must contain the engine's failure text, not
+    # just the generic "Choose a different action" placeholder.
+    second_prompt = mock.calls[1]["messages"][-1]["content"]
+    assert "go south" in second_prompt
+    # The parser emits "Field does not have an exit 'south'"
+    assert "does not have an exit" in second_prompt
+
+
+def test_react_caps_retries(tiny_game):
+    """With max_retries=2 the loop makes at most 3 LLM calls then gives up."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+    # All commands fail — the troll stays put
+    mock = MockLlmClient(default="go south")
+    troll.set_behavior(make_react_behavior(mock, max_retries=2))
+
+    troll.take_turn(tiny_game)
+
+    assert troll.location is tiny_game.locations["Field"]
+    assert len(mock.calls) == 3  # 1 initial + 2 retries
+
+
+def test_hybrid_reflect_prompt_contains_failure_reason(tiny_game):
+    """Hybrid behavior also feeds the failure reason back on retry."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    scripted_calls = []
+
+    def scripted(character, g):
+        scripted_calls.append(character.name)
+
+    mock = MockLlmClient(["go south", "go north"])
+    troll.set_behavior(make_hybrid_behavior(mock, scripted, max_retries=2))
+
+    troll.take_turn(tiny_game)
+
+    assert troll.location is tiny_game.locations["Forest"]
+    assert scripted_calls == []
+    second_prompt = mock.calls[1]["messages"][-1]["content"]
+    assert "go south" in second_prompt
+    assert "does not have an exit" in second_prompt
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

@@ -14,6 +14,7 @@ class WebParser(parsing.Parser):
         self.add_description_to_history(description)
 
     def fail(self, description: str):
+        self.last_fail_message = description
         msg = parsing.Parser.wrap_text(description)
         self.messages.append({"type": "error", "text": msg})
 
