@@ -197,11 +197,18 @@ class Parser:
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
-            # An ActionSequence re-enters parse_command per sub-command, so one
+            # Attribute the event to whoever is acting. The actor is threaded in
+            # explicitly — the player via Game.do_command, an NPC via its
+            # behavior — so we record the true subject of the command. Only fall
+            # back to scanning the command for a name when no actor was supplied,
+            # which keeps the field correct even for player commands that name
+            # another character (e.g. "attack troll").
+            #
+            # (An ActionSequence re-enters parse_command per sub-command, so one
             # comma-separated command logs each sub-command plus the wrapping
-            # "sequence" action — a future event-log consumer (#9) should expect that.
-            actor = self.get_character(command)
-            self.game.log_event(actor.name, action.action_name(), command)
+            # "sequence" action — a future event-log consumer (#9) should expect that.)
+            event_actor = actor if actor is not None else self.get_character(command)
+            self.game.log_event(event_actor.name, action.action_name(), command)
         return success
 
     def get_character(
