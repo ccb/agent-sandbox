@@ -195,11 +195,14 @@ class Parser:
         return success
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None
+        self, command: str, hint: str = None, split_words=None, position=None,
+        exclude=None,
     ) -> Character:
         """
         This method tries to match a character's name in the command.
-        If no names are matched, it returns the default value.
+        If no names are matched, it returns the default value. A candidate
+        equal to ``exclude`` is skipped (used to keep an action's target from
+        resolving to its own actor).
         """
         command = command.lower()
         if split_words:
@@ -215,7 +218,10 @@ class Parser:
                     break
         for name in self.game.characters.keys():
             if name.lower() in command:
-                return self.game.characters[name]
+                candidate = self.game.characters[name]
+                if exclude is not None and candidate is exclude:
+                    continue
+                return candidate
         return self.game.player
 
     def get_character_location(self, character: Character) -> Location:

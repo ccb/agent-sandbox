@@ -210,10 +210,13 @@ class LlmParser(parsing.Parser):
     # ------------------------------------------------------------------
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None
+        self, command: str, hint: str = None, split_words=None, position=None,
+        exclude=None,
     ) -> Character:
         """Try keyword matching first; fall back to LLM for character matching."""
-        result = super().get_character(command, hint, split_words, position)
+        result = super().get_character(
+            command, hint, split_words, position, exclude=exclude
+        )
         # If keyword matching returned the player (default), try LLM for a better match
         if result is self.game.player and hint:
             llm_result = self._llm_get_character(command, hint)

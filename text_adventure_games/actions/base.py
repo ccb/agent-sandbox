@@ -22,9 +22,17 @@ class Action:
     ACTION_DESCRIPTION: str = None
     ACTION_ALIASES: list[str] = None
 
-    def __init__(self, game):
+    def __init__(self, game, actor=None):
         self.game = game
         self.parser = game.parser
+        self.actor = actor
+
+    def acting_character(self, command, **kwargs):
+        """Resolve who performs this action: the explicit actor if one was
+        supplied, else the legacy command-string scan (player default)."""
+        if self.actor is not None:
+            return self.actor
+        return self.parser.get_character(command, **kwargs)
 
     def check_preconditions(self) -> bool:
         """
@@ -239,12 +247,8 @@ class ActionSequence(Action):
     ACTION_NAME = "sequence"
     ACTION_DESCRIPTION = "Complete a sequence of actions specified in a list"
 
-    def __init__(
-        self,
-        game,
-        command: str,
-    ):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command
 
     def check_preconditions(self) -> bool:
@@ -263,12 +267,8 @@ class Quit(Action):
     ACTION_DESCRIPTION = "Quit the game"
     ACTION_ALIASES = ["q"]
 
-    def __init__(
-        self,
-        game,
-        command: str,
-    ):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command
 
     def check_preconditions(self) -> bool:
@@ -288,8 +288,8 @@ class Wait(Action):
     ACTION_DESCRIPTION = "Wait and let time pass"
     ACTION_ALIASES = ["z"]
 
-    def __init__(self, game, command: str):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
 
     def check_preconditions(self) -> bool:
         return True
@@ -303,12 +303,8 @@ class Describe(Action):
     ACTION_DESCRIPTION = "Describe the current location"
     ACTION_ALIASES = ["look", "l"]
 
-    def __init__(
-        self,
-        game,
-        command: str,
-    ):
-        super().__init__(game)
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
         self.command = command
 
     def check_preconditions(self) -> bool:
