@@ -54,7 +54,7 @@ class Attack(base.Action):
         ):
             return False
         if not self.attacker.is_in_inventory(self.weapon):
-            description = "{name} doesn't have the {weapom}.".format(
+            description = "{name} doesn't have the {weapon}.".format(
                 name=self.attacker.name, weapon=self.weapon.name
             )
             self.parser.fail(description)
