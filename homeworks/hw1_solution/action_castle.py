@@ -34,8 +34,8 @@ class Unlock_Door(actions.Action):
     ACTION_DESCRIPTION = "Unlock a door with a key"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
         self.key = self.parser.match_item(
             "key", self.parser.get_items_in_scope(self.character)
@@ -89,8 +89,8 @@ class Read_Runes(actions.Action):
     ACTION_DESCRIPTION = "Read runes off of the candle"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
         self.candle = self.parser.match_item(
             "candle", self.parser.get_items_in_scope(self.character)
@@ -165,8 +165,8 @@ class Propose(actions.Action):
     ACTION_DESCRIPTION = "Propose marriage to someone"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         marriage_words = ["propose", "marry"]
         self.proposer = self.parser.get_character(
             command, hint="proposer", split_words=marriage_words, position="before"
@@ -246,8 +246,8 @@ class Wear_Crown(actions.Action):
     ACTION_DESCRIPTION = "Put a crown in your inventory atop your head"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
         self.crown = self.parser.match_item(
             "crown", self.parser.get_items_in_scope(self.character)
@@ -286,8 +286,8 @@ class Sit_On_Throne(actions.Action):
     ACTION_DESCRIPTION = "Sit on the throne, if you are the crowned monarch."
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
         self.throne = self.parser.match_item(
             "throne", self.parser.get_items_in_scope(self.character)
@@ -442,8 +442,8 @@ class Growl(actions.Action):
     ACTION_DESCRIPTION = "Growl menacingly at someone"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["growl"], position="before"
         )
@@ -466,8 +466,8 @@ class Snarl(actions.Action):
     ACTION_DESCRIPTION = "Snarl and bare teeth at someone"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["snarl"], position="before"
         )
@@ -490,15 +490,17 @@ class Pound_Fists(actions.Action):
     ACTION_DESCRIPTION = "Pound fists on the ground in rage"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
 
     def check_preconditions(self) -> bool:
         return True
 
     def apply_effects(self):
-        description = f"{self.character.name.capitalize()} pounds its fists on the ground."
+        description = (
+            f"{self.character.name.capitalize()} pounds its fists on the ground."
+        )
         self.parser.npc_ok(description)
 
 
@@ -507,8 +509,8 @@ class Warn(actions.Action):
     ACTION_DESCRIPTION = "Issue a verbal warning to someone"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["warn"], position="before"
         )
@@ -522,7 +524,7 @@ class Warn(actions.Action):
         return True
 
     def apply_effects(self):
-        description = f"{self.character.name.capitalize()} warns {self.target.name}: \"You don't belong here.\""
+        description = f'{self.character.name.capitalize()} warns {self.target.name}: "You don\'t belong here."'
         self.parser.npc_ok(description)
 
 
@@ -531,8 +533,8 @@ class Threaten(actions.Action):
     ACTION_DESCRIPTION = "Make a threatening gesture or statement"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["threaten"], position="before"
         )
@@ -546,7 +548,7 @@ class Threaten(actions.Action):
         return True
 
     def apply_effects(self):
-        description = f"{self.character.name.capitalize()} threatens {self.target.name}: \"This is your LAST warning!\""
+        description = f'{self.character.name.capitalize()} threatens {self.target.name}: "This is your LAST warning!"'
         self.parser.npc_ok(description)
 
 
@@ -557,8 +559,8 @@ class Haunt(actions.Action):
     ACTION_DESCRIPTION = "Make a ghostly threat to frighten someone"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["haunt"], position="before"
         )
@@ -577,7 +579,7 @@ class Haunt(actions.Action):
     def apply_effects(self):
         description = (
             f"{self.character.name.capitalize()} turns its hollow eyes toward "
-            f"{self.target.name}. \"Leave this place, mortal... or join me in death.\""
+            f'{self.target.name}. "Leave this place, mortal... or join me in death."'
         )
         self.parser.npc_ok(description)
 
@@ -589,8 +591,8 @@ class Ghost_Touch(actions.Action):
     ACTION_DESCRIPTION = "Plunge a ghostly hand into someone's chest"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command):
-        super().__init__(game)
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
         self.character = self.parser.get_character(
             command, split_words=["ghost touch"], position="before"
         )
@@ -636,9 +638,7 @@ def make_troll_behavior():
             return
         state["turns_present"] += 1
         if state["turns_present"] > len(commands):
-            game.parser.parse_command(
-                f"troll attack {player.name} with club"
-            )
+            game.parser.parse_command(f"troll attack {player.name} with club")
         else:
             cmd = commands[state["turns_present"] - 1].format(player=player.name)
             game.parser.parse_command(cmd)
@@ -664,9 +664,7 @@ def make_guard_behavior():
             return
         state["warnings_given"] += 1
         if state["warnings_given"] > len(commands):
-            game.parser.parse_command(
-                f"guard attack {player.name} with sword"
-            )
+            game.parser.parse_command(f"guard attack {player.name} with sword")
         else:
             cmd = commands[state["warnings_given"] - 1].format(player=player.name)
             game.parser.parse_command(cmd)
@@ -926,8 +924,18 @@ def build_game(llm_client=None) -> ActionCastle:
     # The Game
     characters = [troll, guard, princess, ghost]
     custom_actions = [
-        Unlock_Door, Read_Runes, Propose, Wear_Crown, Sit_On_Throne,
-        Growl, Snarl, Pound_Fists, Warn, Threaten, Haunt, Ghost_Touch,
+        Unlock_Door,
+        Read_Runes,
+        Propose,
+        Wear_Crown,
+        Sit_On_Throne,
+        Growl,
+        Snarl,
+        Pound_Fists,
+        Warn,
+        Threaten,
+        Haunt,
+        Ghost_Touch,
     ]
     game = ActionCastle(cottage, player, characters, custom_actions)
     return game

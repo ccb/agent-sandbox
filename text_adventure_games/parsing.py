@@ -102,18 +102,28 @@ class Parser:
                 if not attr == actions.Action:
                     self.add_action(attr)
 
-    def determine_intent(self, command: str):
+    def determine_intent(self, command: str, actor=None):
         """
         This function determines what command the player wants to do.
         Here we have implemented it with a simple keyword match. Later
         we will use AI to do more flexible matching.
         """
-        # check which character is acting (defaults to the player)
-        character = self.get_character(command)
+        # Resolve the acting character (the actor, else a player-default scan).
+        # Used below only to interpret directions relative to where they stand.
+        character = actor if actor is not None else self.get_character(command)
         command = command.lower()
         if "," in command:
             # Let the player type in a comma separted sequence of commands
             return "sequence"
+        elif (
+            command.startswith("say ")
+            or command.startswith("speak ")
+            or command in ("say", "speak")
+        ):
+            # Speech routes here regardless of message content (a message may
+            # contain other command words), and this also handles the "speak"
+            # alias, which is not auto-registered.
+            return "say"
         elif self.get_direction(command, character.location):
             # Check for the direction intent
             return "go"
@@ -156,7 +166,7 @@ class Parser:
                         best_match = special_command
             return best_match
 
-    def parse_action(self, command: str) -> actions.Action:
+    def parse_action(self, command: str, actor=None) -> actions.Action:
         """
         Routes an action described in a command to the right action class for
         performing the action.
@@ -166,10 +176,10 @@ class Parser:
         command = command.lower().strip()
         if command == "":
             return None
-        intent = self.determine_intent(command)
+        intent = self.determine_intent(command, actor=actor)
         if intent in self.actions:
             action = self.actions[intent]
-            return action(self.game, command)
+            return action(self.game, command, actor=actor)
         return None
 
     def npc_ok(self, description: str):
@@ -177,29 +187,43 @@ class Parser:
         print(msg)
         self.add_description_to_history(description)
 
-    def parse_command(self, command: str) -> bool:
+    def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
         self.add_command_to_history(command)
-        action = self.parse_action(command)
+        action = self.parse_action(command, actor=actor)
         if not action:
             self.fail("I'm not sure what you want to do.")
             return False
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
-            # An ActionSequence re-enters parse_command per sub-command, so one
+            # Attribute the event to whoever is acting. The actor is threaded in
+            # explicitly — the player via Game.do_command, an NPC via its
+            # behavior — so we record the true subject of the command. Only fall
+            # back to scanning the command for a name when no actor was supplied,
+            # which keeps the field correct even for player commands that name
+            # another character (e.g. "attack troll").
+            #
+            # (An ActionSequence re-enters parse_command per sub-command, so one
             # comma-separated command logs each sub-command plus the wrapping
-            # "sequence" action — a future event-log consumer (#9) should expect that.
-            actor = self.get_character(command)
-            self.game.log_event(actor.name, action.action_name(), command)
+            # "sequence" action — a future event-log consumer (#9) should expect that.)
+            event_actor = actor if actor is not None else self.get_character(command)
+            self.game.log_event(event_actor.name, action.action_name(), command)
         return success
 
     def get_character(
-        self, command: str, hint: str = None, split_words=None, position=None
+        self,
+        command: str,
+        hint: str = None,
+        split_words=None,
+        position=None,
+        exclude=None,
     ) -> Character:
         """
         This method tries to match a character's name in the command.
-        If no names are matched, it returns the default value.
+        If no names are matched, it returns the default value. A candidate
+        equal to ``exclude`` is skipped (used to keep an action's target from
+        resolving to its own actor).
         """
         command = command.lower()
         if split_words:
@@ -215,7 +239,10 @@ class Parser:
                     break
         for name in self.game.characters.keys():
             if name.lower() in command:
-                return self.game.characters[name]
+                candidate = self.game.characters[name]
+                if exclude is not None and candidate is exclude:
+                    continue
+                return candidate
         return self.game.player
 
     def get_character_location(self, character: Character) -> Location:
