@@ -34,9 +34,40 @@ Usage::
 
 _DECISION_INSTRUCTION = (
     "Based on your persona, goals, and the current situation, choose a single "
-    "game command to execute. Respond with ONLY the command, nothing else. "
-    "Examples: 'attack player', 'go north', 'take sword'."
+    "game command to execute. Reply with exactly two lines:\n"
+    "Reasoning: <one short sentence explaining your choice>\n"
+    "Action: <the command, e.g. 'attack player', 'go north', 'take sword'>"
 )
+
+
+def _parse_decision(text: str) -> tuple[str | None, str | None]:
+    """Split an LLM reply into ``(reasoning, command)``.
+
+    Understands the labeled format requested by ``_DECISION_INSTRUCTION``
+    ("Reasoning: ...\\nAction: ..."; "Thought:" is accepted as a synonym).
+    Falls back to treating the first non-empty line as a bare command, so
+    models (and tests) that reply with just the command keep working.
+    """
+    reasoning = None
+    command = None
+    first_line = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if first_line is None:
+            first_line = line
+        lowered = line.lower()
+        if reasoning is None and lowered.startswith(("reasoning:", "thought:")):
+            reasoning = line.split(":", 1)[1].strip() or None
+        elif command is None and lowered.startswith("action:"):
+            command = line.split(":", 1)[1].strip() or None
+    if command is None and first_line is not None:
+        # No "Action:" label anywhere: treat the first line as the command,
+        # unless it was a reasoning line (then there is no action this turn).
+        if not first_line.lower().startswith(("reasoning:", "thought:")):
+            command = first_line
+    return reasoning, command
 
 
 # ----------------------------------------------------------------------
@@ -57,6 +88,9 @@ class Agent:
     def __init__(self, persona: str = "", goals=None):
         self.persona = persona
         self.goals = list(goals) if goals else []
+        # Why the agent chose its last command. Subclasses may set this in
+        # decide(); the ReAct loop logs it next to the chosen action.
+        self.last_reasoning: str | None = None
 
     def decide(self, observation: str) -> str | None:
         """Return a single command string for *observation* (or ``None``)."""
@@ -69,8 +103,9 @@ class LLMAgent(Agent):
     Accepts either an :class:`LlmClient` (anything with a ``chat()`` method) or
     a legacy ``(str) -> str`` callable. The persona and goals are sent as the
     system message; the observation is the user message. ``decide()`` returns
-    the first line of the reply (or ``None`` if the client failed or said
-    nothing).
+    the command from the reply's "Action:" line (or, for unlabeled replies,
+    its first line), and records the "Reasoning:" line in ``last_reasoning``.
+    Returns ``None`` if the client failed or said nothing.
     """
 
     def __init__(
@@ -78,7 +113,7 @@ class LLMAgent(Agent):
         llm_client,
         persona: str = "",
         goals=None,
-        max_tokens: int = 64,
+        max_tokens: int = 128,
         temperature: float = 0.7,
     ):
         super().__init__(persona=persona, goals=goals)
@@ -87,11 +122,13 @@ class LLMAgent(Agent):
         self.temperature = temperature
 
     def decide(self, observation: str) -> str | None:
+        self.last_reasoning = None
         response = self._call(observation)
         if response is None:
             return None
-        command = response.strip().split("\n")[0].strip()
-        return command or None
+        reasoning, command = _parse_decision(response)
+        self.last_reasoning = reasoning
+        return command
 
     def _system_message(self) -> str:
         # The character's name is deliberately left out of this prompt: an
@@ -197,13 +234,30 @@ def _reflect(observation: str, command: str, failure_reason: str) -> str:
     )
 
 
+def _log_decision(character, game, agent: Agent, command: str):
+    """Emit the agent's decision as labeled trace lines, e.g.::
+
+        troll [reasoning] My growl didn't scare the player off -- escalate.
+        troll [action] snarl player
+
+    Goes through ``parser.npc_log`` (printed in terminal mode, buffered in web
+    mode), which keeps it OUT of command_history -- an NPC's reasoning is
+    private and must never leak into other characters' observations.
+    """
+    if agent.last_reasoning:
+        game.parser.npc_log(f"{character.name} [reasoning] {agent.last_reasoning}")
+    game.parser.npc_log(f"{character.name} [action] {command}")
+
+
 def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
 
     Observe (build the observation), let the agent decide a command, route it
     through the parser; on failure, read the parser's last failure message and
     feed it back via :func:`_reflect`, then retry up to *max_retries* times.
-    Returns ``True`` if a command succeeded, else ``False``.
+    Each attempt is traced with labeled reasoning/action lines (see
+    :func:`_log_decision`). Returns ``True`` if a command succeeded, else
+    ``False``.
     """
     base = build_npc_context(character, game)
     observation = base
@@ -212,6 +266,7 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
         command = agent.decide(observation)
         if not command:
             return False
+        _log_decision(character, game, agent, command)
         if _route(character, game, command):
             return True
         failure_reason = (

@@ -23,6 +23,11 @@ class WebParser(parsing.Parser):
         self.messages.append({"type": "npc_action", "text": msg})
         self.add_description_to_history(description)
 
+    def npc_log(self, message: str):
+        # Agent trace (labeled reasoning/action); never added to history.
+        msg = parsing.Parser.wrap_text(message)
+        self.messages.append({"type": "npc_log", "text": msg})
+
     def get_messages(self):
         msgs = list(self.messages)
         self.messages = []

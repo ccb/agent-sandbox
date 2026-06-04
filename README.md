@@ -135,17 +135,43 @@ natural-language commands too, e.g. *"give the fish to the troll."*
 
 **What this is (and isn't):** with a provider set, each NPC uses
 `make_hybrid_behavior` (`npc.py`) — it asks the LLM for an action, runs it through
-the same `check_preconditions()` gate as the player, retries once on failure, and
-**falls back to the scripted behavior** if the LLM errors. It's a thin hybrid: no
-memory, no goals, and the retry is *not* a real Reflect step. Building that out
-(first-class agents, memory, a proper ReAct loop) is the summer's work — see
-issues **#3–#5** and [`ROADMAP.md`](ROADMAP.md).
+the same `check_preconditions()` gate as the player, and on failure **Reflects**:
+the parser's actual failure reason is fed back to the agent, which retries with a
+different action. If the LLM errors entirely, the NPC **falls back to the scripted
+behavior**. Still no memory — that's Phase 2; see [`ROADMAP.md`](ROADMAP.md).
+
+### The free offline demo (no API key)
+
+`LLM_PROVIDER=mock` swaps in `MockReActClient` — a deterministic stand-in that
+reads the same prompts a real model would see and picks in-character commands.
+The whole ReAct loop runs end-to-end at no cost:
+
+```bash
+LLM_PROVIDER=mock python -m homeworks.hw1_llm.play          # terminal
+LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # browser
+```
+
+`homeworks/hw1_llm/` is a thin wrapper around the HW1 game: same world, but
+troll/guard/ghost are driven by **pure ReAct** (`make_react_behavior`, no
+scripted fallback), so every NPC action you see was reasoned by the agent.
+Each decision is traced with explicit labels. Walk to the Drawbridge (`go
+out`, `go north`, `go east`) and `wait` a few times:
+
+```
+troll [reasoning] Growling and snarling didn't drive the intruder off. Attack.
+troll [action] attack player
+troll doesn't have a weapon.                <- rejected by check_preconditions()
+troll [reasoning] My attack failed because I never said which weapon to use.
+troll [action] attack player with club      <- the Reflect step fed the reason back
+troll attacked The player with the club.
+```
 
 ### Run the tests
 
 ```bash
 source venv/bin/activate
 python test_npc_behaviors.py         # the turn-based NPC behavior suite
+pytest tests/ -v                     # offline agent-layer + live-game ReAct suites
 ```
 
 ### Onboarding assignment

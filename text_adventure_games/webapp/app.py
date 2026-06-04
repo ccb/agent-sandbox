@@ -14,23 +14,9 @@ game_sessions = {}
 
 def get_llm_client():
     """Create an LLM client from environment variables, or return None."""
-    provider = os.environ.get("LLM_PROVIDER")
-    if not provider:
-        return None
-    try:
-        from text_adventure_games.llm_client import LlmConfig, create_llm_client
+    from text_adventure_games.llm_client import client_from_env
 
-        config = LlmConfig(
-            provider=provider,
-            api_key=os.environ.get("LLM_API_KEY"),
-            model=os.environ.get("LLM_MODEL"),
-            base_url=os.environ.get("LLM_BASE_URL"),
-            verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
-        )
-        return create_llm_client(config)
-    except (ImportError, ValueError) as e:
-        print(f"Warning: Could not create LLM client: {e}")
-        return None
+    return client_from_env()
 
 
 def new_game():

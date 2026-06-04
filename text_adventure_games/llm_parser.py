@@ -174,6 +174,7 @@ class LlmParser(parsing.Parser):
         self.add_description_to_history(narrated)
 
     def fail(self, description: str):
+        self.last_fail_message = description  # the ReAct Reflect step reads this
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._fail_system_instructions())
         if self.verbose:
@@ -363,6 +364,7 @@ class WebLlmParser(LlmParser):
         self.add_description_to_history(narrated)
 
     def fail(self, description: str):
+        self.last_fail_message = description  # the ReAct Reflect step reads this
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._fail_system_instructions())
         self.messages.append({"type": "error", "text": self.wrap_text(narrated)})
@@ -373,6 +375,11 @@ class WebLlmParser(LlmParser):
         narrated = self._narrate(description, self._npc_system_instructions())
         self.messages.append({"type": "npc_action", "text": self.wrap_text(narrated)})
         self.add_description_to_history(narrated)
+
+    def npc_log(self, message: str):
+        # Agent trace (labeled reasoning/action): buffered like WebParser's,
+        # not narrated, and never added to history.
+        self.messages.append({"type": "npc_log", "text": self.wrap_text(message)})
 
     def get_messages(self):
         msgs = list(self.messages)
