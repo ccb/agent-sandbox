@@ -217,10 +217,14 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
     # The NPC's turns flowed through LLMAgent.chat(), not a scripted behavior.
     assert mock.calls, "the agent never consulted the LLM"
 
-    # Escalation driven by observation history.
+    # Escalation driven by observation history. The full strings pin the
+    # subject too: the actor seam must attribute the action to the troll
+    # (a legacy command-text scan would mis-resolve it to the player).
     npc_actions = by_type(messages, "npc_action")
-    assert any("growls menacingly" in m for m in npc_actions), "missing growl"
-    assert any("snarls and bares" in m for m in npc_actions), "missing snarl"
+    assert "Troll growls menacingly at The player." in npc_actions, "missing growl"
+    assert (
+        "Troll snarls and bares its teeth at The player." in npc_actions
+    ), "missing snarl"
 
     # The bare 'attack player' was rejected by the precondition gate...
     errors = by_type(messages, "error")
@@ -275,9 +279,14 @@ def test_react_guard_warns_then_escalates(live_game):
         ],
     )
 
+    # Full strings pin the actor-seam attribution (guard, not player).
     npc_actions = by_type(messages, "npc_action")
-    assert any("You don't belong here" in m for m in npc_actions), "missing warn"
-    assert any("LAST warning" in m for m in npc_actions), "missing threaten"
+    assert (
+        'Guard warns The player: "You don\'t belong here."' in npc_actions
+    ), "missing warn"
+    assert (
+        'Guard threatens The player: "This is your LAST warning!"' in npc_actions
+    ), "missing threaten"
     assert any("attacked" in m for m in by_type(messages, "output"))
     assert game.player.get_property("is_unconscious") is True
     assert mock.calls
@@ -294,9 +303,16 @@ def test_react_ghost_haunts_then_kills(live_game):
 
     messages = run_commands(game, ["look", "wait"])
 
+    # Full strings pin the actor-seam attribution (ghost, not player).
     npc_actions = by_type(messages, "npc_action")
-    assert any("Leave this place, mortal" in m for m in npc_actions), "missing haunt"
-    assert any("icy hand" in m for m in npc_actions), "missing ghost touch"
+    assert any(
+        m.startswith("Ghost turns its hollow eyes toward The player.")
+        for m in npc_actions
+    ), "missing haunt"
+    assert (
+        "Ghost plunges its icy hand into The player's chest and stops their heart."
+        in npc_actions
+    ), "missing ghost touch"
     assert game.player.get_property("is_dead") is True
     assert mock.calls
 

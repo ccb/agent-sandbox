@@ -444,11 +444,11 @@ class Growl(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["growl"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["growl"], position="after"
+            command, split_words=["growl"], position="after", exclude=self.character
         )
 
     def check_preconditions(self) -> bool:
@@ -468,11 +468,11 @@ class Snarl(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["snarl"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["snarl"], position="after"
+            command, split_words=["snarl"], position="after", exclude=self.character
         )
 
     def check_preconditions(self) -> bool:
@@ -492,7 +492,7 @@ class Pound_Fists(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command)
+        self.character = self.acting_character(command)
 
     def check_preconditions(self) -> bool:
         return True
@@ -511,11 +511,11 @@ class Warn(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["warn"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["warn"], position="after"
+            command, split_words=["warn"], position="after", exclude=self.character
         )
 
     def check_preconditions(self) -> bool:
@@ -535,11 +535,11 @@ class Threaten(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["threaten"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["threaten"], position="after"
+            command, split_words=["threaten"], position="after", exclude=self.character
         )
 
     def check_preconditions(self) -> bool:
@@ -561,11 +561,11 @@ class Haunt(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["haunt"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["haunt"], position="after"
+            command, split_words=["haunt"], position="after", exclude=self.character
         )
 
     def check_preconditions(self) -> bool:
@@ -593,11 +593,14 @@ class Ghost_Touch(actions.Action):
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(
+        self.character = self.acting_character(
             command, split_words=["ghost touch"], position="before"
         )
         self.target = self.parser.get_character(
-            command, split_words=["ghost touch"], position="after"
+            command,
+            split_words=["ghost touch"],
+            position="after",
+            exclude=self.character,
         )
 
     def check_preconditions(self) -> bool:
