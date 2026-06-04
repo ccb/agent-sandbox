@@ -56,17 +56,17 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 ## Reading List
 
-| Title | Authors | Journal/Conference | Date Published | Notes |
-|-------|---------|-------------------|----------------|-------|
-| Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia | Google DeepMind; Google Research; Technion; University of Toronto | arXiv | December 2023 | |
-| CLIN: A Continually Learning Language Agent for Rapid Task Adaptation and Generalization | Allen Institute for AI; University of Arizona; University of Pennsylvania | COLM | October 2023 | |
-| Generative Agents: Interactive Simulacra of Human Behavior | Stanford University; Google Research; Google DeepMind | UIST | April 2023 | |
-| ReAct: Synergizing Reasoning and Acting in Language Models | Princeton University; Google Research | ICLR | October 2022 | |
-| A Systematic Survey of Text Worlds as Embodied Natural Language Environments | University of Arizona | Wordplay | July 2021 | |
+| Title | Authors | Journal/Conference | Date Published | arXiv | Notes |
+|-------|---------|-------------------|----------------|-------|-------|
+| Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia | Google DeepMind; Google Research; Technion; University of Toronto | arXiv | December 2023 | [2312.03664](https://arxiv.org/abs/2312.03664) | |
+| CLIN: A Continually Learning Language Agent for Rapid Task Adaptation and Generalization | Allen Institute for AI; University of Arizona; University of Pennsylvania | COLM | October 2023 | [2310.10134](https://arxiv.org/abs/2310.10134) | |
+| Generative Agents: Interactive Simulacra of Human Behavior | Stanford University; Google Research; Google DeepMind | UIST | April 2023 | [2304.03442](https://arxiv.org/abs/2304.03442) | |
+| ReAct: Synergizing Reasoning and Acting in Language Models | Princeton University; Google Research | ICLR | October 2022 | [2210.03629](https://arxiv.org/abs/2210.03629) | |
+| A Systematic Survey of Text Worlds as Embodied Natural Language Environments | University of Arizona | Wordplay | July 2021 | [2107.04132](https://arxiv.org/abs/2107.04132) | |
 
 ### Lower priority 
 
-| Title | Authors | Journal/Conference | Date Published | Notes |
-|-------|---------|-------------------|----------------|-------|
-| Large Language Models are Superpositions of All Characters: Attaining Arbitrary Role-play via Self-Alignment | Alibaba Inc. | ACL | January 2024 | |
-| Humanoid Agents: Platform for Simulating Human-like Generative Agents | University of Washington; NVIDIA; University of Hong Kong | EMNLP | October 2023 | |
+| Title | Authors | Journal/Conference | Date Published | arXiv | Notes |
+|-------|---------|-------------------|----------------|-------|-------|
+| Large Language Models are Superpositions of All Characters: Attaining Arbitrary Role-play via Self-Alignment | Alibaba Inc. | ACL | January 2024 | [2401.12474](https://arxiv.org/abs/2401.12474) | |
+| Humanoid Agents: Platform for Simulating Human-like Generative Agents | University of Washington; NVIDIA; University of Hong Kong | EMNLP | October 2023 | [2310.05418](https://arxiv.org/abs/2310.05418) | |
