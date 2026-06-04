@@ -4,6 +4,21 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-04
+
+**Focus:** reconcile **PR #21** with the actor seam (#19); start a reading list in the journal
+
+**Done today:**
+- On `main`: added a **Reading List** section to this journal — core papers on generative agents, ReAct, text worlds, and Concordia, plus a lower-priority tier. Corrected publication dates/ordering and added an arXiv column with links.
+- On **PR #21** (issue #5): after **PR #19** (actor seam) merged, pushed a reconcile commit so hw1 custom NPC actions (`Growl`, `Snarl`, `Pound_Fists`, `Warn`, `Threaten`, `Haunt`, `Ghost_Touch`) resolve the acting character via `Action.acting_character()` instead of scanning text before the verb. ReAct already routes commands as `parse_command(cmd, actor=character)` with no name prefix, so the old scan mis-attributed narration (e.g. "The player growls menacingly at The player.") and let a banished ghost keep haunting by checking `is_banished` on the wrong character. Scripted behaviors (prefixed commands, no actor) are unchanged. Live-game tests now pin full narration strings, subject included, so this class of bug cannot slip through substring checks again.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #20** and **PR #21** reviewed/merged.
+- Phase 2: agent memory.
+
 ## 2026-06-03
 
 **Focus:** landed the time model (#7); notebooks reorg + multi-agent demo; wired ReAct into the live game (#5)
