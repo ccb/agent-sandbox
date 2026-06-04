@@ -187,6 +187,12 @@ class Parser:
         print(msg)
         self.add_description_to_history(description)
 
+    def npc_log(self, message: str):
+        """Print an agent trace line (the ReAct loop's labeled reasoning and
+        action). Deliberately NOT added to command_history: an NPC's reasoning
+        is private, so it must never leak into other characters' observations."""
+        print(Parser.wrap_text(message))
+
     def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
         self.add_command_to_history(command)
