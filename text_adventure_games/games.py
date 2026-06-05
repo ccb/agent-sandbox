@@ -389,6 +389,14 @@ class Game:
         else:
             lines.append("Inventory: empty")
 
+        # The character's own state, straight from its properties. This is the
+        # authoritative world state set by apply_effects() (e.g. is_hungry),
+        # so agents can act on facts instead of inferring them from narration.
+        if character.properties:
+            lines.append("Your state:")
+            for prop_name in sorted(character.properties):
+                lines.append(f" * {prop_name}: {character.properties[prop_name]}")
+
         # Available actions
         action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")

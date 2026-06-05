@@ -202,6 +202,8 @@ def test_describe_for_npc():
 
     assert "DRAWBRIDGE" in desc
     assert "club" in desc.lower(), "Should list troll's inventory"
+    assert "Your state:" in desc, "Should render the troll's own properties"
+    assert "is_hungry: True" in desc, "Should show the authoritative is_hungry"
     assert "Available actions:" in desc
     assert "growl" in desc, "Should list growl action"
     assert "Turn:" in desc

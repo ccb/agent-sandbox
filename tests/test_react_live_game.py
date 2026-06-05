@@ -28,7 +28,7 @@ from text_adventure_games.llm_client import (
     client_from_env,
     create_llm_client,
 )
-from text_adventure_games.npc import _parse_decision
+from text_adventure_games.npc import _parse_decision, build_npc_context
 from text_adventure_games.webapp.web_parser import WebParser
 
 
@@ -102,6 +102,9 @@ DRAWBRIDGE_OBS = (
     " * The player - You are a simple peasant destined for greatness.\n"
     "Inventory:\n"
     " * club - a heavy club\n"
+    "Your state:\n"
+    " * character_type: troll\n"
+    " * is_hungry: True\n"
     "Available actions: attack, growl, snarl\n"
     "Turn: 3"
 )
@@ -186,13 +189,66 @@ def test_mock_brain_recognizes_original_personas():
 
 
 def test_mock_brain_troll_stands_down_when_fed():
-    fed = DRAWBRIDGE_OBS + "\n\nRecent events:\n  Game: Troll eats the fish."
+    # The fed gate keys off the observation's 'Your state:' section -- the
+    # authoritative is_hungry property -- not narration (issue #22).
+    fed = DRAWBRIDGE_OBS.replace(" * is_hungry: True", " * is_hungry: False")
     assert _mock_brain_choose(TROLL_SYSTEM, fed) is None
+
+
+def test_mock_brain_fed_gate_reads_state_not_narration():
+    """Stale 'eats the fish' chatter in the history must not pacify a troll
+    whose world state says it is still hungry (issue #22)."""
+    chatter = DRAWBRIDGE_OBS + "\n\nRecent events:\n  Game: Troll eats the fish."
+    assert action_of(_mock_brain_choose(TROLL_SYSTEM, chatter)) == "growl player"
 
 
 # ----------------------------------------------------------------------
 # The live game: ReAct NPCs in the actual turn loop
 # ----------------------------------------------------------------------
+
+
+def test_observation_renders_world_state(live_game):
+    """describe_for() puts the character's own properties in the observation
+    as a 'Your state:' section, so brains can gate mechanics on authoritative
+    world state instead of narration strings (issue #22)."""
+    game, _ = live_game
+    troll = game.characters["troll"]
+
+    obs = build_npc_context(troll, game)
+    assert "Your state:" in obs
+    assert " * is_hungry: True" in obs
+
+    troll.set_property("is_hungry", False)
+    assert " * is_hungry: False" in build_npc_context(troll, game)
+
+
+def test_react_fed_troll_stays_fed_after_history_scrolls(live_game):
+    """The fed gate reads world state, so it outlives the history window.
+
+    Under the old narration-matching gate, the troll resumed threatening once
+    'Troll eats the fish' scrolled out of the last-10 recent events. Now
+    apply_effects() set is_hungry=False once, and the troll stays stood down
+    no matter how long the player loiters (issue #22)."""
+    game, _ = live_game
+    run_commands(
+        game,
+        [
+            "get pole",
+            "go out",
+            "go south",
+            "catch fish with pole",
+            "go north",
+            "go north",
+            "go east",  # drawbridge: the troll growls
+            "give fish to troll",
+        ],
+    )
+    troll = game.characters["troll"]
+    assert troll.get_property("is_hungry") is False  # the authoritative state
+
+    # Loiter long enough to push the eat narration out of the history window.
+    messages = run_commands(game, ["wait"] * 8)
+    assert by_type(messages, "npc_action") == []
 
 
 def test_react_troll_escalates_and_reflect_gates_attack(live_game):

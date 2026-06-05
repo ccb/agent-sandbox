@@ -280,6 +280,8 @@ def _player_present(observation: str) -> bool:
         Characters here:
          * The player - ...
         Inventory: ...
+        Your state:
+         * is_hungry: True
 
     We only look between the two headers, because 'the player' also shows up
     in the 'Recent events:' history even after the player has left the room.
@@ -302,16 +304,21 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
     This is the 'reasoning' behind :class:`MockReActClient`: an ordered list
     of substring rules over the same two prompts a real model would see --
     the system message (persona + goals) and the observation (location,
-    characters present, recent events, and any reflected failure reason).
-    First matching rule wins. Replies use the same labeled two-line format a
-    real model is instructed to use ("Reasoning: ...\\nAction: ..."), so the
-    agent's trace shows *why* each command was chosen. Returns ``None`` (act
-    on nothing) when the prompt isn't an NPC decision or the player isn't
+    characters present, own state, recent events, and any reflected failure
+    reason). First matching rule wins. Replies use the same labeled two-line
+    format a real model is instructed to use ("Reasoning: ...\\nAction: ..."),
+    so the agent's trace shows *why* each command was chosen. Returns ``None``
+    (act on nothing) when the prompt isn't an NPC decision or the player isn't
     there to menace.
 
-    Each NPC escalates by reading its own past actions in the observation's
-    'Recent events:' history -- the mock has no memory between calls, just
-    like the real agent (memory is Phase 2).
+    Two kinds of reads, deliberately kept apart (issue #22):
+
+    * **Mechanics** (is the troll fed?) come from the observation's
+      'Your state:' section, which describe_for() renders straight from the
+      character's properties -- authoritative world state, never narration.
+    * **Pacing** (growl, then snarl, then attack) comes from reading the
+      NPC's own past actions in the 'Recent events:' history -- the mock has
+      no memory between calls, just like the real agent (memory is Phase 2).
     """
     system = system.lower()
     observation = observation.lower()
@@ -336,7 +343,12 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
     if "i am the troll" in system or "guard the drawbridge" in system:
         if not player_here:
             return None
-        if "eats the fish" in observation:  # recently fed -> stand down
+        # Mechanics come from world state: describe_for() renders the troll's
+        # own is_hungry property into the observation's 'Your state:' section,
+        # so we read that instead of matching narration like "eats the fish"
+        # (which could scroll out of the history window, or diverge from the
+        # real game state).
+        if "is_hungry: false" in observation:  # fed -> stand down
             return None
         if reflecting and "doesn't have a weapon" in observation:
             return _decision(
