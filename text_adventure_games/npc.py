@@ -31,6 +31,8 @@ Usage::
     troll.set_behavior(make_hybrid_behavior(llm_client, make_troll_behavior()))
 """
 
+from .things.characters import Goal, GoalType
+
 
 _DECISION_INSTRUCTION = (
     "Based on your persona, goals, and the current situation, choose a single "
@@ -85,9 +87,9 @@ class Agent:
     supply the backend.
     """
 
-    def __init__(self, persona: str = "", goals=None):
+    def __init__(self, persona: str = "", goals: list[Goal] | None = None):
         self.persona = persona
-        self.goals = list(goals) if goals else []
+        self.goals: list[Goal] = list(goals) if goals else []
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
@@ -108,11 +110,17 @@ class LLMAgent(Agent):
     Returns ``None`` if the client failed or said nothing.
     """
 
+    _TIER_LABELS = {
+        GoalType.SHORT: "Short-term",
+        GoalType.MEDIUM: "Medium-term",
+        GoalType.LONG: "Long-term",
+    }
+
     def __init__(
         self,
         llm_client,
         persona: str = "",
-        goals=None,
+        goals: list[Goal] | None = None,
         max_tokens: int = 128,
         temperature: float = 0.7,
     ):
@@ -130,6 +138,19 @@ class LLMAgent(Agent):
         self.last_reasoning = reasoning
         return command
 
+    def _format_goals(self) -> str | None:
+        """Render incomplete goals grouped by tier, in SHORT/MEDIUM/LONG order.
+        Empty tiers are skipped so the prompt never shows a bare header with
+        nothing under it. Returns None when there are no active goals at all."""
+        sections = []
+        for tier in GoalType:
+            active = [g for g in self.goals if g.type == tier and not g.done]
+            if not active:
+                continue
+            bullets = "\n".join(f"  - {g.description}" for g in active)
+            sections.append(f"{self._TIER_LABELS[tier]}:\n{bullets}")
+        return "\n".join(sections) if sections else None
+
     def _system_message(self) -> str:
         # The character's name is deliberately left out of this prompt: an
         # agent's identity rides on its first-person persona string (and the
@@ -140,8 +161,10 @@ class LLMAgent(Agent):
         lines = ["You are an NPC in a text adventure game."]
         if self.persona:
             lines.append(f"Persona: {self.persona}")
-        if self.goals:
-            lines.append("Goals: " + "; ".join(self.goals))
+        formatted = self._format_goals()
+        if formatted:
+            lines.append("Goals:")
+            lines.append(formatted)
         lines.append(_DECISION_INSTRUCTION)
         return "\n".join(lines)
 
@@ -171,7 +194,7 @@ class ScriptedAgent(Agent):
     loop, tests, and games can't tell which backend is driving a character.
     """
 
-    def __init__(self, rule, persona: str = "", goals=None):
+    def __init__(self, rule, persona: str = "", goals: list[Goal] | None = None):
         super().__init__(persona=persona, goals=goals)
         self.rule = rule
 
@@ -286,14 +309,18 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
 # ----------------------------------------------------------------------
 
 
-def make_react_behavior(llm_client, max_retries: int = 1, goals=None):
+def make_react_behavior(llm_client, max_retries: int = 1):
     """Return a behavior that drives a character with an :class:`LLMAgent`.
+
+    The character owns its persona and goals; the agent reads them. Persona is
+    adopted once (it rarely changes); goals are re-read every turn so any
+    in-game ``character.add_goal()`` / ``complete_goal()`` lands in the next
+    decision prompt without re-wiring anything.
 
     Args:
         llm_client: An ``LlmClient`` (with ``chat()``) or a ``(str) -> str``
             callable.
         max_retries: How many times to retry on a failed command.
-        goals: Optional list of goal strings for the agent.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -302,22 +329,23 @@ def make_react_behavior(llm_client, max_retries: int = 1, goals=None):
     # closure, so this agent (its persona today, its memory in Phase 2) belongs
     # to a single character. Attach the result to ONE character; to drive
     # several NPCs, call this factory once per character rather than sharing a
-    # behavior, or they would share an identity. The first turn lazily adopts
-    # the running character's persona.
-    agent = LLMAgent(llm_client, goals=goals)
+    # behavior, or they would share an identity.
+    agent = LLMAgent(llm_client)
 
     def behavior(character, game):
         if not agent.persona:
             agent.persona = character.persona or ""
+        agent.goals = character.goals
         react_behavior(character, game, agent, max_retries=max_retries)
 
     return behavior
 
 
-def make_hybrid_behavior(
-    llm_client, scripted_behavior, max_retries: int = 1, goals=None
-):
+def make_hybrid_behavior(llm_client, scripted_behavior, max_retries: int = 1):
     """Return a behavior that tries the LLM agent, then falls back to scripted.
+
+    Persona and goals are sourced from the character, same as
+    :func:`make_react_behavior`.
 
     Args:
         llm_client: An ``LlmClient`` (with ``chat()``) or a ``(str) -> str``
@@ -325,18 +353,18 @@ def make_hybrid_behavior(
         scripted_behavior: A ``(character, game) -> None`` callable used when
             the LLM produces nothing usable (e.g. an API failure).
         max_retries: How many times to retry the LLM on a failed command.
-        goals: Optional list of goal strings for the agent.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
     """
     # As in make_react_behavior, this single agent belongs to one character;
     # call the factory once per NPC rather than sharing the returned behavior.
-    agent = LLMAgent(llm_client, goals=goals)
+    agent = LLMAgent(llm_client)
 
     def behavior(character, game):
         if not agent.persona:
             agent.persona = character.persona or ""
+        agent.goals = character.goals
         if not react_behavior(character, game, agent, max_retries=max_retries):
             scripted_behavior(character, game)
 
