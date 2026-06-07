@@ -1,6 +1,6 @@
-"""Make the repo root importable so tests can import `homeworks.*`.
+"""Make the repo root importable so tests can import `notebooks.*`.
 
-`text_adventure_games` is installed editable, but the `homeworks/` games are
+`text_adventure_games` is installed editable, but the `notebooks/` games are
 not packaged -- they normally resolve because scripts run from the repo root.
 This keeps that working no matter where pytest is invoked from.
 """

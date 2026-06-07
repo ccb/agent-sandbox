@@ -168,11 +168,15 @@ class Propose(actions.Action):
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         marriage_words = ["propose", "marry"]
-        self.proposer = self.parser.get_character(
+        self.proposer = self.acting_character(
             command, hint="proposer", split_words=marriage_words, position="before"
         )
         self.propositioned = self.parser.get_character(
-            command, hint="propositioned", split_words=marriage_words, position="after"
+            command,
+            hint="propositioned",
+            split_words=marriage_words,
+            position="after",
+            exclude=self.proposer,
         )
 
     def check_preconditions(self) -> bool:
@@ -189,6 +193,7 @@ class Propose(actions.Action):
             return False
         if self.proposer == self.propositioned:
             self.parser.fail(f"{self.proposer.name} cannot marry themself")
+            return False
         if not self.at(
             self.propositioned,
             self.proposer.location,

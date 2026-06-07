@@ -13,7 +13,7 @@ Inheritance::
       └── WebLlmParser    (LLM parsing + narration, buffers messages)
            extends LlmParser
 
-Ported from ``homeworks/hw2_solution/gpt_parser.py`` with provider-agnostic
+Ported from the course's hw2 solution (``gpt_parser.py``) with provider-agnostic
 LLM client abstraction.
 """
 
