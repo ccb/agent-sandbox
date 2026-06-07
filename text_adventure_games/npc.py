@@ -15,10 +15,12 @@ sit behind the same seam and are interchangeable:
 The surrounding Observe -> Act -> Reflect cycle (building the observation,
 routing the command through the parser's precondition gate, and feeding a
 failure back on retry) lives *outside* ``decide()`` in :func:`react_behavior`.
-Today that loop is bridged onto a character via the legacy ``set_behavior``
-hook through :func:`make_react_behavior` / :func:`make_hybrid_behavior`; a
-later issue moves it into the turn loop itself. Keeping ``decide()`` free of
-``game`` is what lets the agent layer be unit-tested offline with
+That loop is bridged onto a character two ways: via the legacy
+``set_behavior`` hook through :func:`make_react_behavior` /
+:func:`make_hybrid_behavior` (sequential mode), or via
+``Character.set_agent``, which lets the simultaneous gather -> resolve loop
+in ``turns.py`` (issue #25) call ``decide()`` directly. Keeping ``decide()``
+free of ``game`` is what lets the agent layer be unit-tested offline with
 ``MockLlmClient``.
 
 See ``docs/design/multi-character-play.md`` (issue #3).
@@ -274,21 +276,20 @@ def _log_decision(character, game, agent: Agent, command: str):
     game.parser.agent_action(character.name, command)
 
 
-def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
-    """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
+def decide_and_route(
+    character, game, agent: Agent, observation: str, max_retries: int = 1
+) -> bool:
+    """The Decide -> Act -> Reflect core: decide a command for *observation*,
+    route it through the parser's precondition gate, and on failure trace the
+    reason as a Reflect step, feed it back via :func:`_reflect`, and retry, up
+    to ``1 + max_retries`` attempts in total. Each step is traced on its
+    AGENT_* channel (see :func:`_log_decision`). Returns ``True`` if a command
+    succeeded, ``False`` if the agent declined or every attempt failed.
 
-    Observe (build the observation), let the agent decide a command, route it
-    through the parser; on failure, read the parser's last failure message,
-    trace it as a Reflect step, feed it back via :func:`_reflect`, and retry up
-    to *max_retries* times. Each step is traced on its AGENT_* channel
-    (observation is verbose-only). Returns ``True`` if a command succeeded, else
-    ``False``.
+    Shared by :func:`react_behavior` (sequential mode) and the simultaneous
+    resolve phase (:func:`route_with_retry`, issue #25).
     """
-    base = build_npc_context(character, game)
-    observation = base
-
-    # The full observation is traced too, but only shows at verbose verbosity.
-    game.parser.agent_observation(character.name, base)
+    base = observation
 
     for _ in range(1 + max_retries):
         command = agent.decide(observation)
@@ -304,6 +305,44 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
         observation = _reflect(base, command, failure_reason)
 
     return False
+
+
+def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
+    """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
+
+    Observe (build the observation), trace it (verbose-only), then hand off to
+    :func:`decide_and_route` for the decide/route/reflect cycle. Returns
+    ``True`` if a command succeeded, else ``False``.
+    """
+    observation = build_npc_context(character, game)
+    # The full observation is traced too, but only shows at verbose verbosity.
+    game.parser.agent_observation(character.name, observation)
+    return decide_and_route(character, game, agent, observation, max_retries)
+
+
+def route_with_retry(
+    character, game, agent: Agent, first_command: str, max_retries: int = 1
+) -> bool:
+    """Route an already-decided *first_command*; on failure, reflect and retry.
+
+    Used by the simultaneous resolve phase (issue #25, turns.py): the first
+    command was chosen during the gather phase against the turn-start
+    snapshot, but is resolved later — so when it fails, the reflection
+    observation is rebuilt against the *live* world, letting the agent see why
+    the action failed *now* (e.g. another character got there first). The
+    retry tail goes through :func:`decide_and_route`, keeping the total at
+    ``1 + max_retries`` attempts, consistent with :func:`react_behavior`.
+    """
+    _log_decision(character, game, agent, first_command)
+    if _route(character, game, first_command):
+        return True
+    if max_retries <= 0:
+        return False
+    failure_reason = getattr(game.parser, "last_fail_message", None) or "action failed"
+    game.parser.agent_reflection(character.name, failure_reason)
+    base = build_npc_context(character, game)
+    observation = _reflect(base, first_command, failure_reason)
+    return decide_and_route(character, game, agent, observation, max_retries - 1)
 
 
 # ----------------------------------------------------------------------
