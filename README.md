@@ -52,7 +52,7 @@ text_adventure_games/      The engine (the shared framework)
   llm_client.py            Provider-agnostic LLM client (OpenAI / Anthropic)
   llm_parser.py            LLM-backed parser (keyword-first, LLM fallback)
   webapp/                  Flask web UI for playing in the browser
-homeworks/                 HW1 "Action Castle" — the onboarding assignment
+notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework demos
 test_npc_behaviors.py      Tests for the turn-based NPC system (all passing)
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
@@ -147,11 +147,11 @@ reads the same prompts a real model would see and picks in-character commands.
 The whole ReAct loop runs end-to-end at no cost:
 
 ```bash
-LLM_PROVIDER=mock python -m homeworks.hw1_llm.play          # terminal
+LLM_PROVIDER=mock python -m notebooks.hw1_llm.play          # terminal
 LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # browser
 ```
 
-`homeworks/hw1_llm/` is a thin wrapper around the HW1 game: same world, but
+`notebooks/hw1_llm/` is a thin wrapper around the HW1 game: same world, but
 troll/guard/ghost are driven by **pure ReAct** (`make_react_behavior`, no
 scripted fallback), so every NPC action you see was reasoned by the agent.
 Each decision is traced with explicit labels. Walk to the Drawbridge (`go
@@ -176,8 +176,10 @@ pytest tests/ -v                     # offline agent-layer + live-game ReAct sui
 
 ### Onboarding assignment
 
-The HW1 "Action Castle" notebook in [`homeworks/`](homeworks/) is the day-one ramp.
-See [`ONBOARDING.md`](ONBOARDING.md).
+The HW1 "Action Castle" notebook in [`notebooks/`](notebooks/) is the day-one ramp.
+See [`ONBOARDING.md`](ONBOARDING.md). The same folder holds
+[`multi_agent_action_castle.ipynb`](notebooks/multi_agent_action_castle.ipynb), a
+demo of the new agent framework (mock-LLM agents, clock, triggers, event log).
 
 ## Credits
 

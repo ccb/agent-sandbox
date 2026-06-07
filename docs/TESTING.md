@@ -60,7 +60,7 @@ client = MockLlmClient(pick_first)
 For driving the **whole game** rather than a single test, `MockReActClient` (registered as provider `"mock"`) is a callable-responder client with Action Castle rules built in: it reads the agent's system message (persona + goals) and observation, and picks an in-character command — escalating from the NPC's own action history, standing down when the player leaves, and demonstrating the Reflect step by first issuing an `attack` that fails `check_preconditions()`. It replies in the same labeled two-line format a real model is instructed to use (`Reasoning: ...` / `Action: ...`), so the ReAct loop traces every decision with explicit `[reasoning]`/`[action]` labels (via `parser.npc_log`, which stays out of `command_history`). Because it is a real registered provider, `LLM_PROVIDER=mock` exercises the live terminal game and webapp at no cost:
 
 ```bash
-LLM_PROVIDER=mock python -m homeworks.hw1_llm.play           # pure ReAct NPCs
+LLM_PROVIDER=mock python -m notebooks.hw1_llm.play           # pure ReAct NPCs
 LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # hybrid NPCs + LLM parser
 ```
 

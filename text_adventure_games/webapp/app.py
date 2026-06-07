@@ -3,7 +3,7 @@ import uuid
 
 from flask import Flask, render_template, request, redirect, session, url_for
 from text_adventure_games.webapp.web_parser import WebParser
-from homeworks.hw1_solution import action_castle
+from notebooks.hw1_solution import action_castle
 
 app = Flask(__name__)
 app.secret_key = "action-castle-secret-key"
