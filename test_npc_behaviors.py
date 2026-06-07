@@ -1,7 +1,7 @@
 """Test script for NPC behaviors. Runs the game with scripted commands
 and verifies NPC actions fire correctly."""
 
-from homeworks.hw1_solution import action_castle
+from notebooks.hw1_solution import action_castle
 from text_adventure_games.webapp.web_parser import WebParser
 
 

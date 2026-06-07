@@ -20,7 +20,7 @@ Run with pytest::
 
 import pytest
 
-from homeworks.hw1_llm import build_llm_game
+from notebooks.hw1_llm import build_llm_game
 from text_adventure_games.llm_client import (
     LlmConfig,
     MockReActClient,
@@ -342,7 +342,7 @@ def test_webapp_hybrid_path_is_react_driven():
     on the troll's third turn: the scripted troll pounds its fists, the mock
     brain attacks. (WebLlmParser.fail() must set last_fail_message for the
     Reflect retry to learn the real reason -- this is the regression test.)"""
-    from homeworks.hw1_solution import action_castle
+    from notebooks.hw1_solution import action_castle
     from text_adventure_games.llm_parser import WebLlmParser
 
     mock = MockReActClient()

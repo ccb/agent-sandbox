@@ -1,6 +1,6 @@
 """Action Castle with LLM-driven NPCs (issue #5).
 
-This is a thin wrapper around ``homeworks/hw1_solution`` -- the original game
+This is a thin wrapper around ``notebooks/hw1_solution`` -- the original game
 file is untouched. We build the same world, then rewire the troll, guard, and
 ghost with *pure* ReAct behaviors (``make_react_behavior``): there is no
 scripted fallback, so every NPC action you see was reasoned by the agent,
@@ -13,8 +13,8 @@ back to the scripted behaviors on LLM failure.)
 
 Run it from the repo root::
 
-    LLM_PROVIDER=mock python -m homeworks.hw1_llm.play       # free, offline
-    LLM_PROVIDER=anthropic python -m homeworks.hw1_llm.play  # a real LLM
+    LLM_PROVIDER=mock python -m notebooks.hw1_llm.play       # free, offline
+    LLM_PROVIDER=anthropic python -m notebooks.hw1_llm.play  # a real LLM
 
 The ``mock`` provider is a deterministic stand-in that picks in-character
 commands from the same prompts a real model would see (see
@@ -31,7 +31,7 @@ weapon.") -- reflects on the failure, and retries with ``attack player with
 club``.
 """
 
-from homeworks.hw1_solution import build_game
+from notebooks.hw1_solution import build_game
 from text_adventure_games.llm_client import client_from_env
 from text_adventure_games.npc import make_react_behavior
 from text_adventure_games.things.characters import GoalType

@@ -326,7 +326,7 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
     # react_behavior's Reflect step appends this line after a failed command.
     reflecting = "' failed:" in observation
 
-    # Who am I? Match the "I am the {name}." prefix that homeworks/hw1_llm
+    # Who am I? Match the "I am the {name}." prefix that notebooks/hw1_llm
     # adds, or a distinctive phrase from the original Action Castle personas
     # (so the webapp's hybrid NPCs are recognized too).
     # Troll: growl -> snarl -> attack. The first attack deliberately omits
