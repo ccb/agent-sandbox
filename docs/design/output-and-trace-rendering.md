@@ -103,6 +103,7 @@ class Message:
     text: str                   # the human-readable content
     actor: str | None = None    # which character it's about (e.g. "troll")
     turn: int | None = None     # which turn, for grouping / headers
+    phase: str | None = None    # "gather"/"resolve" in simultaneous mode (#30); else None
     meta: dict = field(default_factory=dict)  # command, failure_reason, ok flag, …
 ```
 
@@ -115,7 +116,7 @@ already produces today:
 | `NARRATION` | World/action result | `Parser.ok()` | default green, `»` prefix | `.msg-output` |
 | `BLOCKED` | Action failed a precondition | `Parser.fail()` | red | `.msg-error` |
 | `COMMAND` | The actor's echoed command | app echoes `> cmd` | bold yellow, `>` prefix | `.msg-command` |
-| `AGENT_OBSERVATION` | ReAct "Observe" | `build_npc_context` (verbose) | dim, indented `↳ observe` | *(new)* `.msg-npc_observation` |
+| `AGENT_OBSERVATION` | ReAct "Observe" — context + tiered goals (#28) | `build_npc_context` (verbose) | dim, indented `↳ observe` | *(new)* `.msg-npc_observation` |
 | `AGENT_REASONING` | ReAct "Think" | `npc_log` `[reasoning]` line | dim, indented `↳ think` | `.msg-npc_log` |
 | `AGENT_ACTION` | ReAct chosen command | `npc_log` `[action]` line | `✓`/`✗`, indented `act` | `.msg-npc_log` |
 | `AGENT_REFLECTION` | ReAct "Reflect" after a failure | `_reflect` (currently unshown) | dim, indented `↳ reflect` | *(new)* `.msg-npc_reflection` |
@@ -192,6 +193,9 @@ troll
 In a real terminal the actor name and rule are colored, the `↳` lines are dim, `✗`
 is red, `✓` is green, and `»` narration is the default green. Multiple NPCs in one
 turn each get their own indented block, so two agents' thoughts never interleave.
+That per-actor grouping is also what keeps the trace coherent under the
+**simultaneous** turn mode (#30), where an agent reasons in the *gather* phase but
+acts later at *resolve* — see §11.
 
 The web app keeps its existing look (the colored message types it already renders),
 now driven by the same channels:
@@ -303,6 +307,10 @@ Recommendation, to keep the cost contained:
   observations.
 - **Rendering is downstream of effects.** Messages describe what already happened;
   the precondition → effect gate is untouched. Output can never change the world.
+- **The renderer groups by `(turn, actor)`, not emission order.** An agent's trace is
+  drawn as one block even when its reasoning and action are emitted in different
+  phases — so the same renderer is correct for the sequential loop and the
+  `gather → resolve` (simultaneous) loop (#30).
 - **World vs. view vs. render are three concerns.** State lives in the world graph;
   what a viewer perceives is a `View` (multi-character-play.md §5); how that's drawn
   is a `Renderer`. This doc only adds the third.
@@ -330,10 +338,71 @@ Sequenced so single-character games keep working at every step. Aligns with the
 | 5 | Richer ReAct trace in `npc.py` (observation/reasoning/action/reflection channels) | the §5 trace |
 | 6 | Fold `LlmParser` narration into the seam; collapse the duplicate classes | LLM-narrated play |
 | 7 | Tests switch to a `CaptureRenderer`; assert on channels not strings | the offline suites |
-| 8 *(future)* | `JSONRenderer` / export feed for the Godot renderer | the 2D renderer |
+| 8 *(after #28)* | `AGENT_OBSERVATION` renders tiered goals; optional goal-change `SYSTEM` messages | tiered-goal play |
+| 9 *(after #30)* | `phase` on `Message` + group-by-`(turn, actor)`; turn header shows mode | simultaneous turns |
+| 10 *(future)* | `JSONRenderer` / export feed for the Godot renderer | the 2D renderer |
 
 Each stage is independently shippable; stop after any of them and the game still
-runs.
+runs. Stages 8–9 depend on PRs still in flight and land **after they merge** — see §11.
+
+---
+
+## 11. Fit with in-flight work (#30 simultaneous turns, #28 tiered goals)
+
+Two PRs in flight reshape *when* an agent acts and *how* its goals are structured.
+This design accommodates both, but the integrations land **after those PRs merge**,
+because they depend on the structures those PRs introduce. The core seam (§1–§10)
+depends on neither and can ship first.
+
+### Simultaneous turns (#30)
+
+PR #30 adds an opt-in `turn_mode="simultaneous"` whose round is
+`gather → resolve → react → advance`: every agent *reasons* during **gather**
+(against the turn-start snapshot), then commands *resolve* in `initiative` order,
+where contention is settled at the precondition gate with a capped retry
+(`route_with_retry`). The rendering consequence: an agent's `AGENT_OBSERVATION` /
+`AGENT_REASONING` are emitted in the *gather* phase, while its `AGENT_ACTION` /
+`AGENT_REFLECTION` (and any contention failure) happen later at *resolve* — so
+reasoning and action are no longer adjacent in emission order. Two small
+accommodations cover it:
+
+- **A `phase` field on `Message`** (`"gather"` / `"resolve"`), set by `turns.py`. The
+  renderer buffers a turn and **groups by `(turn, actor)`** before drawing (§9), so
+  each agent still gets one coherent block regardless of interleaving; `turn_header`
+  can show the mode (`── Turn 4 · simultaneous ──`).
+- **Contention rides existing channels.** A command that loses at the gate emits a
+  failed `AGENT_ACTION` / `BLOCKED` carrying the reason — the `action_failed` event
+  #30 already logs — so "someone else got there first" needs no new channel.
+
+A simultaneous round (guard and troll both want the key; troll wins on initiative,
+guard's `take key` fails at resolve and it reflects-and-retries):
+
+```
+── Turn 4 · simultaneous ─────────────────────────────────
+guard
+  ↳ think     The key is on the table — grab it before the troll.
+  ✗ act       take key       → blocked: I don't see it.   (troll took it at resolve)
+  ↳ reflect   Someone beat me to it; guard the door instead.
+  ✓ act       go south
+troll
+  ↳ think     I want that key.
+  ✓ act       take key
+  » The troll snatches the brass key.
+```
+
+### Tiered goals (#28)
+
+PR #28 replaces the flat `goals=[...]` list with first-class, **tiered**, **mutable**
+goals (`GoalType` SHORT/MEDIUM/LONG; `Goal` dataclass; `add_goal` / `complete_goal`),
+rendered in the agent's system message grouped by tier. For this design that means:
+
+- The `AGENT_OBSERVATION` channel's content carries persona **and goals grouped by
+  tier** (Short-/Medium-/Long-term), matching #28's prompt format — so `verbose`
+  shows the same structure the model actually sees.
+- Because goals mutate mid-play, goal changes are worth surfacing: when an
+  `Action.apply_effects()` calls `complete_goal` / `add_goal`, emit a `SYSTEM` message
+  (e.g. `troll completed a short-term goal: snarl at the player`) so progress shows up
+  in the trace. This is optional polish, not required for the core seam.
 
 ---
 
@@ -363,6 +432,7 @@ class Message:
     text: str
     actor: str | None = None
     turn: int | None = None
+    phase: str | None = None    # "gather"/"resolve" (simultaneous mode, #30)
     meta: dict = field(default_factory=dict)
 
 class Renderer:
