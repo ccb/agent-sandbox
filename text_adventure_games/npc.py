@@ -235,32 +235,37 @@ def _reflect(observation: str, command: str, failure_reason: str) -> str:
 
 
 def _log_decision(character, game, agent: Agent, command: str):
-    """Emit the agent's decision as labeled trace lines, e.g.::
+    """Trace the agent's decision on its own channels, e.g.::
 
         troll [reasoning] My growl didn't scare the player off -- escalate.
         troll [action] snarl player
 
-    Goes through ``parser.npc_log`` (printed in terminal mode, buffered in web
-    mode), which keeps it OUT of command_history -- an NPC's reasoning is
-    private and must never leak into other characters' observations.
+    These go through ``parser.agent_reasoning`` / ``parser.agent_action`` (the
+    AGENT_* channels), which a terminal renderer groups under the actor and a
+    web renderer tags ``npc_log``. They are deliberately kept OUT of
+    command_history -- an NPC's reasoning is private and must never leak into
+    other characters' observations.
     """
     if agent.last_reasoning:
-        game.parser.npc_log(f"{character.name} [reasoning] {agent.last_reasoning}")
-    game.parser.npc_log(f"{character.name} [action] {command}")
+        game.parser.agent_reasoning(character.name, agent.last_reasoning)
+    game.parser.agent_action(character.name, command)
 
 
 def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
 
     Observe (build the observation), let the agent decide a command, route it
-    through the parser; on failure, read the parser's last failure message and
-    feed it back via :func:`_reflect`, then retry up to *max_retries* times.
-    Each attempt is traced with labeled reasoning/action lines (see
-    :func:`_log_decision`). Returns ``True`` if a command succeeded, else
+    through the parser; on failure, read the parser's last failure message,
+    trace it as a Reflect step, feed it back via :func:`_reflect`, and retry up
+    to *max_retries* times. Each step is traced on its AGENT_* channel
+    (observation is verbose-only). Returns ``True`` if a command succeeded, else
     ``False``.
     """
     base = build_npc_context(character, game)
     observation = base
+
+    # The full observation is traced too, but only shows at verbose verbosity.
+    game.parser.agent_observation(character.name, base)
 
     for _ in range(1 + max_retries):
         command = agent.decide(observation)
@@ -272,6 +277,7 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
         failure_reason = (
             getattr(game.parser, "last_fail_message", None) or "action failed"
         )
+        game.parser.agent_reflection(character.name, failure_reason)
         observation = _reflect(base, command, failure_reason)
 
     return False

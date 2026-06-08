@@ -1,17 +1,17 @@
 """LLM-enhanced parsers for text adventure games.
 
-Provides ``LlmParser`` (terminal mode) and ``WebLlmParser`` (web/Flask mode)
-that add LLM-powered narration, intent detection, and entity matching on top
-of the base keyword parser. Both gracefully fall back to keyword parsing when
-the LLM is unavailable or returns no result.
+Provides ``LlmParser`` (LLM-narrated parsing) and ``WebLlmParser`` (the same,
+wired to the web renderer) that add LLM-powered narration, intent detection,
+and entity matching on top of the base keyword parser. Both gracefully fall
+back to keyword parsing when the LLM is unavailable or returns no result.
 
-Inheritance::
+Output goes through the Message/Renderer seam (``reporting.py``): every parser
+builds Messages by Channel and a Renderer decides how they look. Terminal vs.
+web is just a different renderer, so the ``Web*`` classes are now thin shims:
 
-    Parser                (keyword parsing, prints to stdout)
-      ├── WebParser       (keyword parsing, buffers messages)
-      ├── LlmParser       (LLM parsing + narration, prints to stdout)
-      └── WebLlmParser    (LLM parsing + narration, buffers messages)
-           extends LlmParser
+    Parser        builds Messages -> default_renderer() (rich terminal / plain)
+      └── LlmParser     same, but LLM-narrates the text first
+            WebParser / WebLlmParser  install a WebRenderer + expose get_messages()
 
 Ported from the course's hw2 solution (``gpt_parser.py``) with provider-agnostic
 LLM client abstraction.
@@ -23,6 +23,7 @@ import re
 
 from text_adventure_games import parsing
 from text_adventure_games.llm_client import LlmClient, limit_context_length
+from text_adventure_games.reporting import Channel
 from text_adventure_games.things import Character, Item, Location
 
 
@@ -168,24 +169,20 @@ class LlmParser(parsing.Parser):
     def ok(self, description: str):
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._ok_system_instructions())
-        if self.verbose:
-            print("LLM Description:")
-        print(self.wrap_text(narrated) + "\n")
+        self._emit(Channel.NARRATION, narrated)
         self.add_description_to_history(narrated)
 
     def fail(self, description: str):
         self.last_fail_message = description  # the ReAct Reflect step reads this
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._fail_system_instructions())
-        if self.verbose:
-            print("LLM Description of Failed Command:")
-        print(self.wrap_text(narrated) + "\n")
+        self._emit(Channel.BLOCKED, narrated)
         self.add_description_to_history(narrated)
 
     def npc_ok(self, description: str):
         self.add_description_to_history(description)
         narrated = self._narrate(description, self._npc_system_instructions())
-        print(self.wrap_text(narrated) + "\n")
+        self._emit(Channel.NPC_NARRATION, narrated)
         self.add_description_to_history(narrated)
 
     # ------------------------------------------------------------------
@@ -334,10 +331,12 @@ class LlmParser(parsing.Parser):
 
 
 class WebLlmParser(LlmParser):
-    """LLM-enhanced parser that buffers messages for Flask (web mode).
+    """Compatibility shim: an :class:`LlmParser` that renders to a
+    :class:`~text_adventure_games.webapp.web_parser.WebRenderer`.
 
-    Extends ``LlmParser`` and overrides the 3 delivery methods to buffer
-    messages instead of printing, matching WebParser's interface.
+    The narration logic lives in ``LlmParser`` and the buffering in the
+    renderer; this subclass only installs the web renderer and exposes
+    ``get_messages()`` so the existing Flask wiring keeps working.
     """
 
     def __init__(
@@ -348,6 +347,10 @@ class WebLlmParser(LlmParser):
         verbose: bool = False,
         narration_style: str | None = None,
     ):
+        # Imported here (not at module top) to avoid a webapp <-> parser import
+        # cycle; the webapp package imports llm_parser.
+        from text_adventure_games.webapp.web_parser import WebRenderer
+
         super().__init__(
             game,
             llm_client,
@@ -355,33 +358,7 @@ class WebLlmParser(LlmParser):
             verbose=verbose,
             narration_style=narration_style,
         )
-        self.messages = []
-
-    def ok(self, description: str):
-        self.add_description_to_history(description)
-        narrated = self._narrate(description, self._ok_system_instructions())
-        self.messages.append({"type": "output", "text": self.wrap_text(narrated)})
-        self.add_description_to_history(narrated)
-
-    def fail(self, description: str):
-        self.last_fail_message = description  # the ReAct Reflect step reads this
-        self.add_description_to_history(description)
-        narrated = self._narrate(description, self._fail_system_instructions())
-        self.messages.append({"type": "error", "text": self.wrap_text(narrated)})
-        self.add_description_to_history(narrated)
-
-    def npc_ok(self, description: str):
-        self.add_description_to_history(description)
-        narrated = self._narrate(description, self._npc_system_instructions())
-        self.messages.append({"type": "npc_action", "text": self.wrap_text(narrated)})
-        self.add_description_to_history(narrated)
-
-    def npc_log(self, message: str):
-        # Agent trace (labeled reasoning/action): buffered like WebParser's,
-        # not narrated, and never added to history.
-        self.messages.append({"type": "npc_log", "text": self.wrap_text(message)})
+        self.set_renderer(WebRenderer())
 
     def get_messages(self):
-        msgs = list(self.messages)
-        self.messages = []
-        return msgs
+        return self.renderer.drain()

@@ -1,7 +1,9 @@
 # Output & Agent-Trace Rendering — Design
 
-**Status:** Proposal — not yet adopted. A design doc for discussion, not a
-description of current behavior.
+**Status:** Core implemented (PR #31). Sections 1–7 are built and shipping;
+the parts that depend on other in-flight PRs (sections 8–9) and a few polish
+items are not. See **section 12, Implementation status**, for the exact
+what's-done / what's-left breakdown.
 
 **Author:** Alistair King.
 
@@ -403,6 +405,76 @@ rendered in the agent's system message grouped by tier. For this design that mea
   `Action.apply_effects()` calls `complete_goal` / `add_goal`, emit a `SYSTEM` message
   (e.g. `troll completed a short-term goal: snarl at the player`) so progress shows up
   in the trace. This is optional polish, not required for the core seam.
+
+---
+
+## 12. Implementation status
+
+What PR #31 actually ships, what differs from the proposal above, and what's left.
+
+### Implemented (PR #31)
+
+- **`text_adventure_games/reporting.py`** — `Channel`, `Message`, the `Renderer`
+  ABC, `PlainRenderer`, `RichTerminalRenderer`, `CaptureRenderer`, the
+  `quiet/normal/verbose` gate (`channel_visible`), and `default_renderer()`
+  (picks `rich` on an interactive TTY, else the plain fallback). *(stages 1, 3)*
+- **`parsing.py`** — `Parser` holds a `renderer`; `ok` / `fail` / `npc_ok` and the
+  new `agent_observation` / `agent_reasoning` / `agent_action` / `agent_reflection`
+  methods build `Message`s and emit them; the command echo emits `COMMAND`; a
+  `turn_header()` hook delegates to the renderer. `last_fail_message` and
+  `command_history` behavior are unchanged. *(stage 2)*
+- **`webapp/web_parser.py`** — `WebRenderer` maps each channel to the legacy web
+  `type` string (so the page and tests are byte-for-byte unchanged); `WebParser`
+  is now a thin shim that installs it. `WebLlmParser` is likewise a thin shim over
+  `LlmParser`. *(stages 4, 6)*
+- **`npc.py`** — the ReAct loop emits Observe / Think / Act / Reflect on their
+  channels. *(stage 5)*
+- **`setup.py`** — `rich` added to `install_requires`, with the plain fallback so a
+  no-`rich` install still runs. *(section 8)*
+- **`tests/test_reporting.py`** — `CaptureRenderer`-based tests asserting on
+  channels (taxonomy, verbosity, plain/web renderers, parser routing, the ReAct
+  channels, and the privacy invariant). *(stage 7, partial)*
+- **`webapp/static/style.css`** — `.msg-npc_reflection`, `.msg-npc_observation`,
+  `.msg-system` added.
+
+All 152 existing tests still pass (via the `WebParser`/`WebLlmParser` shims),
+plus 11 new ones.
+
+### Deltas from the proposal above
+
+- **An extra `NPC_NARRATION` channel** was added (the proposal folded NPC action
+  narration into `NARRATION`). The web layer colors NPC actions distinctly from
+  player narration (`msg-npc_action` vs `msg-output`), so they need to stay
+  separate channels. The section 3 table's `NARRATION` row therefore splits in two.
+- **Turn rules are drawn lazily by the terminal renderer** — on the first
+  agent/NPC message of a new turn — rather than emitted by the game loop. This
+  avoids empty headers on turns where nothing happens and keeps the web stream
+  unchanged (no turn dividers, matching the section 5 web mock). The
+  `turn_header()` hook still exists for explicit use.
+- **The action's outcome renders as the *next* line** (a green `»` narration or a
+  red `✗` blocked line) rather than merged inline onto the `· act` line with a
+  `✓`/`✗` glyph. Inline merging would need per-turn renderer buffering — left as
+  polish. In practice the following line's color already signals success/failure,
+  and reads naturally as *think → act → result*.
+- **`AGENT_OBSERVATION` is emitted every NPC turn but shown only at `verbose`** — so
+  it's free at the default `normal` level and never reaches the web stream there.
+
+### Still to do
+
+- **Sections 8–9 (after #28 / #30 merge):** render tiered goals in
+  `AGENT_OBSERVATION`, optional goal-change `SYSTEM` messages, and `phase`-aware
+  grouping for simultaneous turns. The `Message.phase` field is already in place.
+- **Stage 7, full migration:** the existing suites still assert on the web dicts
+  through the `WebParser` shim; only `test_reporting.py` uses `CaptureRenderer`.
+  Migrating the rest is mechanical but deferred to keep this PR focused.
+- **Stage 10:** the `JSONRenderer` / export feed for the 2D renderer.
+- **Verbose JSON dump:** `llm_client.py` / `LlmParser._narrate` still
+  `print(json.dumps(...))` under their `verbose` flag for deep prompt debugging;
+  the `AGENT_OBSERVATION` channel is added but hasn't replaced that path yet.
+- **`SYSTEM` channel wiring:** the channel and styling exist, but the engine
+  doesn't yet route game-over / clock notices through it.
+- **Polish:** inline `✓`/`✗` on the act line (via renderer buffering); a short
+  blurb in `notebooks/hw1_llm/play.py` showing the new trace.
 
 ---
 
