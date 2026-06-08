@@ -1,3 +1,16 @@
+## 2026-06-08
+**Focus:** working on issue #23 and looking into logging for triggers
+
+**Done today:**
+- finished rebasing onto main and changed testing environment to match (`Python 3.9`)
+- started issue #29
+- auditing the codebase (i.e., checking logging behavior for triggers)
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- working on issue #29
 ## 2026-06-05
 **Focus:** working on issue #23 and looking into algebraic data types
 
