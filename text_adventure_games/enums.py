@@ -217,12 +217,15 @@ class ReActLabel(_StrEnum):
 
     Stored with the trailing colon so they double as both prompt template
     fragments ("Reasoning: ...") and parser tokens. ``THOUGHT`` is accepted as
-    a synonym for ``REASONING`` when parsing replies.
+    a synonym for ``REASONING`` when parsing replies. ``DURATION`` is the
+    optional line on which a model estimates how many in-game minutes an action
+    takes (consumed by the per-turn NPC time budget).
     """
 
     REASONING = "Reasoning:"
     ACTION = "Action:"
     THOUGHT = "Thought:"
+    DURATION = "Duration:"
 
 
 # ----------------------------------------------------------------------

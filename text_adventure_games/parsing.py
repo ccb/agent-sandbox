@@ -76,6 +76,10 @@ class Parser:
         # Set by fail() so the ReAct loop can read the reason without side-effects
         self.last_fail_message: str | None = None
 
+        # The most recent action that passed its preconditions; the NPC turn
+        # loop reads its get_duration() to charge the per-turn budget (issue #24).
+        self.last_action = None
+
         # How output is shown. The engine builds Messages (by Channel) and hands
         # them to a Renderer; the default picks a colored terminal renderer when
         # one fits, else a plain fallback. Web mode passes a WebRenderer.
@@ -279,6 +283,9 @@ class Parser:
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
+            # Remember the action that just ran so the NPC turn loop can read
+            # its in-game duration when charging the per-turn budget (issue #24).
+            self.last_action = action
             # Attribute the event to whoever is acting. The actor is threaded in
             # explicitly — the player via Game.do_command, an NPC via its
             # behavior — so we record the true subject of the command. Only fall
