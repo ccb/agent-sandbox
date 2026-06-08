@@ -4,6 +4,39 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-07
+
+**Focus:** clear the merge queue (#20, #22); implement simultaneous turns (#25)
+
+**Done today:**
+- Merged **PR #20** (multi-agent demo notebook) and **PR #27** (issue #22) into `main`. #21 (issue #5, ReAct wired into the live game) had merged on the 4th, so the whole ReAct + notebook + world-state stack is now on `main`.
+- Opened **PR #30** (issue #25): opt-in **simultaneous turn mode**. New `turns.py` runs a `gather → resolve → react → advance` round per the `docs/design/multi-character-play.md` §3/§8 spec — every NPC agent decides against the **turn-start snapshot** (no peeking at others' actions this round), then commands resolve player-first and in `initiative` order (ties keep gather order). Contention settles at the precondition gate: the loser's command fails, the failure reason is fed back for a capped reflect-retry (`route_with_retry`), and an unrecovered failure is logged as an `action_failed` event.
+- Added `Game(..., turn_mode="simultaneous")` (validated flag; default `"sequential"` path byte-for-byte unchanged, `end_turn()` untouched) and first-class `Character.set_agent(agent)` so gather can call `decide()` directly. Refactored `npc.py` to share the decide→route→reflect core (`decide_and_route`) between sequential and simultaneous modes — behavior-preserving, same `1 + max_retries` attempt budget.
+- `tests/test_simultaneous_turns.py`: 10 offline `ScriptedAgent` tests (NPC-vs-NPC contention, player-vs-NPC snapshot contention, gather-order tie-break, death between gather and resolve, failed player command, `decide() -> None`, legacy-behavior compat, turn-mode validation, sequential regression). Full suite 162 passing; `test_npc_behaviors.py` green.
+- Demoed the mode offline in `notebooks/multi_agent_action_castle.ipynb` (§10): a one-fish standoff where the guard's initiative beats the troll's gather order, the player's resolve-first priority defeats both NPCs, the troll's reflect-retry recovers, and the guard's unrecovered failure lands in the event log. Sequential walkthrough re-executed, unchanged (same 47 events).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #30** reviewed/merged.
+- Future work parked in #25's design doc: the session layer ("Someone else got there first" narration, `/switch`, party control) and dry-run preconditions.
+- Phase 2: agent memory.
+
+## 2026-06-05
+
+**Focus:** issue #22 — stop NPC mechanics from depending on narration text
+
+**Done today:**
+- Opened **PR #27** (issue #22): gate NPC mechanics on **world state, not narration strings**. `describe_for()` now renders a dedicated "Your state:" section so agent brains can read their own properties (which observations otherwise omit) and decide on mechanics from state rather than substring-matching the prose. Stacked on PR #20; planned to retarget to `main` once #20 landed (it did, 6/7).
+- Black-formatted `test_npc_behaviors.py`.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land #20 then retarget/merge #27.
+
 ## 2026-06-04
 
 **Focus:** reconcile **PR #21** with the actor seam (#19); start a reading list in the journal
