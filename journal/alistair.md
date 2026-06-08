@@ -106,6 +106,7 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 | Title | Authors | Journal/Conference | Date Published | arXiv | Notes |
 |-------|---------|-------------------|----------------|-------|-------|
+| ExpeL: LLM Agents Are Experiential Learners | Tsinghua University | AAAI | February 2024 | [2308.10144](https://arxiv.org/abs/2308.10144) | |
 | Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia | Google DeepMind; Google Research; Technion; University of Toronto | arXiv | December 2023 | [2312.03664](https://arxiv.org/abs/2312.03664) | |
 | CLIN: A Continually Learning Language Agent for Rapid Task Adaptation and Generalization | Allen Institute for AI; University of Arizona; University of Pennsylvania | COLM | October 2023 | [2310.10134](https://arxiv.org/abs/2310.10134) | |
 | Generative Agents: Interactive Simulacra of Human Behavior | Stanford University; Google Research; Google DeepMind | UIST | April 2023 | [2304.03442](https://arxiv.org/abs/2304.03442) | |
