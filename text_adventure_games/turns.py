@@ -66,6 +66,10 @@ def gather_intents(game) -> list:
             # attached without a persona takes on its character's.
             if not agent.persona:
                 agent.persona = character.persona or ""
+            # Re-read the character's goals each round, exactly as the
+            # sequential factories do, so in-game add_goal()/complete_goal()
+            # reaches the next decision prompt (issue #23 tiered goals).
+            agent.goals = character.goals
             observation = build_npc_context(character, game)
             command = agent.decide(observation)
             if command:
