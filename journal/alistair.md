@@ -4,6 +4,28 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-09
+
+**Focus:** land the output/trace rendering stack (#31); rebase #30 onto a much-changed `main`; ship shared Claude Code automations and a sim-action design doc
+
+**Done today:**
+- Merged **PR #31** (unified output & agent-trace rendering) into `main`. Added a final commit first — `docs: add user-facing guide to reading game output` — so the merge ships the `Message`/`Channel`/`Renderer` seam (rich terminal + `PlainRenderer` fallback) together with a reader-facing guide. Two teammate PRs also landed on `main` today around the same window (**#28** tiered goals, **#33** scenario integration tests), so the merge base shifted under everything in flight.
+- Rebased **PR #30** (issue #25, simultaneous turn mode) onto the new `origin/main` and got it back to **MERGEABLE/CLEAN**. This took several reconciling commits against the day's landings:
+  - `fix: sync agent goals from character in simultaneous gather phase` — gather now pulls each agent's goal from its character so the tiered-goals API (#28) feeds the decide step correctly.
+  - `docs: migrate multi-agent notebook to the tiered-goals API (issue #23)` — moved the notebook off the old goal shape onto #28's API.
+  - `fix: adapt to #31 output/trace rendering after rebase` — wired the simultaneous path through the new rendering seam now that #31 is on `main`.
+  - Merged `main` into the branch (resolving a notebook conflict from the `Force rich rendering` commit), then `docs: split multi-agent notebook into sequential + simultaneous (issue #25)` — the notebook is now two clear walkthroughs instead of one overloaded cell.
+- Committed `Force rich rendering in multi-agent notebook` to `main` so the committed notebook output renders via the rich renderer rather than the plain fallback.
+- Opened **PR #34** (`chore/claude-code-automations`): project-shared Claude Code automations — a renderer-coverage guard hook plus a `/sync-renderer` command — so the rendering seam stays in sync as new output paths get added.
+- Opened **PR #35** (`docs/simultaneous-actions-design`): a design doc for simultaneous action resolution, capturing the gather→resolve→react model behind #30.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #30**, **#34**, and **#35** reviewed/merged.
+- Phase 2: agent memory.
+
 ## 2026-06-07
 
 **Focus:** clear the merge queue (#20, #22); implement simultaneous turns (#25)
