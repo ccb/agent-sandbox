@@ -166,6 +166,10 @@ troll [action] attack player with club      <- the Reflect step fed the reason b
 troll attacked The player with the club.
 ```
 
+New to reading this output — the colors, prefixes, and indented agent blocks?
+See [`docs/reading-the-output.md`](docs/reading-the-output.md), a guide to
+interpreting what the game prints (and how to show more or less of it).
+
 ### Run the tests
 
 ```bash

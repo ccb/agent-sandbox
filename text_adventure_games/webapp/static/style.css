@@ -91,6 +91,29 @@ h1 {
     margin-bottom: 0.3em;
 }
 
+.msg-npc_reflection {
+    /* Agent trace: the ReAct loop's Reflect step (why a retry happened). */
+    color: #c8a050;
+    font-style: italic;
+    white-space: pre-wrap;
+    margin-bottom: 0.3em;
+}
+
+.msg-npc_observation {
+    /* Agent trace: the full Observe block (shown only at verbose verbosity). */
+    color: #5a7a8a;
+    font-style: italic;
+    white-space: pre-wrap;
+    margin-bottom: 0.3em;
+}
+
+.msg-system {
+    /* Turn headers, clock, meta-commands, game-over notices. */
+    color: #6a6a6a;
+    white-space: pre-wrap;
+    margin-bottom: 0.3em;
+}
+
 form {
     display: flex;
     align-items: center;

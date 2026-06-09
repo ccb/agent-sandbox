@@ -21,6 +21,9 @@ setup(
         'jupyter',
         'graphviz',
         'flask',
+        'rich',  # colored, turn-structured terminal output (see reporting.py).
+                 # Optional at runtime: the engine falls back to a plain renderer
+                 # if it's missing, so a no-rich install still works.
     ],
     extras_require={
         'dev': [
