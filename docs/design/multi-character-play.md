@@ -186,7 +186,9 @@ For richer simulations the human can steer more than one character. This is a th
   `/who`, `/switch <name>`, `/party [add|remove] <name>`, `/status`, `/log`.
 - **Conflict resolution** — when two characters' commands contend for the same target in
   one turn, settle by an `initiative` order (fallback: gather order); the loser's action
-  fails with a clear reason.
+  fails with a clear reason. PR #30 ships this initiative-order version;
+  [simultaneous-actions.md](simultaneous-actions.md) proposes how to grow it into a
+  pluggable resolution policy (situational priority, conflict-aware retries, dialog phases).
 
 This layer is what makes a *Sims/SimCity-style* social simulation playable: many agents
 living their lives while the human nudges one or several of them.
