@@ -1,6 +1,29 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+
 from .base import Thing
 from .items import Item
 from .locations import Location
+
+
+class GoalType(str, Enum):
+    """
+    An enum that defines the type of goal, whether that be short, medium, or long-term
+    Can be accessed via . notation, i.e., GoalType.SHORT == "short"
+    """
+
+    SHORT = "short"
+    MEDIUM = "medium"
+    LONG = "long"
+
+
+@dataclass
+class Goal:
+    description: str
+    type: GoalType
+    done: bool = False
 
 
 class Character(Thing):
@@ -22,10 +45,7 @@ class Character(Thing):
     """
 
     def __init__(
-        self,
-        name: str,
-        description: str,
-        persona: str,
+        self, name: str, description: str, persona: str, goals: list[Goal] | None = None
     ):
         super().__init__(name, description)
         self.set_property("character_type", "notset")
@@ -34,6 +54,7 @@ class Character(Thing):
         self.inventory = {}
         self.location = None
         self.behavior = None
+        self.goals = goals if goals else []
 
     def to_primitive(self):
         """
@@ -59,6 +80,10 @@ class Character(Thing):
             thing_data["location"] = self.location.name
         elif self.location:
             thing_data["location"] = self.location
+        thing_data["goals"] = [
+            {"description": g.description, "type": g.type.value, "done": g.done}
+            for g in self.goals
+        ]
         return thing_data
 
     @classmethod
@@ -74,6 +99,10 @@ class Character(Thing):
         instance.inventory = {
             k: Item.from_primitive(v) for k, v in data["inventory"].items()
         }
+        instance.goals = [
+            Goal(d["description"], GoalType(d["type"]), d.get("done", False))
+            for d in data.get("goals", [])
+        ]
         return instance
 
     def add_to_inventory(self, item):
@@ -113,3 +142,26 @@ class Character(Thing):
         """
         if self.behavior is not None:
             self.behavior(self, game)
+
+    def add_goal(self, description: str, type: GoalType) -> Goal:
+        goal = Goal(description, type)
+        self.goals.append(goal)
+        return goal
+
+    def complete_goal(self, goal: Goal) -> None:
+        goal.done = True
+
+    def goals_by_type(self, goal_type: GoalType) -> list[Goal]:
+        """
+        Gets all the goals stored in `self.goals` that are incomplete
+        and of the specified type (i.e., GoalType.SHORT).
+        """
+        return [g for g in self.goals if g.type == goal_type and not g.done]
+
+    def replace_goals(self, type: GoalType, descriptions: list[str]) -> None:
+        """
+        Drops all goals of the tier for when some event occurs (i.e., guard blocking
+        castle door is dead).
+        """
+        self.goals = [g for g in self.goals if g.type != type]
+        self.goals.extend(Goal(d, type) for d in descriptions)

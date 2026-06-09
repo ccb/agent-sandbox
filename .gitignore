@@ -175,3 +175,8 @@ engine-overview.html
 
 # superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
 docs/superpowers/
+
+# uv runtime ignore
+uv.lock
+pyproject.toml
+.python-version

@@ -23,6 +23,7 @@ from text_adventure_games.npc import (
     ScriptedAgent,
     make_react_behavior,
 )
+from text_adventure_games.things.characters import Goal, GoalType
 
 # ----------------------------------------------------------------------
 # The seam in isolation (no game, no parser)
@@ -47,7 +48,9 @@ def test_llmagent_decide_puts_persona_and_goals_in_system_message():
     observation is the user message. decide() stays a pure (str) -> str seam."""
     mock = MockLlmClient(["wait"])
     agent = LLMAgent(
-        mock, persona="I am a lonely gravedigger.", goals=["find a friend"]
+        mock,
+        persona="I am a lonely gravedigger.",
+        goals=[Goal("find a friend", GoalType.SHORT)],
     )
     agent.decide("You are in the churchyard.")
 
@@ -56,6 +59,7 @@ def test_llmagent_decide_puts_persona_and_goals_in_system_message():
     assert system["role"] == "system"
     assert "lonely gravedigger" in system["content"]
     assert "find a friend" in system["content"]
+    assert "Short-term" in system["content"]
     assert user == {"role": "user", "content": "You are in the churchyard."}
 
 

@@ -34,12 +34,14 @@ club``.
 from notebooks.hw1_solution import build_game
 from text_adventure_games.llm_client import client_from_env
 from text_adventure_games.npc import make_react_behavior
+from text_adventure_games.things.characters import GoalType
 
-# Goals are sent to the agent in its system message, alongside the persona.
+# Goals attached to each NPC. The behavior reads them off the character each
+# turn, so in-game updates (add_goal / complete_goal) land in the next prompt.
 NPC_GOALS = {
-    "troll": ["Keep intruders from crossing the drawbridge"],
-    "guard": ["Stop strangers from entering the castle"],
-    "ghost": ["Drive the living out of the dungeon"],
+    "troll": [("Keep intruders from crossing the drawbridge", GoalType.MEDIUM)],
+    "guard": [("Stop strangers from entering the castle", GoalType.MEDIUM)],
+    "ghost": [("Drive the living out of the dungeon", GoalType.SHORT)],
 }
 
 
@@ -55,7 +57,9 @@ def build_llm_game(llm_client):
         # The agent's prompt contains its persona but not its name -- tell it
         # who it is, so it (and the mock brain) can act in character.
         npc.persona = f"I am the {name}. {npc.persona}"
-        npc.set_behavior(make_react_behavior(llm_client, goals=goals))
+        for description, tier in goals:
+            npc.add_goal(description, tier)
+        npc.set_behavior(make_react_behavior(llm_client))
     return game
 
 
