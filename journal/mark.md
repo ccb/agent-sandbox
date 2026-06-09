@@ -4,6 +4,55 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-08
+
+**Focus:** Shipping #24 (variable action durations), kicking off #26 (scenario integration tests), plus more work on my own game (Tingen).
+
+**Done today:**
+- **#24 — done, PR up (#32).** Implemented as a per-turn *time budget* for NPCs rather than a variable clock: the `GameClock` stays a pure function of turn count, but each NPC now acts within a budget equal to `clock.minutes_per_turn`. A behavior reports the minutes it spent (returns the number) and keeps acting while budget remains; the first action always runs even if it overruns. Behaviors that return `None` run exactly once, so the legacy troll/guard/ghost escalation is untouched. Added `Action.DURATION` + `get_duration()`, `Parser.last_action`, the budget loop in `Character.take_turn`, and an optional LLM `Duration:` line on the existing ReAct decision prompt (resolution precedence: LLM estimate > declared DURATION > full budget). Sample durations on Smell_Rose/Examine/Inventory. Built with TDD (179 passing), had a subagent review it (APPROVE, no blocking issues), opened PR #32.
+- **#26 — started on `feature/scenario-integration-tests`.** Added a game-agnostic `text_adventure_games/scenario.py` (`play`, `blocked`, `prop`, `at`, `has_item`) and `tests/test_scenarios.py` with three scenarios asserting *world state* (not strings): feed-the-troll (drawbridge blocked→unblocked, troll hungry→fed — the motivating example), pick-the-rose (property/inventory transition), and light-lamp-dispels-darkness (a tiny purpose-built world). Goal predicates are kept as standalone `game -> bool` functions so a future agent-planning eval can reuse them unchanged. Verified the tests aren't vacuous with a mutation check; subagent review came back APPROVE. Not yet PR'd.
+- Continued building out my own game (Tingen).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Commit #26 and open its PR.
+- Keep iterating on Tingen.
+
+## 2026-06-05
+
+**Focus:** Two newly-assigned issues (#24, #26), plus the first implementation pass on my own game (Tingen) and its asset pipeline.
+
+**Done today:**
+- Picked up the two issues just assigned to me: #24 (variable action durations instead of a constant time tick) and #26 (scenario-based integration tests asserting game state across action sequences). Read and started scoping both — #24 builds on the time model from #7, #26 builds on the event log from #6. No code up yet.
+- Started implementing the Tingen game in Godot — stood up the core data-driven simulation as autoload singletons: `WorldState` (canonical pressures + derived stability), `Clock` (6-phase day + day/night tint), `WorldManager` (6-stage story machine on a strategic refresh with seeded dynamic slots), a weighted `EventManager`, `ClueDB` + a live Investigation Board, a topic/clue-gated `DialogueManager`, scheduled NPCs, `SaveManager`, a dev console, toast notifications, and a district map.
+- Wired it all into the project and validated headless: clean import, zero script errors on boot, and 25/25 on a dependency-free test runner (clock phases, pressure clamping, stage machine, seeded-slot determinism, clue collection, event scoring, save/load round-trip).
+- Kept a `DESIGN_DECISIONS.md` log of the choices I made plus open questions (stability formula weighting, refresh cadence, etc.) for review later.
+- Asset generation: started the Tingen asset pipeline (`asset-gen/generate_tingen_assets.py`) — Replicate-backed generation of placeholder art.
+
+**Blockers / questions:**
+- For #24, still deciding whether durations should live on the `Action` subclass or come from a central lookup — will raise once I've scoped it properly.
+
+**Next:**
+- Put up a first PR on #24 or #26.
+- Keep building out the Tingen implementation (event tuning, real NPC pathfinding later) and the asset generation.
+
+## 2026-06-04
+
+**Focus:** Planning my own game (Tingen) on top of the engine — design reconciliation + build order.
+
+**Done today:**
+- Read through the full Tingen design docs and resolved the engine question: the docs target a web "Yumina" engine, but the actual build is Godot. Decided to treat the engine docs as a portable system-design spec and port their contracts into Godot rather than rewrite them.
+- Pinned down the design canon the scaffold has to match: the five pressure variables (corruption, panic, fatigue, cult_readiness, attention), the six day phases, and the six world stages (disturbance → awakening → investigation → confrontation → ritual_night → resolution).
+- Rewrote the game's `TODO.md` into a sequenced build plan — tagged each task with its milestone, added a build-order DAG and a "what to avoid" list — so Friday's implementation could just follow the order.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Start implementing the core simulation systems and pick up the two new engine issues.
+
 ## 2026-06-03
 
 **Focus:** #8 — agent-to-agent interaction (actor seam + `say` action), then addressing #14/#16 review feedback and integrating onto current `main`.
