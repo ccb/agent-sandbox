@@ -1,6 +1,7 @@
 from .things import Location, Character
 from .clock import GameClock
 from . import parsing, actions, blocks
+from .enums import EventKind, Property
 from .events import GameEvent
 from .triggers import Trigger, MAX_CASCADE_PASSES, at_turn
 
@@ -128,8 +129,8 @@ class Game:
         for character in list(self.characters.values()):
             if character is self.player:
                 continue
-            if character.get_property("is_dead") or character.get_property(
-                "is_unconscious"
+            if character.get_property(Property.IS_DEAD) or character.get_property(
+                Property.IS_UNCONSCIOUS
             ):
                 continue
             if character.location is None:
@@ -169,7 +170,7 @@ class Game:
                     trigger.action(self)
                     trigger.fired = True
                     fired_this_round.add(trigger)
-                    self.log_event("trigger", trigger.name, f"{trigger.name} fired")
+                    self.log_event(EventKind.TRIGGER, trigger.name, f"{trigger.name} fired")
                     newly_fired = True
             if not newly_fired:
                 break
@@ -247,11 +248,11 @@ class Game:
         if self.game_over:
             return True
         # The player has died
-        if self.player.get_property("is_dead"):
+        if self.player.get_property(Property.IS_DEAD):
             self.game_over_description = "You have died. THE END"
             return True
         # The player has been knocked unconscious
-        if self.player.get_property("is_unconscious"):
+        if self.player.get_property(Property.IS_UNCONSCIOUS):
             self.game_over_description = "You have been knocked unconscious. THE END"
             return True
         # Has the game has been won?

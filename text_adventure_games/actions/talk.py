@@ -1,4 +1,5 @@
 from . import base
+from ..enums import ActionName, Role
 
 
 class Say(base.Action):
@@ -9,7 +10,7 @@ class Say(base.Action):
         say to <name> <message>  -> directed at a co-located character
     """
 
-    ACTION_NAME = "say"
+    ACTION_NAME = ActionName.SAY
     ACTION_DESCRIPTION = "Say something out loud; others in the room hear it"
     ACTION_ALIASES = ["speak"]
 
@@ -40,7 +41,7 @@ class Say(base.Action):
         # verbatim just before parse_action lowercased it.
         original = command
         for entry in reversed(self.parser.command_history):
-            if entry.get("role") == "user":
+            if entry.get("role") == Role.USER:
                 original = entry["content"]
                 break
 

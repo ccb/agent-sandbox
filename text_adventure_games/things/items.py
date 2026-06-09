@@ -1,4 +1,5 @@
 from .base import Thing
+from ..enums import Property
 
 
 class Item(Thing):
@@ -18,7 +19,7 @@ class Item(Thing):
 
         # If an item is gettable, then the player can get it and put it in
         # their inventory.
-        self.set_property("gettable", True)
+        self.set_property(Property.GETTABLE, True)
 
         # It might be at a location
         self.location = None

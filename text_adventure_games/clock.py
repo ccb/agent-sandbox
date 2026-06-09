@@ -37,15 +37,19 @@ Example::
 
 from __future__ import annotations
 
+from .enums import Period
+
 # Default day periods as (start_hour, name) pairs. Each period runs from its
 # start hour up to the next period's start hour. The last period wraps around
-# midnight: with these defaults "night" covers 20:00 through 4:59.
+# midnight: with these defaults "night" covers 20:00 through 4:59. Names use
+# the Period enum but are stored alongside plain strings; since Period
+# members ARE strings, custom periods can mix freely with the defaults.
 DEFAULT_PERIODS = [
-    (5, "dawn"),
-    (8, "morning"),
-    (12, "afternoon"),
-    (17, "dusk"),
-    (20, "night"),
+    (5, Period.DAWN),
+    (8, Period.MORNING),
+    (12, Period.AFTERNOON),
+    (17, Period.DUSK),
+    (20, Period.NIGHT),
 ]
 
 MINUTES_PER_DAY = 24 * 60

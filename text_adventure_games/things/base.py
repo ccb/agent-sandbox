@@ -1,5 +1,17 @@
+from __future__ import annotations
+
 from collections import defaultdict
 import json
+from typing import Union
+
+from ..enums import Property
+
+# Property keys are *either* a Property enum member or a plain string -- the
+# two are fully interchangeable. Property inherits from ``str``, so an enum
+# member IS a string at runtime (same hash, same equality, same dict key).
+# The enum just gives autocomplete and a single source of truth for the
+# well-known keys; ad-hoc properties stay as raw strings.
+PropertyKey = Union[Property, str]
 
 
 class Thing:
@@ -15,9 +27,10 @@ class Thing:
         # A description of the thing
         self.description = description
 
-        # A dictionary of properties and their values. Boolean properties for
-        # items include: gettable, is_wearable, is_drink, is_food, is_weapon,
-        #     is_container, is_surface
+        # A dictionary of properties and their values. Well-known boolean keys
+        # are enumerated in text_adventure_games.enums.Property (gettable,
+        # is_weapon, is_locked, is_dead, ...); games may declare new keys as
+        # plain strings without coordinating with the engine.
         self.properties = defaultdict(bool)
 
         # A set of special command associated with this item. The key is the
@@ -66,15 +79,24 @@ class Thing:
         instance = cls.from_primitive(data)
         return instance
 
-    def set_property(self, property_name: str, property):
+    def set_property(self, property_name: PropertyKey, property):
         """
-        Sets the property of this item
+        Sets the property of this item.
+
+        ``property_name`` is either a plain string (``"is_locked"``) or a
+        :class:`~text_adventure_games.enums.Property` member
+        (``Property.IS_LOCKED``). They are fully interchangeable: every enum
+        member IS a string at runtime, so a value set with one form can be
+        read back with the other.
         """
         self.properties[property_name] = property
 
-    def get_property(self, property_name: str):
+    def get_property(self, property_name: PropertyKey):
         """
-        Gets the value of this property for this item (defaults to False)
+        Gets the value of this property (defaults to False if unset).
+
+        Accepts the same dual key form as :meth:`set_property`: either a plain
+        string or a :class:`~text_adventure_games.enums.Property` member.
         """
         return self.properties.get(property_name, False)
 

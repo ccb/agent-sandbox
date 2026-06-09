@@ -1,9 +1,10 @@
 from . import base
 from .things import Drop
+from ..enums import ActionName, Property
 
 
 class Attack(base.Action):
-    ACTION_NAME = "attack"
+    ACTION_NAME = ActionName.ATTACK
     ACTION_DESCRIPTION = "Attack someone with a weapon"
     ACTION_ALIASES = ["hit"]
 
@@ -59,15 +60,15 @@ class Attack(base.Action):
             )
             self.parser.fail(description)
             return False
-        if not self.weapon.get_property("is_weapon"):
+        if not self.weapon.get_property(Property.IS_WEAPON):
             description = "{item} is not a weapon".format(item=self.weapon.name)
             self.parser.fail(description)
             return False
-        if self.victim.get_property("is_unconscious"):
+        if self.victim.get_property(Property.IS_UNCONSCIOUS):
             description = "{name} is already unconscious".format(name=self.victim.name)
             self.parser.fail(description)
             return False
-        if self.victim.get_property("is_dead"):
+        if self.victim.get_property(Property.IS_DEAD):
             description = "{name} is already dead".format(name=self.victim.name)
             self.parser.fail(description)
             return False
@@ -88,19 +89,19 @@ class Attack(base.Action):
         )
         self.parser.ok(description)
 
-        if self.weapon.get_property("is_fragile"):
+        if self.weapon.get_property(Property.IS_FRAGILE):
             description = "The fragile weapon broke into pieces."
             self.attacker.remove_from_inventory(self.weapon)
             self.parser.ok(description)
 
-        if self.victim.get_property("is_invulerable"):
+        if self.victim.get_property(Property.IS_INVULNERABLE):
             description = "The attack has no effect on {name}.".format(
                 name=self.victim.name
             )
             self.parser.ok(description)
         else:
             # the victim is knocked unconscious
-            self.victim.set_property("is_unconscious", True)
+            self.victim.set_property(Property.IS_UNCONSCIOUS, True)
             description = "{name} was knocked unconscious.".format(
                 name=self.victim.name.capitalize()
             )
