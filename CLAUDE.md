@@ -40,6 +40,11 @@ a free deterministic stand-in) and, for the real providers, the matching
   `do_command()` handles the player's command and, on success, calls `end_turn()`,
   which increments `self.turn` and gives every living NPC a `take_turn(game)`.
   This is the **turn-based multi-agent loop** — player first, then NPCs.
+  An opt-in `Game(..., turn_mode="simultaneous")` runs a **gather → resolve**
+  round instead (`turns.py`, issue #25): NPC agents (attached via
+  `Character.set_agent`) decide against the turn-start snapshot, then commands
+  resolve player-first and in `initiative` order, with contention failing at
+  the precondition gate and fed back for a retry.
 - **Things** (`things/`): `Thing` → `Location`, `Item`, `Character`. Properties are
   a `defaultdict(bool)`; any property can be set dynamically (`is_locked`, `is_dead`).
   `Character.take_turn()` delegates to a pluggable `self.behavior(character, game)`.
