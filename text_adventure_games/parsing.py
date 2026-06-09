@@ -8,12 +8,12 @@ The implementation that I have given below only uses simple keyword matching.
 """
 
 import inspect
-import textwrap
 
 from text_adventure_games import games
 
 from .things import Character, Item, Location
 from . import actions, blocks
+from .reporting import Channel, Message, default_renderer, wrap_text
 
 
 class Parser:
@@ -24,7 +24,7 @@ class Parser:
     is reflected in the simulated world.
     """
 
-    def __init__(self, game, echo_commands=False):
+    def __init__(self, game, echo_commands=False, renderer=None):
         # A list of the commands that the player has issued,
         # and the respones given to the player.
         self.command_history = []
@@ -45,30 +45,40 @@ class Parser:
         # Set by fail() so the ReAct loop can read the reason without side-effects
         self.last_fail_message: str | None = None
 
+        # How output is shown. The engine builds Messages (by Channel) and hands
+        # them to a Renderer; the default picks a colored terminal renderer when
+        # one fits, else a plain fallback. Web mode passes a WebRenderer.
+        # See text_adventure_games/reporting.py.
+        self.renderer = renderer if renderer is not None else default_renderer()
+
+    def set_renderer(self, renderer):
+        """Swap the renderer (e.g. a WebRenderer for the Flask app, or a
+        CaptureRenderer in tests)."""
+        self.renderer = renderer
+
+    def _emit(self, channel: Channel, text: str, actor=None, meta=None):
+        """Build a Message on *channel* and hand it to the renderer."""
+        self.renderer.emit(
+            Message(channel, text, actor=actor, turn=self.game.turn, meta=meta or {})
+        )
+
     def ok(self, description: str):
-        """
-        In the next homework, we'll replace this with a call to the OpenAI API
-        in order to create more evocative descriptions.
-        """
-        print(Parser.wrap_text(description))
+        """Report a successful action's world narration."""
+        self._emit(Channel.NARRATION, description)
         self.add_description_to_history(description)
 
     def fail(self, description: str):
-        """
-        In the next homework, we'll replace this with a call to the OpenAI API
-        in order to create more evocative descriptions.
-        """
+        """Report an action blocked by its preconditions. ``last_fail_message``
+        is set so the ReAct Reflect step can read the reason."""
         self.last_fail_message = description
-        print(Parser.wrap_text(description))
+        self._emit(Channel.BLOCKED, description)
 
     @staticmethod
     def wrap_text(text: str, width: int = 80) -> str:
         """
         Keeps text output narrow enough to easily be read
         """
-        lines = text.split("\n")
-        wrapped_lines = [textwrap.fill(line, width) for line in lines]
-        return "\n".join(wrapped_lines)
+        return wrap_text(text, width)
 
     def add_command_to_history(self, command: str):
         message = {"role": "user", "content": command}
@@ -172,7 +182,7 @@ class Parser:
         performing the action.
         """
         if self.echo_commands:
-            print(">", command)
+            self._emit(Channel.COMMAND, command)
         command = command.lower().strip()
         if command == "":
             return None
@@ -183,15 +193,44 @@ class Parser:
         return None
 
     def npc_ok(self, description: str):
-        msg = Parser.wrap_text(description)
-        print(msg)
+        """Report an NPC's action narration (rendered distinctly from the
+        player's own narration)."""
+        self._emit(Channel.NPC_NARRATION, description)
         self.add_description_to_history(description)
 
+    # ------------------------------------------------------------------
+    # Agent trace (the ReAct loop's Observe / Think / Act / Reflect).
+    #
+    # Each goes to the renderer on its own Channel and is deliberately NOT
+    # added to command_history: an NPC's reasoning is private, so it must never
+    # leak into other characters' observations.
+    # ------------------------------------------------------------------
+
+    def agent_observation(self, actor: str, text: str):
+        self._emit(Channel.AGENT_OBSERVATION, text, actor=actor)
+
+    def agent_reasoning(self, actor: str, text: str):
+        self._emit(Channel.AGENT_REASONING, text, actor=actor)
+
+    def agent_action(self, actor: str, command: str):
+        self._emit(Channel.AGENT_ACTION, command, actor=actor)
+
+    def agent_reflection(self, actor: str, text: str):
+        self._emit(Channel.AGENT_REFLECTION, text, actor=actor)
+
     def npc_log(self, message: str):
-        """Print an agent trace line (the ReAct loop's labeled reasoning and
-        action). Deliberately NOT added to command_history: an NPC's reasoning
-        is private, so it must never leak into other characters' observations."""
-        print(Parser.wrap_text(message))
+        """Legacy agent-trace shim (a single pre-formatted line). Prefer the
+        typed ``agent_*`` methods above; kept so older callers keep working."""
+        self._emit(Channel.AGENT_REASONING, message)
+
+    def turn_header(self, turn: int = None, time: str = None):
+        """Ask the renderer to mark a turn boundary (terminal renderers draw a
+        rule; others may ignore it)."""
+        if turn is None:
+            turn = self.game.turn
+        if time is None:
+            time = self.game.current_time()
+        self.renderer.turn_header(turn, time)
 
     def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
