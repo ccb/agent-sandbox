@@ -199,7 +199,7 @@ def test_agent_returning_none_sits_the_round_out():
 
     # The round still advanced, but alice produced no trace and no events.
     assert game.turn == turn_before + 1
-    npc_logs = [m for m in game.parser.messages if m["type"] == "npc_log"]
+    npc_logs = [m for m in game.parser.get_messages() if m["type"] == "npc_log"]
     assert npc_logs == []
     assert [e for e in game.events if e.actor == "alice"] == []
     assert "gem" in room.items
