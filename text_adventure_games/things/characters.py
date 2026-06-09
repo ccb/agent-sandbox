@@ -40,6 +40,8 @@ class Character(Thing):
     * A location (the place in the game where they currently are)
     * An inventory of items that they are carrying (a dictionary mapping from
       item name to Item instance)
+    * Optionally a behavior (sequential mode) and/or an agent (simultaneous
+      mode) that decides what the character does each turn
     * TODO: A dictionary of items that they are currently wearing
     * TODO: A dictionary of items that they are currently weilding
     """
@@ -54,6 +56,7 @@ class Character(Thing):
         self.inventory = {}
         self.location = None
         self.behavior = None
+        self.agent = None
         self.goals = goals if goals else []
 
     def to_primitive(self):
@@ -134,6 +137,18 @@ class Character(Thing):
         fn should be a callable with signature (character, game) -> None.
         """
         self.behavior = fn
+
+    def set_agent(self, agent):
+        """
+        Attach an Agent (see npc.py) as this character's decision-maker.
+
+        In the simultaneous turn mode (issue #25, turns.py) the game loop
+        calls agent.decide(observation) directly during the gather phase, so
+        the agent must be reachable here rather than hidden inside a behavior
+        closure. A character may have an agent, a legacy behavior, or neither.
+        Like `behavior`, the agent is runtime-only and is not serialized.
+        """
+        self.agent = agent
 
     def take_turn(self, game):
         """

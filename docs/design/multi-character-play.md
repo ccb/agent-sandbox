@@ -3,6 +3,12 @@
 **Status:** Proposal — not yet adopted. A design doc for discussion, not a
 description of current behavior. See issue #3.
 
+> **Update (issue #25):** the §3 `gather → resolve` loop is now implemented as
+> an opt-in mode — `Game(..., turn_mode="simultaneous")` in `turns.py`, with
+> agents attached via `Character.set_agent`. Conflicts surface as precondition
+> failures at resolve time, ordered by `initiative` (fallback: gather order);
+> the §8 session layer and its narration remain future work.
+
 **Author:** Alistair King. This consolidates the v1 and v2 brainstorms originally
 posted in PR #12 into a single canonical document.
 
@@ -281,8 +287,13 @@ Someone else got there first.
 4. **`parse_action(..., actor=)`** — thread the actor through actions.
 5. **`Reporter`** — decouple printing from effects (buffer messages).
 6. **Phased tick + agent gather** — the `gather → resolve → react → advance` loop.
+   ✅ Done (issue #25): opt-in via `Game(..., turn_mode="simultaneous")` in `turns.py`.
 7. **`GameEvent` log + `/log`**.
 8. **Conflict policy + dry-run preconditions** — polish simultaneous effects.
+   Partially done (issue #25): conflicts fail at the precondition gate in
+   `initiative` order and are logged as `action_failed` events; the loser's
+   agent gets the reason fed back for a retry. Dry-run preconditions and the
+   §8 "someone else got there first" narration are still future work.
 9. **Save/load session blob** — full continuity.
 
 Each step should keep single-character games working when the session is absent or

@@ -28,6 +28,7 @@ class Game:
         characters=None,
         custom_actions=None,
         time_config=None,
+        turn_mode="sequential",
     ):
         self.start_at = start_at
         self.player = player
@@ -89,6 +90,16 @@ class Game:
             err_msg = f"ERROR: invalid time_config ({time_config})"
             raise Exception(err_msg)
 
+        # Turn mode (issue #25). "sequential" (default) is the classic loop:
+        # the player acts, then each NPC observes and acts in order.
+        # "simultaneous" runs a gather -> resolve round instead (see turns.py):
+        # every NPC agent decides against the turn-start snapshot, then
+        # commands resolve player-first and in initiative order.
+        if turn_mode not in ("sequential", "simultaneous"):
+            err_msg = f"ERROR: invalid turn_mode ({turn_mode})"
+            raise Exception(err_msg)
+        self.turn_mode = turn_mode
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
@@ -103,10 +114,18 @@ class Game:
 
     def do_command(self, command: str) -> bool:
         """
-        Public entry point for processing a player command. Parses the command
-        and, if successful, runs the end-of-turn phase (increment turn counter,
-        run NPC behaviors).
+        Public entry point for processing a player command. In the default
+        sequential mode, parses the command and, if successful, runs the
+        end-of-turn phase (increment turn counter, run NPC behaviors). In
+        simultaneous mode (issue #25), runs a gather -> resolve round instead.
         """
+        if self.turn_mode == "simultaneous":
+            # Local import: turns.py imports npc.py, and the default
+            # sequential path shouldn't need either module to run.
+            from .turns import run_simultaneous_round
+
+            return run_simultaneous_round(self, command)
+
         # The player is the subject of any command entered here, so pass them as
         # the explicit actor. This keeps the event log correct even when the
         # command names another character (e.g. "attack troll") — without it the
