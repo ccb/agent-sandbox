@@ -7,6 +7,10 @@ what's-done / what's-left breakdown.
 
 **Author:** Alistair King.
 
+*For the **user-facing** companion — how to read the colors, prefixes, and agent
+trace this produces — see [`../reading-the-output.md`](../reading-the-output.md).
+This doc is the design rationale; that one is the reading guide.*
+
 *A unified design for how the engine surfaces (1) what's happening in the game and
 (2) what the agents are thinking and doing. It promotes the web UI's message types
 into a first-class engine concept and renders them well on every surface — the human
