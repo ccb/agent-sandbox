@@ -1,3 +1,42 @@
+## 2026-06-08
+**Focus:** working on issue #23 and looking into logging for triggers
+
+**Done today:**
+- finished rebasing onto main and changed testing environment to match (`Python 3.9`)
+- started issue #29
+- auditing the codebase (i.e., checking logging behavior for triggers)
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- working on issue #29
+## 2026-06-05
+**Focus:** working on issue #23 and looking into algebraic data types
+
+**Done today:**
+- researched implementation of the Goal class via a GoalType enum rather than just string matching to make the implementation less fragile
+- finished #23 by integrating into `npc.py` (removing the original goals parameter, since that was now handled by character)
+- changed tests to use GoalType rather than strings
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- rebasing onto other PRs and focusing on less string-matching implementations
+## 2026-06-04
+**Focus:** researching and watching lectures on AI
+
+**Done today:**
+- watched lecture on CLIN
+- read through Reflexion paper
+- skimmed through text adventure papers
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- reading more papers while working on issues
 ## 2026-06-03
 **Focus:** rebasing issue #4 onto main and looking into implementation of #9
 
