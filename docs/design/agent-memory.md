@@ -1,0 +1,519 @@
+# Agent Memory Design
+
+**Status:** Proposal - not yet implemented.
+
+**Source paper:** Park et al., "Generative Agents: Interactive Simulacra of
+Human Behavior" (arXiv:2304.03442v2 / UIST 2023).
+
+*A design for adding private, retrievable agent memory to the existing ReAct NPC
+layer without changing the engine's action precondition gate.*
+
+---
+
+## 1. Why memory
+
+Today an NPC can observe the current room, reason about one command, act, and
+reflect on a failed command. That is enough for short ReAct demos, but not enough
+for believable simulations over many turns. An agent that has no durable memory
+will forget who it met, what it tried, what it learned, and what plans it was
+following.
+
+The Generative Agents paper solves this with three connected pieces:
+
+1. A **memory stream**: an append-only list of natural-language records about
+   what the agent experienced.
+2. **Retrieval**: before deciding, select only the most useful memories by
+   recency, importance, and relevance.
+3. **Reflection and planning**: periodically turn raw memories into higher-level
+   thoughts and plans, then store those as memories too.
+
+For this repo, memory should make NPCs more coherent while keeping the code easy
+for new contributors to understand and test offline.
+
+---
+
+## 2. Design goals
+
+- **Private per-agent state.** One NPC's thoughts and memories must not leak into
+  another NPC's observation prompt.
+- **No action shortcuts.** Memory can influence what command an agent chooses,
+  but every command still goes through `Parser.parse_command()` and the normal
+  `check_preconditions()` -> `apply_effects()` gate.
+- **Small first implementation.** Start with in-memory Python objects and
+  deterministic retrieval. Do not require a vector database or persistent
+  backend.
+- **Mockable LLM use.** Importance scoring, semantic relevance, and reflection
+  may use an LLM later, but tests must pass with `MockLlmClient`.
+- **Readable records.** Memory records should be inspectable as plain text in
+  tests, debug output, and save files.
+
+Non-goals for the first pass:
+
+- Cross-session persistence beyond the existing game save/load path.
+- Global shared memory between agents.
+- Long daily schedules for every NPC. That belongs after the time model and
+  event system are stable.
+
+---
+
+## 3. Current repo fit
+
+The repo already has most of the seams this needs:
+
+- `text_adventure_games/npc.py` has `Agent.decide(observation)` and says memory
+  is Phase 2.
+- `react_behavior()` owns the Observe -> Act -> Reflect loop, so it is the right
+  place to retrieve memories and write new observations.
+- `Game.events` is an append-only event log. This should become the main source
+  for "what did the agent perceive since last turn?"
+- `parser.agent_reasoning()`, `parser.agent_action()`, and
+  `parser.agent_reflection()` already keep private ReAct traces out of
+  `command_history`. Memory should follow that privacy rule.
+- `Game.describe_for(character)` already builds a character-specific current
+  observation. Memory should add context around this observation, not replace it.
+
+Important distinction:
+
+- **Event log:** public-ish world facts about what happened.
+- **Agent memory:** private records derived from what a specific agent perceived,
+  inferred, or planned.
+
+---
+
+## 4. Data model
+
+Add a new module:
+
+```text
+text_adventure_games/memory.py
+```
+
+Suggested records:
+
+```python
+from dataclasses import dataclass, field
+from enum import Enum
+
+
+class MemoryKind(str, Enum):
+    OBSERVATION = "observation"
+    REFLECTION = "reflection"
+    PLAN = "plan"
+
+
+@dataclass
+class MemoryRecord:
+    id: int
+    kind: MemoryKind
+    text: str
+    created_turn: int
+    last_accessed_turn: int
+    importance: float = 1.0       # 1 to 10, paper-style
+    actor: str | None = None
+    source_event_ids: list[int] = field(default_factory=list)
+    tags: set[str] = field(default_factory=set)
+    embedding: list[float] | None = None
+    metadata: dict = field(default_factory=dict)
+```
+
+Suggested container:
+
+```python
+class AgentMemory:
+    def __init__(self, owner: str):
+        self.owner = owner
+        self.records: list[MemoryRecord] = []
+        self.last_seen_event_index = 0
+        self.importance_since_reflection = 0.0
+
+    def add_observation(self, text: str, turn: int, **kwargs) -> MemoryRecord:
+        ...
+
+    def add_reflection(self, text: str, turn: int, evidence_ids=None) -> MemoryRecord:
+        ...
+
+    def add_plan(self, text: str, turn: int, **kwargs) -> MemoryRecord:
+        ...
+
+    def retrieve(self, query: str, turn: int, max_records=6, token_budget=800):
+        ...
+```
+
+`Agent` should gain:
+
+```python
+self.memory = AgentMemory(owner="")
+```
+
+The owner can be filled when `make_react_behavior()` first binds the agent to a
+character.
+
+---
+
+## 5. Writing memories
+
+An agent should write memories from three sources.
+
+### A. Perceived world events
+
+At the start of `react_behavior(character, game, agent)`, compare
+`agent.memory.last_seen_event_index` against `game.events`.
+
+For each new event:
+
+1. Decide whether the character could perceive it.
+2. Convert it to one short natural-language sentence.
+3. Store it as an `OBSERVATION`.
+
+Initial visibility rule:
+
+- The agent remembers its own actions.
+- The agent remembers events in its current location.
+- The agent remembers events whose payload explicitly names it.
+
+This is intentionally conservative. When `View.build(game, viewer)` lands, use
+that instead of ad hoc visibility logic.
+
+### B. Agent's own action outcome
+
+After `_route()` succeeds, store a memory such as:
+
+```text
+I tried "take shovel" and succeeded.
+```
+
+After `_route()` fails and the Reflect step runs, store:
+
+```text
+I tried "attack player" but it failed because troll doesn't have a weapon.
+```
+
+This helps an agent avoid repeating the same failed command even when the parser
+failure has fallen out of the immediate observation prompt.
+
+### C. Reflections and plans
+
+Reflections and plans are not public narration. They are private memories created
+by the agent's reasoning layer.
+
+Examples:
+
+```text
+The player keeps returning to the drawbridge, so they probably intend to enter
+the castle.
+```
+
+```text
+Plan: guard the drawbridge unless the player offers food or leaves.
+```
+
+---
+
+## 6. Retrieval
+
+Before an agent decides, build a query from:
+
+- the current `game.describe_for(character)` observation,
+- the agent's active goals,
+- any reflected failure from this turn.
+
+Score each memory with the paper's three ingredients:
+
+```text
+score =
+    alpha_recency * recency
+  + alpha_importance * importance
+  + alpha_relevance * relevance
+```
+
+Default weights:
+
+```python
+alpha_recency = 1.0
+alpha_importance = 1.0
+alpha_relevance = 1.0
+```
+
+### Recency
+
+Use exponential decay over turns:
+
+```python
+recency = decay ** max(0, turn - record.last_accessed_turn)
+```
+
+Start with `decay = 0.95`. The paper used a slower decay for sandbox hours, but
+text-adventure turns are shorter and noisier.
+
+### Importance
+
+Normalize `record.importance` from 1-10 into 0-1:
+
+```python
+importance = record.importance / 10
+```
+
+Initial implementation:
+
+- Hard-code action/outcome observations to low-medium scores.
+- Let tests pass explicit importance values.
+- Add LLM importance scoring later.
+
+LLM-backed scorer, when enabled:
+
+- Ask for a 1-10 "poignancy" or importance rating.
+- Clamp invalid output into the 1-10 range.
+- Fall back to `1.0` if the model returns nothing.
+
+### Relevance
+
+Initial implementation:
+
+- Use deterministic keyword overlap between the query and memory text.
+- Strip common stop words.
+- Return a 0-1 score.
+
+LLM-backed implementation:
+
+- Add an embedding method to the LLM client layer or a separate
+  `EmbeddingClient` protocol.
+- Store embeddings on `MemoryRecord`.
+- Use cosine similarity for relevance.
+
+Do not block the first memory PR on embeddings.
+
+### Prompt insertion
+
+After retrieval, add a short memory block to the observation:
+
+```text
+Relevant memories:
+- [observation, turn 3] The player gave me a fish.
+- [reflection, turn 4] The player may be friendly if they offer food.
+```
+
+Then pass the augmented observation to `Agent.decide()`.
+
+Only retrieved memories enter the prompt. The full memory stream should never be
+dumped into the LLM context.
+
+---
+
+## 7. Reflection
+
+Raw observations help with continuity, but reflections help with generalization.
+The paper generates reflections when recent importance crosses a threshold. Use
+the same idea at a smaller text-adventure scale.
+
+Suggested trigger:
+
+```python
+if memory.importance_since_reflection >= 30:
+    reflect(agent, game)
+```
+
+Reflection flow:
+
+1. Take the 20-50 most recent memory records.
+2. Ask for 2-3 salient questions the agent could answer from those memories.
+3. For each question, retrieve supporting memories.
+4. Ask for 1 short inference grounded in those memories.
+5. Store each inference as `MemoryKind.REFLECTION` with `source_event_ids` or
+   evidence memory IDs.
+6. Reset `importance_since_reflection`.
+
+For the first implementation, this can be optional and disabled by default:
+
+```python
+AgentMemory(enable_reflection=False)
+```
+
+Tests should cover the threshold logic with a fake reflection function before any
+real LLM prompts are added.
+
+---
+
+## 8. Planning
+
+Plans should be stored as memories, but planning can land after basic retrieval
+and reflection.
+
+For this engine, start smaller than the paper's day-level schedules:
+
+- **Short-term plan:** 1-3 next intentions tied to current goals.
+- **Location-aware plan:** include where the agent expects to execute it.
+- **Revision-friendly plan:** failed actions or new observations can create a new
+  plan instead of mutating the old one.
+
+Example:
+
+```text
+Plan: stay near the drawbridge and warn the player before attacking.
+```
+
+Prompt rule:
+
+- Retrieved plans can guide action choice.
+- Plans do not schedule world mutations by themselves.
+- The chosen command still has to pass parser preconditions.
+
+When the time model is mature, plans can grow into clock-aware schedules with
+start turns and durations.
+
+---
+
+## 9. Integration sketch
+
+`react_behavior()` becomes:
+
+```python
+def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
+    if not agent.memory.owner:
+        agent.memory.owner = character.name
+
+    agent.memory.ingest_events(game, character)
+
+    base = build_npc_context(character, game)
+    relevant = agent.memory.retrieve(
+        query=base,
+        turn=game.turn,
+        token_budget=800,
+    )
+    observation = format_observation_with_memories(base, relevant)
+
+    game.parser.agent_observation(character.name, observation)
+
+    for _ in range(1 + max_retries):
+        command = agent.decide(observation)
+        if not command:
+            return False
+
+        _log_decision(character, game, agent, command)
+        if _route(character, game, command):
+            agent.memory.add_observation(
+                f'I tried "{command}" and succeeded.',
+                turn=game.turn,
+                importance=3,
+            )
+            return True
+
+        failure_reason = getattr(game.parser, "last_fail_message", None) or "action failed"
+        agent.memory.add_observation(
+            f'I tried "{command}" but it failed because {failure_reason}',
+            turn=game.turn,
+            importance=4,
+        )
+        game.parser.agent_reflection(character.name, failure_reason)
+        observation = _reflect(base, command, failure_reason)
+
+    return False
+```
+
+Important privacy rule:
+
+- Use `agent.memory.retrieve()` only inside that agent's own prompt.
+- Never append memory records to `parser.command_history`.
+- Never put `AGENT_REASONING` records into `Game.events`.
+
+---
+
+## 10. Save/load
+
+The current behavior factory captures an `Agent` inside a closure, which makes
+agent state hard to serialize. There are two reasonable paths:
+
+### Short-term
+
+Add `memory` to `Character`:
+
+```python
+character.memory = AgentMemory(owner=character.name)
+```
+
+`make_react_behavior()` then points `agent.memory` at `character.memory`. This
+lets `Character.to_primitive()` serialize memory records while keeping the
+existing behavior hook.
+
+### Longer-term
+
+Promote agents to first-class objects on characters:
+
+```python
+character.agent = LLMAgent(...)
+```
+
+Then `Character.to_primitive()` serializes `agent.memory`, persona, and goals,
+while runtime-only fields like the LLM client are reattached after load.
+
+Recommendation: use the short-term path for the first memory PR, and leave the
+first-class `character.agent` refactor for the broader multi-agent loop work.
+
+---
+
+## 11. Testing plan
+
+Unit tests:
+
+- `MemoryRecord.to_primitive()` / `from_primitive()` round-trips.
+- Recency decay decreases as turns pass.
+- Importance normalization handles 1, 10, and invalid values.
+- Keyword relevance returns higher scores for related text than unrelated text.
+- Retrieval returns top records in deterministic order.
+- Retrieval updates `last_accessed_turn`.
+- Token budget limits the number of prompt memories.
+
+Agent-loop tests:
+
+- A ReAct NPC's prompt includes a relevant prior memory.
+- A failed command is stored as memory and can affect the retry prompt.
+- One NPC's memory never appears in another NPC's prompt.
+- `parser.command_history` does not receive memory or private reasoning.
+- Mock clients can exercise all paths without API keys.
+
+Live-game tests:
+
+- In Action Castle, the troll remembers that a previous bare `attack player`
+  failed because it did not name a weapon.
+- If the player gives the troll food, the troll can remember that friendliness
+  and stop escalating in later turns.
+
+---
+
+## 12. Build order
+
+| Stage | Deliverable |
+|-------|-------------|
+| 1 | `memory.py` with `MemoryRecord`, `AgentMemory`, deterministic scoring, and unit tests. |
+| 2 | Add `Agent.memory`; retrieve memories into `react_behavior()` prompts. |
+| 3 | Ingest visible `Game.events` into per-agent observations. |
+| 4 | Store action success/failure outcomes as memories. |
+| 5 | Add optional LLM importance scoring behind a mockable interface. |
+| 6 | Add optional reflection threshold and reflection memory generation. |
+| 7 | Add simple plan memories. |
+| 8 | Serialize memory through `Character.to_primitive()` / `from_primitive()`. |
+
+Each stage should keep existing no-memory games working.
+
+---
+
+## 13. Open questions
+
+- Should event visibility wait for a formal `View` object, or is the simple
+  location-based rule good enough for the first PR?
+- Should importance scoring be configured per game, or globally through
+  `LLM_PROVIDER`?
+- Do we want embeddings in this package, or should relevance remain a pluggable
+  strategy so games can choose their own backend?
+- How should memory debug output be exposed: verbose agent trace, a `/memory`
+  meta command, or tests only?
+
+---
+
+## 14. Design invariants
+
+- Memory is context, not authority. The world graph remains the source of truth.
+- Retrieved memory may influence a command, but only actions mutate the world.
+- Private reasoning stays private.
+- The first implementation must be useful without network access.
+- The implementation should be obvious enough that a first- or second-year
+  undergraduate can read, test, and extend it.
