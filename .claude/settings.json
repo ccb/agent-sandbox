@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv/bin/black *)",
+      "Bash(venv/bin/python -m pytest tests/*)",
+      "Bash(venv/bin/python test_npc_behaviors.py)",
+      "Bash(venv/bin/jupyter nbconvert *)",
+      "Bash(git diff --stat *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/venv/bin/python\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_renderer_coverage.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

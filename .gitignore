@@ -161,6 +161,9 @@ cython_debug/
 *.json.*
 *.jsonl.*
 
+# Project-shared Claude Code config (commit it); per-dev settings.local.json stays ignored.
+!.claude/settings.json
+
 notebooks/hw3_solution/fine_tuning_item_specifications.jsonl
 notebooks/hw3_solution/fine_tuning_location_descriptions.jsonl
 notebooks/hw3_solution/games-updated.zip
