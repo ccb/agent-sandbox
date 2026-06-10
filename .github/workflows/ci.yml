@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: setup.py
+          cache-dependency-path: pyproject.toml
       # The suites are fully offline (the mock LLM provider drives the ReAct
       # loop), so the engine plus dev tools are all we need — no API keys and no
       # openai/anthropic install.

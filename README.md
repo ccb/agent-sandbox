@@ -87,6 +87,16 @@ pip install -e ".[llm]"               # engine + openai, anthropic, tiktoken
 # or: pip install -e ".[dev]"         # + black, nbformat (dev team)
 ```
 
+**Faster, with [uv](https://docs.astral.sh/uv/)** — one tool does both steps, and
+`uv pip` always installs into the venv that `uv venv` just made, so the
+`pip`-vs-`python` interpreter mismatch the callout below warns about can't happen:
+
+```bash
+uv venv venv                          # creates the same venv/ (uv picks a Python)
+source venv/bin/activate
+uv pip install -e ".[llm]"            # same target + extras as the pip line above
+```
+
 **If you use Anaconda/Miniconda**, use a conda env instead (Anaconda's `venv` is
 often broken):
 
