@@ -313,3 +313,31 @@ def test_mock_react_call_tool_returns_none_when_player_absent():
         {"role": "user", "content": alone},
     ]
     assert client.call_tool(messages, build_choose_action_tool([])) is None
+
+
+def test_mock_react_call_tool_keeps_multiword_verb_intact():
+    # The ghost's escalated command is "ghost touch player" -- a two-word verb.
+    # With the verb in the tool's enum, the split must keep "ghost touch" whole
+    # (action), not break it into "ghost" + "touch player", so the mock matches
+    # what a real enum-constrained tool-calling model would return.
+    client = MockReActClient()
+    ghost_system = (
+        "You are an NPC in a text adventure game.\n"
+        "Persona: I am the ghost. I will haunt this dungeon."
+    )
+    haunted_obs = (
+        "DUNGEON\n"
+        "Characters here:\n"
+        " * The player - a hero.\n"
+        "  Game: The ghost wails: Leave this place, mortal!\n"
+        "Turn: 2"
+    )
+    messages = [
+        {"role": "system", "content": ghost_system},
+        {"role": "user", "content": haunted_obs},
+    ]
+    result = client.call_tool(
+        messages, build_choose_action_tool(["ghost touch", "haunt"])
+    )
+    assert result["action"] == "ghost touch"
+    assert result["arguments"] == "player"

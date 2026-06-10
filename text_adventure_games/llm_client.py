@@ -501,6 +501,25 @@ def _split_decision(text: str) -> tuple[str | None, str | None]:
     return reasoning, command
 
 
+def _split_command(command: str, tool: dict) -> tuple[str, str]:
+    """Split a flat command ("ghost touch player") into (action, arguments) the
+    way the choose_action tool expects. When the tool constrains `action` to a
+    known set of verbs (its enum), match the longest verb the command starts
+    with -- so multi-word verbs like "ghost touch" stay intact, exactly as a
+    real tool-calling model (which can only return an enum value) would. Falls
+    back to splitting on the first space when the tool has no enum."""
+    enum = (
+        tool.get("parameters", {}).get("properties", {}).get("action", {}).get("enum")
+    )
+    if enum:
+        # Longest verb first so "ghost touch" wins over a hypothetical "ghost".
+        for verb in sorted(enum, key=len, reverse=True):
+            if command == verb or command.startswith(verb + " "):
+                return verb, command[len(verb) :].strip()
+    head, _, rest = command.partition(" ")
+    return head, rest
+
+
 def _mock_brain_choose(system: str, observation: str) -> str | None:
     """Pick a command for an Action Castle NPC, the way an LLM would.
 
@@ -654,7 +673,7 @@ class MockReActClient(MockLlmClient):
         reasoning, command = _split_decision(decision)
         if not command:
             return None
-        verb, _, rest = command.partition(" ")
+        verb, rest = _split_command(command, tool)
         return {"reasoning": reasoning, "action": verb, "arguments": rest}
 
 
