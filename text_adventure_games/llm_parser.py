@@ -128,7 +128,13 @@ class LlmParser(parsing.Parser):
             )
             if result is not None:
                 index = result.get("index")
-                if isinstance(index, int) and 0 <= index < len(options_list):
+                # Note: bool is a subclass of int in Python, so guard against a
+                # stray True/False sneaking through as the index 1/0.
+                if (
+                    isinstance(index, int)
+                    and not isinstance(index, bool)
+                    and 0 <= index < len(options_list)
+                ):
                     return options[options_list[index]]
                 # malformed / out of range -> fall through to the free-text path
 

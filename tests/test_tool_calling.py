@@ -507,6 +507,18 @@ def test_pick_option_non_int_index_falls_back_to_regex():
     assert parser._pick_option("pick one", options, "first") == "A"
 
 
+def test_pick_option_bool_index_falls_back_to_regex():
+    # bool is a subclass of int, so True must NOT be accepted as index 1.
+    # The structured result is rejected and we fall through to chat()+regex,
+    # which returns "0" -> the first option's value.
+    client = MockLlmClient(responses=["0"], tool_responses=[{"index": True}])
+    parser = _make_parser(client)
+    options = {"first": "A", "second": "B"}
+
+    assert parser._pick_option("pick one", options, "first") == "A"
+    assert client.tool_calls and client.calls  # tried tool, then chat
+
+
 def test_pick_option_no_call_tool_uses_regex_unchanged():
     class ChatOnly:
         def __init__(self):
