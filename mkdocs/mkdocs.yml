@@ -67,4 +67,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - API reference: api.md
+  - API reference:
+      - Overview: api/index.md
+      - Game loop: api/game-loop.md
+      - Turn modes: api/turn-modes.md
+      - Agents: api/agents.md
+      - LLM client: api/llm-client.md
+      - World model: api/world-model.md
