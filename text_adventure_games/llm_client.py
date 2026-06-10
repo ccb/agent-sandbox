@@ -483,6 +483,24 @@ def _decision(reasoning: str, command: str) -> str:
     return f"Reasoning: {reasoning}\nAction: {command}"
 
 
+def _split_decision(text: str) -> tuple[str | None, str | None]:
+    """Split a `_decision`-formatted reply ("Reasoning: ...\\nAction: ...")
+    back into ``(reasoning, command)``. Used by MockReActClient.call_tool to
+    turn the mock brain's labeled string into a structured arguments dict.
+    Kept local to llm_client (rather than importing npc._parse_decision) so the
+    low-level client layer does not depend on the agent layer."""
+    reasoning = None
+    command = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        lowered = line.lower()
+        if lowered.startswith("reasoning:"):
+            reasoning = line.split(":", 1)[1].strip() or None
+        elif lowered.startswith("action:"):
+            command = line.split(":", 1)[1].strip() or None
+    return reasoning, command
+
+
 def _mock_brain_choose(system: str, observation: str) -> str | None:
     """Pick a command for an Action Castle NPC, the way an LLM would.
 
@@ -607,6 +625,37 @@ class MockReActClient(MockLlmClient):
         if self._verbose:
             print(f"[mock-react] -> {command!r}")
         return command
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        """Structured counterpart of `_decide`: pick an in-character command via
+        the mock brain, then split it into a choose_action arguments object.
+        Returns None for prompts the brain doesn't recognize (the same
+        graceful-fallback signal `chat` gives), so LLM_PROVIDER=mock exercises
+        the structured path end-to-end and falls back exactly like a real one."""
+        self.tool_calls.append(
+            {
+                "messages": messages,
+                "tool": tool,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        system = messages[0]["content"] if messages else ""
+        observation = messages[-1]["content"] if messages else ""
+        decision = _mock_brain_choose(system, observation)
+        if decision is None:
+            return None
+        reasoning, command = _split_decision(decision)
+        if not command:
+            return None
+        verb, _, rest = command.partition(" ")
+        return {"reasoning": reasoning, "action": verb, "arguments": rest}
 
 
 # ---------------------------------------------------------------------------

@@ -242,3 +242,74 @@ def test_mock_chat_and_tool_queues_are_independent():
     client = MockLlmClient(responses=["chat reply"], tool_responses=[{"index": 0}])
     assert client.call_tool([], SELECT_OPTION_TOOL) == {"index": 0}
     assert client.chat([]) == "chat reply"
+
+
+# --- MockReActClient.call_tool (Task 4) ---------------------------------
+
+from text_adventure_games.llm_client import MockReActClient
+
+_TROLL_SYSTEM = (
+    "You are an NPC in a text adventure game.\n"
+    "Persona: I am the troll. I guard the drawbridge."
+)
+_DRAWBRIDGE_OBS = (
+    "DRAWBRIDGE\n"
+    "You are standing on one side of a drawbridge.\n"
+    "Characters here:\n"
+    " * The player - a hero.\n"
+    "Inventory:\n"
+    " * club - a heavy club\n"
+    "Turn: 3"
+)
+
+
+def test_mock_react_call_tool_returns_structured_decision():
+    client = MockReActClient()
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": _DRAWBRIDGE_OBS},
+    ]
+    result = client.call_tool(messages, build_choose_action_tool(["growl", "attack"]))
+    assert result["action"] == "growl"
+    assert result["arguments"] == "player"
+    assert result["reasoning"]  # a non-empty explanation
+    assert client.tool_calls  # the call was recorded
+
+
+def test_mock_react_call_tool_splits_multiword_arguments():
+    # After snarling, the troll's first attack omits the weapon; the reflected
+    # prompt makes it name the club -> "attack player with club".
+    client = MockReActClient()
+    reflected_obs = (
+        _DRAWBRIDGE_OBS
+        + "\n  Game: Troll snarls and bares its teeth at The player."
+        + "\n\nYour previous command 'attack player' failed: "
+        "troll doesn't have a weapon.\n"
+        "Reflect on why it failed and choose a different action."
+    )
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": reflected_obs},
+    ]
+    result = client.call_tool(messages, build_choose_action_tool(["attack"]))
+    assert result["action"] == "attack"
+    assert result["arguments"] == "player with club"
+
+
+def test_mock_react_call_tool_returns_none_for_unknown_prompt():
+    client = MockReActClient()
+    messages = [
+        {"role": "system", "content": "You narrate a text adventure game."},
+        {"role": "user", "content": "The player waits."},
+    ]
+    assert client.call_tool(messages, build_choose_action_tool([])) is None
+
+
+def test_mock_react_call_tool_returns_none_when_player_absent():
+    client = MockReActClient()
+    alone = _DRAWBRIDGE_OBS.replace(" * The player - a hero.\n", "")
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": alone},
+    ]
+    assert client.call_tool(messages, build_choose_action_tool([])) is None
