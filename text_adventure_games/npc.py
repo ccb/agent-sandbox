@@ -193,9 +193,14 @@ class LLMAgent(Agent):
 
     Accepts either an :class:`LlmClient` (anything with a ``chat()`` method) or
     a legacy ``(str) -> str`` callable. The persona and goals are sent as the
-    system message; the observation is the user message. ``decide()`` returns
-    the command from the reply's "Action:" line (or, for unlabeled replies,
-    its first line), and records the "Reasoning:" line in ``last_reasoning``.
+    system message; the observation is the user message.
+
+    ``decide()`` prefers a structured tool call when the client supports one
+    (``call_tool``): the model fills the ``choose_action`` schema and the agent
+    assembles ``"<action> <arguments>"``. When tool calling is unavailable or
+    returns nothing, it falls back to the free-text path -- parsing the command
+    from the reply's "Action:" line (or, for unlabeled replies, its first
+    line). Either way the "Reasoning:" is recorded in ``last_reasoning``.
     Returns ``None`` if the client failed or said nothing.
     """
 
