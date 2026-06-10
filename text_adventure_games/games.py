@@ -10,6 +10,33 @@ import inspect
 from collections import namedtuple
 
 
+# Affordance properties surfaced in describe_for() so an agent can see, at a
+# glance, what the engine will let it do with an item. Kept as a tuple of
+# strings so a game can extend it via a new Property member without touching
+# this list -- the values resolve through Thing.get_property either way.
+_AFFORDANCE_KEYS = (
+    Property.GETTABLE,
+    Property.EDIBLE,
+    Property.DRINKABLE,
+    Property.FLAMMABLE,
+    Property.WEARABLE,
+    Property.WIELDABLE,
+)
+
+
+def _format_item(item) -> str:
+    """Render an item as 'name - description [aff1, aff2]'.
+
+    The bracketed affordance hint is omitted when no well-known affordance
+    is set, so scenery (no tags) reads the same as before.
+    """
+    base = f"{item.name} - {item.description}"
+    tags = [str(k) for k in _AFFORDANCE_KEYS if item.get_property(k)]
+    if tags:
+        base += f" [{', '.join(tags)}]"
+    return base
+
+
 class Game:
     """
     The Game class keeps track of the state of the world, and describes what
@@ -394,7 +421,7 @@ class Game:
         if loc.items:
             lines.append("Items here:")
             for item_name, item in loc.items.items():
-                lines.append(f" * {item.name} - {item.description}")
+                lines.append(f" * {_format_item(item)}")
 
         # Other characters present
         others = [c for name, c in loc.characters.items() if name != character.name]
@@ -407,9 +434,14 @@ class Game:
         if character.inventory:
             lines.append("Inventory:")
             for item_name, item in character.inventory.items():
-                lines.append(f" * {item.name} - {item.description}")
+                lines.append(f" * {_format_item(item)}")
         else:
             lines.append("Inventory: empty")
+
+        if character.worn:
+            lines.append(f"Worn: {', '.join(character.worn)}")
+        if character.wielded:
+            lines.append(f"Wielded: {', '.join(character.wielded)}")
 
         # Available actions
         action_names = sorted(self.parser.actions.keys())

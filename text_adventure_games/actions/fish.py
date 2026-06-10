@@ -66,7 +66,7 @@ class Catch_Fish(base.Action):
 
         fish = Item("fish", "a dead fish", "IT SMELLS TERRIBLE.")
         fish.add_command_hint("eat fish")
-        fish.set_property(Property.IS_FOOD, True)
+        fish.set_property(Property.EDIBLE, True)
         fish.set_property(
             Property.TASTE, "disgusting! It's raw! And definitely not sashimi-grade!"
         )

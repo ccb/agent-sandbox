@@ -105,7 +105,7 @@ def _dark_cave_game():
     entrance.add_connection("down", cave)
     player = things.Character("The player", "a spelunker", "I explore caves.")
     lamp = things.Item("lamp", "a lamp", "A LAMP.")
-    lamp.set_property("is_lightable", True)
+    lamp.set_property("flammable", True)
     lamp.set_property("is_lit", False)
     player.add_to_inventory(lamp)
     game = games.Game(entrance, player, characters=[])

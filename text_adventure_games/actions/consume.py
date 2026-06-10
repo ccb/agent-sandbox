@@ -26,7 +26,7 @@ class Eat(base.Action):
             self.item, error_message="I don't know what you want to eat"
         ):
             return False
-        elif not self.item.get_property(Property.IS_FOOD):
+        elif not self.item.get_property(Property.EDIBLE):
             description = "That's not edible."
             self.parser.fail(description)
             return False
@@ -85,7 +85,7 @@ class Drink(base.Action):
             self.item, error_message="I don't know what you want to drink"
         ):
             return False
-        elif not self.item.get_property(Property.IS_DRINK):
+        elif not self.item.get_property(Property.DRINKABLE):
             description = "That's not drinkable."
             self.parser.fail(description)
             return False
@@ -124,7 +124,7 @@ class Drink(base.Action):
             self.parser.ok(description)
 
         if self.item.get_property(Property.IS_ALCOHOL):
-            self.character.set_property(Property.IS_DRINK, True)
+            self.character.set_property(Property.IS_DRUNK, True)
             description = "{name} is now drunk from {drink}.".format(
                 drink=self.item.name, name=self.character.name.capitalize()
             )
@@ -155,7 +155,7 @@ class Light(base.Action):
             return False
         if not self.is_in_inventory(self.character, self.item):
             return False
-        if not self.item.get_property(Property.IS_LIGHTABLE):
+        if not self.item.get_property(Property.FLAMMABLE):
             description = "That's not something that can be lit."
             self.parser.fail(description)
             return False
