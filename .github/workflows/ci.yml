@@ -1,0 +1,56 @@
+name: CI
+
+# Runs the same gates as the `/check` skill (format + both test suites) on every
+# push to main and every pull request. The repo had no CI before this; treat a
+# green check here as the automated stand-in for the manual pre-PR check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # lets you trigger a run by hand from the Actions tab
+
+# If you push again to the same branch/PR while a run is in flight, cancel the
+# old run instead of queueing a second one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: format (black)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Pin black to the version the team runs locally so CI and your machine
+      # agree on formatting. Bump this line when you upgrade black.
+      - run: pip install black==26.5.1
+      # No [jupyter] extra, so notebooks are skipped — same as `black --check .`
+      # locally and in the `/check` skill.
+      - run: black --check .
+
+  test:
+    name: test (py ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # run every Python version even if one of them fails
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: setup.py
+      # The suites are fully offline (the mock LLM provider drives the ReAct
+      # loop), so the engine plus dev tools are all we need — no API keys and no
+      # openai/anthropic install.
+      - run: pip install -e ".[dev]"
+      - name: pytest suite
+        run: pytest tests/ -q
+      - name: NPC behavior suite
+        run: python test_npc_behaviors.py

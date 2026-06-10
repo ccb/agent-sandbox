@@ -35,7 +35,6 @@ Usage::
 
 from .things.characters import Goal, GoalType
 
-
 _DECISION_INSTRUCTION = (
     "Based on your persona, goals, and the current situation, choose a single "
     "game command to execute. Reply with exactly two lines:\n"

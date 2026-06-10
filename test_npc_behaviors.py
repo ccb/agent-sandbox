@@ -38,16 +38,24 @@ def test_troll_escalation():
     print("TEST: Troll escalation (growl → snarl → pound → attack)")
     print("=" * 60)
     game = make_test_game()
-    results = run_commands(game, [
-        "go out", "go north", "go east",  # navigate to drawbridge
-        "wait", "wait", "wait",            # 3 escalation turns
-        "wait",                            # troll attacks
-    ])
+    results = run_commands(
+        game,
+        [
+            "go out",
+            "go north",
+            "go east",  # navigate to drawbridge
+            "wait",
+            "wait",
+            "wait",  # 3 escalation turns
+            "wait",  # troll attacks
+        ],
+    )
     print_results(results)
 
     npc_msgs = [
         msg["text"]
-        for r in results for msg in r["messages"]
+        for r in results
+        for msg in r["messages"]
         if msg["type"] == "npc_action"
     ]
     assert any("growl" in m.lower() for m in npc_msgs), "Missing growl"
@@ -56,7 +64,8 @@ def test_troll_escalation():
 
     attack_msgs = [
         msg["text"]
-        for r in results for msg in r["messages"]
+        for r in results
+        for msg in r["messages"]
         if msg["type"] == "output" and "attacked" in msg["text"]
     ]
     assert len(attack_msgs) > 0, "Troll never attacked"
@@ -85,31 +94,45 @@ def test_troll_resets_on_leave():
     print("TEST: Troll resets counter when player leaves")
     print("=" * 60)
     game = make_test_game()
-    run_commands(game, [
-        "go out", "go north", "go east",  # at drawbridge
-        "wait",                            # turn 1: growl
-        "go west",                         # leave
-        "go east",                         # return
-        "wait",                            # should be growl again (reset)
-    ])
+    run_commands(
+        game,
+        [
+            "go out",
+            "go north",
+            "go east",  # at drawbridge
+            "wait",  # turn 1: growl
+            "go west",  # leave
+            "go east",  # return
+            "wait",  # should be growl again (reset)
+        ],
+    )
     msgs = game.parser.get_messages()  # get all remaining
 
     # Count total results
     results = run_commands(game, [])
     # Let's just re-check by doing it from scratch
     game = make_test_game()
-    results = run_commands(game, [
-        "go out", "go north", "go east",  # at drawbridge
-        "wait",                            # growl
-    ])
+    results = run_commands(
+        game,
+        [
+            "go out",
+            "go north",
+            "go east",  # at drawbridge
+            "wait",  # growl
+        ],
+    )
     npc1 = [m for r in results for m in r["messages"] if m["type"] == "npc_action"]
 
     results2 = run_commands(game, ["go west", "go east", "wait"])
     npc2 = [m for r in results2 for m in r["messages"] if m["type"] == "npc_action"]
 
     # Both should be growls (counter reset)
-    assert any("growl" in m["text"].lower() for m in npc1), "First visit: expected growl"
-    assert any("growl" in m["text"].lower() for m in npc2), "Second visit: expected growl (reset)"
+    assert any(
+        "growl" in m["text"].lower() for m in npc1
+    ), "First visit: expected growl"
+    assert any(
+        "growl" in m["text"].lower() for m in npc2
+    ), "Second visit: expected growl (reset)"
     print_results(results + results2)
     print("PASSED\n")
 
@@ -119,20 +142,29 @@ def test_troll_stops_when_fed():
     print("TEST: Troll stops acting after being fed")
     print("=" * 60)
     game = make_test_game()
-    results = run_commands(game, [
-        "get pole", "go out", "go south",
-        "catch fish with pole",
-        "go north", "go north", "go east",  # at drawbridge
-        "give fish to troll",                # feed troll
-        "wait",                              # should be no troll action
-    ])
+    results = run_commands(
+        game,
+        [
+            "get pole",
+            "go out",
+            "go south",
+            "catch fish with pole",
+            "go north",
+            "go north",
+            "go east",  # at drawbridge
+            "give fish to troll",  # feed troll
+            "wait",  # should be no troll action
+        ],
+    )
     print_results(results)
 
     # After feeding, wait should produce no NPC messages
     last = results[-1]
     npc_msgs = [m for m in last["messages"] if m["type"] == "npc_action"]
     assert len(npc_msgs) == 0, f"Troll acted after being fed: {npc_msgs}"
-    assert not game.characters["troll"].get_property("is_hungry"), "Troll should not be hungry"
+    assert not game.characters["troll"].get_property(
+        "is_hungry"
+    ), "Troll should not be hungry"
     print("PASSED\n")
 
 
@@ -141,21 +173,28 @@ def test_guard_escalation():
     print("TEST: Guard escalation (warn → threaten → threaten → attack)")
     print("=" * 60)
     game = make_test_game()
-    results = run_commands(game, [
-        "get pole", "go out", "go south",
-        "catch fish with pole",
-        "go north", "go north", "go east",
-        "give fish to troll",
-        "go east",                          # courtyard with guard
-        "wait", "wait", "wait",             # 3 warnings
-        "wait",                             # guard attacks
-    ])
+    results = run_commands(
+        game,
+        [
+            "get pole",
+            "go out",
+            "go south",
+            "catch fish with pole",
+            "go north",
+            "go north",
+            "go east",
+            "give fish to troll",
+            "go east",  # courtyard with guard
+            "wait",
+            "wait",
+            "wait",  # 3 warnings
+            "wait",  # guard attacks
+        ],
+    )
     print_results(results)
 
     npc_msgs = [
-        m["text"]
-        for r in results for m in r["messages"]
-        if m["type"] == "npc_action"
+        m["text"] for r in results for m in r["messages"] if m["type"] == "npc_action"
     ]
     assert any("warn" in m.lower() for m in npc_msgs), "Missing warn"
     assert any("threaten" in m.lower() for m in npc_msgs), "Missing threaten"
@@ -179,12 +218,14 @@ def test_ghost_two_turn_kill():
     print_results(results)
 
     npc_msgs = [
-        m["text"]
-        for r in results for m in r["messages"]
-        if m["type"] == "npc_action"
+        m["text"] for r in results for m in r["messages"] if m["type"] == "npc_action"
     ]
-    assert any("hollow eyes" in m.lower() or "haunt" in m.lower() for m in npc_msgs), "Missing haunt"
-    assert any("plunge" in m.lower() or "icy hand" in m.lower() for m in npc_msgs), "Missing ghost touch"
+    assert any(
+        "hollow eyes" in m.lower() or "haunt" in m.lower() for m in npc_msgs
+    ), "Missing haunt"
+    assert any(
+        "plunge" in m.lower() or "icy hand" in m.lower() for m in npc_msgs
+    ), "Missing ghost touch"
     assert game.player.get_property("is_dead"), "Player should be dead"
     print("PASSED\n")
 
