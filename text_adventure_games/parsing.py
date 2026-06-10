@@ -231,6 +231,15 @@ class Parser:
         """
         if self.echo_commands:
             self._emit(Channel.COMMAND, command)
+        return self.peek_action(command, actor=actor)
+
+    def peek_action(self, command: str, actor=None) -> actions.Action:
+        """Build the Action a command would route to WITHOUT echoing or running
+        it. Constructing the action matches its target (item/character/exit) via
+        ``match_item`` / ``get_character``, but ``check_preconditions`` /
+        ``apply_effects`` never run. Used by the simultaneous gather phase to read
+        an intent's action name and the resource it claims (issue #42), where a
+        full ``parse_command`` would prematurely echo and mutate the world."""
         command = command.lower().strip()
         if command == "":
             return None
@@ -245,6 +254,17 @@ class Parser:
         player's own narration)."""
         self._emit(Channel.NPC_NARRATION, description)
         self.add_description_to_history(description)
+
+    def conflict(self, actor: str, description: str):
+        """Report that *actor* lost a contested resource this round (issue #42).
+
+        Distinct from :meth:`fail`: it's not a precondition error, it's the
+        outcome of two characters reaching for the same thing in a simultaneous
+        round. Goes on its own ``CONFLICT`` channel so a renderer can tell the
+        contention story, and is deliberately kept OUT of command_history (the
+        loser's private setback must not leak into other characters'
+        observations)."""
+        self._emit(Channel.CONFLICT, description, actor=actor)
 
     # ------------------------------------------------------------------
     # Agent trace (the ReAct loop's Observe / Think / Act / Reflect).

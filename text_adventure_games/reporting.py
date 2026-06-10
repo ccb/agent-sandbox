@@ -45,6 +45,7 @@ class Channel(Enum):
     NARRATION = "narration"  # world / action result (Parser.ok)
     NPC_NARRATION = "npc_narration"  # an NPC's action result (Parser.npc_ok)
     BLOCKED = "blocked"  # an action failed a precondition (Parser.fail)
+    CONFLICT = "conflict"  # two characters contended for one thing (Parser.conflict)
     COMMAND = "command"  # the actor's echoed command
     AGENT_OBSERVATION = "agent_observation"  # ReAct "Observe"
     AGENT_REASONING = "agent_reasoning"  # ReAct "Think"
@@ -96,6 +97,7 @@ _BASE = {
     Channel.NARRATION,
     Channel.NPC_NARRATION,
     Channel.BLOCKED,
+    Channel.CONFLICT,
     Channel.COMMAND,
     Channel.SYSTEM,
 }
@@ -175,6 +177,8 @@ class PlainRenderer(Renderer):
             return wrap_text(f"{m.actor} [reflect] {m.text}")
         if c is Channel.AGENT_OBSERVATION:
             return wrap_text(f"{m.actor} [observe]\n{m.text}")
+        if c is Channel.CONFLICT:
+            return wrap_text(f"⚔ {m.text}")
         if c is Channel.COMMAND:
             return f"> {m.text}"
         return wrap_text(m.text)  # NARRATION, NPC_NARRATION, BLOCKED, SYSTEM
@@ -208,6 +212,7 @@ class RichTerminalRenderer(Renderer):
         Channel.NARRATION: ("» ", "green"),
         Channel.NPC_NARRATION: ("» ", "magenta"),
         Channel.BLOCKED: ("✗ ", "red"),
+        Channel.CONFLICT: ("⚔ ", "yellow"),
         Channel.COMMAND: ("> ", "bold yellow"),
         Channel.SYSTEM: ("", "dim"),
     }
@@ -227,7 +232,8 @@ class RichTerminalRenderer(Renderer):
         if (
             message.turn is not None
             and message.turn != self._last_turn
-            and message.channel in AGENT_CHANNELS | {Channel.NPC_NARRATION}
+            and message.channel
+            in AGENT_CHANNELS | {Channel.NPC_NARRATION, Channel.CONFLICT}
         ):
             self.turn_header(message.turn, message.meta.get("time"))
 

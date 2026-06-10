@@ -9,6 +9,7 @@ _WEB_TYPE = {
     Channel.NARRATION: "output",
     Channel.NPC_NARRATION: "npc_action",
     Channel.BLOCKED: "error",
+    Channel.CONFLICT: "conflict",
     Channel.COMMAND: "command",
     Channel.AGENT_REASONING: "npc_log",
     Channel.AGENT_ACTION: "npc_log",

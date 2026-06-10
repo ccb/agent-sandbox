@@ -17,6 +17,10 @@ class Get(base.Action):
             command, self.location.items, hint="thing to get"
         )
 
+    def claimed_resource(self):
+        """Two characters grabbing for the same item contend over it (#42)."""
+        return self.item
+
     def check_preconditions(self) -> bool:
         """
         Preconditions:
@@ -226,6 +230,10 @@ class Give(base.Action):
             **self.giver.wielded,
         }
         self.item = self.parser.match_item(command, giver_held, hint="item being given")
+
+    def claimed_resource(self):
+        """Two characters giving to the same recipient contend for them (#42)."""
+        return self.recipient
 
     def check_preconditions(self) -> bool:
         """

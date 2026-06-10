@@ -204,5 +204,44 @@ def test_agent_reasoning_never_enters_command_history(tiny_game):
     assert "[reasoning]" not in history_text
 
 
+# ----------------------------------------------------------------------
+# The conflict channel (issue #42): contention is a first-class signal
+# ----------------------------------------------------------------------
+
+
+def test_conflict_channel_visible_at_every_level():
+    # Contention is important, so it shows even at quiet (it's a _BASE channel).
+    assert channel_visible(Channel.CONFLICT, QUIET)
+    assert channel_visible(Channel.CONFLICT, NORMAL)
+    assert channel_visible(Channel.CONFLICT, VERBOSE)
+
+
+def test_plain_renderer_formats_conflict():
+    buf = io.StringIO()
+    r = PlainRenderer(level=NORMAL, stream=buf)
+    r.emit(Message(Channel.CONFLICT, "bob got the gem first this turn.", actor="alice"))
+    assert "bob got the gem first this turn." in buf.getvalue()
+
+
+def test_web_renderer_maps_conflict_channel():
+    r = WebRenderer()
+    r.emit(Message(Channel.CONFLICT, "bob got the gem first", actor="alice"))
+    assert {"type": "conflict", "text": "bob got the gem first"} in r.drain()
+
+
+def test_parser_conflict_emits_on_conflict_channel(tiny_game):
+    cap = CaptureRenderer()
+    tiny_game.parser.set_renderer(cap)
+    tiny_game.parser.conflict("alice", "bob got the gem first")
+    msgs = cap.by_channel(Channel.CONFLICT)
+    assert len(msgs) == 1
+    assert msgs[0].actor == "alice"
+    assert msgs[0].text == "bob got the gem first"
+    # A lost contest is the actor's private setback; like the agent trace it must
+    # not leak into command_history (which feeds other characters' observations).
+    history_text = " ".join(e["content"] for e in tiny_game.parser.command_history)
+    assert "got the gem first" not in history_text
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

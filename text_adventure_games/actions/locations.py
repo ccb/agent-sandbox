@@ -40,6 +40,13 @@ class Go(base.Action):
         self.direction = self.parser.get_direction(command, self.location)
         self.command = command
 
+    def claimed_resource(self):
+        """The destination tile: two characters heading to the same place
+        contend for it (#42; matters when a tile is single-occupancy)."""
+        if self.direction is None:
+            return None
+        return self.location.get_connection(self.direction)
+
     def check_preconditions(self) -> bool:
         """
         Preconditions:
