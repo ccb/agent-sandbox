@@ -1,25 +1,23 @@
 ---
-description: Run the full pre-PR gate (format check + both test suites)
+description: Run the full pre-PR gate (format check + test suite)
 ---
 
 This repo has **no CI** — `/check` is the stand-in. Run every gate a PR should
-pass, from the repo root, using the project venv interpreter. Run all three even
-if an earlier one fails, then report.
+pass, from the repo root, using the project venv interpreter. Run both even
+if the first one fails, then report.
 
 Run these in order:
 
 1. **Format** — `venv/bin/black --check .`
    (reports unformatted files; does not modify anything)
 2. **Pytest suite** — `venv/bin/python -m pytest tests/ -q`
-3. **NPC behavior suite** — `venv/bin/python test_npc_behaviors.py`
-   (the root-level turn-based suite, not part of pytest)
+   (includes the turn-based NPC behavior suite, `tests/test_npc_behaviors.py`)
 
 Then print a compact summary, one line per gate:
 
 ```
 format   PASS | FAIL
 pytest   PASS | FAIL
-npc      PASS | FAIL
 ```
 
 For any gate that FAILs, surface the relevant failing output (unformatted file
