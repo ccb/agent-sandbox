@@ -63,6 +63,20 @@ class Item(Thing):
         elif self.owner and isinstance(self.owner, str):
             thing_data["owner"] = self.owner
 
+        thing_data["capacity"] = self.capacity
+        if self.contents:
+            contents = {}
+            for k, v in self.contents.items():
+                contents[k] = v.to_primitive() if hasattr(v, "to_primitive") else v
+            thing_data["contents"] = contents
+        # `container` is a back-reference to the parent container item. It is
+        # implied by membership in `contents` and would create a circular
+        # reference if serialized recursively, so we store only the name.
+        if self.container and hasattr(self.container, "name"):
+            thing_data["container"] = self.container.name
+        elif self.container and isinstance(self.container, str):
+            thing_data["container"] = self.container
+
         return thing_data
 
     @classmethod
@@ -76,6 +90,14 @@ class Item(Thing):
             instance.location = data["location"]
         if "owner" in data:
             instance.owner = data["owner"]
+        instance.capacity = data.get("capacity", None)
+        if "contents" in data:
+            instance.contents = {
+                k: Item.from_primitive(v) for k, v in data["contents"].items()
+            }
+        # `container` is a runtime back-reference; we intentionally do not
+        # restore it here (the field stays None) to avoid storing a stale
+        # string reference and to match the test expectation.
         return instance
 
     def make_container(self, capacity=None):

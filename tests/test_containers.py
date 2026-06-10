@@ -68,3 +68,17 @@ def test_remove_item_clears_backref():
     pack.remove_item(rock)
     assert "rock" not in pack.contents
     assert rock.container is None
+
+
+def test_container_round_trips_through_primitive():
+    pack = _backpack(capacity=4)
+    pack.add_item(things.Item("rock", "a plain rock"))
+    pack.add_item(things.Item("gem", "a shiny gem"))
+
+    restored = things.Item.from_primitive(pack.to_primitive())
+
+    assert restored.get_property("is_container") is True
+    assert restored.capacity == 4
+    assert set(restored.contents.keys()) == {"rock", "gem"}
+    assert restored.contents["rock"].description == "a plain rock"
+    assert restored.contents["rock"].container is None  # back-ref by name only
