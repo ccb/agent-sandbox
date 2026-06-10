@@ -372,7 +372,7 @@ class MockLlmClient:
         client = MockLlmClient(pick_first)
     """
 
-    def __init__(self, responses=None, default: str | None = ""):
+    def __init__(self, responses=None, default: str | None = "", tool_responses=None):
         if callable(responses):
             self._responder = responses
             self._queue = None
@@ -382,6 +382,23 @@ class MockLlmClient:
         self._default = default
         # A log of every chat() call, for test assertions.
         self.calls: list[dict] = []
+
+        # call_tool() support: scripted structured replies, drawn from a
+        # SEPARATE queue/responder so chat() and call_tool() never consume each
+        # other's scripts. `tool_responses` may be a list of dicts/None, or a
+        # callable (messages, tool, max_tokens, temperature) -> dict | None.
+        # Defaults to None, so call_tool() returns None unless a test scripts a
+        # reply -- which makes the agent fall back to its chat() path.
+        if callable(tool_responses):
+            self._tool_responder = tool_responses
+            self._tool_queue = None
+        else:
+            self._tool_responder = None
+            self._tool_queue = (
+                list(tool_responses) if tool_responses is not None else []
+            )
+        # A log of every call_tool() call, mirroring `calls`.
+        self.tool_calls: list[dict] = []
 
     def chat(
         self,
@@ -409,7 +426,18 @@ class MockLlmClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> dict | None:
-        # Stub — full behavior is added in Task 3.
+        self.tool_calls.append(
+            {
+                "messages": messages,
+                "tool": tool,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        if self._tool_responder is not None:
+            return self._tool_responder(messages, tool, max_tokens, temperature)
+        if self._tool_queue:
+            return self._tool_queue.pop(0)
         return None
 
     def count_tokens(self, text: str) -> int:

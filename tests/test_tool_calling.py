@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from text_adventure_games.llm_client import (
     AnthropicClient,
+    MockLlmClient,
     OpenAIClient,
     SELECT_OPTION_TOOL,
     _to_anthropic_tool,
@@ -205,3 +206,39 @@ def test_select_option_tool_shape():
     idx = SELECT_OPTION_TOOL["parameters"]["properties"]["index"]
     assert idx["type"] == "integer"
     assert SELECT_OPTION_TOOL["parameters"]["required"] == ["index"]
+
+
+# --- MockLlmClient.call_tool (Task 3) -----------------------------------
+
+
+def test_mock_call_tool_returns_scripted_dict_and_records():
+    client = MockLlmClient(tool_responses=[{"index": 1}])
+    result = client.call_tool([{"role": "user", "content": "x"}], SELECT_OPTION_TOOL)
+    assert result == {"index": 1}
+    assert client.tool_calls[0]["tool"] is SELECT_OPTION_TOOL
+    assert client.tool_calls[0]["max_tokens"] == 256
+
+
+def test_mock_call_tool_defaults_to_none():
+    client = MockLlmClient()
+    assert (
+        client.call_tool([{"role": "user", "content": "x"}], SELECT_OPTION_TOOL) is None
+    )
+
+
+def test_mock_call_tool_callable_reacts_to_args():
+    def responder(messages, tool, max_tokens, temperature):
+        return {"action": "look", "arguments": ""}
+
+    client = MockLlmClient(tool_responses=responder)
+    assert client.call_tool([], SELECT_OPTION_TOOL) == {
+        "action": "look",
+        "arguments": "",
+    }
+
+
+def test_mock_chat_and_tool_queues_are_independent():
+    # chat() draws from `responses`; call_tool() from `tool_responses`.
+    client = MockLlmClient(responses=["chat reply"], tool_responses=[{"index": 0}])
+    assert client.call_tool([], SELECT_OPTION_TOOL) == {"index": 0}
+    assert client.chat([]) == "chat reply"
