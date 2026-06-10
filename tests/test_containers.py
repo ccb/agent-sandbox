@@ -265,6 +265,25 @@ def test_give_loaded_container_refreshes_nested_owner():
     assert rock.owner is recipient  # nested content changed hands too
 
 
+def test_give_food_into_container_is_still_eaten_when_hungry():
+    # Recipient's single hand is full of a backpack, so the gifted food is
+    # routed into the pack. A hungry recipient must still eat it -- the
+    # eat follow-up has to see container contents, not just top-level hands.
+    game, room, giver, recipient, cap = _capture_two_char_game(recipient_cap=1)
+    pack = _backpack(capacity=2)
+    recipient.add_to_inventory(pack)  # the one hand slot is now full
+    recipient.set_property("is_hungry", True)
+    apple = things.Item("apple", "a crisp apple")
+    apple.set_property("is_food", True)
+    giver.add_to_inventory(apple)
+
+    thing_actions.Give(game, "give apple to recipient", actor=giver)()
+
+    assert recipient.get_property("is_hungry") is False  # they ate it
+    assert "apple" not in pack.contents  # consumed, not just stowed
+    assert "apple" not in recipient.carried_items()
+
+
 def test_inventory_shows_container_contents_and_capacity():
     game, room, player, cap = _capture_game(player_capacity=None)
     pack = _backpack(capacity=5)

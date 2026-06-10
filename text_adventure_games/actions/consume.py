@@ -12,7 +12,7 @@ class Eat(base.Action):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="eater")
         self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="food"
+            command, self.character.carried_items(), hint="food"
         )
 
     def check_preconditions(self) -> bool:
@@ -20,7 +20,7 @@ class Eat(base.Action):
         Preconditions:
         * There must be a matched item
         * The item must be food
-        * The food must be in character's inventory
+        * The food must be carried by the character (in hand or a container)
         """
         if not self.was_matched(
             self.item, error_message="I don't know what you want to eat"
@@ -30,7 +30,7 @@ class Eat(base.Action):
             description = "That's not edible."
             self.parser.fail(description)
             return False
-        elif not self.character.is_in_inventory(self.item):
+        elif self.item.name not in self.character.carried_items():
             description = "You don't have it."
             self.parser.fail(description)
             return False
@@ -39,12 +39,12 @@ class Eat(base.Action):
     def apply_effects(self):
         """
         Effects:
-        * Removes the food from the inventory so that it has been consumed.
+        * Removes the food from wherever it is carried so it is consumed.
         * Causes the character's hunger to end
         * Describes the taste (if the "taste" property is set)
         * If the food is poisoned, it causes the character to die.
         """
-        self.character.remove_from_inventory(self.item)
+        self.character.discard_item(self.item)
         self.character.set_property(Property.IS_HUNGRY, False)
         description = "{name} eats the {food}.".format(
             name=self.character.name.capitalize(), food=self.item.name
@@ -71,7 +71,7 @@ class Drink(base.Action):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="drinker")
         self.item = self.parser.match_item(
-            command, self.parser.get_items_in_scope(self.character), hint="drink"
+            command, self.character.carried_items(), hint="drink"
         )
 
     def check_preconditions(self) -> bool:
@@ -79,7 +79,7 @@ class Drink(base.Action):
         Preconditions:
         * There must be a matched item
         * The item must be a drink
-        * The drink must be in character's inventory
+        * The drink must be carried by the character (in hand or a container)
         """
         if not self.was_matched(
             self.item, error_message="I don't know what you want to drink"
@@ -89,7 +89,7 @@ class Drink(base.Action):
             description = "That's not drinkable."
             self.parser.fail(description)
             return False
-        elif not self.character.is_in_inventory(self.item):
+        elif self.item.name not in self.character.carried_items():
             description = "You don't have it."
             self.parser.fail(description)
             return False
@@ -98,12 +98,12 @@ class Drink(base.Action):
     def apply_effects(self):
         """
         Effects:
-        * Removes the drink from the inventory so that it has been consumed.
+        * Removes the drink from wherever it is carried so it is consumed.
         * Causes the character's thirst to end
         * Describes the taste (if the "taste" property is set)
         * If the drink is poisoned, it causes the character to die.
         """
-        self.character.remove_from_inventory(self.item)
+        self.character.discard_item(self.item)
         self.character.set_property(Property.IS_THIRSTY, False)
         description = "{name} drinks the {drink}.".format(
             name=self.character.name.capitalize(), drink=self.item.name
