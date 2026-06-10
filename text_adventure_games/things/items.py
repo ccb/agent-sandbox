@@ -27,6 +27,16 @@ class Item(Thing):
         # It might be in a character's inventory
         self.owner = None
 
+        # Container support (issue #43). A plain item is not a container.
+        # When `is_container` is True, `contents` holds items by name and
+        # `capacity` is the max item count (None means unlimited).
+        self.capacity = None
+        self.contents = {}
+
+        # The container Item currently holding this one (None if held in hands
+        # or sitting at a location).
+        self.container = None
+
     def to_primitive(self):
         """
         Converts this object into a dictionary of values the can be safely
@@ -67,3 +77,36 @@ class Item(Thing):
         if "owner" in data:
             instance.owner = data["owner"]
         return instance
+
+    def make_container(self, capacity=None):
+        """Declare this item a container that holds up to `capacity` items
+        (None = unlimited). Returns self so authors can chain."""
+        self.set_property("is_container", True)
+        self.capacity = capacity
+        return self
+
+    def current_count(self):
+        """Number of items currently inside this container."""
+        return len(self.contents)
+
+    def has_space(self):
+        """True if another item can be added (always True when unlimited)."""
+        return self.capacity is None or self.current_count() < self.capacity
+
+    def is_full(self):
+        return not self.has_space()
+
+    def add_item(self, item):
+        """Put `item` inside this container. Removes it from any location and
+        records the back-reference and carrying owner."""
+        if item.location is not None and hasattr(item.location, "remove_item"):
+            item.location.remove_item(item)
+            item.location = None
+        self.contents[item.name] = item
+        item.container = self
+        item.owner = self.owner
+
+    def remove_item(self, item):
+        """Take `item` out of this container, clearing its back-reference."""
+        self.contents.pop(item.name, None)
+        item.container = None
