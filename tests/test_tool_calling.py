@@ -9,9 +9,11 @@ from types import SimpleNamespace
 from text_adventure_games.llm_client import (
     AnthropicClient,
     OpenAIClient,
+    SELECT_OPTION_TOOL,
     _to_anthropic_tool,
     _to_openai_tool,
 )
+from text_adventure_games.npc import build_choose_action_tool
 
 # A normalized, provider-agnostic tool dict (the shape call_tool accepts).
 CHOOSE = {
@@ -182,3 +184,24 @@ def test_anthropic_call_tool_no_tool_use_returns_none():
 def test_anthropic_call_tool_exception_returns_none():
     client = _make_anthropic(_RaisingAnthropicSDK())
     assert client.call_tool([{"role": "user", "content": "hi"}], CHOOSE) is None
+
+
+def test_build_choose_action_tool_with_names_has_enum():
+    tool = build_choose_action_tool(["go", "attack", "get"])
+    assert tool["name"] == "choose_action"
+    props = tool["parameters"]["properties"]
+    assert props["action"]["enum"] == ["go", "attack", "get"]
+    assert tool["parameters"]["required"] == ["action"]
+    assert "reasoning" in props and "arguments" in props
+
+
+def test_build_choose_action_tool_empty_names_omits_enum():
+    tool = build_choose_action_tool([])
+    assert "enum" not in tool["parameters"]["properties"]["action"]
+
+
+def test_select_option_tool_shape():
+    assert SELECT_OPTION_TOOL["name"] == "select_option"
+    idx = SELECT_OPTION_TOOL["parameters"]["properties"]["index"]
+    assert idx["type"] == "integer"
+    assert SELECT_OPTION_TOOL["parameters"]["required"] == ["index"]

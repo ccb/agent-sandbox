@@ -90,6 +90,25 @@ def _to_anthropic_tool(tool: dict) -> dict:
     }
 
 
+# The normalized tool for picking one option from a numbered list (used by the
+# LLM parser to resolve intent / item / character / direction). Returning a
+# validated integer index replaces scraping a number out of prose.
+SELECT_OPTION_TOOL = {
+    "name": "select_option",
+    "description": "Select the option that best matches the input.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "integer",
+                "description": "0-based index of the chosen option",
+            },
+        },
+        "required": ["index"],
+    },
+}
+
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------

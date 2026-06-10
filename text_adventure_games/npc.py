@@ -79,6 +79,43 @@ def _parse_duration(text: str) -> int | None:
     return min(value, _MAX_DURATION)
 
 
+def build_choose_action_tool(action_names: list[str]) -> dict:
+    """Build the normalized `choose_action` tool schema for the agent.
+
+    When *action_names* is non-empty, the `action` field is a closed ``enum``
+    over those verbs, so a tool-calling model can only pick a command the parser
+    knows. When empty (e.g. a direct ``decide()`` caller that never set them),
+    `action` is a plain string -- the seam still works, just less constrained.
+    `arguments` is free text (the rest of the command); the engine's existing
+    resolver and precondition gate turn it into entities.
+    """
+    action_property = {"type": "string", "description": "the verb to perform"}
+    if action_names:
+        action_property["enum"] = list(action_names)
+    return {
+        "name": "choose_action",
+        "description": "Choose the single game command to perform this turn.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reasoning": {
+                    "type": "string",
+                    "description": "one short sentence explaining the choice",
+                },
+                "action": action_property,
+                "arguments": {
+                    "type": "string",
+                    "description": (
+                        "the rest of the command, e.g. 'player with club'; "
+                        "'' if none"
+                    ),
+                },
+            },
+            "required": ["action"],
+        },
+    }
+
+
 def _parse_decision(text: str) -> tuple[str | None, str | None, int | None]:
     """Split an LLM reply into ``(reasoning, command, duration)``.
 
