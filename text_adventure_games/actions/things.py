@@ -207,7 +207,7 @@ class Give(base.Action):
             exclude=self.giver,
         )
         giver_held = {
-            **self.giver.inventory,
+            **self.giver.carried_items(),
             **self.giver.worn,
             **self.giver.wielded,
         }
@@ -216,8 +216,10 @@ class Give(base.Action):
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the giver's inventory (not worn or wielded)
-        * The character must be at the same location as the recipient
+        * The item must be carried by the giver (in hand or a container),
+          and not worn or wielded.
+        * The giver must be at the same location as the recipient
+        * The recipient must have room to receive the item
         """
         if not self.was_matched(self.item, "I don't see it."):
             return False
@@ -233,20 +235,32 @@ class Give(base.Action):
                 f"{self.item.name}. Stow it first."
             )
             return False
-        if not self.is_in_inventory(self.giver, self.item):
+        if self.item.name not in self.giver.carried_items():
+            self.parser.fail("You aren't carrying that.")
             return False
         if not self.at(self.recipient, self.giver.location):
+            return False
+        if not self.recipient.can_accept_item():
+            self.parser.fail(
+                "{recipient} has no room to carry the {item}.".format(
+                    recipient=self.recipient.name.capitalize(), item=self.item.name
+                )
+            )
             return False
         return True
 
     def apply_effects(self):
         """The giver hands the item to the recipient.
 
+        The item is removed from wherever the giver holds it (hand or a carried
+        container) and placed on the recipient via hands-first routing, with
+        overflow into a carried container if the recipient's hands are full.
+
         If the recipient is hungry and the item is food, they will eat it.
         If the recipient is thirsty and the item is drink, they will drink it.
         """
-        self.giver.remove_from_inventory(self.item)
-        self.recipient.add_to_inventory(self.item)
+        self.giver.discard_item(self.item)
+        self.recipient.accept_item(self.item)
         description = "{giver} gave the {item_name} to {recipient}".format(
             giver=self.giver.name.capitalize(),
             item_name=self.item.name,

@@ -211,3 +211,40 @@ def test_drop_item_held_in_hand():
     assert "rock" not in player.inventory
     assert "rock" in room.items
     assert rock.location is room
+
+
+def _capture_two_char_game(giver_cap=None, recipient_cap=None):
+    room = things.Location("Room", "A plain room.")
+    giver = things.Character("giver", "the giver", "I give.")
+    giver.carry_capacity = giver_cap
+    recipient = things.Character("recipient", "the recipient", "I receive.")
+    recipient.carry_capacity = recipient_cap
+    game = games.Game(room, giver, characters=[recipient])
+    room.add_character(recipient)
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    return game, room, giver, recipient, cap
+
+
+def test_give_stowed_item_routes_into_recipient():
+    game, room, giver, recipient, cap = _capture_two_char_game()
+    pack = _backpack(capacity=2)
+    giver.add_to_inventory(pack)
+    rock = things.Item("rock", "a plain rock")
+    pack.add_item(rock)
+
+    thing_actions.Give(game, "give rock to recipient", actor=giver)()
+
+    assert "rock" not in pack.contents
+    assert "rock" in recipient.inventory
+
+
+def test_give_fails_gracefully_when_recipient_full():
+    game, room, giver, recipient, cap = _capture_two_char_game(recipient_cap=0)
+    rock = things.Item("rock", "a plain rock")
+    giver.add_to_inventory(rock)
+
+    action = thing_actions.Give(game, "give rock to recipient", actor=giver)
+    assert action.check_preconditions() is False
+    assert "rock" in giver.inventory  # still with the giver
+    assert "rock" not in recipient.inventory
