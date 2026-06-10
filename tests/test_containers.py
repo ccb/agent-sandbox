@@ -185,3 +185,17 @@ def test_get_fails_gracefully_when_full():
     assert action.check_preconditions() is False
     assert "rock" in room.items  # world state unchanged
     assert "full" in (game.parser.last_fail_message or "").lower()
+
+
+def test_drop_item_stowed_in_backpack():
+    game, room, player, cap = _capture_game(player_capacity=1)
+    pack = _backpack(capacity=2)
+    player.add_to_inventory(pack)
+    rock = things.Item("rock", "a plain rock")
+    pack.add_item(rock)
+
+    thing_actions.Drop(game, "drop rock", actor=player)()
+
+    assert "rock" not in pack.contents
+    assert rock.container is None
+    assert "rock" in room.items

@@ -75,13 +75,14 @@ class Drop(base.Action):
         self.character = self.acting_character(command, hint="wants to drop something")
         self.location = self.character.location
         self.item = self.parser.match_item(
-            command, self.character.inventory, hint="thing being dropped"
+            command, self.character.carried_items(), hint="thing being dropped"
         )
 
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the character's inventory (not worn or wielded)
+        * The item must be carried by the character (in hand or in a
+          container), and not worn or wielded.
         """
         if not self.was_matched(self.item, "I don't see it."):
             return False
@@ -97,16 +98,17 @@ class Drop(base.Action):
                 f"{self.item.name}. Stow it first."
             )
             return False
-        if not self.is_in_inventory(self.character, self.item):
+        if self.item.name not in self.character.carried_items():
+            self.parser.fail("You aren't carrying that.")
             return False
         return True
 
     def apply_effects(self):
         """
-        Drop removes an item from character's inventory and adds it to the
-        current location, assuming preconditions are met
+        Drop removes an item from wherever the character holds it (hand or a
+        carried container) and adds it to the current location.
         """
-        self.character.remove_from_inventory(self.item)
+        self.character.discard_item(self.item)
         self.item.location = self.location
         self.location.add_item(self.item)
         d = "{character_name} dropped the {item_name} in the {location}."
