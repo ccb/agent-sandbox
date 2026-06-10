@@ -199,3 +199,15 @@ def test_drop_item_stowed_in_backpack():
     assert "rock" not in pack.contents
     assert rock.container is None
     assert "rock" in room.items
+
+
+def test_drop_item_held_in_hand():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    rock = things.Item("rock", "a plain rock")
+    player.add_to_inventory(rock)
+
+    thing_actions.Drop(game, "drop rock", actor=player)()
+
+    assert "rock" not in player.inventory
+    assert "rock" in room.items
+    assert rock.location is room
