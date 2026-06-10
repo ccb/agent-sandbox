@@ -413,6 +413,13 @@ class Game:
         loc = character.location
         lines = []
 
+        def _visible_to(thing) -> bool:
+            """Hidden Things (flagged ``secret_topic``) are perceived only by a
+            character whose knowledge unlocks that topic (issue #45). Unflagged
+            Things are always visible, so existing games are unchanged."""
+            secret = thing.get_property("secret_topic")
+            return not secret or character.knowledge.knows_about(secret)
+
         # Location
         lines.append(loc.name.upper())
         lines.append(loc.description)
@@ -423,14 +430,19 @@ class Game:
             for direction, dest in loc.connections.items():
                 lines.append(f" * {direction.capitalize()} to {dest.name}")
 
-        # Items at location
-        if loc.items:
+        # Items at location (hidden items are revealed only to those who know)
+        visible_items = [it for it in loc.items.values() if _visible_to(it)]
+        if visible_items:
             lines.append("Items here:")
-            for item_name, item in loc.items.items():
+            for item in visible_items:
                 lines.append(f" * {_format_item(item)}")
 
-        # Other characters present
-        others = [c for name, c in loc.characters.items() if name != character.name]
+        # Other characters present (hidden ones revealed only to those who know)
+        others = [
+            c
+            for name, c in loc.characters.items()
+            if name != character.name and _visible_to(c)
+        ]
         if others:
             lines.append("Characters here:")
             for c in others:
@@ -452,6 +464,15 @@ class Game:
         # Available actions
         action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")
+
+        # What the character believes about the world (issue #45). This is the
+        # character's world-model -- possibly incomplete or wrong -- not
+        # omniscient ground truth, and not memory (#37, the episodic log).
+        # render() returns "" for an un-seeded character, so an observation is
+        # byte-identical to before unless beliefs were added.
+        beliefs = character.knowledge.render()
+        if beliefs:
+            lines.append(beliefs)
 
         # Turn (with the in-game time when a clock is configured)
         if self.clock is not None:
