@@ -41,9 +41,53 @@ class LlmClient(Protocol):
         """Send a chat completion request. Returns text or None on failure."""
         ...
 
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        """Force the model to call the single named *tool* and return its
+        arguments as a dict (validated by the provider), or None if tool
+        calling is unavailable or no tool call came back."""
+        ...
+
     def count_tokens(self, text: str) -> int:
         """Estimate the number of tokens in *text*."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# Normalized tool translation
+# ---------------------------------------------------------------------------
+#
+# A "normalized" tool is a provider-agnostic dict:
+#   {"name": str, "description": str, "parameters": <JSON Schema object>}
+# These helpers translate it to each provider's wire shape. Keeping the
+# translation in one place means tool *schemas* (built elsewhere) never need to
+# know which provider is in use.
+
+
+def _to_openai_tool(tool: dict) -> dict:
+    """Translate a normalized tool dict to OpenAI's function-tool shape."""
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool["parameters"],
+        },
+    }
+
+
+def _to_anthropic_tool(tool: dict) -> dict:
+    """Translate a normalized tool dict to Anthropic's tool shape."""
+    return {
+        "name": tool["name"],
+        "description": tool.get("description", ""),
+        "input_schema": tool["parameters"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +171,36 @@ class OpenAIClient:
                 print(f"OpenAI API error: {e}")
             return None
 
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        try:
+            if self._verbose:
+                print(json.dumps(messages, indent=2))
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=[_to_openai_tool(tool)],
+                tool_choice={
+                    "type": "function",
+                    "function": {"name": tool["name"]},
+                },
+            )
+            tool_calls = response.choices[0].message.tool_calls
+            if not tool_calls:
+                return None
+            return json.loads(tool_calls[0].function.arguments)
+        except Exception as e:
+            if self._verbose:
+                print(f"OpenAI tool-call error: {e}")
+            return None
+
     def count_tokens(self, text: str) -> int:
         tokenizer = self._get_tokenizer()
         if tokenizer is not None:
@@ -194,6 +268,50 @@ class AnthropicClient:
         except Exception as e:
             if self._verbose:
                 print(f"Anthropic API error: {e}")
+            return None
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        try:
+            # Same system-message extraction as chat().
+            system_text = None
+            chat_messages = []
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_text = msg["content"]
+                else:
+                    content = msg["content"]
+                    if msg["role"] == "assistant":
+                        content = content.rstrip()
+                    chat_messages.append({"role": msg["role"], "content": content})
+
+            if self._verbose:
+                print(json.dumps(messages, indent=2))
+
+            kwargs = {
+                "model": self._model,
+                "messages": chat_messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "tools": [_to_anthropic_tool(tool)],
+                "tool_choice": {"type": "tool", "name": tool["name"]},
+            }
+            if system_text:
+                kwargs["system"] = system_text
+
+            response = self._client.messages.create(**kwargs)
+            for block in response.content:
+                if getattr(block, "type", None) == "tool_use":
+                    return dict(block.input)
+            return None
+        except Exception as e:
+            if self._verbose:
+                print(f"Anthropic tool-call error: {e}")
             return None
 
     def count_tokens(self, text: str) -> int:
@@ -264,6 +382,16 @@ class MockLlmClient:
         if self._queue:
             return self._queue.pop(0)
         return self._default
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        # Stub — full behavior is added in Task 3.
+        return None
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token (matches the Anthropic adapter).
