@@ -341,3 +341,78 @@ def test_mock_react_call_tool_keeps_multiword_verb_intact():
     )
     assert result["action"] == "ghost touch"
     assert result["arguments"] == "player"
+
+
+# --- LLMAgent structured decision path (Task 5) -------------------------
+
+from text_adventure_games.npc import LLMAgent
+
+
+def test_llm_agent_decide_uses_structured_path():
+    client = MockLlmClient(
+        tool_responses=[
+            {"reasoning": "r", "action": "attack", "arguments": "player with club"}
+        ]
+    )
+    agent = LLMAgent(client, persona="I am the troll.")
+    agent.action_names = ["attack", "go"]
+
+    assert agent.decide("an observation") == "attack player with club"
+    assert agent.last_reasoning == "r"
+    assert client.tool_calls  # used the tool
+    assert not client.calls  # did NOT fall back to chat
+
+
+def test_llm_agent_structured_builds_enum_from_action_names():
+    captured = {}
+
+    def responder(messages, tool, max_tokens, temperature):
+        captured["tool"] = tool
+        captured["system"] = messages[0]["content"]
+        return {"action": "go", "arguments": "north"}
+
+    client = MockLlmClient(tool_responses=responder)
+    agent = LLMAgent(client, persona="I wander.")
+    agent.action_names = ["go", "attack"]
+
+    assert agent.decide("obs") == "go north"
+    action = captured["tool"]["parameters"]["properties"]["action"]
+    assert action["enum"] == ["go", "attack"]
+    # The structured system message omits the two-line Reasoning/Action format.
+    assert "Reply with exactly two lines" not in captured["system"]
+    assert "Persona: I wander." in captured["system"]
+
+
+def test_llm_agent_falls_back_to_freetext_when_no_call_tool():
+    # A bare chat-only client (no call_tool attribute) keeps today's behavior.
+    class ChatOnly:
+        def __init__(self):
+            self.calls = []
+
+        def chat(self, messages, max_tokens=256, temperature=0.0):
+            self.calls.append(messages)
+            return "Reasoning: because\nAction: go north"
+
+        def count_tokens(self, text):
+            return len(text) // 4
+
+    agent = LLMAgent(ChatOnly())
+    assert agent.decide("obs") == "go north"
+    assert agent.last_reasoning == "because"
+
+
+def test_llm_agent_falls_back_when_call_tool_returns_none():
+    client = MockLlmClient(
+        responses=["Reasoning: r\nAction: look"], tool_responses=[None]
+    )
+    agent = LLMAgent(client)
+    agent.action_names = ["look"]
+
+    assert agent.decide("obs") == "look"
+    assert client.tool_calls  # tried the tool first
+    assert client.calls  # then fell back to chat
+
+
+def test_llm_agent_action_names_defaults_empty():
+    agent = LLMAgent(MockLlmClient())
+    assert agent.action_names == []

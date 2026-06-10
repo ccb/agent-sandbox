@@ -176,6 +176,12 @@ class Agent:
         # if it gave no estimate. The turn loop prefers this over the action's
         # declared DURATION when charging the per-turn budget (issue #24).
         self.last_duration: int | None = None
+        # The verbs this agent may choose from, used to build the closed-enum
+        # `action` field of the choose_action tool. Set per-turn by the behavior
+        # factories / turns.py from game.parser.actions; empty means
+        # unconstrained (the enum is omitted). Only LLMAgent's structured path
+        # reads it; ScriptedAgent ignores it.
+        self.action_names: list[str] = []
 
     def decide(self, observation: str) -> str | None:
         """Return a single command string for *observation* (or ``None``)."""
@@ -215,6 +221,38 @@ class LLMAgent(Agent):
     def decide(self, observation: str) -> str | None:
         self.last_reasoning = None
         self.last_duration = None
+        structured = self._decide_structured(observation)
+        if structured is not None:
+            return structured
+        return self._decide_freetext(observation)
+
+    def _decide_structured(self, observation: str) -> str | None:
+        """Tool-calling path: ask the model to fill the choose_action schema and
+        assemble '<action> <arguments>'. Returns None when tool calling is
+        unavailable or produced nothing, so decide() falls back to free text.
+        The closed `action` enum guarantees a verb the parser knows; the
+        command still re-enters the precondition gate via decide_and_route."""
+        if not hasattr(self.llm_client, "call_tool"):
+            return None
+        tool = build_choose_action_tool(self.action_names)
+        messages = [
+            {"role": "system", "content": self._structured_system_message()},
+            {"role": "user", "content": observation},
+        ]
+        result = self.llm_client.call_tool(
+            messages, tool, max_tokens=self.max_tokens, temperature=self.temperature
+        )
+        if not result:
+            return None
+        self.last_reasoning = (result.get("reasoning") or "").strip() or None
+        action = (result.get("action") or "").strip()
+        arguments = (result.get("arguments") or "").strip()
+        command = f"{action} {arguments}".strip()
+        return command or None
+
+    def _decide_freetext(self, observation: str) -> str | None:
+        """The original chat()+_parse_decision path, used as a graceful fallback
+        when structured tool calling is unavailable or returns nothing."""
         response = self._call(observation)
         if response is None:
             return None
@@ -236,7 +274,7 @@ class LLMAgent(Agent):
             sections.append(f"{self._TIER_LABELS[tier]}:\n{bullets}")
         return "\n".join(sections) if sections else None
 
-    def _system_message(self) -> str:
+    def _base_system_lines(self) -> list[str]:
         # The character's name is deliberately left out of this prompt: an
         # agent's identity rides on its first-person persona string (and the
         # observation already names the scene and the other characters in it),
@@ -250,8 +288,18 @@ class LLMAgent(Agent):
         if formatted:
             lines.append("Goals:")
             lines.append(formatted)
+        return lines
+
+    def _system_message(self) -> str:
+        # Free-text path: persona/goals plus the labeled two-line instruction.
+        lines = self._base_system_lines()
         lines.append(_DECISION_INSTRUCTION)
         return "\n".join(lines)
+
+    def _structured_system_message(self) -> str:
+        # Structured path: the tool schema IS the output contract, so the
+        # two-line Reasoning/Action instruction is omitted.
+        return "\n".join(self._base_system_lines())
 
     def _call(self, observation: str) -> str | None:
         """Call the backend, supporting both the chat protocol and callables."""
