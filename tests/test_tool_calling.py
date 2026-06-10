@@ -464,3 +464,61 @@ def test_gather_intents_sets_action_names_on_agent():
 
     assert seen["enum"], "gather_intents did not set action_names"
     assert agent.action_names  # populated on the agent itself
+
+
+# --- Task 7: LlmParser._pick_option structured tool calling path --------
+
+from text_adventure_games.llm_parser import LlmParser
+
+
+def _make_parser(client):
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    game = games.Game(room, player, characters=[])
+    return LlmParser(game, client)
+
+
+def test_pick_option_structured_returns_indexed_value():
+    client = MockLlmClient(tool_responses=[{"index": 1}])
+    parser = _make_parser(client)
+    options = {"first": "A", "second": "B", "third": "C"}
+
+    assert parser._pick_option("pick one", options, "the second") == "B"
+    assert client.tool_calls  # used the select_option tool
+    assert not client.calls  # did not fall back to chat
+
+
+def test_pick_option_out_of_range_falls_back_to_regex():
+    # call_tool yields a bad index -> fall through to chat()+regex, which
+    # returns "1" -> the 2nd option's value.
+    client = MockLlmClient(responses=["1"], tool_responses=[{"index": 99}])
+    parser = _make_parser(client)
+    options = {"first": "A", "second": "B"}
+
+    assert parser._pick_option("pick one", options, "second") == "B"
+    assert client.tool_calls and client.calls  # tried tool, then chat
+
+
+def test_pick_option_non_int_index_falls_back_to_regex():
+    client = MockLlmClient(responses=["0"], tool_responses=[{"index": "nope"}])
+    parser = _make_parser(client)
+    options = {"first": "A", "second": "B"}
+
+    assert parser._pick_option("pick one", options, "first") == "A"
+
+
+def test_pick_option_no_call_tool_uses_regex_unchanged():
+    class ChatOnly:
+        def __init__(self):
+            self.calls = []
+
+        def chat(self, messages, max_tokens=256, temperature=0.0):
+            self.calls.append(messages)
+            return "0"
+
+        def count_tokens(self, text):
+            return len(text) // 4
+
+    parser = _make_parser(ChatOnly())
+    options = {"first": "A", "second": "B"}
+    assert parser._pick_option("pick one", options, "first") == "A"
