@@ -148,7 +148,21 @@ class Inventory(base.Action):
             description = f"{self.character.name}'s inventory contains:\n"
             for item_name in self.character.inventory:
                 item = self.character.inventory[item_name]
-                description += "* {item}\n".format(item=item.description)
+                if item.get_property("is_container"):
+                    if item.capacity is None:
+                        gauge = "({count})".format(count=item.current_count())
+                    else:
+                        gauge = "({count}/{cap})".format(
+                            count=item.current_count(), cap=item.capacity
+                        )
+                    description += "* {item} {gauge}\n".format(
+                        item=item.description, gauge=gauge
+                    )
+                    for inner_name in item.contents:
+                        inner = item.contents[inner_name]
+                        description += "    - {item}\n".format(item=inner.description)
+                else:
+                    description += "* {item}\n".format(item=item.description)
             self.parser.ok(description)
 
 

@@ -248,3 +248,39 @@ def test_give_fails_gracefully_when_recipient_full():
     assert action.check_preconditions() is False
     assert "rock" in giver.inventory  # still with the giver
     assert "rock" not in recipient.inventory
+
+
+def test_inventory_shows_container_contents_and_capacity():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    pack = _backpack(capacity=5)
+    player.add_to_inventory(pack)
+    pack.add_item(things.Item("rock", "a plain rock"))
+    pack.add_item(things.Item("gem", "a shiny gem"))
+
+    thing_actions.Inventory(game, "inventory", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "backpack" in text
+    assert "(2/5)" in text  # count / capacity
+    assert "a plain rock" in text  # nested content shown
+    assert "a shiny gem" in text
+
+
+def test_inventory_unlimited_container_shows_count_only():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    pack = _backpack(capacity=None)
+    player.add_to_inventory(pack)
+    pack.add_item(things.Item("rock", "a plain rock"))
+
+    thing_actions.Inventory(game, "inventory", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "(1)" in text  # count only, no slash
+    assert "/" not in text.split("backpack")[1].split("\n")[0]
+
+
+def test_inventory_empty_is_unchanged():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    thing_actions.Inventory(game, "inventory", actor=player)()
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "empty" in text
