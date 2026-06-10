@@ -416,3 +416,51 @@ def test_llm_agent_falls_back_when_call_tool_returns_none():
 def test_llm_agent_action_names_defaults_empty():
     agent = LLMAgent(MockLlmClient())
     assert agent.action_names == []
+
+
+# --- Task 6: action_names wired from parser into agent factories ---------
+
+from text_adventure_games import games, things, turns
+from text_adventure_games.npc import make_react_behavior
+
+
+def _troll_game():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    troll = things.Character("troll", "a troll", "I am the troll. I guard here.")
+    game = games.Game(room, player, characters=[troll])
+    room.add_character(troll)
+    return game, player, troll
+
+
+def test_make_react_behavior_sets_action_names_from_parser():
+    game, player, troll = _troll_game()
+    seen = {}
+
+    def responder(messages, tool, max_tokens, temperature):
+        seen["enum"] = tool["parameters"]["properties"]["action"].get("enum")
+        return {"action": "look", "arguments": ""}
+
+    client = MockLlmClient(tool_responses=responder)
+    troll.set_behavior(make_react_behavior(client))
+    troll.take_turn(game)
+
+    assert seen["enum"], "action_names were not propagated to the tool enum"
+    assert isinstance(seen["enum"], list) and len(seen["enum"]) > 0
+
+
+def test_gather_intents_sets_action_names_on_agent():
+    game, player, troll = _troll_game()
+    seen = {}
+
+    def responder(messages, tool, max_tokens, temperature):
+        seen["enum"] = tool["parameters"]["properties"]["action"].get("enum")
+        return {"action": "look", "arguments": ""}
+
+    agent = LLMAgent(MockLlmClient(tool_responses=responder))
+    troll.set_agent(agent)
+
+    turns.gather_intents(game)
+
+    assert seen["enum"], "gather_intents did not set action_names"
+    assert agent.action_names  # populated on the agent itself

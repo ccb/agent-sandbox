@@ -532,6 +532,7 @@ def make_react_behavior(llm_client, max_retries: int = 1):
         if not agent.persona:
             agent.persona = character.persona or ""
         agent.goals = character.goals
+        agent.action_names = list(game.parser.actions)
         if not react_behavior(character, game, agent, max_retries=max_retries):
             return None
         return _resolve_duration(agent, game)
@@ -563,6 +564,7 @@ def make_hybrid_behavior(llm_client, scripted_behavior, max_retries: int = 1):
         if not agent.persona:
             agent.persona = character.persona or ""
         agent.goals = character.goals
+        agent.action_names = list(game.parser.actions)
         if react_behavior(character, game, agent, max_retries=max_retries):
             return _resolve_duration(agent, game)
         # LLM produced nothing usable: fall back to the scripted behavior, whose
