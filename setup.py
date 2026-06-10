@@ -17,6 +17,9 @@ setup(
     # license='',
     packages=find_packages(),
     include_package_data=True,
+    # Floor is 3.11 — the versions CI tests. The code uses PEP 604 unions
+    # (`X | None`), so it needs 3.10+ at minimum; we only verify 3.11–3.13.
+    python_requires=">=3.11",
     install_requires=[
         "jupyter",
         "graphviz",
@@ -52,9 +55,8 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
 )
