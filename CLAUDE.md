@@ -21,8 +21,8 @@ pip install -e .[dev]       # + black, nbformat
 pip install -e .[llm]       # + openai, anthropic, tiktoken
 
 python -m text_adventure_games.webapp.app   # Flask web UI at localhost:8080
-python test_npc_behaviors.py                 # turn-based NPC behavior suite
-pytest tests/ -v                             # offline agent-layer + live-game suites
+pytest tests/ -v                             # full suite (agent layer + NPC behaviors)
+pytest tests/test_npc_behaviors.py -s        # watch the NPC behavior suite, narrated
 black .                                       # format
 
 LLM_PROVIDER=mock python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
