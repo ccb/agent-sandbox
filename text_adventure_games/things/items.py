@@ -107,6 +107,13 @@ class Item(Thing):
         self.capacity = capacity
         return self
 
+    def set_owner(self, owner):
+        """Set this item's carrying owner, propagating to any contained items
+        so a whole loaded container changes hands at once."""
+        self.owner = owner
+        for item in self.contents.values():
+            item.set_owner(owner)
+
     def current_count(self):
         """Number of items currently inside this container."""
         return len(self.contents)
@@ -126,7 +133,7 @@ class Item(Thing):
             item.location = None
         self.contents[item.name] = item
         item.container = self
-        item.owner = self.owner
+        item.set_owner(self.owner)
 
     def remove_item(self, item):
         """Take `item` out of this container, clearing its back-reference."""

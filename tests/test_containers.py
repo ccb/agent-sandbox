@@ -250,6 +250,21 @@ def test_give_fails_gracefully_when_recipient_full():
     assert "rock" not in recipient.inventory
 
 
+def test_give_loaded_container_refreshes_nested_owner():
+    game, room, giver, recipient, cap = _capture_two_char_game()
+    pack = _backpack(capacity=2)
+    giver.add_to_inventory(pack)
+    rock = things.Item("rock", "a plain rock")
+    pack.add_item(rock)
+    assert rock.owner is giver  # the rock rides along with the giver
+
+    thing_actions.Give(game, "give backpack to recipient", actor=giver)()
+
+    assert "backpack" in recipient.inventory
+    assert pack.owner is recipient
+    assert rock.owner is recipient  # nested content changed hands too
+
+
 def test_inventory_shows_container_contents_and_capacity():
     game, room, player, cap = _capture_game(player_capacity=None)
     pack = _backpack(capacity=5)

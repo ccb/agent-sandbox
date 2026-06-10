@@ -138,7 +138,7 @@ class Character(Thing):
             item.location.remove_item(item)
             item.location = None
         self.inventory[item.name] = item
-        item.owner = self
+        item.set_owner(self)
 
     def is_in_inventory(self, item):
         """
@@ -150,7 +150,7 @@ class Character(Thing):
         """
         Removes an item to a character's inventory.
         """
-        item.owner = None
+        item.set_owner(None)
         self.inventory.pop(item.name)
 
     def wear(self, item):
@@ -226,7 +226,7 @@ class Character(Thing):
             self.remove_from_inventory(item)
         elif item.container is not None:
             item.container.remove_item(item)
-            item.owner = None
+            item.set_owner(None)
 
     def set_behavior(self, fn):
         """
