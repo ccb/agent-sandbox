@@ -82,3 +82,69 @@ def test_container_round_trips_through_primitive():
     assert set(restored.contents.keys()) == {"rock", "gem"}
     assert restored.contents["rock"].description == "a plain rock"
     assert restored.contents["rock"].container is None  # back-ref by name only
+
+
+def test_unlimited_hands_always_have_space():
+    player = things.Character("player", "the player", "I explore.")
+    assert player.carry_capacity is None
+    assert player.has_hand_space() is True
+
+
+def test_finite_hands_fill_up():
+    player = things.Character("player", "the player", "I explore.")
+    player.carry_capacity = 1
+    assert player.has_hand_space() is True
+    player.add_to_inventory(things.Item("rock", "a plain rock"))
+    assert player.has_hand_space() is False
+
+
+def test_accept_item_routes_overflow_into_container():
+    player = things.Character("player", "the player", "I explore.")
+    player.carry_capacity = 1
+    pack = _backpack(capacity=2)
+    player.add_to_inventory(pack)  # fills the single hand slot
+    assert player.has_hand_space() is False
+
+    rock = things.Item("rock", "a plain rock")
+    placed = player.accept_item(rock)
+    assert placed is True
+    assert rock.container is pack
+    assert "rock" in pack.contents
+
+
+def test_accept_item_fails_when_hands_and_containers_full():
+    player = things.Character("player", "the player", "I explore.")
+    player.carry_capacity = 1
+    pack = _backpack(capacity=1)
+    player.add_to_inventory(pack)
+    player.accept_item(things.Item("rock", "a plain rock"))  # fills the pack
+    assert player.accept_item(things.Item("gem", "a gem")) is False
+
+
+def test_carried_items_flattens_hands_and_containers():
+    player = things.Character("player", "the player", "I explore.")
+    pack = _backpack(capacity=3)
+    player.add_to_inventory(pack)
+    pack.add_item(things.Item("rock", "a plain rock"))
+    carried = player.carried_items()
+    assert set(carried.keys()) == {"backpack", "rock"}
+
+
+def test_discard_item_removes_from_container_or_hands():
+    player = things.Character("player", "the player", "I explore.")
+    pack = _backpack(capacity=3)
+    player.add_to_inventory(pack)
+    rock = things.Item("rock", "a plain rock")
+    pack.add_item(rock)
+    player.discard_item(rock)
+    assert "rock" not in pack.contents
+    assert rock.container is None
+    player.discard_item(pack)
+    assert "backpack" not in player.inventory
+
+
+def test_carry_capacity_round_trips():
+    player = things.Character("player", "the player", "I explore.")
+    player.carry_capacity = 2
+    restored = things.Character.from_primitive(player.to_primitive())
+    assert restored.carry_capacity == 2

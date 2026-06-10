@@ -62,6 +62,10 @@ class Character(Thing):
         self.inventory = {}
         self.worn = {}
         self.wielded = {}
+        # Base hand limit (issue #43). None means unlimited so existing games
+        # are unchanged. Container `contents` do not count against this; the
+        # container item itself occupies one hand slot.
+        self.carry_capacity = None
         self.location = None
         self.behavior = None
         self.agent = None
@@ -78,6 +82,7 @@ class Character(Thing):
         """
         thing_data = super().to_primitive()
         thing_data["persona"] = self.persona
+        thing_data["carry_capacity"] = self.carry_capacity
 
         def _serialize(slot):
             out = {}
@@ -109,6 +114,7 @@ class Character(Thing):
         instance = cls(data["name"], data["description"], data["persona"])
         super().from_primitive(data, instance=instance)
         instance.location = data.get("location", None)
+        instance.carry_capacity = data.get("carry_capacity", None)
         instance.inventory = {
             k: Item.from_primitive(v) for k, v in data["inventory"].items()
         }
@@ -172,6 +178,55 @@ class Character(Thing):
 
     def is_wielded(self, item) -> bool:
         return item.name in self.wielded
+
+    def has_hand_space(self):
+        """True if the character can hold another item directly in hand."""
+        return self.carry_capacity is None or len(self.inventory) < self.carry_capacity
+
+    def available_container(self):
+        """The first carried container with room, or None."""
+        for item in self.inventory.values():
+            if item.get_property("is_container") and item.has_space():
+                return item
+        return None
+
+    def can_accept_item(self):
+        """True if a newly picked-up item could go somewhere (hands or a
+        carried container)."""
+        return self.has_hand_space() or self.available_container() is not None
+
+    def accept_item(self, item):
+        """Place `item` in hands if there is room, else into a carried
+        container. Returns True if placed, False if there is no room."""
+        if self.has_hand_space():
+            self.add_to_inventory(item)
+            return True
+        container = self.available_container()
+        if container is not None:
+            container.add_item(item)
+            return True
+        return False
+
+    def carried_items(self):
+        """A flat name->Item view of everything carried: top-level inventory
+        plus the contents of any carried containers. Used for matching items
+        the character can act on (drop, give)."""
+        result = {}
+        for name, item in self.inventory.items():
+            result[name] = item
+            if item.get_property("is_container"):
+                for cname, citem in item.contents.items():
+                    result[cname] = citem
+        return result
+
+    def discard_item(self, item):
+        """Remove `item` from wherever the character holds it -- their hands or
+        a carried container -- clearing ownership."""
+        if self.inventory.get(item.name) is item:
+            self.remove_from_inventory(item)
+        elif item.container is not None:
+            item.container.remove_item(item)
+            item.owner = None
 
     def set_behavior(self, fn):
         """
