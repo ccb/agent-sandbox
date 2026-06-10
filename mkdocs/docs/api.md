@@ -2,7 +2,8 @@
 
 These pages are generated from the engine's own docstrings, so they always match
 the installed code. For the conceptual picture, start with the
-[design notes](design/multi-character-play.md); this page is the precise reference.
+[design notes](https://github.com/ccb/agent-sandbox/tree/main/docs/design) on
+GitHub; this page is the precise reference.
 
 ## Game loop
 

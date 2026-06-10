@@ -32,8 +32,9 @@ setup(
             "pytest",
         ],
         "docs": [
-            # Local documentation site. Build/serve with `mkdocs serve`; the
-            # rendered site is local-only (not published anywhere — see docs/index.md).
+            # Local documentation site under mkdocs/. Build/serve with
+            # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
+            # published anywhere — see mkdocs/docs/index.md).
             "mkdocs-material",  # theme + search + navigation
             "mkdocstrings[python]",  # API reference pulled from docstrings
             "black",  # lets mkdocstrings pretty-format rendered signatures

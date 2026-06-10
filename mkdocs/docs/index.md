@@ -15,11 +15,16 @@ paper ("Smallville") and the [ReAct](https://arxiv.org/abs/2210.03629)
 
     ```bash
     pip install -e .[docs]
-    mkdocs serve     # then open http://127.0.0.1:8000
+    cd mkdocs && mkdocs serve     # then open http://127.0.0.1:8000
     ```
 
-    `mkdocs build` produces a static site under `./site/` (git-ignored) that you
-    can zip and share with collaborators. Nothing is published to the internet.
+    `mkdocs build` produces a static site under `mkdocs/site/` (git-ignored) that
+    you can zip and share with collaborators. Nothing is published to the internet.
+
+    This site is the home page and API reference. The design notes and guides
+    live in the repo's
+    [`docs/`](https://github.com/ccb/agent-sandbox/tree/main/docs) directory and
+    are read directly on GitHub.
 
 ## The idea
 
@@ -67,11 +72,16 @@ free deterministic stand-in) and, for the real providers, the matching
 
 ## Where to go next
 
-- **[Reading the output](reading-the-output.md)** — how to interpret what the game
-  prints, including an agent's reasoning trace.
-- **[Testing the agent layer](TESTING.md)** — running the offline, deterministic
-  test suites with the mock LLM client.
-- **Design notes** — proposals and specs for the multi-agent features
-  (turn modes, simultaneous actions, memory, output rendering).
 - **[API reference](api.md)** — the engine's public classes and functions,
-  generated from docstrings.
+  generated from docstrings. (This is the one other page in this site.)
+
+The longer-form guides and design notes are kept in the repo's `docs/` directory
+and read on GitHub:
+
+- **[Reading the output](https://github.com/ccb/agent-sandbox/blob/main/docs/reading-the-output.md)**
+  — how to interpret what the game prints, including an agent's reasoning trace.
+- **[Testing the agent layer](https://github.com/ccb/agent-sandbox/blob/main/docs/TESTING.md)**
+  — running the offline, deterministic test suites with the mock LLM client.
+- **[Design notes](https://github.com/ccb/agent-sandbox/tree/main/docs/design)**
+  — proposals and specs for the multi-agent features (turn modes, simultaneous
+  actions, memory, output rendering).
