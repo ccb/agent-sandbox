@@ -358,8 +358,16 @@ class MockLlmClient:
     Returning `None` simulates an API failure, which exercises the
     graceful-fallback paths in the parser and the ReAct loop.
 
-    Every call is recorded in `calls` so tests can assert on what was
-    sent to the model.
+    The `tool_responses` argument is the structured-tool-calling counterpart of
+    `responses`: a separate list of dicts (or `None`), or a callable
+    `(messages, tool, max_tokens, temperature) -> dict | None`, returned one per
+    `call_tool` call. It is kept entirely separate from `responses` so `chat`
+    and `call_tool` never consume each other's scripts. It defaults to `None`,
+    so `call_tool` returns `None` (the graceful-fallback signal) unless a test
+    scripts a reply.
+
+    Every `chat` call is recorded in `calls`, and every `call_tool` call in
+    `tool_calls`, so tests can assert on what was sent to the model.
 
     Example:
 
