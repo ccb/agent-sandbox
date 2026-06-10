@@ -41,15 +41,19 @@ class Get(base.Action):
             ),
         ):
             return False
+        if not self.character.can_accept_item():
+            self.parser.fail(
+                "Your hands are full and you have nothing with room to stow it."
+            )
+            return False
         return True
 
     def apply_effects(self):
         """
         Get's an item from the location and adds it to the character's
-        inventory, assuming preconditions are met.
+        inventory or, if their hands are full, a carried container with space.
         """
-        self.location.remove_item(self.item)
-        self.character.add_to_inventory(self.item)
+        self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
         )

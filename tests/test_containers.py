@@ -148,3 +148,40 @@ def test_carry_capacity_round_trips():
     player.carry_capacity = 2
     restored = things.Character.from_primitive(player.to_primitive())
     assert restored.carry_capacity == 2
+
+
+def test_get_with_unlimited_hands_is_unchanged():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    rock = things.Item("rock", "a plain rock")
+    room.add_item(rock)
+    thing_actions.Get(game, "get rock", actor=player)()
+    assert "rock" in player.inventory
+    assert cap.texts(Channel.NARRATION)  # a success message was emitted
+
+
+def test_get_overflows_into_backpack():
+    game, room, player, cap = _capture_game(player_capacity=1)
+    pack = _backpack(capacity=2)
+    player.add_to_inventory(pack)  # the one hand slot is now full
+    rock = things.Item("rock", "a plain rock")
+    room.add_item(rock)
+
+    thing_actions.Get(game, "get rock", actor=player)()
+
+    assert "rock" not in player.inventory  # not in hands
+    assert "rock" in pack.contents  # stowed in the pack
+    assert "rock" not in room.items  # left the room
+
+
+def test_get_fails_gracefully_when_full():
+    game, room, player, cap = _capture_game(player_capacity=1)
+    pack = _backpack(capacity=1)
+    player.add_to_inventory(pack)
+    player.accept_item(things.Item("gem", "a gem"))  # fills the pack
+    rock = things.Item("rock", "a plain rock")
+    room.add_item(rock)
+
+    action = thing_actions.Get(game, "get rock", actor=player)
+    assert action.check_preconditions() is False
+    assert "rock" in room.items  # world state unchanged
+    assert "full" in (game.parser.last_fail_message or "").lower()
