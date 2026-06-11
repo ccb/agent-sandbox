@@ -172,3 +172,22 @@ def test_parse_command_drop_goal_end_to_end():
     bob.add_goal("fetch the key", GoalType.SHORT)
     assert game.parser.parse_command("drop goal fetch the key", actor=bob)
     assert bob.goals == []
+
+
+from text_adventure_games.npc import build_npc_context
+
+
+def test_build_npc_context_renders_heard_and_note():
+    game, alice, bob = _two_char_room()
+    bob.hear("alice said to you: fetch the key")
+    obs = build_npc_context(bob, game)
+    assert "You recently heard:" in obs
+    assert "alice said to you: fetch the key" in obs
+    # The optional-input note keeps persuasion non-automatic.
+    assert "only adopt or drop a goal" in obs
+
+
+def test_build_npc_context_omits_heard_when_empty():
+    game, alice, bob = _two_char_room()
+    obs = build_npc_context(bob, game)
+    assert "You recently heard:" not in obs
