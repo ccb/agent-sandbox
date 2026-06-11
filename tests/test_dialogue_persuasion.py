@@ -101,3 +101,51 @@ def test_other_room_does_not_hear_broadcast():
     forest.add_character(carol)
     game.parser.parse_command("say hello", actor=alice)
     assert carol.heard == []
+
+
+from text_adventure_games.actions.goals import AdoptGoal, DropGoal
+
+
+def _solo_game():
+    """A single character (used as the player) in a field."""
+    field = things.Location("Field", "A field.")
+    bob = things.Character("bob", "a fellow", "I listen.")
+    game = games.Game(field, bob)
+    return game, bob
+
+
+def test_adopt_goal_adds_short_goal():
+    game, bob = _solo_game()
+    AdoptGoal(game, "adopt goal fetch the key", actor=bob)()
+    assert any(
+        g.description == "fetch the key" and g.type == GoalType.SHORT and not g.done
+        for g in bob.goals
+    )
+
+
+def test_adopt_goal_empty_text_fails():
+    game, bob = _solo_game()
+    action = AdoptGoal(game, "adopt goal", actor=bob)
+    assert action.check_preconditions() is False
+    assert bob.goals == []
+
+
+def test_adopt_goal_duplicate_fails():
+    game, bob = _solo_game()
+    bob.add_goal("fetch the key", GoalType.SHORT)
+    action = AdoptGoal(game, "adopt goal fetch the key", actor=bob)
+    assert action.check_preconditions() is False
+    assert len(bob.goals) == 1
+
+
+def test_drop_goal_removes_it():
+    game, bob = _solo_game()
+    bob.add_goal("fetch the key", GoalType.SHORT)
+    DropGoal(game, "drop goal fetch the key", actor=bob)()
+    assert bob.goals == []
+
+
+def test_drop_goal_not_held_fails():
+    game, bob = _solo_game()
+    action = DropGoal(game, "drop goal nonexistent", actor=bob)
+    assert action.check_preconditions() is False
