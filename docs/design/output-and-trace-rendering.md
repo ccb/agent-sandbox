@@ -294,7 +294,7 @@ Recommendation, to keep the cost contained:
 - **`PlainRenderer` is always available** and `rich`-free. If `import rich` fails,
   the engine falls back to it automatically — so the project never *hard*-requires
   `rich` and CI/tests stay green without it.
-- **Where it lands in `setup.py`:** add `rich` to core `install_requires` (next to
+- **Where it lands in `pyproject.toml`:** add `rich` to core `dependencies` (next to
   `flask`) so the default `pip install -e .` gives the good terminal experience out
   of the box. The lighter-touch alternative is a `rich` extra
   (`pip install -e .[rich]`, mirroring `[llm]`); pick this if the team wants the
@@ -433,7 +433,7 @@ What PR #31 actually ships, what differs from the proposal above, and what's lef
   `LlmParser`. *(stages 4, 6)*
 - **`npc.py`** — the ReAct loop emits Observe / Think / Act / Reflect on their
   channels. *(stage 5)*
-- **`setup.py`** — `rich` added to `install_requires`, with the plain fallback so a
+- **`pyproject.toml`** — `rich` added to `dependencies`, with the plain fallback so a
   no-`rich` install still runs. *(section 8)*
 - **`tests/test_reporting.py`** — `CaptureRenderer`-based tests asserting on
   channels (taxonomy, verbosity, plain/web renderers, parser routing, the ReAct

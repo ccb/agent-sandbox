@@ -444,9 +444,7 @@ def create_llm_client(config: LlmConfig) -> LlmClient:
     provider = str(config.provider).lower()
     if provider not in _PROVIDERS:
         choices = [str(p) for p in _PROVIDERS]
-        raise ValueError(
-            f"Unknown provider '{provider}'. Choose from: {choices}"
-        )
+        raise ValueError(f"Unknown provider '{provider}'. Choose from: {choices}")
     return _PROVIDERS[provider](config)
 
 

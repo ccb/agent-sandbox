@@ -16,7 +16,6 @@ from typing import Union
 
 from .enums import ActionName, EventKind
 
-
 # Accepted values for ``GameEvent.action``. Stored as a plain string at
 # runtime; this alias is purely for IDE/type-checker discoverability.
 ActionKind = Union[EventKind, ActionName, str]

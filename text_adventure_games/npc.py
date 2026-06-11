@@ -36,7 +36,6 @@ Usage::
 from .enums import ReActLabel, Role
 from .things.characters import Goal, GoalType
 
-
 # Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
 # prompt template, the parser, and any future label additions stay in sync.
 # either "thought" or "reasoning" get categorized as "_REASONING_TOKENS"
