@@ -2,10 +2,11 @@ import random
 
 from . import base
 from ..things import Item
+from ..enums import ActionName, Property
 
 
 class Pick_Rose(base.Action):
-    ACTION_NAME = "pick rose"
+    ACTION_NAME = ActionName.PICK_ROSE
     ACTION_DESCRIPTION = "Pick a rose from a rosebush"
 
     def __init__(self, game, command: str, actor=None):
@@ -24,7 +25,7 @@ class Pick_Rose(base.Action):
         """
         if not self.was_matched(self.rosebush, "There's no rosebush here."):
             return False
-        if not self.rosebush.get_property("has_rose"):
+        if not self.rosebush.get_property(Property.HAS_ROSE):
             description = "The rosebush is bare."
             self.game.parser.fail(description)
             return False
@@ -45,7 +46,7 @@ class Pick_Rose(base.Action):
             "IT SMELLS GOOD.",
         )
         rose.add_command_hint("smell rose")
-        self.rosebush.set_property("has_rose", False)
+        self.rosebush.set_property(Property.HAS_ROSE, False)
         self.character.add_to_inventory(rose)
         d = "{character_name} picked the lone rose from the rosebush"
         description = d.format(character_name=self.character.name)
@@ -57,7 +58,7 @@ class Pick_Rose(base.Action):
 
 
 class Smell_Rose(base.Action):
-    ACTION_NAME = "smell rose"
+    ACTION_NAME = ActionName.SMELL_ROSE
     ACTION_DESCRIPTION = "Smell the rose"
 
     def __init__(self, game, command: str, actor=None):
@@ -125,16 +126,16 @@ class Smell_Rose(base.Action):
             "festively joyful",
             "timelessly classic",
         ]
-        self.rose.set_property("scent", random.choice(rose_smells))
+        self.rose.set_property(Property.SCENT, random.choice(rose_smells))
 
         d = "{character_name} smells the rose. It smells {scent}."
         description = d.format(
             character_name=self.character.name.capitalize(),
-            scent=self.rose.get_property("scent"),
+            scent=self.rose.get_property(Property.SCENT),
         )
         self.parser.ok(description)
 
-        self.character.set_property("emotional_state", "happy")
+        self.character.set_property(Property.EMOTIONAL_STATE, "happy")
         description = "{character_name} is happy.".format(
             character_name=self.character.name.capitalize()
         )

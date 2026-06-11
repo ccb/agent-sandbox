@@ -13,7 +13,38 @@ from text_adventure_games import games
 
 from .things import Character, Item, Location
 from . import actions, blocks
+from .enums import ActionName, Direction, Role
 from .reporting import Channel, Message, default_renderer, wrap_text
+
+# Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
+# Direction members. Up/down/in/out have no single-letter alias today; if
+# games add new shortcuts, extend here rather than in get_direction.
+_DIRECTION_ALIASES: dict[str, Direction] = {
+    "n": Direction.NORTH,
+    "s": Direction.SOUTH,
+    "e": Direction.EAST,
+    "w": Direction.WEST,
+}
+
+# Direction members whose name should be detected when it appears anywhere in
+# the command ("you may travel north" -> Direction.NORTH). These are the
+# cardinals; up/down/in/out are too easily mistaken for unrelated words
+# (e.g. "drink water" contains "in"), so they require the explicit "go up"
+# form below.
+_SUBSTRING_DIRECTIONS = (
+    Direction.NORTH,
+    Direction.SOUTH,
+    Direction.EAST,
+    Direction.WEST,
+)
+
+# Direction members usable as "go <name>" -- avoids the substring ambiguity.
+_GO_SUFFIX_DIRECTIONS = (
+    Direction.UP,
+    Direction.DOWN,
+    Direction.OUT,
+    Direction.IN,
+)
 
 
 class Parser:
@@ -81,12 +112,12 @@ class Parser:
         return wrap_text(text, width)
 
     def add_command_to_history(self, command: str):
-        message = {"role": "user", "content": command}
+        message = {"role": Role.USER, "content": command}
         self.command_history.append(message)
         # CCB - todo - manage command_history size
 
     def add_description_to_history(self, description: str):
-        message = {"role": "assistant", "content": description}
+        message = {"role": Role.ASSISTANT, "content": description}
         self.command_history.append(message)
         # CCB - todo - manage command_history size
 
@@ -124,7 +155,7 @@ class Parser:
         command = command.lower()
         if "," in command:
             # Let the player type in a comma separted sequence of commands
-            return "sequence"
+            return ActionName.SEQUENCE
         elif (
             command.startswith("say ")
             or command.startswith("speak ")
@@ -133,40 +164,40 @@ class Parser:
             # Speech routes here regardless of message content (a message may
             # contain other command words), and this also handles the "speak"
             # alias, which is not auto-registered.
-            return "say"
+            return ActionName.SAY
         elif self.get_direction(command, character.location):
             # Check for the direction intent
-            return "go"
+            return ActionName.GO
         elif command == "look" or command == "l":
             # when the user issues a "look" command, re-describe what they see
-            return "describe"
+            return ActionName.DESCRIBE
         elif "examine " in command or command.startswith("x "):
-            return "examine"
+            return ActionName.EXAMINE
         elif "take " in command or "get " in command:
-            return "get"
+            return ActionName.GET
         elif "light" in command:
-            return "light"
+            return ActionName.LIGHT
         elif "drop " in command:
-            return "drop"
+            return ActionName.DROP
         elif (
             "eat " in command
             or "eats " in command
             or "ate " in command
             or "eating " in command
         ):
-            return "eat"
+            return ActionName.EAT
         elif "drink" in command:
-            return "drink"
+            return ActionName.DRINK
         elif "give" in command:
-            return "give"
+            return ActionName.GIVE
         elif "attack" in command or "hit " in command or "hits " in command:
-            return "attack"
+            return ActionName.ATTACK
         elif "inventory" in command or command == "i":
-            return "inventory"
+            return ActionName.INVENTORY
         elif command == "wait" or command == "z":
-            return "wait"
+            return ActionName.WAIT
         elif "quit" in command:
-            return "quit"
+            return ActionName.QUIT
         else:
             best_match = None
             for _, action in self.actions.items():
@@ -343,25 +374,28 @@ class Parser:
 
     def get_direction(self, command: str, location: Location = None) -> str:
         """
-        Converts aliases for directions into its primary direction name.
+        Converts aliases for directions into its canonical direction name.
+
+        Returns the direction as a string (Direction members ARE strings via
+        the str-mixin enum, so the return type is compatible with the
+        existing dict lookups in Location.connections).
         """
         command = command.lower()
-        if command == "n" or "north" in command:
-            return "north"
-        if command == "s" or "south" in command:
-            return "south"
-        if command == "e" or "east" in command:
-            return "east"
-        if command == "w" or "west" in command:
-            return "west"
-        if command.endswith("go up"):
-            return "up"
-        if command.endswith("go down"):
-            return "down"
-        if command.endswith("go out"):
-            return "out"
-        if command.endswith("go in"):
-            return "in"
+        # Single-letter shortcuts only fire on the bare command -- "n", "s",
+        # not "open the box".
+        if command in _DIRECTION_ALIASES:
+            return _DIRECTION_ALIASES[command]
+        # Cardinal name appearing anywhere in the command.
+        for direction in _SUBSTRING_DIRECTIONS:
+            if direction in command:
+                return direction
+        # Vertical / in-out require the explicit "go <name>" form so we don't
+        # mis-fire on words like "drink" containing "in".
+        for direction in _GO_SUFFIX_DIRECTIONS:
+            if command.endswith(f"go {direction}"):
+                return direction
+        # Fall back to any exit name the location declares -- supports games
+        # that invent custom direction tokens like "through the portal".
         if location:
             for exit in location.connections.keys():
                 if exit.lower() in command:

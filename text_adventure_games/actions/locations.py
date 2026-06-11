@@ -1,4 +1,5 @@
 from . import base
+from ..enums import ActionName, Direction, Property
 
 # from . import preconditions as P
 
@@ -6,21 +7,24 @@ from . import base
 
 
 class Go(base.Action):
-    ACTION_NAME = "go"
+    ACTION_NAME = ActionName.GO
     ACTION_DESCRIPTION = "Go in a direction"
+    # Aliases mix canonical Direction members with the one-letter shortcuts
+    # the parser also accepts; Direction members are strings, so the list
+    # type stays homogeneous.
     ACTION_ALIASES = [
-        "north",
+        Direction.NORTH,
         "n",
-        "south",
+        Direction.SOUTH,
         "s",
-        "east",
+        Direction.EAST,
         "e",
-        "west",
+        Direction.WEST,
         "w",
-        "out",
-        "in",
-        "up",
-        "down",
+        Direction.OUT,
+        Direction.IN,
+        Direction.UP,
+        Direction.DOWN,
     ]
 
     def __init__(
@@ -98,7 +102,7 @@ class Go(base.Action):
         self.parser.ok(description)
 
         # Some locations finish game
-        if to_loc.get_property("game_over") and is_main_player:
+        if to_loc.get_property(Property.GAME_OVER) and is_main_player:
             self.game.game_over = True
             self.game.game_over_description = to_loc.description
             self.parser.ok(to_loc.description)

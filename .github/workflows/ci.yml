@@ -1,6 +1,6 @@
 name: CI
 
-# Runs the same gates as the `/check` skill (format + both test suites) on every
+# Runs the same gates as the `/check` skill (format + the pytest suite) on every
 # push to main and every pull request. The repo had no CI before this; treat a
 # green check here as the automated stand-in for the manual pre-PR check.
 
@@ -50,7 +50,7 @@ jobs:
       # loop), so the engine plus dev tools are all we need — no API keys and no
       # openai/anthropic install.
       - run: pip install -e ".[dev]"
+      # The turn-based NPC behavior suite now lives at tests/test_npc_behaviors.py
+      # (moved in #51), so pytest collects it — no separate run step needed.
       - name: pytest suite
         run: pytest tests/ -q
-      - name: NPC behavior suite
-        run: python test_npc_behaviors.py

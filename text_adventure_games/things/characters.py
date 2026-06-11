@@ -6,6 +6,7 @@ from enum import Enum
 from .base import Thing
 from .items import Item
 from .locations import Location
+from ..enums import Property
 
 
 class GoalType(str, Enum):
@@ -50,8 +51,8 @@ class Character(Thing):
         self, name: str, description: str, persona: str, goals: list[Goal] | None = None
     ):
         super().__init__(name, description)
-        self.set_property("character_type", "notset")
-        self.set_property("is_dead", False)
+        self.set_property(Property.CHARACTER_TYPE, "notset")
+        self.set_property(Property.IS_DEAD, False)
         self.persona = persona
         self.inventory = {}
         self.location = None

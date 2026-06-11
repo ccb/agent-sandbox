@@ -53,7 +53,7 @@ text_adventure_games/      The engine (the shared framework)
   llm_parser.py            LLM-backed parser (keyword-first, LLM fallback)
   webapp/                  Flask web UI for playing in the browser
 notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework demos
-test_npc_behaviors.py      Tests for the turn-based NPC system (all passing)
+tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one
@@ -73,6 +73,12 @@ an untested skeleton with no reflection and isn't wired into the live game); an
 **event/trigger** system; a **time** model; **agent-to-agent** interaction; and a
 **Godot 2D bridge**. See [`ROADMAP.md`](ROADMAP.md) and
 [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md).
+
+**Longer-term, lower priority** (not on the critical path — revisit as agent
+counts grow and real-provider runs get costly): LLM **cost & observability** —
+per-call token/usage accounting, Anthropic prompt caching, per-run usage logs,
+and reproducible (seeded / replayable) runs. Design sketch in
+[`docs/design/llm-cost-observability.md`](docs/design/llm-cost-observability.md).
 
 ## Setup
 
@@ -184,8 +190,8 @@ interpreting what the game prints (and how to show more or less of it).
 
 ```bash
 source venv/bin/activate
-python test_npc_behaviors.py         # the turn-based NPC behavior suite
-pytest tests/ -v                     # offline agent-layer + live-game ReAct suites
+pytest tests/ -v                     # full suite: agent layer, ReAct live game, NPC behaviors
+pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, narrated
 ```
 
 ### Onboarding assignment

@@ -1,4 +1,5 @@
 from .base import Block
+from ..enums import Property
 
 
 class Locked_Door(Block):
@@ -20,14 +21,14 @@ class Locked_Door(Block):
         self.connection.add_item(self.door)
         self.connection.add_block(con_direction, self)
 
-        self.door.set_property("is_locked", True)
+        self.door.set_property(Property.IS_LOCKED, True)
         self.door.add_command_hint("unlock door")
 
     def is_blocked(self) -> bool:
         # Conditions of block:
         # * There is a door
         # * The door locked
-        if self.door and self.door.get_property("is_locked"):
+        if self.door and self.door.get_property(Property.IS_LOCKED):
             return True
         return False
 

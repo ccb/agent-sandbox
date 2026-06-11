@@ -50,6 +50,14 @@ dev = ["black", "nbformat", "pytest"]
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
 llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
+# Local documentation site under mkdocs/. Build/serve with
+# `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
+# published anywhere — see mkdocs/docs/index.md).
+docs = [
+    "mkdocs-material",      # theme + search + navigation
+    "mkdocstrings[python]", # API reference pulled from docstrings
+    "black",                # lets mkdocstrings pretty-format rendered signatures
+]
 
 # Read the version from the package's __version__ attribute. setuptools extracts
 # it by parsing the source statically (no import), so building never has to import

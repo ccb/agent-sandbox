@@ -1,4 +1,6 @@
+from __future__ import annotations
 from ..things import Thing, Character, Item, Location
+from ..enums import ActionName
 import re
 
 
@@ -18,7 +20,7 @@ class Action:
       * apply_effects()
     """
 
-    ACTION_NAME: str = None
+    ACTION_NAME: str | None = None
     ACTION_DESCRIPTION: str = None
     ACTION_ALIASES: list[str] = None
 
@@ -244,7 +246,7 @@ class ActionSequence(Action):
     Example: get pole, go out, south, catch fish with pole
     """
 
-    ACTION_NAME = "sequence"
+    ACTION_NAME = ActionName.SEQUENCE
     ACTION_DESCRIPTION = "Complete a sequence of actions specified in a list"
 
     def __init__(self, game, command: str, actor=None):
@@ -263,7 +265,7 @@ class ActionSequence(Action):
 
 
 class Quit(Action):
-    ACTION_NAME = "quit"
+    ACTION_NAME = ActionName.QUIT
     ACTION_DESCRIPTION = "Quit the game"
     ACTION_ALIASES = ["q"]
 
@@ -284,7 +286,7 @@ class Quit(Action):
 
 
 class Wait(Action):
-    ACTION_NAME = "wait"
+    ACTION_NAME = ActionName.WAIT
     ACTION_DESCRIPTION = "Wait and let time pass"
     ACTION_ALIASES = ["z"]
 
@@ -299,7 +301,7 @@ class Wait(Action):
 
 
 class Describe(Action):
-    ACTION_NAME = "describe"
+    ACTION_NAME = ActionName.DESCRIBE
     ACTION_DESCRIPTION = "Describe the current location"
     ACTION_ALIASES = ["look", "l"]
 

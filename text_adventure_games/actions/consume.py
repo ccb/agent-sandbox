@@ -1,10 +1,11 @@
 from . import base
+from ..enums import ActionName, Property
 
 # from ..things import Character  # , Item
 
 
 class Eat(base.Action):
-    ACTION_NAME = "eat"
+    ACTION_NAME = ActionName.EAT
     ACTION_DESCRIPTION = "Eat something"
 
     def __init__(self, game, command: str, actor=None):
@@ -25,7 +26,7 @@ class Eat(base.Action):
             self.item, error_message="I don't know what you want to eat"
         ):
             return False
-        elif not self.item.get_property("is_food"):
+        elif not self.item.get_property(Property.IS_FOOD):
             description = "That's not edible."
             self.parser.fail(description)
             return False
@@ -44,18 +45,18 @@ class Eat(base.Action):
         * If the food is poisoned, it causes the character to die.
         """
         self.character.remove_from_inventory(self.item)
-        self.character.set_property("is_hungry", False)
+        self.character.set_property(Property.IS_HUNGRY, False)
         description = "{name} eats the {food}.".format(
             name=self.character.name.capitalize(), food=self.item.name
         )
 
-        if self.item.get_property("taste"):
+        if self.item.get_property(Property.TASTE):
             description += " It tastes {taste}".format(
-                taste=self.item.get_property("taste")
+                taste=self.item.get_property(Property.TASTE)
             )
 
-        if self.item.get_property("is_poisonous"):
-            self.character.set_property("is_dead", True)
+        if self.item.get_property(Property.IS_POISONOUS):
+            self.character.set_property(Property.IS_DEAD, True)
             description += " The {food} is poisonous. {name} died.".format(
                 food=self.item.name, name=self.character.name.capitalize()
             )
@@ -63,7 +64,7 @@ class Eat(base.Action):
 
 
 class Drink(base.Action):
-    ACTION_NAME = "drink"
+    ACTION_NAME = ActionName.DRINK
     ACTION_DESCRIPTION = "Drink something"
 
     def __init__(self, game, command: str, actor=None):
@@ -84,7 +85,7 @@ class Drink(base.Action):
             self.item, error_message="I don't know what you want to drink"
         ):
             return False
-        elif not self.item.get_property("is_drink"):
+        elif not self.item.get_property(Property.IS_DRINK):
             description = "That's not drinkable."
             self.parser.fail(description)
             return False
@@ -103,27 +104,27 @@ class Drink(base.Action):
         * If the drink is poisoned, it causes the character to die.
         """
         self.character.remove_from_inventory(self.item)
-        self.character.set_property("is_thirsty", False)
+        self.character.set_property(Property.IS_THIRSTY, False)
         description = "{name} drinks the {drink}.".format(
             name=self.character.name.capitalize(), drink=self.item.name
         )
         self.parser.ok(description)
 
-        if self.item.get_property("taste"):
+        if self.item.get_property(Property.TASTE):
             description = "It tastes {taste}".format(
-                taste=self.item.get_property("taste")
+                taste=self.item.get_property(Property.TASTE)
             )
             self.parser.ok(description)
 
-        if self.item.get_property("is_poisonous"):
-            self.character.set_property("is_dead", True)
+        if self.item.get_property(Property.IS_POISONOUS):
+            self.character.set_property(Property.IS_DEAD, True)
             description = "The {drink} is poisonous. {name} died.".format(
                 drink=self.item.name, name=self.character.name.capitalize()
             )
             self.parser.ok(description)
 
-        if self.item.get_property("is_alcohol"):
-            self.character.set_property("is_drink", True)
+        if self.item.get_property(Property.IS_ALCOHOL):
+            self.character.set_property(Property.IS_DRINK, True)
             description = "{name} is now drunk from {drink}.".format(
                 drink=self.item.name, name=self.character.name.capitalize()
             )
@@ -131,7 +132,7 @@ class Drink(base.Action):
 
 
 class Light(base.Action):
-    ACTION_NAME = "light"
+    ACTION_NAME = ActionName.LIGHT
     ACTION_DESCRIPTION = "Light something flammable like a lamp or a candle"
 
     def __init__(self, game, command: str, actor=None):
@@ -154,11 +155,11 @@ class Light(base.Action):
             return False
         if not self.is_in_inventory(self.character, self.item):
             return False
-        if not self.item.get_property("is_lightable"):
+        if not self.item.get_property(Property.IS_LIGHTABLE):
             description = "That's not something that can be lit."
             self.parser.fail(description)
             return False
-        if self.item.get_property("is_lit"):
+        if self.item.get_property(Property.IS_LIT):
             description = "It is already lit."
             self.parser.fail(description)
             return False
@@ -169,7 +170,7 @@ class Light(base.Action):
         Effects:
         * Changes the state to lit
         """
-        self.item.set_property("is_lit", True)
+        self.item.set_property(Property.IS_LIT, True)
         description = "{name} lights the {item}. It glows.".format(
             name=self.character.name, item=self.item.name
         )
