@@ -13,10 +13,14 @@ class Go(base.Action):
     # the parser also accepts; Direction members are strings, so the list
     # type stays homogeneous.
     ACTION_ALIASES = [
-        Direction.NORTH, "n",
-        Direction.SOUTH, "s",
-        Direction.EAST, "e",
-        Direction.WEST, "w",
+        Direction.NORTH,
+        "n",
+        Direction.SOUTH,
+        "s",
+        Direction.EAST,
+        "e",
+        Direction.WEST,
+        "w",
         Direction.OUT,
         Direction.IN,
         Direction.UP,

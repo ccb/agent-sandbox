@@ -16,7 +16,6 @@ from . import actions, blocks
 from .enums import ActionName, Direction, Role
 from .reporting import Channel, Message, default_renderer, wrap_text
 
-
 # Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
 # Direction members. Up/down/in/out have no single-letter alias today; if
 # games add new shortcuts, extend here rather than in get_direction.

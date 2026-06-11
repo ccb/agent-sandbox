@@ -180,7 +180,6 @@ engine-overview.html
 # superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
 docs/superpowers/
 
-# uv runtime ignore
+# uv runtime ignore (pyproject.toml IS tracked — it's our packaging manifest)
 uv.lock
-pyproject.toml
 .python-version

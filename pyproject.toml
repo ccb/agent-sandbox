@@ -1,0 +1,73 @@
+# Packaging metadata (PEP 621). This replaces the old setup.py: everything the
+# build needs lives here declaratively, so there's no Python to execute at build
+# time. `pip install -e .` and `uv pip install -e .` both read this file.
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "text-adventure-games"
+description = "A framework for building text based RPGs"
+readme = "README.md"
+authors = [
+    { name = "Chris Callison-Burch", email = "ccb@upenn.edu" },
+    { name = "Jms Dnns" },
+]
+# Floor is 3.11 — the versions CI tests. The code uses PEP 604 unions
+# (`X | None`), so it needs 3.10+ at minimum; we only verify 3.11–3.13.
+requires-python = ">=3.11"
+# The version isn't hard-coded here; it's read from text_adventure_games.__version__
+# (see [tool.setuptools.dynamic] below). See `dynamic` for why.
+dynamic = ["version"]
+dependencies = [
+    "jupyter",
+    "graphviz",
+    "flask",
+    "rich", # colored, turn-structured terminal output (see reporting.py).
+    # Optional at runtime: the engine falls back to a plain renderer
+    # if it's missing, so a no-rich install still works.
+]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://interactive-fiction-class.org/"
+
+# Install extras with e.g. `pip install -e ".[llm]"`.
+[project.optional-dependencies]
+dev = ["black", "nbformat", "pytest"]
+openai = ["openai>=1.0", "tiktoken"]
+anthropic = ["anthropic>=0.20"]
+llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
+# Local documentation site under mkdocs/. Build/serve with
+# `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
+# published anywhere — see mkdocs/docs/index.md).
+docs = [
+    "mkdocs-material",      # theme + search + navigation
+    "mkdocstrings[python]", # API reference pulled from docstrings
+    "black",                # lets mkdocstrings pretty-format rendered signatures
+]
+
+# Read the version from the package's __version__ attribute. setuptools extracts
+# it by parsing the source statically (no import), so building never has to import
+# the package or its dependencies — the failure mode the old setup.py had when it
+# did `from text_adventure_games import __version__` at build time.
+[tool.setuptools.dynamic]
+version = { attr = "text_adventure_games.__version__" }
+
+# Equivalent of the old find_packages(): ship text_adventure_games and its
+# subpackages, but not notebooks/, tests/, or docs/ (they aren't importable
+# packages and shouldn't be installed).
+[tool.setuptools.packages.find]
+include = ["text_adventure_games*"]
