@@ -1,0 +1,76 @@
+# MkDocs configuration for the agent-sandbox documentation site.
+#
+# This site is self-contained under mkdocs/, kept separate from the repo's
+# hand-written docs in /docs (the design notes and guides read directly on
+# GitHub). This site is the generated home page + API reference.
+#
+# This site is LOCAL-ONLY. There is deliberately no deploy step (no GitHub
+# Pages, no Read the Docs, no CI publish). To read the docs, clone the repo and
+# run it from this folder:
+#
+#     pip install -e .[docs]
+#     cd mkdocs && mkdocs serve   # live site at http://127.0.0.1:8000
+#
+# `mkdocs build` writes a static site to mkdocs/site, which is git-ignored.
+# Only people with access to this repository can build or view the docs.
+
+site_name: agent-sandbox
+site_description: A research test bed for multi-agent simulated environments.
+# No site_url / repo deploy on purpose — see the note above. The site is served
+# from localhost, not hosted publicly.
+
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections   # group the nav by section headers
+    - navigation.top        # back-to-top button
+    - content.code.copy     # copy button on code blocks
+    - search.suggest
+    - toc.follow
+  palette:
+    # Light/dark toggle.
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          # The package is installed editable, but point griffe at the repo
+          # root too so the API reference resolves from this subfolder.
+          paths: [..]
+          options:
+            show_root_heading: true
+            show_source: true
+            members_order: source
+            separate_signature: true
+
+markdown_extensions:
+  - admonition              # note/warning callout boxes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences    # nested/typed fenced code blocks
+  - pymdownx.details        # collapsible admonitions
+
+nav:
+  - Home: index.md
+  - API reference:
+      - Overview: api/index.md
+      - Game loop: api/game-loop.md
+      - Turn modes: api/turn-modes.md
+      - Agents: api/agents.md
+      - LLM client: api/llm-client.md
+      - World model: api/world-model.md
