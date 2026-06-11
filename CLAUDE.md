@@ -81,8 +81,6 @@ the game from `notebooks/hw1_solution/action_castle.py`.
 
 - `Game.from_primitive()` has commented-out block deserialization, so save/load
   silently drops blocks. Save/load is incomplete — don't rely on it.
-- Mild Python 3.9-vs-3.10 syntax tension (PEP 604 `X | None` works only via
-  `from __future__ import annotations`).
 
 ## Key Patterns
 
