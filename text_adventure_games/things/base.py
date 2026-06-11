@@ -33,7 +33,11 @@ class Thing:
         thing_data = {
             "name": self.name,
             "description": self.description,
-            "commands": list(self.commands),
+            # ``commands`` is a set, so sort it for a *canonical* serialization:
+            # set iteration order depends on PYTHONHASHSEED, which would
+            # otherwise make to_primitive() (and save/load) non-deterministic
+            # across processes. Order carries no meaning here.
+            "commands": sorted(self.commands),
             "properties": self.properties,
         }
         return thing_data

@@ -34,7 +34,7 @@ Usage::
 """
 
 from .things.characters import Goal, GoalType
-
+from .transcript import record_step
 
 _DECISION_INSTRUCTION = (
     "Based on your persona, goals, and the current situation, choose a single "
@@ -95,6 +95,9 @@ class Agent:
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
+        # The model's untouched reply for the last decision (before parsing).
+        # Subclasses set this in decide(); the run transcript records it.
+        self.last_response: str | None = None
 
     def decide(self, observation: str) -> str | None:
         """Return a single command string for *observation* (or ``None``)."""
@@ -134,6 +137,7 @@ class LLMAgent(Agent):
     def decide(self, observation: str) -> str | None:
         self.last_reasoning = None
         response = self._call(observation)
+        self.last_response = response  # keep the raw reply, even when None
         if response is None:
             return None
         reasoning, command = _parse_decision(response)
@@ -201,7 +205,9 @@ class ScriptedAgent(Agent):
         self.rule = rule
 
     def decide(self, observation: str) -> str | None:
-        return self.rule(observation)
+        command = self.rule(observation)
+        self.last_response = command  # no separate raw reply for a scripted rule
+        return command
 
 
 # ----------------------------------------------------------------------
@@ -276,6 +282,33 @@ def _log_decision(character, game, agent: Agent, command: str):
     game.parser.agent_action(character.name, command)
 
 
+def _record_step(character, game, agent, observation, command, route_ok, fail_reason):
+    """Append one transcript ``StepRecord`` for this attempt.
+
+    A no-op unless a :class:`~text_adventure_games.transcript.TranscriptRecorder`
+    is attached to ``game.transcript`` -- the guard is here so we don't build the
+    system prompt when recording is off. The reasoning/raw-response come straight
+    off the agent (set in ``decide()``); ``route_ok`` and ``fail_reason`` are
+    known only here in the loop, which is why the transcript is captured here and
+    not via a display renderer.
+    """
+    if getattr(game, "transcript", None) is None:
+        return
+    system_message = getattr(agent, "_system_message", None)
+    record_step(
+        game,
+        turn=game.turn,
+        actor=character.name,
+        observation=observation,
+        system_prompt=system_message() if system_message else "",
+        raw_response=agent.last_response,
+        reasoning=agent.last_reasoning,
+        command=command,
+        route_ok=route_ok,
+        fail_reason=fail_reason,
+    )
+
+
 def decide_and_route(
     character, game, agent: Agent, observation: str, max_retries: int = 1
 ) -> bool:
@@ -296,11 +329,15 @@ def decide_and_route(
         if not command:
             return False
         _log_decision(character, game, agent, command)
-        if _route(character, game, command):
-            return True
+        ok = _route(character, game, command)
         failure_reason = (
-            getattr(game.parser, "last_fail_message", None) or "action failed"
+            None
+            if ok
+            else (getattr(game.parser, "last_fail_message", None) or "action failed")
         )
+        _record_step(character, game, agent, observation, command, ok, failure_reason)
+        if ok:
+            return True
         game.parser.agent_reflection(character.name, failure_reason)
         observation = _reflect(base, command, failure_reason)
 
@@ -334,11 +371,30 @@ def route_with_retry(
     ``1 + max_retries`` attempts, consistent with :func:`react_behavior`.
     """
     _log_decision(character, game, agent, first_command)
-    if _route(character, game, first_command):
+    ok = _route(character, game, first_command)
+    failure_reason = (
+        None
+        if ok
+        else (getattr(game.parser, "last_fail_message", None) or "action failed")
+    )
+    if getattr(game, "transcript", None) is not None:
+        # The gather-phase observation isn't threaded down here, so rebuild it
+        # against the live world as a best-effort record of this first attempt.
+        # (The bare gather-phase decision in turns.py is the one step not yet
+        # captured -- see docs/design/reproducible-runs.md.)
+        _record_step(
+            character,
+            game,
+            agent,
+            build_npc_context(character, game),
+            first_command,
+            ok,
+            failure_reason,
+        )
+    if ok:
         return True
     if max_retries <= 0:
         return False
-    failure_reason = getattr(game.parser, "last_fail_message", None) or "action failed"
     game.parser.agent_reflection(character.name, failure_reason)
     base = build_npc_context(character, game)
     observation = _reflect(base, first_command, failure_reason)
