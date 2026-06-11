@@ -233,3 +233,59 @@ def test_mock_brain_stubborn_knight_refuses():
         "Persona: I am the stubborn knight. I serve no one."
     )
     assert _mock_brain_choose(system, REQUEST_OBS) is None
+
+
+from text_adventure_games.llm_client import MockReActClient
+from text_adventure_games.npc import make_react_behavior
+
+
+def _persuasion_scene(name, persona):
+    """A field with `master` (player/speaker) and one agent-driven NPC."""
+    field = things.Location("Field", "A grassy field.")
+    master = things.Character("master", "a noble", "I command my servants.")
+    npc = things.Character(name, "a retainer", persona)
+    game = games.Game(field, master, characters=[npc])
+    field.add_character(npc)
+    mock = MockReActClient()
+    npc.set_behavior(make_react_behavior(mock))
+    return game, master, npc, mock
+
+
+def test_servant_adopts_goal_after_hearing_request():
+    game, master, servant, mock = _persuasion_scene(
+        "servant", "I am the servant. I live to serve my master."
+    )
+    # The master speaks; do_command runs the player's say, then end_turn()
+    # gives the servant its turn -- on which it hears the request and adopts.
+    game.do_command("say to servant please fetch the golden key")
+    assert any("fetch the golden key" in g.description for g in servant.goals)
+    # The decision went through the structured tool path (issue #44).
+    assert mock.tool_calls
+
+
+def test_stubborn_knight_does_not_adopt():
+    game, master, knight, mock = _persuasion_scene(
+        "knight", "I am the stubborn knight. I serve no one."
+    )
+    game.do_command("say to knight please fetch the golden key")
+    assert knight.goals == []
+
+
+def test_listener_in_other_room_never_hears():
+    field = things.Location("Field", "A grassy field.")
+    hall = things.Location("Hall", "A stone hall.")
+    field.add_connection("north", hall)
+    master = things.Character("master", "a noble", "I command my servants.")
+    servant = things.Character(
+        "servant", "a retainer", "I am the servant. I live to serve my master."
+    )
+    game = games.Game(field, master, characters=[servant])
+    hall.add_character(servant)  # another room
+    mock = MockReActClient()
+    servant.set_behavior(make_react_behavior(mock))
+
+    # A broadcast in the field reaches only the field; the servant is in the
+    # hall, so it hears nothing and adopts no goal even though it takes a turn.
+    game.do_command("say please fetch the golden key")
+    assert servant.heard == []
+    assert servant.goals == []

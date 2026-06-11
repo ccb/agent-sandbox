@@ -656,11 +656,16 @@ class MockReActClient(MockLlmClient):
         # also construct this directly with no config.
         super().__init__(responses=self._decide)
         self._verbose = bool(config and config.verbose)
+        # Records every structured decision (non-None) that _mock_brain_choose
+        # returns -- the issue #44 "tool path" analogue for offline tests.
+        self.tool_calls: list[dict] = []
 
     def _decide(self, messages, max_tokens, temperature) -> str | None:
         system = messages[0]["content"] if messages else ""
         observation = messages[-1]["content"] if messages else ""
         command = _mock_brain_choose(system, observation)
+        if command is not None:
+            self.tool_calls.append({"command": command, "system": system})
         if self._verbose:
             print(f"[mock-react] -> {command!r}")
         return command
