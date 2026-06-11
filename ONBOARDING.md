@@ -103,7 +103,8 @@ largest:
 4. `text_adventure_games/games.py` — the `Game` loop. Focus on `do_command()` and
    `end_turn()` — this is the **turn-based loop** where NPCs act each round.
 
-Then run and read `test_npc_behaviors.py` to see the NPC system exercised
+Then read `tests/test_npc_behaviors.py` and run it narrated with
+`pytest tests/test_npc_behaviors.py -s` to see the NPC system exercised
 end-to-end (the troll escalating to an attack is a nice example).
 
 > Skip `Game.from_primitive()` in `games.py` for now — it's gnarly save/load code
