@@ -191,3 +191,45 @@ def test_build_npc_context_omits_heard_when_empty():
     game, alice, bob = _two_char_room()
     obs = build_npc_context(bob, game)
     assert "You recently heard:" not in obs
+
+
+from text_adventure_games.llm_client import _mock_brain_choose
+from text_adventure_games.npc import _parse_decision
+
+
+def _action_of(reply):
+    """The command from a labeled 'Reasoning: ...\\nAction: ...' mock reply."""
+    return _parse_decision(reply)[1]
+
+
+SERVANT_SYSTEM = (
+    "You are an NPC in a text adventure game.\n"
+    "Persona: I am the servant. I live to serve my master."
+)
+REQUEST_OBS = (
+    "FIELD\nA field.\n"
+    "You recently heard:\n"
+    "  - master said to you: please fetch the golden key\n"
+)
+
+
+def test_mock_brain_servant_adopts_on_request():
+    reply = _mock_brain_choose(SERVANT_SYSTEM, REQUEST_OBS)
+    assert _action_of(reply) == "adopt goal fetch the golden key"
+
+
+def test_mock_brain_servant_silent_without_request():
+    assert _mock_brain_choose(SERVANT_SYSTEM, "FIELD\nA field.\n") is None
+
+
+def test_mock_brain_servant_does_not_readopt_when_goal_held():
+    system = SERVANT_SYSTEM + "\nGoals:\nShort-term:\n  - fetch the golden key"
+    assert _mock_brain_choose(system, REQUEST_OBS) is None
+
+
+def test_mock_brain_stubborn_knight_refuses():
+    system = (
+        "You are an NPC in a text adventure game.\n"
+        "Persona: I am the stubborn knight. I serve no one."
+    )
+    assert _mock_brain_choose(system, REQUEST_OBS) is None
