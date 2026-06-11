@@ -49,3 +49,55 @@ def test_audience_for_excludes_other_room():
     forest.add_character(carol)  # not co-located with alice
 
     assert game.audience_for(alice, "hello") == []
+
+
+def _two_char_room():
+    """alice (player/speaker) and bob (listener), co-located in a field."""
+    field = things.Location("Field", "A field.")
+    alice = things.Character("alice", "a herald", "I speak.")
+    bob = things.Character("bob", "a fellow", "I listen.")
+    game = games.Game(field, alice, characters=[bob])
+    field.add_character(bob)
+    return game, alice, bob
+
+
+def test_directed_speech_heard_as_to_you():
+    game, alice, bob = _two_char_room()
+    game.parser.parse_command("say to bob fetch the key", actor=alice)
+    assert bob.heard == ["alice said to you: fetch the key"]
+
+
+def test_broadcast_speech_heard_plainly():
+    game, alice, bob = _two_char_room()
+    game.parser.parse_command("say hello everyone", actor=alice)
+    assert bob.heard == ["alice said: hello everyone"]
+
+
+def test_speaker_does_not_hear_self():
+    game, alice, bob = _two_char_room()
+    game.parser.parse_command("say hello", actor=alice)
+    assert alice.heard == []
+
+
+def test_bystander_overhears_directed_speech():
+    field = things.Location("Field", "A field.")
+    alice = things.Character("alice", "a herald", "I speak.")
+    bob = things.Character("bob", "a fellow", "I listen.")
+    carol = things.Character("carol", "a bystander", "I overhear.")
+    game = games.Game(field, alice, characters=[bob, carol])
+    field.add_character(bob)
+    field.add_character(carol)
+    game.parser.parse_command("say to bob secret plan", actor=alice)
+    assert carol.heard == ["alice said to bob: secret plan"]
+
+
+def test_other_room_does_not_hear_broadcast():
+    field = things.Location("Field", "A field.")
+    forest = things.Location("Forest", "A forest.")
+    field.add_connection("north", forest)
+    alice = things.Character("alice", "a herald", "I speak.")
+    carol = things.Character("carol", "afar", "I am elsewhere.")
+    game = games.Game(field, alice, characters=[carol])
+    forest.add_character(carol)
+    game.parser.parse_command("say hello", actor=alice)
+    assert carol.heard == []
