@@ -148,7 +148,10 @@ Notes:
 - The loop checks the goal *each step*, so we capture **steps-to-goal**, not just
   pass/fail.
 - Runs must be reproducible offline: `LLM_PROVIDER=mock` should drive the harness
-  for free in CI, with real providers gated behind env vars.
+  for free in CI, with real providers gated behind env vars. Re-creating a
+  *real-model* run deterministically (record/replay of the LLM pipeline, seeded
+  engine RNG, provenance) is its own concern — see the companion plan
+  `docs/design/reproducible-runs.md`.
 
 ---
 
