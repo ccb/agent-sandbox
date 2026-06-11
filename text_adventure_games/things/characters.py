@@ -13,6 +13,10 @@ from ..enums import Property
 # more than is sensible when minutes_per_turn is large (issue #24).
 MAX_ACTIONS_PER_TURN = 100
 
+# How many recently-heard utterances a character retains. Kept small so the
+# buffer stays bounded; older lines fall off FIFO.
+HEARD_MAX = 5
+
 
 class GoalType(str, Enum):
     """
@@ -70,6 +74,11 @@ class Character(Thing):
         self.behavior = None
         self.agent = None
         self.goals = goals if goals else []
+        # Recently perceived utterances (e.g. speech heard this round). Scoped
+        # per-character: only lines delivered here are visible to this
+        # character, so dialogue never leaks across rooms. Runtime-only --
+        # like `behavior` and `agent`, it is not serialized.
+        self.heard: list[str] = []
 
     def to_primitive(self):
         """
@@ -246,6 +255,17 @@ class Character(Thing):
         Like `behavior`, the agent is runtime-only and is not serialized.
         """
         self.agent = agent
+
+    def hear(self, utterance: str) -> None:
+        """Record something this character perceived. The buffer keeps only the
+        most recent HEARD_MAX entries (FIFO) so it stays bounded."""
+        self.heard.append(utterance)
+        if len(self.heard) > HEARD_MAX:
+            self.heard = self.heard[-HEARD_MAX:]
+
+    def clear_heard(self) -> None:
+        """Forget everything recently heard."""
+        self.heard = []
 
     def take_turn(self, game):
         """
