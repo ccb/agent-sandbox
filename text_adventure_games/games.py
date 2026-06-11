@@ -71,6 +71,11 @@ class Game:
         # Turn counter
         self.turn = 0
 
+        # Optional run transcript (reproducible-runs). When a
+        # TranscriptRecorder is attached here before a run, the ReAct loop
+        # records one StepRecord per agent attempt; None means "don't record".
+        self.transcript = None
+
         # Event log (issue #6): append-only record of what happened each round
         self.events = []
 
