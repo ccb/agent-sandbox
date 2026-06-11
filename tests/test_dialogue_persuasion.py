@@ -149,3 +149,26 @@ def test_drop_goal_not_held_fails():
     game, bob = _solo_game()
     action = DropGoal(game, "drop goal nonexistent", actor=bob)
     assert action.check_preconditions() is False
+
+
+def test_determine_intent_routes_goal_verbs():
+    game, bob = _solo_game()
+    p = game.parser
+    # "drop goal ..." must NOT be hijacked by the inventory "drop" verb.
+    assert p.determine_intent("drop goal fetch the key", actor=bob) == "drop goal"
+    assert p.determine_intent("adopt goal fetch the key", actor=bob) == "adopt goal"
+    # A plain "drop <item>" still routes to inventory drop.
+    assert p.determine_intent("drop sword", actor=bob) == "drop"
+
+
+def test_parse_command_adopt_goal_end_to_end():
+    game, bob = _solo_game()
+    assert game.parser.parse_command("adopt goal fetch the key", actor=bob)
+    assert any(g.description == "fetch the key" for g in bob.goals)
+
+
+def test_parse_command_drop_goal_end_to_end():
+    game, bob = _solo_game()
+    bob.add_goal("fetch the key", GoalType.SHORT)
+    assert game.parser.parse_command("drop goal fetch the key", actor=bob)
+    assert bob.goals == []
