@@ -259,7 +259,8 @@ def test_servant_adopts_goal_after_hearing_request():
     # gives the servant its turn -- on which it hears the request and adopts.
     game.do_command("say to servant please fetch the golden key")
     assert any("fetch the golden key" in g.description for g in servant.goals)
-    # The decision went through the structured tool path (issue #44).
+    # The servant actually took a decision on its turn (rather than the goal
+    # having somehow pre-existed): the brain recorded a non-None command.
     assert mock.tool_calls
 
 

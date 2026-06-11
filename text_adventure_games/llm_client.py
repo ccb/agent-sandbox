@@ -656,8 +656,10 @@ class MockReActClient(MockLlmClient):
         # also construct this directly with no config.
         super().__init__(responses=self._decide)
         self._verbose = bool(config and config.verbose)
-        # Records every structured decision (non-None) that _mock_brain_choose
-        # returns -- the issue #44 "tool path" analogue for offline tests.
+        # A log of every actual decision (non-None command) the brain made,
+        # separate from the inherited `calls` log (which records *every* chat
+        # call, including the turns where the brain stays silent). Tests assert
+        # on this to confirm an NPC genuinely chose to act on its turn.
         self.tool_calls: list[dict] = []
 
     def _decide(self, messages, max_tokens, temperature) -> str | None:
