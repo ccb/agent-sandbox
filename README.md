@@ -74,6 +74,12 @@ an untested skeleton with no reflection and isn't wired into the live game); an
 **Godot 2D bridge**. See [`ROADMAP.md`](ROADMAP.md) and
 [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md).
 
+**Longer-term, lower priority** (not on the critical path — revisit as agent
+counts grow and real-provider runs get costly): LLM **cost & observability** —
+per-call token/usage accounting, Anthropic prompt caching, per-run usage logs,
+and reproducible (seeded / replayable) runs. Design sketch in
+[`docs/design/llm-cost-observability.md`](docs/design/llm-cost-observability.md).
+
 ## Setup
 
 Always work inside an **isolated virtual environment** so you don't fight your
