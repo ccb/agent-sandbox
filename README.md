@@ -53,7 +53,7 @@ text_adventure_games/      The engine (the shared framework)
   llm_parser.py            LLM-backed parser (keyword-first, LLM fallback)
   webapp/                  Flask web UI for playing in the browser
 notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework demos
-test_npc_behaviors.py      Tests for the turn-based NPC system (all passing)
+tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one
@@ -180,8 +180,8 @@ interpreting what the game prints (and how to show more or less of it).
 
 ```bash
 source venv/bin/activate
-python test_npc_behaviors.py         # the turn-based NPC behavior suite
-pytest tests/ -v                     # offline agent-layer + live-game ReAct suites
+pytest tests/ -v                     # full suite: agent layer, ReAct live game, NPC behaviors
+pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, narrated
 ```
 
 ### Onboarding assignment
