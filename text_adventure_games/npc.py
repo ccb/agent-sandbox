@@ -33,14 +33,25 @@ Usage::
     troll.set_behavior(make_hybrid_behavior(llm_client, make_troll_behavior()))
 """
 
+from .enums import ReActLabel, Role
 from .things.characters import Goal, GoalType
+
+
+# Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
+# prompt template, the parser, and any future label additions stay in sync.
+# either "thought" or "reasoning" get categorized as "_REASONING_TOKENS"
+_REASONING_TOKENS = (
+    ReActLabel.REASONING.lower(),
+    ReActLabel.THOUGHT.lower(),
+)
+_ACTION_TOKEN = ReActLabel.ACTION.lower()
 
 
 _DECISION_INSTRUCTION = (
     "Based on your persona, goals, and the current situation, choose a single "
     "game command to execute. Reply with exactly two lines:\n"
-    "Reasoning: <one short sentence explaining your choice>\n"
-    "Action: <the command, e.g. 'attack player', 'go north', 'take sword'>"
+    f"{ReActLabel.REASONING} <one short sentence explaining your choice>\n"
+    f"{ReActLabel.ACTION} <the command, e.g. 'attack player', 'go north', 'take sword'>"
 )
 
 
@@ -62,14 +73,14 @@ def _parse_decision(text: str) -> tuple[str | None, str | None]:
         if first_line is None:
             first_line = line
         lowered = line.lower()
-        if reasoning is None and lowered.startswith(("reasoning:", "thought:")):
+        if reasoning is None and lowered.startswith(_REASONING_TOKENS):
             reasoning = line.split(":", 1)[1].strip() or None
-        elif command is None and lowered.startswith("action:"):
+        elif command is None and lowered.startswith(_ACTION_TOKEN):
             command = line.split(":", 1)[1].strip() or None
     if command is None and first_line is not None:
         # No "Action:" label anywhere: treat the first line as the command,
         # unless it was a reasoning line (then there is no action this turn).
-        if not first_line.lower().startswith(("reasoning:", "thought:")):
+        if not first_line.lower().startswith(_REASONING_TOKENS):
             command = first_line
     return reasoning, command
 
@@ -174,8 +185,8 @@ class LLMAgent(Agent):
         """Call the backend, supporting both the chat protocol and callables."""
         if hasattr(self.llm_client, "chat"):
             messages = [
-                {"role": "system", "content": self._system_message()},
-                {"role": "user", "content": observation},
+                {"role": Role.SYSTEM, "content": self._system_message()},
+                {"role": Role.USER, "content": observation},
             ]
             return self.llm_client.chat(
                 messages, max_tokens=self.max_tokens, temperature=self.temperature
@@ -235,7 +246,7 @@ def build_npc_context(character, game) -> str:
         for entry in history:
             role = entry["role"]
             content = entry["content"]
-            prefix = "  Player:" if role == "user" else "  Game:"
+            prefix = "  Player:" if role == Role.USER else "  Game:"
             lines.append(f"{prefix} {content[:200]}")
 
     return "\n".join(lines)
