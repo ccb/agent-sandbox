@@ -19,7 +19,9 @@ import os
 import re
 import json
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, Union
+
+from .enums import LlmProvider
 
 # ---------------------------------------------------------------------------
 # Protocol
@@ -53,7 +55,9 @@ class LlmClient(Protocol):
 class LlmConfig:
     """Configuration for creating an LLM client."""
 
-    provider: str  # "openai" or "anthropic"
+    # Accepts an :class:`LlmProvider` member or a plain string ("openai",
+    # "anthropic", "mock") -- the two are interchangeable.
+    provider: Union[LlmProvider, str]
     api_key: str | None = None  # falls back to env vars
     model: str | None = None  # defaults per provider
     max_output_tokens: int = 256
@@ -426,19 +430,22 @@ class MockReActClient(MockLlmClient):
 # Factory
 # ---------------------------------------------------------------------------
 
+# Keyed by LlmProvider members; since LlmProvider IS a str, a lookup with the
+# raw string "openai" still resolves.
 _PROVIDERS = {
-    "openai": OpenAIClient,
-    "anthropic": AnthropicClient,
-    "mock": MockReActClient,
+    LlmProvider.OPENAI: OpenAIClient,
+    LlmProvider.ANTHROPIC: AnthropicClient,
+    LlmProvider.MOCK: MockReActClient,
 }
 
 
 def create_llm_client(config: LlmConfig) -> LlmClient:
     """Create an LLM client from a config."""
-    provider = config.provider.lower()
+    provider = str(config.provider).lower()
     if provider not in _PROVIDERS:
+        choices = [str(p) for p in _PROVIDERS]
         raise ValueError(
-            f"Unknown provider '{provider}'. Choose from: {list(_PROVIDERS.keys())}"
+            f"Unknown provider '{provider}'. Choose from: {choices}"
         )
     return _PROVIDERS[provider](config)
 

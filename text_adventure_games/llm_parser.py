@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 from text_adventure_games import parsing
+from text_adventure_games.enums import Role
 from text_adventure_games.llm_client import LlmClient, limit_context_length
 from text_adventure_games.reporting import Channel
 from text_adventure_games.things import Character, Item, Location
@@ -77,7 +78,7 @@ class LlmParser(parsing.Parser):
 
         Returns the LLM's narrated version, or *description* unchanged on failure.
         """
-        messages = [{"role": "system", "content": system_instructions}]
+        messages = [{"role": Role.SYSTEM, "content": system_instructions}]
         context = limit_context_length(
             self.command_history,
             max_tokens=self.llm.count_tokens("") + 6000,  # leave room
@@ -104,8 +105,8 @@ class LlmParser(parsing.Parser):
 
         system_content = f"{instructions}\n\n{choices_str}\nReturn just the number."
         messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": input_str},
+            {"role": Role.SYSTEM, "content": system_content},
+            {"role": Role.USER, "content": input_str},
         ]
 
         if self.verbose:

@@ -1,9 +1,10 @@
 from . import base
 from ..things import Item
+from ..enums import ActionName, Property
 
 
 class Catch_Fish(base.Action):
-    ACTION_NAME = "catch fish"
+    ACTION_NAME = ActionName.CATCH_FISH
     ACTION_DESCRIPTION = "Catch fish with a pole"
     ACTION_ALIASES = ["go fishing"]
 
@@ -30,7 +31,7 @@ class Catch_Fish(base.Action):
         """
         if not self.was_matched(self.pond, "There's no pond here."):
             return False
-        if not self.pond.get_property("has_fish"):
+        if not self.pond.get_property(Property.HAS_FISH):
             self.parser.fail("The pond has no fish.")
             return False
         no_pole_msg = f"{self.character.name} does not have a fishing pole."
@@ -65,11 +66,11 @@ class Catch_Fish(base.Action):
 
         fish = Item("fish", "a dead fish", "IT SMELLS TERRIBLE.")
         fish.add_command_hint("eat fish")
-        fish.set_property("is_food", True)
+        fish.set_property(Property.IS_FOOD, True)
         fish.set_property(
-            "taste", "disgusting! It's raw! And definitely not sashimi-grade!"
+            Property.TASTE, "disgusting! It's raw! And definitely not sashimi-grade!"
         )
-        self.pond.set_property("has_fish", False)
+        self.pond.set_property(Property.HAS_FISH, False)
         self.character.add_to_inventory(fish)
 
         d = "".join(

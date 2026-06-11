@@ -9,6 +9,7 @@ a puzzle for the player to solve before making progress).
 
 from .base import Thing
 from .items import Item
+from ..enums import Direction, OPPOSITES
 
 
 class Location(Thing):
@@ -110,47 +111,26 @@ class Location(Thing):
         return instance
 
     def add_connection(
-        self, direction: str, connected_location, travel_description: str = ""
+        self, direction, connected_location, travel_description: str = ""
     ):
         """
         Add a connection from the current location to a connected location.
-        Direction is a string that the player can use to get to the connected
-        location.  If the direction is a cardinal direction, then we also
-        automatically make a connection in the reverse direction.
+        ``direction`` can be a :class:`~text_adventure_games.enums.Direction`
+        member or a plain string (case-insensitive). If it is a well-known
+        direction (north/south/east/west/up/down/in/out/inside/outside) we
+        also wire the reverse connection automatically.
         """
-        direction = direction.lower()
+        direction = str(direction).lower()
         self.connections[direction] = connected_location
         self.travel_descriptions[direction] = travel_description
-        if direction == "north":
-            connected_location.connections["south"] = self
-            connected_location.travel_descriptions["south"] = ""
-        if direction == "south":
-            connected_location.connections["north"] = self
-            connected_location.travel_descriptions["north"] = ""
-        if direction == "east":
-            connected_location.connections["west"] = self
-            connected_location.travel_descriptions["west"] = ""
-        if direction == "west":
-            connected_location.connections["east"] = self
-            connected_location.travel_descriptions["east"] = ""
-        if direction == "up":
-            connected_location.connections["down"] = self
-            connected_location.travel_descriptions["down"] = ""
-        if direction == "down":
-            connected_location.connections["up"] = self
-            connected_location.travel_descriptions["up"] = ""
-        if direction == "in":
-            connected_location.connections["out"] = self
-            connected_location.travel_descriptions["out"] = ""
-        if direction == "out":
-            connected_location.connections["in"] = self
-            connected_location.travel_descriptions["in"] = ""
-        if direction == "inside":
-            connected_location.connections["outside"] = self
-            connected_location.travel_descriptions["outside"] = ""
-        if direction == "outside":
-            connected_location.connections["inside"] = self
-            connected_location.travel_descriptions["inside"] = ""
+        # If this direction has a canonical opposite, install the reverse
+        # connection on the other side. OPPOSITES is keyed by Direction
+        # members, which are strings (str-mixin enum), so plain-string
+        # arguments look up correctly too.
+        opposite = OPPOSITES.get(direction)
+        if opposite is not None:
+            connected_location.connections[opposite] = self
+            connected_location.travel_descriptions[opposite] = ""
 
     def get_connection(self, direction: str):
         return self.connections.get(direction, None)

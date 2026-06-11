@@ -1,10 +1,11 @@
 from . import base
 from .consume import Drink, Eat
 from .rose import Smell_Rose
+from ..enums import ActionName, Property
 
 
 class Get(base.Action):
-    ACTION_NAME = "get"
+    ACTION_NAME = ActionName.GET
     ACTION_DESCRIPTION = "Get something and add it to the inventory"
     ACTION_ALIASES = ["take"]
 
@@ -56,7 +57,7 @@ class Get(base.Action):
 
 
 class Drop(base.Action):
-    ACTION_NAME = "drop"
+    ACTION_NAME = ActionName.DROP
     ACTION_DESCRIPTION = "Drop something from the character's inventory"
     ACTION_ALIASES = ["toss", "get rid of"]
 
@@ -102,7 +103,7 @@ class Drop(base.Action):
 
 
 class Inventory(base.Action):
-    ACTION_NAME = "inventory"
+    ACTION_NAME = ActionName.INVENTORY
     ACTION_DESCRIPTION = "Check the character's inventory"
     ACTION_ALIASES = ["i"]
 
@@ -133,7 +134,7 @@ class Inventory(base.Action):
 
 
 class Examine(base.Action):
-    ACTION_NAME = "examine"
+    ACTION_NAME = ActionName.EXAMINE
     ACTION_DESCRIPTION = "Examine an item"
     ACTION_ALIASES = ["look at", "x"]
 
@@ -168,7 +169,7 @@ class Examine(base.Action):
 
 
 class Give(base.Action):
-    ACTION_NAME = "give"
+    ACTION_NAME = ActionName.GIVE
     ACTION_DESCRIPTION = "Give something to someone"
     ACTION_ALIASES = ["hand"]
 
@@ -218,8 +219,8 @@ class Give(base.Action):
         )
         self.parser.ok(description)
 
-        if self.recipient.get_property("is_hungry") and self.item.get_property(
-            "is_food"
+        if self.recipient.get_property(Property.IS_HUNGRY) and self.item.get_property(
+            Property.IS_FOOD
         ):
             command = "{name} eat {food}".format(
                 name=self.recipient.name, food=self.item.name
@@ -227,8 +228,8 @@ class Give(base.Action):
             eat = Eat(self.game, command)
             eat()
 
-        if self.recipient.get_property("is_thirsty") and self.item.get_property(
-            "is_drink"
+        if self.recipient.get_property(Property.IS_THIRSTY) and self.item.get_property(
+            Property.IS_DRINK
         ):
             command = "{name} drink {drink}".format(
                 name=self.recipient.name, drink=self.item.name
@@ -236,7 +237,7 @@ class Give(base.Action):
             drink = Drink(self.game, command)
             drink()
 
-        if self.item.get_property("scent"):
+        if self.item.get_property(Property.SCENT):
             command = "{name} smell {thing}".format(
                 name=self.recipient.name, thing=self.item.name
             )
@@ -245,7 +246,7 @@ class Give(base.Action):
 
 
 class Unlock_Door(base.Action):
-    ACTION_NAME = "unlock door"
+    ACTION_NAME = ActionName.UNLOCK_DOOR
     ACTION_DESCRIPTION = "Unlock a door"
 
     def __init__(self, game, command, actor=None):
@@ -265,11 +266,11 @@ class Unlock_Door(base.Action):
         if not self.was_matched(self.key, "There's no key here."):
             return False
         if self.has_property(
-            self.door, "is_locked", error_message="The door is not locked."
+            self.door, Property.IS_LOCKED, error_message="The door is not locked."
         ):
             return False
         return True
 
     def apply_effects(self):
-        self.door.set_property("is_locked", False)
+        self.door.set_property(Property.IS_LOCKED, False)
         self.parser.ok("Door is unlocked")
