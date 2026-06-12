@@ -9,7 +9,6 @@ import json
 import inspect
 from collections import namedtuple
 
-
 # Affordance properties surfaced in describe_for() so an agent can see, at a
 # glance, what the engine will let it do with an item. Kept as a tuple of
 # strings so a game can extend it via a new Property member without touching
