@@ -246,44 +246,34 @@ class Propose(actions.Action):
             self.propositioned.set_property("is_royal", True)
 
 
-class Wear_Crown(actions.Action):
+class Wear_Crown(actions.Wear):
+    """Wearing the crown crowns the wearer, gated on royalty.
+
+    Composes on top of the generic ``Wear`` action: the parent already
+    enforces 'matched + in inventory + wearable + not already worn' (the
+    crown is tagged ``wearable``). This subclass adds the royalty gate
+    and the ``is_crowned`` side-effect.
+    """
+
     ACTION_NAME = "wear crown"
     ACTION_DESCRIPTION = "Put a crown in your inventory atop your head"
     ACTION_ALIASES = []
 
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command)
-        self.crown = self.parser.match_item(
-            "crown", self.parser.get_items_in_scope(self.character)
-        )
-
     def check_preconditions(self) -> bool:
-        """
-        Preconditions:
-        * The crown must be in the character's inventory
-        * The the character must be a royal
-        """
-        if not self.was_matched(self.crown, "I don't see it."):
+        if not super().check_preconditions():
             return False
-        if not self.is_in_inventory(self.character, self.crown):
-            return False
-        if not self.has_property(
+        return self.has_property(
             self.character, "is_royal", "Only a royal may wear the crown."
-        ):
-            return False
-        return True
+        )
 
     def apply_effects(self):
-        """
-        The character is crowned.
-        """
-
-        description = "{character_name} has been crowned as the monarch.  They may now take their rightful seat on the throne.".format(
-            character_name=self.character.name.capitalize()
-        )
-        self.parser.ok(description)
+        super().apply_effects()
         self.character.set_property("is_crowned", True)
+        self.parser.ok(
+            "{character_name} has been crowned as the monarch. They may now take their rightful seat on the throne.".format(
+                character_name=self.character.name.capitalize()
+            )
+        )
 
 
 class Sit_On_Throne(actions.Action):
@@ -780,7 +770,7 @@ def build_game(llm_client=None) -> ActionCastle:
         "a strange candle",
         "THE CANDLE IS COVERED IN STRANGE RUNES.",
     )
-    candle.set_property("is_lightable", True)
+    candle.set_property("flammable", True)
     candle.set_property("is_lit", False)
     candle.add_command_hint("light candle")
     candle.add_command_hint("read runes")
@@ -855,6 +845,7 @@ def build_game(llm_client=None) -> ActionCastle:
     # Guard's sword
     sword = things.Item("sword", "a short sword", "A SHARP SHORT SWORD.")
     sword.set_property("is_weapon", True)
+    sword.set_property("wieldable", True)
     guard.add_to_inventory(sword)
 
     # Princess
@@ -881,6 +872,7 @@ def build_game(llm_client=None) -> ActionCastle:
 
     # Ghost's crown
     crown = things.Item("crown", "a crown", "A CROWN FIT FOR A KING.")
+    crown.set_property("wearable", True)
     crown.add_command_hint("wear crown")
     ghost.add_to_inventory(crown)
 
@@ -924,7 +916,7 @@ def build_game(llm_client=None) -> ActionCastle:
 
     # Player's lamp
     lamp = things.Item("lamp", "a lamp", "A LAMP.")
-    lamp.set_property("is_lightable", True)
+    lamp.set_property("flammable", True)
     lamp.set_property("is_lit", False)
     lamp.add_command_hint("light lamp")
     player.add_to_inventory(lamp)

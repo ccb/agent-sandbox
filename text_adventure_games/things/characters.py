@@ -39,12 +39,12 @@ class Character(Thing):
       I do a job that many people shun because of my contact with death. I am
       very lonely and wish I had someone to talk to who isn't dead.")
     * A location (the place in the game where they currently are)
-    * An inventory of items that they are carrying (a dictionary mapping from
+    * An inventory of items the character is carrying (a dictionary mapping
       item name to Item instance)
-    * Optionally a behavior (sequential mode) and/or an agent (simultaneous
-      mode) that decides what the character does each turn
-    * TODO: A dictionary of items that they are currently wearing
-    * TODO: A dictionary of items that they are currently weilding
+    * ``worn`` and ``wielded``: same shape as ``inventory``, for items
+      currently equipped. The three dicts are mutually exclusive -- an item
+      lives in exactly one of them at a time. Moving an item between slots
+      is done with ``wear``/``take_off``/``wield``/``unwield``.
     """
 
     def __init__(
@@ -55,6 +55,8 @@ class Character(Thing):
         self.set_property(Property.IS_DEAD, False)
         self.persona = persona
         self.inventory = {}
+        self.worn = {}
+        self.wielded = {}
         self.location = None
         self.behavior = None
         self.agent = None
@@ -72,13 +74,15 @@ class Character(Thing):
         thing_data = super().to_primitive()
         thing_data["persona"] = self.persona
 
-        inventory = {}
-        for k, v in self.inventory.items():
-            if hasattr(v, "to_primitive"):
-                inventory[k] = v.to_primitive()
-            else:
-                inventory[k] = v
-        thing_data["inventory"] = inventory
+        def _serialize(slot):
+            out = {}
+            for k, v in slot.items():
+                out[k] = v.to_primitive() if hasattr(v, "to_primitive") else v
+            return out
+
+        thing_data["inventory"] = _serialize(self.inventory)
+        thing_data["worn"] = _serialize(self.worn)
+        thing_data["wielded"] = _serialize(self.wielded)
 
         if self.location and hasattr(self.location, "name"):
             thing_data["location"] = self.location.name
@@ -102,6 +106,12 @@ class Character(Thing):
         instance.location = data.get("location", None)
         instance.inventory = {
             k: Item.from_primitive(v) for k, v in data["inventory"].items()
+        }
+        instance.worn = {
+            k: Item.from_primitive(v) for k, v in data.get("worn", {}).items()
+        }
+        instance.wielded = {
+            k: Item.from_primitive(v) for k, v in data.get("wielded", {}).items()
         }
         instance.goals = [
             Goal(d["description"], GoalType(d["type"]), d.get("done", False))
@@ -131,6 +141,32 @@ class Character(Thing):
         """
         item.owner = None
         self.inventory.pop(item.name)
+
+    def wear(self, item):
+        """Move an item from ``inventory`` into ``worn``."""
+        self.inventory.pop(item.name)
+        self.worn[item.name] = item
+
+    def take_off(self, item):
+        """Move an item from ``worn`` back into ``inventory``."""
+        self.worn.pop(item.name)
+        self.inventory[item.name] = item
+
+    def wield(self, item):
+        """Move an item from ``inventory`` into ``wielded``."""
+        self.inventory.pop(item.name)
+        self.wielded[item.name] = item
+
+    def unwield(self, item):
+        """Move an item from ``wielded`` back into ``inventory``."""
+        self.wielded.pop(item.name)
+        self.inventory[item.name] = item
+
+    def is_worn(self, item) -> bool:
+        return item.name in self.worn
+
+    def is_wielded(self, item) -> bool:
+        return item.name in self.wielded
 
     def set_behavior(self, fn):
         """

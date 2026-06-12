@@ -77,9 +77,21 @@ class Drop(base.Action):
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the character's inventory
+        * The item must be in the character's inventory (not worn or wielded)
         """
         if not self.was_matched(self.item, "I don't see it."):
+            return False
+        if self.character.is_worn(self.item):
+            self.parser.fail(
+                f"{self.character.name.capitalize()} is wearing the "
+                f"{self.item.name}. Take it off first."
+            )
+            return False
+        if self.character.is_wielded(self.item):
+            self.parser.fail(
+                f"{self.character.name.capitalize()} is wielding the "
+                f"{self.item.name}. Stow it first."
+            )
             return False
         if not self.is_in_inventory(self.character, self.item):
             return False
@@ -186,17 +198,32 @@ class Give(base.Action):
             position="after",
             exclude=self.giver,
         )
-        self.item = self.parser.match_item(
-            command, self.giver.inventory, hint="item being given"
-        )
+        giver_held = {
+            **self.giver.inventory,
+            **self.giver.worn,
+            **self.giver.wielded,
+        }
+        self.item = self.parser.match_item(command, giver_held, hint="item being given")
 
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the giver's inventory
+        * The item must be in the giver's inventory (not worn or wielded)
         * The character must be at the same location as the recipient
         """
         if not self.was_matched(self.item, "I don't see it."):
+            return False
+        if self.giver.is_worn(self.item):
+            self.parser.fail(
+                f"{self.giver.name.capitalize()} is wearing the "
+                f"{self.item.name}. Take it off first."
+            )
+            return False
+        if self.giver.is_wielded(self.item):
+            self.parser.fail(
+                f"{self.giver.name.capitalize()} is wielding the "
+                f"{self.item.name}. Stow it first."
+            )
             return False
         if not self.is_in_inventory(self.giver, self.item):
             return False
@@ -220,7 +247,7 @@ class Give(base.Action):
         self.parser.ok(description)
 
         if self.recipient.get_property(Property.IS_HUNGRY) and self.item.get_property(
-            Property.IS_FOOD
+            Property.EDIBLE
         ):
             command = "{name} eat {food}".format(
                 name=self.recipient.name, food=self.item.name
@@ -229,7 +256,7 @@ class Give(base.Action):
             eat()
 
         if self.recipient.get_property(Property.IS_THIRSTY) and self.item.get_property(
-            Property.IS_DRINK
+            Property.DRINKABLE
         ):
             command = "{name} drink {drink}".format(
                 name=self.recipient.name, drink=self.item.name

@@ -1,3 +1,17 @@
+## 2026-06-10
+**Focus:** focusing on implementing enums and structuring the data for the engine in issue #40
+
+**Done today:**
+- migrating the codebase to use tag-based affordances based on the LIGHT dataset, i.e., `edible` instead of `is_food`
+- adding a `worn` dictionary and a `wield` dictionary, conforming to the standards of LIGHT by removing items in either to be removed from the inventory
+- continued structuring the rest of the codebase using enums
+- looked into `PyMuPDF` for #29 in order to both parse the text and keep the text color
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- developing issue #29 further
 ## 2026-06-08
 **Focus:** working on issue #23 and looking into logging for triggers
 

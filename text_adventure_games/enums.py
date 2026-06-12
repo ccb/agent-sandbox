@@ -54,18 +54,26 @@ class Property(_StrEnum):
     IS_INVULNERABLE = "is_invulerable"  # legacy misspelling kept for compat
     IS_HUNGRY = "is_hungry"
     IS_THIRSTY = "is_thirsty"
+    IS_DRUNK = "is_drunk"
     CHARACTER_TYPE = "character_type"
     EMOTIONAL_STATE = "emotional_state"
 
-    # Item flags
+    # Affordances -- yes/no capabilities of an item. Read by action
+    # preconditions ("is this drinkable?") and surfaced to agents as an
+    # affordance list. Games may add their own affordances by passing a
+    # plain string to set_property.
     GETTABLE = "gettable"
+    EDIBLE = "edible"
+    DRINKABLE = "drinkable"
+    FLAMMABLE = "flammable"
+    WEARABLE = "wearable"
+    WIELDABLE = "wieldable"
+
+    # Other item flags (state or descriptors, not affordances)
     IS_WEAPON = "is_weapon"
     IS_FRAGILE = "is_fragile"
-    IS_FOOD = "is_food"
-    IS_DRINK = "is_drink"
     IS_ALCOHOL = "is_alcohol"
     IS_POISONOUS = "is_poisonous"
-    IS_LIGHTABLE = "is_lightable"
     IS_LIT = "is_lit"
     TASTE = "taste"
     SCENT = "scent"
@@ -157,6 +165,12 @@ class ActionName(_StrEnum):
     EAT = "eat"
     DRINK = "drink"
     LIGHT = "light"
+
+    # Equipment
+    WEAR = "wear"
+    TAKE_OFF = "take off"
+    WIELD = "wield"
+    UNWIELD = "unwield"
 
     # Bundled-game actions (Action Castle quest items)
     CATCH_FISH = "catch fish"
