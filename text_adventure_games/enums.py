@@ -25,10 +25,10 @@ from enum import Enum
 class _StrEnum(str, Enum):
     """``str`` + ``Enum`` mixin.
 
-    Two reasons we don't use ``enum.StrEnum`` from 3.11:
-    1) the project supports Python 3.9 (see pyproject ``requires-python``);
-    2) ``str.__str__`` on ``StrEnum`` returns the value (``"north"``), which
-       is what we want — and the mixin form gives the same behavior on 3.9+.
+    We use the explicit ``(str, Enum)`` mixin rather than ``enum.StrEnum``
+    so the behavior is identical on every supported Python version:
+    ``str(member)`` and f-strings render the value (``"north"``), and
+    members compare equal to plain strings and work as dict keys.
     """
 
     def __str__(self) -> str:  # so f-strings render the value, not "Direction.NORTH"
