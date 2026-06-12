@@ -173,6 +173,12 @@ class Parser:
             return ActionName.DESCRIBE
         elif "examine " in command or command.startswith("x "):
             return ActionName.EXAMINE
+        elif command.startswith("take off") or command.startswith("remove "):
+            # Must precede the "take "/get branch -- "take " is a substring of
+            # "take off" and would otherwise route equipment removal to Get.
+            return ActionName.TAKE_OFF
+        elif command.startswith("stow ") or command.startswith("unequip "):
+            return ActionName.UNWIELD
         elif "take " in command or "get " in command:
             return ActionName.GET
         elif "light" in command:

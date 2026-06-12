@@ -177,7 +177,7 @@ def test_actor_eats_own_food():
     player = things.Character("player", "the player", "I explore.")
     npc = things.Character("guard", "a guard", "I patrol.")
     bread = things.Item("bread", "a loaf of bread")
-    bread.set_property("is_food", True)
+    bread.set_property("edible", True)
     game = games.Game(room, player, characters=[npc])
     room.add_character(npc)
     npc.add_to_inventory(bread)
