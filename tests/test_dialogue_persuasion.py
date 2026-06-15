@@ -261,7 +261,11 @@ def test_servant_adopts_goal_after_hearing_request():
     assert any("fetch the golden key" in g.description for g in servant.goals)
     # The servant actually took a decision on its turn (rather than the goal
     # having somehow pre-existed): the brain recorded a non-None command.
-    assert mock.tool_calls
+    # `decisions` logs only real (non-None) commands, regardless of whether the
+    # turn flowed through the structured `call_tool` path or the `chat`
+    # fallback -- unlike `tool_calls`, which records every call_tool invocation
+    # including the silent turns.
+    assert mock.decisions
 
 
 def test_stubborn_knight_does_not_adopt():
