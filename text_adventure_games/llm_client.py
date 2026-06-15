@@ -647,8 +647,10 @@ class MockReActClient(MockLlmClient):
     in-character command via :func:`_mock_brain_choose`. Deterministic, so the
     integration tests can rely on it.
 
-    Inherits ``calls`` recording from :class:`MockLlmClient`, so tests can
-    assert on exactly what the agent sent.
+    Inherits ``calls`` and ``tool_calls`` recording from
+    :class:`MockLlmClient`, so tests can assert on exactly what the agent sent.
+    Adds ``decisions``: a log of the brain's actual (non-None) commands,
+    appended on whichever route ran -- ``_decide`` or ``call_tool``.
     """
 
     def __init__(self, config: LlmConfig | None = None):
@@ -656,18 +658,21 @@ class MockReActClient(MockLlmClient):
         # also construct this directly with no config.
         super().__init__(responses=self._decide)
         self._verbose = bool(config and config.verbose)
-        # A log of every actual decision (non-None command) the brain made,
-        # separate from the inherited `calls` log (which records *every* chat
-        # call, including the turns where the brain stays silent). Tests assert
-        # on this to confirm an NPC genuinely chose to act on its turn.
-        self.tool_calls: list[dict] = []
+        # A log of every actual decision (non-None command) the brain made.
+        # This is distinct from the inherited `tool_calls` log, which records
+        # *every* `call_tool` invocation (including the silent turns where the
+        # brain declines), and from `calls`, which records every `chat` call.
+        # Both `_decide` and `call_tool` append here on a non-None command, so
+        # `decisions` is accurate regardless of which route the agent took.
+        # Tests assert on this to confirm an NPC genuinely chose to act.
+        self.decisions: list[dict] = []
 
     def _decide(self, messages, max_tokens, temperature) -> str | None:
         system = messages[0]["content"] if messages else ""
         observation = messages[-1]["content"] if messages else ""
         command = _mock_brain_choose(system, observation)
         if command is not None:
-            self.tool_calls.append({"command": command, "system": system})
+            self.decisions.append({"command": command, "system": system})
         if self._verbose:
             print(f"[mock-react] -> {command!r}")
         return command
@@ -700,6 +705,9 @@ class MockReActClient(MockLlmClient):
         reasoning, command = _split_decision(decision)
         if not command:
             return None
+        # Record the real decision (mirrors `_decide`), so `decisions` is
+        # accurate whether the agent took the structured or the chat route.
+        self.decisions.append({"command": command, "system": system})
         verb, rest = _split_command(command, tool)
         return {"reasoning": reasoning, "action": verb, "arguments": rest}
 
