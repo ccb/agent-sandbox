@@ -7,6 +7,7 @@ from .base import Thing
 from .items import Item
 from .locations import Location
 from ..enums import Property
+from ..knowledge import Belief, Knowledge
 
 # Hard cap on actions one NPC may take in a single turn, regardless of budget.
 # Guards against a behavior that keeps reporting cheap actions from looping far
@@ -79,6 +80,10 @@ class Character(Thing):
         # character, so dialogue never leaks across rooms. Runtime-only --
         # like `behavior` and `agent`, it is not serialized.
         self.heard: list[str] = []
+        # What this character believes about the world (issue #45). Empty by
+        # default, so existing games/characters are unchanged. Distinct from
+        # memory (#37): knowledge is the current world-model; memory is the log.
+        self.knowledge = Knowledge(owner=name)
 
     def to_primitive(self):
         """
@@ -111,6 +116,7 @@ class Character(Thing):
             {"description": g.description, "type": g.type.value, "done": g.done}
             for g in self.goals
         ]
+        thing_data["knowledge"] = self.knowledge.to_primitive()
         return thing_data
 
     @classmethod
@@ -137,6 +143,10 @@ class Character(Thing):
             Goal(d["description"], GoalType(d["type"]), d.get("done", False))
             for d in data.get("goals", [])
         ]
+        # .get default keeps save files written before issue #45 loadable.
+        instance.knowledge = Knowledge.from_primitive(
+            data.get("knowledge", {"owner": data["name"], "beliefs": []})
+        )
         return instance
 
     def add_to_inventory(self, item):
@@ -320,3 +330,13 @@ class Character(Thing):
         """
         self.goals = [g for g in self.goals if g.type != type]
         self.goals.extend(Goal(d, type) for d in descriptions)
+
+    def add_belief(
+        self, text: str, topic: str | None = None, learned_turn: int | None = None
+    ) -> Belief:
+        """Add a belief to this character's knowledge (mirrors add_goal).
+
+        See text_adventure_games/knowledge.py. ``topic`` doubles as a key that
+        unlocks perception of a Thing flagged with a matching ``secret_topic``.
+        """
+        return self.knowledge.add(text, topic=topic, learned_turn=learned_turn)
