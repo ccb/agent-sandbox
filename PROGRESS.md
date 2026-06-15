@@ -12,7 +12,7 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 | 🟠 Needs conflict resolution | [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
 | 🟠 Needs conflict resolution | [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
 | 🟠 Needs conflict resolution | [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) | [@aking526](https://github.com/aking526) |
-| 🟠 Mergeability unverified | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) | [@aking526](https://github.com/aking526) |
+| 🟠 Needs conflict resolution | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
@@ -44,9 +44,12 @@ and [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md). This file tracks *status* only.
 | 💡 Backlog | Open issue, no PR yet |
 | ✅ Shipped | Merged to `main` — see the section below |
 
-**Maintenance:** update the relevant row when a PR opens, lands, or stalls. When an item
-merges, move it from the in-flight table to the Shipped section. Last synced with GitHub
-on **2026-06-15**.
+**Maintenance:** the in-flight **Status** cells and the synced date below are refreshed
+automatically — a Claude Code hook (`.claude/hooks/update_progress.py`) re-queries GitHub
+after every `git commit` and rewrites each PR-backed row's status. Everything else is
+hand-curated: update the title/owner when a PR opens, add a row when work starts, and when
+an item merges move it from this table to the Shipped section (the hook flags merged PRs but
+leaves the move to you). Last synced with GitHub on **2026-06-15**.
 
 ---
 
