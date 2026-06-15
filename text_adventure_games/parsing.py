@@ -169,6 +169,13 @@ class Parser:
             # contain other command words), and this also handles the "speak"
             # alias, which is not auto-registered.
             return ActionName.SAY
+        elif command.startswith("adopt goal"):
+            # Goal-management verbs are matched explicitly: "drop goal ..." must
+            # win over the inventory "drop" verb below, and both must beat the
+            # generic longest-match fallback.
+            return "adopt goal"
+        elif command.startswith("drop goal"):
+            return "drop goal"
         elif self.get_direction(command, character.location):
             # Check for the direction intent
             return ActionName.GO

@@ -615,6 +615,26 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
             "haunt player",
         )
 
+    # Persuadable servant: when its master directly asks it to fetch the key,
+    # adopting that goal fits its servile persona. This is the issue #46
+    # demonstration -- an utterance changing a listener agent's goals. The
+    # `already` guard reads the agent's own active goals (rendered into the
+    # system message) so it won't re-adopt a goal it already holds.
+    if "i am the servant" in system:
+        already = "fetch the golden key" in system
+        wants = "said to you: please fetch the golden key" in observation
+        if wants and not already:
+            return _decision(
+                "My master asked me directly, and serving is who I am.",
+                "adopt goal fetch the golden key",
+            )
+        return None
+
+    # Stubborn knight: bound by its own oath, it refuses others' requests.
+    # Hearing the same plea changes nothing -- persuasion is persona-gated.
+    if "i am the stubborn knight" in system:
+        return None
+
     return None  # unknown NPC: safest move is no move
 
 
@@ -636,11 +656,18 @@ class MockReActClient(MockLlmClient):
         # also construct this directly with no config.
         super().__init__(responses=self._decide)
         self._verbose = bool(config and config.verbose)
+        # A log of every actual decision (non-None command) the brain made,
+        # separate from the inherited `calls` log (which records *every* chat
+        # call, including the turns where the brain stays silent). Tests assert
+        # on this to confirm an NPC genuinely chose to act on its turn.
+        self.tool_calls: list[dict] = []
 
     def _decide(self, messages, max_tokens, temperature) -> str | None:
         system = messages[0]["content"] if messages else ""
         observation = messages[-1]["content"] if messages else ""
         command = _mock_brain_choose(system, observation)
+        if command is not None:
+            self.tool_calls.append({"command": command, "system": system})
         if self._verbose:
             print(f"[mock-react] -> {command!r}")
         return command
