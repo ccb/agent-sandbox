@@ -24,10 +24,24 @@ class Action:
     ACTION_DESCRIPTION: str = None
     ACTION_ALIASES: list[str] = None
 
+    # In-game minutes this action consumes (issue #24). None means "no declared
+    # cost" — the NPC turn loop treats that as a full per-turn budget, so an
+    # undeclared action takes one action per turn, exactly as before durations
+    # existed. Subclasses set a positive integer to make the action cheaper.
+    DURATION: int = None
+
     def __init__(self, game, actor=None):
         self.game = game
         self.parser = game.parser
         self.actor = actor
+
+    def get_duration(self):
+        """In-game minutes this action consumes, or None for no declared cost.
+
+        Override point for dynamic costs (e.g. an LLM-estimated duration);
+        the default simply returns the declared ``DURATION``.
+        """
+        return self.DURATION
 
     def acting_character(self, command, **kwargs):
         """Resolve who performs this action: the explicit actor if one was

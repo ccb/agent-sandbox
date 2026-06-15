@@ -60,6 +60,7 @@ class Pick_Rose(base.Action):
 class Smell_Rose(base.Action):
     ACTION_NAME = ActionName.SMELL_ROSE
     ACTION_DESCRIPTION = "Smell the rose"
+    DURATION = 1  # a quick sniff (issue #24)
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)

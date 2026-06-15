@@ -135,7 +135,7 @@ def test_mock_brain_replies_are_labeled():
     """Every mock decision uses the labeled two-line format the real LLM is
     instructed to use, so the reasoning is visible in the agent trace."""
     reply = _mock_brain_choose(TROLL_SYSTEM, DRAWBRIDGE_OBS)
-    reasoning, command = _parse_decision(reply)
+    reasoning, command, _duration = _parse_decision(reply)
     assert reply.startswith("Reasoning: ")
     assert "\nAction: " in reply
     assert reasoning, "mock reply has no reasoning"

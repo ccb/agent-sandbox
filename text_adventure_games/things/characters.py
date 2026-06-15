@@ -8,6 +8,11 @@ from .items import Item
 from .locations import Location
 from ..enums import Property
 
+# Hard cap on actions one NPC may take in a single turn, regardless of budget.
+# Guards against a behavior that keeps reporting cheap actions from looping far
+# more than is sensible when minutes_per_turn is large (issue #24).
+MAX_ACTIONS_PER_TURN = 100
+
 
 class GoalType(str, Enum):
     """
@@ -189,11 +194,34 @@ class Character(Thing):
 
     def take_turn(self, game):
         """
-        Called by Game.end_turn() for each living NPC. Delegates to the
-        behavior function if one has been set.
+        Called by Game.end_turn() for each living NPC. Runs the character's
+        behavior within a per-turn time budget (issue #24).
+
+        The budget equals the clock's minutes_per_turn. A behavior reports the
+        in-game minutes it spent by returning that number; the character keeps
+        acting while the budget lasts. A behavior that returns None/falsy is
+        done for the turn — this is how legacy behaviors (which return None)
+        stay at exactly one action per turn. The first action always runs, even
+        if it overruns the budget, so an NPC is never starved.
+
+        With no clock there is no budget, so exactly one action runs, as before.
         """
-        if self.behavior is not None:
-            self.behavior(self, game)
+        if self.behavior is None:
+            return
+
+        budget = game.clock.minutes_per_turn if game.clock is not None else None
+        remaining = budget
+        for _ in range(MAX_ACTIONS_PER_TURN):
+            spent = self.behavior(self, game)
+            if not spent:  # None/0/False -> nothing more to do this turn
+                break
+            if remaining is None:  # no clock -> single action per turn
+                break
+            if game.is_game_over() or self.get_property(Property.IS_DEAD):
+                break
+            remaining -= spent
+            if remaining <= 0:
+                break
 
     def add_goal(self, description: str, type: GoalType) -> Goal:
         goal = Goal(description, type)
