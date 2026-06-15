@@ -27,6 +27,16 @@ class Item(Thing):
         # It might be in a character's inventory
         self.owner = None
 
+        # Container support (issue #43). A plain item is not a container.
+        # When `is_container` is True, `contents` holds items by name and
+        # `capacity` is the max item count (None means unlimited).
+        self.capacity = None
+        self.contents = {}
+
+        # The container Item currently holding this one (None if held in hands
+        # or sitting at a location).
+        self.container = None
+
     def to_primitive(self):
         """
         Converts this object into a dictionary of values the can be safely
@@ -53,6 +63,20 @@ class Item(Thing):
         elif self.owner and isinstance(self.owner, str):
             thing_data["owner"] = self.owner
 
+        thing_data["capacity"] = self.capacity
+        if self.contents:
+            contents = {}
+            for k, v in self.contents.items():
+                contents[k] = v.to_primitive() if hasattr(v, "to_primitive") else v
+            thing_data["contents"] = contents
+        # `container` is a back-reference to the parent container item. It is
+        # implied by membership in `contents` and would create a circular
+        # reference if serialized recursively, so we store only the name.
+        if self.container and hasattr(self.container, "name"):
+            thing_data["container"] = self.container.name
+        elif self.container and isinstance(self.container, str):
+            thing_data["container"] = self.container
+
         return thing_data
 
     @classmethod
@@ -66,4 +90,52 @@ class Item(Thing):
             instance.location = data["location"]
         if "owner" in data:
             instance.owner = data["owner"]
+        instance.capacity = data.get("capacity", None)
+        if "contents" in data:
+            instance.contents = {
+                k: Item.from_primitive(v) for k, v in data["contents"].items()
+            }
+        # `container` is a runtime back-reference; we intentionally do not
+        # restore it here (the field stays None) to avoid storing a stale
+        # string reference and to match the test expectation.
         return instance
+
+    def make_container(self, capacity=None):
+        """Declare this item a container that holds up to `capacity` items
+        (None = unlimited). Returns self so authors can chain."""
+        self.set_property("is_container", True)
+        self.capacity = capacity
+        return self
+
+    def set_owner(self, owner):
+        """Set this item's carrying owner, propagating to any contained items
+        so a whole loaded container changes hands at once."""
+        self.owner = owner
+        for item in self.contents.values():
+            item.set_owner(owner)
+
+    def current_count(self):
+        """Number of items currently inside this container."""
+        return len(self.contents)
+
+    def has_space(self):
+        """True if another item can be added (always True when unlimited)."""
+        return self.capacity is None or self.current_count() < self.capacity
+
+    def is_full(self):
+        return not self.has_space()
+
+    def add_item(self, item):
+        """Put `item` inside this container. Removes it from any location and
+        records the back-reference and carrying owner."""
+        if item.location is not None and hasattr(item.location, "remove_item"):
+            item.location.remove_item(item)
+            item.location = None
+        self.contents[item.name] = item
+        item.container = self
+        item.set_owner(self.owner)
+
+    def remove_item(self, item):
+        """Take `item` out of this container, clearing its back-reference."""
+        self.contents.pop(item.name, None)
+        item.container = None
