@@ -4,24 +4,24 @@
 
 Everything currently open — PRs and unclaimed issues — in one table, ordered by status.
 
-| Status | Item | Title | Issue |
-| --- | --- | --- | --- |
-| 🟢 Ready to merge | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — |
-| 🟢 Ready to merge | [#52](https://github.com/ccb/agent-sandbox/pull/52) | Container / capacity inventory mechanics | [#43](https://github.com/ccb/agent-sandbox/issues/43) |
-| 🟠 Needs conflict resolution | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — |
-| 🟠 Needs conflict resolution | [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) |
-| 🟠 Needs conflict resolution | [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) |
-| 🟠 Needs conflict resolution | [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) |
-| 🟠 Mergeability unverified | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) |
-| 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
-| 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
-| 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) |
-| 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) |
-| 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — |
-| 🔵 In design (doc merged) | [`output-and-trace-rendering.md`](docs/design/output-and-trace-rendering.md) | Output & trace rendering — core landed, see §12 for remaining stages | — |
-| 💡 Backlog (no PR) | [#63](https://github.com/ccb/agent-sandbox/issues/63) | Prioritize & approve the agent memory layer (Phase 2) | — |
-| 💡 Backlog (no PR) | [#47](https://github.com/ccb/agent-sandbox/issues/47) | Multi-step planning benchmark | — |
-| 💡 Backlog (no PR) | [#41](https://github.com/ccb/agent-sandbox/issues/41) | Instantiate described-but-nonexistent objects from LLM room descriptions | — |
+| Status | Item | Title | Issue | Owner |
+| --- | --- | --- | --- | --- |
+| 🟢 Ready to merge | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — | [@aking526](https://github.com/aking526) |
+| 🟢 Ready to merge | [#52](https://github.com/ccb/agent-sandbox/pull/52) | Container / capacity inventory mechanics | [#43](https://github.com/ccb/agent-sandbox/issues/43) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
+| 🟠 Needs conflict resolution | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
+| 🟠 Needs conflict resolution | [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
+| 🟠 Needs conflict resolution | [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
+| 🟠 Needs conflict resolution | [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) | [@aking526](https://github.com/aking526) |
+| 🟠 Mergeability unverified | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
+| 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
+| 🔵 In design (doc merged) | [`output-and-trace-rendering.md`](docs/design/output-and-trace-rendering.md) | Output & trace rendering — core landed, see §12 for remaining stages | — | [@aking526](https://github.com/aking526) |
+| 💡 Backlog (no PR) | [#63](https://github.com/ccb/agent-sandbox/issues/63) | Prioritize & approve the agent memory layer (Phase 2) | — | [@aking526](https://github.com/aking526) |
+| 💡 Backlog (no PR) | [#47](https://github.com/ccb/agent-sandbox/issues/47) | Multi-step planning benchmark | — | [@aking526](https://github.com/aking526) |
+| 💡 Backlog (no PR) | [#41](https://github.com/ccb/agent-sandbox/issues/41) | Instantiate described-but-nonexistent objects from LLM room descriptions | — | [@0frankie](https://github.com/0frankie) |
 
 ---
 
