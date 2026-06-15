@@ -41,9 +41,72 @@ class LlmClient(Protocol):
         """Send a chat completion request. Returns text or None on failure."""
         ...
 
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        """Force the model to call the single named *tool* and return its
+        arguments as a dict (validated by the provider), or None if tool
+        calling is unavailable or no tool call came back."""
+        ...
+
     def count_tokens(self, text: str) -> int:
         """Estimate the number of tokens in *text*."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# Normalized tool translation
+# ---------------------------------------------------------------------------
+#
+# A "normalized" tool is a provider-agnostic dict:
+#   {"name": str, "description": str, "parameters": <JSON Schema object>}
+# These helpers translate it to each provider's wire shape. Keeping the
+# translation in one place means tool *schemas* (built elsewhere) never need to
+# know which provider is in use.
+
+
+def _to_openai_tool(tool: dict) -> dict:
+    """Translate a normalized tool dict to OpenAI's function-tool shape."""
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool["parameters"],
+        },
+    }
+
+
+def _to_anthropic_tool(tool: dict) -> dict:
+    """Translate a normalized tool dict to Anthropic's tool shape."""
+    return {
+        "name": tool["name"],
+        "description": tool.get("description", ""),
+        "input_schema": tool["parameters"],
+    }
+
+
+# The normalized tool for picking one option from a numbered list (used by the
+# LLM parser to resolve intent / item / character / direction). Returning a
+# validated integer index replaces scraping a number out of prose.
+SELECT_OPTION_TOOL = {
+    "name": "select_option",
+    "description": "Select the option that best matches the input.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "integer",
+                "description": "0-based index of the chosen option",
+            },
+        },
+        "required": ["index"],
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +190,36 @@ class OpenAIClient:
                 print(f"OpenAI API error: {e}")
             return None
 
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        try:
+            if self._verbose:
+                print(json.dumps(messages, indent=2))
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=[_to_openai_tool(tool)],
+                tool_choice={
+                    "type": "function",
+                    "function": {"name": tool["name"]},
+                },
+            )
+            tool_calls = response.choices[0].message.tool_calls
+            if not tool_calls:
+                return None
+            return json.loads(tool_calls[0].function.arguments)
+        except Exception as e:
+            if self._verbose:
+                print(f"OpenAI tool-call error: {e}")
+            return None
+
     def count_tokens(self, text: str) -> int:
         tokenizer = self._get_tokenizer()
         if tokenizer is not None:
@@ -196,6 +289,50 @@ class AnthropicClient:
                 print(f"Anthropic API error: {e}")
             return None
 
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        try:
+            # Same system-message extraction as chat().
+            system_text = None
+            chat_messages = []
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_text = msg["content"]
+                else:
+                    content = msg["content"]
+                    if msg["role"] == "assistant":
+                        content = content.rstrip()
+                    chat_messages.append({"role": msg["role"], "content": content})
+
+            if self._verbose:
+                print(json.dumps(messages, indent=2))
+
+            kwargs = {
+                "model": self._model,
+                "messages": chat_messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "tools": [_to_anthropic_tool(tool)],
+                "tool_choice": {"type": "tool", "name": tool["name"]},
+            }
+            if system_text:
+                kwargs["system"] = system_text
+
+            response = self._client.messages.create(**kwargs)
+            for block in response.content:
+                if getattr(block, "type", None) == "tool_use":
+                    return dict(block.input)
+            return None
+        except Exception as e:
+            if self._verbose:
+                print(f"Anthropic tool-call error: {e}")
+            return None
+
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token
         return len(text) // 4
@@ -221,8 +358,16 @@ class MockLlmClient:
     Returning `None` simulates an API failure, which exercises the
     graceful-fallback paths in the parser and the ReAct loop.
 
-    Every call is recorded in `calls` so tests can assert on what was
-    sent to the model.
+    The `tool_responses` argument is the structured-tool-calling counterpart of
+    `responses`: a separate list of dicts (or `None`), or a callable
+    `(messages, tool, max_tokens, temperature) -> dict | None`, returned one per
+    `call_tool` call. It is kept entirely separate from `responses` so `chat`
+    and `call_tool` never consume each other's scripts. It defaults to `None`,
+    so `call_tool` returns `None` (the graceful-fallback signal) unless a test
+    scripts a reply.
+
+    Every `chat` call is recorded in `calls`, and every `call_tool` call in
+    `tool_calls`, so tests can assert on what was sent to the model.
 
     Example:
 
@@ -235,7 +380,7 @@ class MockLlmClient:
         client = MockLlmClient(pick_first)
     """
 
-    def __init__(self, responses=None, default: str | None = ""):
+    def __init__(self, responses=None, default: str | None = "", tool_responses=None):
         if callable(responses):
             self._responder = responses
             self._queue = None
@@ -245,6 +390,23 @@ class MockLlmClient:
         self._default = default
         # A log of every chat() call, for test assertions.
         self.calls: list[dict] = []
+
+        # call_tool() support: scripted structured replies, drawn from a
+        # SEPARATE queue/responder so chat() and call_tool() never consume each
+        # other's scripts. `tool_responses` may be a list of dicts/None, or a
+        # callable (messages, tool, max_tokens, temperature) -> dict | None.
+        # Defaults to None, so call_tool() returns None unless a test scripts a
+        # reply -- which makes the agent fall back to its chat() path.
+        if callable(tool_responses):
+            self._tool_responder = tool_responses
+            self._tool_queue = None
+        else:
+            self._tool_responder = None
+            self._tool_queue = (
+                list(tool_responses) if tool_responses is not None else []
+            )
+        # A log of every call_tool() call, mirroring `calls`.
+        self.tool_calls: list[dict] = []
 
     def chat(
         self,
@@ -264,6 +426,27 @@ class MockLlmClient:
         if self._queue:
             return self._queue.pop(0)
         return self._default
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        self.tool_calls.append(
+            {
+                "messages": messages,
+                "tool": tool,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        if self._tool_responder is not None:
+            return self._tool_responder(messages, tool, max_tokens, temperature)
+        if self._tool_queue:
+            return self._tool_queue.pop(0)
+        return None
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token (matches the Anthropic adapter).
@@ -298,6 +481,43 @@ def _decision(reasoning: str, command: str) -> str:
     """Format a reply the way ``_DECISION_INSTRUCTION`` asks a real LLM to:
     a labeled Reasoning line, then a labeled Action line."""
     return f"Reasoning: {reasoning}\nAction: {command}"
+
+
+def _split_decision(text: str) -> tuple[str | None, str | None]:
+    """Split a `_decision`-formatted reply ("Reasoning: ...\\nAction: ...")
+    back into ``(reasoning, command)``. Used by MockReActClient.call_tool to
+    turn the mock brain's labeled string into a structured arguments dict.
+    Kept local to llm_client (rather than importing npc._parse_decision) so the
+    low-level client layer does not depend on the agent layer."""
+    reasoning = None
+    command = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        lowered = line.lower()
+        if lowered.startswith("reasoning:"):
+            reasoning = line.split(":", 1)[1].strip() or None
+        elif lowered.startswith("action:"):
+            command = line.split(":", 1)[1].strip() or None
+    return reasoning, command
+
+
+def _split_command(command: str, tool: dict) -> tuple[str, str]:
+    """Split a flat command ("ghost touch player") into (action, arguments) the
+    way the choose_action tool expects. When the tool constrains `action` to a
+    known set of verbs (its enum), match the longest verb the command starts
+    with -- so multi-word verbs like "ghost touch" stay intact, exactly as a
+    real tool-calling model (which can only return an enum value) would. Falls
+    back to splitting on the first space when the tool has no enum."""
+    enum = (
+        tool.get("parameters", {}).get("properties", {}).get("action", {}).get("enum")
+    )
+    if enum:
+        # Longest verb first so "ghost touch" wins over a hypothetical "ghost".
+        for verb in sorted(enum, key=len, reverse=True):
+            if command == verb or command.startswith(verb + " "):
+                return verb, command[len(verb) :].strip()
+    head, _, rest = command.partition(" ")
+    return head, rest
 
 
 def _mock_brain_choose(system: str, observation: str) -> str | None:
@@ -424,6 +644,37 @@ class MockReActClient(MockLlmClient):
         if self._verbose:
             print(f"[mock-react] -> {command!r}")
         return command
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        """Structured counterpart of `_decide`: pick an in-character command via
+        the mock brain, then split it into a choose_action arguments object.
+        Returns None for prompts the brain doesn't recognize (the same
+        graceful-fallback signal `chat` gives), so LLM_PROVIDER=mock exercises
+        the structured path end-to-end and falls back exactly like a real one."""
+        self.tool_calls.append(
+            {
+                "messages": messages,
+                "tool": tool,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        system = messages[0]["content"] if messages else ""
+        observation = messages[-1]["content"] if messages else ""
+        decision = _mock_brain_choose(system, observation)
+        if decision is None:
+            return None
+        reasoning, command = _split_decision(decision)
+        if not command:
+            return None
+        verb, rest = _split_command(command, tool)
+        return {"reasoning": reasoning, "action": verb, "arguments": rest}
 
 
 # ---------------------------------------------------------------------------
