@@ -1,5 +1,32 @@
 # Progress Tracker
 
+## In flight (not yet on `main`)
+
+Everything currently open — PRs and unclaimed issues — in one table, ordered by status.
+
+| Status | Item | Title | Issue |
+| --- | --- | --- | --- |
+| 🟢 Ready to merge | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — |
+| 🟢 Ready to merge | [#52](https://github.com/ccb/agent-sandbox/pull/52) | Container / capacity inventory mechanics | [#43](https://github.com/ccb/agent-sandbox/issues/43) |
+| 🟠 Needs conflict resolution | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — |
+| 🟠 Needs conflict resolution | [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) |
+| 🟠 Needs conflict resolution | [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) |
+| 🟠 Needs conflict resolution | [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) |
+| 🟠 Mergeability unverified | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) |
+| 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
+| 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
+| 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) |
+| 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) |
+| 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — |
+| 🔵 In design (doc merged) | [`output-and-trace-rendering.md`](docs/design/output-and-trace-rendering.md) | Output & trace rendering — core landed, see §12 for remaining stages | — |
+| 💡 Backlog (no PR) | [#63](https://github.com/ccb/agent-sandbox/issues/63) | Prioritize & approve the agent memory layer (Phase 2) | — |
+| 💡 Backlog (no PR) | [#47](https://github.com/ccb/agent-sandbox/issues/47) | Multi-step planning benchmark | — |
+| 💡 Backlog (no PR) | [#41](https://github.com/ccb/agent-sandbox/issues/41) | Instantiate described-but-nonexistent objects from LLM room descriptions | — |
+
+---
+
+## How to read & maintain this table
+
 A single, at-a-glance view of where every feature, design doc, and PR stands across
 `agent-sandbox`. This unifies what's otherwise scattered across GitHub issues, open PRs,
 and the `docs/design/` folder.
@@ -7,68 +34,19 @@ and the `docs/design/` folder.
 For the *vision* see [`README.md`](README.md); for the *plan* see [`ROADMAP.md`](ROADMAP.md)
 and [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md). This file tracks *status* only.
 
-> **Maintenance:** update the relevant row when a PR opens, lands, or stalls. Last
-> synced with GitHub on **2026-06-15**. Status legend below.
+**Status legend:**
 
 | Status | Meaning |
 | --- | --- |
-| ✅ Shipped | Merged to `main` |
 | 🟢 Ready to merge | PR open, mergeable, not draft — awaiting review/merge |
-| 🟠 Needs conflict resolution | PR open but conflicting with `main` |
+| 🟠 Needs conflict resolution | PR open but conflicting with `main` (or mergeability unverified) |
 | 🔵 In design | Design doc or draft PR; not yet implementing |
 | 💡 Backlog | Open issue, no PR yet |
+| ✅ Shipped | Merged to `main` — see the section below |
 
----
-
-## 🟢 Ready to merge
-
-These are open, mergeable, and out of draft. Next action: review → merge.
-
-| PR | Title | Issue |
-| --- | --- | --- |
-| [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — |
-| [#52](https://github.com/ccb/agent-sandbox/pull/52) | Container / capacity inventory mechanics | [#43](https://github.com/ccb/agent-sandbox/issues/43) |
-
-## 🟠 Needs conflict resolution
-
-Open PRs that currently conflict with `main` (or whose mergeability is unverified).
-Next action: rebase on `main`, resolve, re-run `/check`.
-
-| PR | Title | Issue | State |
-| --- | --- | --- | --- |
-| [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | conflicting |
-| [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) | conflicting |
-| [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) | conflicting |
-| [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) | conflicting |
-| [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) | mergeability unverified |
-
-## 🔵 In design (design docs / draft PRs)
-
-Not yet implementing — under design review.
-
-| PR / Doc | Title | Issue |
-| --- | --- | --- |
-| [#62](https://github.com/ccb/agent-sandbox/pull/62) (draft) · [`docs/design`](docs/design/) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
-| [#59](https://github.com/ccb/agent-sandbox/pull/59) (draft) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) |
-| [#36](https://github.com/ccb/agent-sandbox/pull/36) (draft) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) |
-
-Merged design docs awaiting implementation (living in [`docs/design/`](docs/design/)):
-
-| Doc | Status |
-| --- | --- |
-| [`agent-memory.md`](docs/design/agent-memory.md) | Approved design; Phase 2 — see decision item [#63](https://github.com/ccb/agent-sandbox/issues/63) |
-| [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | Long-term design merged ([#56](https://github.com/ccb/agent-sandbox/pull/56)); not scheduled |
-| [`output-and-trace-rendering.md`](docs/design/output-and-trace-rendering.md) | Core landed ([#31](https://github.com/ccb/agent-sandbox/pull/31)); see doc §12 for remaining stages |
-| [`simultaneous-actions.md`](docs/design/simultaneous-actions.md) | Implemented via [#30](https://github.com/ccb/agent-sandbox/pull/30); contested-resource follow-up in [#49](https://github.com/ccb/agent-sandbox/pull/49) |
-| [`multi-character-play.md`](docs/design/multi-character-play.md) | Design reference for the agent layer |
-
-## 💡 Backlog (open issues, no PR yet)
-
-| Issue | Title | Notes |
-| --- | --- | --- |
-| [#63](https://github.com/ccb/agent-sandbox/issues/63) | Prioritize & approve the agent memory layer (Phase 2) | Decision needed; design already merged |
-| [#47](https://github.com/ccb/agent-sandbox/issues/47) | Multi-step planning benchmark | In design via [#62](https://github.com/ccb/agent-sandbox/pull/62)/[#59](https://github.com/ccb/agent-sandbox/pull/59) |
-| [#41](https://github.com/ccb/agent-sandbox/issues/41) | Instantiate described-but-nonexistent objects from LLM room descriptions | Unclaimed |
+**Maintenance:** update the relevant row when a PR opens, lands, or stalls. When an item
+merges, move it from the in-flight table to the Shipped section. Last synced with GitHub
+on **2026-06-15**.
 
 ---
 
