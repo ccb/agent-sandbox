@@ -69,6 +69,20 @@ class Action:
             self._preconditions_passed = True
             return self.apply_effects()
 
+    def claimed_resource(self):
+        """The single world resource this action reaches for — the thing two
+        characters might contend over in a simultaneous round (issue #42): an
+        item to pick up, a recipient to hand to, a tile to step onto.
+
+        The simultaneous gather phase reads this (after constructing the action,
+        before running it) to detect contention: when two intents claim the
+        *same* object, only the higher-priority one can take it. The base action
+        claims nothing; an action that competes for a resource overrides this to
+        return the matched object (or ``None`` if its command matched nothing).
+        Returning ``None`` means "never contended" — correct for untargeted
+        actions like ``look`` or ``inventory``."""
+        return None
+
     @classmethod
     def action_name(cls):
         """

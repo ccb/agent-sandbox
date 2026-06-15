@@ -39,9 +39,10 @@ class CountingRule:
         return None
 
 
-def make_world(turn_mode="simultaneous", with_gem=True):
+def make_world(turn_mode="simultaneous", with_gem=True, with_coin=False):
     """One room holding the player and two NPCs (alice gathered before bob),
-    plus an optionally placed gettable gem for contention tests."""
+    plus an optionally placed gettable gem for contention tests (and a second
+    item, a coin, for ranked-fallback tests)."""
     room = things.Location("Room", "A bare stone room.")
     player = things.Character("player", "the hero", "I act.")
     alice = things.Character("alice", "a quick npc", "I grab things.")
@@ -56,6 +57,8 @@ def make_world(turn_mode="simultaneous", with_gem=True):
     if with_gem:
         gem = things.Item("gem", "a sparkling gem")
         room.add_item(gem)
+    if with_coin:
+        room.add_item(things.Item("coin", "a gold coin"))
     return game, room, player, alice, bob, gem
 
 
@@ -63,6 +66,10 @@ def action_failed_events(game, actor_name):
     return [
         e for e in game.events if e.actor == actor_name and e.action == "action_failed"
     ]
+
+
+def conflict_events(game, actor_name):
+    return [e for e in game.events if e.actor == actor_name and e.action == "conflict"]
 
 
 # ----------------------------------------------------------------------
@@ -106,13 +113,19 @@ def test_higher_initiative_wins_contested_item_and_loser_retries():
     # Both decided to take the gem, but bob resolves first and wins.
     assert "gem" in bob.inventory
     assert "gem" not in alice.inventory
-    # Alice's reflect-retry fired: a second decide() call whose observation
-    # names the failed command and the parser's reason.
+    # Alice's reflect-retry fired: a second decide() call whose observation names
+    # the failed command and — because she lost a contest, not a phantom missing
+    # object — the *true* reason (bob beat her to it).
     assert len(alice_rule.observations) == 2
     assert "'take gem' failed" in alice_rule.observations[1]
-    # The conflict is recorded on the event log.
-    assert len(action_failed_events(game, "alice")) == 1
-    assert action_failed_events(game, "alice")[0].payload == {"command": "take gem"}
+    assert "bob got the gem first" in alice_rule.observations[1]
+    # The contention is recorded as a first-class conflict event naming the
+    # winner — not a bare action_failed.
+    assert action_failed_events(game, "alice") == []
+    conflicts = conflict_events(game, "alice")
+    assert len(conflicts) == 1
+    assert conflicts[0].payload == {"command": "take gem", "winner": "bob"}
+    assert "bob got the gem first" in conflicts[0].summary
 
 
 def test_initiative_ties_fall_back_to_gather_order():
@@ -227,3 +240,134 @@ def test_persona_lazy_adoption_at_gather():
     # Parity with make_react_behavior: an agent attached without a persona
     # takes on its character's at the first gather.
     assert agent.persona == alice.persona
+
+
+# ----------------------------------------------------------------------
+# Contested resources + retry policy (issue #42)
+# ----------------------------------------------------------------------
+
+
+def test_claimed_resource_is_the_matched_item():
+    """peek_action builds (but never runs) the action, so the gather phase can
+    read the resource a command claims for contention detection."""
+    game, room, player, alice, bob, gem = make_world()
+    action = game.parser.peek_action("take gem", actor=alice)
+    assert action.claimed_resource() is gem
+    # An untargeted action (look) claims nothing and so never contends.
+    assert game.parser.peek_action("look", actor=alice).claimed_resource() is None
+
+
+def test_fallback_intent_taken_on_lost_contest():
+    """Stage 4: a loser that pre-chose a ranked backup at gather takes it
+    immediately — no second decision."""
+    game, room, player, alice, bob, gem = make_world(with_coin=True)
+    alice.set_property("initiative", 1)
+    bob.set_property("initiative", 5)
+    # Alice returns a ranked list: grab the gem, else fall back to the coin.
+    alice_rule = CountingRule([["take gem", "take coin"]])
+    alice.set_agent(ScriptedAgent(alice_rule))
+    bob.set_agent(ScriptedAgent(CountingRule(["take gem"])))
+
+    assert game.do_command("look")
+
+    # Bob (higher initiative) won the gem; alice fell back to the coin.
+    assert "gem" in bob.inventory
+    assert "coin" in alice.inventory
+    assert "gem" not in alice.inventory
+    # The fallback fired with NO second decision (decide() ran once, at gather).
+    assert len(alice_rule.observations) == 1
+    # Still surfaced as a conflict naming the winner.
+    conflicts = conflict_events(game, "alice")
+    assert len(conflicts) == 1
+    assert conflicts[0].payload == {"command": "take gem", "winner": "bob"}
+
+
+def test_informed_retry_uses_the_true_conflict_reason():
+    """Stage 3: with no fallback, the loser reflects on the *true* reason (it
+    lost a contest) and decides again, recovering."""
+    game, room, player, alice, bob, gem = make_world(with_coin=True)
+    alice.set_property("initiative", 1)
+    bob.set_property("initiative", 5)
+    seen = []
+
+    def alice_rule(observation):
+        seen.append(observation)
+        # The reflection carries the real reason; switch to the coin on seeing it.
+        if "got the gem first" in observation:
+            return "take coin"
+        return "take gem"
+
+    alice.set_agent(ScriptedAgent(alice_rule))
+    bob.set_agent(ScriptedAgent(CountingRule(["take gem"])))
+
+    assert game.do_command("look")
+
+    assert "gem" in bob.inventory
+    assert "coin" in alice.inventory  # recovered via informed reflection
+    # Exactly one informed retry: gather, then a re-decide seeded with the reason
+    # (the doomed "take gem" is never routed against the live world).
+    assert len(seen) == 2
+    assert "bob got the gem first" in seen[1]
+    # Recorded as a conflict (not action_failed) even though she recovered.
+    assert len(conflict_events(game, "alice")) == 1
+    assert action_failed_events(game, "alice") == []
+
+
+def test_no_conflict_when_winner_also_fails():
+    """Truthful conflicts: if the only would-be winner is the player (who
+    resolves first), neither NPC "won" the gem, so the loser gets a plain
+    failure, not a misleading "X got it first" — preserving PR #30 behavior."""
+    game, room, player, alice, bob, gem = make_world()
+    alice.set_agent(ScriptedAgent(CountingRule(["take gem"])))
+    bob.set_agent(ScriptedAgent(CountingRule(["take gem"])))
+
+    # The player grabs the gem; both NPCs decided to take it against the snapshot.
+    assert game.do_command("take gem")
+
+    assert "gem" in player.inventory
+    # No NPC secured the gem, so no conflict is fabricated between them.
+    assert conflict_events(game, "alice") == []
+    assert conflict_events(game, "bob") == []
+    # They simply failed, exactly as in #30.
+    assert len(action_failed_events(game, "alice")) == 1
+    assert len(action_failed_events(game, "bob")) == 1
+
+
+def test_phases_order_resolution_before_initiative():
+    """Stage 1+2: an opt-in phase map orders actions ahead of initiative; with
+    no map, resolution collapses to PR #30's initiative-only order."""
+    from text_adventure_games.turns import Intent, resolve_order, DEFAULT_PHASES
+
+    game, room, player, alice, bob, gem = make_world()
+    alice.set_property("initiative", 1)  # slower
+    bob.set_property("initiative", 5)  # faster
+    # Alice speaks (phase 0), bob grabs (phase 2). With phases enabled, speech
+    # resolves first even though bob is quicker — phase outranks initiative.
+    speak = Intent(alice, object(), "say hi", gather_index=0, action_name="say")
+    grab = Intent(bob, object(), "take gem", gather_index=1, action_name="get")
+
+    game.phases = DEFAULT_PHASES
+    order = resolve_order([grab, speak], game)
+    assert [intent.character.name for intent in order] == ["alice", "bob"]
+
+    # No phase map -> the faster character leads regardless of action.
+    game.phases = None
+    order = resolve_order([grab, speak], game)
+    assert [intent.character.name for intent in order] == ["bob", "alice"]
+
+
+def test_game_can_override_resolve_order():
+    """Design §4.2: a Game subclass expresses situational priority by defining
+    its own resolve_order, which the round honors over the default policy."""
+    from text_adventure_games.turns import Intent, resolve_order
+
+    class ReversedGame(games.Game):
+        def resolve_order(self, intents):
+            return list(reversed(intents))
+
+    room = things.Location("Room", "A bare stone room.")
+    player = things.Character("player", "the hero", "I act.")
+    g = ReversedGame(room, player, turn_mode="simultaneous")
+    first = Intent(things.Character("a", "", "I"), object(), "look", gather_index=0)
+    second = Intent(things.Character("b", "", "I"), object(), "look", gather_index=1)
+    assert resolve_order([first, second], g) == [second, first]

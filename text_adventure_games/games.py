@@ -127,6 +127,13 @@ class Game:
             raise Exception(err_msg)
         self.turn_mode = turn_mode
 
+        # Resolution phases (issue #42): an optional action -> phase-rank map that
+        # orders the simultaneous resolve phase ("talk before move before fight").
+        # Opt in by assigning a map, e.g. ``game.phases = turns.DEFAULT_PHASES``;
+        # left as None, every action shares one phase and resolution falls back to
+        # the plain initiative order from issue #25.
+        self.phases = None
+
         # Parser
         self.custom_actions = custom_actions
         self.set_parser(parsing.Parser(self))
