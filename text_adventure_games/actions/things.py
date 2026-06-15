@@ -118,6 +118,7 @@ class Inventory(base.Action):
     ACTION_NAME = ActionName.INVENTORY
     ACTION_DESCRIPTION = "Check the character's inventory"
     ACTION_ALIASES = ["i"]
+    DURATION = 1  # a quick glance in one's pockets (issue #24)
 
     def __init__(
         self,
@@ -149,6 +150,7 @@ class Examine(base.Action):
     ACTION_NAME = ActionName.EXAMINE
     ACTION_DESCRIPTION = "Examine an item"
     ACTION_ALIASES = ["look at", "x"]
+    DURATION = 1  # a quick look (issue #24)
 
     def __init__(
         self,
