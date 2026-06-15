@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-import re
-
 """Agent decision layer for LLM-driven (and scripted) NPC behavior.
 
 The seam is ``Agent.decide(observation) -> command``: a pure function from an
@@ -34,6 +30,10 @@ Usage::
     troll.set_behavior(make_react_behavior(llm_client))
     troll.set_behavior(make_hybrid_behavior(llm_client, make_troll_behavior()))
 """
+
+from __future__ import annotations
+
+import re
 
 from .enums import ReActLabel, Role
 from .things.characters import Goal, GoalType
