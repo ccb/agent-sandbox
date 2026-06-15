@@ -85,3 +85,21 @@ class Say(base.Action):
             )
         else:
             self.parser.ok(f"{self.speaker.name} says: {self.message}")
+        # Deliver the utterance to whoever can perceive it. WHO hears is decided
+        # by the game's audibility seam (room-based by default; override
+        # Game.audience_for for a continuous/range-based world), so Say stays
+        # ignorant of distance.
+        for listener in self.game.audience_for(
+            self.speaker, self.message, self.recipient
+        ):
+            listener.hear(self._heard_line(listener))
+
+    def _heard_line(self, listener) -> str:
+        """Render the spoken line from *listener*'s point of view, so a listener
+        can tell speech directed at them ("said to you") from speech merely
+        overheard ("said to <name>") or broadcast ("said:")."""
+        if self.recipient is listener:
+            return f"{self.speaker.name} said to you: {self.message}"
+        if self.recipient is not None:
+            return f"{self.speaker.name} said to {self.recipient.name}: {self.message}"
+        return f"{self.speaker.name} said: {self.message}"

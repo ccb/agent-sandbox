@@ -13,6 +13,7 @@ from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
 from .things import Get, Drop, Inventory, Examine, Give
 from .talk import Say
+from .goals import AdoptGoal, DropGoal
 
 __all__ = [
     Action,
@@ -38,4 +39,6 @@ __all__ = [
     Pick_Rose,
     Smell_Rose,
     Say,
+    AdoptGoal,
+    DropGoal,
 ]

@@ -454,6 +454,22 @@ class Game:
 
         return "\n".join(lines)
 
+    def audience_for(self, speaker, message, target=None):
+        """Return the characters who perceive *speaker*'s spoken *message*.
+
+        This is the single audibility seam for dialogue. **Override it** to
+        model a continuous or range-based world (hearing radius, line of sight,
+        walls). The default policy is room-based: every character in the
+        speaker's location except the speaker. Bystanders may overhear directed
+        speech; *target* (the addressed character, or None for a broadcast) is
+        passed so an override can treat the addressee specially, but the default
+        ignores it.
+        """
+        loc = speaker.location
+        if loc is None:
+            return []
+        return [c for c in loc.characters.values() if c is not speaker]
+
     def set_parser(self, parser):
         """
         Use a different parser for this game.
