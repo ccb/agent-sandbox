@@ -474,8 +474,32 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     return decide_and_route(character, game, agent, observation, max_retries)
 
 
+def route_first_workable(character, game, agent: Agent, commands) -> bool:
+    """Route ranked fallback *commands* in order; run the first that passes the
+    precondition gate (issue #42, stage 4).
+
+    The cheap arm of contention handling: when an agent supplied a backup at
+    gather time (``decide`` returned ``["take gem", "take coin"]``), the loser of
+    the gem takes the coin immediately — no second LLM round-trip. Each attempt
+    is traced as an action; returns ``True`` on the first success, ``False`` if
+    none of the fallbacks work.
+    """
+    for command in commands:
+        if not command:
+            continue
+        game.parser.agent_action(character.name, command)
+        if _route(character, game, command):
+            return True
+    return False
+
+
 def route_with_retry(
-    character, game, agent: Agent, first_command: str, max_retries: int = 1
+    character,
+    game,
+    agent: Agent,
+    first_command: str,
+    max_retries: int = 1,
+    conflict_reason: str = None,
 ) -> bool:
     """Route an already-decided *first_command*; on failure, reflect and retry.
 
@@ -486,13 +510,24 @@ def route_with_retry(
     the action failed *now* (e.g. another character got there first). The
     retry tail goes through :func:`decide_and_route`, keeping the total at
     ``1 + max_retries`` attempts, consistent with :func:`react_behavior`.
+
+    ``conflict_reason`` (issue #42) is the informed-retry arm of contention
+    handling: when a higher-priority character already took the contested
+    resource, ``first_command`` is *known* to be doomed, so we skip routing it
+    (no wasted attempt, no phantom "I don't see it.") and reflect directly on the
+    true reason — "they got there first" — before re-deciding.
     """
-    _log_decision(character, game, agent, first_command)
-    if _route(character, game, first_command):
-        return True
-    if max_retries <= 0:
-        return False
-    failure_reason = getattr(game.parser, "last_fail_message", None) or "action failed"
+    if conflict_reason is None:
+        _log_decision(character, game, agent, first_command)
+        if _route(character, game, first_command):
+            return True
+        if max_retries <= 0:
+            return False
+        failure_reason = (
+            getattr(game.parser, "last_fail_message", None) or "action failed"
+        )
+    else:
+        failure_reason = conflict_reason
     game.parser.agent_reflection(character.name, failure_reason)
     base = build_npc_context(character, game)
     observation = _reflect(base, first_command, failure_reason)

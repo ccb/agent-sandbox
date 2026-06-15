@@ -1,10 +1,11 @@
 # Simultaneous Action Resolution — Design
 
-**Status:** Proposal — not yet adopted. A design doc for discussion, not a
-description of current behavior. It extends the **simultaneous turn mode** added
-by PR #30 (issue #25), which is assumed merged: this doc takes `turns.py` and its
-`gather → resolve → react → advance` loop as the starting point and proposes how
-to grow it.
+**Status:** Stages 1–4 implemented (issue #42); stages 5–7 remain future work.
+It extends the **simultaneous turn mode** added by PR #30 (issue #25): this doc
+takes `turns.py` and its `gather → resolve → react → advance` loop as the
+starting point and grows it. The ordering seam, phase map, claim/arbitrate pass,
+and ranked fallbacks (§4, §5) now ship in `turns.py`/`npc.py`, with one refinement
+to §5.2 noted there.
 
 **Author:** Alistair King.
 
@@ -295,6 +296,17 @@ records the **highest-priority** claimant as the winner. The winner is now a
 claimants on the same resource are the losers, and crucially the decision is made
 *before* any effect runs, so it no longer depends on mutation order. (§6 bounds
 how complete this guarantee is.)
+
+> **Implementation note (issue #42).** The shipped `turns.py` refines this to
+> declare a contest lost only when the higher-priority claimant *actually
+> secures* the resource (tracked in a `secured` map as the resolve loop runs),
+> rather than purely from the pre-mutation claim. This keeps the loser's reason
+> honest: if the designated winner's own command fails for an unrelated reason —
+> most commonly the **player** grabbed the thing first, since the player resolves
+> ahead of every NPC — nobody "won," so the later intent gets a plain failure
+> instead of a fabricated "someone beat me to it." In the common case (two NPCs,
+> the higher-priority one succeeds) the outcome is identical to the claim_pass
+> above.
 
 ### 5.3 Conflict-aware failure & fallback
 
