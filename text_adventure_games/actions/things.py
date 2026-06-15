@@ -41,15 +41,19 @@ class Get(base.Action):
             ),
         ):
             return False
+        if not self.character.can_accept_item():
+            self.parser.fail(
+                "Your hands are full and you have nothing with room to stow it."
+            )
+            return False
         return True
 
     def apply_effects(self):
         """
         Get's an item from the location and adds it to the character's
-        inventory, assuming preconditions are met.
+        inventory or, if their hands are full, a carried container with space.
         """
-        self.location.remove_item(self.item)
-        self.character.add_to_inventory(self.item)
+        self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
         )
@@ -71,13 +75,14 @@ class Drop(base.Action):
         self.character = self.acting_character(command, hint="wants to drop something")
         self.location = self.character.location
         self.item = self.parser.match_item(
-            command, self.character.inventory, hint="thing being dropped"
+            command, self.character.carried_items(), hint="thing being dropped"
         )
 
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the character's inventory (not worn or wielded)
+        * The item must be carried by the character (in hand or in a
+          container), and not worn or wielded.
         """
         if not self.was_matched(self.item, "I don't see it."):
             return False
@@ -93,16 +98,17 @@ class Drop(base.Action):
                 f"{self.item.name}. Stow it first."
             )
             return False
-        if not self.is_in_inventory(self.character, self.item):
+        if self.item.name not in self.character.carried_items():
+            self.parser.fail("You aren't carrying that.")
             return False
         return True
 
     def apply_effects(self):
         """
-        Drop removes an item from character's inventory and adds it to the
-        current location, assuming preconditions are met
+        Drop removes an item from wherever the character holds it (hand or a
+        carried container) and adds it to the current location.
         """
-        self.character.remove_from_inventory(self.item)
+        self.character.discard_item(self.item)
         self.item.location = self.location
         self.location.add_item(self.item)
         d = "{character_name} dropped the {item_name} in the {location}."
@@ -142,7 +148,21 @@ class Inventory(base.Action):
             description = f"{self.character.name}'s inventory contains:\n"
             for item_name in self.character.inventory:
                 item = self.character.inventory[item_name]
-                description += "* {item}\n".format(item=item.description)
+                if item.get_property("is_container"):
+                    if item.capacity is None:
+                        gauge = "({count})".format(count=item.current_count())
+                    else:
+                        gauge = "({count}/{cap})".format(
+                            count=item.current_count(), cap=item.capacity
+                        )
+                    description += "* {item} {gauge}\n".format(
+                        item=item.description, gauge=gauge
+                    )
+                    for inner_name in item.contents:
+                        inner = item.contents[inner_name]
+                        description += "    - {item}\n".format(item=inner.description)
+                else:
+                    description += "* {item}\n".format(item=item.description)
             self.parser.ok(description)
 
 
@@ -201,7 +221,7 @@ class Give(base.Action):
             exclude=self.giver,
         )
         giver_held = {
-            **self.giver.inventory,
+            **self.giver.carried_items(),
             **self.giver.worn,
             **self.giver.wielded,
         }
@@ -210,8 +230,10 @@ class Give(base.Action):
     def check_preconditions(self) -> bool:
         """
         Preconditions:
-        * The item must be in the giver's inventory (not worn or wielded)
-        * The character must be at the same location as the recipient
+        * The item must be carried by the giver (in hand or a container),
+          and not worn or wielded.
+        * The giver must be at the same location as the recipient
+        * The recipient must have room to receive the item
         """
         if not self.was_matched(self.item, "I don't see it."):
             return False
@@ -227,20 +249,32 @@ class Give(base.Action):
                 f"{self.item.name}. Stow it first."
             )
             return False
-        if not self.is_in_inventory(self.giver, self.item):
+        if self.item.name not in self.giver.carried_items():
+            self.parser.fail("You aren't carrying that.")
             return False
         if not self.at(self.recipient, self.giver.location):
+            return False
+        if not self.recipient.can_accept_item():
+            self.parser.fail(
+                "{recipient} has no room to carry the {item}.".format(
+                    recipient=self.recipient.name.capitalize(), item=self.item.name
+                )
+            )
             return False
         return True
 
     def apply_effects(self):
         """The giver hands the item to the recipient.
 
+        The item is removed from wherever the giver holds it (hand or a carried
+        container) and placed on the recipient via hands-first routing, with
+        overflow into a carried container if the recipient's hands are full.
+
         If the recipient is hungry and the item is food, they will eat it.
         If the recipient is thirsty and the item is drink, they will drink it.
         """
-        self.giver.remove_from_inventory(self.item)
-        self.recipient.add_to_inventory(self.item)
+        self.giver.discard_item(self.item)
+        self.recipient.accept_item(self.item)
         description = "{giver} gave the {item_name} to {recipient}".format(
             giver=self.giver.name.capitalize(),
             item_name=self.item.name,
