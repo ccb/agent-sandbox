@@ -274,7 +274,7 @@ def test_give_food_into_container_is_still_eaten_when_hungry():
     recipient.add_to_inventory(pack)  # the one hand slot is now full
     recipient.set_property("is_hungry", True)
     apple = things.Item("apple", "a crisp apple")
-    apple.set_property("is_food", True)
+    apple.set_property("edible", True)
     giver.add_to_inventory(apple)
 
     thing_actions.Give(game, "give apple to recipient", actor=giver)()
