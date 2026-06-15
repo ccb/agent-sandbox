@@ -4,6 +4,75 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-15
+
+**Focus:** land contested-resource resolution in simultaneous mode (#42); repo hygiene (progress tracker, uv, ScienceWorld clones)
+
+**Done today:**
+- Merged **PR #49** (issue #42): **contested resources + retry policy** in simultaneous turn mode — stages 1–4 of `docs/design/simultaneous-actions.md` (#35). The resolve step now runs **claim → arbitrate → recover**: `Intent` carries ranked `fallbacks`, `resolve_order()` sorts by `(phase, -initiative, gather_index)` with an optional `Game` override, opt-in `Game.phases` buckets actions (`communicate < move < manipulate < fight`), and losers get a specific contention failure fed into the capped reflect-retry instead of a generic `"I don't see it."`
+- Pushed `chore: ignore local benchmarks/ clones (e.g. ScienceWorld)` to `main` — keeps upstream benchmark repos (and their bundled JARs) out of our tree when cloned under `benchmarks/`.
+- Opened **PR #64** (`chore/uv-project-workflow`): adopt **uv** as the default project workflow with a committed lockfile, while keeping plain `venv`/conda paths documented as fallbacks.
+- Opened **PR #65** (`docs/progress-tracker`): **`PROGRESS.md`** — a single at-a-glance status board for shipped features, open PRs, and design docs (was scattered across issues/PRs/`docs/design/`).
+- Teammate PRs also landed on `main` today: **#32** (issue #24, per-turn NPC time budget), **#52** (#43, container/capacity inventory), **#57** (#44, structured tool/function-calling on LLM clients), **#58** (#46, goal-influencing dialogue), **#48** (engine-wide enums), **#53** (affordance tags).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #54** (knowledge/belief layer, #45), **#59**, **#61**, **#62**, **#64**, and **#65** reviewed/merged.
+- Follow up on **issue #63** (Chris sign-off on prioritizing agent memory alongside the planning benchmark).
+
+## 2026-06-13
+
+**Focus:** ScienceWorld benchmark interface; align Phase 2 memory with the planning benchmark (#47)
+
+**Done today:**
+- Opened **PR #62** (`docs/scienceworld-interface`): design for plugging the engine into the [**ScienceWorld**](https://github.com/allenai/ScienceWorld) benchmark — local clone under `benchmarks/`, adapter shape, evaluation loop. Documentation only for now.
+- Opened **issue #63**: ask Chris to **prioritize and approve** the agent-memory layer (#37) and agree we should build it **in parallel** with the planning-benchmark work (#47), not after it.
+
+**Blockers / questions:**
+- Waiting on Chris for #63 (memory prioritization + design sign-off).
+
+**Next:**
+- Land **PR #49** (#42 contested resources).
+- Keep iterating **PR #54** (#45 knowledge layer).
+
+## 2026-06-11
+
+**Focus:** first CI + docs site; fix Claude Code hook; planning/reproducibility design docs
+
+**Done today:**
+- Merged **PR #39** (issue #38): coverage-hook launcher resolves the interpreter (`venv/bin/python` → `python3` → `python`) instead of hard-coding `venv/bin/python` — fixes noisy hook failures on conda/lab machines.
+- Merged **PR #50**: local-only **MkDocs** documentation site (`pip install -e .[docs]` → `mkdocs serve` at `127.0.0.1:8000`). Material theme + mkdocstrings; no public deploy yet.
+- Merged **PR #51**: moved `test_npc_behaviors.py` into `tests/` so `pytest tests/` collects the narrated NPC behavior suite automatically.
+- Merged **PR #55**: first **GitHub Actions CI** — mirrors the `/check` gates (`black --check`, `pytest tests/`, `test_npc_behaviors.py`) on push/PR across Python 3.11–3.13.
+- Merged **PR #56**: `docs/design/llm-cost-observability.md` — long-term design for token accounting, cost reduction, and reproducible LLM runs (usage ledger, price table, build order).
+- Opened **PR #59** (`docs/planning-benchmark-plan`): temp plan for issue **#47** (multi-step planning benchmark harness) in `docs/design/planning-benchmark.md`.
+- Opened **PR #60** then closed it in favor of **PR #61** (`feat/reproducible-runs`): unified design + implementation for record/replay, YAML run records, and pinning nondeterminism — companion to the planning benchmark.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land **PR #49** and **#54**.
+- Get **#59** / **#61** reviewed.
+
+## 2026-06-10
+
+**Focus:** Phase 2 agent memory design; start knowledge layer (#45) and contested resources (#42)
+
+**Done today:**
+- Merged **PR #37**: `docs/design/agent-memory.md` — Phase 2 proposal for per-agent memory (memory streams, retrieval by recency/importance/relevance, reflection, planning, privacy, save/load, build order). Documentation only; marks the start of memory work after simultaneous turns shipped.
+- Opened **PR #54** (issue #45): per-character **knowledge / belief layer** — private world-model beliefs (`Knowledge`/`Belief`) distinct from episodic memory (#37); composes via separate `describe_for` sections, no `memory.py` dependency.
+- Opened **PR #49** (issue #42): contested resources + retry policy in simultaneous mode — scoped the #35 design's claim/arbitrate/recover path for when two NPCs target the same resource.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land infra/docs PRs (#39, #50, #51, #55, #56).
+- Get **#49** and **#54** to review-ready.
+
 ## 2026-06-09
 
 **Focus:** land the output/trace rendering stack (#31); rebase #30 onto a much-changed `main`; ship shared Claude Code automations and a sim-action design doc
@@ -18,13 +87,13 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 - Committed `Force rich rendering in multi-agent notebook` to `main` so the committed notebook output renders via the rich renderer rather than the plain fallback.
 - Opened **PR #34** (`chore/claude-code-automations`): project-shared Claude Code automations — a renderer-coverage guard hook plus a `/sync-renderer` command — so the rendering seam stays in sync as new output paths get added.
 - Opened **PR #35** (`docs/simultaneous-actions-design`): a design doc for simultaneous action resolution, capturing the gather→resolve→react model behind #30.
+- Merged **PR #30**, **#34**, and **#35** into `main` (finishing the day's queue).
 
 **Blockers / questions:**
 - none
 
 **Next:**
-- Get **PR #30**, **#34**, and **#35** reviewed/merged.
-- Phase 2: agent memory.
+- Phase 2: agent memory (#37).
 
 ## 2026-06-07
 
@@ -141,3 +210,7 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 |-------|---------|-------------------|----------------|-------|-------|
 | Large Language Models are Superpositions of All Characters: Attaining Arbitrary Role-play via Self-Alignment | Alibaba Inc. | ACL | January 2024 | [2401.12474](https://arxiv.org/abs/2401.12474) | |
 | Humanoid Agents: Platform for Simulating Human-like Generative Agents | University of Washington; NVIDIA; University of Hong Kong | EMNLP | October 2023 | [2310.05418](https://arxiv.org/abs/2310.05418) | |
+
+### Quick links
+
+- [ChatGPT conversation](https://chatgpt.com/share/6a30535f-3760-83ea-a7d0-7fd40d21cc99)
