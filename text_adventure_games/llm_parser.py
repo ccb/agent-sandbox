@@ -23,7 +23,11 @@ import re
 
 from text_adventure_games import parsing
 from text_adventure_games.enums import Role
-from text_adventure_games.llm_client import LlmClient, limit_context_length
+from text_adventure_games.llm_client import (
+    SELECT_OPTION_TOOL,
+    LlmClient,
+    limit_context_length,
+)
 from text_adventure_games.reporting import Channel
 from text_adventure_games.things import Character, Item, Location
 
@@ -97,7 +101,10 @@ class LlmParser(parsing.Parser):
     def _pick_option(
         self, instructions: str, options: dict, input_str: str
     ) -> object | None:
-        """Ask the LLM to pick one numbered option. Returns the option value or None."""
+        """Ask the LLM to pick one option. Prefers structured tool calling (a
+        provider-validated integer index); falls back to the legacy free-text
+        'return the number' path when tool calling is unavailable or returns
+        nothing usable. Returns the chosen option's value, or None."""
         options_list = list(options.keys())
         choices_str = ""
         for i, option in enumerate(options_list):
@@ -114,6 +121,24 @@ class LlmParser(parsing.Parser):
                 f"{instructions}\n\n{choices_str}\nReturn just the number.\n---\n> {input_str}"
             )
 
+        # Structured path first: a validated integer index.
+        if hasattr(self.llm, "call_tool"):
+            result = self.llm.call_tool(
+                messages, SELECT_OPTION_TOOL, max_tokens=32, temperature=0.0
+            )
+            if result is not None:
+                index = result.get("index")
+                # Note: bool is a subclass of int in Python, so guard against a
+                # stray True/False sneaking through as the index 1/0.
+                if (
+                    isinstance(index, int)
+                    and not isinstance(index, bool)
+                    and 0 <= index < len(options_list)
+                ):
+                    return options[options_list[index]]
+                # malformed / out of range -> fall through to the free-text path
+
+        # Free-text fallback: scrape the first number out of the prose reply.
         content = self.llm.chat(messages, max_tokens=32, temperature=0.0)
         if content is None:
             return None

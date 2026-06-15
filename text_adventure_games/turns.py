@@ -70,6 +70,7 @@ def gather_intents(game) -> list:
             # sequential factories do, so in-game add_goal()/complete_goal()
             # reaches the next decision prompt (issue #23 tiered goals).
             agent.goals = character.goals
+            agent.action_names = list(game.parser.actions)
             observation = build_npc_context(character, game)
             command = agent.decide(observation)
             if command:

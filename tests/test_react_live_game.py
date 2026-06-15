@@ -214,8 +214,10 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
         ],
     )
 
-    # The NPC's turns flowed through LLMAgent.chat(), not a scripted behavior.
-    assert mock.calls, "the agent never consulted the LLM"
+    # The NPC's turns flowed through LLMAgent's structured tool call (not a
+    # scripted behavior, and not the chat() fallback) -- this is the issue #44
+    # demonstration that decisions now go through provider tool calling.
+    assert mock.tool_calls, "the agent never used the structured tool path"
 
     # Escalation driven by observation history. The full strings pin the
     # subject too: the actor seam must attribute the action to the troll
@@ -233,7 +235,7 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
     # ...and the Reflect step fed the parser's real failure reason back.
     reflect_prompts = [
         call["messages"][-1]["content"]
-        for call in mock.calls
+        for call in mock.tool_calls
         if "' failed:" in call["messages"][-1]["content"]
     ]
     assert reflect_prompts, "no reflect retry happened"
@@ -289,7 +291,7 @@ def test_react_guard_warns_then_escalates(live_game):
     ), "missing threaten"
     assert any("attacked" in m for m in by_type(messages, "output"))
     assert game.player.get_property("is_unconscious") is True
-    assert mock.calls
+    assert mock.tool_calls
 
 
 def test_react_ghost_haunts_then_kills(live_game):
@@ -314,7 +316,7 @@ def test_react_ghost_haunts_then_kills(live_game):
         in npc_actions
     ), "missing ghost touch"
     assert game.player.get_property("is_dead") is True
-    assert mock.calls
+    assert mock.tool_calls
 
 
 def test_react_banished_ghost_is_gated(live_game):
@@ -353,7 +355,7 @@ def test_webapp_hybrid_path_is_react_driven():
 
     messages = run_commands(game, ["go out", "go north", "go east", "wait", "wait"])
 
-    assert mock.calls, "the hybrid behavior never consulted the LLM"
+    assert mock.tool_calls, "the hybrid behavior never used the structured tool path"
     npc_actions = by_type(messages, "npc_action")
     assert not any(
         "pounds its fists" in m for m in npc_actions
@@ -368,8 +370,10 @@ def test_npcs_idle_when_player_absent(live_game):
     game, mock = live_game
     messages = run_commands(game, ["wait"])  # player is alone in the cottage
 
-    # All three ReAct NPCs consulted the LLM this turn...
-    assert len(mock.calls) == 3
+    # All three ReAct NPCs consulted the LLM this turn (via the structured tool;
+    # each declined, so call_tool returned None and the agent also tried the
+    # chat fallback -- we assert on the structured path here).
+    assert len(mock.tool_calls) == 3
     # ...but none of them acted, so there is nothing to trace either.
     assert by_type(messages, "npc_action") == []
     assert by_type(messages, "npc_log") == []
