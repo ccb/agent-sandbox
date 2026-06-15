@@ -17,7 +17,7 @@ moved classes or functions, a new subsystem, a removed export).
 **Scope:** `$ARGUMENTS` if given (the subsystem or symbol that changed — focus
 there). Otherwise review the whole API reference against the engine.
 
-Work from the repo root with the project venv. Steps:
+Work from the repo root with the project environment (`uv run`). Steps:
 
 1. **Find the drift.** Each page in `mkdocs/docs/api/` targets specific symbols
    with `::: text_adventure_games.<module>.<Symbol>` (some list explicit
@@ -39,12 +39,12 @@ Work from the repo root with the project venv. Steps:
    points into the reference. Update both if pages were added, removed, or
    renamed so no link dangles.
 
-4. **Verify it builds.** Install the docs extra if needed, then build in strict
-   mode so broken references and missing-docstring warnings fail loudly:
+4. **Verify it builds.** Build in strict mode so broken references and
+   missing-docstring warnings fail loudly. `uv run --extra docs` pulls in the docs
+   dependencies on the fly:
 
    ```
-   venv/bin/pip install -e .[docs]
-   cd mkdocs && ../venv/bin/mkdocs build --strict
+   cd mkdocs && uv run --extra docs mkdocs build --strict
    ```
 
    `--strict` must exit 0. Fix any warning it surfaces (a dangling link, a

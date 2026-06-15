@@ -180,9 +180,9 @@ engine-overview.html
 # superpowers skill artifacts (brainstorming specs / implementation plans) — kept local
 docs/superpowers/
 
-# uv runtime ignore (pyproject.toml IS tracked — it's our packaging manifest)
-uv.lock
-.python-version
+# uv project files ARE tracked: uv.lock pins exact versions for reproducible
+# `uv sync`, and .python-version pins the interpreter (3.12, within the CI range).
+# Only the resolved virtualenv (.venv, below) stays local.
 
 # External benchmark clones (e.g. ScienceWorld) live under benchmarks/ for local
 # reference and experiments. They are upstream repos with their own history and a

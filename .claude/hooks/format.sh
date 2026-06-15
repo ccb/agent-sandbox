@@ -26,8 +26,11 @@ print(data.get("tool_input", {}).get("file_path", ""))
 [[ "$file_path" == *.py ]] || exit 0
 [[ -f "$file_path" ]] || exit 0
 
-# Prefer the project venv's black; fall back to whatever is on PATH.
-if [[ -x "$repo_root/venv/bin/black" ]]; then
+# Prefer the project venv's black; fall back to whatever is on PATH. We default
+# to uv's .venv/ but still honor a legacy venv/ for anyone who hasn't switched.
+if [[ -x "$repo_root/.venv/bin/black" ]]; then
+    black_bin="$repo_root/.venv/bin/black"
+elif [[ -x "$repo_root/venv/bin/black" ]]; then
     black_bin="$repo_root/venv/bin/black"
 elif command -v black >/dev/null 2>&1; then
     black_bin="black"

@@ -82,6 +82,24 @@ and reproducible (seeded / replayable) runs. Design sketch in
 
 ## Setup
 
+This project is set up for **[uv](https://docs.astral.sh/uv/)** — it's the default
+path and the fastest. The committed `uv.lock` + `.python-version` give everyone the
+same dependency versions and interpreter (Python 3.12), and `uv` manages the
+`.venv/` for you, so there's no `pip`-vs-`python` mismatch to trip over.
+
+```bash
+uv sync --extra llm                   # creates .venv/, installs engine + openai, anthropic, tiktoken
+# or: uv sync                         # engine only
+# or: uv sync --extra dev             # + black, nbformat, pytest (dev team)
+```
+
+Then prefix commands with `uv run` (it auto-uses `.venv/`, no activation needed) —
+or `source .venv/bin/activate` once if you prefer. Don't have uv?
+`curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
+<details>
+<summary><b>No uv? Plain <code>venv</code> + <code>pip</code> still works</b></summary>
+
 Always work inside an **isolated virtual environment** so you don't fight your
 system / Anaconda / Homebrew Python.
 
@@ -90,37 +108,29 @@ python3 -m venv venv
 source venv/bin/activate              # prompt should now show (venv)
 pip install -e ".[llm]"               # engine + openai, anthropic, tiktoken
 # or: pip install -e "."              # engine only
-# or: pip install -e ".[dev]"         # + black, nbformat (dev team)
-```
-
-**Faster, with [uv](https://docs.astral.sh/uv/)** — one tool does both steps, and
-`uv pip` always installs into the venv that `uv venv` just made, so the
-`pip`-vs-`python` interpreter mismatch the callout below warns about can't happen:
-
-```bash
-uv venv venv                          # creates the same venv/ (uv picks a Python)
-source venv/bin/activate
-uv pip install -e ".[llm]"            # same target + extras as the pip line above
+# or: pip install -e ".[dev]"         # + black, nbformat, pytest (dev team)
 ```
 
 **If you use Anaconda/Miniconda**, use a conda env instead (Anaconda's `venv` is
 often broken):
 
 ```bash
-conda create -n agent-sandbox python=3.11 -y && conda activate agent-sandbox
+conda create -n agent-sandbox python=3.12 -y && conda activate agent-sandbox
 pip install -e ".[llm]"
 ```
 
 > **`ModuleNotFoundError` after install?** Your `pip` and `python` are different
 > interpreters. Install with `python -m pip install -e ".[llm]"` so it lands in the
 > same Python you run with, and confirm your venv/conda env is activated. See
-> `ONBOARDING.md` for the full troubleshooting list.
+> `ONBOARDING.md` for the full troubleshooting list. (This whole class of problem
+> is why uv is the default above.)
+
+</details>
 
 ### Run the game in your browser
 
 ```bash
-source venv/bin/activate
-python -m text_adventure_games.webapp.app
+uv run python -m text_adventure_games.webapp.app   # or activate first, then drop `uv run`
 # open http://localhost:8080
 ```
 
@@ -138,7 +148,7 @@ bills per token.
 export LLM_PROVIDER=anthropic        # the on-switch: "anthropic" or "openai"
 export ANTHROPIC_API_KEY=sk-ant-...  # or OPENAI_API_KEY=sk-... for openai
 export LLM_VERBOSE=1                  # optional: print every LLM call (great for debugging)
-python -m text_adventure_games.webapp.app
+uv run python -m text_adventure_games.webapp.app
 ```
 
 Optional env vars: `LLM_MODEL` (defaults: Anthropic → `claude-sonnet-4-20250514`,
@@ -163,8 +173,8 @@ reads the same prompts a real model would see and picks in-character commands.
 The whole ReAct loop runs end-to-end at no cost:
 
 ```bash
-LLM_PROVIDER=mock python -m notebooks.hw1_llm.play          # terminal
-LLM_PROVIDER=mock python -m text_adventure_games.webapp.app  # browser
+LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play          # terminal
+LLM_PROVIDER=mock uv run python -m text_adventure_games.webapp.app  # browser
 ```
 
 `notebooks/hw1_llm/` is a thin wrapper around the HW1 game: same world, but
@@ -189,9 +199,8 @@ interpreting what the game prints (and how to show more or less of it).
 ### Run the tests
 
 ```bash
-source venv/bin/activate
-pytest tests/ -v                     # full suite: agent layer, ReAct live game, NPC behaviors
-pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, narrated
+uv run pytest tests/ -v                     # full suite: agent layer, ReAct live game, NPC behaviors
+uv run pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, narrated
 ```
 
 ### Browse the documentation site

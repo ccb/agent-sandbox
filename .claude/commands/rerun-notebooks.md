@@ -15,7 +15,7 @@ For each target notebook, from the repo root:
 
 1. Execute it in place with the mock provider:
    ```
-   LLM_PROVIDER=mock venv/bin/jupyter nbconvert --to notebook --execute --inplace <notebook>
+   LLM_PROVIDER=mock uv run jupyter nbconvert --to notebook --execute --inplace <notebook>
    ```
 2. If execution **fails**, stop and surface the traceback from nbconvert — the
    engine likely broke the notebook and that needs fixing first.

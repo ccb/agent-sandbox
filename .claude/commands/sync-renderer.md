@@ -12,7 +12,7 @@ This command does that wiring end to end.
 **Target channel:** `$ARGUMENTS` if given (a `Channel` name like
 `AGENT_GOAL_UPDATE`, or a short description of the new feature's output).
 Otherwise, run the coverage guard to discover the gap:
-`echo '{"tool_input":{"file_path":"'$PWD'/text_adventure_games/reporting.py"}}' | venv/bin/python .claude/hooks/check_renderer_coverage.py`
+`echo '{"tool_input":{"file_path":"'$PWD'/text_adventure_games/reporting.py"}}' | uv run python .claude/hooks/check_renderer_coverage.py`
 and wire whatever channels it reports.
 
 For the target channel, make sure **each** of these is handled (add the case only
@@ -46,8 +46,8 @@ where it's missing — don't duplicate existing ones):
 Then verify:
 
 ```
-venv/bin/python -m pytest tests/test_reporting.py -q
-echo '{"tool_input":{"file_path":"'$PWD'/text_adventure_games/reporting.py"}}' | venv/bin/python .claude/hooks/check_renderer_coverage.py
+uv run pytest tests/test_reporting.py -q
+echo '{"tool_input":{"file_path":"'$PWD'/text_adventure_games/reporting.py"}}' | uv run python .claude/hooks/check_renderer_coverage.py
 ```
 
 The coverage guard must exit 0 (no gaps) and the reporting tests must pass before
