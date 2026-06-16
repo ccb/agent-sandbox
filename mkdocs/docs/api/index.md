@@ -12,3 +12,4 @@ The reference is split by subsystem:
 - **[Agents](agents.md)** — the ReAct layer: `Agent`, `LLMAgent`, `ScriptedAgent`.
 - **[LLM client](llm-client.md)** — the provider-agnostic client and its adapters.
 - **[World model](world-model.md)** — the `Thing` hierarchy and the action gate.
+- **[Knowledge & beliefs](knowledge.md)** — what a character believes is true, kept distinct from the world graph.
