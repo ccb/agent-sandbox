@@ -110,7 +110,7 @@ def test_default_renderer_falls_back_without_tty(monkeypatch):
 
 
 # ----------------------------------------------------------------------
-# RichTerminalRenderer: every line carries a bracketed channel label
+# RichTerminalRenderer: every line carries a glyph cue and bracketed channel label
 # ----------------------------------------------------------------------
 
 
@@ -121,9 +121,10 @@ def _strip_ansi(text: str) -> str:
 
 
 def test_rich_renderer_labels_every_line():
-    """Each rendered line names its channel in brackets so the *kind* of line is
-    legible from the text alone (color is only a secondary cue), and agent-trace
-    lines are attributed to the acting character."""
+    """Each rendered line opens with a glyph cue *and* names its channel in
+    brackets so the *kind* of line is legible from the text alone (color is only
+    a tertiary cue), and agent-trace lines are attributed to the acting
+    character."""
     pytest.importorskip("rich")
     from rich.console import Console
 
@@ -153,18 +154,18 @@ def test_rich_renderer_labels_every_line():
         r.emit(m)
     out = _strip_ansi(buf.getvalue())
 
-    # Top-level lines are labeled by kind...
-    assert "[player command] go north" in out
-    assert "[narration] You walk north." in out
-    assert "[npc] The troll growls." in out
-    assert "[blocked] the way is blocked" in out
-    assert "[conflict] guard got the fish first" in out
-    assert "[system] the bells ring" in out
-    # ...and agent-trace lines also name the actor.
-    assert "troll [observation] A troll blocks the bridge." in out
-    assert "troll [reasoning] Escalate." in out
-    assert "troll [action] growl player" in out
-    assert "troll [reflection] Try again." in out
+    # Top-level lines carry a glyph cue followed by the bracketed kind...
+    assert "> [player command] go north" in out
+    assert "» [narration] You walk north." in out
+    assert "» [npc] The troll growls." in out
+    assert "✗ [blocked] the way is blocked" in out
+    assert "⚔ [conflict] guard got the fish first" in out
+    assert "· [system] the bells ring" in out
+    # ...and agent-trace lines pair a glyph with the actor and the label.
+    assert "◦ troll [observation] A troll blocks the bridge." in out
+    assert "· troll [reasoning] Escalate." in out
+    assert "▸ troll [action] growl player" in out
+    assert "↺ troll [reflection] Try again." in out
 
 
 # ----------------------------------------------------------------------

@@ -187,11 +187,13 @@ class PlainRenderer(Renderer):
 class RichTerminalRenderer(Renderer):
     """Colored, labeled, turn-structured terminal output via ``rich``.
 
-    Every line carries a bracketed label naming its channel -- ``[narration]``,
-    ``[action]``, ``[observation]``, ... -- so the *kind* of line is legible from
-    the text alone; color is only a secondary cue (which keeps the trace readable
-    even when several channels share a hue). Agent-trace lines are additionally
-    attributed to the acting character (``troll [reasoning] ...``), matching the
+    Every line opens with two redundant cues: a leading *glyph* (``»``, ``✗``,
+    ``⚔``, ...) for a quick at-a-glance scan, and a bracketed *label* naming its
+    channel in words -- ``[narration]``, ``[action]``, ``[observation]``, ... --
+    so the *kind* of line is legible from the text alone. Color is only a tertiary
+    cue (which keeps the trace readable even when several channels share a hue, or
+    on a no-color terminal). Agent-trace lines are additionally attributed to the
+    acting character (``· troll [reasoning] ...``), matching the
     :class:`PlainRenderer`. A turn rule is drawn lazily -- when the first
     agent/NPC line of a new turn arrives -- so there are no empty headers. Never
     instantiated unless ``rich`` imports (see :func:`default_renderer`).
@@ -204,24 +206,24 @@ class RichTerminalRenderer(Renderer):
         self.console = console if console is not None else Console()
         self._last_turn = None
 
-    # channel -> (label, style) for the indented agent-trace lines. AGENT_ACTION
-    # is special-cased in emit(); the rest are looked up here.
+    # channel -> (glyph, label, style) for the indented agent-trace lines.
+    # AGENT_ACTION is special-cased in emit(); the rest are looked up here.
     _AGENT_LABEL = {
-        Channel.AGENT_OBSERVATION: ("[observation]", "dim cyan"),
-        Channel.AGENT_REASONING: ("[reasoning]", "cyan"),
-        Channel.AGENT_REFLECTION: ("[reflection]", "yellow"),
+        Channel.AGENT_OBSERVATION: ("◦", "[observation]", "dim cyan"),
+        Channel.AGENT_REASONING: ("·", "[reasoning]", "cyan"),
+        Channel.AGENT_REFLECTION: ("↺", "[reflection]", "yellow"),
     }
-    # channel -> (label, style) for the top-level lines. The bracketed label is
-    # what makes each line legible regardless of color; the color is only a
-    # secondary cue, so the styles are kept distinct across channels (no two
-    # greens).
+    # channel -> (glyph, label, style) for the top-level lines. The glyph is a
+    # quick visual cue and the bracketed label names the channel in words;
+    # color is only a tertiary cue, so the styles stay distinct across channels
+    # (no two greens).
     _LINE = {
-        Channel.COMMAND: ("[player command]", "bold yellow"),
-        Channel.NARRATION: ("[narration]", "green"),
-        Channel.NPC_NARRATION: ("[npc]", "magenta"),
-        Channel.BLOCKED: ("[blocked]", "red"),
-        Channel.CONFLICT: ("[conflict]", "bold yellow"),
-        Channel.SYSTEM: ("[system]", "dim"),
+        Channel.COMMAND: (">", "[player command]", "bold yellow"),
+        Channel.NARRATION: ("»", "[narration]", "green"),
+        Channel.NPC_NARRATION: ("»", "[npc]", "magenta"),
+        Channel.BLOCKED: ("✗", "[blocked]", "red"),
+        Channel.CONFLICT: ("⚔", "[conflict]", "bold yellow"),
+        Channel.SYSTEM: ("·", "[system]", "dim"),
     }
 
     def turn_header(self, turn: int, time: str | None = None) -> None:
@@ -247,17 +249,17 @@ class RichTerminalRenderer(Renderer):
         from rich.text import Text
 
         if message.channel in AGENT_CHANNELS:
-            # Agent-trace lines name the acting character: "troll [reasoning] ...".
+            # Agent-trace lines name the acting character: "· troll [reasoning] ...".
             if message.channel is Channel.AGENT_ACTION:
-                label, style = "[action]", "bold cyan"
+                glyph, label, style = "▸", "[action]", "bold cyan"
             else:
-                label, style = self._AGENT_LABEL[message.channel]
+                glyph, label, style = self._AGENT_LABEL[message.channel]
             who = f"{message.actor} " if message.actor else ""
-            prefix = f"{who}{label} "
+            prefix = f"{glyph} {who}{label} "
         else:
-            # Every other line stands alone: "[narration] ...".
-            label, style = self._LINE.get(message.channel, ("", ""))
-            prefix = f"{label} " if label else ""
+            # Every other line stands alone: "» [narration] ...".
+            glyph, label, style = self._LINE.get(message.channel, ("", "", ""))
+            prefix = f"{glyph} {label} " if label else (f"{glyph} " if glyph else "")
 
         # Align continuation lines (e.g. a multi-line observation) under the body.
         body = message.text.replace("\n", "\n" + " " * len(prefix))

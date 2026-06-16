@@ -119,18 +119,20 @@ already produces today:
 
 | Channel | Meaning | Today's source | Terminal style | Web CSS class (exists) |
 |---------|---------|----------------|----------------|------------------------|
-| `NARRATION` | World/action result | `Parser.ok()` | `[narration]`, green | `.msg-output` |
-| `BLOCKED` | Action failed a precondition | `Parser.fail()` | `[blocked]`, red | `.msg-error` |
-| `COMMAND` | The actor's echoed command | app echoes `> cmd` | `[player command]`, bold yellow | `.msg-command` |
-| `AGENT_OBSERVATION` | ReAct "Observe" — context + tiered goals (#28) | `build_npc_context` (verbose) | `actor [observation]`, dim cyan | *(new)* `.msg-npc_observation` |
-| `AGENT_REASONING` | ReAct "Think" | `npc_log` `[reasoning]` line | `actor [reasoning]`, cyan | `.msg-npc_log` |
-| `AGENT_ACTION` | ReAct chosen command | `npc_log` `[action]` line | `actor [action]`, bold cyan | `.msg-npc_log` |
-| `AGENT_REFLECTION` | ReAct "Reflect" after a failure | `_reflect` | `actor [reflection]`, yellow | *(new)* `.msg-npc_reflection` |
-| `SYSTEM` | Turn header, clock, meta-commands, game-over | game loop / clock | turn rule + `[system]`, dim | *(new)* `.msg-system` |
+| `NARRATION` | World/action result | `Parser.ok()` | `» [narration]`, green | `.msg-output` |
+| `NPC_NARRATION` | NPC action result | `Parser.npc_ok()` | `» [npc]`, magenta | `.msg-npc_action` |
+| `BLOCKED` | Action failed a precondition | `Parser.fail()` | `✗ [blocked]`, red | `.msg-error` |
+| `COMMAND` | The actor's echoed command | app echoes `> cmd` | `> [player command]`, bold yellow | `.msg-command` |
+| `AGENT_OBSERVATION` | ReAct "Observe" — context + tiered goals (#28) | `build_npc_context` (verbose) | `◦ actor [observation]`, dim cyan | *(new)* `.msg-npc_observation` |
+| `AGENT_REASONING` | ReAct "Think" | `npc_log` `[reasoning]` line | `· actor [reasoning]`, cyan | `.msg-npc_log` |
+| `AGENT_ACTION` | ReAct chosen command | `npc_log` `[action]` line | `▸ actor [action]`, bold cyan | `.msg-npc_log` |
+| `AGENT_REFLECTION` | ReAct "Reflect" after a failure | `_reflect` | `↺ actor [reflection]`, yellow | *(new)* `.msg-npc_reflection` |
+| `SYSTEM` | Turn header, clock, meta-commands, game-over | game loop / clock | turn rule + `· [system]`, dim | *(new)* `.msg-system` |
 
-`NARRATION`, `BLOCKED`, `COMMAND`, `AGENT_REASONING`, and `AGENT_ACTION` already
-have a web class today; the rest are small additions. Nothing is invented — every
-channel corresponds to a line the engine already emits or builds.
+`NARRATION`, `NPC_NARRATION`, `BLOCKED`, `COMMAND`, `AGENT_REASONING`, and
+`AGENT_ACTION` already have a web class today; the rest are small additions.
+Nothing is invented — every channel corresponds to a line the engine already emits
+or builds.
 
 ---
 
@@ -152,7 +154,7 @@ installed:
 
 | Renderer | Surface | What it does |
 |----------|---------|--------------|
-| `RichTerminalRenderer` | terminal, notebooks | **Default.** Uses [`rich`](https://rich.readthedocs.io): turn rules and a bracketed per-channel label on every line (`[narration]`, `[action]`, `[observation]`, …), with the actor on agent-trace lines (`troll [reasoning] …`), each colored as a secondary cue. Auto-detects a non-TTY / `NO_COLOR` and degrades to plain text. |
+| `RichTerminalRenderer` | terminal, notebooks | **Default.** Uses [`rich`](https://rich.readthedocs.io): turn rules plus a leading glyph and bracketed per-channel label on every line (`» [narration]`, `▸ troll [action]`, `◦ troll [observation]`, …), with the actor on agent-trace lines, each colored as a tertiary cue. Auto-detects a non-TTY / `NO_COLOR` and degrades to plain text. |
 | `PlainRenderer` | tests, logs, CI, no-`rich` fallback | No color or markup; one stable line per message. Guarantees the engine runs even if `rich` isn't installed, and keeps test output deterministic. |
 | `WebRenderer` | Flask web app | Emits today's `{"type": ..., "text": ...}` dicts via a `channel → CSS class` map. The template and `style.css` are essentially unchanged. |
 | `JSONRenderer` *(future)* | Godot / external renderer | One JSON record per message — the structured change feed the 2D renderer subscribes to. Realizes the export-API idea in [multi-character-play.md](multi-character-play.md) §5/§7. |
@@ -183,30 +185,32 @@ troll [action] attack player with club
 The troll swings its club at you!
 ```
 
-**After** (turn-structured, colored, every line self-labeled — the ReAct cycle
-legible at a glance):
+**After** (turn-structured, colored, every line has both a glyph cue and a label
+— the ReAct cycle is legible at a glance):
 
 ```
 ── Turn 3 · 8:45 AM (morning) ───────────────────────────────
-[player command] wait
-troll [observation] You are on the drawbridge. An intruder blocks the way…
-troll [reasoning] My growl didn't scare them off — escalate.
-troll [action] attack player
-[blocked] The troll has no weapon.
-troll [reflection] I need a weapon; I'm holding a club.
-troll [action] attack player with club
-[npc] The troll swings its club at you!
+> [player command] wait
+◦ troll [observation] You are on the drawbridge. An intruder blocks the way…
+· troll [reasoning] My growl didn't scare them off — escalate.
+▸ troll [action] attack player
+✗ [blocked] The troll has no weapon.
+↺ troll [reflection] I need a weapon; I'm holding a club.
+▸ troll [action] attack player with club
+» [npc] The troll swings its club at you!
 ```
 
-Every line names its channel in brackets — `[player command]`, `[observation]`,
-`[reasoning]`, `[action]`, `[blocked]`, `[npc]` — so the *kind* of line is legible
-from the text alone; color is only a secondary cue (which matters because several
-channels would otherwise read as near-identical hues). In a real terminal the
-labels are colored (narration green, the agent trace cyan, blocked red, …) and the
-turn rule is drawn at the first agent line. Agent-trace lines also carry the actor
-(`troll [reasoning] …`), so two NPCs acting in one turn never blur together. An
-action's outcome renders as the *next* line (a `[narration]`/`[npc]` or a
-`[blocked]`), not merged onto the action line. That self-labeling is also what keeps
+Every line opens with a quick glyph cue and names its channel in brackets —
+`> [player command]`, `◦ troll [observation]`, `· troll [reasoning]`,
+`▸ troll [action]`, `✗ [blocked]`, `» [npc]` — so the *kind* of line is legible
+from the text alone;
+color is only a tertiary cue (which matters because several channels would
+otherwise read as near-identical hues). In a real terminal the labels are colored
+(narration green, the agent trace cyan, blocked red, …) and the turn rule is drawn
+at the first agent line. Agent-trace lines also carry the actor
+(`· troll [reasoning] …`), so two NPCs acting in one turn never blur together. An
+action's outcome renders as the *next* line (a `» [narration]`/`» [npc]` or a
+`✗ [blocked]`), not merged onto the action line. That paired cue is also what keeps
 the trace coherent under the **simultaneous** turn mode (#30), where an agent
 reasons in the *gather* phase but acts later at *resolve* — see §11.
 
@@ -392,15 +396,16 @@ guard's `take key` fails at resolve and it reflects-and-retries):
 
 ```
 ── Turn 4 · simultaneous ─────────────────────────────────
-guard
-  ↳ think     The key is on the table — grab it before the troll.
-  ✗ act       take key       → blocked: I don't see it.   (troll took it at resolve)
-  ↳ reflect   Someone beat me to it; guard the door instead.
-  ✓ act       go south
-troll
-  ↳ think     I want that key.
-  ✓ act       take key
-  » The troll snatches the brass key.
+◦ guard [observation] The brass key is on the table.
+· guard [reasoning] Grab it before the troll.
+▸ guard [action] take key
+✗ [blocked] I don't see it. (troll took it at resolve)
+↺ guard [reflection] Someone beat me to it; guard the door instead.
+▸ guard [action] go south
+◦ troll [observation] The brass key is on the table.
+· troll [reasoning] I want that key.
+▸ troll [action] take key
+» [npc] The troll snatches the brass key.
 ```
 
 ### Tiered goals (#28)
@@ -537,20 +542,21 @@ class RichTerminalRenderer(Renderer):
         self.console = Console()              # rich auto-detects TTY / NO_COLOR
         self.level = level
 
-    # Every channel -> (bracketed label, style). The label is the primary cue;
-    # color is secondary. Agent-trace channels are looked up the same way and
-    # additionally prefixed with the actor in emit().
+    # Every channel -> (glyph, bracketed label, style). The glyph is the quick
+    # visual cue, the label is the durable text cue, and color is tertiary.
+    # Agent-trace channels are looked up the same way and additionally prefixed
+    # with the actor in emit().
     _LINE = {
-        Channel.COMMAND:   ("[player command]", "bold yellow"),
-        Channel.NARRATION: ("[narration]", "green"),
-        Channel.BLOCKED:   ("[blocked]",   "red"),
+        Channel.COMMAND:   (">", "[player command]", "bold yellow"),
+        Channel.NARRATION: ("»", "[narration]", "green"),
+        Channel.BLOCKED:   ("✗", "[blocked]", "red"),
         # …
     }
     _AGENT_LABEL = {
-        Channel.AGENT_OBSERVATION: ("[observation]", "dim cyan"),
-        Channel.AGENT_REASONING:   ("[reasoning]", "cyan"),
-        Channel.AGENT_ACTION:      ("[action]", "bold cyan"),
-        Channel.AGENT_REFLECTION:  ("[reflection]", "yellow"),
+        Channel.AGENT_OBSERVATION: ("◦", "[observation]", "dim cyan"),
+        Channel.AGENT_REASONING:   ("·", "[reasoning]", "cyan"),
+        Channel.AGENT_ACTION:      ("▸", "[action]", "bold cyan"),
+        Channel.AGENT_REFLECTION:  ("↺", "[reflection]", "yellow"),
     }
 
     def turn_header(self, turn, time=None):
@@ -560,12 +566,13 @@ class RichTerminalRenderer(Renderer):
     def emit(self, message):
         if not self._visible(message.channel):   # §6 verbosity gate
             return
-        if message.channel in AGENT_CHANNELS:    # "troll [reasoning] …"
-            label, style = self._AGENT_LABEL[message.channel]
-            prefix = f"{message.actor} {label} "
-        else:                                    # "[narration] …"
-            label, style = self._LINE[message.channel]
-            prefix = f"{label} "
+        if message.channel in AGENT_CHANNELS:    # "· troll [reasoning] …"
+            glyph, label, style = self._AGENT_LABEL[message.channel]
+            who = f"{message.actor} " if message.actor else ""
+            prefix = f"{glyph} {who}{label} "
+        else:                                    # "» [narration] …"
+            glyph, label, style = self._LINE[message.channel]
+            prefix = f"{glyph} {label} "
         # An action's outcome is NOT merged onto the act line; it arrives as the
         # next NARRATION/BLOCKED message and renders on its own labeled line.
         self.console.print(f"[{style}]{prefix}{message.text}[/]")
@@ -606,24 +613,24 @@ class CaptureRenderer(Renderer):
 $ LLM_PROVIDER=mock python -m notebooks.hw1_llm.play
 
 ── Turn 0 · 8:00 AM (morning) ────────────────────────────────
-DRAWBRIDGE
-You are on a drawbridge over the moat. A troll blocks the way north.
-Exits:
-  » North to the gatehouse
+· [system] DRAWBRIDGE
+» [narration] You are on a drawbridge over the moat. A troll blocks the way north.
+· [system] Exits:
+» [narration] North to the gatehouse
 
-> wait
+> [player command] wait
 
 ── Turn 1 · 8:15 AM (morning) ────────────────────────────────
-troll
-  ↳ think     An intruder is on my drawbridge. Warn them off.
-  ✓ act       growl player
-  » The troll growls menacingly.
+· troll [reasoning] An intruder is on my drawbridge. Warn them off.
+▸ troll [action] growl player
+» [npc] The troll growls menacingly.
 ```
 
 ### Notes
 
-- **Glyphs/Unicode:** `rich` handles the box-drawing and arrows; `PlainRenderer`
-  substitutes ASCII (`->`, `[x]`/`[ok]`) so logs stay 7-bit clean.
+- **Glyphs/Unicode:** `RichTerminalRenderer` uses box-drawing plus glyph cues and
+  bracketed labels. `PlainRenderer` keeps the simpler legacy text shape for
+  deterministic logs and fixtures.
 - **`wrap_text`:** `rich` wraps to the console width on its own; `PlainRenderer`
   keeps the existing `wrap_text(..., 80)` for stable fixtures.
 - **Where the renderer lives:** the `Game`/`Parser` holds one renderer (default
