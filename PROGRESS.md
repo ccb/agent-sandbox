@@ -6,13 +6,9 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 
 | Status | Item | Title | Issue | Owner |
 | --- | --- | --- | --- | --- |
+| 🟢 Ready to merge | [#68](https://github.com/ccb/agent-sandbox/pull/68) | Sync MkDocs API reference with the engine | — | [@aking526](https://github.com/aking526) |
 | 🟢 Ready to merge | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — | [@aking526](https://github.com/aking526) |
-| 🟢 Ready to merge | [#52](https://github.com/ccb/agent-sandbox/pull/52) | Container / capacity inventory mechanics | [#43](https://github.com/ccb/agent-sandbox/issues/43) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
-| 🟠 Needs conflict resolution | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
-| 🟠 Needs conflict resolution | [#58](https://github.com/ccb/agent-sandbox/pull/58) | Goal-influencing dialogue (persuasion / negotiation) | [#46](https://github.com/ccb/agent-sandbox/issues/46) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
-| 🟠 Needs conflict resolution | [#57](https://github.com/ccb/agent-sandbox/pull/57) | Structured tool/function-calling interface for the LLM clients | [#44](https://github.com/ccb/agent-sandbox/issues/44) | [@MaEnqiMark](https://github.com/MaEnqiMark) |
-| 🟠 Needs conflict resolution | [#54](https://github.com/ccb/agent-sandbox/pull/54) | Per-character knowledge / belief layer | [#45](https://github.com/ccb/agent-sandbox/issues/45) | [@aking526](https://github.com/aking526) |
-| 🟠 Needs conflict resolution | [#49](https://github.com/ccb/agent-sandbox/pull/49) | Contested resources + retry policy in simultaneous turn mode | [#42](https://github.com/ccb/agent-sandbox/issues/42) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
@@ -49,7 +45,7 @@ automatically — a Claude Code hook (`.claude/hooks/update_progress.py`) re-que
 after every `git commit` and rewrites each PR-backed row's status. Everything else is
 hand-curated: update the title/owner when a PR opens, add a row when work starts, and when
 an item merges move it from this table to the Shipped section (the hook flags merged PRs but
-leaves the move to you). Last synced with GitHub on **2026-06-15**.
+leaves the move to you). Last synced with GitHub on **2026-06-16**.
 
 ---
 
@@ -62,6 +58,9 @@ leaves the move to you). Last synced with GitHub on **2026-06-15**.
 - [#5](https://github.com/ccb/agent-sandbox/issues/5) Wire ReAct behavior into the live game end-to-end — [#21](https://github.com/ccb/agent-sandbox/pull/21)
 - [#8](https://github.com/ccb/agent-sandbox/issues/8) Agent-to-agent interaction (actor seam + `say`) — [#19](https://github.com/ccb/agent-sandbox/pull/19)
 - [#23](https://github.com/ccb/agent-sandbox/issues/23) First-class tiered goals — [#28](https://github.com/ccb/agent-sandbox/pull/28)
+- [#44](https://github.com/ccb/agent-sandbox/issues/44) Structured tool/function-calling interface for the LLM clients — [#57](https://github.com/ccb/agent-sandbox/pull/57)
+- [#45](https://github.com/ccb/agent-sandbox/issues/45) Per-character knowledge / belief layer — [#54](https://github.com/ccb/agent-sandbox/pull/54)
+- [#46](https://github.com/ccb/agent-sandbox/issues/46) Goal-influencing dialogue (persuasion / negotiation) — [#58](https://github.com/ccb/agent-sandbox/pull/58)
 - Multi-agent demo notebook — [#20](https://github.com/ccb/agent-sandbox/pull/20)
 
 ### World model & engine
@@ -72,6 +71,8 @@ leaves the move to you). Last synced with GitHub on **2026-06-15**.
 - [#24](https://github.com/ccb/agent-sandbox/issues/24) Per-turn NPC time budget / variable action durations — [#32](https://github.com/ccb/agent-sandbox/pull/32)
 - [#25](https://github.com/ccb/agent-sandbox/issues/25) Opt-in simultaneous turn mode (gather/resolve) — [#30](https://github.com/ccb/agent-sandbox/pull/30)
 - [#40](https://github.com/ccb/agent-sandbox/issues/40) Affordance tags + wear/wield slots — [#53](https://github.com/ccb/agent-sandbox/pull/53)
+- [#42](https://github.com/ccb/agent-sandbox/issues/42) Contested resources + retry policy in simultaneous turn mode — [#49](https://github.com/ccb/agent-sandbox/pull/49)
+- [#43](https://github.com/ccb/agent-sandbox/issues/43) Container / capacity inventory mechanics — [#52](https://github.com/ccb/agent-sandbox/pull/52)
 - Magic-string → enum refactor — [#48](https://github.com/ccb/agent-sandbox/pull/48)
 
 ### Testing, docs & tooling
@@ -81,6 +82,7 @@ leaves the move to you). Last synced with GitHub on **2026-06-15**.
 - Local-only MkDocs documentation site — [#50](https://github.com/ccb/agent-sandbox/pull/50)
 - Move `test_npc_behaviors.py` into `tests/` — [#51](https://github.com/ccb/agent-sandbox/pull/51)
 - GitHub Actions CI running the `/check` gates — [#55](https://github.com/ccb/agent-sandbox/pull/55)
+- Disambiguate `MockReActClient` decisions from tool_calls — [#67](https://github.com/ccb/agent-sandbox/pull/67)
 
 ### Design docs merged
 - Unified output & agent-trace rendering — [#31](https://github.com/ccb/agent-sandbox/pull/31)
