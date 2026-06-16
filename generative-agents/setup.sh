@@ -47,6 +47,32 @@ if [ -d "$SRC/storage/$BASE_SIM" ]; then
   rsync -a "$SRC/storage/$BASE_SIM/" "$DST/storage/$BASE_SIM/"
 fi
 
+# The upstream landing page (http://localhost:8000/) just says "server is up and
+# running" with no link, which is a confusing dead-end -- the visualization lives
+# at /replay/<sim>/0/. Replace it with a version that links straight to the
+# generated replay. (rsync above restores the pristine template each run, so this
+# overwrite re-applies every time and stays idempotent.)
+SIM_CODE="mock_the_ville_isabella_maria_klaus"
+cat > "$DST/templates/landing/landing.html" <<'LANDING'
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+<div style="padding:2em; font-family:sans-serif; line-height:1.5">
+  <img src="{% static 'img/atlas.png' %}"><br>
+  Your environment server is up and running!
+  <h2 style="margin-top:1em">Generative Agents — Smallville (mock-LLM port)</h2>
+  <p style="font-size:1.2em">
+    ▶ <a href="/replay/mock_the_ville_isabella_maria_klaus/0/">Open the Smallville replay</a>
+  </p>
+  <p style="color:#666">
+    Seeing a 404 or an empty map? Generate a simulation first:<br>
+    <code>../venv/bin/python -m backend.run_simulation</code>
+  </p>
+</div>
+{% endblock content %}
+LANDING
+
 echo
 echo "Frontend ready at: $DST"
 echo
