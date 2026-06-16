@@ -26,9 +26,17 @@
 
 				</h2>
 
+				<!-- Collapse the map and just read the agent-info panels below
+				     (toggles visibility only; the replay keeps running). -->
+				<div style="text-align: right; margin-top: 0.5em">
+					<button id="toggle_map_button" type="button" class="btn btn-default btn-sm" title="Hide or show the map">
+						<i class="glyphicon glyphicon-eye-close"></i> Hide map
+					</button>
+				</div>
+
 				<!-- Zoom / navigation controls. These reach the Phaser camera via
 				     the global `mainCamera` set up in home/main_script.html. -->
-				<div style="text-align: right; margin-top: 0.5em">
+				<div id="zoom-controls" style="text-align: right; margin-top: 0.5em">
 					<div class="btn-group" role="group" aria-label="Zoom controls">
 						<button id="zoom_out_button" type="button" class="btn btn-default" title="Zoom out">
 							<i class="glyphicon glyphicon-minus"></i>
