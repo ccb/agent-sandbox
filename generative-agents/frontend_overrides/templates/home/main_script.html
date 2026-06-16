@@ -101,6 +101,7 @@
 	// buttons (wired up at the bottom of this script) read and write them, just
 	// like the Play/Pause buttons flip the replay globals.
 	let mainCamera = null;   // Phaser's main camera, set in create()
+	let gameScale = null;    // Phaser Scale Manager, set in create(); used to re-fit on "Show map"
 	let clampCamera = null;  // keeps the camera inside the map (or centers it), set in create()
 	let minZoom = 0.1;       // most zoomed-OUT allowed (= whole map fits); set in create()
 	let maxZoom = 1.5;       // most zoomed-IN allowed (1.0 = native tile resolution)
@@ -357,6 +358,7 @@
 
 	  // Publish to the global bridge so the DOM zoom buttons / arrow keys reach it.
 	  mainCamera = camera;
+	  gameScale = this.scale;   // lets the "Show map" toggle re-fit the canvas
 
 	  // Keep things correct whenever the canvas changes size (window resize, and
 	  // also once on startup if the container hadn't finished laying out when this
@@ -366,6 +368,11 @@
 	  // were viewing the whole map keep it fitted; otherwise just clamp their zoom
 	  // so they can never end up more zoomed-out than the whole map.
 	  this.scale.on("resize", (gameSize) => {
+	    // When the map is collapsed (display:none) the container reports 0x0;
+	    // bail so we don't divide by zero / zoom to NaN. We re-fit on "Show map".
+	    if (gameSize.width < 1 || gameSize.height < 1) {
+	      return;
+	    }
 	    camera.setSize(gameSize.width, gameSize.height);
 	    const wasCover = Math.abs(camera.zoom - coverZoom) < 1e-3;
 	    const wasFit = camera.zoom <= minZoom + 1e-4;
@@ -724,6 +731,30 @@
 			}
 			mainCamera.setZoom(fitZoom);
 			if (clampCamera) clampCamera();
+		};
+	}
+
+	// *** COLLAPSE / EXPAND THE MAP ***
+	// Hide the Phaser canvas (and the now-useless zoom controls) so the page is
+	// just the agent-info panels. The replay loop keeps running while hidden, so
+	// the Current Action / Location / Conversation fields still update live.
+	var toggle_map_button = document.getElementById("toggle_map_button");
+	if (toggle_map_button) {
+		toggle_map_button.onclick = function () {
+			var container = document.getElementById("game-container");
+			var zoomControls = document.getElementById("zoom-controls");
+			var willShow = (container.style.display === "none");
+			container.style.display = willShow ? "" : "none";
+			if (zoomControls) {
+				zoomControls.style.display = willShow ? "" : "none";
+			}
+			toggle_map_button.innerHTML = willShow
+				? '<i class="glyphicon glyphicon-eye-close"></i> Hide map'
+				: '<i class="glyphicon glyphicon-eye-open"></i> Show map';
+			// Re-measure the canvas so the camera re-fits the now-visible map.
+			if (willShow && gameScale) {
+				gameScale.refresh();
+			}
 		};
 	}
 </script>

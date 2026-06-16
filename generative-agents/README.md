@@ -149,12 +149,25 @@ the maze assets aren't present — run `./setup.sh` first.)
 - **Live (non-replay) mode**, where the backend serves `update_environment`
   step-by-step instead of pre-generating the whole run.
 
+## Known issues
+
+- **Replay map doesn't fill the view on some setups (UNRESOLVED).** The map is
+  meant to fill the view from the top-left, with camera zoom/pan (`Scale.RESIZE`,
+  a "cover" default zoom, on-screen +/-/Reset). On at least one machine it instead
+  renders centered / pushed to the bottom-right with black space along the top and
+  left, and rightward panning is limited. The camera/scale logic verifies correct
+  in headless Chrome at devicePixelRatio 1 and 2, so the root cause is still
+  unknown. **Workaround:** click **Hide map** on the replay page to collapse the
+  map and read the agent-info panels (current action, location, conversation)
+  directly — the replay keeps running while the map is hidden. See the notes in
+  `setup.sh` and `frontend_overrides/templates/home/main_script.html`.
+
 ## Layout
 
 ```
 generative-agents/
   run-replay.sh               # one command: generate-if-needed + serve the replay
-  setup.sh                    # copy frontend + assets from the external/ clone
+  setup.sh                    # copy frontend + assets from the clone, then apply overrides
   requirements-frontend.txt   # Django 2.2 etc. (frontend venv only)
   backend/
     build_world.py            # Smallville world + cast in the engine
@@ -165,7 +178,8 @@ generative-agents/
     exporter.py               # write the frontend's movement/environment/meta files
     run_simulation.py         # the driver + CLI entry point
   tests/                      # offline tests
-  frontend/                   # (git-ignored) populated by setup.sh
+  frontend_overrides/         # committed replay-UI files setup.sh copies into frontend/
+  frontend/                   # (git-ignored) populated by setup.sh (clone + overrides)
 ```
 
 ## Credits
