@@ -185,12 +185,16 @@ class PlainRenderer(Renderer):
 
 
 class RichTerminalRenderer(Renderer):
-    """Colored, turn-structured terminal output via ``rich``.
+    """Colored, labeled, turn-structured terminal output via ``rich``.
 
-    Inserts a turn rule lazily -- when the first agent/NPC message of a new turn
-    arrives -- so there are no empty headers, and groups an agent's trace under
-    its name. Never instantiated unless ``rich`` imports (see
-    :func:`default_renderer`).
+    Every line carries a bracketed label naming its channel -- ``[narration]``,
+    ``[action]``, ``[observation]``, ... -- so the *kind* of line is legible from
+    the text alone; color is only a secondary cue (which keeps the trace readable
+    even when several channels share a hue). Agent-trace lines are additionally
+    attributed to the acting character (``troll [reasoning] ...``), matching the
+    :class:`PlainRenderer`. A turn rule is drawn lazily -- when the first
+    agent/NPC line of a new turn arrives -- so there are no empty headers. Never
+    instantiated unless ``rich`` imports (see :func:`default_renderer`).
     """
 
     def __init__(self, level: str = NORMAL, console=None):
@@ -199,22 +203,25 @@ class RichTerminalRenderer(Renderer):
         self.level = level
         self.console = console if console is not None else Console()
         self._last_turn = None
-        self._last_actor = None
 
-    # channel -> (label, style) for the indented agent-trace lines
+    # channel -> (label, style) for the indented agent-trace lines. AGENT_ACTION
+    # is special-cased in emit(); the rest are looked up here.
     _AGENT_LABEL = {
-        Channel.AGENT_OBSERVATION: ("  observe  ", "dim"),
-        Channel.AGENT_REASONING: ("  think    ", "dim"),
-        Channel.AGENT_REFLECTION: ("  reflect  ", "yellow"),
+        Channel.AGENT_OBSERVATION: ("[observation]", "dim cyan"),
+        Channel.AGENT_REASONING: ("[reasoning]", "cyan"),
+        Channel.AGENT_REFLECTION: ("[reflection]", "yellow"),
     }
-    # channel -> (prefix, style) for the top-level lines
+    # channel -> (label, style) for the top-level lines. The bracketed label is
+    # what makes each line legible regardless of color; the color is only a
+    # secondary cue, so the styles are kept distinct across channels (no two
+    # greens).
     _LINE = {
-        Channel.NARRATION: ("» ", "green"),
-        Channel.NPC_NARRATION: ("» ", "magenta"),
-        Channel.BLOCKED: ("✗ ", "red"),
-        Channel.CONFLICT: ("⚔ ", "yellow"),
-        Channel.COMMAND: ("> ", "bold yellow"),
-        Channel.SYSTEM: ("", "dim"),
+        Channel.COMMAND: ("[player command]", "bold yellow"),
+        Channel.NARRATION: ("[narration]", "green"),
+        Channel.NPC_NARRATION: ("[npc]", "magenta"),
+        Channel.BLOCKED: ("[blocked]", "red"),
+        Channel.CONFLICT: ("[conflict]", "bold yellow"),
+        Channel.SYSTEM: ("[system]", "dim"),
     }
 
     def turn_header(self, turn: int, time: str | None = None) -> None:
@@ -223,12 +230,12 @@ class RichTerminalRenderer(Renderer):
         label = f"Turn {turn}" + (f" · {time}" if time else "")
         self.console.rule(Text(label, style="bold cyan"), align="left")
         self._last_turn = turn
-        self._last_actor = None
 
     def emit(self, message: Message) -> None:
         if not self._visible(message):
             return
-        # Lazy turn rule: only when an agent/NPC line opens a new turn.
+        # Lazy turn rule: only when an agent/NPC line opens a new turn, so the
+        # player's own command never draws an empty header above it.
         if (
             message.turn is not None
             and message.turn != self._last_turn
@@ -237,33 +244,24 @@ class RichTerminalRenderer(Renderer):
         ):
             self.turn_header(message.turn, message.meta.get("time"))
 
+        from rich.text import Text
+
         if message.channel in AGENT_CHANNELS:
-            self._emit_agent(message)
-            return
+            # Agent-trace lines name the acting character: "troll [reasoning] ...".
+            if message.channel is Channel.AGENT_ACTION:
+                label, style = "[action]", "bold cyan"
+            else:
+                label, style = self._AGENT_LABEL[message.channel]
+            who = f"{message.actor} " if message.actor else ""
+            prefix = f"{who}{label} "
+        else:
+            # Every other line stands alone: "[narration] ...".
+            label, style = self._LINE.get(message.channel, ("", ""))
+            prefix = f"{label} " if label else ""
 
-        from rich.text import Text
-
-        # A player-level line (the player's own narration/command, or a system
-        # notice) ends the current agent block; an action's outcome
-        # (BLOCKED / NPC_NARRATION) stays attached to it, so the actor name
-        # isn't reprinted around it.
-        if message.channel in (Channel.NARRATION, Channel.COMMAND, Channel.SYSTEM):
-            self._last_actor = None
-        prefix, style = self._LINE.get(message.channel, ("", ""))
-        self.console.print(Text(f"{prefix}{message.text}", style=style or None))
-
-    def _emit_agent(self, m: Message) -> None:
-        from rich.text import Text
-
-        if m.actor != self._last_actor:
-            self.console.print(Text(str(m.actor), style="bold magenta"))
-            self._last_actor = m.actor
-        if m.channel is Channel.AGENT_ACTION:
-            self.console.print(Text("  · act     ", style="cyan") + Text(m.text))
-            return
-        label, style = self._AGENT_LABEL[m.channel]
-        body = m.text.replace("\n", "\n" + " " * len(label))
-        self.console.print(Text(label, style=style) + Text(body, style=style))
+        # Align continuation lines (e.g. a multi-line observation) under the body.
+        body = message.text.replace("\n", "\n" + " " * len(prefix))
+        self.console.print(Text(f"{prefix}{body}", style=style or None))
 
 
 class CaptureRenderer(Renderer):
