@@ -1,0 +1,736 @@
+{% load staticfiles %}
+
+<div id="step" style="display:none">{{step}}</div>
+<div id="sim_code" style="display:none">{{sim_code}}</div>
+<div id="persona_name_list" style="display:none">{{persona_name_str}}</div>
+<div id="persona_init_pos" style="display:none">
+	{% for i in persona_init_pos %}
+		<span>{{i.0}},{{i.1}},{{i.2}}</span>
+	{% endfor %}
+</div>
+
+<script type="text/javascript">
+	/*
+	  Main resources: 
+	  https://www.youtube.com/watch?v=cKIG1lKwLeo&t=401s&ab_channel=HongLy
+	  For the ground zero code, see the exported files from here: 
+	  https://codepen.io/mikewesthad/pen/BVeoYP?editors=1111 
+
+	  Also worth taking a look: 
+	  https://www.youtube.com/watch?v=fdXcD9X4NrQ&ab_channel=MorganPage
+	  and 
+	  https://www.youtube.com/watch?v=MR2CvWxOEsw&ab_channel=MattWilber
+	 */
+
+
+	// ###########################################################################
+	// PREAMBLE
+	// ###########################################################################
+
+	// <step> -- one full loop around all three phases determined by <phase> is 
+	// a step. We use this to link the steps in the backend. 
+	let step = parseInt(document.getElementById('step').innerHTML);
+	let sim_code = document.getElementById('sim_code').innerHTML;
+	// let persona_names = document.getElementById('persona_name_list').innerHTML.split(",");
+
+	let spans = document.getElementById('persona_init_pos').getElementsByTagName('span');
+	let persona_names = {};
+	for(var i = 0, l = spans.length; i < l; i++){
+		let x = spans[i].innerText.split(",");
+		persona_names[x[0]] = [parseInt(x[1]), parseInt(x[2])]
+	}
+
+
+	// Phaser 3.0 global settings. 
+	// Configuration meant to be passed to the main Phaser game instance. 
+	// The canvas now fills the #game-container box rather than being the size of
+	// the whole map. Phaser's Scale Manager (mode RESIZE) keeps the canvas matched
+	// to the container's pixel size, including when the browser window resizes.
+	// How much of the MAP we see is controlled by the camera zoom (set up in
+	// create()), NOT by the canvas size.
+	const map_width = 4480;   // 140 tiles * 32px -- the map's true pixel size
+	const map_height = 3200;  // 100 tiles * 32px
+	const config = {
+	  type: Phaser.AUTO,
+	  parent: "game-container",
+	  pixelArt: true,
+	  scale: {
+	    // RESIZE: make the canvas exactly fill #game-container in BOTH width and
+	    // height, so there are never any letterbox bars around the game view.
+	    // (FIT, by contrast, locks the canvas to a fixed aspect ratio and centers
+	    // it, which black-bars any container whose shape differs.) How much of the
+	    // map you see is set entirely by the camera zoom in create(); the "fit the
+	    // whole map" zoom is computed from the live canvas size and recomputed on
+	    // every window resize, so there's no startup layout-timing race.
+	    mode: Phaser.Scale.RESIZE,
+	    autoCenter: Phaser.Scale.NO_CENTER },
+	  physics: {
+	    default: "arcade",
+	    arcade: {
+	      gravity: { y: 0 } } },
+	  scene: {
+	    preload: preload,
+	    create: create,
+	    update: update } };
+
+	// const config = {
+	//   type: Phaser.AUTO,
+	//   width: 4480,
+	//   height: 3200,
+	//   parent: "game-container",
+	//   pixelArt: true,
+	//   physics: {
+	//     default: "arcade",
+	//     arcade: {
+	//       gravity: { y: 0 } } },
+	//   scene: {
+	//     preload: preload,
+	//     create: create,
+	//     update: update },
+	//   scale: {zoom: 0.5} };
+
+	// Creating the game instance and setting up the main Phaser variables that  
+	// will be used in it. 
+	const game = new Phaser.Game(config);
+	let cursors;
+	let player;
+	let showDebug = false;
+
+	// *** ZOOM / NAVIGATION BRIDGE ***
+	// create() fills these in once the camera exists. The on-screen +/-/Reset
+	// buttons (wired up at the bottom of this script) read and write them, just
+	// like the Play/Pause buttons flip the replay globals.
+	let mainCamera = null;   // Phaser's main camera, set in create()
+	let clampCamera = null;  // keeps the camera inside the map (or centers it), set in create()
+	let minZoom = 0.1;       // most zoomed-OUT allowed (= whole map fits); set in create()
+	let maxZoom = 1.5;       // most zoomed-IN allowed (1.0 = native tile resolution)
+	let fitZoom = 0.1;       // the "fit whole map" zoom; the Reset button returns here
+
+	// Persona related variables. This should have the name of the persona as its 
+	// keys, and the instances of the Persona class as the values.
+	var spawn_tile_loc = {};
+	// for (var i = 0; i < persona_names.length; i++) { 
+	// 	spawn_tile_loc[persona_names[i]] = [0, 0]
+	// }
+
+	for (var key in persona_names){
+		spawn_tile_loc[key] = persona_names[key] ;
+	}
+	console.log(spawn_tile_loc);
+
+	var personas = {};
+	var pronunciatios = {};
+	let anims_direction;
+	let pre_anims_direction;
+	let pre_anims_direction_dict = {};
+
+	let curr_maze = "the_ville";
+	let replay_started = "{{ mode }}" !== "replay";
+
+	// <tile_width> is the width of one individual tile (tiles are square)
+	let tile_width = 32;
+	// Important: tile_width % movement_speed has to be 0. 
+	// <movement_speed> determines how fast we move at each upate cylce. 
+	let movement_speed = 32; 
+
+	// <timer_max> determines how frequently our update function will query the 
+	// frontend server. If it's higher, we wait longer cycles. 
+	let timer_max = 0;
+	let timer = timer_max;
+
+	// <phase> -- there are three phases: "process," "update," and "execute."
+	let phase = "update"; // or "update" or "execute"
+
+	// Variables for storing movements that are sent from the backend server.
+	let execute_movement;
+	let execute_count_max = tile_width/movement_speed;
+	let execute_count = execute_count_max;
+	let movement_target = {};
+	
+
+	// ###########################################################################
+	// ENGINE
+	// ###########################################################################
+
+	// Joon: Phaser 3.0 is oriented around "scenes" -- recall how Pokemon plays: 
+	//       there is the outdoor space, and then there is the indoor space; when
+	//       you go inside, you transition to a new "scene" and the outdoor space
+	//       basically disappears. 
+	//       A scene in Phaser has four key methods that are called at different
+	//       stages of rendering for different purposes. They are: 
+	//       init() -> preload() -> create() -> update()
+	//         init() is called only once at the very beginning. This is the 
+	//           initialization function in case that is needed. 
+	//         preload() is called once and preloads any of the assets
+	//         create() is also called once after preloading... creates sprites 
+	//           and actually displays stuff
+	//         update() is called on each frame during the game play 
+
+	function preload() {  
+	  // Loading the necessary images (e.g., the background image, character 
+	  // sprites). 
+
+	  // Joon: for load.image, the first parameter is simply the key value that
+	  //       you are passing in. The second parameter should be pointed to the
+	  //       png file that contains the tileset. 
+	  //       Also IMPORTANT: when you create a tileset in Tiled, always be  
+	  //       sure to check the "embedded" option. 
+	  this.load.image("blocks_1", "{% static 'assets/the_ville/visuals/map_assets/blocks/blocks_1.png' %}");
+	  this.load.image("walls", "{% static 'assets/the_ville/visuals/map_assets/v1/Room_Builder_32x32.png' %}");
+	  this.load.image("interiors_pt1", "{% static 'assets/the_ville/visuals/map_assets/v1/interiors_pt1.png' %}");
+	  this.load.image("interiors_pt2", "{% static 'assets/the_ville/visuals/map_assets/v1/interiors_pt2.png' %}");
+	  this.load.image("interiors_pt3", "{% static 'assets/the_ville/visuals/map_assets/v1/interiors_pt3.png' %}");
+	  this.load.image("interiors_pt4", "{% static 'assets/the_ville/visuals/map_assets/v1/interiors_pt4.png' %}");
+	  this.load.image("interiors_pt5", "{% static 'assets/the_ville/visuals/map_assets/v1/interiors_pt5.png' %}");
+	  this.load.image("CuteRPG_Field_B", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Field_B.png' %}");
+	  this.load.image("CuteRPG_Field_C", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Field_C.png' %}");
+	  this.load.image("CuteRPG_Harbor_C", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Harbor_C.png' %}");
+	  this.load.image("CuteRPG_Village_B", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Village_B.png' %}");
+	  this.load.image("CuteRPG_Forest_B", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Forest_B.png' %}");
+	  this.load.image("CuteRPG_Desert_C", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Desert_C.png' %}");
+	  this.load.image("CuteRPG_Mountains_B", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Mountains_B.png' %}");
+	  this.load.image("CuteRPG_Desert_B", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Desert_B.png' %}");
+	  this.load.image("CuteRPG_Forest_C", "{% static 'assets/the_ville/visuals/map_assets/cute_rpg_word_VXAce/tilesets/CuteRPG_Forest_C.png' %}");
+
+	  // Joon: This is the export json file you get from Tiled. 
+	  this.load.tilemapTiledJSON("map", "{% static 'assets/the_ville/visuals/the_ville_jan7.json' %}");
+
+	  // An atlas is a way to pack multiple images together into one texture. I'm 
+	  // using it to load all the player animations (walking left, walking right, 
+	  // etc.) in one image. For more info see:
+	  // https://labs.phaser.io/view.html?src=src/animation/texture%20atlas%20animation.js
+	  // If you don't use an atlas, you can do the same thing with a spritesheet, 
+	  // see: https://labs.phaser.io/view.html?src=src/animation/single%20sprite%20sheet.js
+	  // Joon: Technically, I think this guy had the best tutorial for atlas: 
+	  //       https://www.youtube.com/watch?v=fdXcD9X4NrQ&ab_channel=MorganPage
+	  this.load.atlas("atlas", 
+	                  "https://mikewesthad.github.io/phaser-3-tilemap-blog-posts/post-1/assets/atlas/atlas.png", 
+	                  "https://mikewesthad.github.io/phaser-3-tilemap-blog-posts/post-1/assets/atlas/atlas.json");
+	}
+
+	function create() {  
+	  const map = this.make.tilemap({ key: "map" });
+	  // Joon: Logging map is really helpful for debugging here: 
+	  //       console.log(map);
+
+	  // The first parameter is the name you gave to the tileset in Tiled and then
+	  // the key of the tileset image in Phaser's cache (i.e. the name you used in
+	  // preload)
+	  // Joon: for the first parameter here, really take a look at the 
+	  //       console.log(map) output. You need to make sure that the name 
+	  //       matches.
+	  const collisions = map.addTilesetImage("blocks", "blocks_1");
+	  const walls = map.addTilesetImage("Room_Builder_32x32", "walls");
+	  const interiors_pt1 = map.addTilesetImage("interiors_pt1", "interiors_pt1");
+	  const interiors_pt2 = map.addTilesetImage("interiors_pt2", "interiors_pt2");
+	  const interiors_pt3 = map.addTilesetImage("interiors_pt3", "interiors_pt3");
+	  const interiors_pt4 = map.addTilesetImage("interiors_pt4", "interiors_pt4");
+	  const interiors_pt5 = map.addTilesetImage("interiors_pt5", "interiors_pt5");
+	  const CuteRPG_Field_B = map.addTilesetImage("CuteRPG_Field_B", "CuteRPG_Field_B");
+	  const CuteRPG_Field_C = map.addTilesetImage("CuteRPG_Field_C", "CuteRPG_Field_C");
+	  const CuteRPG_Harbor_C = map.addTilesetImage("CuteRPG_Harbor_C", "CuteRPG_Harbor_C");
+	  const CuteRPG_Village_B = map.addTilesetImage("CuteRPG_Village_B", "CuteRPG_Village_B");
+	  const CuteRPG_Forest_B = map.addTilesetImage("CuteRPG_Forest_B", "CuteRPG_Forest_B");
+	  const CuteRPG_Desert_C = map.addTilesetImage("CuteRPG_Desert_C", "CuteRPG_Desert_C");
+	  const CuteRPG_Mountains_B = map.addTilesetImage("CuteRPG_Mountains_B", "CuteRPG_Mountains_B");
+	  const CuteRPG_Desert_B = map.addTilesetImage("CuteRPG_Desert_B", "CuteRPG_Desert_B");
+	  const CuteRPG_Forest_C = map.addTilesetImage("CuteRPG_Forest_C", "CuteRPG_Forest_C");
+
+	  // The first parameter is the layer name (or index) taken from Tiled, the 
+	  // second parameter is the tileset you set above, and the final two 
+	  // parameters are the x, y coordinate. 
+	  // Joon: The "layer name" that comes as the first parameter value  
+	  //       literally is taken from our Tiled layer name. So to find out what
+	  //       they are; you actually need to open up tiled and see how you 
+	  //       named things there. 
+	  let tileset_group_1 = [CuteRPG_Field_B, CuteRPG_Field_C, CuteRPG_Harbor_C, CuteRPG_Village_B, 
+	  											 CuteRPG_Forest_B, CuteRPG_Desert_C, CuteRPG_Mountains_B, CuteRPG_Desert_B, CuteRPG_Forest_C,
+	  											 interiors_pt1, interiors_pt2, interiors_pt3, interiors_pt4, interiors_pt5, walls];
+	  const bottomGroundLayer = map.createLayer("Bottom Ground", tileset_group_1, 0, 0);
+	  const exteriorGroundLayer = map.createLayer("Exterior Ground", tileset_group_1, 0, 0);
+	  const exteriorDecorationL1Layer = map.createLayer("Exterior Decoration L1", tileset_group_1, 0, 0);
+	  const exteriorDecorationL2Layer = map.createLayer("Exterior Decoration L2", tileset_group_1, 0, 0);
+	  const interiorGroundLayer = map.createLayer("Interior Ground", tileset_group_1, 0, 0);
+	  const wallLayer = map.createLayer("Wall", [CuteRPG_Field_C, walls], 0, 0);
+	  const interiorFurnitureL1Layer = map.createLayer("Interior Furniture L1", tileset_group_1, 0, 0);
+	  const interiorFurnitureL2Layer = map.createLayer("Interior Furniture L2 ", tileset_group_1, 0, 0);
+	  const foregroundL1Layer = map.createLayer("Foreground L1", tileset_group_1, 0, 0);
+	  const foregroundL2Layer = map.createLayer("Foreground L2", tileset_group_1, 0, 0);
+	  foregroundL1Layer.setDepth(2);
+	  foregroundL2Layer.setDepth(2);
+
+	  const collisionsLayer = map.createLayer("Collisions", collisions, 0, 0);
+	  // const groundLayer = map.createLayer("Ground", walls, 0, 0);
+	  // const indoorGroundLayer = map.createLayer("Indoor Ground", walls, 0, 0);
+	  // const wallsLayer = map.createLayer("Walls", walls, 0, 0);
+	  // const interiorsLayer = map.createLayer("Furnitures", interiors, 0, 0);
+	  // const builtInLayer = map.createLayer("Built-ins", interiors, 0, 0);
+	  // const appliancesLayer = map.createLayer("Appliances", interiors, 0, 0);
+	  // const foregroundLayer = map.createLayer("Foreground", interiors, 0, 0);
+
+	  // Joon : This is where you want to create a custom field for the tileset
+	  //        in Tiled. Take a look at this guy's tutorial: 
+	  //        https://www.youtube.com/watch?v=MR2CvWxOEsw&ab_channel=MattWilber
+	  collisionsLayer.setCollisionByProperty({ collide: true });
+	  // By default, everything gets depth sorted on the screen in the order we 
+	  // created things. Here, we want the "Above Player" layer to sit on top of 
+	  // the player, so we explicitly give it a depth. Higher depths will sit on 
+	  // top of lower depth objects.
+	  // Collisions layer should get a negative depth since we do not want to see
+	  // it. 
+	  collisionsLayer.setDepth(-1);
+	  // foregroundL1Layer.setDepth(2);
+	  // foregroundL1Layer.setDepth(2);
+
+	  // *** SET UP CAMERA *** 
+	  // "player" is to be set as the center of mass for our "camera." We 
+	  // basically create a game character sprite as we would for our personas 
+	  // but we move it to depth -1 and let it pass through the collision map;  
+	  // that is, do not have the following line: 
+	  // this.physics.add.collider(player, collisionsLayer);
+	  // OLD NOTE: Create a sprite with physics enabled via the physics system. 
+	  // The image  used for the sprite has a bit of whitespace, so I'm using 
+	  // setSize & setOffset to control the size of the player's body.
+	  player = this.physics.add.
+	                sprite(800, 288, "atlas", "misa-front").
+	                setSize(30, 40).
+	                setOffset(0, 0);
+	  player.setDepth(-1);
+	  // KNOWN ISSUE (unresolved): on at least one machine the world renders
+	  // centered / pushed toward the bottom-right with black space on the top and
+	  // left and limited rightward panning, instead of filling the view from the
+	  // top-left. The setup below verifies correct in headless Chrome at dpr 1 and
+	  // 2 (canvas fills the container, scroll clamps to >= 0, cover-zoom fills both
+	  // axes), so the root cause is still TBD -- a likely culprit was setup.sh
+	  // regenerating the older upstream UI over local edits. Needs more digging.
+	  // Setting up the camera.
+	  const camera = this.cameras.main;
+
+	  // We no longer call startFollow() -- instead the user drives the camera
+	  // directly by zooming and panning.
+	  //
+	  // pixelArt + fractional zoom can make tile seams shimmer; rounding the
+	  // camera to whole pixels keeps the art crisp.
+	  camera.setRoundPixels(true);
+
+	  // Keep the camera looking at the map. Pin the map's TOP-LEFT corner to the
+	  // top-left of the view: scroll can never go below 0 (so you never see empty
+	  // space above/left of the map), and never past the map's far edge. When the
+	  // map is SMALLER than the view along an axis (e.g. fully zoomed out), the
+	  // upper clamp bound is 0, so the map stays flush top-left and any empty
+	  // space falls to the right/bottom instead of being centered. We do our own
+	  // clamping rather than camera.setBounds() because Phaser's bounds are
+	  // measured in screen pixels and drift once the zoom isn't 1.
+	  clampCamera = function () {
+	    const viewW = camera.width / camera.zoom;    // world pixels visible across
+	    const viewH = camera.height / camera.zoom;   // world pixels visible down
+	    camera.scrollX = Phaser.Math.Clamp(camera.scrollX, 0, Math.max(0, map.widthInPixels - viewW));
+	    camera.scrollY = Phaser.Math.Clamp(camera.scrollY, 0, Math.max(0, map.heightInPixels - viewH));
+	  };
+
+	  // Compute the "fit the whole map" zoom: how many screen pixels per world
+	  // pixel. We take the SMALLER of the width/height ratios so that BOTH
+	  // dimensions fit on screen. camera.width/height equal the canvas size.
+	  function computeFitZoom() {
+	    return Math.min(camera.width / map.widthInPixels,
+	                    camera.height / map.heightInPixels);
+	  }
+	  // The "fill the area" zoom: the LARGER of the width/height ratios, so the
+	  // map covers the whole canvas on both axes (the non-limiting axis overflows
+	  // and can be panned). camera.width/height equal the canvas size.
+	  function computeCoverZoom() {
+	    return Math.max(camera.width / map.widthInPixels,
+	                    camera.height / map.heightInPixels);
+	  }
+
+	  // Default view = FILL the area (cover), with the world's top-left pinned to
+	  // the view's top-left. "Fit the whole map" stays the minimum zoom and the
+	  // Reset (fullscreen) button, so the user can still zoom out to see it all.
+	  fitZoom = computeFitZoom();
+	  let coverZoom = computeCoverZoom();
+	  minZoom = fitZoom;   // never let the user zoom out past the whole map
+	  maxZoom = 2.5;       // how far the user can zoom IN to inspect a small area
+	  camera.scrollX = 0;
+	  camera.scrollY = 0;
+	  camera.setZoom(coverZoom);   // fill the area on load (was: fitZoom)
+	  clampCamera();               // pins the world's top-left into the view
+
+	  // Publish to the global bridge so the DOM zoom buttons / arrow keys reach it.
+	  mainCamera = camera;
+
+	  // Keep things correct whenever the canvas changes size (window resize, and
+	  // also once on startup if the container hadn't finished laying out when this
+	  // ran). RESIZE keeps camera.width/height in sync, but we set the size
+	  // explicitly so the zoom math always reads the new dimensions. Preserve the
+	  // user's current mode: if they were filling the area keep it filled; if they
+	  // were viewing the whole map keep it fitted; otherwise just clamp their zoom
+	  // so they can never end up more zoomed-out than the whole map.
+	  this.scale.on("resize", (gameSize) => {
+	    camera.setSize(gameSize.width, gameSize.height);
+	    const wasCover = Math.abs(camera.zoom - coverZoom) < 1e-3;
+	    const wasFit = camera.zoom <= minZoom + 1e-4;
+	    fitZoom = computeFitZoom();
+	    coverZoom = computeCoverZoom();
+	    minZoom = fitZoom;
+	    if (wasCover) {
+	      camera.setZoom(coverZoom);
+	    } else if (wasFit || camera.zoom < minZoom) {
+	      camera.setZoom(fitZoom);
+	    }
+	    clampCamera();
+	  });
+	  // Force one measure now so the initial fit uses the real container size even
+	  // if create() ran before the layout settled.
+	  this.scale.refresh();
+
+	  // --- Mouse-wheel zoom (zoom toward the cursor) ---
+	  this.input.on("wheel", (pointer, gameObjects, deltaX, deltaY) => {
+	    // World point under the cursor BEFORE we change the zoom.
+	    const before = camera.getWorldPoint(pointer.x, pointer.y);
+	    // A multiplicative step feels natural (a constant % per wheel notch).
+	    const zoomFactor = deltaY > 0 ? 0.9 : 1.1;
+	    camera.setZoom(Phaser.Math.Clamp(camera.zoom * zoomFactor, minZoom, maxZoom));
+	    // Scroll so that same world point stays under the cursor after zooming.
+	    const after = camera.getWorldPoint(pointer.x, pointer.y);
+	    camera.scrollX -= after.x - before.x;
+	    camera.scrollY -= after.y - before.y;
+	    clampCamera();
+	  });
+
+	  // --- Drag-to-pan ---
+	  // While a mouse button is held, shift the camera by the cursor movement
+	  // divided by zoom (so a 1px cursor move pans 1px of WORLD at any zoom).
+	  this.input.on("pointermove", (pointer) => {
+	    if (!pointer.isDown) {
+	      return;
+	    }
+	    camera.scrollX -= (pointer.x - pointer.prevPosition.x) / camera.zoom;
+	    camera.scrollY -= (pointer.y - pointer.prevPosition.y) / camera.zoom;
+	    clampCamera();
+	  });
+
+	  cursors = this.input.keyboard.createCursorKeys();
+
+	  // *** SET UP PERSONAS *** 
+	  // We start by creating the game sprite objects. 
+	  for (let i=0; i<Object.keys(spawn_tile_loc).length; i++) { 
+	    let persona_name = Object.keys(spawn_tile_loc)[i];
+	    let start_pos = [spawn_tile_loc[persona_name][0] * tile_width + tile_width / 2, 
+	                     spawn_tile_loc[persona_name][1] * tile_width + tile_width];
+	    let new_sprite = this.physics.add
+	                         .sprite(start_pos[0], start_pos[1], "atlas", "misa-front")
+	                         .setSize(30, 40)
+	                         .setOffset(0, 32); // DEBUG 1 --- I added 32 offset on Dec 29. 
+	    // Here, we are creating the persona and its pronunciatio sprites.
+	    personas[persona_name] = new_sprite;
+	    pronunciatios[persona_name] = this.add.text(
+	                                   new_sprite.body.x - 6, 
+	                                   new_sprite.body.y - 42 - 32, // DEBUG 1 --- I added 32 offset on Dec 29. 
+	                                   "🦁", {
+	                                   font: "28px monospace", 
+	                                   fill: "#000000", 
+	                                   padding: { x: 8, y: 8}, 
+	                                   backgroundColor: "#ffffff",
+	                                   border:"solid",
+	                                   borderRadius:"10px"}).setDepth(3);
+	  }
+
+	  // Create the player's walking animations from the texture atlas. These are
+	  // stored in the global animation manager so any sprite can access them.
+	  const anims = this.anims;
+	  anims.create({
+	    key: "misa-left-walk",
+	    frames: anims.generateFrameNames("atlas", { prefix: "misa-left-walk.", start: 0, end: 3, zeroPad: 3 }),
+	    frameRate: 4,
+	    repeat: -1 });
+
+	  anims.create({
+	    key: "misa-right-walk",
+	    frames: anims.generateFrameNames("atlas", { prefix: "misa-right-walk.", start: 0, end: 3, zeroPad: 3 }),
+	    frameRate: 4,
+	    repeat: -1 });
+
+	  anims.create({
+	    key: "misa-front-walk",
+	    frames: anims.generateFrameNames("atlas", { prefix: "misa-front-walk.", start: 0, end: 3, zeroPad: 3 }),
+	    frameRate: 4,
+	    repeat: -1 });
+
+	  anims.create({
+	    key: "misa-back-walk",
+	    frames: anims.generateFrameNames("atlas", { prefix: "misa-back-walk.", start: 0, end: 3, zeroPad: 3 }),
+	    frameRate: 4,
+	    repeat: -1 });
+	}
+
+
+	function update(time, delta) {
+		if (!replay_started) {
+			return;
+		}
+
+	  // *** ARROW-KEY PAN ***
+	  // Arrow keys move the CAMERA directly (we no longer move a player sprite
+	  // and follow it). Dividing by zoom keeps the on-screen pan speed the same
+	  // whether you're zoomed in or out. `delta` is ms since the last frame, so
+	  // the pan speed is framerate-independent.
+	  if (mainCamera) {
+	    const dist = (600 * delta / 1000) / mainCamera.zoom;
+	    if (cursors.left.isDown)  mainCamera.scrollX -= dist;
+	    if (cursors.right.isDown) mainCamera.scrollX += dist;
+	    if (cursors.up.isDown)    mainCamera.scrollY -= dist;
+	    if (cursors.down.isDown)  mainCamera.scrollY += dist;
+	    if (clampCamera) clampCamera();
+	  }
+
+	  // console.log("phase: " + phase + ", step: " + step);
+	  // *** MOVE PERSONAS ***
+	  // Moving personas take place in three distinct phases: "process," "update,"
+	  // and "execute." These phases are determined by the value of <phase>. 
+	  // Only one of the three phases is incurred in each update cycle. 
+	  if (phase == "process") {
+	    // "process" takes all current locations of the personas and send them to
+	    // the frontend server in a json form. Here, we first create the json 
+	    // file that records all persona locations: 
+	    let data = {"step": step, 
+	    						"sim_code": sim_code,
+	                "environment": {}}
+	    for (let i=0; i<Object.keys(personas).length; i++) {
+	      let persona_name = Object.keys(personas)[i];
+	      data["environment"][persona_name] = {"maze": curr_maze,
+	                                           "x": Math.ceil((personas[persona_name].body.position.x) / tile_width),
+	                                           "y": Math.ceil((personas[persona_name].body.position.y) / tile_width)}
+	    }
+	    var json = JSON.stringify(data);
+	    // We then send this to the frontend server: 
+	    var retrieve_xobj = new XMLHttpRequest();
+	    retrieve_xobj.overrideMimeType("application/json");
+	    retrieve_xobj.open('POST', "{% url 'process_environment' %}", true);
+	    retrieve_xobj.send(json);   
+	    // Finally, we update the phase variable to start the "udpate" process. 
+	    // Now that we sent all persona locations to the backend server, we need
+	    // to wait until the backend determines what the personas will do next. 
+	    phase = "update";
+	  } 
+
+	  else if (phase == "update") { 
+	    // Update is where we * wait * for the backend server to finish 
+	    // computing about what the personas will do next given their current 
+	    // situation. 
+	    // We do this by continuously asking the backend server if it is ready. 
+	    // The backend server is ready when it returns a json that has a key-val
+	    // pair with "<move>": true.
+	    // Note that we do not want to overburden the backend too much by 
+	    // over-querying; so, we have a timer set so we only query it once every
+	    // timer_max cycles. 
+	    if (timer <= 0) {
+	      var update_xobj = new XMLHttpRequest();
+	      update_xobj.overrideMimeType("application/json");
+	      update_xobj.open('POST', "{% url 'update_environment' %}", true);
+	      update_xobj.addEventListener("load", function() {
+	        if (this.readyState === 4) {
+	          if (update_xobj.status === 200) {
+	            if (JSON.parse(update_xobj.responseText)["<step>"] == step) {
+	              execute_movement = JSON.parse(update_xobj.responseText)
+	              phase = "execute";
+	            }
+	            timer = timer_max;
+	          }
+	        }
+	      });
+	      update_xobj.send(JSON.stringify({"step": step, "sim_code": sim_code }));   
+	    }
+	    timer = timer - 1; 
+	  } 
+
+	  else { 
+	    // This is where we actually move the personas in the visual world. Each
+	    // backend computation in execute_movement moves each persona by one tile
+	    // (or some personas might not move if they choose not to). 
+	    // The execute_count_max is computed by tile_width/movement_speed, which
+	    // defines a one step sequence in this world. 
+	    document.getElementById("game-time-content").innerHTML = execute_movement["meta"]["curr_time"];
+	    for (let i=0; i<Object.keys(personas).length; i++) {
+	      let curr_persona_name = Object.keys(personas)[i];
+	      let curr_persona = personas[curr_persona_name];
+	      let curr_pronunciatio = pronunciatios[Object.keys(personas)[i]];
+
+	      if (execute_count == execute_count_max) { 
+	        let curr_x = execute_movement["persona"][curr_persona_name]["movement"][0];
+	        let curr_y = execute_movement["persona"][curr_persona_name]["movement"][1];
+	        movement_target[curr_persona_name] = [curr_x * tile_width, 
+	                                              curr_y * tile_width]; 
+	        let pronunciatio_content = execute_movement["persona"][curr_persona_name]["pronunciatio"];
+	        // This is what gives the pronunciatio balloon the name initials. We 
+	        // use regex to extract the initials of the personas. 
+	        // E.g., "Dolores Murphy" -> "DM"
+	        let rgx = new RegExp(/(\p{L}{1})\p{L}+/, 'gu');
+	        let initials = [...curr_persona_name.matchAll(rgx)] || [];
+	        initials = (
+	          (initials.shift()?.[1] || '') + (initials.pop()?.[1] || '')
+	        ).toUpperCase();
+	        pronunciatios[curr_persona_name].setText(initials + ": " + pronunciatio_content);
+	      }
+
+	      console.log(curr_persona_name);
+	      if (execute_count > 0) {
+	        if (curr_persona.body.x < movement_target[curr_persona_name][0]) {
+	          curr_persona.body.x += movement_speed; 
+	          anims_direction = "r";
+	          pre_anims_direction = "r"
+	          pre_anims_direction_dict[curr_persona_name] = "r"
+	        } else if (curr_persona.body.x > movement_target[curr_persona_name][0]) {
+	          curr_persona.body.x -= movement_speed; 
+	          anims_direction = "l";
+	          pre_anims_direction = "l"
+	          pre_anims_direction_dict[curr_persona_name] = "l"
+	        } else if (curr_persona.body.y < movement_target[curr_persona_name][1]) {
+	          curr_persona.body.y += movement_speed;
+	          anims_direction = "d";
+	          pre_anims_direction = "d"
+	          pre_anims_direction_dict[curr_persona_name] = "d"
+	        } else if (curr_persona.body.y > movement_target[curr_persona_name][1]) {
+	          curr_persona.body.y -= movement_speed;
+	          anims_direction = "u";
+	          pre_anims_direction = "u"
+	          pre_anims_direction_dict[curr_persona_name] = "u"
+	        } else {
+	        	anims_direction = "";
+	        }
+
+	        curr_pronunciatio.x = curr_persona.body.x - 6; 
+          curr_pronunciatio.y = curr_persona.body.y - 42 - 32; // DEBUG 1 --- I added 32 offset on Dec 29. 
+
+          if (anims_direction == "l") {
+			      curr_persona.anims.play("misa-left-walk", true);
+			    } else if (anims_direction == "r") {
+			      curr_persona.anims.play("misa-right-walk", true);
+			    } else if (anims_direction == "u") {
+			      curr_persona.anims.play("misa-back-walk", true);
+			    } else if (anims_direction == "d") {
+			      curr_persona.anims.play("misa-front-walk", true);
+			    } else {
+			      curr_persona.anims.stop();
+
+			      // If we were moving, pick an idle frame to use
+			      if (pre_anims_direction_dict[curr_persona_name] == "l") curr_persona.setTexture("atlas", "misa-left");else
+			      if (pre_anims_direction_dict[curr_persona_name] == "r") curr_persona.setTexture("atlas", "misa-right");else
+			      if (pre_anims_direction_dict[curr_persona_name] == "u") curr_persona.setTexture("atlas", "misa-back");else
+			      if (pre_anims_direction_dict[curr_persona_name] == "d") curr_persona.setTexture("atlas", "misa-front");
+			    };
+
+	      } 
+	      else {
+	        // Once we are done moving the personas, we move on to the "process"
+	        // stage where we will send the current locations of all personas at the
+	        // end of the movemments to the frontend server, and then the backend.
+	        for (let i=0; i<Object.keys(personas).length; i++) {
+	          let curr_persona_name = Object.keys(personas)[i]
+	          let curr_persona = personas[curr_persona_name];
+	          curr_persona.body.x = movement_target[curr_persona_name][0];
+	          curr_persona.body.y = movement_target[curr_persona_name][1];
+	        }
+	        phase = "process";
+	        execute_count = execute_count_max + 1;
+	        step = step + 1;
+	      }
+	    }
+
+	    // Filling in the action description. 
+	    if (execute_count == execute_count_max) { 
+	      for (let i=0; i<Object.keys(personas).length; i++) {
+	      	let action_description = ""
+	        let curr_persona_name = Object.keys(personas)[i];
+	        let curr_persona_name_os = curr_persona_name.replace(/ /g,"_");
+	        let description_content = execute_movement["persona"][curr_persona_name]["description"];
+	        let chat_content = ""
+
+	        if (execute_movement["persona"][curr_persona_name]["chat"] != null ){
+		        for (let j=0; j<execute_movement["persona"][curr_persona_name]["chat"].length; j++) { 
+		        	chat_content += execute_movement["persona"][curr_persona_name]["chat"][j][0] + ": " + execute_movement["persona"][curr_persona_name]["chat"][j][1] + "<br>"
+		        }
+		      } else {
+		      	chat_content = "<em>None at the moment</em>"
+		      }
+	        // action_description += description_content + "<br>";
+
+	        document.getElementById("current_action__"+curr_persona_name_os).innerHTML = description_content.split("@")[0];
+	        document.getElementById("target_address__"+curr_persona_name_os).innerHTML = description_content.split("@")[1];
+	        document.getElementById("chat__"+curr_persona_name_os).innerHTML = chat_content;
+	      }
+	      
+	    }
+
+	    execute_count = execute_count - 1;
+	  }
+	}
+
+	// Control button binders
+	var play_button=document.getElementById("play_button");
+	var pause_button=document.getElementById("pause_button");
+	function update_playback_buttons() {
+		if (!play_button || !pause_button) {
+			return;
+		}
+		play_button.style.display = replay_started ? "none" : "inline-block";
+		pause_button.style.display = replay_started ? "inline-block" : "none";
+	}
+	play_button.onclick = function(){
+		replay_started = true;
+		update_playback_buttons();
+	};
+	pause_button.onclick = function(){
+		replay_started = false;
+		update_playback_buttons();
+	};
+	update_playback_buttons();
+
+	// *** ZOOM CONTROL BUTTONS ***
+	// These DOM buttons reach the Phaser camera through the global `mainCamera`
+	// that create() filled in -- the same "globals as a bridge" trick the
+	// Play/Pause buttons use above. We guard on mainCamera in case a click
+	// somehow happens before create() runs.
+	var zoom_in_button = document.getElementById("zoom_in_button");
+	var zoom_out_button = document.getElementById("zoom_out_button");
+	var zoom_reset_button = document.getElementById("zoom_reset_button");
+
+	// Zoom while keeping the CENTER of the screen fixed (the buttons have no
+	// cursor position to zoom toward, so the center is the natural anchor).
+	function zoomByFactor(factor) {
+		if (!mainCamera) {
+			return;
+		}
+		const cx = mainCamera.width / 2;
+		const cy = mainCamera.height / 2;
+		const before = mainCamera.getWorldPoint(cx, cy);
+		mainCamera.setZoom(Phaser.Math.Clamp(mainCamera.zoom * factor, minZoom, maxZoom));
+		const after = mainCamera.getWorldPoint(cx, cy);
+		mainCamera.scrollX -= after.x - before.x;
+		mainCamera.scrollY -= after.y - before.y;
+		if (clampCamera) clampCamera();
+	}
+
+	if (zoom_in_button) {
+		zoom_in_button.onclick = function(){ zoomByFactor(1.2); };
+	}
+	if (zoom_out_button) {
+		zoom_out_button.onclick = function(){ zoomByFactor(1 / 1.2); };
+	}
+	if (zoom_reset_button) {
+		// Reset = fit the whole map again and recenter (the load-time view).
+		zoom_reset_button.onclick = function(){
+			if (!mainCamera) {
+				return;
+			}
+			mainCamera.setZoom(fitZoom);
+			if (clampCamera) clampCamera();
+		};
+	}
+</script>
+
+
+
+
+
+
+
