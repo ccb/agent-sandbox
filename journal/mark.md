@@ -4,6 +4,85 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-16
+
+**Focus:** Follow-up cleanup on the just-landed agent layer — #66 (disambiguate `MockReActClient.tool_calls`).
+
+**Done today:**
+- **#66 — fixed, PR #67 up (green, MERGEABLE).** Chris filed this after the merge: my #57 (structured tool calling) and #58 (persuasion) both wrote to `MockReActClient.tool_calls` for *different* reasons. #57 logs every `call_tool` invocation (unconditionally, even on a silent turn); #58 logged the brain's actual non-`None` command in `_decide`. Because `LLMAgent.decide()` prefers the `call_tool` path, the `_decide` logging was effectively dead in the live game, and a persuasion test was passing for the wrong reason (it asserted on `tool_calls`, which is non-empty even when the NPC does nothing). Fix (TDD): added a dedicated `decisions` list written on **both** paths on a real command, kept `tool_calls` meaning #57's thing, and pointed the persuasion test at `decisions`. 301 tests pass, `black` clean.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Wait for Chris to merge #67.
+- Back to Tingen — wire NPC daily schedules onto the new city navmesh.
+
+## 2026-06-15
+
+**Focus:** Merge-train day — rebasing my batch (#52 → #57 → #58) onto `main`; on Tingen, rebuilding the world to scale with a real navmesh.
+
+**Done today:**
+- **Merge train (my batch) — all three landed.** Chris ran a fixed-order train across the overlapping PRs; my job was to keep each of mine rebased and conflict-free.
+  - **#52 (containers / carry-capacity, #43)** — rebased onto `main`; resolved conflicts in `characters.py` (kept both the equipment slots *and* `carry_capacity`), `actions/things.py` (Drop/Give guards), and `consume.py` (Eat/Drink now use `discard_item` + clear hunger/thirst). Fixed one post-rebase test failure where a test seeded the stale `is_food` flag but `main` had migrated food to `Property.EDIBLE`.
+  - **#57 (structured tool calling, #44)** — rebased; resolved `npc.py` / `llm_parser.py` conflicts (kept the duration constants alongside the new `call_tool` path).
+  - **#58 (goal-influencing dialogue / persuasion, #46 — my own feature)** — rebased 9 commits; conflicts in `parsing.py` (`determine_intent`: kept the `SAY` enum, re-added the adopt/drop-goal routing) and `npc.py`. Verified `black` clean + 301 tests, pushed `--force-with-lease`, CI green, merged (`992cb36`). That finished my batch.
+- Diagnosed a "failing all CI checks" scare on #52 as a **GitHub Actions billing problem** (Chris's lapsed card), not a code bug — impossibly-fast failures + missing log blobs + clean local runs. Re-triggered once it was sorted; green.
+- **Tingen — rebuilt the district to a to-scale walkable city.** Added a `CityLayout` loader + `city_layout.json`, replaced the old Iron-Cross remap with a single global `CITY_SCALE` transform, baked a navmesh region from the layout, and got NPCs pathing around the city on it. Added a map underlay, a bounded camera, and city-edge walls; retired `LiveDistrict` and the old hubs. Logged the design decisions and addressed final-review findings.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Clear any post-merge follow-ups Chris flags (became #66).
+- Tingen: re-anchor NPC schedules/waypoints to the new world scale.
+
+## 2026-06-11
+
+**Focus:** Tingen — the Nighthawks HQ scene; agent-sandbox dialogue feature wrap-up.
+
+**Done today:**
+- **Tingen — built the Nighthawks HQ.** Top-down HQ room with a City door + a wiring test, a captain dialogue tree that hands out the briefing clue, and the HQ background + captain portrait art.
+- **agent-sandbox (#46 dialogue/persuasion)** — finished the feature build: the `AdoptGoal`/`DropGoal` actions through the precondition gate, parser routing for the goal verbs (ahead of inventory "drop"), the "recently heard" section in NPC observations, the persuadable-servant / refusing-knight mock-brain rules, and an end-to-end integration test. Opened it as PR #58.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Keep #58 rebased as the merge train moves.
+- Tingen: connect HQ → city.
+
+## 2026-06-10
+
+**Focus:** Tingen — the map panel; agent-sandbox dialogue feature core.
+
+**Done today:**
+- **Tingen — real map panel, built bottom-up with TDD.** A pure `MapProjection.world_to_map` seam, then an aspect-preserving `image_to_canvas` + inverse, a `map_polygon` per district in map-image space, and finally rendering the real `tingen_map.png` with risk regions, markers, and a live player tracker. Also a Y-sorted depth upgrade for `IntroRoom`. Logged the map-panel design decisions + rejected alternatives.
+- **agent-sandbox (#46)** — built the dialogue core: the bounded per-character `heard` buffer, the overridable `Game.audience_for` audibility seam, and `Say` delivering spoken utterances into the audience's buffer. All TDD.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Finish the dialogue actions + mock brains and PR it.
+- Tingen: HQ scene next.
+
+## 2026-06-09
+
+**Focus:** Closing out #26 (scenario tests); designing the dialogue feature (#46); Tingen endgame + asset pipeline.
+
+**Done today:**
+- **#26 — committed and merged (#33).** The game-agnostic `scenario.py` helpers + world-state integration tests.
+- **#46 (dialogue/persuasion) — designed.** Brainstormed the feature, wrote the design spec, and turned it into a task-by-task implementation plan (heard buffer → audience seam → say delivery → goal actions → parser routing → observation surfacing → mock brains → integration test).
+- **Tingen — endgame + animation pipeline.** The cult rite at the warehouse now drives the summoning countdown; wired the player's three interference levers into the summoning and added real endgame endings plus NPC combat/gather/talk verbs. Switched the animation generator to `gpt-image-2` with slim-gutter strips and rebuilt the intro blood-room art.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Start implementing the #46 dialogue feature.
+- Tingen: map panel.
+
 ## 2026-06-08
 
 **Focus:** Shipping #24 (variable action durations), kicking off #26 (scenario integration tests), plus more work on my own game (Tingen).
