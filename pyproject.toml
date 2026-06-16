@@ -54,7 +54,8 @@ llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
 docs = [
-    "mkdocs-material",      # theme + search + navigation
+    "mkdocs",               # readthedocs theme + search + navigation
+    "pymdown-extensions",   # pymdownx.* markdown extensions in mkdocs.yml
     "mkdocstrings[python]", # API reference pulled from docstrings
     "black",                # lets mkdocstrings pretty-format rendered signatures
 ]

@@ -22,25 +22,7 @@ site_description: A research test bed for multi-agent simulated environments.
 docs_dir: docs
 
 theme:
-  name: material
-  features:
-    - navigation.sections   # group the nav by section headers
-    - navigation.top        # back-to-top button
-    - content.code.copy     # copy button on code blocks
-    - search.suggest
-    - toc.follow
-  palette:
-    # Light/dark toggle.
-    - scheme: default
-      primary: indigo
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
+  name: readthedocs
 
 plugins:
   - search
