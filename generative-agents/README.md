@@ -78,6 +78,11 @@ python3.9 -m venv frontend-venv
 #    http://localhost:8000/replay/mock_the_ville_isabella_maria_klaus/0/
 ```
 
+> **The map lives at the `/replay/...` URL above, not at the root.** Opening
+> `http://localhost:8000/` just shows a status page ("environment server is up and
+> running") — now with a link to the replay. If you only see that text, click the
+> link or go straight to the `/replay/...` URL.
+
 You should see Isabella, Maria, and Klaus wake at their homes, walk believable
 paths through town, and settle into their morning activities — Isabella tending
 the Hobbs Cafe counter (☕), Maria studying there (📚), and Klaus writing his paper
