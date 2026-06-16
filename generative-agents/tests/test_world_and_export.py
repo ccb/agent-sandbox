@@ -1,0 +1,177 @@
+"""Offline tests for the Smallville port (no Django, no live LLM).
+
+Covers the three layers that must stay correct for a replay to render: the
+library world + mock-driven agents, the spatial map/pathfinder, and the exporter
+that writes the frontend's movement contract.
+
+Run from the ``generative-agents`` directory with the engine's venv::
+
+    ../venv/bin/python -m pytest tests/ -v
+"""
+
+import json
+import os
+
+import pytest
+
+from backend import exporter
+from backend.build_world import PERSONAS, build_world
+from backend.run_simulation import simulate
+from backend.smallville_agents import attach_agents
+from backend.world_map import WorldMap
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_GA_DIR = os.path.dirname(_HERE)
+
+
+def _find_ville_dir():
+    """Locate the_ville assets: the set-up frontend, else the external clone."""
+    candidates = [
+        os.path.join(_GA_DIR, "frontend", "static_dirs", "assets", "the_ville"),
+        os.path.join(
+            _GA_DIR,
+            "..",
+            "external",
+            "generative_agents",
+            "environment",
+            "frontend_server",
+            "static_dirs",
+            "assets",
+            "the_ville",
+        ),
+    ]
+    for path in candidates:
+        if os.path.isdir(path):
+            return path
+    return None
+
+
+@pytest.fixture(scope="module")
+def world_map():
+    ville = _find_ville_dir()
+    if not ville:
+        pytest.skip("the_ville maze assets not found (run ./setup.sh)")
+    return WorldMap(ville)
+
+
+# --------------------------------------------------------------------------
+# Library world + agents
+# --------------------------------------------------------------------------
+
+
+def test_build_world_places_cast_at_home():
+    game, chars = build_world()
+    # All three personas are characters in the game.
+    for spec in PERSONAS:
+        assert spec["name"] in game.characters
+        # ...and start in their home location.
+        assert chars[spec["name"]].location.name == spec["home"]
+    # The destinations exist as locations.
+    assert "Hobbs Cafe" in game.locations
+    assert "Oak Hill College" in game.locations
+
+
+def test_agents_travel_then_perform():
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS)
+    for spec in PERSONAS:
+        char = chars[spec["name"]]
+        # First decision (at home) -> travel; routing moves the character.
+        cmd1 = char.agent.decide(game.describe_for(char))
+        assert cmd1.startswith("travel")
+        assert game.parser.parse_command(cmd1, actor=char)
+        assert char.location.name == spec["destination"]
+        # Second decision (at destination) -> perform; sets the activity.
+        cmd2 = char.agent.decide(game.describe_for(char))
+        assert cmd2.startswith("perform")
+        assert game.parser.parse_command(cmd2, actor=char)
+        assert char.get_property("activity") == spec["activity"]
+
+
+# --------------------------------------------------------------------------
+# Spatial map + pathfinder
+# --------------------------------------------------------------------------
+
+
+def test_addresses_resolve_to_tiles(world_map):
+    assert len(world_map.tiles_for("the Ville:Hobbs Cafe:cafe")) > 0
+    assert len(world_map.tiles_for("the Ville:Oak Hill College:library")) > 0
+    assert world_map.tiles_for("the Ville:Nowhere At All") == set()
+
+
+def test_walk_path_is_contiguous_and_collision_free(world_map):
+    start = (72, 14)  # Isabella's apartment tile (from the base sim)
+    address = "the Ville:Hobbs Cafe:cafe"
+    path = world_map.walk_path(start, address)
+    assert path, "expected a non-empty path to the cafe"
+    # Each step moves to an orthogonally-adjacent, non-blocked tile.
+    prev = start
+    for tile in path:
+        dx = abs(tile[0] - prev[0])
+        dy = abs(tile[1] - prev[1])
+        assert dx + dy == 1, f"non-adjacent step {prev} -> {tile}"
+        assert not world_map.is_blocked(tile), f"path crosses a wall at {tile}"
+        prev = tile
+    # The path ends on a tile of the target address.
+    assert path[-1] in world_map.tiles_for(address)
+
+
+# --------------------------------------------------------------------------
+# Simulation driver + exporter contract
+# --------------------------------------------------------------------------
+
+
+def test_simulate_frames_match_contract(world_map):
+    frames = simulate(world_map, num_steps=12)
+    assert len(frames) == 12
+    names = {p["name"] for p in PERSONAS}
+    for frame in frames:
+        assert set(frame.keys()) == names
+        for entry in frame.values():
+            assert isinstance(entry["movement"], list) and len(entry["movement"]) == 2
+            assert all(isinstance(c, int) for c in entry["movement"])
+            assert isinstance(entry["pronunciatio"], str) and entry["pronunciatio"]
+            assert (
+                isinstance(entry["description"], str) and " @ " in entry["description"]
+            )
+            assert entry["chat"] is None
+
+
+def test_simulate_reaches_activity(world_map):
+    # Isabella's walk to the cafe is short (~17 tiles), so within 40 steps she
+    # should have arrived and settled into tending the counter.
+    frames = simulate(world_map, num_steps=40)
+    last = frames[-1]["Isabella Rodriguez"]["description"]
+    assert "tending the cafe counter" in last
+
+
+def test_exporter_writes_replayable_layout(world_map, tmp_path):
+    frames = simulate(world_map, num_steps=5)
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    import datetime
+
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="test_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+    )
+    # movement files: one per step.
+    movement_files = os.listdir(os.path.join(sim_dir, "movement"))
+    assert len(movement_files) == 5
+
+    with open(os.path.join(sim_dir, "movement", "0.json")) as f:
+        mv0 = json.load(f)
+    assert set(mv0["persona"].keys()) == {p["name"] for p in PERSONAS}
+    assert mv0["meta"]["curr_time"] == "February 13, 2023, 08:00:00"
+
+    with open(os.path.join(sim_dir, "reverie", "meta.json")) as f:
+        meta = json.load(f)
+    assert meta["step"] == 5
+    assert meta["maze_name"] == "the_ville"
+
+    with open(os.path.join(sim_dir, "environment", "0.json")) as f:
+        env0 = json.load(f)
+    assert env0["Isabella Rodriguez"]["x"] == 72
