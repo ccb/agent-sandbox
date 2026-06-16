@@ -5,8 +5,8 @@
 # modern Python; the project was tested on Python 3.9. The backend simulation
 # generator, by contrast, uses the engine's own venv.
 #
-#   python3.9 -m venv frontend-venv
-#   ./frontend-venv/bin/pip install -r requirements-frontend.txt
+#   uv venv --python 3.9 frontend-venv
+#   uv pip install --python frontend-venv -r requirements-frontend.txt
 #
 # These are the only upstream pins the replay path actually needs (the full
 # upstream requirements.txt also lists gensim/matplotlib/selenium/etc. for the

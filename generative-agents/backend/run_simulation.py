@@ -12,11 +12,11 @@ decision seam (``Agent.decide`` -> mock client) only at decision points:
 * Every step, advance one tile along any active path, then record the
   character's tile + emoji + action label into that step's movement frame.
 
-Run it (from the ``generative-agents`` directory, using the project venv that
-has the engine installed)::
+Run it (from the ``generative-agents`` directory; ``uv run`` finds the repo's
+project env that has the engine installed)::
 
-    ../venv/bin/python -m backend.run_simulation            # 1 hour (360 steps)
-    ../venv/bin/python -m backend.run_simulation --steps 120
+    uv run python -m backend.run_simulation            # 1 hour (360 steps)
+    uv run python -m backend.run_simulation --steps 120
 """
 
 import argparse

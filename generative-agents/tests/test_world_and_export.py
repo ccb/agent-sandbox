@@ -4,9 +4,10 @@ Covers the three layers that must stay correct for a replay to render: the
 library world + mock-driven agents, the spatial map/pathfinder, and the exporter
 that writes the frontend's movement contract.
 
-Run from the ``generative-agents`` directory with the engine's venv::
+Run from the ``generative-agents`` directory (``uv run`` uses the repo's
+project env that has the engine installed)::
 
-    ../venv/bin/python -m pytest tests/ -v
+    uv run pytest tests/ -v
 """
 
 import json
