@@ -1,0 +1,62 @@
+html,
+body,
+#game-container {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * The game container is now a real, fixed-size box. Phaser draws its canvas to
+ * exactly fill this box (see Scale.RESIZE in home/main_script.html), and the
+ * Phaser *camera* handles zooming -- we no longer squish the canvas with CSS.
+ */
+#game-container {
+  width: 100%;
+  max-width: 100vw;
+  height: 78vh;          /* a real height so the canvas has somewhere to live */
+  margin: 0 auto;
+  overflow: hidden;      /* hide anything drawn outside the box */
+  border-radius: 5px;
+  background: #000;      /* empty/letterbox areas show black, not white */
+  touch-action: none;    /* let Phaser handle drag/scroll gestures, not the browser */
+}
+
+/* Phaser's RESIZE scale mode stretches the canvas to fill the container exactly
+   (no letterbox bars); we just give it block layout and rounded corners. */
+#game-container>canvas {
+  display: block;
+  border-radius: 5px;
+}
+
+#replay-status-panel {
+  max-width: 920px;
+  width: calc(100% - 32px) !important;
+}
+
+@media (max-width: 767px) {
+  #replay-status-panel {
+    margin-top: 2.5em !important;
+  }
+
+  #replay-status-panel .media {
+    padding: 1em !important;
+  }
+
+  #replay-status-panel .media-left,
+  #replay-status-panel .media-body {
+    display: block;
+    padding-left: 0 !important;
+    width: 100%;
+  }
+
+  #replay-status-panel .media-left {
+    margin-bottom: 1em;
+    text-align: center;
+  }
+
+  #replay-status-panel h2 {
+    font-size: 1.35em !important;
+    overflow-wrap: anywhere;
+  }
+}
+
