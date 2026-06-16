@@ -194,6 +194,23 @@ pytest tests/ -v                     # full suite: agent layer, ReAct live game,
 pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, narrated
 ```
 
+### Browse the documentation site
+
+A local [MkDocs](https://www.mkdocs.org/) site (Material theme) serves this home
+page plus an API reference pulled from the engine's docstrings. It's **local-only**
+— nothing is published to the internet.
+
+```bash
+source venv/bin/activate
+pip install -e ".[docs]"             # mkdocs-material + mkdocstrings
+cd mkdocs && mkdocs serve            # then open http://127.0.0.1:8000
+```
+
+`mkdocs build` (also from the `mkdocs/` directory) renders a static site under
+`mkdocs/site/` (git-ignored) that you can zip and share with collaborators. The
+design notes and guides in [`docs/`](docs/) are read directly on GitHub and aren't
+part of this site.
+
 ### Onboarding assignment
 
 The HW1 "Action Castle" notebook in [`notebooks/`](notebooks/) is the day-one ramp.
