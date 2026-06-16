@@ -21,7 +21,7 @@ from text_adventure_games.knowledge import Belief, Knowledge
 from text_adventure_games.npc import build_npc_context
 
 # Beliefs the demo notebook seeds. Pinned here so the forbidden-substring test
-# guards the exact text that ships in knowledge_demo.ipynb.
+# guards the exact text that ships in 04_knowledge_beliefs.ipynb.
 DEMO_BELIEFS = [
     "The tower door is locked and I hold the only brass key.",
     "The dungeon hides the castle's dark secret.",

@@ -7,9 +7,14 @@ When the engine changes, the demo notebook's committed outputs go stale. This
 command re-runs them offline (free, deterministic) so the outputs match the
 current engine.
 
-**Target:** `$ARGUMENTS` if any notebook paths were given; otherwise default to
-just `notebooks/multi_agent_action_castle.ipynb`. Do **not** touch the large
-`hw1*.ipynb` assignment notebooks unless they are passed explicitly.
+**Target:** `$ARGUMENTS` if any notebook paths were given; otherwise default to the
+lightweight feature-demo walkthrough notebooks (all offline via the mock LLM):
+`notebooks/02_agents_react.ipynb`, `notebooks/03_output_and_traces.ipynb`,
+`notebooks/04_knowledge_beliefs.ipynb`, `notebooks/05_persuasion_dialogue.ipynb`,
+`notebooks/06_simultaneous_turns.ipynb`, `notebooks/07_contested_resources.ipynb`,
+`notebooks/08_world_mechanics.ipynb`. Do **not** touch the large
+`notebooks/01_engine_tutorial.ipynb` or the `hw1*.ipynb` assignment notebooks unless
+they are passed explicitly.
 
 For each target notebook, from the repo root:
 
