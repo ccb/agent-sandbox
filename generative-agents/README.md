@@ -51,12 +51,29 @@ The backend (`backend/`) does three things:
 
 ## Quick start
 
+```bash
+cd generative-agents
+./run-replay.sh
+```
+
+`run-replay.sh` does the whole dance for you: it sets up the frontend assets if
+needed, **generates the simulation only if it hasn't been generated already**
+(otherwise it skips straight to serving), creates the Django venv on first run, then
+starts the frontend and prints the replay URL (and opens it on macOS). Re-running is
+safe and fast. Flags: `--rebuild` (force-regenerate the sim), `--steps N` (sim
+length, passed through), `--port N` (default 8000).
+
+That's it. The rest of this section explains what it does under the hood, for
+debugging or running the pieces by hand.
+
+### Under the hood (manual steps)
+
 You need **two Python environments** (this is the one fiddly part):
 
 | Piece | Python | Why |
 |-------|--------|-----|
-| Backend (sim generator) | this repo's `venv` (the engine's) | imports `text_adventure_games` |
-| Frontend (Django visualizer) | a **separate Python 3.9** venv | Django 2.2 doesn't run on modern Python |
+| Backend (sim generator) | the repo's **uv project env** (`uv run`) | imports `text_adventure_games` |
+| Frontend (Django visualizer) | a **separate Python 3.9** venv (uv-managed) | Django 2.2 doesn't run on modern Python |
 
 ```bash
 cd generative-agents
@@ -65,13 +82,15 @@ cd generative-agents
 #    (The full upstream frontend is ~1GB of example sims we don't need.)
 ./setup.sh
 
-# 2. Generate a 1-hour simulation using the engine's venv.
-../venv/bin/python -m backend.run_simulation            # 360 steps (1 hour)
-#    fewer steps:  ../venv/bin/python -m backend.run_simulation --steps 120
+# 2. Generate a 1-hour simulation. `uv run` finds the repo's project env (one
+#    level up) and provisions it with the engine on first use.
+uv run python -m backend.run_simulation                 # 360 steps (1 hour)
+#    fewer steps:  uv run python -m backend.run_simulation --steps 120
 
-# 3. Run the Django frontend in its OWN Python 3.9 venv.
-python3.9 -m venv frontend-venv
-./frontend-venv/bin/pip install -r requirements-frontend.txt
+# 3. Run the Django frontend in its OWN Python 3.9 venv. uv fetches a managed
+#    CPython 3.9 if you don't have one, so there's nothing to install by hand.
+uv venv --python 3.9 frontend-venv
+uv pip install --python frontend-venv -r requirements-frontend.txt
 (cd frontend && ../frontend-venv/bin/python manage.py runserver)
 
 # 4. Open the replay in your browser:
@@ -103,10 +122,10 @@ One step = 10 in-game seconds; 360 steps = one hour.
 
 ## Tests
 
-Offline, no Django, no LLM. From this directory, with the engine's venv:
+Offline, no Django, no LLM. From this directory (`uv run` uses the repo's project env):
 
 ```bash
-../venv/bin/python -m pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 They cover the world build + mock-driven decisions, address→tile resolution and
@@ -134,6 +153,7 @@ the maze assets aren't present — run `./setup.sh` first.)
 
 ```
 generative-agents/
+  run-replay.sh               # one command: generate-if-needed + serve the replay
   setup.sh                    # copy frontend + assets from the external/ clone
   requirements-frontend.txt   # Django 2.2 etc. (frontend venv only)
   backend/

@@ -67,7 +67,7 @@ cat > "$DST/templates/landing/landing.html" <<'LANDING'
   </p>
   <p style="color:#666">
     Seeing a 404 or an empty map? Generate a simulation first:<br>
-    <code>../venv/bin/python -m backend.run_simulation</code>
+    <code>uv run python -m backend.run_simulation</code>
   </p>
 </div>
 {% endblock content %}
@@ -77,11 +77,11 @@ echo
 echo "Frontend ready at: $DST"
 echo
 echo "Next steps:"
-echo "  1. Generate a simulation (uses the project venv with the engine installed):"
-echo "       ../venv/bin/python -m backend.run_simulation"
+echo "  1. Generate a simulation (runs the engine in the repo's uv project env):"
+echo "       uv run python -m backend.run_simulation"
 echo "  2. Run the frontend in its OWN Python 3.9 venv (Django 2.2 needs an older"
-echo "     interpreter than the engine's). From this directory:"
-echo "       python3.9 -m venv frontend-venv"
-echo "       ./frontend-venv/bin/pip install -r requirements-frontend.txt"
+echo "     interpreter than the engine's). uv fetches Python 3.9 for you:"
+echo "       uv venv --python 3.9 frontend-venv"
+echo "       uv pip install --python frontend-venv -r requirements-frontend.txt"
 echo "       (cd frontend && ../frontend-venv/bin/python manage.py runserver)"
 echo "  3. Open: http://localhost:8000/replay/mock_the_ville_isabella_maria_klaus/0/"
