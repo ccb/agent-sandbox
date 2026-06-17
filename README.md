@@ -214,9 +214,10 @@ part of this site.
 ### Onboarding assignment
 
 The HW1 "Action Castle" notebook in [`notebooks/`](notebooks/) is the day-one ramp.
-See [`ONBOARDING.md`](ONBOARDING.md). The same folder holds
-[`multi_agent_action_castle.ipynb`](notebooks/multi_agent_action_castle.ipynb), a
-demo of the new agent framework (mock-LLM agents, clock, triggers, event log).
+See [`ONBOARDING.md`](ONBOARDING.md). The same folder holds a numbered walkthrough of
+the library's features — start with [`notebooks/README.md`](notebooks/README.md) for the
+reading order. [`02_agents_react.ipynb`](notebooks/02_agents_react.ipynb) is the agent
+framework demo (mock-LLM agents, clock, triggers, event log).
 
 ## Credits
 

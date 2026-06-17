@@ -214,7 +214,7 @@ belief on its own.
 
 ## 8. Demo
 
-`notebooks/knowledge_demo.ipynb` is fully offline and deterministic (no API key).
+`notebooks/04_knowledge_beliefs.ipynb` is fully offline and deterministic (no API key).
 It reuses the real Action Castle cast via `build_game()` and seeds beliefs **in the
 notebook**, leaving the canonical game pristine. It demonstrates:
 
@@ -285,7 +285,7 @@ unchanged observation.
 | 2 | `Character` integration: `self.knowledge`, `add_belief`, save/load. |
 | 3 | `describe_for` injects the beliefs section and gates hidden things. |
 | 4 | `tests/test_knowledge.py`: data model, isolation, gating, backward compat. |
-| 5 | `notebooks/knowledge_demo.ipynb`: offline asymmetric-knowledge demo. |
+| 5 | `notebooks/04_knowledge_beliefs.ipynb`: offline asymmetric-knowledge demo. |
 | 6 | This design doc, with the knowledge <-> memory composition section. |
 
 Each stage keeps existing no-knowledge games working.
