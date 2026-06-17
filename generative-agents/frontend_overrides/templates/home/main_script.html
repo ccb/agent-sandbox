@@ -796,6 +796,55 @@
 			}
 		};
 	}
+
+	// *** AGENT VIEWER ARROWS ***
+	// The right-hand panel shows ONE agent at a time. These arrows only change
+	// which card is visible -- every card keeps getting updated by the replay
+	// loop above whether it is shown or not, so flipping between agents never
+	// touches the running simulation (the map and all sprites keep moving).
+	var agentCards = Array.prototype.slice.call(
+		document.querySelectorAll(".agent-card"));
+	var agent_prev_button = document.getElementById("agent_prev_button");
+	var agent_next_button = document.getElementById("agent_next_button");
+	var agent_indicator = document.getElementById("agent-indicator");
+	var selectedAgent = 0;
+
+	function showSelectedAgent() {
+		for (var i = 0; i < agentCards.length; i++) {
+			agentCards[i].style.display = (i === selectedAgent) ? "" : "none";
+		}
+		if (agent_indicator && agentCards.length) {
+			var name = agentCards[selectedAgent].dataset.agentName || "";
+			agent_indicator.textContent =
+				name + " — " + (selectedAgent + 1) + " / " + agentCards.length;
+		}
+	}
+
+	if (agent_prev_button) {
+		agent_prev_button.onclick = function () {
+			// + length keeps the result positive when wrapping past the first card.
+			selectedAgent = (selectedAgent - 1 + agentCards.length) % agentCards.length;
+			showSelectedAgent();
+		};
+	}
+	if (agent_next_button) {
+		agent_next_button.onclick = function () {
+			selectedAgent = (selectedAgent + 1) % agentCards.length;
+			showSelectedAgent();
+		};
+	}
+	showSelectedAgent();
+
+	// *** RESET ***
+	// Restart the replay from the beginning. The page is served at the start step
+	// in the normal run-replay flow, so a reload re-spawns every sprite at its
+	// initial tile and rewinds the clock -- the simplest, most robust reset.
+	var reset_button = document.getElementById("reset_button");
+	if (reset_button) {
+		reset_button.onclick = function () {
+			window.location.reload();
+		};
+	}
 </script>
 
 
