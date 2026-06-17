@@ -14,8 +14,8 @@ paper ("Smallville") and the [ReAct](https://arxiv.org/abs/2210.03629)
     people working on the project. To read them, clone the repo and run:
 
     ```bash
-    pip install -e .[docs]
-    cd mkdocs && mkdocs serve     # then open http://127.0.0.1:8000
+    cd mkdocs && uv run --extra docs mkdocs serve   # then open http://127.0.0.1:8000
+    # no uv? pip install -e .[docs] && cd mkdocs && mkdocs serve
     ```
 
     `mkdocs build` produces a static site under `mkdocs/site/` (git-ignored) that
@@ -49,21 +49,26 @@ actions actually available, and the engine decides whether they're allowed.
 
 ## Getting started
 
+This project defaults to [**uv**](https://docs.astral.sh/uv/) — the committed
+`uv.lock` + `.python-version` pin everyone to the same versions and Python 3.12.
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .            # editable install of the engine
-pip install -e .[dev]       # + black, nbformat, pytest
-pip install -e .[llm]       # + openai, anthropic, tiktoken
-pip install -e .[docs]      # + mkdocs-material, mkdocstrings (this site)
+uv sync                # editable install of the engine into .venv/ (from the lockfile)
+uv sync --extra dev    # + black, nbformat, pytest
+uv sync --extra llm    # + openai, anthropic, tiktoken
+uv sync --extra docs   # + mkdocs-material, mkdocstrings (this site)
 ```
 
-Run things:
+No uv? The classic flow still works: `python3 -m venv venv && source
+venv/bin/activate && pip install -e ".[dev]"` (and drop the `uv run` prefixes
+below once it's activated).
+
+Run things — `uv run` uses `.venv/` automatically, no activation needed:
 
 ```bash
-python -m text_adventure_games.webapp.app          # Flask web UI at localhost:8080
-pytest tests/ -v                                    # offline agent-layer + live-game suites
-LLM_PROVIDER=mock python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
+uv run python -m text_adventure_games.webapp.app          # Flask web UI at localhost:8080
+uv run pytest tests/ -v                                    # offline agent-layer + live-game suites
+LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
 ```
 
 To enable the LLM layer, set `LLM_PROVIDER` (`anthropic`, `openai`, or `mock` — a

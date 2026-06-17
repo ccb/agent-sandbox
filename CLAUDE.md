@@ -13,20 +13,25 @@ favor clear, readable code and explanation over cleverness.
 
 ## Setup & Commands
 
+This project defaults to **uv** (committed `uv.lock` + `.python-version` pin
+versions and Python 3.12). `uv run <cmd>` auto-uses `.venv/` — no activation.
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .            # editable install of the engine
-pip install -e .[dev]       # + black, nbformat
-pip install -e .[llm]       # + openai, anthropic, tiktoken
+uv sync                 # create .venv/ + install engine (editable) from the lockfile
+uv sync --extra dev     # + black, nbformat, pytest
+uv sync --extra llm     # + openai, anthropic, tiktoken
 
-python -m text_adventure_games.webapp.app   # Flask web UI at localhost:8080
-pytest tests/ -v                             # full suite (agent layer + NPC behaviors)
-pytest tests/test_npc_behaviors.py -s        # watch the NPC behavior suite, narrated
-black .                                       # format
+uv run python -m text_adventure_games.webapp.app   # Flask web UI at localhost:8080
+uv run pytest tests/ -v                             # full suite (agent layer + NPC behaviors)
+uv run pytest tests/test_npc_behaviors.py -s        # watch the NPC behavior suite, narrated
+uv run black .                                       # format
 
-LLM_PROVIDER=mock python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
+LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play  # ReAct NPCs, free + offline
 ```
+
+No uv? The plain `python3 -m venv venv && source venv/bin/activate && pip install
+-e ".[dev]"` flow still works (drop the `uv run` prefixes once activated) — see
+`README.md` for the venv/conda fallbacks.
 
 To enable the LLM layer: set `LLM_PROVIDER` (`anthropic`, `openai`, or `mock` —
 a free deterministic stand-in) and, for the real providers, the matching

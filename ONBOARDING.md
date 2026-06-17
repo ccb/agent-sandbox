@@ -24,17 +24,31 @@ Work inside an **isolated virtual environment** — don't install into your syst
 or Anaconda Python (that's the #1 source of "it won't import" headaches; see
 Troubleshooting below).
 
+We use [**uv**](https://docs.astral.sh/uv/) — one tool that creates the
+environment, installs everything from the committed lockfile (so you get the exact
+same versions as everyone else), and runs commands. Install it first if you
+haven't: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
 ```bash
 git clone https://github.com/ccb/agent-sandbox.git
 cd agent-sandbox
+uv sync --extra llm              # creates .venv/ and installs the engine + LLM SDKs
+uv run python -m text_adventure_games.webapp.app   # then open http://localhost:8080
+```
+
+`uv run` automatically uses the project's `.venv/`, so there's nothing to
+"activate" — every time you come back, just prefix commands with `uv run`. (If you
+prefer the classic feel, `source .venv/bin/activate` once and drop the prefix.)
+Stop the server with `Ctrl+C`.
+
+Don't want uv? The classic flow still works:
+
+```bash
 python3 -m venv venv             # create an isolated environment
 source venv/bin/activate         # activate it — your prompt should now show (venv)
 pip install -e ".[llm]"          # install the engine + LLM SDKs into the venv
 python -m text_adventure_games.webapp.app   # then open http://localhost:8080
 ```
-
-Every time you come back to work, re-activate first: `source venv/bin/activate`.
-Stop the server with `Ctrl+C`.
 
 Play through a bit of Action Castle in the browser so you know what the engine
 *does* before you read how it works.
@@ -50,7 +64,7 @@ Play through a bit of Action Castle in the browser so you know what the engine
   (`ensurepip` errors), and bare `pip` may target a different interpreter than
   `python`. Use a conda env instead of a venv:
   ```bash
-  conda create -n agent-sandbox python=3.11 -y
+  conda create -n agent-sandbox python=3.12 -y
   conda activate agent-sandbox
   pip install -e ".[llm]"
   ```
