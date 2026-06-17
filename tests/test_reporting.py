@@ -110,6 +110,65 @@ def test_default_renderer_falls_back_without_tty(monkeypatch):
 
 
 # ----------------------------------------------------------------------
+# RichTerminalRenderer: every line carries a glyph cue and bracketed channel label
+# ----------------------------------------------------------------------
+
+
+def _strip_ansi(text: str) -> str:
+    import re
+
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def test_rich_renderer_labels_every_line():
+    """Each rendered line opens with a glyph cue *and* names its channel in
+    brackets so the *kind* of line is legible from the text alone (color is only
+    a tertiary cue), and agent-trace lines are attributed to the acting
+    character."""
+    pytest.importorskip("rich")
+    from rich.console import Console
+
+    from text_adventure_games.reporting import RichTerminalRenderer
+
+    buf = io.StringIO()
+    # no_color keeps the literal label text un-escaped so we can assert on it.
+    console = Console(file=buf, width=100, no_color=True, force_terminal=True)
+    r = RichTerminalRenderer(level=VERBOSE, console=console)
+    for m in [
+        Message(Channel.COMMAND, "go north", turn=1),
+        Message(Channel.NARRATION, "You walk north.", turn=1),
+        Message(Channel.NPC_NARRATION, "The troll growls.", turn=1),
+        Message(Channel.BLOCKED, "the way is blocked", turn=1),
+        Message(Channel.CONFLICT, "guard got the fish first", actor="troll", turn=1),
+        Message(Channel.SYSTEM, "the bells ring", turn=1),
+        Message(
+            Channel.AGENT_OBSERVATION,
+            "A troll blocks the bridge.",
+            actor="troll",
+            turn=1,
+        ),
+        Message(Channel.AGENT_REASONING, "Escalate.", actor="troll", turn=1),
+        Message(Channel.AGENT_ACTION, "growl player", actor="troll", turn=1),
+        Message(Channel.AGENT_REFLECTION, "Try again.", actor="troll", turn=1),
+    ]:
+        r.emit(m)
+    out = _strip_ansi(buf.getvalue())
+
+    # Top-level lines carry a glyph cue followed by the bracketed kind...
+    assert "> [player command] go north" in out
+    assert "» [narration] You walk north." in out
+    assert "» [npc] The troll growls." in out
+    assert "✗ [blocked] the way is blocked" in out
+    assert "⚔ [conflict] guard got the fish first" in out
+    assert "· [system] the bells ring" in out
+    # ...and agent-trace lines pair a glyph with the actor and the label.
+    assert "◦ troll [observation] A troll blocks the bridge." in out
+    assert "· troll [reasoning] Escalate." in out
+    assert "▸ troll [action] growl player" in out
+    assert "↺ troll [reflection] Try again." in out
+
+
+# ----------------------------------------------------------------------
 # WebRenderer: the compatibility surface (Channel -> legacy web "type")
 # ----------------------------------------------------------------------
 
