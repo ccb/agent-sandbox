@@ -160,16 +160,31 @@ the maze assets aren't present — run `./setup.sh` first.)
 
 ## Known issues
 
-- **Replay map doesn't fill the view on some setups (UNRESOLVED).** The map is
-  meant to fill the view from the top-left, with camera zoom/pan (`Scale.RESIZE`,
-  a "cover" default zoom, on-screen +/-/Reset). On at least one machine it instead
-  renders centered / pushed to the bottom-right with black space along the top and
-  left, and rightward panning is limited. The camera/scale logic verifies correct
-  in headless Chrome at devicePixelRatio 1 and 2, so the root cause is still
-  unknown. **Workaround:** click **Hide map** on the replay page to collapse the
-  map and read the agent-info panels (current action, location, conversation)
-  directly — the replay keeps running while the map is hidden. See the notes in
-  `setup.sh` and `frontend_overrides/templates/home/main_script.html`.
+_(none open — the replay-map fill bug below is resolved.)_
+
+### Resolved: replay map black space / didn't fill the view
+
+The replay map used to render with black space along the top and left (the world
+shoved toward the bottom-right) and with stretches of black on the right and
+bottom. This was **two independent bugs**, both now fixed in
+`frontend_overrides/templates/home/main_script.html`:
+
+1. **Black on the top/left** — a Phaser camera zooms around its *origin*, which
+   defaults to the center `(0.5, 0.5)`. At our zoomed-out "cover" default
+   (fractional zoom < 1, since the map dwarfs the canvas) that meant `scroll = 0`
+   put a *negative* world coordinate at the screen's top-left corner, so the
+   map's top/left edges floated in black. Fixed by pivoting the camera around its
+   top-left: `camera.setOrigin(0, 0)`.
+2. **Black on the right/bottom** — Phaser 3.55's tile culling under-counts which
+   tiles are on-screen at fractional zoom, so most of the map (the base grass
+   layer especially — only ~4,400 of 14,000 tiles were drawn) silently dropped
+   out. Fixed by disabling per-tile culling on this small map
+   (`tilemapLayer.setSkipCull(true)` on every layer).
+
+Verified from a clean template load at devicePixelRatio 2: the camera's top-left
+pixel maps to world `(0, 0)` and all 14,000 base tiles draw. The **Hide map**
+button remains as a convenience for reading the agent-info panels, not a
+workaround.
 
 ## Layout
 

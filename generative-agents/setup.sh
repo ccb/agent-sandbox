@@ -83,14 +83,12 @@ echo "Installing local replay UI overrides (camera zoom/pan + fill-the-view)..."
 # because frontend/ itself is git-ignored -- so edits made directly under
 # frontend/ are NOT tracked and get wiped by the rsync --delete above.
 #
-# KNOWN ISSUE (unresolved): on at least one reporter's machine the replay world
-# renders centered / pushed toward the bottom-right with black space along the top
-# and left, and rightward panning is limited, instead of filling the view from the
-# top-left. The camera/scale logic verifies correct in headless Chrome at dpr 1
-# and 2, and these overrides are what *should* render. A likely cause was this
-# script regenerating the OLD upstream UI on top of local edits -- which moving the
-# UI into these committed overrides is meant to fix. If it still mis-renders after
-# a clean regen + fresh browser, it needs further investigation.
+# (Resolved) The old "black space on the top/left, world shoved bottom-right, plus
+# black on the right/bottom" bug was two issues in main_script.html, both fixed
+# there: the Phaser camera pivoted around its center instead of its top-left
+# (origin now 0,0), and Phaser's tile culling dropped most of the map at our
+# zoomed-out default (culling now disabled per layer via setSkipCull). See the
+# comments in frontend_overrides/templates/home/main_script.html and the README.
 rsync -a "$HERE/frontend_overrides/" "$DST/"
 
 echo

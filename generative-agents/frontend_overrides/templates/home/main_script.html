@@ -273,6 +273,19 @@
 	  foregroundL2Layer.setDepth(2);
 
 	  const collisionsLayer = map.createLayer("Collisions", collisions, 0, 0);
+
+	  // Draw the WHOLE map every frame instead of letting Phaser cull the tiles
+	  // it thinks are off-screen. Phaser 3.55's tile culling under-counts which
+	  // tiles are visible when the camera is zoomed OUT (fractional zoom < 1 --
+	  // which our fill-the-view default always is, since the map dwarfs the
+	  // canvas), so big stretches of the map silently dropped out and rendered
+	  // as BLACK on the right and bottom. The base "Bottom Ground" grass was the
+	  // most visible casualty: it's one tile repeated across all 140x100 cells,
+	  // yet only ~4,400 of 14,000 were being drawn. This map is small, so turning
+	  // culling off and just drawing every tile is cheap and removes the black.
+	  map.layers.forEach(function (layerData) {
+	    if (layerData.tilemapLayer) { layerData.tilemapLayer.setSkipCull(true); }
+	  });
 	  // const groundLayer = map.createLayer("Ground", walls, 0, 0);
 	  // const indoorGroundLayer = map.createLayer("Indoor Ground", walls, 0, 0);
 	  // const wallsLayer = map.createLayer("Walls", walls, 0, 0);
@@ -309,15 +322,21 @@
 	                setSize(30, 40).
 	                setOffset(0, 0);
 	  player.setDepth(-1);
-	  // KNOWN ISSUE (unresolved): on at least one machine the world renders
-	  // centered / pushed toward the bottom-right with black space on the top and
-	  // left and limited rightward panning, instead of filling the view from the
-	  // top-left. The setup below verifies correct in headless Chrome at dpr 1 and
-	  // 2 (canvas fills the container, scroll clamps to >= 0, cover-zoom fills both
-	  // axes), so the root cause is still TBD -- a likely culprit was setup.sh
-	  // regenerating the older upstream UI over local edits. Needs more digging.
 	  // Setting up the camera.
 	  const camera = this.cameras.main;
+
+	  // Pivot the camera around its TOP-LEFT, not its center (Phaser's default
+	  // origin is 0.5,0.5). This is the fix for the old "black space on the top
+	  // and left, map shoved to the bottom-right" bug: a Phaser camera zooms
+	  // around its origin, so with the default center origin and a zoomed-OUT
+	  // view (cover zoom < 1, since the map is far bigger than the canvas),
+	  // scrollX/scrollY = 0 did NOT put world (0,0) at the screen's top-left --
+	  // it put a NEGATIVE world coordinate there, leaving the map's top/left
+	  // edges floating in black. With origin (0,0), scrollX/scrollY are exactly
+	  // the world coordinate shown at the top-left pixel, so scroll=0 pins the
+	  // map flush to the corner and clampCamera()'s "viewW = width/zoom" math is
+	  // correct at every zoom level. (Was reproduced at dpr 2 via getWorldPoint.)
+	  camera.setOrigin(0, 0);
 
 	  // We no longer call startFollow() -- instead the user drives the camera
 	  // directly by zooming and panning.
