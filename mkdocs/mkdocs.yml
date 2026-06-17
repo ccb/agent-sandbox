@@ -56,3 +56,4 @@ nav:
       - Agents: api/agents.md
       - LLM client: api/llm-client.md
       - World model: api/world-model.md
+      - Knowledge & beliefs: api/knowledge.md
