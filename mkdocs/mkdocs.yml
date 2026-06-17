@@ -8,8 +8,8 @@
 # Pages, no Read the Docs, no CI publish). To read the docs, clone the repo and
 # run it from this folder:
 #
-#     pip install -e .[docs]
-#     cd mkdocs && mkdocs serve   # live site at http://127.0.0.1:8000
+#     cd mkdocs && uv run --extra docs mkdocs serve   # live site at http://127.0.0.1:8000
+#     # no uv? pip install -e .[docs] && cd mkdocs && mkdocs serve
 #
 # `mkdocs build` writes a static site to mkdocs/site, which is git-ignored.
 # Only people with access to this repository can build or view the docs.

@@ -2,16 +2,20 @@
 description: Run the full pre-PR gate (format check + test suite)
 ---
 
-This repo has **no CI** — `/check` is the stand-in. Run every gate a PR should
-pass, from the repo root, using the project venv interpreter. Run both even
-if the first one fails, then report.
+`/check` runs the same gates CI does (`.github/workflows/ci.yml`), locally, before
+you push. Run every gate a PR should pass, from the repo root, via `uv run` (it
+uses the project's `.venv/` automatically). Run both even if the first one fails,
+then report.
 
 Run these in order:
 
-1. **Format** — `venv/bin/black --check .`
+1. **Format** — `uv run black --check .`
    (reports unformatted files; does not modify anything)
-2. **Pytest suite** — `venv/bin/python -m pytest tests/ -q`
+2. **Pytest suite** — `uv run pytest tests/ -q`
    (includes the turn-based NPC behavior suite, `tests/test_npc_behaviors.py`)
+
+If `uv` isn't installed, fall back to the activated venv (`black --check .` /
+`python -m pytest tests/ -q`).
 
 Then print a compact summary, one line per gate:
 

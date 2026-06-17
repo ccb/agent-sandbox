@@ -306,11 +306,11 @@ Recommendation, to keep the cost contained:
   the engine falls back to it automatically — so the project never *hard*-requires
   `rich` and CI/tests stay green without it.
 - **Where it lands in `pyproject.toml`:** add `rich` to core `dependencies` (next to
-  `flask`) so the default `pip install -e .` gives the good terminal experience out
-  of the box. The lighter-touch alternative is a `rich` extra
-  (`pip install -e .[rich]`, mirroring `[llm]`); pick this if the team wants the
-  base install to stay minimal. Either way the fallback in the previous bullet keeps
-  a no-`rich` install fully functional.
+  `flask`) so the default install (`uv sync`, or `pip install -e .`) gives the good
+  terminal experience out of the box. The lighter-touch alternative is a `rich` extra
+  (`uv sync --extra rich` / `pip install -e .[rich]`, mirroring `[llm]`); pick this if
+  the team wants the base install to stay minimal. Either way the fallback in the
+  previous bullet keeps a no-`rich` install fully functional.
 
 ---
 
@@ -610,7 +610,7 @@ class CaptureRenderer(Renderer):
 ### Example terminal session (mock provider, free offline)
 
 ```text
-$ LLM_PROVIDER=mock python -m notebooks.hw1_llm.play
+$ LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play
 
 ── Turn 0 · 8:00 AM (morning) ────────────────────────────────
 · [system] DRAWBRIDGE

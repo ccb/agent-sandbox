@@ -2,10 +2,11 @@
 # PostToolUse launcher: run the renderer-coverage guard with whatever Python
 # is available.
 #
-# We can't hard-code "$repo/venv/bin/python": anyone on conda (or any non-venv
-# interpreter) -- e.g. the lab machines -- has no venv/, so that path errors on
+# We can't hard-code "$repo/.venv/bin/python": anyone on conda (or any non-venv
+# interpreter) -- e.g. the lab machines -- has no .venv/, so that path errors on
 # every edit. So we resolve an interpreter the same way format.sh resolves
-# black: prefer the project venv, then fall back to PATH python3 / python. The
+# black: prefer the project venv (uv's .venv/, then a legacy venv/), then fall
+# back to PATH python3 / python. The
 # coverage script puts the repo root on sys.path itself and only needs the
 # stdlib, so any Python 3 works; if none is found we no-op rather than block.
 #
@@ -19,7 +20,9 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 coverage_script="$script_dir/check_renderer_coverage.py"
 
 # Prefer the project venv's python; fall back to whatever is on PATH.
-if [[ -x "$repo_root/venv/bin/python" ]]; then
+if [[ -x "$repo_root/.venv/bin/python" ]]; then
+    python_bin="$repo_root/.venv/bin/python"
+elif [[ -x "$repo_root/venv/bin/python" ]]; then
     python_bin="$repo_root/venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
     python_bin="python3"

@@ -47,7 +47,7 @@ The two big things to internalize:
 ## Walking through a turn
 
 Here's a real moment from the offline demo
-(`LLM_PROVIDER=mock python -m notebooks.hw1_llm.play`), as it looks in a color
+(`LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play`), as it looks in a color
 terminal. The troll growls, that doesn't work, so it escalates to an attack —
 which **fails** because it has no weapon — then it reflects and retries with its
 club:
@@ -117,7 +117,7 @@ terminal it's simply whatever you typed at the prompt.)
 
 ## In the browser
 
-The web app (`python -m text_adventure_games.webapp.app`,
+The web app (`uv run python -m text_adventure_games.webapp.app`,
 <http://localhost:8080>) shows the same information, color-coded the same way —
 just as a scrolling HTML transcript instead of a turn-ruled terminal:
 
@@ -145,8 +145,8 @@ How much of the agent trace you see is controlled by one setting. Set the
 `OUTPUT_LEVEL` environment variable before launching:
 
 ```bash
-OUTPUT_LEVEL=quiet   LLM_PROVIDER=mock python -m notebooks.hw1_llm.play
-OUTPUT_LEVEL=verbose LLM_PROVIDER=mock python -m notebooks.hw1_llm.play
+OUTPUT_LEVEL=quiet   LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play
+OUTPUT_LEVEL=verbose LLM_PROVIDER=mock uv run python -m notebooks.hw1_llm.play
 ```
 
 | Level | What you see | Good for |
