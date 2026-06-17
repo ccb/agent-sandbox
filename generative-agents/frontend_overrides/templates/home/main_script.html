@@ -102,10 +102,10 @@
 	// like the Play/Pause buttons flip the replay globals.
 	let mainCamera = null;   // Phaser's main camera, set in create()
 	let gameScale = null;    // Phaser Scale Manager, set in create(); used to re-fit on "Show map"
-	let clampCamera = null;  // keeps the camera inside the map (or centers it), set in create()
-	let minZoom = 0.1;       // most zoomed-OUT allowed (= whole map fits); set in create()
+	let clampCamera = null;  // keeps the camera inside the map, set in create()
+	let minZoom = 0.1;       // most zoomed-OUT allowed (= map fills the view); set in create()
 	let maxZoom = 1.5;       // most zoomed-IN allowed (1.0 = native tile resolution)
-	let fitZoom = 0.1;       // the "fit whole map" zoom; the Reset button returns here
+	let coverZoom = 0.1;     // the "fill the view" zoom (= minZoom); the Reset button returns here
 
 	// Persona related variables. This should have the name of the persona as its 
 	// keys, and the instances of the Persona class as the values.
@@ -360,31 +360,28 @@
 	    camera.scrollY = Phaser.Math.Clamp(camera.scrollY, 0, Math.max(0, map.heightInPixels - viewH));
 	  };
 
-	  // Compute the "fit the whole map" zoom: how many screen pixels per world
-	  // pixel. We take the SMALLER of the width/height ratios so that BOTH
-	  // dimensions fit on screen. camera.width/height equal the canvas size.
-	  function computeFitZoom() {
-	    return Math.min(camera.width / map.widthInPixels,
-	                    camera.height / map.heightInPixels);
-	  }
-	  // The "fill the area" zoom: the LARGER of the width/height ratios, so the
-	  // map covers the whole canvas on both axes (the non-limiting axis overflows
-	  // and can be panned). camera.width/height equal the canvas size.
+	  // The "fill the view" zoom: the LARGER of the width/height ratios, so the
+	  // map covers the whole canvas on BOTH axes (the non-limiting axis overflows
+	  // off-screen and can be panned to). camera.width/height equal the canvas size.
 	  function computeCoverZoom() {
 	    return Math.max(camera.width / map.widthInPixels,
 	                    camera.height / map.heightInPixels);
 	  }
 
-	  // Default view = FILL the area (cover), with the world's top-left pinned to
-	  // the view's top-left. "Fit the whole map" stays the minimum zoom and the
-	  // Reset (fullscreen) button, so the user can still zoom out to see it all.
-	  fitZoom = computeFitZoom();
-	  let coverZoom = computeCoverZoom();
-	  minZoom = fitZoom;   // never let the user zoom out past the whole map
-	  maxZoom = 2.5;       // how far the user can zoom IN to inspect a small area
+	  // Default view = FILL the view, world's top-left pinned to the view's
+	  // top-left. Cover is ALSO the most zoomed-OUT we allow. Zooming out any
+	  // further would shrink the map below the canvas on its non-limiting axis
+	  // and show black bars there: the canvas is wider (or taller) relative to
+	  // the map than the map's own aspect ratio, so a "fit the whole map" zoom
+	  // fills one axis but leaves slack -- and thus black -- on the other. Pinning
+	  // cover as the floor keeps the canvas always full of map; the cropped axis
+	  // is reached by panning, not by zooming out into a void.
+	  coverZoom = computeCoverZoom();
+	  minZoom = coverZoom;   // never let the user zoom out past a full canvas
+	  maxZoom = 2.5;         // how far the user can zoom IN to inspect a small area
 	  camera.scrollX = 0;
 	  camera.scrollY = 0;
-	  camera.setZoom(coverZoom);   // fill the area on load (was: fitZoom)
+	  camera.setZoom(coverZoom);   // fill the view on load
 	  clampCamera();               // pins the world's top-left into the view
 
 	  // Publish to the global bridge so the DOM zoom buttons / arrow keys reach it.
@@ -394,10 +391,10 @@
 	  // Keep things correct whenever the canvas changes size (window resize, and
 	  // also once on startup if the container hadn't finished laying out when this
 	  // ran). RESIZE keeps camera.width/height in sync, but we set the size
-	  // explicitly so the zoom math always reads the new dimensions. Preserve the
-	  // user's current mode: if they were filling the area keep it filled; if they
-	  // were viewing the whole map keep it fitted; otherwise just clamp their zoom
-	  // so they can never end up more zoomed-out than the whole map.
+	  // explicitly so the zoom math always reads the new dimensions. The cover
+	  // zoom depends on the canvas size, so recompute it (and the matching min
+	  // floor); if the user was filling the view keep it filled, otherwise just
+	  // clamp their current zoom so they can never end up below a full canvas.
 	  this.scale.on("resize", (gameSize) => {
 	    // When the map is collapsed (display:none) the container reports 0x0;
 	    // bail so we don't divide by zero / zoom to NaN. We re-fit on "Show map".
@@ -405,15 +402,15 @@
 	      return;
 	    }
 	    camera.setSize(gameSize.width, gameSize.height);
-	    const wasCover = Math.abs(camera.zoom - coverZoom) < 1e-3;
-	    const wasFit = camera.zoom <= minZoom + 1e-4;
-	    fitZoom = computeFitZoom();
+	    // Were they at (or, defensively, below) the OLD cover/floor? If so, snap
+	    // to the new one; otherwise just clamp their zoom into the new range.
+	    const wasCover = camera.zoom <= coverZoom + 1e-3;
 	    coverZoom = computeCoverZoom();
-	    minZoom = fitZoom;
+	    minZoom = coverZoom;
 	    if (wasCover) {
 	      camera.setZoom(coverZoom);
-	    } else if (wasFit || camera.zoom < minZoom) {
-	      camera.setZoom(fitZoom);
+	    } else {
+	      camera.setZoom(Phaser.Math.Clamp(camera.zoom, minZoom, maxZoom));
 	    }
 	    clampCamera();
 	  });
@@ -763,12 +760,15 @@
 		zoom_out_button.onclick = function(){ zoomByFactor(1 / 1.2); };
 	}
 	if (zoom_reset_button) {
-		// Reset = fit the whole map again and recenter (the load-time view).
+		// Reset = the load-time view: fill the view (cover, the most zoomed-OUT
+		// we allow) with the world's top-left pinned back to the corner.
 		zoom_reset_button.onclick = function(){
 			if (!mainCamera) {
 				return;
 			}
-			mainCamera.setZoom(fitZoom);
+			mainCamera.setZoom(coverZoom);
+			mainCamera.scrollX = 0;
+			mainCamera.scrollY = 0;
 			if (clampCamera) clampCamera();
 		};
 	}

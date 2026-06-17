@@ -180,11 +180,19 @@ bottom. This was **two independent bugs**, both now fixed in
    layer especially — only ~4,400 of 14,000 tiles were drawn) silently dropped
    out. Fixed by disabling per-tile culling on this small map
    (`tilemapLayer.setSkipCull(true)` on every layer).
+3. **Black when you zoomed all the way out** — even with the map drawn correctly,
+   the minimum zoom used to be the "fit the whole map" zoom, which on a window
+   whose aspect ratio differs from the map's (≈1.4) leaves slack — and thus black
+   bars — on one axis (the right on a typical wide window). Fixed by making the
+   zoom floor the *cover* zoom instead: the most zoomed-out view now exactly fills
+   the canvas, and the off-screen axis is reached by panning rather than by zooming
+   out into a void. (`minZoom = coverZoom`; the Reset button returns to it.)
 
-Verified from a clean template load at devicePixelRatio 2: the camera's top-left
-pixel maps to world `(0, 0)` and all 14,000 base tiles draw. The **Hide map**
-button remains as a convenience for reading the agent-info panels, not a
-workaround.
+Verified headless at devicePixelRatio 2 from a clean template load: the camera's
+top-left pixel maps to world `(0, 0)`, all 14,000 base tiles draw, and after
+mashing zoom-out the camera stops at the cover zoom with the whole canvas still
+full of map. The **Hide map** button remains as a convenience for reading the
+agent-info panels, not a workaround.
 
 ## Layout
 
