@@ -4,6 +4,41 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-17
+
+**Focus:** land the repo-hygiene queue (#64–#65, #68–#69); open the Generative Agents port for review (#72)
+
+**Done today:**
+- Merged **PR #64**: adopt **uv** as the default project workflow — committed `uv.lock`, `.python-version`, and README/CLAUDE.md updates; plain `venv`/conda paths stay documented as fallbacks.
+- Merged **PR #65**: **`PROGRESS.md`** — single at-a-glance status board for shipped features, open PRs, and design docs (replaces the scattered issues/PRs/`docs/design/` view).
+- Merged **PR #68**: resync the local-only **MkDocs API reference** to the engine — new `api/knowledge.md` (#45), `turns.phase_rank` (#42), and string-literal `__all__` fixes so `mkdocs build --strict` passes.
+- Merged **PR #69**: reorganize **`notebooks/`** into a numbered feature walkthrough (`01_engine_tutorial` … `08_world_mechanics`) with offline mock-LLM demos for output/traces (#31), persuasion (#46), containers/durations (#43/#24), plus a coverage matrix in `notebooks/README.md`.
+- Opened **PR #72** (`feat/generative-agents-port`): port Stanford's **Generative Agents (Smallville)** onto the engine — mock-LLM backend pre-generates movement files, upstream Phaser/Django frontend replays them; full **25-resident** town, camera zoom/pan, split map/agent-panel UI, synthetic-maze offline tests + CI step. Supersedes **#71** (base branch deleted when #64 merged). Everything under `generative-agents/`; **no engine code changed.**
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #72** reviewed/merged.
+- Get **#59**, **#61**, and **#62** reviewed.
+
+## 2026-06-16
+
+**Focus:** start the Generative Agents (Smallville) port; docs-site polish
+
+**Done today:**
+- **Late 6/15** (after the journal entry): merged **PR #54** (issue #45, per-character **knowledge / belief layer**) and **PR #67** (#66, disambiguate `MockReActClient` decisions from `tool_calls`).
+- Opened **PR #70** (`external-generative-agents`): survey doc cataloging Smallville's world hierarchy (19 sectors, ~62 arenas), the 25 personas, memory/cognition structure, and porting correspondences to our `Location`/`Character` model — plus `.gitignore` for `/external/` where the upstream repo is cloned locally. Closed when folded into the implementation PR.
+- Opened **PR #71** (`feat/generative-agents-port`): first cut of the port — engine-backed backend pre-generates the frontend's movement JSON, mock LLM drives three agents (Isabella, Maria, Klaus) through the real `Agent.decide` seam, vendored pathfinder + `setup.sh` copies upstream assets into a git-ignored `frontend/`. Closed when GitHub auto-closed it after the `chore/uv-project-workflow` base branch merged via #64 (can't reopen once the base is gone).
+- Pushed docs hygiene to `main`: MkDocs serve/build instructions in **README**, theme switch **Material → Read the Docs**, and `/external/` in **`.gitignore`**.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land **#64** / **#65**, then rebase the Generative Agents branch onto `main` and reopen as a fresh PR.
+- Expand the port from 3 agents to the full 25-resident cast.
+
 ## 2026-06-15
 
 **Focus:** land contested-resource resolution in simultaneous mode (#42); repo hygiene (progress tracker, uv, ScienceWorld clones)
