@@ -9,5 +9,6 @@ then commands resolve player-first and in initiative order.
       members:
         - Intent
         - gather_intents
+        - phase_rank
         - resolve_order
         - run_simultaneous_round

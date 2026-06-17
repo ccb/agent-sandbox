@@ -74,7 +74,7 @@ free deterministic stand-in) and, for the real providers, the matching
 
 - **[API reference](api/index.md)** — the engine's public classes and functions,
   generated from docstrings, split by subsystem (game loop, turn modes, agents,
-  LLM client, world model).
+  LLM client, world model, knowledge & beliefs).
 
 The longer-form guides and design notes are kept in the repo's `docs/` directory
 and read on GitHub:
