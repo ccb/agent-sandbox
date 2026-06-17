@@ -4,9 +4,9 @@
 #
 # Copies the Django visualizer + the ~38MB of the_ville map/sprite assets, but
 # NOT the ~1GB of pre-baked example simulations (we generate our own). Also
-# brings in the small 3-agent base sim, whose initial tile positions and persona
-# memory the backend reuses. Idempotent: safe to re-run; never touches a sim you
-# generated under frontend/storage/ (that path is preserved).
+# brings in the 25-resident base sim (~500KB), whose initial tile positions and
+# per-persona memory the backend reuses. Idempotent: safe to re-run; never
+# touches a sim you generated under frontend/storage/ (that path is preserved).
 #
 # Usage:  ./setup.sh
 set -euo pipefail
@@ -14,7 +14,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../external/generative_agents/environment/frontend_server"
 DST="$HERE/frontend"
-BASE_SIM="base_the_ville_isabella_maria_klaus"
+BASE_SIM="base_the_ville_n25"
 
 if [ ! -d "$SRC" ]; then
   echo "ERROR: upstream frontend not found at:" >&2
@@ -40,8 +40,8 @@ rsync -a --delete \
 # Runtime dirs the frontend expects to exist (empty is fine).
 mkdir -p "$DST/storage" "$DST/temp_storage" "$DST/compressed_storage"
 
-# The small base sim (≈68KB): the backend reads its environment/0.json for
-# initial tile positions and copies its persona memory into each generated sim.
+# The base sim (~500KB): the backend reads its environment/0.json for initial
+# tile positions and copies its per-persona memory into each generated sim.
 if [ -d "$SRC/storage/$BASE_SIM" ]; then
   echo "Copying base simulation '$BASE_SIM'..."
   rsync -a "$SRC/storage/$BASE_SIM/" "$DST/storage/$BASE_SIM/"
@@ -52,7 +52,7 @@ fi
 # at /replay/<sim>/0/. Replace it with a version that links straight to the
 # generated replay. (rsync above restores the pristine template each run, so this
 # overwrite re-applies every time and stays idempotent.)
-SIM_CODE="mock_the_ville_isabella_maria_klaus"
+SIM_CODE="mock_the_ville_n25"
 cat > "$DST/templates/landing/landing.html" <<'LANDING'
 {% extends "base.html" %}
 {% load staticfiles %}
@@ -63,7 +63,7 @@ cat > "$DST/templates/landing/landing.html" <<'LANDING'
   Your environment server is up and running!
   <h2 style="margin-top:1em">Generative Agents — Smallville (mock-LLM port)</h2>
   <p style="font-size:1.2em">
-    ▶ <a href="/replay/mock_the_ville_isabella_maria_klaus/0/">Open the Smallville replay</a>
+    ▶ <a href="/replay/mock_the_ville_n25/0/">Open the Smallville replay (25 residents)</a>
   </p>
   <p style="color:#666">
     Seeing a 404 or an empty map? Generate a simulation first:<br>
@@ -104,4 +104,4 @@ echo "     interpreter than the engine's). uv fetches Python 3.9 for you:"
 echo "       uv venv --python 3.9 frontend-venv"
 echo "       uv pip install --python frontend-venv -r requirements-frontend.txt"
 echo "       (cd frontend && ../frontend-venv/bin/python manage.py runserver)"
-echo "  3. Open: http://localhost:8000/replay/mock_the_ville_isabella_maria_klaus/0/"
+echo "  3. Open: http://localhost:8000/replay/mock_the_ville_n25/0/"

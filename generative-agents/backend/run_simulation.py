@@ -34,8 +34,11 @@ _FRONTEND = os.path.join(_GA_DIR, "frontend")
 
 DEFAULT_VILLE_DIR = os.path.join(_FRONTEND, "static_dirs", "assets", "the_ville")
 DEFAULT_STORAGE = os.path.join(_FRONTEND, "storage")
-DEFAULT_BASE_SIM = "base_the_ville_isabella_maria_klaus"
-DEFAULT_SIM_CODE = "mock_the_ville_isabella_maria_klaus"
+# The 25-resident base sim: the backend reuses its persona memory (copied into
+# each generated sim so the frontend's click-a-persona state panel has something
+# to show). setup.sh copies it into frontend/storage/.
+DEFAULT_BASE_SIM = "base_the_ville_n25"
+DEFAULT_SIM_CODE = "mock_the_ville_n25"
 
 # 1 hour of in-game time at 10 seconds per step.
 DEFAULT_STEPS = 360

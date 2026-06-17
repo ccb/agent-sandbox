@@ -62,10 +62,12 @@ def world_map():
 
 def test_build_world_places_cast_at_home():
     game, chars = build_world()
-    # All three personas are characters in the game.
+    # The full 25-resident town is present.
+    assert len(PERSONAS) == 25
+    # Every persona is a character in the game...
     for spec in PERSONAS:
         assert spec["name"] in game.characters
-        # ...and start in their home location.
+        # ...and starts in their home location.
         assert chars[spec["name"]].location.name == spec["home"]
     # The destinations exist as locations.
     assert "Hobbs Cafe" in game.locations

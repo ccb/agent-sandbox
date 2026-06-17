@@ -4,13 +4,13 @@ This folder runs Stanford's [Generative Agents](https://github.com/joonspk-resea
 **visualization** (the Smallville tile map and character sprites), but drives it
 with a backend built on this repo's `text_adventure_games` engine instead of the
 original `reverie` server. For now there is **no live LLM**: the cast is driven by
-the engine's mock LLM client, producing a **simplified ~1-hour simulation** of
-three agents going about their morning.
+the engine's mock LLM client, producing a **simplified ~1-hour simulation** of the
+full 25-resident town going about its morning.
 
 It's a first step toward a full port. See `../docs/design/generative-agents-port.md`
 for the survey of the upstream world and cast that this builds on.
 
-![what you'll see: Isabella, Maria, and Klaus moving around Smallville]
+![what you'll see: the 25 residents of Smallville moving around town]
 
 ## How it works
 
@@ -36,7 +36,7 @@ So the port is split cleanly in two:
 The backend (`backend/`) does three things:
 
 1. **Builds the world in the engine** (`build_world.py`): Smallville's places
-   become `Location`s, the three personas become `Character`s with first-person
+   become `Location`s, the 25 personas become `Character`s with first-person
    persona text, and two custom actions (`actions.py`) let them `travel` and
    `perform` through the normal precondition gate.
 2. **Decides with the mock LLM** (`smallville_agents.py`): each persona is driven
@@ -94,7 +94,7 @@ uv pip install --python frontend-venv -r requirements-frontend.txt
 (cd frontend && ../frontend-venv/bin/python manage.py runserver)
 
 # 4. Open the replay in your browser:
-#    http://localhost:8000/replay/mock_the_ville_isabella_maria_klaus/0/
+#    http://localhost:8000/replay/mock_the_ville_n25/0/
 ```
 
 > **The map lives at the `/replay/...` URL above, not at the root.** Opening
@@ -102,23 +102,30 @@ uv pip install --python frontend-venv -r requirements-frontend.txt
 > running") — now with a link to the replay. If you only see that text, click the
 > link or go straight to the `/replay/...` URL.
 
-You should see Isabella, Maria, and Klaus wake at their homes, walk believable
-paths through town, and settle into their morning activities — Isabella tending
-the Hobbs Cafe counter (☕), Maria studying there (📚), and Klaus writing his paper
-in the Oak Hill College library (✍️). Click a character to see their state panel.
+You should see all 25 residents wake at their homes, walk believable paths
+through town, and settle into their morning activities — Isabella tending the
+Hobbs Cafe counter (☕), Maria studying there (📚), Klaus writing his paper in the
+Oak Hill College library (✍️), Arthur opening the pub (🍺), Wolfgang out for a run
+(🏃), and so on. Click a character to see their state panel.
 
 ## The simulation
 
-Three agents, starting 8:00 AM on Feb 13 (the town is asleep at the base sim's
-midnight, so we start later). Each has a simple morning goal:
+The full **25-resident** town, starting 8:00 AM on Feb 13 (the town is asleep at
+the base sim's midnight, so we start later). Each resident wakes at home and heads
+to where they spend their day:
 
-| Agent | From | Goes to | Does |
-|-------|------|---------|------|
-| Isabella Rodriguez | her apartment | Hobbs Cafe | tends the cafe counter ☕ |
-| Maria Lopez | the dorm | Hobbs Cafe | studies at a table 📚 |
-| Klaus Mueller | the dorm | Oak Hill College | writes in the library ✍️ |
+| Destination | Residents |
+|-------------|-----------|
+| **Hobbs Cafe** ☕ | Isabella (tends counter), Maria (studies), Ryan (codes), Adam (writes), Abigail (animates), Hailey (novel), Tamara (kids' book) |
+| **Oak Hill College** 📚 | Klaus (paper), Ayesha (studies), Eddy (composes), Mei (teaches), Giorgio (math), Yuriko (tax filings) |
+| **Johnson Park** 🌳 | Wolfgang (run), Carlos (poetry), Francisco (comedy), Latoya (photos), Rajiv (paints), Jennifer (watercolors), Sam (strolls) |
+| **Willows Market & Pharmacy** 🛒 | John (pharmacy), Tom (grocery), Jane (shopping) |
+| **Harvey Oak Supply Store** 🔧 | Carmen (minds the store) |
+| **The Rose and Crown Pub** 🍺 | Arthur (tends the bar) |
 
-One step = 10 in-game seconds; 360 steps = one hour.
+One step = 10 in-game seconds; 360 steps = one hour. Personas, traits, and home
+addresses are lifted from the upstream `the_ville` base sim; each name also picks
+the matching sprite (`John Lin` → `John_Lin.png`).
 
 ## Tests
 
@@ -138,14 +145,16 @@ the maze assets aren't present — run `./setup.sh` first.)
   `backend/build_world.py` (destination, activity, emoji, start tile). The mock
   brain in `backend/smallville_agents.py` reads each agent's current location and
   chooses travel-vs-perform; a multi-stop schedule is a natural next step.
-- **More of the cast (up to 25):** add personas + their home/destination
-  `Location`s. The world and tile addresses are data-driven.
+- **Add or change residents:** each persona is one dict in `PERSONAS` and each
+  place one dict in `_LOCATIONS` — both data-driven. A new resident just needs a
+  sprite named to match (`First_Last.png` under `static_dirs/assets/characters/`).
 
 ## Not done yet (future work)
 
 - **Live LLM agents** — swap `SmallvilleMockClient` for a real client via the
   engine's `client_from_env()`; the `Agent.decide` seam is identical.
-- **Conversations** (`chat`), the **memory stream**, and the **full 25-agent town**.
+- **Conversations** (`chat`) and the **memory stream** (agents currently follow a
+  fixed wake → travel → perform routine rather than reasoning over memories).
 - **Live (non-replay) mode**, where the backend serves `update_environment`
   step-by-step instead of pre-generating the whole run.
 

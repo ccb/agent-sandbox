@@ -20,7 +20,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
-SIM_CODE="mock_the_ville_isabella_maria_klaus"
+SIM_CODE="mock_the_ville_n25"
 SIM_MOVEMENT="$HERE/frontend/storage/$SIM_CODE/movement/0.json"
 
 REBUILD=0
@@ -62,7 +62,9 @@ if [ "$REBUILD" -eq 1 ] || [ ! -f "$SIM_MOVEMENT" ]; then
   else
     echo ">> No simulation found -- generating '$SIM_CODE' ..."
   fi
-  uv run python -m backend.run_simulation "${STEPS_ARGS[@]}"
+  # ${arr[@]+"${arr[@]}"} expands to nothing when the array is empty instead of
+  # tripping `set -u` ("unbound variable") on macOS's bash 3.2.
+  uv run python -m backend.run_simulation ${STEPS_ARGS[@]+"${STEPS_ARGS[@]}"}
 else
   echo ">> Simulation '$SIM_CODE' already generated -- skipping (use --rebuild to force)."
 fi
