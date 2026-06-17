@@ -64,7 +64,9 @@
 			<div class="media" style="background-color:#EEEEEE; padding:1em; padding-left:3.5em; padding-right:2em; border-radius:10px">
 			  <div class="media-left media-middle">
 			    <a href="#">
-			      <img class="media-object" src="{% static 'img/atlas.png' %}" style="width:5em">
+			      {% with 'assets/characters/profile/'|add:p_name_os|add:'.png' as profile_img %}
+			      <img class="media-object" src="{% static profile_img %}" style="width:5em; image-rendering:pixelated">
+			      {% endwith %}
 			    </a>
 			  </div>
 			  <div class="media-body" style='padding-left:3em; padding-top:0.5em; padding-bottom:1em'>
