@@ -6,11 +6,11 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 
 | Status | Item | Title | Issue | Owner |
 | --- | --- | --- | --- | --- |
-| 🟢 Ready to merge | [#68](https://github.com/ccb/agent-sandbox/pull/68) | Sync MkDocs API reference with the engine | — | [@aking526](https://github.com/aking526) |
-| 🟢 Ready to merge | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — | [@aking526](https://github.com/aking526) |
+| ✅ Merged — move to Shipped | [#68](https://github.com/ccb/agent-sandbox/pull/68) | Sync MkDocs API reference with the engine | — | [@aking526](https://github.com/aking526) |
+| ✅ Merged — move to Shipped | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
-| 🔵 In design (draft PR) | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| 🟢 Ready to merge | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
 | 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
@@ -45,7 +45,7 @@ automatically — a Claude Code hook (`.claude/hooks/update_progress.py`) re-que
 after every `git commit` and rewrites each PR-backed row's status. Everything else is
 hand-curated: update the title/owner when a PR opens, add a row when work starts, and when
 an item merges move it from this table to the Shipped section (the hook flags merged PRs but
-leaves the move to you). Last synced with GitHub on **2026-06-16**.
+leaves the move to you). Last synced with GitHub on **2026-06-17**.
 
 ---
 
