@@ -1,3 +1,10 @@
+/*
+ * Adapted from the Generative Agents project (Apache-2.0).
+ * Original author: Joon Sung Park (joonspk@stanford.edu).
+ * Modified for the agent-sandbox Smallville port: a responsive full-height
+ * replay layout (fixed nav + map/agent-card columns) and camera-control styling.
+ */
+
 html,
 body,
 #game-container {

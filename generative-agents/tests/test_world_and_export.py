@@ -1,8 +1,12 @@
-"""Offline tests for the Smallville port (no Django, no live LLM).
+"""Offline tests for the Smallville port (no Django, no live LLM, no setup.sh).
 
 Covers the three layers that must stay correct for a replay to render: the
 library world + mock-driven agents, the spatial map/pathfinder, and the exporter
 that writes the frontend's movement contract.
+
+The spatial/export tests run against a small **synthetic** the_ville maze
+(:mod:`synthetic_ville`) rather than the 38MB upstream assets, so the whole
+suite passes on a fresh checkout and in CI -- no ``./setup.sh`` required.
 
 Run from the ``generative-agents`` directory (``uv run`` uses the repo's
 project env that has the engine installed)::
@@ -20,38 +24,12 @@ from backend.build_world import PERSONAS, build_world
 from backend.run_simulation import simulate
 from backend.smallville_agents import attach_agents
 from backend.world_map import WorldMap
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_GA_DIR = os.path.dirname(_HERE)
-
-
-def _find_ville_dir():
-    """Locate the_ville assets: the set-up frontend, else the external clone."""
-    candidates = [
-        os.path.join(_GA_DIR, "frontend", "static_dirs", "assets", "the_ville"),
-        os.path.join(
-            _GA_DIR,
-            "..",
-            "external",
-            "generative_agents",
-            "environment",
-            "frontend_server",
-            "static_dirs",
-            "assets",
-            "the_ville",
-        ),
-    ]
-    for path in candidates:
-        if os.path.isdir(path):
-            return path
-    return None
+from synthetic_ville import build_synthetic_ville
 
 
 @pytest.fixture(scope="module")
-def world_map():
-    ville = _find_ville_dir()
-    if not ville:
-        pytest.skip("the_ville maze assets not found (run ./setup.sh)")
+def world_map(tmp_path_factory):
+    ville = build_synthetic_ville(str(tmp_path_factory.mktemp("ville")))
     return WorldMap(ville)
 
 
@@ -103,7 +81,9 @@ def test_addresses_resolve_to_tiles(world_map):
 
 
 def test_walk_path_is_contiguous_and_collision_free(world_map):
-    start = (72, 14)  # Isabella's apartment tile (from the base sim)
+    # Isabella's spawn tile; the synthetic maze puts a wall between it and the
+    # cafe, so a correct path has to detour around the wall.
+    start = (72, 14)
     address = "the Ville:Hobbs Cafe:cafe"
     path = world_map.walk_path(start, address)
     assert path, "expected a non-empty path to the cafe"
@@ -141,7 +121,7 @@ def test_simulate_frames_match_contract(world_map):
 
 
 def test_simulate_reaches_activity(world_map):
-    # Isabella's walk to the cafe is short (~17 tiles), so within 40 steps she
+    # Isabella's cafe is a short walk from her spawn, so within 40 steps she
     # should have arrived and settled into tending the counter.
     frames = simulate(world_map, num_steps=40)
     last = frames[-1]["Isabella Rodriguez"]["description"]
