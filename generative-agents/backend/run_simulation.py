@@ -17,6 +17,8 @@ project env that has the engine installed)::
 
     uv run python -m backend.run_simulation            # 1 hour (360 steps)
     uv run python -m backend.run_simulation --steps 120
+    uv run python -m backend.run_simulation --start "2023-02-13 18:00:00"
+    uv run python -m backend.run_simulation --sec-per-step 60   # 1 min/step
 """
 
 import argparse
@@ -44,9 +46,20 @@ DEFAULT_SIM_CODE = "mock_the_ville_n25"
 DEFAULT_STEPS = 360
 # Start at 8am: the town is waking, the cafe opens, students head out -- a lively
 # hour. (The base sim starts at midnight, when everyone is asleep.)
-START_DT = datetime.datetime(2023, 2, 13, 8, 0, 0)
+DEFAULT_START_DT = datetime.datetime(2023, 2, 13, 8, 0, 0)
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
+
+
+def _parse_start(value: str) -> datetime.datetime:
+    """Parse a --start value like '2023-02-13 08:00:00' (ISO 8601)."""
+    try:
+        return datetime.datetime.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid start time {value!r}; use ISO format, "
+            "e.g. '2023-02-13 08:00:00'"
+        )
 
 
 def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
@@ -113,7 +126,25 @@ def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a Smallville replay.")
-    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=DEFAULT_STEPS,
+        help="number of steps to simulate (default: %(default)s = 1 hour at 10s/step)",
+    )
+    parser.add_argument(
+        "--start",
+        type=_parse_start,
+        default=DEFAULT_START_DT,
+        metavar="ISO_DATETIME",
+        help="in-game start time, ISO format (default: 2023-02-13 08:00:00)",
+    )
+    parser.add_argument(
+        "--sec-per-step",
+        type=int,
+        default=exporter.SEC_PER_STEP,
+        help="seconds of in-game time per step (default: %(default)s)",
+    )
     parser.add_argument("--sim-code", default=DEFAULT_SIM_CODE)
     parser.add_argument("--ville-dir", default=DEFAULT_VILLE_DIR)
     parser.add_argument("--storage", default=DEFAULT_STORAGE)
@@ -138,9 +169,10 @@ def main() -> None:
         storage_root=args.storage,
         sim_code=args.sim_code,
         frames=frames,
-        start_dt=START_DT,
+        start_dt=args.start,
         start_tiles=start_tiles,
         base_personas_dir=base_personas,
+        sec_per_step=args.sec_per_step,
     )
     print(f"Wrote simulation to {sim_dir}")
     print(

@@ -158,3 +158,35 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
     with open(os.path.join(sim_dir, "environment", "0.json")) as f:
         env0 = json.load(f)
     assert env0["Isabella Rodriguez"]["x"] == 72
+
+
+def test_exporter_honors_start_time_and_sec_per_step(world_map, tmp_path):
+    # A custom start time and step length (the new CLI knobs) must flow into
+    # meta.json *and* the per-step movement timestamps -- not the hardcoded
+    # February-13 / 10-second defaults.
+    import datetime
+
+    frames = simulate(world_map, num_steps=3)
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="custom_clock",
+        frames=frames,
+        start_dt=datetime.datetime(2026, 6, 18, 18, 30, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+        sec_per_step=60,
+    )
+
+    with open(os.path.join(sim_dir, "reverie", "meta.json")) as f:
+        meta = json.load(f)
+    # start_date is derived from start_dt, so it tracks the flag (no stale default).
+    assert meta["start_date"] == "June 18, 2026"
+    assert meta["curr_time"] == "June 18, 2026, 18:30:00"
+    assert meta["sec_per_step"] == 60
+
+    # Step 2 is 2 * 60s = 2 minutes after the start.
+    with open(os.path.join(sim_dir, "movement", "2.json")) as f:
+        mv2 = json.load(f)
+    assert mv2["meta"]["curr_time"] == "June 18, 2026, 18:32:00"

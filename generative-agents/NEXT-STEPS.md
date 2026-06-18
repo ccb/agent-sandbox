@@ -73,10 +73,10 @@ later phases build on a live model rather than the mock. Low risk, high momentum
   model calls; we need per-agent / per-step token and dollar accounting before scaling
   up. Anchor:
   [`../docs/design/llm-cost-observability.md`](../docs/design/llm-cost-observability.md).
-- `[port] S` **Make sim parameters configurable.** Start time, duration, and
-  `SEC_PER_STEP` are currently constants (`backend/exporter.py:17-20`,
-  `backend/run_simulation.py`). Surface them as CLI flags so experiments don't require
-  code edits.
+- `[port] S` ✅ **Done (#74) — Make sim parameters configurable.** Start time
+  (`--start`, ISO), duration (`--steps`), and `SEC_PER_STEP` (`--sec-per-step`) are now
+  CLI flags on `backend/run_simulation.py`; the exporter derives `start_date` from the
+  passed `start_dt` so `meta.json` tracks the flag instead of a hardcoded constant.
 
 ---
 

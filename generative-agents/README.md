@@ -65,6 +65,9 @@ cd generative-agents
 #    level up) and provisions it with the engine on first use.
 uv run python -m backend.run_simulation                 # 360 steps (1 hour)
 #    fewer steps:  uv run python -m backend.run_simulation --steps 120
+#    other clock:  uv run python -m backend.run_simulation \
+#                      --start "2023-02-13 18:00:00" --sec-per-step 60
+#    (--help lists all flags: --steps, --start, --sec-per-step, --sim-code, ...)
 
 # 3. Run the Django frontend in its OWN Python 3.9 venv. uv fetches a managed
 #    CPython 3.9 if you don't have one, so there's nothing to install by hand.

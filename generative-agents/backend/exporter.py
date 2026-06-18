@@ -14,7 +14,6 @@ import json
 import os
 import shutil
 
-START_DATE = "February 13, 2023"
 # Smallville's clock: one step is 10 seconds of in-game time.
 SEC_PER_STEP = 10
 MAZE_NAME = "the_ville"
@@ -23,6 +22,11 @@ MAZE_NAME = "the_ville"
 def _fmt_time(dt: datetime.datetime) -> str:
     """Upstream's curr_time format, e.g. 'February 13, 2023, 08:00:10'."""
     return f"{dt:%B} {dt.day}, {dt.year}, {dt:%H:%M:%S}"
+
+
+def _fmt_date(dt: datetime.datetime) -> str:
+    """Upstream's start_date format (date only), e.g. 'February 13, 2023'."""
+    return f"{dt:%B} {dt.day}, {dt.year}"
 
 
 def write_simulation(
@@ -67,7 +71,7 @@ def write_simulation(
     # Simulation metadata.
     meta = {
         "fork_sim_code": sim_code,
-        "start_date": START_DATE,
+        "start_date": _fmt_date(start_dt),
         "curr_time": _fmt_time(start_dt),
         "sec_per_step": sec_per_step,
         "maze_name": MAZE_NAME,
