@@ -321,5 +321,46 @@ def test_hybrid_reflect_prompt_contains_failure_reason(tiny_game):
     assert "does not have an exit" in second_prompt
 
 
+# ----------------------------------------------------------------------
+# Section D: usage accounting flows through the ReAct loop (usage.py)
+# ----------------------------------------------------------------------
+
+
+def test_mock_chat_records_zero_cost(tiny_game):
+    """Every mock call appends one zero-cost record -- the offline accounting
+    path. (No game needed, but keeping the fixture import consistent.)"""
+    client = MockLlmClient(["go north"])
+    client.chat([{"role": "user", "content": "hi"}])
+    assert len(client.ledger.records) == 1
+    assert client.ledger.records[0].cost_usd == 0.0
+
+
+def test_decide_and_route_attributes_calls_to_actor_and_turn(tiny_game):
+    """The shared decide funnel tags each LLM call with the acting NPC and the
+    current turn, so the ledger can roll cost up per agent."""
+    from text_adventure_games.llm_client import MockReActClient
+    from text_adventure_games.npc import LLMAgent, decide_and_route
+
+    troll = tiny_game.characters["troll"]
+    # Put the player in the room so the troll's mock brain decides to act.
+    player = tiny_game.player
+    observation = (
+        "FIELD\nAn open grassy field.\n"
+        "Characters here:\n * The player - a hero.\nInventory:\n"
+    )
+
+    client = MockReActClient()
+    agent = LLMAgent(client, persona="I am the troll. I guard the drawbridge.")
+    agent.action_names = ["growl", "snarl", "attack"]
+    troll.set_agent(agent)
+
+    decide_and_route(troll, tiny_game, agent, observation)
+
+    assert client.ledger.records, "expected the decision to be recorded"
+    rec = client.ledger.records[0]
+    assert rec.actor == "troll"
+    assert rec.turn == tiny_game.turn  # attribution picked up the game's turn
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
