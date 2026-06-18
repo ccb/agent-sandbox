@@ -8,6 +8,7 @@ GitHub; these pages are the precise reference.
 The reference is split by subsystem:
 
 - **[Game loop](game-loop.md)** — `Game`, which manages world state and runs rounds.
+- **[Configuration](config.md)** — `GameConfig`, the one object that sets a game's tuning knobs.
 - **[Turn modes](turn-modes.md)** — the opt-in simultaneous gather → resolve round.
 - **[Agents](agents.md)** — the ReAct layer: `Agent`, `LLMAgent`, `ScriptedAgent`.
 - **[LLM client](llm-client.md)** — the provider-agnostic client and its adapters.
