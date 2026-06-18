@@ -27,7 +27,7 @@ their resolve slot via ``take_turn()``, observing the mid-resolve world — the
 same semantics they had in the sequential loop.
 
 The ordering and contention machinery is the **Orchestration** layer designed in
-``docs/design/simultaneous-actions.md``; it is opt-in and additive — with no
+``docs/design/implemented/simultaneous-actions.md``; it is opt-in and additive — with no
 phase map, no fallbacks, and no contention it reduces to PR #30's behavior.
 """
 

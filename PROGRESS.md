@@ -6,11 +6,9 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 
 | Status | Item | Title | Issue | Owner |
 | --- | --- | --- | --- | --- |
-| ✅ Merged — move to Shipped | [#68](https://github.com/ccb/agent-sandbox/pull/68) | Sync MkDocs API reference with the engine | — | [@aking526](https://github.com/aking526) |
-| ✅ Merged — move to Shipped | [#64](https://github.com/ccb/agent-sandbox/pull/64) | Adopt `uv` as the default project workflow | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
-| 🟠 Mergeability unverified | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| 🟢 Ready to merge | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
 | 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
@@ -40,12 +38,20 @@ and [`FEATURE-ROADMAP.md`](FEATURE-ROADMAP.md). This file tracks *status* only.
 | 💡 Backlog | Open issue, no PR yet |
 | ✅ Shipped | Merged to `main` — see the section below |
 
+**The one invariant:** a merged item lives in **exactly one** place. Once a PR merges to
+`main` it belongs in the ✅ Shipped (bottom) section *only* — never in the in-flight (top)
+table. The two lists are disjoint: top = not yet on `main`, bottom = on `main`.
+
 **Maintenance:** the in-flight **Status** cells and the synced date below are refreshed
 automatically — a Claude Code hook (`.claude/hooks/update_progress.py`) re-queries GitHub
 after every `git commit` and rewrites each PR-backed row's status. Everything else is
 hand-curated: update the title/owner when a PR opens, add a row when work starts, and when
-an item merges move it from this table to the Shipped section (the hook flags merged PRs but
-leaves the move to you). Last synced with GitHub on **2026-06-17**.
+an item merges move it from this table down to the Shipped section. The hook can't decide
+which Shipped subsection a row belongs in, so it only *flags* a merged PR (`✅ Merged — move
+to Shipped`) and leaves the move to you — clearing that flag means relocating the row, not
+just relabelling it. Implemented design docs are filed under
+[`docs/design/implemented/`](docs/design/implemented/); proposals and partially-built designs
+stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-18**.
 
 ---
 
@@ -82,7 +88,9 @@ leaves the move to you). Last synced with GitHub on **2026-06-17**.
 - Local-only MkDocs documentation site — [#50](https://github.com/ccb/agent-sandbox/pull/50)
 - Move `test_npc_behaviors.py` into `tests/` — [#51](https://github.com/ccb/agent-sandbox/pull/51)
 - GitHub Actions CI running the `/check` gates — [#55](https://github.com/ccb/agent-sandbox/pull/55)
+- Adopt `uv` as the default project workflow — [#64](https://github.com/ccb/agent-sandbox/pull/64)
 - Disambiguate `MockReActClient` decisions from tool_calls — [#67](https://github.com/ccb/agent-sandbox/pull/67)
+- Sync MkDocs API reference with the engine — [#68](https://github.com/ccb/agent-sandbox/pull/68)
 
 ### Design docs merged
 - Unified output & agent-trace rendering — [#31](https://github.com/ccb/agent-sandbox/pull/31)
