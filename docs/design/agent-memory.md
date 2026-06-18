@@ -1,6 +1,14 @@
 # Agent Memory Design
 
-**Status:** Proposal - not yet implemented.
+**Status:** Stages 1–4 implemented (issue #75, PR #94); stages 5–8 remain future
+work. The append-only memory stream, deterministic retrieval, event perception,
+and action-outcome memories now ship in `text_adventure_games/memory.py` and
+`text_adventure_games/npc.py`. The later stages — LLM importance scoring,
+reflection and plan *generation*, and save/load through `Character` — are not
+built yet. Wiring this engine memory into the generative-agents (Smallville)
+game, which **closes #75**, follows once PR #72 merges. See **§12** for the
+per-stage status, and the **"As built"** notes (§4, §5, §9, §10) for where the
+implementation refined this proposal.
 
 **Source paper:** Park et al., "Generative Agents: Interactive Simulacra of
 Human Behavior" (arXiv:2304.03442v2 / UIST 2023).
@@ -148,6 +156,11 @@ self.memory = AgentMemory(owner="")
 The owner can be filled when `make_react_behavior()` first binds the agent to a
 character.
 
+> **As built:** the owner is bound lazily in both `react_behavior()` *and*
+> `decide_and_route()` (the first time either runs for the agent), so the
+> simultaneous resolve path — which reaches `decide_and_route()` without going
+> through `react_behavior()` — also gets a correctly-owned memory.
+
 ---
 
 ## 5. Writing memories
@@ -173,6 +186,12 @@ Initial visibility rule:
 
 This is intentionally conservative. When `View.build(game, viewer)` lands, use
 that instead of ad hoc visibility logic.
+
+> **As built:** `AgentMemory.ingest_events()` keeps the co-located and
+> payload-naming rules, but **skips the agent's own actions** here. An agent's
+> own action is already captured — more richly, with its success/failure outcome
+> — by §B below, so ingesting the matching `Game.event` too would only duplicate
+> the record and double-count its importance.
 
 ### B. Agent's own action outcome
 
@@ -409,6 +428,15 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     return False
 ```
 
+> **As built:** `react_behavior()` does the Observe step (lazy owner-bind →
+> `ingest_events()` → `retrieve()` → `format_observation_with_memories()`), but
+> the **success/failure outcome memories live in `decide_and_route()`**, the
+> Decide→Act→Reflect core shared by both the sequential loop and the
+> simultaneous resolve path. That way an outcome is recorded once, regardless of
+> turn mode. The failure sentence is worded `... but it failed because ...`
+> (avoiding the `' failed:'` substring the mock troll brain keys on) so a private
+> memory can never spoof another agent's decision.
+
 Important privacy rule:
 
 - Use `agent.memory.retrieve()` only inside that agent's own prompt.
@@ -448,6 +476,12 @@ while runtime-only fields like the LLM client are reattached after load.
 Recommendation: use the short-term path for the first memory PR, and leave the
 first-class `character.agent` refactor for the broader multi-agent loop work.
 
+> **As built (stage 8 not done yet):** memory currently lives on the **`Agent`**
+> (`agent.memory`), not on `Character`. `AgentMemory` and `MemoryRecord` already
+> provide `to_primitive()` / `from_primitive()` round-trips (unit-tested), but
+> they are **not yet wired into `Character.to_primitive()`**, so agent memory
+> does not survive game save/load. Wiring that up is stage 8.
+
 ---
 
 ## 11. Testing plan
@@ -481,18 +515,21 @@ Live-game tests:
 
 ## 12. Build order
 
-| Stage | Deliverable |
-|-------|-------------|
-| 1 | `memory.py` with `MemoryRecord`, `AgentMemory`, deterministic scoring, and unit tests. |
-| 2 | Add `Agent.memory`; retrieve memories into `react_behavior()` prompts. |
-| 3 | Ingest visible `Game.events` into per-agent observations. |
-| 4 | Store action success/failure outcomes as memories. |
-| 5 | Add optional LLM importance scoring behind a mockable interface. |
-| 6 | Add optional reflection threshold and reflection memory generation. |
-| 7 | Add simple plan memories. |
-| 8 | Serialize memory through `Character.to_primitive()` / `from_primitive()`. |
+| Stage | Status | Deliverable |
+|-------|--------|-------------|
+| 1 | ✅ Done | `memory.py` with `MemoryRecord`, `AgentMemory`, deterministic scoring, and unit tests (`tests/test_memory.py`). |
+| 2 | ✅ Done | Add `Agent.memory`; retrieve memories into `react_behavior()` prompts. |
+| 3 | ✅ Done | Ingest visible `Game.events` into per-agent observations (own actions excluded — see §5). |
+| 4 | ✅ Done | Store action success/failure outcomes as memories (in `decide_and_route()`). |
+| 5 | ⬜ Future | Add optional LLM importance scoring behind a mockable interface. |
+| 6 | ⬜ Future | Add optional reflection threshold and reflection memory generation. |
+| 7 | ⬜ Future | Add simple plan memories (the `add_plan` writer exists; automatic generation does not). |
+| 8 | ⬜ Future | Serialize memory through `Character.to_primitive()` / `from_primitive()` (`AgentMemory` already round-trips; the `Character` hook is unwired). |
 
-Each stage should keep existing no-memory games working.
+Stages 1–4 ship in PR #94; each kept existing no-memory games working (the
+empty-render guard means an agent with no memories produces a byte-identical
+observation). Stages 5–8 remain future work, and the generative-agents
+integration that closes #75 follows PR #72.
 
 ---
 
