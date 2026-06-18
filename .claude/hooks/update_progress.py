@@ -15,8 +15,17 @@ What it updates, and what it leaves alone:
 
 Everything else is hand-curated -- titles, owners, which items are listed, the
 design-doc rows, the backlog, the Shipped section -- so the hook never touches
-it. A PR that has merged is flagged (not auto-moved) so a human moves the row
-to Shipped on purpose.
+it.
+
+THE INVARIANT THIS HOOK ASSUMES: a merged item lives in exactly one place. The
+"In flight" table at the top is for work *not yet on `main`*; the "Shipped"
+section at the bottom is for work *on `main`*. The two lists are disjoint, so
+once a PR merges it must leave the top table and appear only in the bottom list.
+
+The hook does NOT make that move itself -- it can't tell which Shipped
+subsection a row belongs in -- so it only *flags* a merged PR with the status
+"✅ Merged — move to Shipped" and leaves the relocation to a human. Clearing
+that flag means moving the row down to Shipped, not merely relabelling it.
 
 It is deliberately defensive: if `gh` is missing, the user is offline or
 unauthenticated, or PROGRESS.md isn't there, it simply no-ops. It never blocks

@@ -12,10 +12,10 @@ to §5.2 noted there.
 *A design for making simultaneous turns fair, recoverable, and order-stable —
 and for laying the groundwork for live agent-to-agent dialog. This is the
 **Orchestration** layer from
-[multi-character-play.md](multi-character-play.md) §3 (the turn loop) and §8
+[multi-character-play.md](../multi-character-play.md) §3 (the turn loop) and §8
 (conflict resolution), taken from "settle by an `initiative` order" to a
 pluggable resolution policy. The code it builds on lives in
-[`../../text_adventure_games/turns.py`](../../text_adventure_games/turns.py).*
+[`../../../text_adventure_games/turns.py`](../../../text_adventure_games/turns.py).*
 
 ---
 
@@ -343,7 +343,7 @@ Not every failure is contention. Some are **ordering false-negatives**: B's
 which *will* succeed this turn — hasn't resolved yet. For these, run a second
 resolve pass over *only the failed intents*, repeating until a pass makes no
 progress (a fixpoint), capped at a fixed depth like the trigger cascade limit in
-[multi-character-play.md](multi-character-play.md) §7. The pass must distinguish
+[multi-character-play.md](../multi-character-play.md) §7. The pass must distinguish
 **blocked-by-a-pending-prerequisite** (worth retrying) from **genuinely
 impossible** (fail now) so it terminates. This is powerful but adds real
 complexity, so it's a later stage (§8), not part of the core.
@@ -354,7 +354,7 @@ Contention is recorded on its own `conflict` channel rather than reused
 `action_failed`, so PR #31's renderer can show it *as* contention — "Alice and Bob
 both reached for the gem; Bob won" — a legible story instead of a stray failure
 line. This is a small addition to the `Channel` set in
-[output-and-trace-rendering.md](output-and-trace-rendering.md) §3.
+[output-and-trace-rendering.md](../output-and-trace-rendering.md) §3.
 
 ---
 
@@ -394,7 +394,7 @@ enough to need it; out of scope for now.
 
 Before any mutation, run every intent's `check_preconditions()` against the
 turn-start snapshot to drop the impossible ones up front — the "dry-run
-preconditions" from [multi-character-play.md](multi-character-play.md)'s migration
+preconditions" from [multi-character-play.md](../multi-character-play.md)'s migration
 checklist (step 8). Lighter than §6.1 and complementary to the claim pass; it can
 be folded into §5.1 as an extra filter. **Caveat:** preconditions today emit
 `parser.fail(...)` messages as a side effect, so a dry run needs a quiet mode — the
