@@ -160,6 +160,76 @@ def test_attacker_does_not_target_self_via_exclude():
     assert action.victim is not troll
 
 
+def test_named_recipient_resolves_to_that_character():
+    # A named, co-located target still resolves by name (the actor seam from #8).
+    game, guard, thief = _give_game()
+    action = a_things.Give(game, "give sword to thief", actor=guard)
+    assert action.recipient is thief
+
+
+def test_unnamed_give_has_no_target():
+    # #81: an agent that names no recipient must NOT silently hand the item to
+    # the player. The target resolves to None and the command fails with a
+    # reason the ReAct loop can reflect on, instead of misfiring at the player.
+    game, guard, thief = _give_game()
+    ok = game.parser.parse_command("give sword", actor=guard)
+    assert ok is False
+    assert game.parser.last_fail_message == "Give it to whom?"
+    assert "sword" in guard.inventory
+    assert "sword" not in thief.inventory
+    assert "sword" not in game.player.inventory
+
+
+def test_unnamed_attack_has_no_target():
+    # #81: an unnamed attack used to default its victim to the (co-located)
+    # player. It must now report a missing target rather than striking them.
+    game, troll, skeleton = _fight_game()
+    ok = game.parser.parse_command("attack with club", actor=troll)
+    assert ok is False
+    assert game.parser.last_fail_message == "The character to attack wasn't matched."
+    assert not skeleton.get_property("is_unconscious")
+    assert not game.player.get_property("is_unconscious")
+
+
+def _sim_shaped_game():
+    """Mirror the generative-agents sim: a silent 'observer' stands in as the
+    engine-required player and sits in a hub, while the agents act in a room
+    elsewhere. An agent's unnamed action must not reach back to the observer."""
+    hub = things.Location("Hub", "A quiet hub.")
+    room = things.Location("Room", "A plain room.")
+    hub.add_connection("to room", room)
+    observer = things.Character("observer", "a silent observer", "I watch.")
+    isabella = things.Character("isabella", "a cafe owner", "I serve coffee.")
+    maria = things.Character("maria", "a student", "I study.")
+    bread = things.Item("bread", "a loaf of bread")
+    game = games.Game(hub, observer, characters=[isabella, maria])
+    room.add_character(isabella)
+    room.add_character(maria)
+    isabella.add_to_inventory(bread)
+    return game, observer, isabella, maria
+
+
+def test_unnamed_give_does_not_reach_uncolocated_player():
+    game, observer, isabella, maria = _sim_shaped_game()
+    ok = game.parser.parse_command("give bread", actor=isabella)
+    assert ok is False
+    assert game.parser.last_fail_message == "Give it to whom?"
+    assert "bread" in isabella.inventory
+    assert "bread" not in observer.inventory
+    assert "bread" not in maria.inventory
+
+
+def test_npc_can_target_player_by_name():
+    # Action Castle relies on NPCs attacking the player by NAMING them, which
+    # must keep resolving to the player even though unnamed targets now go None.
+    game, troll, skeleton = _fight_game()
+    action = fight.Attack(game, "attack player with club", actor=troll)
+    assert action.victim is game.player
+    ok = game.parser.parse_command("attack player with club", actor=troll)
+    assert ok is True
+    assert game.player.get_property("is_unconscious") is True
+
+
 def test_actor_moves_through_exit():
     field = things.Location("Field", "An open field.")
     forest = things.Location("Forest", "A dark forest.")
