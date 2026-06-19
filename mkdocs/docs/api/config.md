@@ -12,3 +12,4 @@ the [Configuration guide](../configuration.md) for examples and a sample config 
         - EngineConfig
         - ClockConfig
         - RenderConfig
+        - ObservabilityConfig

@@ -26,10 +26,12 @@ from text_adventure_games.config import (
     ClockConfig,
     EngineConfig,
     GameConfig,
+    ObservabilityConfig,
     RenderConfig,
 )
 from text_adventure_games.llm_client import LlmConfig
 from text_adventure_games.turns import DEFAULT_PHASES
+from text_adventure_games.usage import RunLog
 
 
 def build_game(**game_kwargs):
@@ -65,6 +67,8 @@ def test_defaults_match_historical_values():
     assert c.render.level is None  # follow OUTPUT_LEVEL / default
     assert c.render.width == 80
     assert c.render.no_color is None
+    assert c.observability.log_path is None  # no usage artifact by default
+    assert c.observability.log_prompts is False
 
 
 def test_to_dict_from_dict_round_trip():
@@ -160,6 +164,84 @@ def test_from_env_no_provider_means_no_llm(monkeypatch):
 
 def test_build_llm_client_none_when_unset():
     assert GameConfig().build_llm_client() is None
+
+
+# ----------------------------------------------------------------------
+# Section A': observability (the usage-log knobs)
+# ----------------------------------------------------------------------
+
+
+def test_observability_round_trips_through_dict():
+    c = GameConfig(
+        observability=ObservabilityConfig(log_path="runs/", log_prompts=True)
+    )
+    d = c.to_dict()
+    assert d["observability"] == {"log_path": "runs/", "log_prompts": True}
+
+    c2 = GameConfig.from_dict(d)
+    assert c2.observability.log_path == "runs/"
+    assert c2.observability.log_prompts is True
+
+
+def test_from_dict_rejects_unknown_observability_key():
+    with pytest.raises(ValueError, match="Unknown key"):
+        GameConfig.from_dict({"observability": {"nope": 1}})
+
+
+def test_from_env_reads_observability(monkeypatch):
+    monkeypatch.setenv("LLM_LOG", "runs/")
+    monkeypatch.setenv("LLM_LOG_PROMPTS", "1")
+    c = GameConfig.from_env()
+    assert c.observability.log_path == "runs/"
+    assert c.observability.log_prompts is True
+
+
+def test_from_env_no_observability_means_off(monkeypatch):
+    monkeypatch.delenv("LLM_LOG", raising=False)
+    monkeypatch.delenv("LLM_LOG_PROMPTS", raising=False)
+    c = GameConfig.from_env()
+    assert c.observability.log_path is None
+    assert c.observability.log_prompts is False
+
+
+def test_build_run_log_none_when_logging_off():
+    assert GameConfig().build_run_log(provider="mock", model="mock") is None
+
+
+def test_build_run_log_directory_gets_timestamped_file(tmp_path):
+    cfg = GameConfig(observability=ObservabilityConfig(log_path=str(tmp_path)))
+    log = cfg.build_run_log(provider="mock", model="mock", turn_mode="simultaneous")
+    assert isinstance(log, RunLog)
+    # A directory log_path becomes a timestamped, provider-tagged file inside it.
+    assert log.path.startswith(str(tmp_path))
+    assert log.path.endswith("-mock.jsonl")
+    assert log.provider == "mock" and log.turn_mode == "simultaneous"
+    assert log.log_prompts is False
+
+
+def test_build_run_log_explicit_file_used_verbatim(tmp_path):
+    target = tmp_path / "cost.jsonl"
+    cfg = GameConfig(
+        observability=ObservabilityConfig(log_path=str(target), log_prompts=True)
+    )
+    log = cfg.build_run_log(provider="mock", model="mock")
+    # A path ending in .jsonl/.json is used as-is (no timestamp inserted).
+    assert log.path == str(target)
+    assert log.log_prompts is True
+
+
+def test_build_run_log_writes_artifact_end_to_end(tmp_path):
+    """The config-built RunLog drives the same header/summary artifact as before."""
+    from text_adventure_games.usage import UsageLedger
+
+    cfg = GameConfig(observability=ObservabilityConfig(log_path=str(tmp_path)))
+    ledger = UsageLedger()
+    log = cfg.build_run_log(provider="mock", model="mock")
+    with log:
+        log.attach(ledger)
+    lines = [json.loads(ln) for ln in open(log.path).read().splitlines()]
+    assert lines[0]["kind"] == "run" and lines[0]["provider"] == "mock"
+    assert lines[-1]["kind"] == "summary"
 
 
 # ----------------------------------------------------------------------
