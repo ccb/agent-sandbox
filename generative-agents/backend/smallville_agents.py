@@ -21,6 +21,8 @@ from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import LLMAgent, format_observation_with_memories
 from text_adventure_games.usage import UsageLedger, record_call
 
+from . import seed
+
 
 class SmallvilleMockClient(MockReActClient):
     """Deterministic mock LLM for one persona's morning routine."""
@@ -94,6 +96,9 @@ def attach_agents(
     personas: list[dict],
     ledger: UsageLedger | None = None,
     embedding_client=None,
+    *,
+    relationships_csv: str | None = None,
+    base_personas_dir: str | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -113,7 +118,19 @@ def attach_agents(
     agent's own private intention, distinct from its persona (already in the
     system prompt): it gives retrieval something to surface from turn 0 and
     demonstrates the ``PLAN`` memory kind. We do not seed the persona text into
-    memory, since the agent layer already injects it into every prompt."""
+    memory, since the agent layer already injects it into every prompt.
+
+    When ``relationships_csv`` and/or ``base_personas_dir`` point at the upstream
+    bootstrap assets, each persona is *also* seeded at t=0 (issue #79): its
+    pre-seeded relationships fold into agent memory, and its partial known-places
+    tree becomes beliefs in the character's knowledge (see :mod:`seed`). Both are
+    optional -- the assets are git-ignored and absent on a fresh checkout, so an
+    unset (or missing) path simply skips that seeding and leaves the agent
+    byte-identical to before."""
+    # Load the relationship table once (returns {} if the path is unset/missing).
+    relationships = (
+        seed.load_relationships(relationships_csv) if relationships_csv else {}
+    )
     for spec in personas:
         char = characters[spec["name"]]
         client = SmallvilleMockClient(
@@ -133,6 +150,12 @@ def attach_agents(
             turn=0,
             importance=5.0,
         )
+        # Seed t=0 social structure (memory) and partial world knowledge
+        # (knowledge) when the upstream assets are available (issue #79).
+        seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        if base_personas_dir:
+            tree = seed.load_spatial_memory(base_personas_dir, char.name)
+            seed.seed_spatial_knowledge(char, tree)
 
 
 def observe_and_decide(game, char, step: int):
