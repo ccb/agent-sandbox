@@ -302,8 +302,9 @@ Embedding implementation (issue #76, opt-in):
 - Embeddings are stored/cached on `MemoryRecord.embedding`.
 - Cosine similarity, rescaled `(1 + cos) / 2` onto the keyword path's 0-1 scale.
 - Opt-in: pass `AgentMemory(embedding_client=...)`; with none, relevance stays
-  keyword overlap. Default real backend is model2vec (local); the test suite uses
-  a deterministic mock. See `docs/design/memory-retrieval-embeddings.md`.
+  keyword overlap. Backends: model2vec (local, the default), sentence-transformers
+  (local transformer), and OpenAI (hosted); plus a deterministic mock for tests.
+  See `docs/design/memory-retrieval-embeddings.md`.
 
 The first memory PR (#94) was deliberately not blocked on embeddings; they landed
 right after, in #76.
