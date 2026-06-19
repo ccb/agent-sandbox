@@ -53,6 +53,13 @@ dev = ["black", "nbformat", "pytest"]
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
 llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
+# Optional semantic memory relevance (issue #76). The engine falls back to
+# keyword-overlap relevance when none of these are installed, so they stay
+# optional. `embeddings` is the default backend (model2vec: a small static model,
+# no torch/GPU, no API key). `embeddings-st` adds the heavier local transformer
+# backend (pulls torch). The hosted OpenAI backend reuses the `openai` extra.
+embeddings = ["model2vec"]
+embeddings-st = ["sentence-transformers"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
