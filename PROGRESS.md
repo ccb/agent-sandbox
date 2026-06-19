@@ -8,7 +8,6 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 | --- | --- | --- | --- | --- |
 | 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
-| ✅ Merged — move to Shipped | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
 | 🔵 In design (draft PR) | [#94](https://github.com/ccb/agent-sandbox/pull/94) | Append-only agent memory stream — engine primitive (design Stages 1–4) + wired into the generative-agents (Smallville) sim; **closes** [#75](https://github.com/ccb/agent-sandbox/issues/75) (Stages 5–8 stay future work) | [#75](https://github.com/ccb/agent-sandbox/issues/75) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
@@ -97,6 +96,7 @@ stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-19*
 - Simultaneous action resolution — [#35](https://github.com/ccb/agent-sandbox/pull/35)
 - Agent memory — [#37](https://github.com/ccb/agent-sandbox/pull/37)
 - LLM cost / observability — [#56](https://github.com/ccb/agent-sandbox/pull/56)
+- Multi-step planning benchmark plan — [#59](https://github.com/ccb/agent-sandbox/pull/59)
 
 ### Closed / deferred
 - [#9](https://github.com/ccb/agent-sandbox/issues/9) Clean world-state export API for the Godot bridge — closed

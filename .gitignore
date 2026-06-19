@@ -164,6 +164,8 @@ cython_debug/
 
 # Project-shared Claude Code config (commit it); per-dev settings.local.json stays ignored.
 !.claude/settings.json
+# Claude Code local git worktrees (per-dev; never commit)
+.claude/worktrees/
 
 notebooks/hw3_solution/fine_tuning_item_specifications.jsonl
 notebooks/hw3_solution/fine_tuning_location_descriptions.jsonl
