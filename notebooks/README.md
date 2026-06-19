@@ -2,7 +2,7 @@
 
 Two things live here:
 
-1. A numbered **feature walkthrough** (`01`–`08`) — a guided tour of the library, each
+1. A numbered **feature walkthrough** (`01`–`09`) — a guided tour of the library, each
    notebook focused on one capability. Read them in order, or jump to the feature you want.
 2. The **onboarding assignment** (`hw1*`) — the day-one "Action Castle" exercise that
    teaches the engine by having you build a game.
@@ -26,10 +26,11 @@ LLM_PROVIDER=mock jupyter lab         # then open any notebook
 | 06 | `06_simultaneous_turns.ipynb` | The opt-in **simultaneous** turn mode (#25): a gather → resolve round, `initiative`, and basic conflict when two NPCs want the same thing. | scripted agents |
 | 07 | `07_contested_resources.ipynb` | **Contested resources** (#42): ranked-fallback intents, informed retry after losing, and action-**phase** ordering. (Deep dive on top of `06`.) | scripted agents |
 | 08 | `08_world_mechanics.ipynb` | Two opt-in world features: **containers / carry capacity** (#43) and **action durations** + the per-turn time budget (#24). | mock LLM |
+| 09 | `09_agent_memory.ipynb` | The per-agent **memory** stream (#75): append-only timestamped records, **retrieval** by *recency × importance × relevance*, **perceiving** visible `Game.events`, and memory woven into the **live ReAct loop** — a failed action is remembered and fed back into the next turn's prompt. | mock LLM |
 
 **Suggested order:** `01` (engine) → `02` (agents) → `03` (reading their output) → `04`
 (what they know) → `05` (how they talk & persuade) → `06`/`07` (acting at once, and
-fighting over resources) → `08` (extra world mechanics).
+fighting over resources) → `08` (extra world mechanics) → `09` (what they remember).
 
 `01` and the `hw1*` notebooks are large and meant to be **run interactively** (their
 outputs aren't committed). The rest ship with committed mock-LLM transcripts; re-execute
@@ -63,6 +64,7 @@ The day-one ramp (see [`../ONBOARDING.md`](../ONBOARDING.md)):
 | Triggers & event log | `02` |
 | Output channels, verbosity, renderers (`reporting.py`) | `03` |
 | Knowledge / beliefs, `describe_for`, perception gating | `04` |
+| Agent memory: records, retrieval (recency/importance/relevance), `ingest_events` | `09` |
 | Dialogue, `heard` buffer, audience, adopt/drop goal, persona gating | `05` |
 | Simultaneous turn mode (gather → resolve, initiative) | `06` |
 | Contested resources, ranked fallbacks, informed retry, phases | `07` |
@@ -70,6 +72,5 @@ The day-one ramp (see [`../ONBOARDING.md`](../ONBOARDING.md)):
 | Action durations & per-turn budget | `08` |
 | LLM provider selection (mock / anthropic / openai) | every notebook (`LLM_PROVIDER`) |
 
-**Not yet demoable (design-only):** episodic **memory** (#37, see
-`docs/design/agent-memory.md`) and the **ScienceWorld / benchmark** interface (#47) are
-designed but not implemented, so they have no notebook yet.
+**Not yet demoable (design-only):** the **ScienceWorld / benchmark** interface (#47) is
+designed but not implemented, so it has no notebook yet.

@@ -18,7 +18,7 @@ seam -- it's just a stand-in for a model, exactly as ``MockReActClient`` is.
 import json
 
 from text_adventure_games.llm_client import MockReActClient
-from text_adventure_games.npc import LLMAgent
+from text_adventure_games.npc import LLMAgent, format_observation_with_memories
 from text_adventure_games.usage import UsageLedger, record_call
 
 
@@ -97,7 +97,14 @@ def attach_agents(
     ``characters`` maps name -> Character (from :func:`build_world.build_world`);
     ``personas`` is the metadata list (``build_world.PERSONAS``). Pass a shared
     ``ledger`` so every persona's LLM calls accumulate in one place for a
-    per-agent cost summary (usage.py); omit it and each client keeps its own."""
+    per-agent cost summary (usage.py); omit it and each client keeps its own.
+
+    Each agent also starts the day with one *plan* memory (issue #75) -- "go to
+    <destination> and <activity>" -- seeded from the persona spec. It is the
+    agent's own private intention, distinct from its persona (already in the
+    system prompt): it gives retrieval something to surface from turn 0 and
+    demonstrates the ``PLAN`` memory kind. We do not seed the persona text into
+    memory, since the agent layer already injects it into every prompt."""
     for spec in personas:
         char = characters[spec["name"]]
         client = SmallvilleMockClient(
@@ -108,3 +115,66 @@ def attach_agents(
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
+        # Bind the private memory to this character and seed the day's plan.
+        agent.memory.owner = char.name
+        agent.memory.add_plan(
+            f"Plan: go to {spec['destination']} and {spec['activity']}.",
+            turn=0,
+            importance=5.0,
+        )
+
+
+def observe_and_decide(game, char, step: int):
+    """Build ``char``'s observation, fold in memory, and ask its agent to decide.
+
+    The Smallville step loop (``run_simulation.simulate``) calls the engine's
+    decision seam directly rather than going through ``react_behavior``, so the
+    perceive -> retrieve -> augment wiring that the ReAct loop does for free
+    (issue #75) is reproduced here, composing the same public memory API:
+
+    1. **Perceive** any visible world events since this agent last looked --
+       ``ingest_events`` folds co-located residents' actions (already logged by
+       ``parse_command``) into private observations, skipping the agent's own.
+    2. **Retrieve** the memories most relevant to the current observation.
+    3. **Augment** the observation with that retrieved block (appended *after*
+       the environment text, so it never changes what the mock brain reads off
+       the first line -- the decision stays deterministic).
+
+    Returns the chosen command string, or ``None``.
+    """
+    agent = char.agent
+    if not agent.memory.owner:
+        agent.memory.owner = char.name
+    agent.memory.ingest_events(game, char)
+    base = game.describe_for(char)
+    relevant = agent.memory.retrieve(query=base, turn=step)
+    observation = format_observation_with_memories(base, relevant)
+    return agent.decide(observation)
+
+
+def remember_outcome(char, command: str, step: int) -> None:
+    """Record ``char``'s own successful action as a first-person memory.
+
+    Only the *actor's own* memory is added here. The :class:`GameEvent` that
+    other, co-located residents perceive was already logged by
+    ``parser.parse_command`` on success -- ``ingest_events`` deliberately skips
+    an agent's own actions, so adding a private first-person record is what
+    keeps the actor's own history from being lost (and avoids double-logging).
+
+    (The logical move happens the instant ``travel`` resolves, while the sprite
+    is still walking the tile path -- memory and the on-screen animation run on
+    different clocks. Harmless: memory never renders to the frontend here.)
+    """
+    agent = char.agent
+    verb, _, rest = command.partition(" ")
+    if verb == "travel":
+        text = f"I traveled to {char.location.name}."
+        importance = 2.0
+    elif verb == "perform":
+        activity = char.get_property("activity") or rest.strip()
+        text = f"I am {activity}."
+        importance = 2.0
+    else:
+        text = f'I did "{command}".'
+        importance = 1.0
+    agent.memory.add_observation(text, turn=step, importance=importance)

@@ -2,8 +2,8 @@
 
 The seam is ``Agent.decide(observation) -> command``: a pure function from an
 observation string to a single raw command string. An ``Agent`` owns the
-character's *mind* -- its persona and goals (memory is Phase 2). Two backends
-sit behind the same seam and are interchangeable:
+character's *mind* -- its persona, goals, and a private :class:`~text_adventure_games.memory.AgentMemory`
+stream (issue #75). Two backends sit behind the same seam and are interchangeable:
 
 * ``LLMAgent`` -- real reasoning via an :class:`LlmClient` (or a legacy
   ``(str) -> str`` callable).
@@ -37,6 +37,7 @@ import re
 
 from .config import AgentConfig
 from .enums import ReActLabel, Role
+from .memory import AgentMemory, render_memories
 from .things.characters import Goal, GoalType
 
 # Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
@@ -164,16 +165,22 @@ def _parse_decision(
 class Agent:
     """Decision-maker attached to a non-human character.
 
-    Owns the character's mind: ``persona`` (a first-person string) and
-    ``goals`` (what it wants). Memory is deferred to Phase 2. The single
-    required behavior is :meth:`decide`: given an observation string, return one
-    raw command string, or ``None`` to act on nothing this turn. Subclasses
-    supply the backend.
+    Owns the character's mind: ``persona`` (a first-person string), ``goals``
+    (what it wants), and ``memory`` (a private append-only
+    :class:`~text_adventure_games.memory.AgentMemory` stream, issue #75). The
+    single required behavior is :meth:`decide`: given an observation string,
+    return one raw command string, or ``None`` to act on nothing this turn.
+    Subclasses supply the backend.
     """
 
     def __init__(self, persona: str = "", goals: list[Goal] | None = None):
         self.persona = persona
         self.goals: list[Goal] = list(goals) if goals else []
+        # Private, append-only episodic memory (issue #75). Per-agent: the ReAct
+        # loop fills in the owner the first time the agent acts. Empty by default
+        # and only ever read into this agent's own prompt, so an agent that
+        # never accrues memories behaves exactly as before.
+        self.memory = AgentMemory(owner="")
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
@@ -404,6 +411,20 @@ def build_npc_context(character, game) -> str:
     return "\n".join(lines)
 
 
+def format_observation_with_memories(base: str, records) -> str:
+    """Append a retrieved-memory block to *base*, or return *base* unchanged.
+
+    The block is added *after* the whole environment observation (issue #75), so
+    when an agent has no relevant memories the observation is byte-identical to
+    before memory existed -- and even when it does, the block sits well below the
+    "Characters here:" / "Inventory:" lines the mock client scans, so it can't
+    perturb that parsing. Privacy stays intact: only this agent's own retrieved
+    records are passed in, and they never reach ``command_history``.
+    """
+    block = render_memories(records)
+    return base if not block else f"{base}\n\n{block}"
+
+
 def _route(character, game, command: str) -> bool:
     """Route a command through the parser (and its precondition gate),
     attributed to *character* via the explicit actor seam. The name-prefix
@@ -465,6 +486,14 @@ def decide_and_route(
     resolve phase (:func:`route_with_retry`, issue #25).
     """
     base = observation
+    # Lazily bind this agent's memory to the character (issue #75). Done here --
+    # not only in react_behavior -- because the simultaneous resolve phase
+    # (route_with_retry) reaches this function without having bound the owner.
+    # getattr-guarded so a hypothetical agent without .memory can't crash.
+    mem = getattr(agent, "memory", None)
+    if mem is not None and not mem.owner:
+        mem.owner = character.name
+    turn = getattr(game, "turn", 0)
 
     for attempt in range(1 + max_retries):
         _set_attribution(agent, character.name, getattr(game, "turn", None), attempt)
@@ -473,10 +502,23 @@ def decide_and_route(
             return False
         _log_decision(character, game, agent, command)
         if _route(character, game, command):
+            if mem is not None:
+                mem.add_observation(
+                    f'I tried "{command}" and succeeded.', turn=turn, importance=3
+                )
             return True
         failure_reason = (
             getattr(game.parser, "last_fail_message", None) or "action failed"
         )
+        if mem is not None:
+            # "but it failed because ..." is worded to avoid the "' failed:'"
+            # substring the mock troll brain keys on -- a private memory must
+            # never spoof another agent's decision.
+            mem.add_observation(
+                f'I tried "{command}" but it failed because {failure_reason}',
+                turn=turn,
+                importance=4,
+            )
         game.parser.agent_reflection(character.name, failure_reason)
         observation = _reflect(base, command, failure_reason)
 
@@ -486,11 +528,24 @@ def decide_and_route(
 def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     """Run one turn of the Observe -> Act -> Reflect loop around *agent*.
 
-    Observe (build the observation), trace it (verbose-only), then hand off to
-    :func:`decide_and_route` for the decide/route/reflect cycle. Returns
-    ``True`` if a command succeeded, else ``False``.
+    Observe (build the observation, augmented with retrieved memories), trace it
+    (verbose-only), then hand off to :func:`decide_and_route` for the
+    decide/route/reflect cycle. Returns ``True`` if a command succeeded, else
+    ``False``.
+
+    Memory (issue #75) is woven in here, in the Observe step: first perceive any
+    new world events since last turn, then retrieve the memories most relevant to
+    the current situation and fold them into the prompt. Retrieval lives only in
+    this sequential path -- the simultaneous gather phase builds its own
+    snapshot -- so other turn modes' observations are unchanged.
     """
-    observation = build_npc_context(character, game)
+    if not agent.memory.owner:
+        agent.memory.owner = character.name
+    agent.memory.ingest_events(game, character)
+
+    base = build_npc_context(character, game)
+    relevant = agent.memory.retrieve(query=base, turn=getattr(game, "turn", 0))
+    observation = format_observation_with_memories(base, relevant)
     # The full observation is traced too, but only shows at verbose verbosity.
     game.parser.agent_observation(character.name, observation)
     return decide_and_route(character, game, agent, observation, max_retries)
@@ -603,10 +658,11 @@ def make_react_behavior(llm_client, max_retries: int | None = None, config=None)
     config = config if config is not None else AgentConfig()
     retries = max_retries if max_retries is not None else config.max_retries
     # One agent is created per factory call and captured by the returned
-    # closure, so this agent (its persona today, its memory in Phase 2) belongs
-    # to a single character. Attach the result to ONE character; to drive
-    # several NPCs, call this factory once per character rather than sharing a
-    # behavior, or they would share an identity.
+    # closure, so this agent -- its persona, goals, and private memory stream
+    # (issue #75) -- belongs to a single character. Attach the result to ONE
+    # character; to drive several NPCs, call this factory once per character
+    # rather than sharing a behavior, or they would share an identity (and a
+    # memory).
     agent = LLMAgent(
         llm_client,
         max_tokens=config.max_tokens,
