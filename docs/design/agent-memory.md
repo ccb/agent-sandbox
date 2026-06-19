@@ -1,14 +1,16 @@
 # Agent Memory Design
 
-**Status:** Stages 1–4 implemented (issue #75, PR #94); stages 5–8 remain future
-work. The append-only memory stream, deterministic retrieval, event perception,
-and action-outcome memories now ship in `text_adventure_games/memory.py` and
-`text_adventure_games/npc.py`. The later stages — LLM importance scoring,
-reflection and plan *generation*, and save/load through `Character` — are not
-built yet. Wiring this engine memory into the generative-agents (Smallville)
-game, which **closes #75**, follows once PR #72 merges. See **§12** for the
-per-stage status, and the **"As built"** notes (§4, §5, §9, §10) for where the
-implementation refined this proposal.
+**Status:** Stages 1–4 implemented **and wired into the generative-agents
+(Smallville) sim**, which **closes #75** (issue #75, PR #94); stages 5–8 remain
+future work. The append-only memory stream, deterministic retrieval, event
+perception, and action-outcome memories ship in `text_adventure_games/memory.py`
+and `text_adventure_games/npc.py`; the Smallville port now perceives co-located
+residents, remembers its own actions, and retrieves memories into each
+observation (`generative-agents/backend/smallville_agents.py` +
+`run_simulation.py`). The later stages — LLM importance scoring, reflection and
+plan *generation*, and save/load through `Character` — are not built yet. See
+**§12** for the per-stage status, and the **"As built"** notes (§4, §5, §9, §10)
+for where the implementation refined this proposal.
 
 **Source paper:** Park et al., "Generative Agents: Interactive Simulacra of
 Human Behavior" (arXiv:2304.03442v2 / UIST 2023).
@@ -528,8 +530,11 @@ Live-game tests:
 
 Stages 1–4 ship in PR #94; each kept existing no-memory games working (the
 empty-render guard means an agent with no memories produces a byte-identical
-observation). Stages 5–8 remain future work, and the generative-agents
-integration that closes #75 follows PR #72.
+observation). The same PR also wires this engine memory into the
+generative-agents (Smallville) sim — residents perceive co-located neighbors,
+remember their own actions, and retrieve memories into each observation, while
+the deterministic mock replay is unchanged (`generative-agents/tests/
+test_memory_wiring.py`) — which **closes #75**. Stages 5–8 remain future work.
 
 ---
 

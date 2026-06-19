@@ -27,7 +27,7 @@ import os
 
 from . import exporter
 from .build_world import PERSONAS, build_world
-from .smallville_agents import attach_agents
+from .smallville_agents import attach_agents, observe_and_decide, remember_outcome
 from .world_map import WorldMap
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -86,6 +86,11 @@ def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
 
     frames: list[dict] = []
     for _step in range(num_steps):
+        # Give per-agent memory a coherent time axis: the step index is the
+        # "turn" memories are stamped and scored against (issue #75). The custom
+        # loop never calls end_turn, so without this game.turn would stay 0 and
+        # recency could never tell memories apart.
+        game.turn = _step
         frame = {}
         for name in order:
             char = chars[name]
@@ -93,8 +98,11 @@ def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
 
             # Decision point: idle and not yet settled into an activity.
             if not st["path"] and not st["performing"]:
-                command = char.agent.decide(game.describe_for(char))
+                # Observe (perceive + retrieve memories) -> decide -> remember
+                # the outcome, the same shape react_behavior gives engine NPCs.
+                command = observe_and_decide(game, char, _step)
                 if command and game.parser.parse_command(command, actor=char):
+                    remember_outcome(char, command, _step)
                     if command.startswith("travel"):
                         dest = char.location
                         address = getattr(dest, "tile_address", None)

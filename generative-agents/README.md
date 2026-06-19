@@ -216,8 +216,14 @@ and cast that this builds on.
 
 - **Live LLM agents** — swap `SmallvilleMockClient` for a real client via the
   engine's `client_from_env()`; the `Agent.decide` seam is identical.
-- **Conversations** (`chat`) and the **memory stream** (agents currently follow a
-  fixed wake → travel → perform routine rather than reasoning over memories).
+- **Conversations** (`chat`) — residents follow a fixed wake → travel → perform
+  routine and don't yet talk to each other. They *do* now carry a private
+  **memory stream** (issue #75): each perceives co-located neighbors, remembers
+  its own actions, and has the retrieved memories folded into every observation
+  (`backend/smallville_agents.py`). The deterministic mock brain still decides
+  from location alone, so the replay is unchanged — but a live LLM would reason
+  over those memories. Reflection and plan *generation* (design Stages 5–7)
+  remain future work.
 - **Live (non-replay) mode**, where the backend serves `update_environment`
   step-by-step instead of pre-generating the whole run.
 

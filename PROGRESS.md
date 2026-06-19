@@ -8,9 +8,9 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 | --- | --- | --- | --- | --- |
 | 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
-| 🟢 Ready to merge | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| ✅ Merged — move to Shipped | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
-| 🔵 In design (draft PR) | [#94](https://github.com/ccb/agent-sandbox/pull/94) | Append-only agent memory stream — engine implemented (design Stages 1–4); draft until [#72](https://github.com/ccb/agent-sandbox/pull/72), closes [#75](https://github.com/ccb/agent-sandbox/issues/75) once wired into generative-agents | [#75](https://github.com/ccb/agent-sandbox/issues/75) | [@aking526](https://github.com/aking526) |
+| 🔵 In design (draft PR) | [#94](https://github.com/ccb/agent-sandbox/pull/94) | Append-only agent memory stream — engine primitive (design Stages 1–4) + wired into the generative-agents (Smallville) sim; **closes** [#75](https://github.com/ccb/agent-sandbox/issues/75) (Stages 5–8 stay future work) | [#75](https://github.com/ccb/agent-sandbox/issues/75) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`output-and-trace-rendering.md`](docs/design/output-and-trace-rendering.md) | Output & trace rendering — core landed, see §12 for remaining stages | — | [@aking526](https://github.com/aking526) |
 | 💡 Backlog (no PR) | [#63](https://github.com/ccb/agent-sandbox/issues/63) | Prioritize & approve the agent memory layer (Phase 2) | — | [@aking526](https://github.com/aking526) |
@@ -51,7 +51,7 @@ which Shipped subsection a row belongs in, so it only *flags* a merged PR (`✅ 
 to Shipped`) and leaves the move to you — clearing that flag means relocating the row, not
 just relabelling it. Implemented design docs are filed under
 [`docs/design/implemented/`](docs/design/implemented/); proposals and partially-built designs
-stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-18**.
+stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-19**.
 
 ---
 
