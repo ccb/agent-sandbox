@@ -59,6 +59,10 @@ llm:                        # omit entirely for no LLM
 render:
   level: verbose            # null -> follow OUTPUT_LEVEL
   width: 100
+
+observability:              # LLM cost/usage logging (off by default)
+  log_path: runs/           # a dir -> timestamped {ts}-{provider}.jsonl; null -> off
+  log_prompts: false        # true also logs full prompts/responses, not just numbers
 ```
 
 !!! note "YAML vs JSON"
@@ -66,7 +70,7 @@ render:
     box; JSON needs nothing extra. An unknown section or field raises a clear
     `ValueError` instead of being silently ignored.
 
-The five sections:
+The six sections:
 
 | Section | Affects | Examples |
 |---|---|---|
@@ -75,6 +79,7 @@ The five sections:
 | `engine` | turn loop, world, triggers | `turn_mode`, `phases`, `give_hints`, `max_actions_per_turn`, `heard_max`, `cascade_passes` |
 | `clock` | the optional in-game clock | `enabled`, `start_hour`, `minutes_per_turn`, `periods` |
 | `render` | terminal output | `level`, `width`, `no_color` |
+| `observability` | LLM cost/usage logging (`usage.py`) | `log_path`, `log_prompts` |
 
 ## Precedence
 
@@ -82,9 +87,9 @@ Highest priority wins:
 
 1. An explicit `Game(...)` argument (`turn_mode=`, `time_config=`) — overrides the config.
 2. A value set in your `GameConfig`.
-3. An environment variable, where one exists (`LLM_*`, `OUTPUT_LEVEL`, `NO_COLOR`) —
-   used when the matching config field is left at its `None` ("follow the
-   environment") default.
+3. An environment variable, where one exists (`LLM_*`, `OUTPUT_LEVEL`, `NO_COLOR`,
+   `LLM_LOG`, `LLM_LOG_PROMPTS`) — used when the matching config field is left at its
+   `None`/`False` ("follow the environment") default.
 4. The built-in default.
 
 ## Wiring the LLM and NPCs
@@ -99,5 +104,14 @@ client = config.build_llm_client()             # None if the `llm` section is un
 if client:
     troll.set_behavior(make_react_behavior(client, config=config.agent))
 ```
+
+## Logging cost & usage
+
+The `observability` section controls the per-run usage artifact (`usage.py`). Token
+tallying is always on (an in-memory `UsageLedger`); set `log_path` to also stream a
+JSONL artifact — a `run` header, one `call` line per LLM call, and a per-actor cost
+`summary`. `config.build_run_log(provider=..., model=...)` turns the section into a
+`RunLog` (or `None` when off), mirroring `build_llm_client()`. `from_env()` reads
+`LLM_LOG` and `LLM_LOG_PROMPTS`.
 
 For field-by-field details, see the [Configuration API reference](api/config.md).
