@@ -190,5 +190,6 @@ docs/superpowers/
 # docs/design/scienceworld-interface.md (#47) for how to obtain and use them.
 /benchmarks/
 
-# External repositories that are not benchmarks
+# External upstream repo clones (e.g. generative_agents) — kept local for
+# reference/experiments; never commit them into our tree.
 /external/

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+<div id="sim-app">
+
+	<!-- TOP NAV BAR: the simulation clock on the left, playback controls on the
+	     right (Play/Pause, and Reset to restart from the beginning). -->
+	<div id="sim-navbar">
+		<div class="nav-time">
+			<span class="nav-clock-icon">🕗</span>
+			<span id="game-time-content"></span>
+		</div>
+		<div class="nav-controls">
+			<!-- In "simulate" mode the replay is already running, so the manual
+			     Play/Pause pair is hidden (same rule as the original layout). -->
+			<span class="playback-buttons" {% if mode == 'simulate' %}style="display:none"{% endif %}>
+				<button id="play_button" type="button" class="btn btn-default">
+					<i class="glyphicon glyphicon-play"></i> Play
+				</button>
+				<button id="pause_button" type="button" class="btn btn-default">
+					<i class="glyphicon glyphicon-pause"></i> Pause
+				</button>
+			</span>
+			<button id="reset_button" type="button" class="btn btn-default" title="Restart from the beginning">
+				<i class="glyphicon glyphicon-repeat"></i> Reset
+			</button>
+		</div>
+	</div>
+
+	<!-- MAIN: the pixel world on the left, one agent card on the right. -->
+	<div id="sim-main">
+
+		<!-- LEFT: the Phaser map fills the column; a slim toolbar sits beneath it. -->
+		<div id="sim-map-col">
+			<!-- Phaser injects its <canvas> in here and draws the world to it. -->
+			<div id="game-container"></div>
+
+			<div id="map-toolbar">
+				<!-- Zoom / navigation controls. These reach the Phaser camera via
+				     the global `mainCamera` set up in home/main_script.html. -->
+				<div id="zoom-controls">
+					<div class="btn-group" role="group" aria-label="Zoom controls">
+						<button id="zoom_out_button" type="button" class="btn btn-default btn-sm" title="Zoom out">
+							<i class="glyphicon glyphicon-minus"></i>
+						</button>
+						<button id="zoom_reset_button" type="button" class="btn btn-default btn-sm" title="Fit whole map">
+							<i class="glyphicon glyphicon-fullscreen"></i> Reset
+						</button>
+						<button id="zoom_in_button" type="button" class="btn btn-default btn-sm" title="Zoom in">
+							<i class="glyphicon glyphicon-plus"></i>
+						</button>
+					</div>
+					<span class="map-hint">Scroll to zoom &middot; drag to pan &middot; arrow keys to move</span>
+				</div>
+
+				<!-- Collapse the map and just read the agent panel (toggles
+				     visibility only; the replay keeps running). -->
+				<button id="toggle_map_button" type="button" class="btn btn-default btn-sm" title="Hide or show the map">
+					<i class="glyphicon glyphicon-eye-close"></i> Hide map
+				</button>
+			</div>
+		</div>
+
+		<!-- RIGHT: one agent at a time. The arrows only change WHO you are looking
+		     at -- the replay keeps running and every card keeps updating in the
+		     background (see home/main_script.html), so flipping agents never
+		     touches the running simulation. -->
+		<div id="sim-agent-col">
+			<div id="agent-nav">
+				<button id="agent_prev_button" type="button" class="btn btn-default" title="Previous agent">
+					<i class="glyphicon glyphicon-chevron-left"></i>
+				</button>
+				<span id="agent-indicator"></span>
+				<button id="agent_next_button" type="button" class="btn btn-default" title="Next agent">
+					<i class="glyphicon glyphicon-chevron-right"></i>
+				</button>
+			</div>
+
+			<div id="agent-cards">
+				{% for p_name, p_name_os in persona_names %}
+					<div class="agent-card" data-agent-name="{{ p_name }}">
+						<div class="agent-card-head">
+							{% with 'assets/characters/profile/'|add:p_name_os|add:'.png' as profile_img %}
+							<img class="agent-portrait" src="{% static profile_img %}" alt="{{ p_name }}">
+							{% endwith %}
+							<h2 id="name__{{ p_name_os }}" class="agent-name">
+								{{ p_name }}
+								<a href="{% url 'replay_persona_state' sim_code step p_name_os %}" class="agent-state-link">State Details</a>
+							</h2>
+						</div>
+						<div class="agent-field">
+							<span class="agent-field-label">Current Action</span>
+							<span class="agent-field-value" id="current_action__{{ p_name_os }}"></span>
+						</div>
+						<div class="agent-field">
+							<span class="agent-field-label">Location</span>
+							<span class="agent-field-value" id="target_address__{{ p_name_os }}"></span>
+						</div>
+						<div class="agent-field">
+							<span class="agent-field-label">Current Conversation</span>
+							<span class="agent-field-value" id="chat__{{ p_name_os }}"></span>
+						</div>
+					</div>
+				{% endfor %}
+			</div>
+		</div>
+
+	</div>
+</div>
+
+<!-- partial -->
+<script src='https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js'></script>
+{% include 'home/main_script.html' %}
+{% endblock content %}
