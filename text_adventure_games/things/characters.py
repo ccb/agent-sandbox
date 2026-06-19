@@ -268,10 +268,13 @@ class Character(Thing):
 
     def hear(self, utterance: str) -> None:
         """Record something this character perceived. The buffer keeps only the
-        most recent HEARD_MAX entries (FIFO) so it stays bounded."""
+        most recent entries (FIFO) so it stays bounded. The cap is
+        ``self.heard_max`` -- set from config when the character is added to a
+        game -- falling back to the module default HEARD_MAX otherwise."""
+        cap = getattr(self, "heard_max", HEARD_MAX)
         self.heard.append(utterance)
-        if len(self.heard) > HEARD_MAX:
-            self.heard = self.heard[-HEARD_MAX:]
+        if len(self.heard) > cap:
+            self.heard = self.heard[-cap:]
 
     def clear_heard(self) -> None:
         """Forget everything recently heard."""
@@ -296,7 +299,8 @@ class Character(Thing):
 
         budget = game.clock.minutes_per_turn if game.clock is not None else None
         remaining = budget
-        for _ in range(MAX_ACTIONS_PER_TURN):
+        max_actions = getattr(game, "_max_actions_per_turn", MAX_ACTIONS_PER_TURN)
+        for _ in range(max_actions):
             spent = self.behavior(self, game)
             if not spent:  # None/0/False -> nothing more to do this turn
                 break

@@ -1,9 +1,10 @@
 from .things import Location, Character
 from .clock import GameClock
+from .config import GameConfig
 from . import parsing, actions, blocks
 from .enums import EventKind, Property
 from .events import GameEvent
-from .triggers import Trigger, MAX_CASCADE_PASSES, at_turn
+from .triggers import Trigger, at_turn
 
 import json
 import inspect
@@ -55,14 +56,21 @@ class Game:
         characters=None,
         custom_actions=None,
         time_config=None,
-        turn_mode="sequential",
+        turn_mode=None,
+        config=None,
     ):
         self.start_at = start_at
         self.player = player
 
+        # Unified config (see config.py). Every field defaults to the engine's
+        # historical value, so an omitted config -- or a bare GameConfig() -- is
+        # a no-op. The explicit `time_config`/`turn_mode` arguments still work and
+        # take precedence over the config's clock/turn_mode, for back-compat.
+        self.config = config if config is not None else GameConfig()
+
         # Print the special commands associated with items in the game (helpful
         # for debugging and for novice players).
-        self.give_hints = True
+        self.give_hints = self.config.engine.give_hints
 
         # Records history of commands, states, and descriptions
         self.game_history = []
@@ -104,35 +112,61 @@ class Game:
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
 
-        # Optional in-game clock (issue #7). Time is opt-in: with no
-        # time_config the turn counter still increments but no clock exists.
-        # Accepts a GameClock, a dict of GameClock kwargs, or None.
-        if time_config is None:
-            self.clock = None
-        elif isinstance(time_config, GameClock):
-            self.clock = time_config
-        elif isinstance(time_config, dict):
-            self.clock = GameClock(**time_config)
+        # Optional in-game clock (issue #7). Time is opt-in: with neither a
+        # time_config nor an enabled clock in the config, the turn counter still
+        # increments but no clock exists. An explicit time_config (a GameClock or
+        # a dict of GameClock kwargs) wins; otherwise config.clock builds one when
+        # enabled.
+        if time_config is not None:
+            if isinstance(time_config, GameClock):
+                self.clock = time_config
+            elif isinstance(time_config, dict):
+                self.clock = GameClock(**time_config)
+            else:
+                err_msg = f"ERROR: invalid time_config ({time_config})"
+                raise Exception(err_msg)
+        elif self.config.clock.enabled:
+            clock_cfg = self.config.clock
+            self.clock = GameClock(
+                start_hour=clock_cfg.start_hour,
+                start_minute=clock_cfg.start_minute,
+                minutes_per_turn=clock_cfg.minutes_per_turn,
+                periods=clock_cfg.periods,
+            )
         else:
-            err_msg = f"ERROR: invalid time_config ({time_config})"
-            raise Exception(err_msg)
+            self.clock = None
 
         # Turn mode (issue #25). "sequential" (default) is the classic loop:
         # the player acts, then each NPC observes and acts in order.
         # "simultaneous" runs a gather -> resolve round instead (see turns.py):
         # every NPC agent decides against the turn-start snapshot, then
-        # commands resolve player-first and in initiative order.
-        if turn_mode not in ("sequential", "simultaneous"):
-            err_msg = f"ERROR: invalid turn_mode ({turn_mode})"
+        # commands resolve player-first and in initiative order. An explicit
+        # turn_mode argument overrides config.engine.turn_mode.
+        mode = turn_mode if turn_mode is not None else self.config.engine.turn_mode
+        if mode not in ("sequential", "simultaneous"):
+            err_msg = f"ERROR: invalid turn_mode ({mode})"
             raise Exception(err_msg)
-        self.turn_mode = turn_mode
+        self.turn_mode = mode
 
         # Resolution phases (issue #42): an optional action -> phase-rank map that
         # orders the simultaneous resolve phase ("talk before move before fight").
-        # Opt in by assigning a map, e.g. ``game.phases = turns.DEFAULT_PHASES``;
-        # left as None, every action shares one phase and resolution falls back to
-        # the plain initiative order from issue #25.
-        self.phases = None
+        # config.engine.phases controls it: False (default) -> plain initiative
+        # order; True -> turns.DEFAULT_PHASES; a dict -> that custom map. You can
+        # still assign ``game.phases`` directly afterward.
+        engine_phases = self.config.engine.phases
+        if engine_phases is True:
+            from .turns import DEFAULT_PHASES
+
+            self.phases = DEFAULT_PHASES
+        elif isinstance(engine_phases, dict):
+            self.phases = engine_phases
+        else:
+            self.phases = None
+
+        # Engine caps read from config (defaults reproduce the old module
+        # constants). The trigger phase and the NPC turn loop read these.
+        self._cascade_passes = self.config.engine.cascade_passes
+        self._max_actions_per_turn = self.config.engine.max_actions_per_turn
 
         # Parser
         self.custom_actions = custom_actions
@@ -208,10 +242,11 @@ class Game:
 
         Re-evaluates in bounded passes so a trigger can enable another one
         (cascading), but each trigger fires at most once per round and the chain
-        is capped at MAX_CASCADE_PASSES to prevent infinite loops.
+        is capped at config.engine.cascade_passes (default MAX_CASCADE_PASSES)
+        to prevent infinite loops.
         """
         fired_this_round = set()
-        for _ in range(MAX_CASCADE_PASSES):
+        for _ in range(self._cascade_passes):
             newly_fired = False
             for trigger in self.triggers:
                 if trigger in fired_this_round:
@@ -317,6 +352,10 @@ class Game:
         Puts characters in the game
         """
         self.characters[character.name] = character
+        # Apply the configured "recently heard" buffer size so it covers NPCs
+        # added after construction too (Character.hear falls back to its module
+        # default for characters never added to a game).
+        character.heard_max = self.config.engine.heard_max
 
     def describe(self) -> str:
         """

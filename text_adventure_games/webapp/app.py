@@ -6,7 +6,10 @@ from text_adventure_games.webapp.web_parser import WebParser
 from notebooks.hw1_solution import action_castle
 
 app = Flask(__name__)
-app.secret_key = "action-castle-secret-key"
+# Read the session secret from the environment so a real deployment never ships
+# a hardcoded key. The fallback keeps local dev frictionless but is unsafe for
+# anything public -- set FLASK_SECRET_KEY before exposing this app.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-only-insecure-key")
 
 # Per-session game state: {session_id: {"game": Game, "messages": list, "command_history": list}}
 game_sessions = {}
@@ -89,4 +92,8 @@ def reset():
 
 
 if __name__ == "__main__":
-    app.run(port=8080)
+    # Host/port come from the environment so you can change them without editing
+    # the source (e.g. PORT=5000, or HOST=0.0.0.0 to accept remote connections).
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "8080"))
+    app.run(host=host, port=port)

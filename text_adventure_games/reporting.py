@@ -154,9 +154,10 @@ class PlainRenderer(Renderer):
     ``name [reasoning] ...`` / ``name [action] ...`` shape.
     """
 
-    def __init__(self, level: str = NORMAL, stream=None):
+    def __init__(self, level: str = NORMAL, stream=None, width: int = 80):
         self.level = level
         self.stream = stream if stream is not None else sys.stdout
+        self.width = width
 
     def emit(self, message: Message) -> None:
         if not self._visible(message):
@@ -167,21 +168,24 @@ class PlainRenderer(Renderer):
         label = f"Turn {turn}" + (f" ({time})" if time else "")
         print(f"-- {label} " + "-" * max(0, 60 - len(label)), file=self.stream)
 
+    def _wrap(self, text: str) -> str:
+        return wrap_text(text, self.width)
+
     def _format(self, m: Message) -> str:
         c = m.channel
         if c is Channel.AGENT_REASONING:
-            return wrap_text(f"{m.actor} [reasoning] {m.text}")
+            return self._wrap(f"{m.actor} [reasoning] {m.text}")
         if c is Channel.AGENT_ACTION:
-            return wrap_text(f"{m.actor} [action] {m.text}")
+            return self._wrap(f"{m.actor} [action] {m.text}")
         if c is Channel.AGENT_REFLECTION:
-            return wrap_text(f"{m.actor} [reflect] {m.text}")
+            return self._wrap(f"{m.actor} [reflect] {m.text}")
         if c is Channel.AGENT_OBSERVATION:
-            return wrap_text(f"{m.actor} [observe]\n{m.text}")
+            return self._wrap(f"{m.actor} [observe]\n{m.text}")
         if c is Channel.CONFLICT:
-            return wrap_text(f"⚔ {m.text}")
+            return self._wrap(f"⚔ {m.text}")
         if c is Channel.COMMAND:
             return f"> {m.text}"
-        return wrap_text(m.text)  # NARRATION, NPC_NARRATION, BLOCKED, SYSTEM
+        return self._wrap(m.text)  # NARRATION, NPC_NARRATION, BLOCKED, SYSTEM
 
 
 class RichTerminalRenderer(Renderer):
@@ -298,25 +302,32 @@ def _level_from_env(default: str = NORMAL) -> str:
     return level if level in (QUIET, NORMAL, VERBOSE) else default
 
 
-def default_renderer(level: str | None = None) -> Renderer:
+def default_renderer(
+    level: str | None = None, no_color: bool | None = None, width: int = 80
+) -> Renderer:
     """Pick a terminal renderer.
 
     ``rich`` when it's importable and the output is an interactive TTY (and
-    ``NO_COLOR`` is unset); otherwise the plain fallback -- which keeps pytest,
+    color isn't disabled); otherwise the plain fallback -- which keeps pytest,
     pipes, and CI clean. Verbosity comes from ``OUTPUT_LEVEL`` (quiet/normal/
-    verbose) unless given explicitly.
+    verbose) unless given explicitly via *level*. Color is disabled when
+    *no_color* is true, or (when *no_color* is None) when the ``NO_COLOR`` env
+    var is set. *width* sets the wrap column for the plain renderer (the rich
+    renderer wraps to the live terminal instead).
     """
     if level is None:
         level = _level_from_env()
-    if os.environ.get("NO_COLOR"):
-        return PlainRenderer(level=level)
+    if no_color is None:
+        no_color = bool(os.environ.get("NO_COLOR"))
+    if no_color:
+        return PlainRenderer(level=level, width=width)
     try:
         import rich  # noqa: F401
     except ImportError:
-        return PlainRenderer(level=level)
+        return PlainRenderer(level=level, width=width)
     if not getattr(sys.stdout, "isatty", lambda: False)():
-        return PlainRenderer(level=level)
+        return PlainRenderer(level=level, width=width)
     try:
         return RichTerminalRenderer(level=level)
     except Exception:
-        return PlainRenderer(level=level)
+        return PlainRenderer(level=level, width=width)

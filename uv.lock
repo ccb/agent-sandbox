@@ -2333,6 +2333,7 @@ dependencies = [
     { name = "flask" },
     { name = "graphviz" },
     { name = "jupyter" },
+    { name = "pyyaml" },
     { name = "rich" },
 ]
 
@@ -2377,6 +2378,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'" },
     { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pyyaml" },
     { name = "rich" },
     { name = "tiktoken", marker = "extra == 'llm'" },
     { name = "tiktoken", marker = "extra == 'openai'" },
