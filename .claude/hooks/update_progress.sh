@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# PostToolUse launcher: keep PROGRESS.md's in-flight table in sync with GitHub.
+# Manual launcher: resync PROGRESS.md's in-flight table with GitHub.
+#
+# Run it by hand -- `.claude/hooks/update_progress.sh` -- when you want the
+# tracker refreshed. It is no longer wired as a PostToolUse hook, so it only
+# runs when called.
 #
 # Like run_renderer_coverage.sh, we can't hard-code "$repo/venv/bin/python":
 # anyone on conda or a bare interpreter (e.g. the lab machines) has no venv/.
 # So we resolve an interpreter the same way -- prefer the project venv, then
 # fall back to PATH python3 / python. The updater only needs the stdlib plus
 # the `gh` CLI, and no-ops cleanly if either is missing.
-#
-# stdin (the PostToolUse hook JSON) is forwarded to the script unchanged; the
-# script self-gates to run only after a `git commit`.
 
 set -euo pipefail
 

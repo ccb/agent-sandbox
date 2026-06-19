@@ -22,15 +22,6 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/run_renderer_coverage.sh\""
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/update_progress.sh\""
-          }
-        ]
       }
     ]
   }
