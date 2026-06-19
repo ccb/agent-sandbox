@@ -1,12 +1,12 @@
 # Memory Retrieval — Embedding Models — Design & Implementation
 
 **Status:** Implemented on a branch **stacked on PR #94** (#75), which owns
-`text_adventure_games/memory.py`. Ships a pluggable `EmbeddingClient` with two
-backends — **model2vec** (local, default real backend) and a deterministic
-**mock** — plus pure-Python cosine relevance wired into retrieval. Hosted backends
-(OpenAI, Voyage) are left as future work behind the same seam. Stays a draft until
-#94 merges, then retargets to `main`. §3 keeps the full option survey that drove
-the choice.
+`text_adventure_games/memory.py`. Ships a pluggable `EmbeddingClient` with three
+real backends — **model2vec** (local, the default), **sentence-transformers**
+(local transformer), and **OpenAI** (hosted) — plus a deterministic **mock**, and
+pure-Python cosine relevance wired into retrieval. Voyage and a raw-`transformers`
+backend are left as future work behind the same seam. Stays a draft until #94
+merges, then retargets to `main`. §3 keeps the full option survey that drove the choice.
 
 **Issue:** #76 ([Phase B] Retrieval scoring: recency × relevance × importance +
 inject into the observation). **Builds on:** PR #94 (#75) — lands
@@ -138,26 +138,37 @@ A few notes that aren't obvious from the table:
 
 ## 4. Decision (what shipped)
 
-A **pluggable `EmbeddingClient`** with **model2vec** as the local real backend and
-a deterministic **mock**, and **keyword overlap retained as the default** when no
-client is configured:
+A **pluggable `EmbeddingClient`** with three real backends plus a deterministic
+**mock**, and **keyword overlap retained as the default** when no client is configured:
 
 - **Default real backend (free / offline / light): model2vec.** Best satisfies
   constraints 1–3 for the out-of-the-box student experience. Honest tradeoff: it's
   a newer library and its embeddings are a notch below full transformer models —
-  but for short memory snippets that gap doesn't change which memories surface. If
-  we ever want to bet on maturity over install size, `all-MiniLM-L6-v2` slots into
-  the same `LocalEmbeddingClient`, at the cost of pulling torch.
+  but for short memory snippets that gap doesn't change which memories surface.
+- **Opt-in local transformer: sentence-transformers** (`SentenceTransformerEmbeddingClient`,
+  default `all-MiniLM-L6-v2`). Higher quality than model2vec; `.encode()` handles
+  pooling/normalization. Tradeoff: pulls `torch` (a heavy install), so it's the
+  `embeddings-st` extra, not the default.
+- **Opt-in hosted: OpenAI** (`OpenAIEmbeddingClient`, default
+  `text-embedding-3-small`). Reuses the existing `[openai]` extra; needs an API key
+  + network. Cheap and strong for short snippets.
 - **Tests / offline: the mock.** `MockEmbeddingClient` hashes words into a
   fixed-length count vector — deterministic, no deps, no network — so the whole
   suite exercises the embedding path with no model download.
 - **Always-available fallback: keyword overlap.** If `EMBEDDING_PROVIDER` is unset
   (and no client is injected), relevance stays keyword-based exactly as #94 ships
   it. So the offline/deterministic invariant holds with no network.
-- **Future, behind the same seam: OpenAI / Voyage.** Hosted backends (OpenAI
-  `text-embedding-3-small`; Voyage `voyage-3-lite` — the Anthropic-aligned path)
-  were scoped out of this change to avoid new API-key/SDK surface, but the Protocol
-  + `EmbeddingProvider` enum + factory leave a one-class slot for each.
+
+Future, behind the same seam (Protocol + `EmbeddingProvider` enum + factory leave a
+one-class slot for each):
+
+- **Raw Hugging Face `transformers`.** A `TransformersEmbeddingClient` using
+  `AutoModel` + manual mean-pooling (and optional L2 normalization), for users who
+  want a specific model without the sentence-transformers wrapper. Deferred because
+  sentence-transformers already covers the local-transformer case with far less
+  pooling code to get subtly wrong.
+- **Voyage AI** (`voyage-3-lite`) — the Anthropic-aligned hosted path (Anthropic
+  ships no first-party embeddings). Deferred to avoid a new `voyageai` dependency.
 
 Embeddings are therefore **strictly opt-in**: existing games and the whole test
 suite behave identically until someone sets a provider (default `embedding_client=None`).
@@ -172,19 +183,21 @@ suite behave identically until someone sets a provider (default `embedding_clien
 class EmbeddingClient(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...   # batched
 
-class MockEmbeddingClient:     # deterministic hashlib bag-of-words vector, no deps
-class LocalEmbeddingClient:    # model2vec StaticModel; lazy import; default potion-base-8M
-# OpenAIEmbeddingClient / VoyageEmbeddingClient: future, same shape.
+class MockEmbeddingClient:                # deterministic hashlib bag-of-words, no deps
+class LocalEmbeddingClient:               # model2vec StaticModel; default potion-base-8M
+class SentenceTransformerEmbeddingClient: # sentence-transformers; default all-MiniLM-L6-v2
+class OpenAIEmbeddingClient:              # openai embeddings; default text-embedding-3-small
+# (all SDKs lazy-imported with a clear ImportError; Voyage / raw-transformers: future)
 
 def create_embedding_client(config) -> EmbeddingClient   # _PROVIDERS dispatch
 def embedding_client_from_env() -> EmbeddingClient | None # reads EMBEDDING_PROVIDER,
-    # EMBEDDING_MODEL/API_KEY/BASE_URL; None when unset -> caller keeps keyword overlap.
+    # EMBEDDING_MODEL/API_KEY/BASE_URL; None when unset or SDK missing -> keyword overlap.
 ```
 
-`EmbeddingProvider(_StrEnum)` (`local` / `mock`) lives in `enums.py` alongside
-`LlmProvider`. The mock uses `hashlib` (not the per-process-salted built-in `hash`)
-so vectors are stable across processes — required for byte-identical replays and
-for embeddings written to save files.
+`EmbeddingProvider(_StrEnum)` (`local` / `sentence-transformers` / `openai` / `mock`)
+lives in `enums.py` alongside `LlmProvider`. The mock uses `hashlib` (not the
+per-process-salted built-in `hash`) so vectors are stable across processes —
+required for byte-identical replays and for embeddings written to save files.
 
 Wiring into the scorer (`memory.py`):
 
@@ -204,8 +217,10 @@ Recency, importance, sort, token budget, and injection are untouched. The option
 `build_game` + ReAct `build_llm_game`, the webapp, and the generative-agents
 `attach_agents` / `simulate`.
 
-Dependencies grow by one extra, following the `[openai]` / `[llm]` convention:
-`embeddings = ["model2vec"]` (no numpy — cosine is pure Python).
+Dependencies, following the `[openai]` / `[llm]` convention: `embeddings =
+["model2vec"]` (the default; no numpy — cosine is pure Python) and `embeddings-st =
+["sentence-transformers"]` (the heavier torch backend). The OpenAI backend reuses
+the existing `[openai]` extra. Each is lazy-imported, so the base install stays lean.
 
 ---
 
@@ -229,8 +244,12 @@ Still open:
 - **Reference scoring.** The "Generative Action Castle" prototype implements this
   exact scoring (the issue says to study it rather than reinvent — ask Chris).
   Confirm its relevance backend and weight choices against ours.
-- **Hosted backends.** Add `OpenAIEmbeddingClient` / `VoyageEmbeddingClient` when a
-  keyed/quality path is wanted — pure additions behind the existing seam.
+- **More backends.** A raw Hugging Face `transformers` client (`AutoModel` +
+  manual mean-pooling) and a Voyage client are natural future additions — pure
+  one-class additions behind the existing seam (see §4).
+- **Embedding cost tracking.** The hosted OpenAI backend has no `UsageLedger`
+  wiring yet (unlike the LLM client). Cheap at this scale, but worth adding if
+  embeddings ever run at volume.
 
 ---
 
