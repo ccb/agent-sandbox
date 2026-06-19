@@ -192,6 +192,23 @@ class LlmProvider(_StrEnum):
     MOCK = "mock"
 
 
+class EmbeddingProvider(_StrEnum):
+    """Identifies an embedding backend. Used by ``EmbeddingConfig.provider`` and
+    the ``EMBEDDING_PROVIDER`` environment variable.
+
+    ``local`` runs a small static model offline (model2vec, the default);
+    ``sentence-transformers`` runs a local transformer model; ``openai`` calls
+    the hosted OpenAI embeddings API; ``mock`` is the deterministic,
+    dependency-free stand-in the test suite uses. Other backends (e.g. Voyage,
+    raw Hugging Face ``transformers``) can join later behind the same
+    ``EmbeddingClient`` seam."""
+
+    LOCAL = "local"
+    MOCK = "mock"
+    OPENAI = "openai"
+    SENTENCE_TRANSFORMERS = "sentence-transformers"
+
+
 # ----------------------------------------------------------------------
 # Day periods
 # ----------------------------------------------------------------------

@@ -26,7 +26,7 @@ LLM_PROVIDER=mock jupyter lab         # then open any notebook
 | 06 | `06_simultaneous_turns.ipynb` | The opt-in **simultaneous** turn mode (#25): a gather → resolve round, `initiative`, and basic conflict when two NPCs want the same thing. | scripted agents |
 | 07 | `07_contested_resources.ipynb` | **Contested resources** (#42): ranked-fallback intents, informed retry after losing, and action-**phase** ordering. (Deep dive on top of `06`.) | scripted agents |
 | 08 | `08_world_mechanics.ipynb` | Two opt-in world features: **containers / carry capacity** (#43) and **action durations** + the per-turn time budget (#24). | mock LLM |
-| 09 | `09_agent_memory.ipynb` | The per-agent **memory** stream (#75): append-only timestamped records, **retrieval** by *recency × importance × relevance*, **perceiving** visible `Game.events`, and memory woven into the **live ReAct loop** — a failed action is remembered and fed back into the next turn's prompt. | mock LLM |
+| 09 | `09_agent_memory.ipynb` | The per-agent **memory** stream (#75): append-only timestamped records, **retrieval** by *recency × importance × relevance*, **perceiving** visible `Game.events`, memory woven into the **live ReAct loop** — a failed action is remembered and fed back into the next turn's prompt — and optional **semantic relevance** via pluggable embeddings (#76). | mock LLM |
 
 **Suggested order:** `01` (engine) → `02` (agents) → `03` (reading their output) → `04`
 (what they know) → `05` (how they talk & persuade) → `06`/`07` (acting at once, and

@@ -23,10 +23,12 @@ import pytest
 
 from text_adventure_games import games, things
 from text_adventure_games.llm_client import MockLlmClient
+from text_adventure_games.embedding_client import MockEmbeddingClient
 from text_adventure_games.memory import (
     AgentMemory,
     MemoryKind,
     MemoryRecord,
+    cosine_similarity,
     importance_score,
     recency_score,
     relevance_score,
@@ -171,6 +173,66 @@ def test_relevance_keyword_overlap():
     # A query of only stop-words has nothing to be relevant to.
     assert relevance_score("the a of to", "anything at all") == 0.0
     assert relevance_score("fish", "fish") == 1.0
+
+
+# ----------------------------------------------------------------------
+# B2. Embedding relevance (issue #76)
+# ----------------------------------------------------------------------
+
+
+def test_cosine_similarity_basic():
+    assert cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
+    assert cosine_similarity([1.0, 0.0], [0.0, 1.0]) == 0.0
+    # A zero vector has no direction to compare -- 0, like keyword no-match.
+    assert cosine_similarity([0.0, 0.0], [1.0, 1.0]) == 0.0
+
+
+def test_default_retrieve_leaves_embeddings_none():
+    """Without an embedding client, relevance stays keyword overlap and no record
+    is ever embedded -- the pre-#76 behavior, byte-for-byte."""
+    mem = AgentMemory(owner="troll")
+    r = mem.add_observation("dragons guard the gold", turn=0)
+    mem.retrieve("dragons", turn=0)
+    assert r.embedding is None
+
+
+def test_retrieve_with_embedding_client_caches_vectors():
+    """With a client, retrieve embeds each record once and caches it on the
+    record (so a second retrieval reuses it rather than re-embedding)."""
+    mem = AgentMemory(owner="troll", embedding_client=MockEmbeddingClient())
+    r = mem.add_observation("dragons guard the gold", turn=0)
+    assert r.embedding is None
+    mem.retrieve("dragons", turn=0)
+    assert r.embedding == MockEmbeddingClient().embed(["dragons guard the gold"])[0]
+
+
+def test_retrieve_with_embedding_client_is_deterministic_and_relevant():
+    """The embedding path ranks a semantically related memory above an unrelated
+    one, deterministically across runs."""
+
+    def run():
+        mem = AgentMemory(owner="troll", embedding_client=MockEmbeddingClient())
+        related = mem.add_observation("dragons breathe fire", turn=10, importance=1)
+        unrelated = mem.add_observation("the weather is nice", turn=10, importance=1)
+        out = mem.retrieve("dragons", turn=10, max_records=2)
+        return out, related, unrelated
+
+    out1, related, unrelated = run()
+    out2, _, _ = run()
+    assert out1[0] is related
+    assert out1.index(related) < out1.index(unrelated)
+    assert [r.id for r in out1] == [r.id for r in out2]
+
+
+def test_cached_embedding_round_trips():
+    """A record's cached embedding survives serialization (the field was always
+    serialized; #76 just populates it)."""
+    mem = AgentMemory(owner="troll", embedding_client=MockEmbeddingClient())
+    mem.add_observation("dragons guard the gold", turn=0)
+    mem.retrieve("dragons", turn=0)
+    restored = AgentMemory.from_primitive(mem.to_primitive())
+    assert restored.records[0].embedding == mem.records[0].embedding
+    assert restored.records[0].embedding is not None
 
 
 # ----------------------------------------------------------------------

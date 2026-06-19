@@ -33,6 +33,7 @@ club``.
 
 from notebooks.hw1_solution import build_game
 from text_adventure_games.llm_client import client_from_env
+from text_adventure_games.embedding_client import embedding_client_from_env
 from text_adventure_games.npc import make_react_behavior
 from text_adventure_games.things.characters import GoalType
 
@@ -45,11 +46,13 @@ NPC_GOALS = {
 }
 
 
-def build_llm_game(llm_client):
+def build_llm_game(llm_client, embedding_client=None):
     """Build Action Castle with troll/guard/ghost driven purely by ReAct.
 
     Takes any LlmClient (a real provider, or MockReActClient for free,
-    deterministic runs) and returns the game ready to play.
+    deterministic runs) and returns the game ready to play. Pass an optional
+    ``embedding_client`` (issue #76) to score memory relevance semantically; with
+    none, retrieval uses keyword overlap.
     """
     game = build_game()  # hw1_solution untouched; behaviors overwritten below
     for name, goals in NPC_GOALS.items():
@@ -59,7 +62,9 @@ def build_llm_game(llm_client):
         npc.persona = f"I am the {name}. {npc.persona}"
         for description, tier in goals:
             npc.add_goal(description, tier)
-        npc.set_behavior(make_react_behavior(llm_client))
+        npc.set_behavior(
+            make_react_behavior(llm_client, embedding_client=embedding_client)
+        )
     return game
 
 
@@ -70,7 +75,9 @@ def main():
             "Set LLM_PROVIDER to play with LLM-driven NPCs "
             "(try LLM_PROVIDER=mock for a free offline demo)."
         )
-    game = build_llm_game(llm)
+    # Optional: EMBEDDING_PROVIDER=local (or =mock) turns on semantic memory
+    # relevance; unset keeps the deterministic keyword default.
+    game = build_llm_game(llm, embedding_client=embedding_client_from_env())
     game.game_loop()
 
 

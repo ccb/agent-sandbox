@@ -25,13 +25,17 @@ import or mutate the engine.
 
 Scoring is deterministic by default (recency decay + importance + keyword
 relevance), so the whole memory loop works with no network access and with the
-mock LLM client. LLM-backed importance and embedding relevance can be layered on
-later behind the same interface; see ``docs/design/agent-memory.md`` (§6).
+mock LLM client. Relevance can optionally upgrade from keyword overlap to
+*semantic* similarity by handing :class:`AgentMemory` an ``embedding_client``
+(see ``embedding_client.py``); when none is given, retrieval is byte-identical to
+before. LLM-backed importance can be layered on the same way; see
+``docs/design/agent-memory.md`` (§6) and ``memory-retrieval-embeddings.md``.
 """
 
 from __future__ import annotations
 
 import re
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -210,6 +214,21 @@ def relevance_score(query: str, text: str) -> float:
     return len(q & _tokenize(text)) / len(q)
 
 
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity of two equal-length vectors, in ``[-1, 1]``.
+
+    Returns 0.0 when either vector is all zeros (no direction to compare),
+    mirroring how keyword relevance scores 0 when there's nothing to match.
+    Hand-rolled in pure Python so this module keeps its no-dependency footprint
+    (a handful of short memory vectors per retrieval -- numpy would be overkill)."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 class AgentMemory:
     """One agent's private, append-only memory stream.
 
@@ -217,11 +236,19 @@ class AgentMemory:
     an honest log of what happened. The ``owner`` name scopes the stream to a
     single character so retrieval can never surface another agent's thoughts; it
     is filled in lazily by the ReAct loop the first time the agent acts.
+
+    Pass an ``embedding_client`` (see ``embedding_client.py``) to score relevance
+    by semantic similarity instead of keyword overlap. It's optional and off by
+    default: with no client, retrieval uses keyword relevance and behaves exactly
+    as before (issue #76).
     """
 
-    def __init__(self, owner: str = ""):
+    def __init__(self, owner: str = "", embedding_client=None):
         self.owner = owner
         self.records: list[MemoryRecord] = []
+        # Optional semantic-relevance backend (issue #76). None -> keyword
+        # overlap, the deterministic, dependency-free default.
+        self.embedding_client = embedding_client
         # How far into Game.events we've already perceived (issue #75 stage 3).
         self.last_seen_event_index = 0
         # Importance accrued since the last reflection; reflection (a later
@@ -392,13 +419,19 @@ class AgentMemory:
         observation. Retrieved records have their ``last_accessed_turn`` bumped
         to *turn* (so attending to a memory keeps it fresh). Ties break by newer
         id, giving a stable, deterministic order.
+
+        Relevance is keyword overlap by default; with an ``embedding_client`` it
+        is semantic similarity instead (see :meth:`_relevance_by_id`). All three
+        ingredients stay on a 0-1 scale, so the equal default weights combine the
+        same way either path.
         """
+        relevance = self._relevance_by_id(query)
         scored = []
         for record in self.records:
             score = (
                 ALPHA_RECENCY * recency_score(record, turn, decay)
                 + ALPHA_IMPORTANCE * importance_score(record)
-                + ALPHA_RELEVANCE * relevance_score(query, record.text)
+                + ALPHA_RELEVANCE * relevance[record.id]
             )
             scored.append((score, record))
         scored.sort(key=lambda pair: (pair[0], pair[1].id), reverse=True)
@@ -414,6 +447,31 @@ class AgentMemory:
         for record in chosen:
             record.last_accessed_turn = turn
         return chosen
+
+    def _relevance_by_id(self, query: str) -> dict[int, float]:
+        """Relevance of every record to *query*, keyed by record id (0-1).
+
+        Keyword overlap by default. With an ``embedding_client`` set, scores by
+        cosine similarity instead: the query is embedded once and each record's
+        embedding is computed lazily and cached on the record (so repeated
+        retrievals don't re-embed), then cosine in [-1, 1] is rescaled to [0, 1]
+        to share the keyword path's scale.
+        """
+        if self.embedding_client is None:
+            return {r.id: relevance_score(query, r.text) for r in self.records}
+
+        # Embed any records we haven't embedded yet, in one batched call.
+        missing = [r for r in self.records if r.embedding is None]
+        if missing:
+            for record, vector in zip(
+                missing, self.embedding_client.embed([r.text for r in missing])
+            ):
+                record.embedding = vector
+        (query_vector,) = self.embedding_client.embed([query])
+        return {
+            r.id: (1.0 + cosine_similarity(query_vector, r.embedding)) / 2.0
+            for r in self.records
+        }
 
     @staticmethod
     def _estimate_tokens(record: MemoryRecord) -> int:
