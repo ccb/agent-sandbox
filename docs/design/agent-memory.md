@@ -288,20 +288,25 @@ LLM-backed scorer, when enabled:
 
 ### Relevance
 
-Initial implementation:
+Default implementation (keyword overlap):
 
-- Use deterministic keyword overlap between the query and memory text.
+- Deterministic keyword overlap between the query and memory text.
 - Strip common stop words.
 - Return a 0-1 score.
 
-LLM-backed implementation:
+Embedding implementation (issue #76, opt-in):
 
-- Add an embedding method to the LLM client layer or a separate
-  `EmbeddingClient` protocol.
-- Store embeddings on `MemoryRecord`.
-- Use cosine similarity for relevance.
+- A separate `EmbeddingClient` protocol (`embedding_client.py`), not a method on
+  the LLM client — embeddings are a distinct provider axis (e.g. there is no
+  Anthropic embedding endpoint).
+- Embeddings are stored/cached on `MemoryRecord.embedding`.
+- Cosine similarity, rescaled `(1 + cos) / 2` onto the keyword path's 0-1 scale.
+- Opt-in: pass `AgentMemory(embedding_client=...)`; with none, relevance stays
+  keyword overlap. Default real backend is model2vec (local); the test suite uses
+  a deterministic mock. See `docs/design/memory-retrieval-embeddings.md`.
 
-Do not block the first memory PR on embeddings.
+The first memory PR (#94) was deliberately not blocked on embeddings; they landed
+right after, in #76.
 
 ### Prompt insertion
 
@@ -544,8 +549,9 @@ test_memory_wiring.py`) — which **closes #75**. Stages 5–8 remain future wor
   location-based rule good enough for the first PR?
 - Should importance scoring be configured per game, or globally through
   `LLM_PROVIDER`?
-- Do we want embeddings in this package, or should relevance remain a pluggable
-  strategy so games can choose their own backend?
+- ~~Do we want embeddings in this package, or should relevance remain a pluggable
+  strategy so games can choose their own backend?~~ Resolved (#76): pluggable
+  `EmbeddingClient`, opt-in, with keyword overlap as the default.
 - How should memory debug output be exposed: verbose agent trace, a `/memory`
   meta command, or tests only?
 

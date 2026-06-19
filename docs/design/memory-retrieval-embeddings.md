@@ -1,13 +1,17 @@
-# Memory Retrieval — Embedding Models — Temp Plan
+# Memory Retrieval — Embedding Models — Design & Implementation
 
-**Status:** Temporary plan / placeholder. Exploration of the *choice*, not a frozen
-spec. Expected to shift to match PR #94's final memory API — no code lands until
-that PR merges. This is the sketch to argue over.
+**Status:** Implemented on a branch **stacked on PR #94** (#75), which owns
+`text_adventure_games/memory.py`. Ships a pluggable `EmbeddingClient` with two
+backends — **model2vec** (local, default real backend) and a deterministic
+**mock** — plus pure-Python cosine relevance wired into retrieval. Hosted backends
+(OpenAI, Voyage) are left as future work behind the same seam. Stays a draft until
+#94 merges, then retargets to `main`. §3 keeps the full option survey that drove
+the choice.
 
 **Issue:** #76 ([Phase B] Retrieval scoring: recency × relevance × importance +
 inject into the observation). **Builds on:** PR #94 (#75) — lands
 `text_adventure_games/memory.py` plus the recency / importance / injection wiring.
-This plan covers only the one piece #94 deliberately left as a placeholder:
+This work covers only the one piece #94 deliberately left as a placeholder:
 **relevance via embeddings**.
 
 *Pick an embedding model for the **relevance** term of memory retrieval — so each
@@ -132,111 +136,113 @@ A few notes that aren't obvious from the table:
 
 ---
 
-## 4. Recommendation
+## 4. Decision (what shipped)
 
-A **pluggable `EmbeddingClient`** with three real backends plus a deterministic
-mock, and **keyword overlap retained as the default** when no client is configured:
+A **pluggable `EmbeddingClient`** with **model2vec** as the local real backend and
+a deterministic **mock**, and **keyword overlap retained as the default** when no
+client is configured:
 
-- **Default (free / offline / light): model2vec.** Best satisfies constraints 1–3
-  for the out-of-the-box student experience. Honest tradeoff: it's a newer library
-  and its embeddings are a notch below full transformer models — but for short
-  memory snippets that gap doesn't change which memories surface. If we'd rather
-  bet on maturity over install size, `all-MiniLM-L6-v2` is the fallback choice, at
-  the cost of pulling torch.
-- **Opt-in high quality: OpenAI `text-embedding-3-small`.** One env var away. The
-  `openai` SDK is already an optional extra, so this is the least *code* to add and
-  the highest quality for anyone who has a key. `text-embedding-3-large` is
-  available but unnecessary here.
-- **Opt-in (Anthropic-aligned): Voyage `voyage-3-lite`.** For teams already on the
-  Anthropic stack who want a hosted embedding to match.
-- **Always-available fallback: keyword overlap + mock.** If `EMBEDDING_PROVIDER` is
-  unset, relevance stays keyword-based exactly as #94 ships it. Tests use the mock
-  (or the unset path) so the offline/deterministic invariant holds with no network.
+- **Default real backend (free / offline / light): model2vec.** Best satisfies
+  constraints 1–3 for the out-of-the-box student experience. Honest tradeoff: it's
+  a newer library and its embeddings are a notch below full transformer models —
+  but for short memory snippets that gap doesn't change which memories surface. If
+  we ever want to bet on maturity over install size, `all-MiniLM-L6-v2` slots into
+  the same `LocalEmbeddingClient`, at the cost of pulling torch.
+- **Tests / offline: the mock.** `MockEmbeddingClient` hashes words into a
+  fixed-length count vector — deterministic, no deps, no network — so the whole
+  suite exercises the embedding path with no model download.
+- **Always-available fallback: keyword overlap.** If `EMBEDDING_PROVIDER` is unset
+  (and no client is injected), relevance stays keyword-based exactly as #94 ships
+  it. So the offline/deterministic invariant holds with no network.
+- **Future, behind the same seam: OpenAI / Voyage.** Hosted backends (OpenAI
+  `text-embedding-3-small`; Voyage `voyage-3-lite` — the Anthropic-aligned path)
+  were scoped out of this change to avoid new API-key/SDK surface, but the Protocol
+  + `EmbeddingProvider` enum + factory leave a one-class slot for each.
 
 Embeddings are therefore **strictly opt-in**: existing games and the whole test
-suite behave identically until someone sets a provider.
+suite behave identically until someone sets a provider (default `embedding_client=None`).
 
 ---
 
-## 5. Proposed API + seam (direction, not contract)
+## 5. The API + seam (as built)
 
-Mirror `llm_client.py`. Sketch:
+`text_adventure_games/embedding_client.py` mirrors `llm_client.py`:
 
 ```python
-# text_adventure_games/embedding_client.py  (new)
-
 class EmbeddingClient(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...   # batched
 
-class MockEmbeddingClient:      # deterministic hash -> fixed-dim vector, no deps
-class LocalEmbeddingClient:     # model2vec (default) or sentence-transformers; lazy import
-class OpenAIEmbeddingClient:    # wraps openai SDK (already lazy-imported elsewhere)
-class VoyageEmbeddingClient:    # wraps voyageai SDK  (the "Anthropic" path)
+class MockEmbeddingClient:     # deterministic hashlib bag-of-words vector, no deps
+class LocalEmbeddingClient:    # model2vec StaticModel; lazy import; default potion-base-8M
+# OpenAIEmbeddingClient / VoyageEmbeddingClient: future, same shape.
 
-def embedding_client_from_env() -> EmbeddingClient | None:
-    # reads EMBEDDING_PROVIDER / EMBEDDING_MODEL / EMBEDDING_API_KEY;
-    # returns None when unset -> caller falls back to keyword overlap.
+def create_embedding_client(config) -> EmbeddingClient   # _PROVIDERS dispatch
+def embedding_client_from_env() -> EmbeddingClient | None # reads EMBEDDING_PROVIDER,
+    # EMBEDDING_MODEL/API_KEY/BASE_URL; None when unset -> caller keeps keyword overlap.
 ```
 
-Wiring it into the existing scorer is a few lines:
+`EmbeddingProvider(_StrEnum)` (`local` / `mock`) lives in `enums.py` alongside
+`LlmProvider`. The mock uses `hashlib` (not the per-process-salted built-in `hash`)
+so vectors are stable across processes — required for byte-identical replays and
+for embeddings written to save files.
 
-- Give `AgentMemory.__init__` an optional `embedding_client=None`, stored on the
-  instance.
-- Add an optional arg to relevance so the keyword path stays the default:
+Wiring into the scorer (`memory.py`):
 
-  ```python
-  def relevance_score(query, text, embedding_client=None) -> float:
-      if embedding_client is None:
-          return _keyword_overlap(query, text)        # today's behavior
-      return cosine_similarity(embedding_client.embed([query])[0],
-                               embedding_client.embed([text])[0])
-  ```
+- `AgentMemory.__init__(self, owner="", embedding_client=None)` stores the client.
+- `retrieve()` calls a new `_relevance_by_id(query)` that **dispatches**: no client
+  → today's keyword `relevance_score`; client set → embed the query once, lazily
+  batch-embed any records missing `MemoryRecord.embedding` and **cache** the vector
+  on the record, then score each by `(1 + cosine(query, record)) / 2` to rescale
+  cosine ∈ [-1, 1] onto the keyword path's [0, 1] scale.
+- `cosine_similarity()` is hand-rolled in pure Python (returns 0.0 on a zero
+  vector), so `memory.py` keeps its no-dependency footprint — numpy stays out of
+  the core engine.
 
-- Cache the vector on the field that already exists — `MemoryRecord.embedding` —
-  so each record is embedded once, not on every `retrieve()`.
-- Add a small `cosine_similarity()` helper. (numpy is the obvious tool but is *not*
-  currently a core dependency — see open questions.)
+Recency, importance, sort, token budget, and injection are untouched. The optional
+`embedding_client` is threaded (default `None`) through `Agent`/`LLMAgent` and the
+`make_react_behavior` / `make_hybrid_behavior` factories, the Action Castle
+`build_game` + ReAct `build_llm_game`, the webapp, and the generative-agents
+`attach_agents` / `simulate`.
 
-The only edit to the hot path is the one argument threaded into the existing
-`ALPHA_RELEVANCE * relevance_score(query, record.text)` line in `retrieve()`.
-Everything else (recency, importance, sort, token budget, injection) is untouched.
-
-Extras would grow by one or two entries, following the existing `[openai]` /
-`[anthropic]` / `[llm]` convention — e.g. `embeddings-local = ["model2vec", "numpy"]`
-and reuse `[openai]` for the hosted path.
+Dependencies grow by one extra, following the `[openai]` / `[llm]` convention:
+`embeddings = ["model2vec"]` (no numpy — cosine is pure Python).
 
 ---
 
 ## 6. Open questions
 
-- **Score normalization.** Keyword overlap is `[0, 1]`; cosine similarity is
-  `[-1, 1]`. Mixing them under the same `ALPHA_RELEVANCE` weight is apples to
-  oranges. Rescale cosine to `[0, 1]` (e.g. `(1 + cos) / 2` or clamp at 0), or
-  retune the alphas per backend?
-- **numpy as a hard dep vs. extra.** Cosine wants numpy, but it's currently only
-  used in `generative-agents/`, not the core engine. Add it to `[embeddings-local]`
-  only, promote it to a core dep, or hand-roll cosine in pure Python for the engine?
-- **When to embed.** On `add_observation`/`add_reflection` (pay up front, every
-  memory), or lazily on first `retrieve()` (pay only for memories that are ever
-  scored)? Lazy is cheaper for chatty agents.
-- **Provider fallback.** Should `EMBEDDING_PROVIDER` default to `LLM_PROVIDER`, or
-  stay an independent knob? (An agent on `anthropic` chat can't reuse it for
-  embeddings — there's no Anthropic embedding endpoint — so coupling them is leaky.)
+Resolved in this implementation:
+
+- **Score normalization** — cosine ∈ [-1, 1] is rescaled to [0, 1] via
+  `(1 + cos) / 2`, so all three ingredients share a scale under equal `ALPHA_*`.
+- **numpy** — *not* added; `cosine_similarity` is pure Python, keeping numpy out of
+  the core engine. (model2vec pulls numpy transitively, but only under the optional
+  `[embeddings]` extra.)
+- **When to embed** — lazily, on first `retrieve()`, caching the vector on
+  `MemoryRecord.embedding` so chatty agents only embed memories that get scored.
+
+Still open:
+
+- **Provider fallback.** `EMBEDDING_PROVIDER` is an independent knob, *not* coupled
+  to `LLM_PROVIDER` (an agent on `anthropic` chat has no Anthropic embedding
+  endpoint to reuse). Revisit if that proves annoying in practice.
 - **Reference scoring.** The "Generative Action Castle" prototype implements this
   exact scoring (the issue says to study it rather than reinvent — ask Chris).
-  Confirm its relevance backend and weight choices before we lock ours.
+  Confirm its relevance backend and weight choices against ours.
+- **Hosted backends.** Add `OpenAIEmbeddingClient` / `VoyageEmbeddingClient` when a
+  keyed/quality path is wanted — pure additions behind the existing seam.
 
 ---
 
-## 7. Why this is a temp plan
+## 7. Status & follow-ups
 
-This work edits `memory.py`, which **PR #94 owns and hasn't merged**. Starting now
-would mean rebasing onto a moving file and risking conflicts on the very function
-(`relevance_score`) and field (`MemoryRecord.embedding`) we'd change. So:
+Implemented on a branch **stacked on PR #94**, which owns `memory.py`:
 
-- **No code until #94 merges.** This PR is the plan doc only.
-- Expect §5's signatures to shift to match #94's final API (arg names, where the
-  client is threaded). The stable commitments are the ones worth arguing over now:
-  **embeddings are opt-in and pluggable, keyword overlap stays the default, the
-  offline/deterministic test invariant is preserved, and the free local default is
-  model2vec.**
+- Stays a **draft until #94 merges**, then retargets to `main`. The default path
+  (no embedding client) is byte-identical to #94, so the engine and
+  generative-agents suites pass unchanged; new mock-driven tests cover the
+  embedding path offline.
+- Follow-ups: the hosted backends above, and validating weights/relevance against
+  the reference prototype. The stable commitments: **embeddings are opt-in and
+  pluggable, keyword overlap stays the default, the offline/deterministic test
+  invariant is preserved, and the free local default is model2vec.**

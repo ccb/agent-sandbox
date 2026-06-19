@@ -68,7 +68,10 @@ def _parse_start(value: str) -> datetime.datetime:
 
 
 def simulate(
-    world_map: WorldMap, num_steps: int, ledger: UsageLedger | None = None
+    world_map: WorldMap,
+    num_steps: int,
+    ledger: UsageLedger | None = None,
+    embedding_client=None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -78,9 +81,13 @@ def simulate(
     Pass a shared ``ledger`` to accumulate per-agent LLM token/cost accounting
     across the run (usage.py); the mock brain records zero cost, so the numbers
     are $0 until a real client is wired in (NEXT-STEPS Phase A).
+
+    Pass an optional ``embedding_client`` (issue #76) for semantic memory
+    relevance. The mock brain decides from location alone, so the frames are
+    byte-identical with or without it; only the retrieved-memory block changes.
     """
     game, chars = build_world()
-    attach_agents(chars, PERSONAS, ledger=ledger)
+    attach_agents(chars, PERSONAS, ledger=ledger, embedding_client=embedding_client)
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]
 

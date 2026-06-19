@@ -90,7 +90,10 @@ class SmallvilleMockClient(MockReActClient):
 
 
 def attach_agents(
-    characters: dict, personas: list[dict], ledger: UsageLedger | None = None
+    characters: dict,
+    personas: list[dict],
+    ledger: UsageLedger | None = None,
+    embedding_client=None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -98,6 +101,12 @@ def attach_agents(
     ``personas`` is the metadata list (``build_world.PERSONAS``). Pass a shared
     ``ledger`` so every persona's LLM calls accumulate in one place for a
     per-agent cost summary (usage.py); omit it and each client keeps its own.
+
+    Pass an optional ``embedding_client`` (issue #76) to score memory relevance
+    semantically; with none, retrieval uses keyword overlap. The mock brain
+    decides from location alone, so the replay stays byte-identical either way --
+    the embedding only changes *which* memories surface in the (mock-ignored)
+    prompt, never the decision.
 
     Each agent also starts the day with one *plan* memory (issue #75) -- "go to
     <destination> and <activity>" -- seeded from the persona spec. It is the
@@ -110,7 +119,9 @@ def attach_agents(
         client = SmallvilleMockClient(
             spec["destination"], spec["activity"], ledger=ledger
         )
-        agent = LLMAgent(client, persona=char.persona)
+        agent = LLMAgent(
+            client, persona=char.persona, embedding_client=embedding_client
+        )
         # The verbs the structured tool may offer; our client ignores the enum
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]

@@ -690,7 +690,7 @@ def make_ghost_behavior():
     return behavior
 
 
-def build_game(llm_client=None) -> ActionCastle:
+def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     # Locations
     cottage = things.Location("Cottage", "You are standing in a small cottage.")
     garden_path = things.Location(
@@ -878,9 +878,21 @@ def build_game(llm_client=None) -> ActionCastle:
 
     # NPC Behaviors
     if llm_client:
-        troll.set_behavior(make_hybrid_behavior(llm_client, make_troll_behavior()))
-        guard.set_behavior(make_hybrid_behavior(llm_client, make_guard_behavior()))
-        ghost.set_behavior(make_hybrid_behavior(llm_client, make_ghost_behavior()))
+        troll.set_behavior(
+            make_hybrid_behavior(
+                llm_client, make_troll_behavior(), embedding_client=embedding_client
+            )
+        )
+        guard.set_behavior(
+            make_hybrid_behavior(
+                llm_client, make_guard_behavior(), embedding_client=embedding_client
+            )
+        )
+        ghost.set_behavior(
+            make_hybrid_behavior(
+                llm_client, make_ghost_behavior(), embedding_client=embedding_client
+            )
+        )
     else:
         troll.set_behavior(make_troll_behavior())
         guard.set_behavior(make_guard_behavior())

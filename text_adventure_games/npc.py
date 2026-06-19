@@ -173,14 +173,21 @@ class Agent:
     Subclasses supply the backend.
     """
 
-    def __init__(self, persona: str = "", goals: list[Goal] | None = None):
+    def __init__(
+        self,
+        persona: str = "",
+        goals: list[Goal] | None = None,
+        embedding_client=None,
+    ):
         self.persona = persona
         self.goals: list[Goal] = list(goals) if goals else []
         # Private, append-only episodic memory (issue #75). Per-agent: the ReAct
         # loop fills in the owner the first time the agent acts. Empty by default
         # and only ever read into this agent's own prompt, so an agent that
-        # never accrues memories behaves exactly as before.
-        self.memory = AgentMemory(owner="")
+        # never accrues memories behaves exactly as before. An optional
+        # embedding_client (issue #76) upgrades retrieval relevance from keyword
+        # overlap to semantic similarity; None keeps the deterministic default.
+        self.memory = AgentMemory(owner="", embedding_client=embedding_client)
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
@@ -230,8 +237,11 @@ class LLMAgent(Agent):
         max_tokens: int = 128,
         temperature: float = 0.7,
         max_duration: int = _MAX_DURATION,
+        embedding_client=None,
     ):
-        super().__init__(persona=persona, goals=goals)
+        super().__init__(
+            persona=persona, goals=goals, embedding_client=embedding_client
+        )
         self.llm_client = llm_client
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -348,8 +358,16 @@ class ScriptedAgent(Agent):
     loop, tests, and games can't tell which backend is driving a character.
     """
 
-    def __init__(self, rule, persona: str = "", goals: list[Goal] | None = None):
-        super().__init__(persona=persona, goals=goals)
+    def __init__(
+        self,
+        rule,
+        persona: str = "",
+        goals: list[Goal] | None = None,
+        embedding_client=None,
+    ):
+        super().__init__(
+            persona=persona, goals=goals, embedding_client=embedding_client
+        )
         self.rule = rule
 
     def decide(self, observation: str) -> str | None:
@@ -635,7 +653,9 @@ def _resolve_duration(agent: Agent, game) -> int | None:
     return None
 
 
-def make_react_behavior(llm_client, max_retries: int | None = None, config=None):
+def make_react_behavior(
+    llm_client, max_retries: int | None = None, config=None, embedding_client=None
+):
     """Return a behavior that drives a character with an :class:`LLMAgent`.
 
     The character owns its persona and goals; the agent reads them. Persona is
@@ -651,6 +671,8 @@ def make_react_behavior(llm_client, max_retries: int | None = None, config=None)
         config: An :class:`~text_adventure_games.config.AgentConfig` supplying
             the agent's temperature, max_tokens, max_retries, and max_duration.
             Defaults to ``AgentConfig()`` (the engine's historical values).
+        embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
+            memory relevance. ``None`` keeps keyword-overlap relevance.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -668,6 +690,7 @@ def make_react_behavior(llm_client, max_retries: int | None = None, config=None)
         max_tokens=config.max_tokens,
         temperature=config.temperature,
         max_duration=config.max_duration,
+        embedding_client=embedding_client,
     )
 
     def behavior(character, game):
@@ -683,7 +706,11 @@ def make_react_behavior(llm_client, max_retries: int | None = None, config=None)
 
 
 def make_hybrid_behavior(
-    llm_client, scripted_behavior, max_retries: int | None = None, config=None
+    llm_client,
+    scripted_behavior,
+    max_retries: int | None = None,
+    config=None,
+    embedding_client=None,
 ):
     """Return a behavior that tries the LLM agent, then falls back to scripted.
 
@@ -699,6 +726,8 @@ def make_hybrid_behavior(
             ``None`` uses ``config.max_retries`` (a passed integer overrides it).
         config: An :class:`~text_adventure_games.config.AgentConfig` supplying
             the agent's temperature, max_tokens, max_retries, and max_duration.
+        embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
+            memory relevance. ``None`` keeps keyword-overlap relevance.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -712,6 +741,7 @@ def make_hybrid_behavior(
         max_tokens=config.max_tokens,
         temperature=config.temperature,
         max_duration=config.max_duration,
+        embedding_client=embedding_client,
     )
 
     def behavior(character, game):
