@@ -25,6 +25,9 @@ from text_adventure_games import games, things
 from text_adventure_games.llm_client import MockLlmClient
 from text_adventure_games.embedding_client import MockEmbeddingClient
 from text_adventure_games.memory import (
+    ALPHA_IMPORTANCE,
+    ALPHA_RECENCY,
+    ALPHA_RELEVANCE,
     AgentMemory,
     MemoryKind,
     MemoryRecord,
@@ -249,6 +252,37 @@ def test_retrieve_returns_top_records_deterministic_order():
     out = mem.retrieve("dragons", turn=10, max_records=3)
     assert out[0] is best  # relevance + top importance wins
     assert out.index(relevant) < out.index(irrelevant)
+
+
+def test_retrieve_alpha_weights_override():
+    # A recent-but-irrelevant memory vs an old-but-relevant one. The relevance
+    # weight decides which surfaces first; omitting the alphas reproduces the
+    # default (equal-weight) scoring. touch=False keeps recency stable across the
+    # comparison calls.
+    mem = AgentMemory(owner="troll")
+    relevant = mem.add_observation("dragons guard the gold", turn=0, importance=1)
+    recent = mem.add_observation("the weather is nice", turn=10, importance=1)
+
+    # Equal default weights: relevance carries the old-but-matching memory to the top.
+    assert mem.retrieve("dragons", turn=10, touch=False)[0] is relevant
+    # Drop relevance entirely -> recency wins, flipping the top result.
+    assert (
+        mem.retrieve("dragons", turn=10, alpha_relevance=0.0, touch=False)[0] is recent
+    )
+    # Cranking relevance keeps the matching memory on top, decisively.
+    assert (
+        mem.retrieve("dragons", turn=10, alpha_relevance=5.0, touch=False)[0]
+        is relevant
+    )
+    # Omitting the alphas == passing the module-constant defaults (no behavior change).
+    assert mem.retrieve("dragons", turn=10, touch=False) == mem.retrieve(
+        "dragons",
+        turn=10,
+        alpha_recency=ALPHA_RECENCY,
+        alpha_importance=ALPHA_IMPORTANCE,
+        alpha_relevance=ALPHA_RELEVANCE,
+        touch=False,
+    )
 
 
 def test_retrieve_updates_last_accessed_turn():
