@@ -32,11 +32,13 @@ See ``docs/configuration.md`` for a guide with a full sample config file.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 from dataclasses import dataclass, field, fields, is_dataclass
 
 from .llm_client import LlmConfig, LlmClient, create_llm_client
+from .usage import RunLog
 
 # These mirror the engine's historical defaults. They live here so the dataclass
 # field defaults read as plain numbers (easy for a student to scan) while the
@@ -126,6 +128,52 @@ class RenderConfig:
 
 
 @dataclass
+class ObservabilityConfig:
+    """LLM cost/usage logging (see ``usage.py``).
+
+    Observability is opt-in. With no ``log_path`` a run still tallies token usage
+    in an in-memory :class:`~text_adventure_games.usage.UsageLedger` (cheap, always
+    on) but writes nothing to disk -- exactly today's behavior. Set ``log_path`` to
+    also stream a per-run JSONL artifact: a ``run`` header, one ``call`` line per
+    LLM call, and a ``summary`` footer of per-actor token/cost totals.
+    """
+
+    # Where to write the per-run JSONL usage log. None = no artifact (default).
+    # A directory gets a timestamped ``{YYYYmmdd-HHMMSS}-{provider}.jsonl`` file;
+    # a path ending in ``.jsonl``/``.json`` is used verbatim.
+    log_path: str | None = None
+    # Include full prompts/responses in the artifact (default: numbers only). The
+    # token/cost numbers are always written; this adds the verbose transcript.
+    log_prompts: bool = False
+
+    def build_run_log(
+        self, *, provider=None, model=None, turn_mode=None, seed=None
+    ) -> RunLog | None:
+        """Create a :class:`~text_adventure_games.usage.RunLog` for this run, or
+        ``None`` if logging is off (``log_path`` unset).
+
+        A directory ``log_path`` is turned into a timestamped file name; a path
+        ending in ``.jsonl``/``.json`` is used as-is. The *provider* / *model* /
+        *turn_mode* / *seed* land in the artifact's ``run`` header so a run can be
+        reproduced from the log alone.
+        """
+        if not self.log_path:
+            return None
+        path = self.log_path
+        if not path.lower().endswith((".jsonl", ".json")):
+            ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            path = os.path.join(path, f"{ts}-{provider or 'run'}.jsonl")
+        return RunLog(
+            path,
+            seed=seed,
+            provider=provider,
+            model=model,
+            turn_mode=turn_mode,
+            log_prompts=self.log_prompts,
+        )
+
+
+@dataclass
 class GameConfig:
     """The one config object a game/simulation hands to :class:`Game`.
 
@@ -142,6 +190,7 @@ class GameConfig:
     engine: EngineConfig = field(default_factory=EngineConfig)
     clock: ClockConfig = field(default_factory=ClockConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
 
     # -- construction helpers ------------------------------------------------
 
@@ -150,9 +199,9 @@ class GameConfig:
         """Load a config from a ``.yaml``/``.yml`` or ``.json`` file.
 
         The file's top-level keys are the sub-config names (``llm``, ``agent``,
-        ``engine``, ``clock``, ``render``); each maps to a dict of that group's
-        fields. Any group you omit keeps its defaults. YAML needs ``pyyaml``
-        installed (it ships as a dependency); JSON needs nothing extra.
+        ``engine``, ``clock``, ``render``, ``observability``); each maps to a dict
+        of that group's fields. Any group you omit keeps its defaults. YAML needs
+        ``pyyaml`` installed (it ships as a dependency); JSON needs nothing extra.
         """
         path = os.fspath(path)
         with open(path, "r", encoding="utf-8") as f:
@@ -182,11 +231,18 @@ class GameConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "GameConfig":
         """Build a config from a plain dict (the shape :meth:`from_file` parses)."""
-        unknown = set(data) - {"llm", "agent", "engine", "clock", "render"}
+        unknown = set(data) - {
+            "llm",
+            "agent",
+            "engine",
+            "clock",
+            "render",
+            "observability",
+        }
         if unknown:
             raise ValueError(
                 f"Unknown config section(s): {sorted(unknown)}. "
-                "Valid sections: llm, agent, engine, clock, render."
+                "Valid sections: llm, agent, engine, clock, render, observability."
             )
         llm_data = data.get("llm")
         if llm_data is not None:
@@ -199,6 +255,11 @@ class GameConfig:
             engine=_build(EngineConfig, data.get("engine", {}), "engine"),
             clock=_build(ClockConfig, data.get("clock", {}), "clock"),
             render=_build(RenderConfig, data.get("render", {}), "render"),
+            observability=_build(
+                ObservabilityConfig,
+                data.get("observability", {}),
+                "observability",
+            ),
         )
 
     @classmethod
@@ -207,8 +268,9 @@ class GameConfig:
 
         Reads the same ``LLM_*`` vars as
         :func:`~text_adventure_games.llm_client.client_from_env` for the LLM
-        section, plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for rendering. Anything
-        unset keeps its default.
+        section, plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for rendering and
+        ``LLM_LOG`` / ``LLM_LOG_PROMPTS`` for the usage log. Anything unset keeps
+        its default.
         """
         config = cls()
         provider = os.environ.get("LLM_PROVIDER")
@@ -225,6 +287,11 @@ class GameConfig:
             config.render.level = level
         if os.environ.get("NO_COLOR"):
             config.render.no_color = True
+        log_path = os.environ.get("LLM_LOG")
+        if log_path:
+            config.observability.log_path = log_path
+        if os.environ.get("LLM_LOG_PROMPTS", "").lower() in ("1", "true"):
+            config.observability.log_prompts = True
         return config
 
     def to_dict(self) -> dict:
@@ -234,6 +301,7 @@ class GameConfig:
             "engine": _asdict(self.engine),
             "clock": _asdict(self.clock),
             "render": _asdict(self.render),
+            "observability": _asdict(self.observability),
         }
         if self.llm is not None:
             llm = _asdict(self.llm)
@@ -252,6 +320,16 @@ class GameConfig:
         if self.llm is None:
             return None
         return create_llm_client(self.llm)
+
+    def build_run_log(self, **header) -> RunLog | None:
+        """Create a per-run usage log from :attr:`observability`, or ``None`` if
+        logging is off (``observability.log_path`` unset).
+
+        A thin convenience that forwards to
+        :meth:`ObservabilityConfig.build_run_log`; pass ``provider=`` / ``model=``
+        / ``turn_mode=`` / ``seed=`` for the artifact's ``run`` header.
+        """
+        return self.observability.build_run_log(**header)
 
 
 def _build(dataclass_type, data, section_name):

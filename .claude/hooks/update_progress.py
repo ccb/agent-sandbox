@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Refresh PROGRESS.md's in-flight table from live GitHub state.
 
-This is a Claude Code PostToolUse hook (see .claude/settings.json). It fires
-after every Bash tool call, but only does work when the command was a
-`git commit` -- the natural moment for the progress tracker to drift. On any
-other command it exits immediately.
+Run this by hand whenever you want to resync the tracker:
+
+    python .claude/hooks/update_progress.py   # or via update_progress.sh
+
+It used to fire automatically as a Claude Code PostToolUse hook after every
+`git commit`; that auto-sync is now off, so it only runs when you call it. The
+old hook path is still supported -- if a hook payload is piped on stdin it
+self-gates on `git commit` -- but nothing wires it up anymore.
 
 What it updates, and what it leaves alone:
 
@@ -119,14 +123,21 @@ def is_git_commit(command: str) -> bool:
 
 
 def main() -> int:
-    # The hook JSON arrives on stdin. Only act on `git commit` commands.
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
-        return 0
-    command = payload.get("tool_input", {}).get("command", "")
-    if not is_git_commit(command):
-        return 0
+    # Two ways in:
+    #   * Run by hand (`python update_progress.py`) -- the normal path now that
+    #     this is manual-only. stdin is a TTY or empty, so we just sync.
+    #   * Invoked with a Claude Code hook payload piped on stdin -- kept for
+    #     backwards compatibility. We still gate on `git commit` in that case.
+    if not sys.stdin.isatty():
+        raw = sys.stdin.read()
+        if raw.strip():
+            try:
+                payload = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                return 0
+            command = payload.get("tool_input", {}).get("command", "")
+            if not is_git_commit(command):
+                return 0
 
     if not PROGRESS.is_file():
         return 0

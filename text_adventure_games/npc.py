@@ -433,6 +433,18 @@ def _route(character, game, command: str) -> bool:
     return game.parser.parse_command(command, actor=character)
 
 
+def _set_attribution(agent: Agent, actor: str, turn, attempt: int = 0) -> None:
+    """Tag the agent's LLM client with who/when, so each recorded LLM call is
+    attributed (usage.py). No-op for clients without a ``context`` attribute
+    (e.g. a legacy callable or a non-LLM agent), so this is always safe to call.
+    """
+    ctx = getattr(getattr(agent, "llm_client", None), "context", None)
+    if ctx is not None:
+        ctx["actor"] = actor
+        ctx["turn"] = turn
+        ctx["attempt"] = attempt
+
+
 def _reflect(observation: str, command: str, failure_reason: str) -> str:
     """Append the parser's failure reason to the observation so the next
     decide() sees *why* the action was rejected, not just that it was."""
@@ -483,7 +495,8 @@ def decide_and_route(
         mem.owner = character.name
     turn = getattr(game, "turn", 0)
 
-    for _ in range(1 + max_retries):
+    for attempt in range(1 + max_retries):
+        _set_attribution(agent, character.name, getattr(game, "turn", None), attempt)
         command = agent.decide(observation)
         if not command:
             return False

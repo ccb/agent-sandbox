@@ -21,10 +21,12 @@ import pytest
 
 from backend import exporter
 from backend.build_world import PERSONAS, build_world
-from backend.run_simulation import simulate
+from backend.run_simulation import _print_cost_summary, simulate
 from backend.smallville_agents import attach_agents
 from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
+from text_adventure_games.reporting import CaptureRenderer, Channel
+from text_adventure_games.usage import UsageLedger
 
 
 @pytest.fixture(scope="module")
@@ -190,3 +192,37 @@ def test_exporter_honors_start_time_and_sec_per_step(world_map, tmp_path):
     with open(os.path.join(sim_dir, "movement", "2.json")) as f:
         mv2 = json.load(f)
     assert mv2["meta"]["curr_time"] == "June 18, 2026, 18:32:00"
+
+
+# --------------------------------------------------------------------------
+# LLM cost/observability wiring (usage.py)
+# --------------------------------------------------------------------------
+
+
+def test_simulate_records_per_agent_usage(world_map):
+    # A shared ledger accumulates one record per persona decision, attributed by
+    # name. The mock brain is free, so every record is $0 -- the plumbing is what
+    # we assert (it lights up once a real client is wired in, NEXT-STEPS Phase A).
+    ledger = UsageLedger()
+    simulate(world_map, num_steps=6, ledger=ledger)
+
+    assert ledger.records, "expected the personas' decisions to be recorded"
+    assert all(rec.cost_usd == 0.0 for rec in ledger.records)
+    by_actor = ledger.totals_by_actor()
+    # Every persona that acted is attributed by name (not "(unattributed)").
+    assert "(unattributed)" not in by_actor
+    assert set(by_actor).issubset({p["name"] for p in PERSONAS})
+    assert len(by_actor) > 0
+
+
+def test_cost_summary_renders_through_reporting_seam(world_map):
+    ledger = UsageLedger()
+    simulate(world_map, num_steps=3, ledger=ledger)
+
+    cap = CaptureRenderer()
+    _print_cost_summary(ledger, renderer=cap)
+
+    lines = cap.texts(Channel.SYSTEM)
+    assert any("LLM cost: $" in line for line in lines)
+    # One total line plus one per attributed actor.
+    assert len(lines) == 1 + len(ledger.totals_by_actor())

@@ -82,6 +82,11 @@ render:                   # terminal output
   level: null             # null -> follow OUTPUT_LEVEL; else "quiet"/"normal"/"verbose"
   width: 80               # wrap column for the plain renderer
   no_color: null          # null -> follow NO_COLOR; true forces the plain renderer
+
+observability:            # LLM cost/usage logging (off by default)
+  log_path: null          # null -> no artifact; a dir gets a timestamped
+                          #   {ts}-{provider}.jsonl file; a *.jsonl path is used as-is
+  log_prompts: false      # true also writes full prompts/responses (not just numbers)
 ```
 
 The same config as JSON (`config.json`) — note JSON has no comments and uses
@@ -109,6 +114,7 @@ The same config as JSON (`config.json`) — note JSON has no comments and uses
 | `engine` | turn loop, world, triggers | `turn_mode`, `phases`, `give_hints`, `max_actions_per_turn`, `heard_max`, `cascade_passes` |
 | `clock` | the optional in-game clock | `enabled`, `start_hour`, `start_minute`, `minutes_per_turn`, `periods` |
 | `render` | terminal output | `level`, `width`, `no_color` |
+| `observability` | LLM cost/usage logging (`usage.py`) | `log_path`, `log_prompts` |
 
 ## How values are chosen (precedence)
 
@@ -118,9 +124,9 @@ From highest priority to lowest:
    still works and overrides the config — handy for back-compat and one-offs.
 2. **A value set in your `GameConfig`.**
 3. **An environment variable**, for the few knobs that have one: the `LLM_*` vars
-   (see below), `OUTPUT_LEVEL` (`render.level`), and `NO_COLOR` (`render.no_color`).
-   These apply when the matching config field is left at its "follow the
-   environment" default (`None`).
+   (see below), `OUTPUT_LEVEL` (`render.level`), `NO_COLOR` (`render.no_color`), and
+   `LLM_LOG` / `LLM_LOG_PROMPTS` (`observability.*`). These apply when the matching
+   config field is left at its "follow the environment" default (`None`/`False`).
 4. **The built-in default** (the engine's historical value).
 
 ## LLM and agents
@@ -150,6 +156,35 @@ You can still pass `max_retries=...` explicitly to override the config's value.
 `GameConfig.from_env()` reads the same `LLM_*` variables as
 `text_adventure_games.llm_client.client_from_env`: `LLM_PROVIDER`, `LLM_API_KEY`,
 `LLM_MODEL`, `LLM_BASE_URL`, `LLM_VERBOSE`.
+
+## Cost & usage logging (observability)
+
+The engine calls a model once per acting NPC per round, so a busy run is thousands
+of calls. The `observability` section controls the per-run usage artifact
+(`usage.py`). Token tallying is always on and cheap (an in-memory `UsageLedger`);
+setting `log_path` *also* streams a JSONL artifact — a `run` header, one `call`
+line per LLM call, and a `summary` footer of per-actor token/cost totals. Set
+`log_prompts: true` to include the full prompts/responses too.
+
+`GameConfig.build_run_log(...)` turns the section into a `RunLog` (or `None` when
+logging is off), mirroring `build_llm_client()`. A directory `log_path` becomes a
+timestamped `{ts}-{provider}.jsonl` file; a `*.jsonl`/`*.json` path is used as-is:
+
+```python
+config = GameConfig.from_env()           # or from_file(...) / built in Python
+ledger = UsageLedger()
+run_log = config.build_run_log(provider="anthropic", model="claude-haiku-4-5")
+with run_log or nullcontext():           # no-op when logging is off
+    if run_log is not None:
+        run_log.attach(ledger)
+    ...                                  # run the game; calls stream to disk
+# summary footer written on exit; ledger.summary() has the totals in memory
+```
+
+`GameConfig.from_env()` reads `LLM_LOG` (the `log_path`) and `LLM_LOG_PROMPTS`. The
+Smallville backend (`generative-agents/backend/run_simulation.py`) wires this up:
+pass `--config my.yaml` (or set the env vars), and `--llm-log` / `--llm-log-prompts`
+override the config's `observability` section.
 
 ## Web app
 
