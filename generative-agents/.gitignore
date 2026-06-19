@@ -1,0 +1,11 @@
+# The Django visualizer + ~38MB of map/sprite assets are copied from the
+# upstream clone by ./setup.sh (and the backend writes generated sims under
+# frontend/storage/). None of it is committed — regenerate locally.
+frontend/
+
+# The frontend's separate Python 3.9 / Django 2.2 virtualenv.
+frontend-venv/
+
+# Python caches
+__pycache__/
+*.pyc

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import re
 
+from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .memory import AgentMemory, render_memories
 from .things.characters import Goal, GoalType
@@ -64,12 +65,13 @@ _DECISION_INSTRUCTION = (
 )
 
 
-def _parse_duration(text: str) -> int | None:
+def _parse_duration(text: str, max_duration: int = _MAX_DURATION) -> int | None:
     """Pull an in-game-minute count out of a "Duration:" line's value.
 
     Extracts the first integer (so "about 30 minutes" -> 30), rejects
     non-positive values as invalid, and clamps anything larger than
-    :data:`_MAX_DURATION`. Returns ``None`` when no usable number is present.
+    *max_duration* (the agent's configured cap, defaulting to
+    :data:`_MAX_DURATION`). Returns ``None`` when no usable number is present.
     """
     match = re.search(r"-?\d+", text)
     if match is None:
@@ -77,7 +79,7 @@ def _parse_duration(text: str) -> int | None:
     value = int(match.group())
     if value <= 0:
         return None
-    return min(value, _MAX_DURATION)
+    return min(value, max_duration)
 
 
 def build_choose_action_tool(action_names: list[str]) -> dict:
@@ -117,15 +119,18 @@ def build_choose_action_tool(action_names: list[str]) -> dict:
     }
 
 
-def _parse_decision(text: str) -> tuple[str | None, str | None, int | None]:
+def _parse_decision(
+    text: str, max_duration: int = _MAX_DURATION
+) -> tuple[str | None, str | None, int | None]:
     """Split an LLM reply into ``(reasoning, command, duration)``.
 
     Understands the labeled format requested by ``_DECISION_INSTRUCTION``
     ("Reasoning: ...\\nAction: ...\\nDuration: ..."; "Thought:" is accepted as a
     synonym for the reasoning line). ``duration`` is the estimated in-game
-    minutes for the action, or ``None`` when the line is absent or unusable.
-    Falls back to treating the first non-empty line as a bare command, so
-    models (and tests) that reply with just the command keep working.
+    minutes for the action (clamped to *max_duration*), or ``None`` when the
+    line is absent or unusable. Falls back to treating the first non-empty line
+    as a bare command, so models (and tests) that reply with just the command
+    keep working.
     """
     reasoning = None
     command = None
@@ -143,7 +148,7 @@ def _parse_decision(text: str) -> tuple[str | None, str | None, int | None]:
         elif command is None and lowered.startswith(_ACTION_TOKEN):
             command = line.split(":", 1)[1].strip() or None
         elif duration is None and lowered.startswith(_DURATION_TOKEN):
-            duration = _parse_duration(line.split(":", 1)[1])
+            duration = _parse_duration(line.split(":", 1)[1], max_duration)
     if command is None and first_line is not None:
         # No "Action:" label anywhere: treat the first line as the command,
         # unless it was a reasoning line (then there is no action this turn).
@@ -224,11 +229,13 @@ class LLMAgent(Agent):
         goals: list[Goal] | None = None,
         max_tokens: int = 128,
         temperature: float = 0.7,
+        max_duration: int = _MAX_DURATION,
     ):
         super().__init__(persona=persona, goals=goals)
         self.llm_client = llm_client
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.max_duration = max_duration
 
     def decide(self, observation: str) -> str | None:
         self.last_reasoning = None
@@ -268,7 +275,9 @@ class LLMAgent(Agent):
         response = self._call(observation)
         if response is None:
             return None
-        reasoning, command, duration = _parse_decision(response)
+        reasoning, command, duration = _parse_decision(
+            response, max_duration=self.max_duration
+        )
         self.last_reasoning = reasoning
         self.last_duration = duration
         return command
@@ -613,7 +622,7 @@ def _resolve_duration(agent: Agent, game) -> int | None:
     return None
 
 
-def make_react_behavior(llm_client, max_retries: int = 1):
+def make_react_behavior(llm_client, max_retries: int | None = None, config=None):
     """Return a behavior that drives a character with an :class:`LLMAgent`.
 
     The character owns its persona and goals; the agent reads them. Persona is
@@ -624,32 +633,45 @@ def make_react_behavior(llm_client, max_retries: int = 1):
     Args:
         llm_client: An ``LlmClient`` (with ``chat()``) or a ``(str) -> str``
             callable.
-        max_retries: How many times to retry on a failed command.
+        max_retries: How many times to retry on a failed command. ``None`` uses
+            ``config.max_retries`` (a passed integer overrides the config).
+        config: An :class:`~text_adventure_games.config.AgentConfig` supplying
+            the agent's temperature, max_tokens, max_retries, and max_duration.
+            Defaults to ``AgentConfig()`` (the engine's historical values).
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
     """
+    config = config if config is not None else AgentConfig()
+    retries = max_retries if max_retries is not None else config.max_retries
     # One agent is created per factory call and captured by the returned
     # closure, so this agent -- its persona, goals, and private memory stream
     # (issue #75) -- belongs to a single character. Attach the result to ONE
     # character; to drive several NPCs, call this factory once per character
     # rather than sharing a behavior, or they would share an identity (and a
     # memory).
-    agent = LLMAgent(llm_client)
+    agent = LLMAgent(
+        llm_client,
+        max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        max_duration=config.max_duration,
+    )
 
     def behavior(character, game):
         if not agent.persona:
             agent.persona = character.persona or ""
         agent.goals = character.goals
         agent.action_names = list(game.parser.actions)
-        if not react_behavior(character, game, agent, max_retries=max_retries):
+        if not react_behavior(character, game, agent, max_retries=retries):
             return None
         return _resolve_duration(agent, game)
 
     return behavior
 
 
-def make_hybrid_behavior(llm_client, scripted_behavior, max_retries: int = 1):
+def make_hybrid_behavior(
+    llm_client, scripted_behavior, max_retries: int | None = None, config=None
+):
     """Return a behavior that tries the LLM agent, then falls back to scripted.
 
     Persona and goals are sourced from the character, same as
@@ -661,20 +683,30 @@ def make_hybrid_behavior(llm_client, scripted_behavior, max_retries: int = 1):
         scripted_behavior: A ``(character, game) -> None`` callable used when
             the LLM produces nothing usable (e.g. an API failure).
         max_retries: How many times to retry the LLM on a failed command.
+            ``None`` uses ``config.max_retries`` (a passed integer overrides it).
+        config: An :class:`~text_adventure_games.config.AgentConfig` supplying
+            the agent's temperature, max_tokens, max_retries, and max_duration.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
     """
+    config = config if config is not None else AgentConfig()
+    retries = max_retries if max_retries is not None else config.max_retries
     # As in make_react_behavior, this single agent belongs to one character;
     # call the factory once per NPC rather than sharing the returned behavior.
-    agent = LLMAgent(llm_client)
+    agent = LLMAgent(
+        llm_client,
+        max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        max_duration=config.max_duration,
+    )
 
     def behavior(character, game):
         if not agent.persona:
             agent.persona = character.persona or ""
         agent.goals = character.goals
         agent.action_names = list(game.parser.actions)
-        if react_behavior(character, game, agent, max_retries=max_retries):
+        if react_behavior(character, game, agent, max_retries=retries):
             return _resolve_duration(agent, game)
         # LLM produced nothing usable: fall back to the scripted behavior, whose
         # return value (None for legacy behaviors) decides whether the turn loop

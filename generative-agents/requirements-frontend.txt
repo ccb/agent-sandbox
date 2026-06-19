@@ -1,0 +1,19 @@
+# Dependencies for the Django visualizer ONLY (generative-agents/frontend/).
+#
+# IMPORTANT: install these in a SEPARATE Python 3.9 virtualenv, not the engine's
+# venv. Django 2.2 (the version the upstream frontend targets) does not run on
+# modern Python; the project was tested on Python 3.9. The backend simulation
+# generator, by contrast, uses the engine's own venv.
+#
+#   uv venv --python 3.9 frontend-venv
+#   uv pip install --python frontend-venv -r requirements-frontend.txt
+#
+# These are the only upstream pins the replay path actually needs (the full
+# upstream requirements.txt also lists gensim/matplotlib/selenium/etc. for the
+# research backend, none of which the visualizer uses).
+Django==2.2
+django-cors-headers==2.5.3
+django-storages-redux==1.3.3
+# global_methods.py (used by the replay views) imports numpy. Unpinned so pip
+# picks a build compatible with the frontend's Python 3.9.
+numpy
