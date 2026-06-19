@@ -18,10 +18,12 @@ from __future__ import annotations
 import os
 import re
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable, Union
 
 from .enums import LlmProvider
+from .usage import RunLog, UsageLedger, record_call
 
 # ---------------------------------------------------------------------------
 # Protocol
@@ -139,7 +141,7 @@ _DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 class OpenAIClient:
     """Wraps the ``openai`` Python SDK (lazy-imported)."""
 
-    def __init__(self, config: LlmConfig):
+    def __init__(self, config: LlmConfig, ledger: UsageLedger | None = None):
         try:
             import openai
         except ImportError:
@@ -155,6 +157,12 @@ class OpenAIClient:
         self._verbose = config.verbose
         # Lazy tokenizer
         self._tokenizer = None
+        # Usage accounting (side channel; see usage.py). Defaults to a private
+        # ledger so existing callers need not change; pass a shared one to
+        # aggregate across clients. `context` carries per-call attribution
+        # (actor/turn), set by the caller before each decision.
+        self.ledger = ledger or UsageLedger()
+        self.context: dict = {}
 
     def _get_tokenizer(self):
         if self._tokenizer is None:
@@ -175,6 +183,7 @@ class OpenAIClient:
         try:
             if self._verbose:
                 print(json.dumps(messages, indent=2))
+            t0 = time.perf_counter()
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
@@ -184,7 +193,19 @@ class OpenAIClient:
                 frequency_penalty=0,
                 presence_penalty=0,
             )
-            return response.choices[0].message.content
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            text = response.choices[0].message.content
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                self._model,
+                getattr(response, "usage", None),
+                messages,
+                text,
+                latency_ms,
+            )
+            return text
         except Exception as e:
             if self._verbose:
                 print(f"OpenAI API error: {e}")
@@ -200,6 +221,7 @@ class OpenAIClient:
         try:
             if self._verbose:
                 print(json.dumps(messages, indent=2))
+            t0 = time.perf_counter()
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
@@ -211,10 +233,22 @@ class OpenAIClient:
                     "function": {"name": tool["name"]},
                 },
             )
+            latency_ms = (time.perf_counter() - t0) * 1000.0
             tool_calls = response.choices[0].message.tool_calls
+            args_text = tool_calls[0].function.arguments if tool_calls else None
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "openai",
+                self._model,
+                getattr(response, "usage", None),
+                messages,
+                args_text,
+                latency_ms,
+            )
             if not tool_calls:
                 return None
-            return json.loads(tool_calls[0].function.arguments)
+            return json.loads(args_text)
         except Exception as e:
             if self._verbose:
                 print(f"OpenAI tool-call error: {e}")
@@ -232,13 +266,17 @@ class OpenAIClient:
 # Anthropic adapter
 # ---------------------------------------------------------------------------
 
-_DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+# Default to the cheapest current model: a 25-agent day is thousands of
+# low-stakes NPC decisions, so Haiku's price/latency fits. (The previous default,
+# claude-sonnet-4-20250514, is past its retirement date.) Override with
+# LLM_MODEL / LlmConfig.model.
+_DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 
 
 class AnthropicClient:
     """Wraps the ``anthropic`` Python SDK (lazy-imported)."""
 
-    def __init__(self, config: LlmConfig):
+    def __init__(self, config: LlmConfig, ledger: UsageLedger | None = None):
         try:
             import anthropic
         except ImportError:
@@ -249,6 +287,9 @@ class AnthropicClient:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = config.model or _DEFAULT_ANTHROPIC_MODEL
         self._verbose = config.verbose
+        # Usage accounting (side channel; see usage.py and OpenAIClient.__init__).
+        self.ledger = ledger or UsageLedger()
+        self.context: dict = {}
 
     def chat(
         self,
@@ -282,8 +323,21 @@ class AnthropicClient:
             if system_text:
                 kwargs["system"] = system_text
 
+            t0 = time.perf_counter()
             response = self._client.messages.create(**kwargs)
-            return response.content[0].text
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            text = response.content[0].text
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                self._model,
+                getattr(response, "usage", None),
+                messages,
+                text,
+                latency_ms,
+            )
+            return text
         except Exception as e:
             if self._verbose:
                 print(f"Anthropic API error: {e}")
@@ -323,11 +377,25 @@ class AnthropicClient:
             if system_text:
                 kwargs["system"] = system_text
 
+            t0 = time.perf_counter()
             response = self._client.messages.create(**kwargs)
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            args = None
             for block in response.content:
                 if getattr(block, "type", None) == "tool_use":
-                    return dict(block.input)
-            return None
+                    args = dict(block.input)
+                    break
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "anthropic",
+                self._model,
+                getattr(response, "usage", None),
+                messages,
+                json.dumps(args) if args is not None else None,
+                latency_ms,
+            )
+            return args
         except Exception as e:
             if self._verbose:
                 print(f"Anthropic tool-call error: {e}")
@@ -380,7 +448,17 @@ class MockLlmClient:
         client = MockLlmClient(pick_first)
     """
 
-    def __init__(self, responses=None, default: str | None = "", tool_responses=None):
+    def __init__(
+        self,
+        responses=None,
+        default: str | None = "",
+        tool_responses=None,
+        ledger: UsageLedger | None = None,
+    ):
+        # Usage accounting: the mock records a zero-cost Usage on every call, so
+        # the accounting path is exercised offline (no SDK, no network).
+        self.ledger = ledger or UsageLedger()
+        self.context: dict = {}
         if callable(responses):
             self._responder = responses
             self._queue = None
@@ -422,10 +500,21 @@ class MockLlmClient:
             }
         )
         if self._responder is not None:
-            return self._responder(messages, max_tokens, temperature)
-        if self._queue:
-            return self._queue.pop(0)
-        return self._default
+            result = self._responder(messages, max_tokens, temperature)
+        elif self._queue:
+            result = self._queue.pop(0)
+        else:
+            result = self._default
+        record_call(
+            getattr(self, "ledger", None),
+            getattr(self, "context", {}),
+            "mock",
+            "mock",
+            None,
+            messages,
+            result,
+        )
+        return result
 
     def call_tool(
         self,
@@ -443,10 +532,21 @@ class MockLlmClient:
             }
         )
         if self._tool_responder is not None:
-            return self._tool_responder(messages, tool, max_tokens, temperature)
-        if self._tool_queue:
-            return self._tool_queue.pop(0)
-        return None
+            result = self._tool_responder(messages, tool, max_tokens, temperature)
+        elif self._tool_queue:
+            result = self._tool_queue.pop(0)
+        else:
+            result = None
+        record_call(
+            getattr(self, "ledger", None),
+            getattr(self, "context", {}),
+            "mock",
+            "mock",
+            None,
+            messages,
+            json.dumps(result) if result is not None else None,
+        )
+        return result
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token (matches the Anthropic adapter).
@@ -653,10 +753,12 @@ class MockReActClient(MockLlmClient):
     appended on whichever route ran -- ``_decide`` or ``call_tool``.
     """
 
-    def __init__(self, config: LlmConfig | None = None):
-        # create_llm_client() constructs providers as cls(config); tests may
-        # also construct this directly with no config.
-        super().__init__(responses=self._decide)
+    def __init__(
+        self, config: LlmConfig | None = None, ledger: UsageLedger | None = None
+    ):
+        # create_llm_client() constructs providers as cls(config, ledger=...);
+        # tests may also construct this directly with no config.
+        super().__init__(responses=self._decide, ledger=ledger)
         self._verbose = bool(config and config.verbose)
         # A log of every actual decision (non-None command) the brain made.
         # This is distinct from the inherited `tool_calls` log, which records
@@ -700,16 +802,27 @@ class MockReActClient(MockLlmClient):
         system = messages[0]["content"] if messages else ""
         observation = messages[-1]["content"] if messages else ""
         decision = _mock_brain_choose(system, observation)
-        if decision is None:
-            return None
-        reasoning, command = _split_decision(decision)
-        if not command:
-            return None
-        # Record the real decision (mirrors `_decide`), so `decisions` is
-        # accurate whether the agent took the structured or the chat route.
-        self.decisions.append({"command": command, "system": system})
-        verb, rest = _split_command(command, tool)
-        return {"reasoning": reasoning, "action": verb, "arguments": rest}
+        result = None
+        if decision is not None:
+            reasoning, command = _split_decision(decision)
+            if command:
+                # Record the real decision (mirrors `_decide`), so `decisions`
+                # is accurate whether the agent took the structured or chat route.
+                self.decisions.append({"command": command, "system": system})
+                verb, rest = _split_command(command, tool)
+                result = {"reasoning": reasoning, "action": verb, "arguments": rest}
+        # Zero-cost usage record (mirrors MockLlmClient.call_tool), so the
+        # accounting path is exercised on the structured route too.
+        record_call(
+            getattr(self, "ledger", None),
+            getattr(self, "context", {}),
+            "mock",
+            "mock",
+            None,
+            messages,
+            json.dumps(result) if result is not None else None,
+        )
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -725,16 +838,22 @@ _PROVIDERS = {
 }
 
 
-def create_llm_client(config: LlmConfig) -> LlmClient:
-    """Create an LLM client from a config."""
+def create_llm_client(
+    config: LlmConfig, ledger: UsageLedger | None = None
+) -> LlmClient:
+    """Create an LLM client from a config.
+
+    Pass a shared :class:`~text_adventure_games.usage.UsageLedger` to aggregate
+    token/cost accounting across clients; omit it and each client keeps its own.
+    """
     provider = str(config.provider).lower()
     if provider not in _PROVIDERS:
         choices = [str(p) for p in _PROVIDERS]
         raise ValueError(f"Unknown provider '{provider}'. Choose from: {choices}")
-    return _PROVIDERS[provider](config)
+    return _PROVIDERS[provider](config, ledger=ledger)
 
 
-def client_from_env() -> LlmClient | None:
+def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
     """Create an LLM client from environment variables, or return None.
 
     Reads ``LLM_PROVIDER`` ("anthropic", "openai", or "mock" -- the free,
@@ -742,6 +861,10 @@ def client_from_env() -> LlmClient | None:
     ``LLM_BASE_URL``, and ``LLM_VERBOSE``. Returns ``None`` when no provider
     is set or the client can't be created, so callers can fall back to their
     non-LLM path.
+
+    When a :class:`~text_adventure_games.usage.RunLog` is passed, the client's
+    usage ledger is attached to it so every call streams to the artifact and the
+    summary is written on close.
     """
     provider = os.environ.get("LLM_PROVIDER")
     if not provider:
@@ -754,7 +877,11 @@ def client_from_env() -> LlmClient | None:
             base_url=os.environ.get("LLM_BASE_URL"),
             verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
         )
-        return create_llm_client(config)
+        ledger = UsageLedger()
+        client = create_llm_client(config, ledger=ledger)
+        if run_log is not None:
+            run_log.attach(ledger)
+        return client
     except (ImportError, ValueError) as e:
         print(f"Warning: Could not create LLM client: {e}")
         return None

@@ -15,15 +15,18 @@ line), so the decision genuinely flows through the engine's observe -> decide
 seam -- it's just a stand-in for a model, exactly as ``MockReActClient`` is.
 """
 
+import json
+
 from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import LLMAgent
+from text_adventure_games.usage import UsageLedger, record_call
 
 
 class SmallvilleMockClient(MockReActClient):
     """Deterministic mock LLM for one persona's morning routine."""
 
-    def __init__(self, destination: str, activity: str, config=None):
-        super().__init__(config)
+    def __init__(self, destination: str, activity: str, config=None, ledger=None):
+        super().__init__(config, ledger=ledger)
         self.destination = destination
         self.activity = activity
 
@@ -71,17 +74,35 @@ class SmallvilleMockClient(MockReActClient):
             if verb == "travel"
             else f"I've arrived, so I'll get on with {self.activity}."
         )
-        return {"reasoning": reasoning, "action": verb, "arguments": rest}
+        result = {"reasoning": reasoning, "action": verb, "arguments": rest}
+        # Zero-cost usage record (this override doesn't call super().call_tool),
+        # so each persona's decision lands in the shared ledger.
+        record_call(
+            getattr(self, "ledger", None),
+            getattr(self, "context", {}),
+            "mock",
+            "mock",
+            None,
+            messages,
+            json.dumps(result),
+        )
+        return result
 
 
-def attach_agents(characters: dict, personas: list[dict]) -> None:
+def attach_agents(
+    characters: dict, personas: list[dict], ledger: UsageLedger | None = None
+) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
     ``characters`` maps name -> Character (from :func:`build_world.build_world`);
-    ``personas`` is the metadata list (``build_world.PERSONAS``)."""
+    ``personas`` is the metadata list (``build_world.PERSONAS``). Pass a shared
+    ``ledger`` so every persona's LLM calls accumulate in one place for a
+    per-agent cost summary (usage.py); omit it and each client keeps its own."""
     for spec in personas:
         char = characters[spec["name"]]
-        client = SmallvilleMockClient(spec["destination"], spec["activity"])
+        client = SmallvilleMockClient(
+            spec["destination"], spec["activity"], ledger=ledger
+        )
         agent = LLMAgent(client, persona=char.persona)
         # The verbs the structured tool may offer; our client ignores the enum
         # but a well-formed schema keeps the seam honest.

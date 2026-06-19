@@ -305,6 +305,98 @@ def test_mock_react_call_tool_returns_none_for_unknown_prompt():
     assert client.call_tool(messages, build_choose_action_tool([])) is None
 
 
+# --- Usage accounting in the real adapters (usage.py Piece 1) ------------
+#
+# The __new__-built fakes above skip __init__, so they have no ledger/context;
+# we attach one here. record_call reads both defensively, so the existing tests
+# stay green while these confirm exactly one record is captured per call, with
+# the provider's token counts mapped through.
+
+from text_adventure_games.usage import UsageLedger
+
+
+def _with_ledger(client):
+    client.ledger = UsageLedger()
+    client.context = {"actor": "troll", "turn": 3}
+    return client.ledger
+
+
+def test_openai_chat_records_one_usage():
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="go north"))],
+        usage=SimpleNamespace(prompt_tokens=120, completion_tokens=8),
+    )
+    client = _make_openai(_FakeOpenAISDK(response))
+    ledger = _with_ledger(client)
+
+    assert client.chat([{"role": "user", "content": "hi"}]) == "go north"
+    assert len(ledger.records) == 1
+    rec = ledger.records[0]
+    assert (rec.usage.input_tokens, rec.usage.output_tokens) == (120, 8)
+    assert rec.actor == "troll" and rec.turn == 3
+    assert rec.cost_usd > 0  # gpt-4o-mini is in the price table
+
+
+def test_openai_call_tool_records_one_usage():
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    tool_calls=[
+                        SimpleNamespace(
+                            function=SimpleNamespace(arguments='{"action": "go north"}')
+                        )
+                    ]
+                )
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=200, completion_tokens=5),
+    )
+    client = _make_openai(_FakeOpenAISDK(response))
+    ledger = _with_ledger(client)
+
+    assert client.call_tool([{"role": "user", "content": "hi"}], CHOOSE) == {
+        "action": "go north"
+    }
+    assert len(ledger.records) == 1
+    assert ledger.records[0].usage.input_tokens == 200
+
+
+def test_anthropic_chat_records_one_usage():
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="growl player")],
+        usage=SimpleNamespace(input_tokens=412, output_tokens=18),
+    )
+    client = _make_anthropic(_FakeAnthropicSDK(response))
+    client._model = "claude-haiku-4-5"
+    ledger = _with_ledger(client)
+
+    assert client.chat([{"role": "user", "content": "hi"}]) == "growl player"
+    assert len(ledger.records) == 1
+    assert ledger.records[0].usage.output_tokens == 18
+
+
+def test_anthropic_call_tool_records_cache_read_into_ledger_and_summary():
+    response = SimpleNamespace(
+        content=[SimpleNamespace(type="tool_use", input={"action": "attack player"})],
+        usage=SimpleNamespace(
+            input_tokens=10, output_tokens=6, cache_read_input_tokens=400
+        ),
+    )
+    client = _make_anthropic(_FakeAnthropicSDK(response))
+    client._model = "claude-haiku-4-5"
+    ledger = _with_ledger(client)
+
+    assert client.call_tool([{"role": "user", "content": "hi"}], CHOOSE) == {
+        "action": "attack player"
+    }
+    assert len(ledger.records) == 1
+    # The cache-read field flows from the response through to the summary, which
+    # is how Piece 2 (caching) will later be proven to fire.
+    assert ledger.records[0].usage.cache_read_input_tokens == 400
+    assert ledger.summary()["cache_read_input_tokens"] == 400
+
+
 def test_mock_react_call_tool_returns_none_when_player_absent():
     client = MockReActClient()
     alone = _DRAWBRIDGE_OBS.replace(" * The player - a hero.\n", "")

@@ -24,6 +24,11 @@ project env that has the engine installed)::
 import argparse
 import datetime
 import os
+from contextlib import nullcontext
+
+from text_adventure_games.config import GameConfig
+from text_adventure_games.reporting import Channel, Message, default_renderer
+from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import PERSONAS, build_world
@@ -62,14 +67,20 @@ def _parse_start(value: str) -> datetime.datetime:
         )
 
 
-def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
+def simulate(
+    world_map: WorldMap, num_steps: int, ledger: UsageLedger | None = None
+) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
     Each frame is ``{persona_name: {movement, pronunciatio, description, chat}}``.
     Builds its own game + agents, so it is self-contained and easy to test.
+
+    Pass a shared ``ledger`` to accumulate per-agent LLM token/cost accounting
+    across the run (usage.py); the mock brain records zero cost, so the numbers
+    are $0 until a real client is wired in (NEXT-STEPS Phase A).
     """
     game, chars = build_world()
-    attach_agents(chars, PERSONAS)
+    attach_agents(chars, PERSONAS, ledger=ledger)
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]
 
@@ -93,6 +104,10 @@ def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
 
             # Decision point: idle and not yet settled into an activity.
             if not st["path"] and not st["performing"]:
+                # Attribute this LLM call to the persona and step (usage.py).
+                ctx = getattr(char.agent.llm_client, "context", None)
+                if ctx is not None:
+                    ctx.update({"actor": name, "turn": _step, "attempt": 0})
                 command = char.agent.decide(game.describe_for(char))
                 if command and game.parser.parse_command(command, actor=char):
                     if command.startswith("travel"):
@@ -124,6 +139,27 @@ def simulate(world_map: WorldMap, num_steps: int) -> list[dict]:
     return frames
 
 
+def _print_cost_summary(ledger: UsageLedger, renderer=None) -> None:
+    """Print a per-agent LLM cost summary through the engine's renderer seam
+    (reporting.py), so it formats consistently with the rest of the engine's
+    output. With the mock brain every line is $0.0000 -- the plumbing is what's
+    delivered; real numbers appear once a live client is wired in."""
+    renderer = renderer or default_renderer()
+    summary = ledger.summary()
+    renderer.emit(
+        Message(
+            Channel.SYSTEM,
+            f"LLM cost: ${summary['total_cost_usd']:.4f} over "
+            f"{summary['calls']} calls "
+            f"({summary['input_tokens']} in / {summary['output_tokens']} out tokens)",
+        )
+    )
+    for actor, cost in sorted(
+        ledger.totals_by_actor().items(), key=lambda kv: kv[1], reverse=True
+    ):
+        renderer.emit(Message(Channel.SYSTEM, f"  {actor}: ${cost:.4f}"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a Smallville replay.")
     parser.add_argument(
@@ -149,6 +185,25 @@ def main() -> None:
     parser.add_argument("--ville-dir", default=DEFAULT_VILLE_DIR)
     parser.add_argument("--storage", default=DEFAULT_STORAGE)
     parser.add_argument("--base-sim", default=DEFAULT_BASE_SIM)
+    parser.add_argument(
+        "--config",
+        metavar="FILE",
+        default=None,
+        help="GameConfig YAML/JSON file; its 'observability' section sets the "
+        "usage log (falls back to GameConfig.from_env() when omitted)",
+    )
+    parser.add_argument(
+        "--llm-log",
+        metavar="DIR",
+        default=None,
+        help="write a per-run JSONL usage log here, overriding the config's "
+        "observability.log_path (off if neither is set)",
+    )
+    parser.add_argument(
+        "--llm-log-prompts",
+        action="store_true",
+        help="include full prompts/responses in the usage log (default: numbers only)",
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.ville_dir):
@@ -160,8 +215,31 @@ def main() -> None:
     world_map = WorldMap(args.ville_dir)
     print(f"Loaded the_ville ({world_map.width}x{world_map.height}).")
 
-    frames = simulate(world_map, args.steps)
+    # Observability follows the global GameConfig: load it from --config (or the
+    # environment), then let the explicit CLI flags override its observability
+    # section. The config builds the per-run JSONL artifact, so the sim honors a
+    # log_path set anywhere a GameConfig can come from (file, env, or flag).
+    config = GameConfig.from_file(args.config) if args.config else GameConfig.from_env()
+    if args.llm_log:
+        config.observability.log_path = args.llm_log
+    if args.llm_log_prompts:
+        config.observability.log_prompts = True
+
+    # Shared usage ledger across all personas; optionally streamed to the run's
+    # JSONL artifact. The mock brain records $0, but the accounting is ready for
+    # when a real client lands (NEXT-STEPS Phase A).
+    ledger = UsageLedger()
+    run_log = config.build_run_log(
+        provider="mock", model="mock", turn_mode="simultaneous"
+    )
+    with run_log or nullcontext():
+        if run_log is not None:
+            run_log.attach(ledger)
+        frames = simulate(world_map, args.steps, ledger=ledger)
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
+    _print_cost_summary(ledger)
+    if run_log is not None:
+        print(f"Wrote usage log to {run_log.path}")
 
     start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
     base_personas = os.path.join(args.storage, args.base_sim, "personas")

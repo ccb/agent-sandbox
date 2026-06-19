@@ -1,11 +1,46 @@
 # LLM Cost & Observability Design
 
-**Status:** Proposal - not yet implemented.
+**Status:** Partially implemented. Pieces **1 (usage capture)** and **3 (run
+artifacts)**, plus the per-agent cost report, shipped in **PR #91** (closing
+[#73] *[Phase A] LLM cost & token observability*). Pieces **2 (prompt caching)**
+and **4 (deterministic runs / record-replay)** are **not built** — they were
+scoped out of #73 as separate concerns (optimization and reproducibility) and
+are tracked under their own follow-ups. See
+[Implementation status](#implementation-status) for the detail.
 
 *A design for measuring, reducing, and reproducing the cost of LLM-driven runs:
 capture token usage on every call, turn on Anthropic prompt caching where it
 pays off, write a per-run usage log, and make runs reproducible with a global
 seed plus record/replay.*
+
+---
+
+## Implementation status
+
+| Piece | Status | Where |
+|-------|--------|-------|
+| **1. Usage capture** — `Usage`, `CallRecord`, `UsageLedger`, `PRICES`, `price()`, `record_call()` | ✅ Shipped (PR #91) | `text_adventure_games/usage.py`; recorded in both `chat()` and `call_tool()` of every adapter in `llm_client.py` |
+| **3. Run artifacts** — `RunLog` JSONL (header / call / summary); `LLM_LOG` + `LLM_LOG_PROMPTS` | ✅ Shipped (PR #91) | `usage.py`; wired via `client_from_env(run_log=...)` and the generative-agents backend |
+| **Per-agent cost report** (build-order stage 7) | ✅ Shipped (PR #91) | `generative-agents/backend/run_simulation.py` (`_print_cost_summary`, via `reporting.py`) |
+| **2. Prompt caching** | ⬜ Not built (out of scope for #73) | seam left: `AnthropicClient` still passes a plain-string `system`; `Usage` carries the cache fields and `price()` already applies the write/read multipliers |
+| **4. Deterministic runs** (seed + `ReplayClient`) | ⬜ Not built (out of scope for #73) | seam left: `CallRecord.prompt_sha256` + `attempt`, and the full transcript under `LLM_LOG_PROMPTS`, are the replay keys/record |
+
+**Decisions resolved while implementing (PR #91)** — these settle several of the
+[open questions](#12-open-questions) below:
+
+- **Attribution channel:** a mutable `client.context` attribute set before each
+  `decide()`, *not* `chat()` kwargs — it works for both the engine ReAct path
+  (`decide_and_route`) and the generative-agents direct-decide loop without
+  touching the `LlmClient` Protocol.
+- **Pricing source of truth:** a hard-coded `PRICES` dict in `usage.py`; an
+  unknown model warns once and costs `$0` rather than crashing a run.
+- **Verbose-transcript privacy:** numbers-only by default; full prompts/responses
+  require `LLM_LOG_PROMPTS=1`.
+- **Related fix (§5):** the default Anthropic model moved off the retired
+  `claude-sonnet-4-20250514` to `claude-haiku-4-5`.
+
+Anything below describing Pieces 2 and 4 (notably §6 and §8) is **design intent,
+not current behavior**.
 
 ---
 
@@ -114,6 +149,11 @@ caching flag, a run object, and a log writer.
 ---
 
 ## 5. Piece 1 — Usage capture & token accounting
+
+> **✅ Implemented in PR #91.** The shipped code follows this section closely; it
+> also instruments `call_tool()` (the default NPC path), records via the shared
+> `record_call()` helper, and adds a `"mock"` price entry so offline runs don't
+> warn.
 
 ### Data model
 
@@ -260,6 +300,11 @@ default is a current model.
 
 ## 6. Piece 2 — Anthropic prompt caching
 
+> **⬜ Not implemented (out of scope for #73; tracked separately).** This is
+> design intent. PR #91 left the seam in place: `AnthropicClient` still sends a
+> plain-string `system`, and `Usage`/`price()` already account for the cache
+> fields, so this plugs in here when picked up.
+
 ### The mechanic
 
 Prompt caching is a **prefix match**: the cache key is the exact bytes of the
@@ -357,6 +402,11 @@ applies. No special handling needed for the first pass.
 
 ## 7. Piece 3 — Run artifacts
 
+> **✅ Implemented in PR #91** as `RunLog` in `usage.py`. One refinement over the
+> sketch below: call lines *stream* to disk as they happen (via a ledger hook
+> installed by `RunLog.attach`) rather than being collected at close, so a crash
+> mid-run still leaves a usable artifact.
+
 A per-run log serves both masters: cost analysis *and* reproducibility (a full
 transcript of what each agent was asked and answered).
 
@@ -413,6 +463,12 @@ signature if we want it fully non-breaking.
 ---
 
 ## 8. Piece 4 — Deterministic runs
+
+> **⬜ Not implemented (out of scope for #73; tracked separately).** This is
+> design intent. PR #91 left the seam in place: every `CallRecord` carries a
+> `prompt_sha256` and `attempt`, and the `RunLog` transcript under
+> `LLM_LOG_PROMPTS` is exactly the record a future `ReplayClient` replays. No
+> RNG seeding is wired in yet.
 
 ### What a seed can and can't do
 
@@ -541,33 +597,38 @@ Determinism tests:
 
 ## 11. Build order
 
-| Stage | Deliverable |
-|-------|-------------|
-| 1 | `Usage`, `CallRecord`, `UsageLedger`, `PRICES`, `price()`; adapters record into an optional ledger. Unit tests. |
-| 2 | `enable_prompt_caching` flag; `cache_control` on the system block in `AnthropicClient`. Tests that the block shape and ledger cache fields work. |
-| 3 | `RunLog` (header / call / summary JSONL); wire `LLM_LOG` + `LLM_LOG_PROMPTS` through `client_from_env()`. |
-| 4 | `Run`/seed object; `random.seed()` at game start; record full transcript. |
-| 5 | `ReplayClient`; replay a recorded run with no network. |
-| 6 | (Optional) restructure `_system_message()` so shared boilerplate is a leading cached block across NPCs; measure whether it clears the size minimum. |
-| 7 | (Optional) a tiny report command that prints a run's summary, reusing the `reporting.py` renderer seam. |
+| Stage | Status | Deliverable |
+|-------|--------|-------------|
+| 1 | ✅ PR #91 | `Usage`, `CallRecord`, `UsageLedger`, `PRICES`, `price()`; adapters record into an optional ledger. Unit tests. |
+| 2 | ⬜ | `enable_prompt_caching` flag; `cache_control` on the system block in `AnthropicClient`. Tests that the block shape and ledger cache fields work. |
+| 3 | ✅ PR #91 | `RunLog` (header / call / summary JSONL); wire `LLM_LOG` + `LLM_LOG_PROMPTS` through `client_from_env()`. |
+| 4 | ⬜ | `Run`/seed object; `random.seed()` at game start; record full transcript. |
+| 5 | ⬜ | `ReplayClient`; replay a recorded run with no network. |
+| 6 | ⬜ | (Optional) restructure `_system_message()` so shared boilerplate is a leading cached block across NPCs; measure whether it clears the size minimum. |
+| 7 | ✅ PR #91 | (Optional) a tiny report command that prints a run's summary, reusing the `reporting.py` renderer seam. |
 
-Each stage keeps existing no-instrumentation runs working unchanged.
+Each stage keeps existing no-instrumentation runs working unchanged. Stages 1, 3,
+and 7 shipped in PR #91; stages 2 and 4–6 (caching + determinism/replay) are out
+of scope for #73 and remain as follow-ups.
 
 ---
 
 ## 12. Open questions
 
-- **Attribution channel:** pass `actor`/`turn` as `chat()` kwargs (explicit, tiny
-  signature change) or via a `client.context` attribute (fully non-breaking)?
-- **Pricing source of truth:** hard-code `PRICES` (simple, drifts) or fetch from
-  the Anthropic Models API once per run and cache it (accurate, adds a call)?
+Resolved in PR #91:
+
+- ~~**Attribution channel**~~ → a `client.context` attribute (not `chat()`
+  kwargs); see [Implementation status](#implementation-status).
+- ~~**Pricing source of truth**~~ → hard-coded `PRICES` dict.
+- ~~**Verbose transcript privacy**~~ → numbers-only by default, full prompts via
+  `LLM_LOG_PROMPTS=1`.
+
+Still open (deferred with Pieces 2 & 4):
+
 - **Replay keying:** prompt hash only, or `(turn, actor, attempt)` so cosmetic
-  prompt edits don't break replay?
+  prompt edits don't break replay? (`CallRecord` already carries both.)
 - **Where does the seed live?** On `Game`, on a new `Run` object, or read from
   `LLM_SEED` in the environment alongside the other knobs?
-- **Verbose transcript privacy:** default to numbers-only and require
-  `LLM_LOG_PROMPTS=1` for full prompts, or always log prompts in this research
-  context?
 - **Should caching be on by default** once we confirm prefixes clear the size
   minimum, or stay opt-in?
 

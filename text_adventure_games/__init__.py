@@ -15,6 +15,7 @@ from .config import (
     ClockConfig,
     EngineConfig,
     GameConfig,
+    ObservabilityConfig,
     RenderConfig,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "ClockConfig",
     "EngineConfig",
     "GameConfig",
+    "ObservabilityConfig",
     "RenderConfig",
 ]
