@@ -8,7 +8,7 @@ Everything currently open — PRs and unclaimed issues — in one table, ordered
 | --- | --- | --- | --- | --- |
 | 🔵 In design (draft PR) | [#61](https://github.com/ccb/agent-sandbox/pull/61) | Reproducible agent runs — record/replay, transcript, YAML run records | — | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#62](https://github.com/ccb/agent-sandbox/pull/62) | ScienceWorld benchmark interface | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
-| 🟢 Ready to merge | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
+| ✅ Merged — move to Shipped | [#59](https://github.com/ccb/agent-sandbox/pull/59) | Multi-step planning benchmark plan | [#47](https://github.com/ccb/agent-sandbox/issues/47) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (draft PR) | [#36](https://github.com/ccb/agent-sandbox/pull/36) | Generate a game from a Parsely-style PDF via LLM | [#29](https://github.com/ccb/agent-sandbox/issues/29) | [@0frankie](https://github.com/0frankie) |
 | 🔵 In design (doc merged) | [`agent-memory.md`](docs/design/agent-memory.md) | Agent memory — approved design, Phase 2 | [#63](https://github.com/ccb/agent-sandbox/issues/63) | [@aking526](https://github.com/aking526) |
 | 🔵 In design (doc merged) | [`llm-cost-observability.md`](docs/design/llm-cost-observability.md) | LLM cost / observability — long-term, not scheduled | — | [@aking526](https://github.com/aking526) |
@@ -51,7 +51,7 @@ which Shipped subsection a row belongs in, so it only *flags* a merged PR (`✅ 
 to Shipped`) and leaves the move to you — clearing that flag means relocating the row, not
 just relabelling it. Implemented design docs are filed under
 [`docs/design/implemented/`](docs/design/implemented/); proposals and partially-built designs
-stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-18**.
+stay in [`docs/design/`](docs/design/). Last synced with GitHub on **2026-06-19**.
 
 ---
 
