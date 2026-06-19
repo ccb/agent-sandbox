@@ -1,0 +1,275 @@
+"""A single, declarative config for a game/simulation: :class:`GameConfig`.
+
+Lots of the engine's tuning knobs used to be baked into the library as module
+constants, inline literals, or function-argument defaults -- the day periods in
+``clock.py``, the per-turn action cap in ``things/characters.py``, the LLM agent's
+``temperature``/``max_tokens`` in ``npc.py``, and so on. To change one you had to
+edit our source. That's fine for us, but a pain for someone building *their* game
+on top of this library.
+
+This module gathers those knobs into one place. A game author builds a
+:class:`GameConfig` once -- in Python, or loaded from a YAML/JSON file shipped with
+their project -- and hands it to :class:`~text_adventure_games.games.Game`::
+
+    from text_adventure_games.config import GameConfig
+
+    config = GameConfig.from_file("my_game/config.yaml")
+    game = Game(start, player, config=config)
+
+Two design rules keep this safe to adopt:
+
+* **Defaults reproduce today's behavior.** Every field defaults to the value that
+  used to be hardcoded, so ``GameConfig()`` (or passing no config at all) changes
+  nothing. The change is purely additive.
+* **Composition, not one giant class.** The knobs are grouped into small sub-configs
+  by what they affect -- :class:`AgentConfig`, :class:`EngineConfig`,
+  :class:`ClockConfig`, :class:`RenderConfig` -- plus the existing
+  :class:`~text_adventure_games.llm_client.LlmConfig` for the LLM connection. Each
+  group is small enough to read at a glance.
+
+See ``docs/configuration.md`` for a guide with a full sample config file.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field, fields, is_dataclass
+
+from .llm_client import LlmConfig, LlmClient, create_llm_client
+
+# These mirror the engine's historical defaults. They live here so the dataclass
+# field defaults read as plain numbers (easy for a student to scan) while the
+# original modules keep their own constants as the no-config fallback.
+
+
+@dataclass
+class AgentConfig:
+    """How an LLM-driven NPC thinks (see ``npc.py``).
+
+    Consumed by the behavior factories
+    :func:`~text_adventure_games.npc.make_react_behavior` and
+    :func:`~text_adventure_games.npc.make_hybrid_behavior`.
+    """
+
+    # Sampling temperature for NPC decisions. 0.0 is deterministic; higher is
+    # more exploratory/varied. Was hardcoded in LLMAgent.__init__.
+    temperature: float = 0.7
+    # Output token budget per NPC decision -- caps cost and verbosity.
+    max_tokens: int = 128
+    # How many times an agent retries a command that fails its preconditions
+    # before giving up for the turn (total attempts = 1 + max_retries).
+    max_retries: int = 1
+    # Upper bound (in in-game minutes) on an action duration an agent may claim,
+    # guarding against absurd model output. Was npc._MAX_DURATION (one full day).
+    max_duration: int = 24 * 60
+
+
+@dataclass
+class EngineConfig:
+    """Turn loop, world, and trigger knobs (see ``games.py``, ``things/``)."""
+
+    # "sequential" (player then each NPC, in order) or "simultaneous"
+    # (gather -> resolve round; see turns.py). Was Game(turn_mode=...).
+    turn_mode: str = "sequential"
+    # Action-resolution ordering for simultaneous mode. False keeps the plain
+    # initiative order; True uses turns.DEFAULT_PHASES ("talk before move before
+    # fight"); a dict gives your own ``{action_name: phase_rank}`` map.
+    phases: bool | dict = False
+    # Print each item's special commands as hints (helpful for novices).
+    give_hints: bool = True
+    # Hard cap on actions one NPC may take in a single turn, regardless of the
+    # time budget. Was things.characters.MAX_ACTIONS_PER_TURN.
+    max_actions_per_turn: int = 100
+    # How many recently-heard utterances a character remembers (FIFO). Was
+    # things.characters.HEARD_MAX.
+    heard_max: int = 5
+    # How many passes the post-round trigger phase makes so a trigger can enable
+    # another (cascading), before stopping. Was triggers.MAX_CASCADE_PASSES.
+    cascade_passes: int = 2
+
+
+@dataclass
+class ClockConfig:
+    """The optional in-game clock (see ``clock.py``).
+
+    Time is opt-in: leave ``enabled`` False and the game runs with no clock, exactly
+    as before. Set it True to build a :class:`~text_adventure_games.clock.GameClock`
+    from these fields.
+    """
+
+    # Off by default so existing games (which have no clock) are unchanged.
+    enabled: bool = False
+    start_hour: int = 8
+    start_minute: int = 0
+    minutes_per_turn: int = 15
+    # ``(start_hour, name)`` pairs naming chunks of the day. None means use
+    # clock.DEFAULT_PERIODS; [] disables period names.
+    periods: list | None = None
+
+
+@dataclass
+class RenderConfig:
+    """How output looks in the terminal (see ``reporting.py``).
+
+    ``level`` and ``no_color`` default to None, meaning "follow the environment"
+    -- the ``OUTPUT_LEVEL`` and ``NO_COLOR`` env vars (or the built-in default)
+    decide, exactly as before. Set them here to override the environment.
+    """
+
+    # Verbosity: "quiet" | "normal" | "verbose", or None to follow OUTPUT_LEVEL.
+    level: str | None = None
+    # Wrap width in columns for narration text.
+    width: int = 80
+    # Force the plain (no-color) renderer, or None to follow NO_COLOR.
+    no_color: bool | None = None
+
+
+@dataclass
+class GameConfig:
+    """The one config object a game/simulation hands to :class:`Game`.
+
+    Compose it directly, load it from a file with :meth:`from_file`, or read the
+    library's environment variables with :meth:`from_env`. Every field has a
+    default that reproduces the engine's historical behavior, so an empty
+    ``GameConfig()`` is a no-op.
+    """
+
+    # The LLM connection (provider, api key, model, ...). None means "no LLM";
+    # reuses the existing dataclass rather than duplicating it.
+    llm: LlmConfig | None = None
+    agent: AgentConfig = field(default_factory=AgentConfig)
+    engine: EngineConfig = field(default_factory=EngineConfig)
+    clock: ClockConfig = field(default_factory=ClockConfig)
+    render: RenderConfig = field(default_factory=RenderConfig)
+
+    # -- construction helpers ------------------------------------------------
+
+    @classmethod
+    def from_file(cls, path) -> "GameConfig":
+        """Load a config from a ``.yaml``/``.yml`` or ``.json`` file.
+
+        The file's top-level keys are the sub-config names (``llm``, ``agent``,
+        ``engine``, ``clock``, ``render``); each maps to a dict of that group's
+        fields. Any group you omit keeps its defaults. YAML needs ``pyyaml``
+        installed (it ships as a dependency); JSON needs nothing extra.
+        """
+        path = os.fspath(path)
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        lower = path.lower()
+        if lower.endswith((".yaml", ".yml")):
+            try:
+                import yaml
+            except ImportError as e:  # pragma: no cover - depends on optional dep
+                raise ImportError(
+                    "Reading a YAML config needs pyyaml (`pip install pyyaml`), "
+                    "or use a .json config file instead."
+                ) from e
+            data = yaml.safe_load(text) or {}
+        elif lower.endswith(".json"):
+            data = json.loads(text) if text.strip() else {}
+        else:
+            raise ValueError(
+                f"Unsupported config file type: {path!r} (use .yaml, .yml, or .json)"
+            )
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Config file {path!r} must contain a mapping at the top level"
+            )
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "GameConfig":
+        """Build a config from a plain dict (the shape :meth:`from_file` parses)."""
+        unknown = set(data) - {"llm", "agent", "engine", "clock", "render"}
+        if unknown:
+            raise ValueError(
+                f"Unknown config section(s): {sorted(unknown)}. "
+                "Valid sections: llm, agent, engine, clock, render."
+            )
+        llm_data = data.get("llm")
+        if llm_data is not None:
+            llm = _build(LlmConfig, llm_data, "llm")
+        else:
+            llm = None
+        return cls(
+            llm=llm,
+            agent=_build(AgentConfig, data.get("agent", {}), "agent"),
+            engine=_build(EngineConfig, data.get("engine", {}), "engine"),
+            clock=_build(ClockConfig, data.get("clock", {}), "clock"),
+            render=_build(RenderConfig, data.get("render", {}), "render"),
+        )
+
+    @classmethod
+    def from_env(cls) -> "GameConfig":
+        """Build a config from the library's environment variables.
+
+        Reads the same ``LLM_*`` vars as
+        :func:`~text_adventure_games.llm_client.client_from_env` for the LLM
+        section, plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for rendering. Anything
+        unset keeps its default.
+        """
+        config = cls()
+        provider = os.environ.get("LLM_PROVIDER")
+        if provider:
+            config.llm = LlmConfig(
+                provider=provider,
+                api_key=os.environ.get("LLM_API_KEY"),
+                model=os.environ.get("LLM_MODEL"),
+                base_url=os.environ.get("LLM_BASE_URL"),
+                verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+            )
+        level = os.environ.get("OUTPUT_LEVEL", "").strip().lower()
+        if level in ("quiet", "normal", "verbose"):
+            config.render.level = level
+        if os.environ.get("NO_COLOR"):
+            config.render.no_color = True
+        return config
+
+    def to_dict(self) -> dict:
+        """Serialize to a plain, JSON-able dict (inverse of :meth:`from_dict`)."""
+        out = {
+            "agent": _asdict(self.agent),
+            "engine": _asdict(self.engine),
+            "clock": _asdict(self.clock),
+            "render": _asdict(self.render),
+        }
+        if self.llm is not None:
+            llm = _asdict(self.llm)
+            # provider may be an LlmProvider enum; store its plain string value.
+            if llm.get("provider") is not None:
+                llm["provider"] = str(llm["provider"])
+            out["llm"] = llm
+        return out
+
+    def build_llm_client(self) -> LlmClient | None:
+        """Create an LLM client from :attr:`llm`, or None if it isn't set.
+
+        A convenience for game authors and the web app, which wire NPC behaviors
+        themselves; ``Game`` does not auto-create clients.
+        """
+        if self.llm is None:
+            return None
+        return create_llm_client(self.llm)
+
+
+def _build(dataclass_type, data, section_name):
+    """Construct *dataclass_type* from *data*, rejecting unknown keys clearly."""
+    if not isinstance(data, dict):
+        raise ValueError(f"Config section {section_name!r} must be a mapping")
+    valid = {f.name for f in fields(dataclass_type)}
+    unknown = set(data) - valid
+    if unknown:
+        raise ValueError(
+            f"Unknown key(s) in '{section_name}' config: {sorted(unknown)}. "
+            f"Valid keys: {sorted(valid)}."
+        )
+    return dataclass_type(**data)
+
+
+def _asdict(obj):
+    """Shallow dataclass -> dict (we only nest one level, so this is enough)."""
+    if not is_dataclass(obj):
+        return obj
+    return {f.name: getattr(obj, f.name) for f in fields(obj)}

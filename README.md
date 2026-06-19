@@ -196,6 +196,11 @@ New to reading this output — the colors, prefixes, and indented agent blocks?
 See [`docs/reading-the-output.md`](docs/reading-the-output.md), a guide to
 interpreting what the game prints (and how to show more or less of it).
 
+Want to tune a game without editing the engine — the turn mode, clock, NPC
+sampling, output width? Build a `GameConfig` (in Python or from a YAML/JSON file
+you ship with your project) and pass it to `Game`. See
+[`docs/configuration.md`](docs/configuration.md).
+
 ### Run the tests
 
 ```bash

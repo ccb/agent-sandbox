@@ -27,6 +27,9 @@ dependencies = [
     "rich", # colored, turn-structured terminal output (see reporting.py).
     # Optional at runtime: the engine falls back to a plain renderer
     # if it's missing, so a no-rich install still works.
+    "pyyaml", # GameConfig.from_file() reads YAML config files (see config.py).
+    # JSON config files work without it; the YAML branch lazy-imports yaml and
+    # raises a clear hint if it's somehow absent.
 ]
 classifiers = [
     "Environment :: Console",
