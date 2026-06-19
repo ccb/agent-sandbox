@@ -14,7 +14,7 @@ class Attack(base.Action):
         self.attacker = self.acting_character(
             command, hint="attacker", split_words=attack_words, position="before"
         )
-        self.victim = self.parser.get_character(
+        self.victim = self.target_character(
             command,
             hint="victim",
             split_words=attack_words,

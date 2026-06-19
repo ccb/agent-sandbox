@@ -50,6 +50,38 @@ class Action:
             return self.actor
         return self.parser.get_character(command, **kwargs)
 
+    def target_character(self, command, exclude=None, **kwargs):
+        """Resolve the character an action is aimed AT (its object), as opposed
+        to its actor resolved by ``acting_character``.
+
+        Excludes the actor by default so an action never targets the character
+        performing it. ``parser.get_character`` returns the player as its
+        no-match default; that default is right for player-issued commands but
+        wrong for an agent acting on its own — so when a non-player actor refers
+        to no one, we return ``None`` instead. The action's precondition gate
+        then reports a missing target (e.g. "Give it to whom?") and the ReAct
+        loop feeds that reason back so the agent names a target on its retry.
+
+        A command that *does* refer to the player still targets them: an agent
+        refers to the player by name or by the bare word "player" — the form
+        agents are taught to use, e.g. "attack player" (see npc.py). The engine
+        player is conventionally named "The player", so we accept either form.
+        """
+        if exclude is None:
+            exclude = self.actor
+        candidate = self.parser.get_character(command, exclude=exclude, **kwargs)
+        player = self.game.player
+        lowered = command.lower()
+        player_referenced = player.name.lower() in lowered or "player" in lowered
+        if (
+            self.actor is not None
+            and self.actor is not player
+            and candidate is player
+            and not player_referenced
+        ):
+            return None
+        return candidate
+
     def check_preconditions(self) -> bool:
         """
         Called before apply_effects to ensure the state for applying the

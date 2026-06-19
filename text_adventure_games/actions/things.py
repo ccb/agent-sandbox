@@ -217,7 +217,7 @@ class Give(base.Action):
         self.giver = self.acting_character(
             command, hint="giver", split_words=give_words, position="before"
         )
-        self.recipient = self.parser.get_character(
+        self.recipient = self.target_character(
             command,
             hint="recipient",
             split_words=give_words,
@@ -259,6 +259,8 @@ class Give(base.Action):
             return False
         if self.item.name not in self.giver.carried_items():
             self.parser.fail("You aren't carrying that.")
+            return False
+        if not self.was_matched(self.recipient, "Give it to whom?"):
             return False
         if not self.at(self.recipient, self.giver.location):
             return False
