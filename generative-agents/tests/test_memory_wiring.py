@@ -25,6 +25,7 @@ from backend.smallville_agents import (
 )
 from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
+from text_adventure_games.embedding_client import MockEmbeddingClient
 from text_adventure_games.memory import MemoryKind
 
 # Substrings the mock brain keys on (copied from tests/test_memory.py): a memory
@@ -95,6 +96,28 @@ def test_simulate_reaches_activity_unchanged(world_map):
     # mock reads, so Isabella still arrives and settles in within 40 steps.
     frames = simulate(world_map, num_steps=40)
     assert "tending the cafe counter" in frames[-1]["Isabella Rodriguez"]["description"]
+
+
+def test_simulate_with_embedding_client_is_byte_identical(world_map):
+    # Semantic memory relevance (issue #76) must not change the replay: the mock
+    # brain decides from location alone, so embeddings only reorder the (ignored)
+    # memory block. Frames stay byte-for-byte identical to the keyword default.
+    baseline = simulate(world_map, num_steps=20)
+    with_embeddings = simulate(
+        world_map, num_steps=20, embedding_client=MockEmbeddingClient()
+    )
+    assert with_embeddings == baseline
+
+
+def test_embedding_client_reaches_retrieval():
+    # Wiring check: with an embedding client attached, the first decide() runs the
+    # embedding relevance path, which embeds and caches each record's vector. The
+    # seeded plan memory at t=0 should come back with an embedding populated.
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS, embedding_client=MockEmbeddingClient())
+    char = chars[PERSONAS[0]["name"]]
+    observe_and_decide(game, char, step=0)
+    assert any(r.embedding is not None for r in char.agent.memory.records)
 
 
 # --------------------------------------------------------------------------

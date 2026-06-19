@@ -53,6 +53,10 @@ dev = ["black", "nbformat", "pytest"]
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
 llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
+# Optional semantic memory relevance (issue #76). model2vec runs a small static
+# embedding model locally with no torch/GPU and no API key; the engine falls
+# back to keyword-overlap relevance when it's absent, so this stays optional.
+embeddings = ["model2vec"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).

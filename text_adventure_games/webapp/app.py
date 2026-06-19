@@ -22,9 +22,21 @@ def get_llm_client():
     return client_from_env()
 
 
+def get_embedding_client():
+    """Create an embedding client from environment variables, or return None.
+
+    ``EMBEDDING_PROVIDER=local`` (or ``=mock``) turns on semantic memory
+    relevance; unset keeps the deterministic keyword default (issue #76)."""
+    from text_adventure_games.embedding_client import embedding_client_from_env
+
+    return embedding_client_from_env()
+
+
 def new_game():
     llm = get_llm_client()
-    game = action_castle.build_game(llm_client=llm)
+    game = action_castle.build_game(
+        llm_client=llm, embedding_client=get_embedding_client()
+    )
     if llm:
         from text_adventure_games.llm_parser import WebLlmParser
 
