@@ -410,6 +410,9 @@ class AgentMemory:
         max_records: int = DEFAULT_MAX_RECORDS,
         token_budget: int = DEFAULT_TOKEN_BUDGET,
         decay: float = DEFAULT_DECAY,
+        alpha_recency: float = ALPHA_RECENCY,
+        alpha_importance: float = ALPHA_IMPORTANCE,
+        alpha_relevance: float = ALPHA_RELEVANCE,
         touch: bool = True,
     ) -> list[MemoryRecord]:
         """Return the most useful memories for *query* at *turn*.
@@ -423,8 +426,13 @@ class AgentMemory:
 
         Relevance is keyword overlap by default; with an ``embedding_client`` it
         is semantic similarity instead (see :meth:`_relevance_by_id`). All three
-        ingredients stay on a 0-1 scale, so the equal default weights combine the
-        same way either path.
+        ingredients stay on a 0-1 scale, so the weights combine the same way
+        either path. ``alpha_recency`` / ``alpha_importance`` /
+        ``alpha_relevance`` weight the three ingredients; they default to the
+        module's ``ALPHA_*`` constants (equal weights, like the paper), so
+        omitting them reproduces the historical scoring exactly. A simulation can
+        override them to, say, favor relevance over recency (see
+        ``generative-agents`` ``RetrievalConfig``).
 
         Set ``touch=False`` for a *read-only* retrieval that does not bump
         ``last_accessed_turn`` -- for inspecting or comparing what would surface
@@ -435,9 +443,9 @@ class AgentMemory:
         scored = []
         for record in self.records:
             score = (
-                ALPHA_RECENCY * recency_score(record, turn, decay)
-                + ALPHA_IMPORTANCE * importance_score(record)
-                + ALPHA_RELEVANCE * relevance[record.id]
+                alpha_recency * recency_score(record, turn, decay)
+                + alpha_importance * importance_score(record)
+                + alpha_relevance * relevance[record.id]
             )
             scored.append((score, record))
         scored.sort(key=lambda pair: (pair[0], pair[1].id), reverse=True)

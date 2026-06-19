@@ -158,7 +158,7 @@ def attach_agents(
             seed.seed_spatial_knowledge(char, tree)
 
 
-def observe_and_decide(game, char, step: int):
+def observe_and_decide(game, char, step: int, retrieval=None):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
     The Smallville step loop (``run_simulation.simulate``) calls the engine's
@@ -174,6 +174,10 @@ def observe_and_decide(game, char, step: int):
        the environment text, so it never changes what the mock brain reads off
        the first line -- the decision stays deterministic).
 
+    Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
+    retrieval scoring (weights / decay / how many memories surface); ``None``
+    uses :meth:`AgentMemory.retrieve`'s defaults -- identical to today.
+
     Returns the chosen command string, or ``None``.
     """
     agent = char.agent
@@ -181,7 +185,19 @@ def observe_and_decide(game, char, step: int):
         agent.memory.owner = char.name
     agent.memory.ingest_events(game, char)
     base = game.describe_for(char)
-    relevant = agent.memory.retrieve(query=base, turn=step)
+    if retrieval is None:
+        relevant = agent.memory.retrieve(query=base, turn=step)
+    else:
+        relevant = agent.memory.retrieve(
+            query=base,
+            turn=step,
+            max_records=retrieval.max_records,
+            token_budget=retrieval.token_budget,
+            decay=retrieval.recency_decay,
+            alpha_recency=retrieval.alpha_recency,
+            alpha_importance=retrieval.alpha_importance,
+            alpha_relevance=retrieval.alpha_relevance,
+        )
     observation = format_observation_with_memories(base, relevant)
     return agent.decide(observation)
 

@@ -186,6 +186,13 @@ Smallville backend (`generative-agents/backend/run_simulation.py`) wires this up
 pass `--config my.yaml` (or set the env vars), and `--llm-log` / `--llm-log-prompts`
 override the config's `observability` section.
 
+!!! note "The Smallville `--config` is a `SimulationConfig`, not a bare `GameConfig`"
+    The generative-agents sim wraps this `GameConfig` in a `SimulationConfig` (run-time
+    + memory-retrieval knobs on top). In its `--config` file the engine sections live
+    **under a `game:` key** (e.g. `game: {engine: {turn_mode: simultaneous}}`), with
+    `simulation:`, `retrieval:`, and `embedding:` as siblings. See
+    [SimulationConfig design](design/simulation-config.md).
+
 ## Web app
 
 The Flask demo app reads a few settings from the environment so you don't edit
