@@ -43,6 +43,13 @@ from . import seed
 from .build_world import LOCATION_NAMES
 from .planner import LLMPlanner, MockPlanner
 
+# How far a resident perceives, in map tiles (issue #82). 8 matches the upstream
+# Generative Agents ``vision_r`` cognition knob (their per-agent scratch.json).
+# Paired with a TiledGame (build_world(world_map=...)), this turns map proximity
+# into co-presence: residents within 8 tiles perceive each other and nearby
+# objects. A persona may override it with a ``vision_r`` key in world_data.yaml.
+SMALLVILLE_VISION_R = 8
+
 
 class SmallvilleMockClient(MockReActClient):
     """Deterministic mock LLM that walks a persona through a *schedule* of stops.
@@ -259,6 +266,10 @@ def attach_agents(
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
         agent.schedule = schedule
+        # How far this resident perceives, in tiles (issue #82). The TiledGame's
+        # perceivable_locations reads this to fold nearby residents/objects into
+        # memory; with the vanilla Game (no world_map) it just means the room.
+        char.vision_r = spec.get("vision_r", SMALLVILLE_VISION_R)
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
