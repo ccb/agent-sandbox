@@ -410,6 +410,7 @@ class AgentMemory:
         max_records: int = DEFAULT_MAX_RECORDS,
         token_budget: int = DEFAULT_TOKEN_BUDGET,
         decay: float = DEFAULT_DECAY,
+        touch: bool = True,
     ) -> list[MemoryRecord]:
         """Return the most useful memories for *query* at *turn*.
 
@@ -424,6 +425,11 @@ class AgentMemory:
         is semantic similarity instead (see :meth:`_relevance_by_id`). All three
         ingredients stay on a 0-1 scale, so the equal default weights combine the
         same way either path.
+
+        Set ``touch=False`` for a *read-only* retrieval that does not bump
+        ``last_accessed_turn`` -- for inspecting or comparing what would surface
+        without disturbing recency (e.g. scoring the same stream under two
+        relevance modes). The default ``touch=True`` is the decision-time path.
         """
         relevance = self._relevance_by_id(query)
         scored = []
@@ -444,8 +450,9 @@ class AgentMemory:
                 break
             chosen.append(record)
             spent += cost
-        for record in chosen:
-            record.last_accessed_turn = turn
+        if touch:
+            for record in chosen:
+                record.last_accessed_turn = turn
         return chosen
 
     def _relevance_by_id(self, query: str) -> dict[int, float]:

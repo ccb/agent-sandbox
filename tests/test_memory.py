@@ -259,6 +259,20 @@ def test_retrieve_updates_last_accessed_turn():
     assert r.last_accessed_turn == 5
 
 
+def test_retrieve_touch_false_leaves_recency_untouched():
+    # A read-only retrieval (touch=False) returns the same records but never bumps
+    # last_accessed_turn, so it can inspect/compare what would surface without
+    # disturbing recency for the next real retrieval.
+    mem = AgentMemory(owner="troll")
+    r = mem.add_observation("the player gave me a fish", turn=0)
+    out = mem.retrieve("fish", turn=5, touch=False)
+    assert out == [r]
+    assert r.last_accessed_turn == 0  # unchanged
+    # The real (touch=True) path still bumps, so the two modes don't interfere.
+    mem.retrieve("fish", turn=5)
+    assert r.last_accessed_turn == 5
+
+
 def test_token_budget_limits_count():
     mem = AgentMemory(owner="troll")
     for i in range(5):

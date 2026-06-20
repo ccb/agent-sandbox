@@ -90,10 +90,14 @@ all read and write memory, so nothing downstream is meaningful without it.
   chats, each with an importance score. `npc.py:5` explicitly notes "memory is Phase 2";
   this fills that gap. Anchor:
   [`../docs/design/agent-memory.md`](../docs/design/agent-memory.md).
-- `[engine] L` **Retrieval scoring = recency × relevance × importance.** Embeddings for
-  relevance; `recency_decay` is already a persona knob. ROADMAP flags a clean reference
-  implementation of exactly this scoring in the "Generative Action Castle" prototype
-  (ask Chris) — study it rather than reinventing.
+- `[engine] L` ✅ **Done (#76) — Retrieval scoring = recency × relevance × importance.**
+  A pluggable `EmbeddingClient` (model2vec default, offline) scores the relevance term;
+  `recency_decay` is already a persona knob. Wired into the sim by **#102**:
+  `run_simulation --embeddings [PROVIDER]` (else `EMBEDDING_PROVIDER`), with
+  `backend/compare_retrieval.py` measuring keyword-vs-semantic retrieval directly (the
+  mock brain ignores the block, so the replay is byte-identical until Phase A's real
+  brain). ROADMAP flags a clean reference implementation of exactly this scoring in the
+  "Generative Action Castle" prototype (ask Chris) — study it rather than reinventing.
 - `[engine] M` **Inject retrieved memories into the observation.** The string
   `Agent.decide(observation)` sees should include the top-scored memories, so the model
   reasons over its past, not just the current tile.

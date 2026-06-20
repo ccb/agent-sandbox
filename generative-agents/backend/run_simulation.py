@@ -27,6 +27,11 @@ import os
 from contextlib import nullcontext
 
 from text_adventure_games.config import GameConfig
+from text_adventure_games.embedding_client import (
+    EmbeddingConfig,
+    create_embedding_client,
+    embedding_client_from_env,
+)
 from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
@@ -65,6 +70,40 @@ def _parse_start(value: str) -> datetime.datetime:
             f"invalid start time {value!r}; use ISO format, "
             "e.g. '2023-02-13 08:00:00'"
         )
+
+
+def resolve_embedding_client(provider: str | None):
+    """Resolve a semantic-memory embedding client for the sim (issue #102).
+
+    Precedence: an explicit ``--embeddings`` *provider* wins; otherwise fall back
+    to the ``EMBEDDING_PROVIDER`` environment variable (via the engine's
+    ``embedding_client_from_env``). Returns ``None`` -- keyword-overlap relevance,
+    the offline default -- when neither is set, or when the chosen backend can't
+    be created (e.g. the ``embeddings`` extra isn't installed). That graceful
+    degrade is what keeps the plain ``run_simulation`` run free, offline, and
+    CI-safe even with a default-on flag.
+
+    Either way the deterministic mock brain decides from location alone, so the
+    exported replay stays byte-identical; an embedding client only reorders the
+    (mock-ignored) retrieved-memory block. Run ``backend.compare_retrieval`` to
+    actually watch semantic vs keyword retrieval diverge.
+    """
+    if not provider:
+        return embedding_client_from_env()
+    try:
+        config = EmbeddingConfig(
+            provider=provider,
+            model=os.environ.get("EMBEDDING_MODEL"),
+            api_key=os.environ.get("EMBEDDING_API_KEY"),
+            base_url=os.environ.get("EMBEDDING_BASE_URL"),
+        )
+        return create_embedding_client(config)
+    except (ImportError, ValueError) as e:
+        print(
+            f"Warning: could not create embedding client ({e}); falling back "
+            "to keyword-overlap relevance."
+        )
+        return None
 
 
 def simulate(
@@ -237,6 +276,20 @@ def main() -> None:
         action="store_true",
         help="include full prompts/responses in the usage log (default: numbers only)",
     )
+    parser.add_argument(
+        "--embeddings",
+        nargs="?",
+        const="local",
+        default=None,
+        metavar="PROVIDER",
+        help="score memory relevance semantically via an embedding backend "
+        "(local | mock | sentence-transformers | openai). Bare --embeddings uses "
+        "'local' (model2vec; needs `uv sync --extra embeddings`). Omit it for "
+        "keyword-overlap relevance, the offline default (EMBEDDING_PROVIDER is "
+        "honored when this flag is absent). The mock brain ignores retrieved "
+        "memories, so the replay is byte-identical either way -- run "
+        "`python -m backend.compare_retrieval` to compare retrieval directly.",
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.ville_dir):
@@ -247,6 +300,19 @@ def main() -> None:
 
     world_map = WorldMap(args.ville_dir)
     print(f"Loaded the_ville ({world_map.width}x{world_map.height}).")
+
+    # Semantic memory relevance (issue #102): the --embeddings flag (else
+    # EMBEDDING_PROVIDER) selects a backend, degrading to keyword overlap when
+    # none is set or installable. The mock brain ignores the retrieved block, so
+    # this never changes the exported replay -- it's the seam a real LLM brain
+    # would reason over (NEXT-STEPS Phase A); compare_retrieval.py shows the diff.
+    embedding_client = resolve_embedding_client(args.embeddings)
+    relevance_mode = (
+        f"semantic ({type(embedding_client).__name__})"
+        if embedding_client is not None
+        else "keyword overlap (no embedding client)"
+    )
+    print(f"Memory retrieval relevance: {relevance_mode}.")
 
     # Observability follows the global GameConfig: load it from --config (or the
     # environment), then let the explicit CLI flags override its observability
@@ -279,6 +345,7 @@ def main() -> None:
             world_map,
             args.steps,
             ledger=ledger,
+            embedding_client=embedding_client,
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
         )
