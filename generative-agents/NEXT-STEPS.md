@@ -97,10 +97,12 @@ all read and write memory, so nothing downstream is meaningful without it.
 - `[engine] M` **Inject retrieved memories into the observation.** The string
   `Agent.decide(observation)` sees should include the top-scored memories, so the model
   reasons over its past, not just the current tile.
-- `[port] M` **Seed personas at t=0.** Load `agent_history_init_n25.csv` relationships
-  into each agent's memory stream on build, and surface each agent's *partial* world
-  knowledge (their `spatial_memory.json` tree) via the engine's existing `Knowledge`
-  layer — the port doesn't use it yet. Anchor:
+- `[port] M` ✅ **Done (#79) — Seed personas at t=0.** `attach_agents` now folds
+  `agent_history_init_n25.csv` relationships into each agent's memory stream and surfaces
+  each persona's *partial* known-places tree (`spatial_memory.json`) as beliefs in the
+  engine's `Knowledge` layer (rendered into the "What you know:" observation section). The
+  loaders live in `backend/seed.py` and tolerate the git-ignored assets being absent, so a
+  fresh checkout / CI seeds nothing and stays byte-identical. Anchor:
   [`../docs/design/agent-knowledge.md`](../docs/design/agent-knowledge.md).
 
 ---

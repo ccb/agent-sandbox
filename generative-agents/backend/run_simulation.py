@@ -72,6 +72,9 @@ def simulate(
     num_steps: int,
     ledger: UsageLedger | None = None,
     embedding_client=None,
+    *,
+    relationships_csv: str | None = None,
+    base_personas_dir: str | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -85,9 +88,22 @@ def simulate(
     Pass an optional ``embedding_client`` (issue #76) for semantic memory
     relevance. The mock brain decides from location alone, so the frames are
     byte-identical with or without it; only the retrieved-memory block changes.
+
+    Pass ``relationships_csv`` / ``base_personas_dir`` (the upstream bootstrap
+    assets) to seed each persona at t=0 -- relationships into memory, partial
+    known-places into knowledge (issue #79, via :func:`attach_agents`). Both are
+    optional: tests call ``simulate`` without them and stay byte-identical, while
+    a real run (:func:`main`) points them at ``frontend/``.
     """
     game, chars = build_world()
-    attach_agents(chars, PERSONAS, ledger=ledger, embedding_client=embedding_client)
+    attach_agents(
+        chars,
+        PERSONAS,
+        ledger=ledger,
+        embedding_client=embedding_client,
+        relationships_csv=relationships_csv,
+        base_personas_dir=base_personas_dir,
+    )
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]
 
@@ -242,6 +258,13 @@ def main() -> None:
     if args.llm_log_prompts:
         config.observability.log_prompts = True
 
+    # The t=0 seed assets (issue #79): the relationships CSV sits beside the maze
+    # under --ville-dir, and each persona's partial known-places tree lives in its
+    # bootstrap_memory under the base sim. Both feed attach_agents via simulate;
+    # base_personas is reused below for the exporter's persona-memory copy.
+    relationships_csv = os.path.join(args.ville_dir, "agent_history_init_n25.csv")
+    base_personas = os.path.join(args.storage, args.base_sim, "personas")
+
     # Shared usage ledger across all personas; optionally streamed to the run's
     # JSONL artifact. The mock brain records $0, but the accounting is ready for
     # when a real client lands (NEXT-STEPS Phase A).
@@ -252,14 +275,19 @@ def main() -> None:
     with run_log or nullcontext():
         if run_log is not None:
             run_log.attach(ledger)
-        frames = simulate(world_map, args.steps, ledger=ledger)
+        frames = simulate(
+            world_map,
+            args.steps,
+            ledger=ledger,
+            relationships_csv=relationships_csv,
+            base_personas_dir=base_personas,
+        )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     _print_cost_summary(ledger)
     if run_log is not None:
         print(f"Wrote usage log to {run_log.path}")
 
     start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
-    base_personas = os.path.join(args.storage, args.base_sim, "personas")
     sim_dir = exporter.write_simulation(
         storage_root=args.storage,
         sim_code=args.sim_code,
