@@ -1,4 +1,5 @@
 from .things import Location, Character
+from .things.characters import DEFAULT_VISION_R
 from .clock import GameClock
 from .config import GameConfig
 from . import parsing, actions, blocks
@@ -536,6 +537,44 @@ class Game:
         if loc is None:
             return []
         return [c for c in loc.characters.values() if c is not speaker]
+
+    def perceivable_locations(self, character) -> list[Location]:
+        """Return the locations *character* can see into this turn (issue #80).
+
+        This is the single **visibility** seam, the sight counterpart to
+        :meth:`audience_for` (hearing). **Override it** to model a continuous or
+        range-based world -- tile distance, line of sight, walls. The default
+        policy is graph-based: a breadth-first walk over room ``connections`` out
+        to the character's ``vision_r`` hops. ``vision_r == 0`` (the default)
+        returns just the current room, so perception stays exactly as it was
+        before #80 until a game opts in by widening a character's radius.
+
+        Sight is deliberately *not* movement: the walk crosses ``blocks`` (a
+        locked gate stops you walking through, not seeing through). A world that
+        wants walls to block sight can override this to honor blocks.
+        """
+        loc = character.location
+        if loc is None:
+            return []
+        radius = getattr(character, "vision_r", DEFAULT_VISION_R)
+        # Breadth-first over the location graph, tracking each room's hop
+        # distance so we stop expanding once we pass the radius. `seen` keys on
+        # Location identity (a room reached by two paths is visited once).
+        seen = {id(loc): loc}
+        result = [loc]
+        frontier = [loc]
+        for _ in range(radius):
+            nxt = []
+            for room in frontier:
+                for neighbor in room.connections.values():
+                    if id(neighbor) not in seen:
+                        seen[id(neighbor)] = neighbor
+                        result.append(neighbor)
+                        nxt.append(neighbor)
+            frontier = nxt
+            if not frontier:
+                break  # radius exceeds the map; nothing more to reach
+        return result
 
     def set_parser(self, parser):
         """
