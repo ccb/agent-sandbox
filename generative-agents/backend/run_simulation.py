@@ -86,7 +86,7 @@ def simulate(
     relevance. The mock brain decides from location alone, so the frames are
     byte-identical with or without it; only the retrieved-memory block changes.
     """
-    game, chars = build_world()
+    game, chars = build_world(world_map)
     attach_agents(chars, PERSONAS, ledger=ledger, embedding_client=embedding_client)
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]

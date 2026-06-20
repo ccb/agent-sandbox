@@ -21,6 +21,13 @@ from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import LLMAgent, format_observation_with_memories
 from text_adventure_games.usage import UsageLedger, record_call
 
+# How far a resident perceives, in map tiles (issue #82). 8 matches the upstream
+# Generative Agents ``vision_r`` cognition knob (their per-agent scratch.json).
+# Paired with a TiledGame (build_world(world_map=...)), this turns map proximity
+# into co-presence: residents within 8 tiles perceive each other and nearby
+# objects. A persona may override it with a ``vision_r`` key in world_data.yaml.
+SMALLVILLE_VISION_R = 8
+
 
 class SmallvilleMockClient(MockReActClient):
     """Deterministic mock LLM for one persona's morning routine."""
@@ -126,6 +133,10 @@ def attach_agents(
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
+        # How far this resident perceives, in tiles (issue #82). The TiledGame's
+        # perceivable_locations reads this to fold nearby residents/objects into
+        # memory; with the vanilla Game (no world_map) it just means the room.
+        char.vision_r = spec.get("vision_r", SMALLVILLE_VISION_R)
         # Bind the private memory to this character and seed the day's plan.
         agent.memory.owner = char.name
         agent.memory.add_plan(
