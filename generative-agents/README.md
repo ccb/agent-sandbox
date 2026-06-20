@@ -67,7 +67,9 @@ uv run python -m backend.run_simulation                 # 360 steps (1 hour)
 #    fewer steps:  uv run python -m backend.run_simulation --steps 120
 #    other clock:  uv run python -m backend.run_simulation \
 #                      --start "2023-02-13 18:00:00" --sec-per-step 60
-#    (--help lists all flags: --steps, --start, --sec-per-step, --sim-code, ...)
+#    embeddings:   uv sync --extra embeddings    # one-time; then:
+#                  uv run python -m backend.run_simulation --embeddings local
+#    (--help lists all flags: --steps, --start, --sec-per-step, --embeddings, ...)
 
 # 3. Run the Django frontend in its OWN Python 3.9 venv. uv fetches a managed
 #    CPython 3.9 if you don't have one, so there's nothing to install by hand.
@@ -105,6 +107,11 @@ the maze assets aren't present — run `./setup.sh` first.)
 - **Add or change residents:** each persona is one dict in `PERSONAS` and each
   place one dict in `_LOCATIONS` — both data-driven. A new resident just needs a
   sprite named to match (`First_Last.png` under `static_dirs/assets/characters/`).
+- **Compare memory retrieval (issue #102):** `uv run python -m
+  backend.compare_retrieval --embeddings local` accrues a real memory stream for
+  each resident, then prints keyword-overlap vs semantic (embedding) retrieval
+  side by side — the believability check for whether semantic recall surfaces
+  better memories. Offline and needs no `setup.sh` assets (`build_world` only).
 
 ## Where the files live
 
@@ -220,10 +227,12 @@ and cast that this builds on.
   routine and don't yet talk to each other. They *do* now carry a private
   **memory stream** (issue #75): each perceives co-located neighbors, remembers
   its own actions, and has the retrieved memories folded into every observation
-  (`backend/smallville_agents.py`). The deterministic mock brain still decides
-  from location alone, so the replay is unchanged — but a live LLM would reason
-  over those memories. Reflection and plan *generation* (design Stages 5–7)
-  remain future work.
+  (`backend/smallville_agents.py`). Memory relevance can now be scored
+  *semantically* with embeddings (issue #102, `--embeddings`) instead of keyword
+  overlap; `backend/compare_retrieval.py` measures the difference directly. The
+  deterministic mock brain still decides from location alone, so the replay is
+  unchanged either way — but a live LLM would reason over those retrieved
+  memories. Reflection and plan *generation* (design Stages 5–7) remain future work.
 - **Live (non-replay) mode**, where the backend serves `update_environment`
   step-by-step instead of pre-generating the whole run.
 
