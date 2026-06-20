@@ -699,15 +699,15 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     decide/route/reflect cycle. Returns ``True`` if a command succeeded, else
     ``False``.
 
-    Memory (issue #75) is woven in here, in the Observe step: first perceive any
-    new world events since last turn, then retrieve the memories most relevant to
-    the current situation and fold them into the prompt. Retrieval lives only in
-    this sequential path -- the simultaneous gather phase builds its own
-    snapshot -- so other turn modes' observations are unchanged.
+    Memory (issue #75) is woven in here, in the Observe step: first perceive the
+    nearby world -- events plus, within the character's vision radius, the agents
+    and objects in view (issue #80) -- then retrieve the memories most relevant to
+    the current situation and fold them into the prompt. The simultaneous gather
+    phase runs the same perceive -> retrieve steps against its own snapshot.
     """
     if not agent.memory.owner:
         agent.memory.owner = character.name
-    agent.memory.ingest_events(game, character)
+    agent.memory.perceive(game, character)
 
     base = build_npc_context(character, game)
     relevant = agent.memory.retrieve(query=base, turn=getattr(game, "turn", 0))

@@ -328,9 +328,13 @@ def observe_and_decide(game, char, step: int):
     perceive -> retrieve -> augment wiring that the ReAct loop does for free
     (issue #75) is reproduced here, composing the same public memory API:
 
-    1. **Perceive** any visible world events since this agent last looked --
-       ``ingest_events`` folds co-located residents' actions (already logged by
-       ``parse_command``) into private observations, skipping the agent's own.
+    1. **Perceive** the nearby world since this agent last looked --
+       ``perceive`` folds visible residents' actions (already logged by
+       ``parse_command``) into private observations, skipping the agent's own,
+       plus -- within the character's vision radius (issue #80) -- the agents
+       and objects in view. At the default ``vision_r == 0`` this is just the
+       co-located event perception the port had before, so the replay is
+       unchanged until personas opt into a wider radius.
     2. **Retrieve** the memories most relevant to the current observation.
     3. **Augment** the observation with that retrieved block (appended *after*
        the environment text, so it never changes what the mock brain reads off
@@ -341,7 +345,7 @@ def observe_and_decide(game, char, step: int):
     agent = char.agent
     if not agent.memory.owner:
         agent.memory.owner = char.name
-    agent.memory.ingest_events(game, char)
+    agent.memory.perceive(game, char)
     base = game.describe_for(char)
     relevant = agent.memory.retrieve(query=base, turn=step)
     # Stash the retrieved block on the agent so the step loop can surface it in
