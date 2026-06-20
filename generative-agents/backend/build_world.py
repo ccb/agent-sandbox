@@ -18,11 +18,11 @@ place is one more location.
 from pathlib import Path
 
 import yaml
-from text_adventure_games import games
 from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
 
 from .actions import Act, Travel
+from .tiled_game import TiledGame
 
 _WORLD_DATA_PATH = Path(__file__).with_name("world_data.yaml")
 
@@ -112,12 +112,18 @@ MAX_ACTIVE_PERSONAS = 5
 PERSONAS = _ALL_PERSONAS[:MAX_ACTIVE_PERSONAS]
 
 
-def build_world():
+def build_world(world_map=None):
     """Construct the Smallville game.
 
     Returns ``(game, characters)`` where ``characters`` maps persona name ->
     :class:`Character`. Agents are *not* attached here (see
     :mod:`smallville_agents`); the caller wires those onto each character.
+
+    Pass a :class:`~backend.world_map.WorldMap` to make "who/what is nearby"
+    tile-distance based (issue #82): the game is a :class:`TiledGame`, so an
+    agent with ``vision_r > 0`` perceives residents/objects in arenas within that
+    many tiles. With no ``world_map`` (the default) perception falls back to the
+    current room, so callers that don't need proximity are unaffected.
     """
     locations: dict[str, Location] = {}
     hub = None
@@ -164,12 +170,13 @@ def build_world():
         char = Character(spec["name"], spec["name"], spec["persona"])
         characters[spec["name"]] = char
 
-    game = games.Game(
+    game = TiledGame(
         hub_loc,
         observer,
         characters=list(characters.values()),
         custom_actions=[Travel, Act],
         turn_mode="simultaneous",
+        world_map=world_map,
     )
 
     # Place each persona in their home location (Game only auto-places the player).

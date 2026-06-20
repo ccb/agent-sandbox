@@ -207,7 +207,7 @@ def simulate(
     writes ``personas/<Name>/daily_plan.json`` and ``backend.compare_plans`` reads it
     back without re-calling the model. Also an out-parameter, for the same reason.
     """
-    game, chars = build_world()
+    game, chars = build_world(world_map)
     attach_agents(
         chars,
         PERSONAS,
