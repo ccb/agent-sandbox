@@ -362,6 +362,19 @@ class _ChooseReward(actions.Action):
         return True
 
 
+def _take_from_hoard(game, character, name):
+    """Move the named loot item out of the treasure hoard into the character's
+    hands (the legitimate reward path -- the steal trigger is keyed on having a
+    hoard item *without* reward_taken, which CHOOSE sets first)."""
+    treasure = game.locations["Treasure Trove"].items.get("treasure")
+    item = treasure.contents.get(name) if treasure else None
+    if item is not None:
+        item.set_property("gettable", True)
+        treasure.remove_item(item)
+        character.add_to_inventory(item)
+    return item
+
+
 class ChooseGold(_ChooseReward):
     ACTION_NAME = "choose gold"
     ACTION_DESCRIPTION = "Take the dragon's gold"
@@ -369,11 +382,7 @@ class ChooseGold(_ChooseReward):
 
     def apply_effects(self):
         self.dragon.set_property("reward_taken", True)
-        gold = things.Item(
-            "gold", "a heavy sack of gold coins", "Stolen from the king's treasury."
-        )
-        gold.set_property("gettable", True)
-        self.character.add_to_inventory(gold)
+        _take_from_hoard(self.game, self.character, "gold")
         self.parser.ok(
             'The dragon laughs evilly. "Well, take as much as you can carry!" '
             "You grab a large sack of gold."
@@ -387,12 +396,7 @@ class ChooseSword(_ChooseReward):
 
     def apply_effects(self):
         self.dragon.set_property("reward_taken", True)
-        sword = things.Item(
-            "sword", "a gleaming sword", "The sword of the fallen champion -- it glows!"
-        )
-        sword.set_property("is_weapon", True)
-        sword.set_property("wieldable", True)
-        self.character.add_to_inventory(sword)
+        _take_from_hoard(self.game, self.character, "sword")
         self.parser.ok(
             '"The sword of the fallen champion? A bold choice!" roars the dragon. '
             "You strap the sword to your waist, and the dragon goes back to sleep."
@@ -406,9 +410,7 @@ class ChooseRing(_ChooseReward):
 
     def apply_effects(self):
         self.dragon.set_property("reward_taken", True)
-        ring = things.Item("ring", "a beautiful diamond ring", "The gem is enormous!")
-        ring.set_property("gettable", True)
-        self.character.add_to_inventory(ring)
+        _take_from_hoard(self.game, self.character, "ring")
         self.parser.ok(
             '"A human who loves pretty rocks? Typical!" With a sweep of its tail, the '
             "dragon opens a chute beneath your feet, and you tumble down into the darkness..."
@@ -962,12 +964,36 @@ def build_game() -> ActionCastle2:
         "Clad in fire-scorched armor and a battered shield.",
         underground,
     )
-    scenery(
+    # The hoard is a container: you can EXAMINE the gold / sword / ring it holds
+    # (rulebook flavor), and you *can* try to grab them -- but stealing wakes the
+    # dragon (the steal trigger below). CHOOSE GOLD/SWORD/RING hands you the same
+    # item legitimately. Contents show on EXAMINE TREASURE, not in the room list.
+    treasure = things.Item(
         "treasure",
         "a mountain of treasure",
-        "Gold coins, gems, jewelry, and a gleaming sword forged of fine steel.",
-        trove,
+        "Burlap sacks bursting with coins, a king's ransom of gems and jewelry, "
+        "and a glint of steel.",
     )
+    treasure.set_property("gettable", False)
+    treasure.make_container()
+    hoard_gold = things.Item(
+        "gold",
+        "a heavy sack of gold coins",
+        "Stolen from the king's treasury, no doubt -- you recognize the royal seal.",
+    )
+    hoard_sword = things.Item(
+        "sword", "a gleaming sword", "The sword isn't just gleaming... it's glowing!"
+    )
+    hoard_sword.set_property("is_weapon", True)
+    hoard_sword.set_property("wieldable", True)
+    hoard_ring = things.Item(
+        "ring",
+        "a beautiful diamond ring",
+        "An especially beautiful diamond ring. The gem is enormous!",
+    )
+    for loot in (hoard_gold, hoard_sword, hoard_ring):
+        treasure.add_item(loot)
+    trove.add_item(treasure)
     # A surface (engine supporter): the old lamp rests ON a stone ledge. Demos
     # the surface verbs in a live game -- EXAMINE LEDGE lists what's on it, and
     # you can TAKE LAMP off it / PUT LAMP ON LEDGE. (The lamp is a useless
@@ -1128,6 +1154,29 @@ def build_game() -> ActionCastle2:
             and not smith.inventory["axe"].get_property("is_sharp"),
             sharpen_axe,
             True,
+        )
+    )
+
+    # Stealing from the hoard wakes the dragon -- and it kills the thief
+    # (rulebook). Keyed on holding a loot item you did NOT earn: CHOOSE sets
+    # reward_taken first, so the legitimate reward never trips this; a bare
+    # "take gold/sword/ring" does.
+    def dragon_kills_thief(g):
+        dragon.set_property("awake", True)
+        _die(
+            g,
+            'The dragon\'s eye snaps open. "THIEF!" it roars, and a gout of '
+            "flame engulfs you. THE END.",
+        )
+
+    game_triggers.append(
+        (
+            "dragon_kills_thief",
+            lambda g: dragon is not None
+            and not dragon.get_property("reward_taken")
+            and any(_is_holding(g.player, n) for n in ("gold", "sword", "ring")),
+            dragon_kills_thief,
+            False,
         )
     )
 
