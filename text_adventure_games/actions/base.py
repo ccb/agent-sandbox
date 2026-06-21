@@ -50,6 +50,23 @@ class Action:
             return self.actor
         return self.parser.get_character(command, **kwargs)
 
+    def character_in_room(self, command, looker):
+        """Match a character (other than *looker*) co-located with *looker* whose
+        name appears in *command*; longest name first so "old man" beats "man".
+
+        Unlike ``parser.get_character`` this is room-scoped and never defaults to
+        the player -- it returns ``None`` when no present character matches. Used
+        by verbs that act on a person in the room (examine, talk)."""
+        loc = getattr(looker, "location", None)
+        if loc is None:
+            return None
+        cmd = command.lower()
+        for name in sorted(loc.characters, key=len, reverse=True):
+            other = loc.characters[name]
+            if other is not looker and name.lower() in cmd:
+                return other
+        return None
+
     def target_character(self, command, exclude=None, **kwargs):
         """Resolve the character an action is aimed AT (its object), as opposed
         to its actor resolved by ``acting_character``.

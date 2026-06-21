@@ -22,7 +22,21 @@ class Wear(base.Action):
         if not self.was_matched(self.item, "I don't see it."):
             return False
         if not self.item.get_property(Property.WEARABLE):
-            self.parser.fail(f"{self.item.name.capitalize()} is not wearable.")
+            self.parser.fail(f"You can't wear the {self.item.name}.")
+            return False
+        # Fit gate: an item may only fit certain wearers. If it declares a
+        # ``fit_property`` (the name of a matching dimension, e.g. "shoe_size"),
+        # the wearer must share the item's value for that property. Unset on the
+        # wearer reads as False, so it won't match a real required value. Items
+        # may set ``misfit_message`` to customize the refusal.
+        fit_property = self.item.get_property("fit_property")
+        if fit_property and self.character.get_property(
+            fit_property
+        ) != self.item.get_property(fit_property):
+            self.parser.fail(
+                self.item.get_property("misfit_message")
+                or f"The {self.item.name} won't fit."
+            )
             return False
         if self.character.is_worn(self.item):
             self.parser.fail(
@@ -91,7 +105,7 @@ class Wield(base.Action):
         if not self.was_matched(self.item, "I don't see it."):
             return False
         if not self.item.get_property(Property.WIELDABLE):
-            self.parser.fail(f"{self.item.name.capitalize()} is not wieldable.")
+            self.parser.fail(f"You can't wield the {self.item.name}.")
             return False
         if self.character.is_wielded(self.item):
             self.parser.fail(
