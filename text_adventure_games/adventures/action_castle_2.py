@@ -462,33 +462,11 @@ class DropPennyInWell(actions.Action):
         )
 
 
-class GiveAxeToSmith(actions.Action):
-    ACTION_NAME = "give axe to smith"
-    ACTION_DESCRIPTION = "Give your axe to the blacksmith to be sharpened"
-    ACTION_ALIASES = ["give axe to blacksmith", "have the smith sharpen the axe"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.smith = self.parser.get_character("smith")
-
-    def check_preconditions(self) -> bool:
-        if self.smith is None or self.smith.location is not self.character.location:
-            self.parser.fail("There's no blacksmith here.")
-            return False
-        if not _is_holding(self.character, "axe"):
-            self.parser.fail("You don't have an axe to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        axe = _all_held(self.character)["axe"]
-        axe.set_property("is_sharp", True)
-        axe.description = "a sharp axe"
-        self.parser.ok(
-            "The smith mutters under his breath and sharpens the axe for you. "
-            "You now have a sharp axe."
-        )
+# NOTE: sharpening the axe is handled by a TRIGGER (see build_game), not a custom
+# action. The built-in Give already moves the axe into the smith's hands for any
+# phrasing -- "give axe to smith", "give smith the axe", "hand the smith my axe" --
+# so a trigger that reacts to "the smith holds the unsharpened axe" sharpens it and
+# hands it back, independent of how the give was worded (issue #113).
 
 
 class GiveBlanketToRosemary(actions.Action):
@@ -979,12 +957,21 @@ def build_game() -> ActionCastle2:
         "Gold coins, gems, jewelry, and a gleaming sword forged of fine steel.",
         trove,
     )
-    scenery(
-        "lamp",
-        "an old lamp",
-        "It ran out of oil ages ago. It cannot be lit.",
-        dungeon_stairs,
+    # A surface (engine supporter): the old lamp rests ON a stone ledge. Demos
+    # the surface verbs in a live game -- EXAMINE LEDGE lists what's on it, and
+    # you can TAKE LAMP off it / PUT LAMP ON LEDGE. (The lamp is a useless
+    # souvenir per the rulebook, but it's takeable so the demo has something to
+    # move.)
+    ledge = things.Item(
+        "ledge", "a stone ledge", "A worn stone ledge runs along the stairs."
     )
+    ledge.set_property("gettable", False)
+    ledge.make_surface()
+    lamp = things.Item(
+        "lamp", "an old lamp", "It ran out of oil ages ago. It cannot be lit."
+    )
+    ledge.add_item(lamp)
+    dungeon_stairs.add_item(ledge)
 
     # --- Characters --------------------------------------------------------
     player = things.Character(
@@ -1088,6 +1075,33 @@ def build_game() -> ActionCastle2:
     # tied to a single verb.
     game_triggers = []
 
+    # SMITH sharpens the axe (issue #113). The built-in Give moves the axe into
+    # the smith's hands for ANY phrasing; this trigger then reacts to "the smith
+    # holds the unsharpened axe" -- sharpening it and handing it back -- so it
+    # works whether you typed "give axe to smith" or "give smith the axe".
+    def sharpen_axe(g):
+        axe = smith.inventory.get("axe")
+        if axe is None:
+            return
+        axe.set_property("is_sharp", True)
+        axe.description = "a sharp axe"
+        smith.remove_from_inventory(axe)
+        g.player.add_to_inventory(axe)
+        g.parser.ok(
+            "The smith mutters under his breath and sharpens the axe for you. "
+            "You now have a sharp axe."
+        )
+
+    game_triggers.append(
+        (
+            "smith_sharpens_axe",
+            lambda g: "axe" in smith.inventory
+            and not smith.inventory["axe"].get_property("is_sharp"),
+            sharpen_axe,
+            True,
+        )
+    )
+
     # Returning to the Moat carrying the gold is fatal (you sink and drown).
     def gold_drown(g):
         _die(
@@ -1134,7 +1148,6 @@ def build_game() -> ActionCastle2:
         ChooseSword,
         ChooseRing,
         DropPennyInWell,
-        GiveAxeToSmith,
         GiveBlanketToRosemary,
         GiveSlippersToHermit,
         GiveSwordToKing,
