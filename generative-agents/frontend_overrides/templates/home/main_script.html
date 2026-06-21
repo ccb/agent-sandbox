@@ -155,7 +155,19 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	let execute_count_max = tile_width/movement_speed;
 	let execute_count = execute_count_max;
 	let movement_target = {};
-	
+
+	// Escape text before injecting it into the agent cards. The reasoning and
+	// memory text come from the simulation data, so escape <, >, & and quotes to
+	// keep them from being parsed as HTML when we build the cards' innerHTML.
+	function escapeHtml(value) {
+		return String(value == null ? "" : value)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
 
 	// ###########################################################################
 	// ENGINE
@@ -708,8 +720,32 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	        document.getElementById("current_action__"+curr_persona_name_os).innerHTML = description_content.split("@")[0];
 	        document.getElementById("target_address__"+curr_persona_name_os).innerHTML = description_content.split("@")[1];
 	        document.getElementById("chat__"+curr_persona_name_os).innerHTML = chat_content;
+
+	        // Memory + reasoning behind the current action. These keys are added by
+	        // the backend (run_simulation); guard for sims/pages that lack them so
+	        // the card degrades gracefully instead of erroring.
+	        let persona_frame = execute_movement["persona"][curr_persona_name];
+	        let reasoning_el = document.getElementById("reasoning__"+curr_persona_name_os);
+	        if (reasoning_el) {
+	          reasoning_el.innerHTML = persona_frame["reasoning"]
+	            ? escapeHtml(persona_frame["reasoning"])
+	            : "<em>&mdash;</em>";
+	        }
+	        let memories_el = document.getElementById("memories__"+curr_persona_name_os);
+	        if (memories_el) {
+	          let mems = persona_frame["memories"] || [];
+	          memories_el.innerHTML = mems.length
+	            ? "<ul class='mem-list'>" + mems.map(function (m) {
+	                return "<li>"
+	                  + "<span class='mem-kind'>" + escapeHtml(m.kind) + "</span> "
+	                  + "<span class='mem-imp'>(" + escapeHtml(String(m.importance)) + ")</span> "
+	                  + escapeHtml(m.text)
+	                  + "</li>";
+	              }).join("") + "</ul>"
+	            : "<em>None retrieved</em>";
+	        }
 	      }
-	      
+
 	    }
 
 	    execute_count = execute_count - 1;

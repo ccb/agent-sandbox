@@ -46,7 +46,16 @@ def _load_world_data() -> tuple[list[dict], list[dict]]:
 #
 # Each location entry has name, description, address (Smallville tile address or
 # null for the hub), and optionally hub: true for the town center.
-PERSONAS, _LOCATIONS = _load_world_data()
+_ALL_PERSONAS, _LOCATIONS = _load_world_data()
+
+# Active cast size. The full 25-resident roster still loads from world_data.yaml
+# (nothing is deleted) -- we just run a smaller subset so the demo's per-agent
+# memory/reasoning panels stay readable. Set this to len(_ALL_PERSONAS) to run
+# the whole town again. The first 5 are a deliberate mix: Isabella + Maria share
+# Hobbs Cafe and Klaus + Ayesha share Oak Hill College, so co-located agents
+# perceive and remember each other, while Wolfgang heads to the park alone.
+MAX_ACTIVE_PERSONAS = 5
+PERSONAS = _ALL_PERSONAS[:MAX_ACTIVE_PERSONAS]
 
 
 def build_world():

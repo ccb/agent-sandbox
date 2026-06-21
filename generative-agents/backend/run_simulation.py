@@ -37,7 +37,12 @@ from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import PERSONAS, build_world
-from .smallville_agents import attach_agents, observe_and_decide, remember_outcome
+from .smallville_agents import (
+    attach_agents,
+    memories_for_frame,
+    observe_and_decide,
+    remember_outcome,
+)
 from .world_map import WorldMap
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -155,6 +160,11 @@ def simulate(
             "pron": emoji[char.name],
             "desc": f"waking up @ {char.location.tile_address}",
             "performing": False,
+            # Latest reasoning + retrieved-memory block, surfaced on the replay's
+            # agent card. They update at each decision point and carry forward on
+            # the steps in between (like desc/pron), so the card is never blank.
+            "reasoning": "(waking up)",
+            "memories": [],
         }
 
     frames: list[dict] = []
@@ -180,6 +190,16 @@ def simulate(
                 # The usage context above is set first so the decide() call
                 # inside observe_and_decide is attributed to this persona/step.
                 command = observe_and_decide(game, char, _step)
+                # Capture the thinking behind this decision for the replay card:
+                # the reasoning the agent produced and the memories it retrieved
+                # (stashed on the agent by observe_and_decide). They persist on
+                # st until the agent's next decision.
+                st["reasoning"] = (
+                    getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
+                )
+                st["memories"] = memories_for_frame(
+                    getattr(char.agent, "last_retrieved", None)
+                )
                 if command and game.parser.parse_command(command, actor=char):
                     remember_outcome(char, command, _step)
                     if command.startswith("travel"):
@@ -205,6 +225,11 @@ def simulate(
                 "pronunciatio": st["pron"],
                 "description": st["desc"],
                 "chat": None,
+                # Reasoning + retrieved memories for this agent's card (the
+                # exporter writes the frame verbatim, so these flow straight into
+                # movement/<step>.json for the replay to render).
+                "reasoning": st["reasoning"],
+                "memories": st["memories"],
             }
         frames.append(frame)
 

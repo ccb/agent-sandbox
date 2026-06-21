@@ -182,8 +182,30 @@ def observe_and_decide(game, char, step: int):
     agent.memory.ingest_events(game, char)
     base = game.describe_for(char)
     relevant = agent.memory.retrieve(query=base, turn=step)
+    # Stash the retrieved block on the agent so the step loop can surface it in
+    # the replay's per-agent card (run_simulation -> exporter). This is a plain
+    # attribute on our own LLMAgent instance -- the engine class is untouched.
+    agent.last_retrieved = relevant
     observation = format_observation_with_memories(base, relevant)
     return agent.decide(observation)
+
+
+def memories_for_frame(records) -> list[dict]:
+    """Format retrieved memory records as UI-ready dicts for a replay frame.
+
+    ``observe_and_decide`` stashes the records it retrieved on ``agent`` as
+    ``last_retrieved``; this turns them into the small JSON shape the frontend's
+    agent card renders (kind / importance / text), so the viewer can watch which
+    memories surfaced for each decision. Returns ``[]`` for an empty/None list.
+    """
+    return [
+        {
+            "kind": r.kind.value,
+            "importance": round(float(r.importance), 1),
+            "text": r.text,
+        }
+        for r in (records or [])
+    ]
 
 
 def remember_outcome(char, command: str, step: int) -> None:
