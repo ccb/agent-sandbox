@@ -96,3 +96,50 @@ def test_say_word_boundary_recipient_match():
     assert ok is True
     # Must be a broadcast (not directed at thief) with the full message intact.
     assert "guard says: to thiefery is doomed" in _history_text(game)
+
+
+# --- Talk: default line + topic dialogue (talk_text / talk_topics) ----------
+
+
+def _talk_game():
+    room = things.Location("Room", "A plain room.")
+    player = things.Character("player", "the player", "I explore.")
+    sage = things.Character("sage", "a wise sage", "I ponder.")
+    sage.talk_text = "The sage nods slowly."
+    sage.talk_topics = {"prophecy": "The sage says the stars foretell a champion."}
+    game = games.Game(room, player, characters=[sage])
+    room.add_character(sage)
+    return game, player, sage
+
+
+def test_talk_default_line_verbatim():
+    game, player, sage = _talk_game()
+    game.parser.parse_command("talk to sage", actor=player)
+    assert "The sage nods slowly." in _history_text(game)
+
+
+def test_talk_about_known_topic():
+    game, player, sage = _talk_game()
+    game.parser.parse_command("talk to sage about prophecy", actor=player)
+    assert "stars foretell a champion" in _history_text(game)
+
+
+def test_ask_about_known_topic_routes_to_talk():
+    game, player, sage = _talk_game()
+    game.parser.parse_command("ask sage about the prophecy", actor=player)
+    assert "stars foretell a champion" in _history_text(game)
+
+
+def test_talk_about_unknown_topic_is_declined():
+    game, player, sage = _talk_game()
+    game.parser.parse_command("talk to sage about dragons", actor=player)
+    assert "has nothing to say about that" in _history_text(game)
+
+
+def test_match_topic_prefers_the_longest_key():
+    game, player, sage = _talk_game()
+    sage.talk_topics = {"war": "a war", "great war": "the big one"}
+    assert (
+        game.parser.match_topic("ask sage about the great war", sage.talk_topics)
+        == "great war"
+    )
