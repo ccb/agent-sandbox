@@ -3,24 +3,26 @@ from ..enums import ActionName, Role
 
 
 class Talk(base.Action):
-    """Greet / talk to a co-located character.
+    """Greet / talk to a co-located character, optionally about a topic.
 
-    Surfaces the character's player-facing ``talk_text`` if one is set, else a
-    neutral "nothing to say". We deliberately do NOT voice ``persona``: that is
-    the character's private first-person self-concept driving the LLM agent
-    (npc.py), not dialogue, and speaking it aloud would leak inner monologue. A
-    game that wants scripted, branching dialogue with a specific NPC registers
-    its own multi-word action (e.g. ``talk to hermit``); the parser's
-    specific-first pass routes there before this generic verb, which handles
-    every other "talk to <name>".
+    ``talk to X`` surfaces the character's default ``talk_text``; ``talk to X
+    about <topic>`` / ``ask X about <topic>`` looks up a canned line in the
+    character's ``talk_topics`` (the topic is resolved via ``parser.match_topic``
+    -- by keyword in the exact-match parser, by meaning in the LLM parser).
+    Lines are printed verbatim (author them as narration). We deliberately do
+    NOT voice ``persona`` -- that's the character's private self-concept driving
+    the LLM agent (npc.py), not dialogue. A game that wants richer scripted
+    dialogue can still register its own ``talk to <name>`` action; the parser's
+    specific-first pass routes there before this generic verb.
     """
 
     ACTION_NAME = ActionName.TALK
-    ACTION_DESCRIPTION = "Talk to someone nearby"
+    ACTION_DESCRIPTION = "Talk to someone nearby, optionally about a topic"
     ACTION_ALIASES = ["talk to", "talk with", "chat with"]
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
+        self.command = command
         self.character = self.acting_character(command, hint="talker")
         self.target = self.character_in_room(command, self.character)
 
@@ -31,12 +33,18 @@ class Talk(base.Action):
         return True
 
     def apply_effects(self):
-        line = getattr(self.target, "talk_text", "")
         name = self.target.name.capitalize()
-        if line:
-            self.parser.ok(f'{name} says, "{line}"')
-        else:
-            self.parser.ok(f"{name} has nothing to say.")
+        topics = getattr(self.target, "talk_topics", None) or {}
+        # "... about <topic>" asks about something specific; resolve which topic.
+        if " about " in self.command.lower() and topics:
+            topic = self.parser.match_topic(self.command, topics)
+            if topic is not None:
+                self.parser.ok(topics[topic])
+            else:
+                self.parser.ok(f"{name} has nothing to say about that.")
+            return
+        line = getattr(self.target, "talk_text", "")
+        self.parser.ok(line if line else f"{name} has nothing to say.")
 
 
 class Follow(base.Action):

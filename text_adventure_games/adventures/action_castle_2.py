@@ -710,30 +710,10 @@ class Propose(actions.Action):
         self.beloved.set_property("is_married", True)
 
 
-class TalkToHermit(actions.Action):
-    ACTION_NAME = "talk to hermit"
-    ACTION_DESCRIPTION = "Talk to the old hermit"
-    ACTION_ALIASES = []
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command)
-        self.hermit = self.parser.get_character("hermit")
-
-    def check_preconditions(self) -> bool:
-        if self.hermit is None or self.hermit.location is not self.character.location:
-            self.parser.fail("There's no one here to talk to.")
-            return False
-        return True
-
-    def apply_effects(self):
-        # Faithful to the rulebook: TALK TO HERMIT gives only the prophecy. The
-        # dragon's riddle hint ("the wise person has everything they need") comes
-        # solely from GIVE SLIPPERS TO HERMIT -- that gift IS the telegraph.
-        self.parser.ok(
-            'The hermit turns from the fire and intones, "A champion will arise from '
-            'humble beginnings to bring peace to the land."'
-        )
+# NOTE: the hermit's dialogue is handled by the engine's generic Talk verb via
+# his talk_text (the mumble) + talk_topics ("prophecy" -> the prophecy line),
+# set in build_game -- not a custom action. So "talk to hermit" mumbles, and
+# "talk to hermit about prophecy" / "ask hermit about the prophecy" evokes it.
 
 
 # ---------------------------------------------------------------------------
@@ -1006,7 +986,10 @@ def build_game() -> ActionCastle2:
     )
     # talk_text is the spoken line the generic Talk action surfaces (nicer than
     # her first-person persona, which would read oddly quoted aloud).
-    rosemary.talk_text = "Oh! H-hello... it's good to see you."
+    rosemary.talk_text = (
+        "Rosemary blushes and looks at her feet. \"Oh! H-hello... it's good to "
+        'see you."'
+    )
     rosemary.set_property("emotional_state", "happy")
     # Following (engine #112): she declines until she has the blanket ("too
     # chilly"), and even once following she won't leave the town for the castle
@@ -1026,7 +1009,7 @@ def build_game() -> ActionCastle2:
         "A burly, bearded blacksmith, sleeves rolled up, hammering red-hot iron "
         "at the forge. He doesn't look up."
     )
-    smith.talk_text = "Whaddya want? I'm busy!"
+    smith.talk_text = 'The smith barely glances up. "Whaddya want? I\'m busy!"'
     smithy.add_character(smith)
 
     hermit = things.Character(
@@ -1038,6 +1021,18 @@ def build_game() -> ActionCastle2:
         "A wild-eyed old man in a burlap sack, warming his hands by a small fire. "
         "He mutters about fools, wealth, and the wisdom of wanting nothing."
     )
+    # TALK TO HERMIT mumbles (and teases the topic); TALK TO HERMIT ABOUT
+    # PROPHECY / ASK HERMIT ABOUT THE PROPHECY evokes the prophecy (rulebook).
+    hermit.talk_text = (
+        "The hermit mumbles something about a prophecy, then goes back to "
+        "staring into the fire."
+    )
+    hermit.talk_topics = {
+        "prophecy": (
+            'The hermit turns from the fire and intones, "A champion will arise '
+            'from humble beginnings to bring peace to the land."'
+        )
+    }
     # The hermit takes the same shoe size as the king (he is more than he seems)
     # -- the velvet slippers fit him, which is why gifting them ends with the
     # king wearing them.
@@ -1062,7 +1057,7 @@ def build_game() -> ActionCastle2:
         "A pair of royal guards in the king's livery, halberds crossed. They eye "
         "you -- and whatever you're carrying -- with suspicion."
     )
-    guards.talk_text = "Halt! Who goes there?"
+    guards.talk_text = 'The guards level their halberds. "Halt! Who goes there?"'
     courtyard.add_character(guards)
 
     king = things.Character(
@@ -1074,7 +1069,10 @@ def build_game() -> ActionCastle2:
         "The king of Action Castle, long-bearded and gold-crowned, slumped on his "
         "throne. He looks every inch a monarch in want of a champion."
     )
-    king.talk_text = "Speak, then -- what brings you before the throne?"
+    king.talk_text = (
+        'The king studies you from his throne. "Speak, then -- what brings you '
+        'before the throne?"'
+    )
     king.set_property("shoe_size", "imperial_foot")  # the velvet slippers fit him
     throne_room.add_character(king)
 
@@ -1166,7 +1164,6 @@ def build_game() -> ActionCastle2:
         RowBoat,
         EnterBoat,
         Propose,
-        TalkToHermit,
     ]
     characters = [rosemary, smith, hermit, dragon, guards, king]
     game = ActionCastle2(workshop, player, characters, custom_actions)
