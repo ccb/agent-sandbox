@@ -11,7 +11,7 @@ from .fight import Attack
 from .fish import Catch_Fish
 from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
-from .things import Get, Drop, Inventory, Examine, Give
+from .things import Get, Drop, Inventory, Examine, Give, Put, Open, Close
 from .talk import Say, Talk
 from .goals import AdoptGoal, DropGoal
 
@@ -27,6 +27,9 @@ __all__ = [
     "Inventory",
     "Examine",
     "Give",
+    "Put",
+    "Open",
+    "Close",
     "Eat",
     "Drink",
     "Light",
