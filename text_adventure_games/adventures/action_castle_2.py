@@ -44,13 +44,12 @@ ROSEMARY_NO_FOLLOW = {
 
 
 def _relocate(game, character, dest_name):
-    """Move *character* to the location named *dest_name* (engine-native move)."""
+    """Move *character* to the location named *dest_name*, dragging any followers
+    along (so rowing out to the pond carries Rosemary with you). Routes through
+    the engine's relocate/drag_followers chokepoint."""
     dest = game.locations[dest_name]
-    loc = character.location
-    if loc is not None and character.name in loc.characters:
-        loc.remove_character(character)
-    dest.add_character(character)
-    character.location = dest
+    game.relocate(character, dest)
+    game.drag_followers(character)
     return dest
 
 
@@ -518,7 +517,10 @@ class GiveBlanketToRosemary(actions.Action):
         blanket = _take_held(self.character, "blanket")
         self.rosemary.add_to_inventory(blanket)
         self.rosemary.wear(blanket)  # she drapes it over her shoulders
-        self.rosemary.set_property("is_following", True)
+        # Now warm enough to come along: she follows the player, and a later
+        # "ask rosemary to follow" is accepted too (clear the cold-feet refusal).
+        self.rosemary.following = self.game.player
+        self.rosemary.set_property("refuses_follow", False)
         self.rosemary.set_property("emotional_state", "happy")
         self.game.award(
             "blanket",
@@ -754,31 +756,6 @@ class TalkToHermit(actions.Action):
             'The hermit turns from the fire and intones, "A champion will arise from '
             'humble beginnings to bring peace to the land."'
         )
-
-
-# ---------------------------------------------------------------------------
-# Following-NPC behavior (Rosemary / Sage)
-# ---------------------------------------------------------------------------
-
-
-def make_rosemary_behavior():
-    """Once she has the blanket, Rosemary follows the player -- but won't go
-    south of the Old Pond or into the castle (ACII pages 35/37)."""
-
-    def behavior(character, game):
-        if not character.get_property("is_following"):
-            return
-        player = game.player
-        ploc = player.location
-        if ploc is None or ploc is character.location:
-            return
-        if ploc.name in ROSEMARY_NO_FOLLOW:
-            game.parser.npc_ok(f"{character.name.capitalize()} won't go any farther.")
-            return
-        _relocate(game, character, ploc.name)
-        game.parser.npc_ok(f"{character.name.capitalize()} follows you.")
-
-    return behavior
 
 
 # ---------------------------------------------------------------------------
@@ -1034,7 +1011,15 @@ def build_game() -> ActionCastle2:
     # her first-person persona, which would read oddly quoted aloud).
     rosemary.talk_text = "Oh! H-hello... it's good to see you."
     rosemary.set_property("emotional_state", "happy")
-    rosemary.set_behavior(make_rosemary_behavior())
+    # Following (engine #112): she declines until she has the blanket ("too
+    # chilly"), and even once following she won't leave the town for the castle
+    # or the hermit's cave (ACII pages 35/37). GiveBlanketToRosemary sets
+    # `following` and clears the refusal.
+    rosemary.set_property("refuses_follow", True)
+    rosemary.set_property(
+        "follow_refusal_message", "Rosemary says it's too chilly to go outside."
+    )
+    rosemary.follow_filter = lambda loc: loc.name not in ROSEMARY_NO_FOLLOW
     town_hall.add_character(rosemary)
 
     smith = things.Character(

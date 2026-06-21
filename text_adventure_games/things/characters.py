@@ -74,6 +74,14 @@ class Character(Thing):
         self.location = None
         self.behavior = None
         self.agent = None
+        # Following (issue #112): the character this one is currently following,
+        # or None. When a character moves, the engine drags its followers along
+        # (Game.drag_followers). `follow_filter`, if set, is a runtime callable
+        # (location) -> bool that lets a follower refuse certain destinations
+        # (e.g. a companion who won't enter the dungeon); like `behavior`, it is
+        # not serialized.
+        self.following = None
+        self.follow_filter = None
         self.goals = goals if goals else []
         # Recently perceived utterances (e.g. speech heard this round). Scoped
         # per-character: only lines delivered here are visible to this
@@ -112,6 +120,10 @@ class Character(Thing):
             thing_data["location"] = self.location.name
         elif self.location:
             thing_data["location"] = self.location
+        # `following` is a back-reference to another character; store the name
+        # only (the runtime ref is re-established by the game, like `behavior`).
+        if self.following is not None:
+            thing_data["following"] = getattr(self.following, "name", self.following)
         thing_data["goals"] = [
             {"description": g.description, "type": g.type.value, "done": g.done}
             for g in self.goals

@@ -39,6 +39,89 @@ class Talk(base.Action):
             self.parser.ok(f"{name} has nothing to say.")
 
 
+class Follow(base.Action):
+    """Ask a co-located character to follow the actor.
+
+    Grammar: ``follow me`` / ``<npc> follow me`` / ``ask <npc> to follow``. The
+    named character starts following the actor; thereafter the engine drags it
+    along whenever the actor moves (Game.drag_followers). A character may decline
+    by setting ``refuses_follow`` (with an optional ``follow_refusal_message``) --
+    e.g. a companion who won't come until you've done something first.
+    """
+
+    ACTION_NAME = ActionName.FOLLOW
+    ACTION_DESCRIPTION = "Ask someone to follow you"
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.leader = self.acting_character(command, hint="leader")
+        self.target = self.character_in_room(command, self.leader)
+        # "follow me" with no one named: if exactly one other character is here,
+        # that's who you mean.
+        if self.target is None and self.leader.location is not None:
+            others = [
+                c
+                for c in self.leader.location.characters.values()
+                if c is not self.leader
+            ]
+            if len(others) == 1:
+                self.target = others[0]
+
+    def check_preconditions(self) -> bool:
+        if self.target is None:
+            self.parser.fail("Who should follow you?")
+            return False
+        if self.target.following is self.leader:
+            self.parser.fail(
+                f"{self.target.name.capitalize()} is already following you."
+            )
+            return False
+        if self.target.get_property("refuses_follow"):
+            self.parser.fail(
+                self.target.get_property("follow_refusal_message")
+                or f"{self.target.name.capitalize()} won't follow you."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.target.following = self.leader
+        self.parser.ok(f"{self.target.name.capitalize()} agrees to follow you.")
+
+
+class Unfollow(base.Action):
+    """Tell a follower to wait / stop following.
+
+    Grammar: ``stop following`` / ``wait here``. Clears following for the named
+    character, or for every character currently following the actor here."""
+
+    ACTION_NAME = ActionName.UNFOLLOW
+    ACTION_DESCRIPTION = "Tell a follower to wait here"
+    ACTION_ALIASES = ["wait here", "stop following me"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.leader = self.acting_character(command, hint="leader")
+        named = self.character_in_room(command, self.leader)
+        if named is not None:
+            self.targets = [named] if named.following is self.leader else []
+        else:
+            loc = self.leader.location
+            here = loc.characters.values() if loc is not None else []
+            self.targets = [c for c in here if c.following is self.leader]
+
+    def check_preconditions(self) -> bool:
+        if not self.targets:
+            self.parser.fail("No one is following you.")
+            return False
+        return True
+
+    def apply_effects(self):
+        for c in self.targets:
+            c.following = None
+            self.parser.ok(f"{c.name.capitalize()} waits here.")
+
+
 class Say(base.Action):
     """A character speaks out loud; everyone in the room can hear it.
 
