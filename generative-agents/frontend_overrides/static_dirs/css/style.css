@@ -56,6 +56,28 @@ body,
   gap: 0.5em;
 }
 
+/* Playback-speed slider: turtle/hare icons flank the range input, with a small
+   readout ("8x slower" / "full speed") whose width is fixed so the bar doesn't
+   shift as the label changes. */
+#sim-navbar .speed-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+#sim-navbar .speed-control input[type="range"] {
+  width: 90px;
+  cursor: pointer;
+}
+#sim-navbar .speed-icon {
+  font-size: 1em;
+  line-height: 1;
+}
+#sim-navbar .speed-readout {
+  min-width: 5.5em;
+  font-size: 0.85em;
+  color: #555;
+}
+
 /* ---------- Main row: map (left) + single agent card (right) ---------------- */
 #sim-main {
   display: flex;
@@ -226,36 +248,86 @@ body,
   overflow-y: auto;
 }
 
+/* Each retrieved memory is a small row: a meta line (kind pill + the in-game
+   time it formed + its quiet importance) above the memory text. A faint left
+   accent, coloured per kind, lets you scan observation/plan/reflection at a
+   glance even before reading the pill. */
 .agent-card .mem-list li {
   font-size: 0.92em;
   line-height: 1.35;
   color: #2b2f3a;
-  padding: 0.35em 0;
+  padding: 0.45em 0 0.45em 0.55em;
   border-bottom: 1px solid #eceef3;
+  border-left: 3px solid transparent;
 }
 
 .agent-card .mem-list li:last-child {
   border-bottom: none;
 }
 
-/* A small pill marking the memory kind (observation / reflection / plan). */
+/* Meta line: kind pill on the left, time then importance trailing right. */
+.agent-card .mem-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.25em;
+}
+
+/* A small pill marking the memory kind. Neutral by default; the per-kind rules
+   below recolour it (and the row's left accent) so the kinds are distinct. */
 .agent-card .mem-kind {
-  display: inline-block;
-  font-size: 0.72em;
+  font-size: 0.7em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 0.1em 0.45em;
   color: #5b6478;
   background: #eef0f5;
-  border-radius: 4px;
-  padding: 0.05em 0.4em;
-  vertical-align: middle;
 }
 
-/* The retrieval importance score, kept quiet next to the memory text. */
+.agent-card .mem-observation {
+  border-left-color: #9cc0f5;
+}
+.agent-card .mem-observation .mem-kind {
+  color: #1a56b8;
+  background: #e6f0fe;
+}
+
+.agent-card .mem-plan {
+  border-left-color: #f0c071;
+}
+.agent-card .mem-plan .mem-kind {
+  color: #b06a00;
+  background: #fdf0db;
+}
+
+.agent-card .mem-reflection {
+  border-left-color: #c79cf0;
+}
+.agent-card .mem-reflection .mem-kind {
+  color: #6b29b8;
+  background: #f1e6fd;
+}
+
+/* The in-game time the memory was formed (e.g. "08:16"); tabular figures keep
+   the column from jittering as the digits change. */
+.agent-card .mem-time {
+  font-size: 0.78em;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The retrieval importance score, pushed to the right edge and kept quiet. */
 .agent-card .mem-imp {
-  font-size: 0.8em;
+  margin-left: auto;
+  font-size: 0.78em;
   color: #9aa0b0;
+}
+
+/* The memory text itself, beneath the meta line. */
+.agent-card .mem-text {
+  display: block;
 }
 
 /* ---------- Narrow screens: stack the map above the agent card -------------- */

@@ -137,6 +137,18 @@ def test_simulate_reaches_activity(world_map):
     assert "tending the cafe counter" in last
 
 
+def test_simulate_advances_through_schedule(world_map):
+    # With a multi-stop schedule, an agent no longer freezes after its first
+    # activity: once a stop's duration elapses it travels on. Over a longer run
+    # Isabella's description should show both her first stop and a later one.
+    frames = simulate(world_map, num_steps=350)
+    activities = {
+        f["Isabella Rodriguez"]["description"].split(" @ ")[0] for f in frames
+    }
+    assert "tending the cafe counter" in activities  # first scheduled stop
+    assert "buying fresh milk for the cafe" in activities  # a later stop -> advanced
+
+
 def test_exporter_writes_replayable_layout(world_map, tmp_path):
     frames = simulate(world_map, num_steps=5)
     start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
@@ -158,6 +170,15 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
         mv0 = json.load(f)
     assert set(mv0["persona"].keys()) == {p["name"] for p in PERSONAS}
     assert mv0["meta"]["curr_time"] == "February 13, 2023, 08:00:00"
+
+    # Each retrieved memory carries its created_turn and a wall-clock time stamped
+    # by the exporter, so the agent card can show when the memory formed. At step 0
+    # every memory was created at turn 0, i.e. the 08:00 start time.
+    mems0 = mv0["persona"]["Isabella Rodriguez"]["memories"]
+    assert mems0, "expected the seeded plan to be retrieved at step 0"
+    for mem in mems0:
+        assert mem["created_turn"] == 0
+        assert mem["time"] == "08:00"
 
     with open(os.path.join(sim_dir, "reverie", "meta.json")) as f:
         meta = json.load(f)

@@ -15,7 +15,7 @@ decision seam (``Agent.decide`` -> mock client) only at decision points:
 Run it (from the ``generative-agents`` directory; ``uv run`` finds the repo's
 project env that has the engine installed)::
 
-    uv run python -m backend.run_simulation            # 1 hour (360 steps)
+    uv run python -m backend.run_simulation            # 3 hours (1080 steps)
     uv run python -m backend.run_simulation --steps 120
     uv run python -m backend.run_simulation --start "2023-02-13 18:00:00"
     uv run python -m backend.run_simulation --sec-per-step 60   # 1 min/step
@@ -57,8 +57,10 @@ DEFAULT_STORAGE = os.path.join(_FRONTEND, "storage")
 DEFAULT_BASE_SIM = "base_the_ville_n25"
 DEFAULT_SIM_CODE = "mock_the_ville_n25"
 
-# 1 hour of in-game time at 10 seconds per step.
-DEFAULT_STEPS = 360
+# 3 hours of in-game time at 10 seconds per step (8-11am): long enough for each
+# agent to work through its daily schedule of stops, so memory keeps growing
+# across the run instead of freezing after the first activity.
+DEFAULT_STEPS = 1080
 # Start at 8am: the town is waking, the cafe opens, students head out -- a lively
 # hour. (The base sim starts at midnight, when everyone is asleep.)
 DEFAULT_START_DT = datetime.datetime(2023, 2, 13, 8, 0, 0)
@@ -160,6 +162,9 @@ def simulate(
             "pron": emoji[char.name],
             "desc": f"waking up @ {char.location.tile_address}",
             "performing": False,
+            # The step at which the current activity is done and the agent should
+            # move on to its next scheduled stop (None = stay put indefinitely).
+            "perform_until": None,
             # Latest reasoning + retrieved-memory block, surfaced on the replay's
             # agent card. They update at each decision point and carry forward on
             # the steps in between (like desc/pron), so the card is never blank.
@@ -178,6 +183,19 @@ def simulate(
         for name in order:
             char = chars[name]
             st = state[name]
+
+            # Has the current activity run its course? Un-latch and point the brain
+            # at the next scheduled stop, so the agent becomes idle below and walks
+            # on. When the schedule is exhausted, just stop the timer and let it
+            # settle into this last activity for the rest of the run.
+            if (
+                st["performing"]
+                and st["perform_until"] is not None
+                and _step >= st["perform_until"]
+            ):
+                if char.agent.llm_client.advance():
+                    st["performing"] = False
+                st["perform_until"] = None
 
             # Decision point: idle and not yet settled into an activity.
             if not st["path"] and not st["performing"]:
@@ -212,9 +230,17 @@ def simulate(
                         st["desc"] = f"walking to {dest.name} @ {address}"
                     elif command.startswith("perform"):
                         st["performing"] = True
-                        st["pron"] = emoji[name]
+                        # Per-stop emoji (the schedule may vary it from the
+                        # persona's default), falling back to the persona's.
+                        st["pron"] = char.agent.llm_client.emoji or emoji[name]
                         activity = char.get_property("activity") or "spending time"
                         st["desc"] = f"{activity} @ {char.location.tile_address}"
+                        # Schedule the move on to the next stop. None steps means
+                        # "stay" -- the agent settles here for the rest of the run.
+                        duration = char.agent.llm_client.steps
+                        st["perform_until"] = (
+                            _step + duration if duration is not None else None
+                        )
 
             # Advance one tile along any active walk.
             if st["path"]:
@@ -263,7 +289,7 @@ def main() -> None:
         "--steps",
         type=int,
         default=DEFAULT_STEPS,
-        help="number of steps to simulate (default: %(default)s = 1 hour at 10s/step)",
+        help="number of steps to simulate (default: %(default)s = 3 hours at 10s/step)",
     )
     parser.add_argument(
         "--start",
