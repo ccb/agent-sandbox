@@ -120,8 +120,39 @@ def test_workshop_is_reachable_from_town_square():
 # --- a couple of signature interactions ------------------------------------
 
 
-def test_give_axe_to_smith_sharpens_it_in_place():
-    game, _ = _play(
+def _smithy_with_axe(give_command):
+    """Reach the smithy holding the axe, then issue *give_command*."""
+    return _play(
+        ["out", "east", "north", "take axe", "south", "west", "south", give_command]
+    )
+
+
+def test_give_axe_to_smith_sharpens_it():
+    game, _ = _smithy_with_axe("give axe to smith")
+    axe = game.player.inventory.get("axe")
+    assert axe is not None and axe.get_property("is_sharp")
+
+
+def test_give_smith_the_axe_also_sharpens_it():
+    # The word-order variant routes through the built-in Give; a trigger reacts
+    # to the smith holding the axe and sharpens it regardless of phrasing (#113).
+    game, _ = _smithy_with_axe("give smith the axe")
+    axe = game.player.inventory.get("axe")
+    assert axe is not None and axe.get_property("is_sharp")
+    assert "axe" not in game.characters["smith"].inventory  # handed back
+
+
+def test_drop_penny_in_well_scores_the_wish():
+    game, _ = _play(["out", "drop penny in well"])
+    assert "penny" not in game.player.inventory
+    assert "wish" in game._scored_keys
+
+
+# --- a surface in the world: the lamp on the dungeon-stairs ledge -----------
+
+
+def test_lamp_rests_on_a_surface_and_is_takeable():
+    game, cap = _play(
         [
             "out",
             "east",
@@ -131,13 +162,30 @@ def test_give_axe_to_smith_sharpens_it_in_place():
             "west",
             "south",
             "give axe to smith",
+            "out",
+            "east",
+            "north",
+            "east",
+            "enter moat",
+            "move stone",
+            "enter tunnel",
+            "south",
+            "wake dragon",
+            "choose wits",
+            "answer riddle a wise man",
+            "choose sword",
+            "north",
+            "east",
+            "up",
         ]
     )
-    axe = game.player.inventory.get("axe")
-    assert axe is not None and axe.get_property("is_sharp")
+    assert game.player.location.name == "Dungeon Stairs"
+    ledge = game.player.location.items["ledge"]
+    assert ledge.get_property("is_surface") and "lamp" in ledge.contents
 
-
-def test_drop_penny_in_well_scores_the_wish():
-    game, _ = _play(["out", "drop penny in well"])
-    assert "penny" not in game.player.inventory
-    assert "wish" in game._scored_keys
+    game.do_command("examine ledge")
+    assert _said(cap, "On it you see an old lamp.")
+    game.do_command("take lamp")
+    assert "lamp" in game.player.inventory and "lamp" not in ledge.contents
+    game.do_command("put lamp on ledge")
+    assert "lamp" in ledge.contents and "lamp" not in game.player.inventory
