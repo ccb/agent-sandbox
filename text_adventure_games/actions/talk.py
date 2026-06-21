@@ -2,6 +2,43 @@ from . import base
 from ..enums import ActionName, Role
 
 
+class Talk(base.Action):
+    """Greet / talk to a co-located character.
+
+    Surfaces the character's player-facing ``talk_text`` if one is set, else a
+    neutral "nothing to say". We deliberately do NOT voice ``persona``: that is
+    the character's private first-person self-concept driving the LLM agent
+    (npc.py), not dialogue, and speaking it aloud would leak inner monologue. A
+    game that wants scripted, branching dialogue with a specific NPC registers
+    its own multi-word action (e.g. ``talk to hermit``); the parser's
+    specific-first pass routes there before this generic verb, which handles
+    every other "talk to <name>".
+    """
+
+    ACTION_NAME = ActionName.TALK
+    ACTION_DESCRIPTION = "Talk to someone nearby"
+    ACTION_ALIASES = ["talk to", "talk with", "chat with"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="talker")
+        self.target = self.character_in_room(command, self.character)
+
+    def check_preconditions(self) -> bool:
+        if self.target is None:
+            self.parser.fail("There's no one here to talk to.")
+            return False
+        return True
+
+    def apply_effects(self):
+        line = getattr(self.target, "talk_text", "")
+        name = self.target.name.capitalize()
+        if line:
+            self.parser.ok(f'{name} says, "{line}"')
+        else:
+            self.parser.ok(f"{name} has nothing to say.")
+
+
 class Say(base.Action):
     """A character speaks out loud; everyone in the room can hear it.
 

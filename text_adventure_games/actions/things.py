@@ -13,9 +13,25 @@ class Get(base.Action):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to get something")
         self.location = self.character.location
-        self.item = self.parser.match_item(
-            command, self.location.items, hint="thing to get"
-        )
+        # You can pick up items lying in the room, and items inside an OPEN
+        # container sitting in the room (e.g. a blanket inside a boat). Track
+        # which container an item came from so apply_effects removes it there.
+        scope = dict(self.location.items)
+        self.room_containers = [
+            it
+            for it in self.location.items.values()
+            if it.get_property("is_container") and not it.get_property("is_closed")
+        ]
+        for c in self.room_containers:
+            for cname, citem in c.contents.items():
+                scope.setdefault(cname, citem)
+        self.item = self.parser.match_item(command, scope, hint="thing to get")
+        self.source_container = None
+        if self.item is not None and self.item.name not in self.location.items:
+            for c in self.room_containers:
+                if self.item.name in c.contents:
+                    self.source_container = c
+                    break
 
     def claimed_resource(self):
         """Two characters grabbing for the same item contend over it (#42)."""
@@ -35,7 +51,9 @@ class Get(base.Action):
             return False
         if not self.at(self.character, self.location):
             return False
-        if not self.at(self.item, self.location):
+        # The item is reachable if it lies in the room, or sits in an open
+        # container that is in the room.
+        if self.source_container is None and not self.at(self.item, self.location):
             return False
         if not self.has_property(
             self.item,
@@ -54,9 +72,12 @@ class Get(base.Action):
 
     def apply_effects(self):
         """
-        Get's an item from the location and adds it to the character's
-        inventory or, if their hands are full, a carried container with space.
+        Get's an item from the location (or an open container in the room) and
+        adds it to the character's inventory or, if their hands are full, a
+        carried container with space.
         """
+        if self.source_container is not None:
+            self.source_container.remove_item(self.item)
         self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
@@ -189,19 +210,51 @@ class Examine(base.Action):
             self.parser.get_items_in_scope(self.character),
             hint="thing being looked at",
         )
+        # EXAMINE also works on people. If no item matched, look for a character
+        # in the room whose name appears in the command, so "examine <npc>"
+        # describes them instead of falling through to "nothing special".
+        self.matched_character = (
+            None
+            if self.matched_item
+            else self.character_in_room(command, self.character)
+        )
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No character was matched."):
             return False
         return True
 
+    @staticmethod
+    def _contents_sentence(item):
+        """For an OPEN, non-empty container, a sentence listing what's inside
+        (so 'examine boat' reads '... It contains a warm wool blanket.')."""
+        if not item.get_property("is_container") or item.get_property("is_closed"):
+            return ""
+        descs = [c.description for c in item.contents.values()]
+        if not descs:
+            return ""
+        if len(descs) == 1:
+            listed = descs[0]
+        elif len(descs) == 2:
+            listed = f"{descs[0]} and {descs[1]}"
+        else:
+            listed = ", ".join(descs[:-1]) + f", and {descs[-1]}"
+        return f" It contains {listed}."
+
     def apply_effects(self):
-        """The player wants to examine an item"""
+        """The player wants to examine an item or a character."""
         if self.matched_item:
-            if self.matched_item.examine_text:
-                self.parser.ok(self.matched_item.examine_text)
-            else:
-                self.parser.ok(self.matched_item.description)
+            base_text = self.matched_item.examine_text or self.matched_item.description
+            self.parser.ok(base_text + self._contents_sentence(self.matched_item))
+        elif self.matched_character is not None:
+            other = self.matched_character
+            # Characters may carry an optional richer ``examine_text``; otherwise
+            # fall back to their one-line description.
+            self.parser.ok(
+                getattr(other, "examine_text", "")
+                or other.description
+                or f"It's {other.name}."
+            )
         else:
             self.parser.ok("You don't see anything special.")
 
