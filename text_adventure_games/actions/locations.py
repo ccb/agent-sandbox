@@ -89,14 +89,11 @@ class Go(base.Action):
         """
         is_main_player = self.character == self.game.player
 
-        # move from
-        from_loc = self.location
-        if self.character.name in from_loc.characters:
-            from_loc.remove_character(self.character)
-
-        # move to
+        # Move via the engine relocate chokepoint (location bookkeeping). The
+        # mover's followers are dragged afterward, so the "moved to" line and
+        # room description come first, then "X follows you."
         to_loc = self.location.connections[self.direction]
-        to_loc.add_character(self.character)
+        self.game.relocate(self.character, to_loc)
         if is_main_player:
             self.has_been_visited = True
 
@@ -116,3 +113,6 @@ class Go(base.Action):
         else:
             action = base.Describe(self.game, command=self.command)
             action()
+
+        # Pull along anyone following the mover (after the room is described).
+        self.game.drag_followers(self.character)
