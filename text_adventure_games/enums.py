@@ -160,6 +160,7 @@ class ActionName(_StrEnum):
     # Combat / social
     ATTACK = "attack"
     SAY = "say"
+    TALK = "talk"
 
     # Consumables
     EAT = "eat"
