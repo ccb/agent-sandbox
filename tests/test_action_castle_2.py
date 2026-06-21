@@ -200,6 +200,59 @@ def test_row_back_from_the_middle_of_the_pond():
         assert game.player.location.name == "Old Pond", back_cmd
 
 
+def _at_trove():
+    return _play(
+        [
+            "out",
+            "east",
+            "north",
+            "take axe",
+            "south",
+            "west",
+            "south",
+            "give axe to smith",
+            "out",
+            "east",
+            "north",
+            "east",
+            "enter moat",
+            "move stone",
+            "enter tunnel",
+            "south",
+        ]
+    )
+
+
+def test_treasure_holds_examinable_loot():
+    game, cap = _at_trove()
+    treasure = game.player.location.items["treasure"]
+    assert treasure.get_property("is_container")
+    assert set(treasure.contents) == {"gold", "sword", "ring"}
+    game.do_command("examine treasure")
+    assert _said(cap, "It contains")  # the hoard lists its loot on examine
+    game.do_command("examine sword")
+    assert _said(cap, "it's glowing")  # the rulebook's sword flavor
+    game.do_command("examine ring")
+    assert _said(cap, "The gem is enormous")
+
+
+def test_stealing_from_the_hoard_wakes_the_dragon_and_kills_you():
+    game, cap = _at_trove()
+    game.do_command("take gold")  # try to steal
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "THIEF")
+    assert game.characters["dragon"].get_property("awake")
+
+
+def test_choosing_the_reward_takes_it_from_the_hoard_without_dying():
+    game, cap = _at_trove()
+    for c in ["wake dragon", "choose wits", "answer riddle a wise man", "choose sword"]:
+        game.do_command(c)
+    assert not game.is_game_over()
+    assert "sword" in game.player.inventory  # the actual hoard sword, handed over
+    assert "sword" not in game.player.location.items["treasure"].contents
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory
