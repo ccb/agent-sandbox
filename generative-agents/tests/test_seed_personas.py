@@ -208,8 +208,9 @@ def test_attach_seeds_relationships_into_memory(seed_assets):
     assert any(r.kind == MemoryKind.PLAN for r in isabella.agent.memory.records)
 
     # A persona with no CSV row gets only its plan -- no relationship memories.
-    john = chars["John Lin"]
-    assert not any("relationship" in r.tags for r in john.agent.memory.records)
+    # (Wolfgang is in the active cast but absent from the fixture's CSV.)
+    wolfgang = chars["Wolfgang Schulz"]
+    assert not any("relationship" in r.tags for r in wolfgang.agent.memory.records)
 
 
 def test_attach_seeds_spatial_into_knowledge(seed_assets):
@@ -222,8 +223,9 @@ def test_attach_seeds_spatial_into_knowledge(seed_assets):
     assert "What you know:" in isabella.knowledge.render()
 
     # Knowledge is partial: a persona with no spatial file knows no places.
-    john = chars["John Lin"]
-    assert john.knowledge.render() == ""
+    # (Wolfgang is in the active cast but absent from the fixture's spatial trees.)
+    wolfgang = chars["Wolfgang Schulz"]
+    assert wolfgang.knowledge.render() == ""
 
 
 def test_seeding_is_decision_neutral(seed_assets):

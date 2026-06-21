@@ -20,7 +20,12 @@ import os
 import pytest
 
 from backend import exporter
-from backend.build_world import PERSONAS, build_world
+from backend.build_world import (
+    _ALL_PERSONAS,
+    MAX_ACTIVE_PERSONAS,
+    PERSONAS,
+    build_world,
+)
 from backend.run_simulation import _print_cost_summary, simulate
 from backend.smallville_agents import attach_agents
 from backend.world_map import WorldMap
@@ -42,9 +47,11 @@ def world_map(tmp_path_factory):
 
 def test_build_world_places_cast_at_home():
     game, chars = build_world()
-    # The full 25-resident town is present.
-    assert len(PERSONAS) == 25
-    # Every persona is a character in the game...
+    # The full 25-resident roster still loads (nothing deleted), but we run a
+    # smaller active subset so the demo's memory/reasoning panels stay readable.
+    assert len(_ALL_PERSONAS) == 25
+    assert len(PERSONAS) == MAX_ACTIVE_PERSONAS == 5
+    # Every active persona is a character in the game...
     for spec in PERSONAS:
         assert spec["name"] in game.characters
         # ...and starts in their home location.

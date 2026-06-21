@@ -97,6 +97,17 @@
 							<span class="agent-field-label">Location</span>
 							<span class="agent-field-value" id="target_address__{{ p_name_os }}"></span>
 						</div>
+						<!-- The agent's cognition behind its current action: which memories
+						     retrieval surfaced, then the reasoning it produced from them.
+						     Both are filled in live by home/main_script.html. -->
+						<div class="agent-field">
+							<span class="agent-field-label">Memories retrieved</span>
+							<span class="agent-field-value" id="memories__{{ p_name_os }}"></span>
+						</div>
+						<div class="agent-field">
+							<span class="agent-field-label">Reasoning</span>
+							<span class="agent-field-value" id="reasoning__{{ p_name_os }}"></span>
+						</div>
 						<div class="agent-field">
 							<span class="agent-field-label">Current Conversation</span>
 							<span class="agent-field-value" id="chat__{{ p_name_os }}"></span>
