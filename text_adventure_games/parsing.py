@@ -528,25 +528,34 @@ class Parser:
 
 
 class LlmParser(Parser):
-    """Intent determination via an LLM, constrained to the registered actions.
+    """EXPERIMENTAL (untested against a live API). Intent *and* argument matching
+    via an LLM, each constrained to the game's actual options.
 
-    The second of the engine's two parsers (the default ``Parser`` handles
-    verb-noun commands, ranking multi-word actions specific-first). ``LlmParser``
-    handles flexible natural-language commands ("hand the blacksmith my axe",
-    "rouse the dragon") that a deterministic parser can't map.
+    The second of the engine's two parsers. The default ``Parser`` handles
+    verb-noun commands (ranking multi-word actions specific-first); ``LlmParser``
+    handles flexible natural language ("hand the blacksmith my axe", "rouse the
+    dragon") end to end: it overrides ``determine_intent`` AND the argument
+    matchers (``get_character`` / ``match_item`` / ``get_direction``), since
+    picking the right verb isn't enough -- "hand the blacksmith my axe" also needs
+    "the blacksmith" resolved to the ``smith`` and "my axe" to the ``axe``.
 
-    It is the modern form of the classic GPT parser: rather than a regex over
-    free-form model output, the action is chosen from an *enum* of the game's
-    registered ACTION_NAMEs via structured outputs, so the model cannot
-    hallucinate an action that doesn't exist. Custom actions are first-class
-    candidates (described to the model by ACTION_DESCRIPTION + ACTION_ALIASES),
-    so there is no keyword pre-emption. Argument matching (get_character /
-    match_item / get_direction) still uses the base implementations; override
-    those too for fully natural-language argument resolution.
+    All four route through one primitive, :meth:`_pick_one`: the model chooses
+    from an *enum* of the real options via structured outputs, so it can't
+    hallucinate an action/character/item/exit that doesn't exist (a robust
+    successor to the classic regex-over-a-numbered-list GPT parser). Options are
+    described with their current location for disambiguation, and a ``hint``
+    (e.g. "giver"/"recipient") is threaded through where the base API offers one.
 
-    ``anthropic`` is imported lazily, so importing this module adds no hard
-    dependency. Requires the SDK + ANTHROPIC_API_KEY at construction; the
-    default model is ``claude-opus-4-8``.
+    Graceful fallback: on any API error -- or when the model picks "none" -- each
+    method defers to the deterministic ``Parser`` implementation, so a transient
+    failure degrades to keyword matching rather than crashing the game. The
+    deterministic parser covers canonical verb-noun input; the LLM covers the
+    rest -- a natural hybrid.
+
+    Cost note: a single command can trigger several LLM calls (intent + one per
+    argument); spend is tracked by the usage ledger. ``anthropic`` is imported
+    lazily, so importing this module adds no hard dependency. Requires the SDK +
+    ANTHROPIC_API_KEY; the default model is ``claude-opus-4-8``.
     """
 
     def __init__(self, game, model="claude-opus-4-8", echo_commands=False):
@@ -556,49 +565,133 @@ class LlmParser(Parser):
         self.client = anthropic.Anthropic()
         self.model = model
 
-    def determine_intent(self, command, actor=None):
+    def _pick_one(self, instructions, options, query, allow_none=True):
+        """Ask the model to choose one of *options* for *query*.
+
+        *options* is an ordered ``{name: (description, value)}`` mapping. The
+        model's choice is enum-constrained to the names (plus "none" when
+        *allow_none*), so it can only return a real option. Returns the chosen
+        value, or ``None`` (no match / "none"). Raises only on an API failure --
+        callers catch that and fall back to the deterministic parser.
+        """
         import json
 
-        # Build the catalogue from the CURRENT action set on every call: custom
-        # actions are registered AFTER __init__ (via set_parser / add_action),
-        # so caching it at construction would silently omit every game-defined
-        # verb from the enum the model must choose from.
-        catalog = [
-            (a.action_name(), a.ACTION_DESCRIPTION or "", list(a.ACTION_ALIASES or []))
-            for _, a in self.actions.items()
-        ]
-        names = sorted({n for n, _, _ in catalog})
-        listing = "\n".join(
-            f"- {n}: {d}" + (f"  (aliases: {', '.join(al)})" if al else "")
-            for n, d, al in catalog
-        )
-        system = (
-            "You are the command parser for a text-adventure game. Map the "
-            "player's command to exactly ONE action_name from the list, choosing "
-            "the closest match by meaning. If nothing fits, choose the most "
-            "plausible action."
-        )
-        user = (
-            f"Actions:\n{listing}\n\nPlayer command: {command!r}\nPick one action_name."
-        )
+        names = list(options.keys())
+        enum = names + (["none"] if allow_none else [])
+        listing = "\n".join(f"- {n}: {desc}" for n, (desc, _) in options.items())
+        if allow_none:
+            listing += "\n- none: nothing here matches"
+        system = f"{instructions}\n\nChoices:\n{listing}\n\nReturn exactly one choice."
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=64,
             system=system,
-            messages=[{"role": "user", "content": user}],
+            messages=[{"role": "user", "content": query}],
             output_config={
                 "format": {
                     "type": "json_schema",
                     "schema": {
                         "type": "object",
-                        "properties": {
-                            "action_name": {"type": "string", "enum": names}
-                        },
-                        "required": ["action_name"],
+                        "properties": {"choice": {"type": "string", "enum": enum}},
+                        "required": ["choice"],
                         "additionalProperties": False,
                     },
                 }
             },
         )
         text = next((b.text for b in resp.content if b.type == "text"), "{}")
-        return json.loads(text).get("action_name")
+        choice = json.loads(text).get("choice")
+        return options[choice][1] if choice in options else None
+
+    def determine_intent(self, command, actor=None):
+        # Catalogue from the CURRENT action set every call: custom actions are
+        # registered after __init__ (set_parser / add_action), so caching it at
+        # construction would omit every game-defined verb from the enum.
+        options = {}
+        for _, a in self.actions.items():
+            desc = a.ACTION_DESCRIPTION or a.action_name()
+            if getattr(a, "ACTION_ALIASES", None):
+                desc += f" (aliases: {', '.join(a.ACTION_ALIASES)})"
+            options[a.action_name()] = (desc, a.action_name())
+        instructions = (
+            "You are the parser for a text-adventure game. Choose the action that "
+            "best matches the player's command by meaning."
+        )
+        try:
+            choice = self._pick_one(instructions, options, command, allow_none=False)
+        except Exception:
+            choice = None
+        return (
+            choice if choice is not None else super().determine_intent(command, actor)
+        )
+
+    def get_character(self, command, hint=None, split_words=None, position=None):
+        options = {}
+        for name, ch in self.game.characters.items():
+            loc = f" (currently in {ch.location.name})" if ch.location else ""
+            label = (
+                ("the player -- " if ch is self.game.player else "")
+                + (ch.description or name)
+                + loc
+            )
+            options[name] = (label, ch)
+        instructions = (
+            "You are the parser for a text-adventure game. Match the character the "
+            "command refers to."
+        )
+        if hint:
+            instructions += f" The character you want is the {hint}."
+        try:
+            ch = self._pick_one(instructions, options, command, allow_none=True)
+        except Exception:
+            ch = None
+        return (
+            ch
+            if ch is not None
+            else super().get_character(
+                command, hint=hint, split_words=split_words, position=position
+            )
+        )
+
+    def match_item(
+        self, command: str, item_dict: dict[str, Item], hint: str = None
+    ) -> Item:
+        if not item_dict:
+            return None
+        options = {}
+        for name, item in item_dict.items():
+            loc = (
+                f" (in {item.location.name})" if getattr(item, "location", None) else ""
+            )
+            options[name] = ((item.description or name) + loc, item)
+        instructions = (
+            "You are the parser for a text-adventure game. Match the item the "
+            "command refers to."
+        )
+        if hint:
+            instructions += f" Hint: {hint}."
+        try:
+            item = self._pick_one(instructions, options, command, allow_none=True)
+        except Exception:
+            item = None
+        return (
+            item if item is not None else super().match_item(command, item_dict, hint)
+        )
+
+    def get_direction(self, command: str, location: Location = None) -> str:
+        options = {}
+        if location:
+            for direction, dest in location.connections.items():
+                options[direction] = (f"{direction} -- toward {dest.name}", direction)
+        if options:
+            instructions = (
+                "You are the parser for a text-adventure game. Match the exit the "
+                "player wants to travel through."
+            )
+            try:
+                d = self._pick_one(instructions, options, command, allow_none=True)
+            except Exception:
+                d = None
+            if d is not None:
+                return d
+        return super().get_direction(command, location)
