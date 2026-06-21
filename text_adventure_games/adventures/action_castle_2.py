@@ -284,6 +284,51 @@ class ChooseSteel(actions.Action):
         )
 
 
+class AttackDragon(actions.Action):
+    """Attacking the dragon is fatal -- with or without the sword (rulebook).
+    Multi-word name/aliases so the parser routes here before the generic ATTACK."""
+
+    ACTION_NAME = "attack dragon"
+    ACTION_DESCRIPTION = "Attack the dragon (ill-advised)"
+    ACTION_ALIASES = [
+        "attack the dragon",
+        "kill dragon",
+        "kill the dragon",
+        "fight dragon",
+        "fight the dragon",
+        "slay dragon",
+        "slay the dragon",
+        "hit dragon",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.parser.get_character(command)
+        self.dragon = self.parser.get_character("dragon")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.dragon, "There's no dragon here."):
+            return False
+        if not self.at(self.dragon, self.character.location, "There's no dragon here."):
+            return False
+        return True
+
+    def apply_effects(self):
+        self.dragon.set_property("awake", True)
+        if _is_holding(self.character, "sword"):
+            _die(
+                self.game,
+                "The creature bats the sword aside and burns you alive with dragon "
+                "fire. THE END.",
+            )
+        else:
+            _die(
+                self.game,
+                "You strike the dragon; it doesn't so much as flinch, then "
+                "incinerates you with a blast of fire. THE END.",
+            )
+
+
 class ChooseWits(actions.Action):
     ACTION_NAME = "choose wits"
     ACTION_DESCRIPTION = "Match wits with the dragon"
@@ -1180,6 +1225,38 @@ def build_game() -> ActionCastle2:
         )
     )
 
+    # Lingering wakes the dragon (rulebook: "any other move besides exiting the
+    # room will wake the dragon"). One turn of grace: on arrival it merely stirs,
+    # so you can look and still leave safely; a second action while you're still
+    # here rouses it into the wits/steel challenge. (Theft is handled above;
+    # stealing kills you outright, so this skips when you're holding loot.)
+    def dragon_stirs(g):
+        if not dragon.get_property("stirring"):
+            dragon.set_property("stirring", True)
+            g.parser.ok(
+                "The dragon stirs in its sleep, one claw twitching. Best not linger."
+            )
+        else:
+            dragon.set_property("awake", True)
+            g.parser.ok(
+                'The dragon wakes, eyes you hungrily and roars, "Another mortal '
+                'dares challenge me? Choose a weapon: wits or steel."'
+            )
+
+    game_triggers.append(
+        (
+            "dragon_stirs",
+            lambda g: dragon is not None
+            and not dragon.get_property("awake")
+            and not dragon.get_property("reward_taken")
+            and not g.game_over
+            and g.player.location is trove
+            and not any(_is_holding(g.player, n) for n in ("gold", "sword", "ring")),
+            dragon_stirs,
+            True,
+        )
+    )
+
     # Returning to the Moat carrying the gold is fatal (you sink and drown).
     def gold_drown(g):
         _die(
@@ -1219,6 +1296,7 @@ def build_game() -> ActionCastle2:
         MoveStone,
         EnterMoat,
         WakeDragon,
+        AttackDragon,
         ChooseWits,
         ChooseSteel,
         AnswerRiddle,

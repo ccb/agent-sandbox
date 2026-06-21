@@ -253,6 +253,28 @@ def test_choosing_the_reward_takes_it_from_the_hoard_without_dying():
     assert "sword" not in game.player.location.items["treasure"].contents
 
 
+def test_attacking_the_dragon_is_fatal():
+    game, cap = _at_trove()
+    game.do_command("attack dragon")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "incinerates you") or _said(cap, "burns you alive")
+    assert game.characters["dragon"].get_property("awake")
+
+
+def test_lingering_wakes_the_dragon_but_leaving_is_safe():
+    # Arrival is a grace turn -- the dragon only stirs; a second action wakes it.
+    game, cap = _at_trove()
+    assert not game.characters["dragon"].get_property("awake")  # just arrived
+    assert _said(cap, "stirs in its sleep")
+    game.do_command("look")  # lingering
+    assert game.characters["dragon"].get_property("awake")
+    # But you can enter and leave without waking it.
+    game2, _ = _at_trove()
+    game2.do_command("north")  # exit to the Underground
+    assert game2.player.location.name == "Underground"
+    assert not game2.characters["dragon"].get_property("awake")
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory
