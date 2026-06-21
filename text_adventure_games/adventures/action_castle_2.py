@@ -625,12 +625,24 @@ class SayNo(actions.Action):
 
 class RowBoat(actions.Action):
     ACTION_NAME = "row boat"
-    ACTION_DESCRIPTION = "Row the boat out onto the pond (or back to shore)"
-    ACTION_ALIASES = []
+    ACTION_DESCRIPTION = "Row the boat out onto the pond, or back to shore"
+    # Natural phrasings for getting back/out, so the player isn't stuck at the
+    # middle hunting for the magic words. (All multi-word, so they route via the
+    # parser's specific-first pass.)
+    ACTION_ALIASES = [
+        "row to shore",
+        "row back",
+        "row back to shore",
+        "row to the shore",
+        "exit boat",
+        "leave the boat",
+        "get out of the boat",
+    ]
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.parser.get_character(command)
+        self.command = command.lower()
 
     def check_preconditions(self) -> bool:
         loc = self.character.location
@@ -640,15 +652,24 @@ class RowBoat(actions.Action):
         return True
 
     def apply_effects(self):
-        if self.character.location.name == "Old Pond":
-            self.parser.ok(
-                "Row, row, row your boat. Life is but a dream. You row out to the "
-                "middle of the pond. It's quiet, peaceful and romantic here."
-            )
-            _relocate(self.game, self.character, "Middle of Pond")
-        else:
+        here = self.character.location.name
+        wants_shore = any(
+            w in self.command for w in ("shore", "back", "exit", "leave", "get out")
+        )
+        if here == "Middle of Pond":
+            # Any row/exit from the middle takes you back to shore.
             self.parser.ok("You row back to the shore.")
             _relocate(self.game, self.character, "Old Pond")
+        elif wants_shore:
+            # "row back" / "exit boat" while already ashore.
+            self.parser.ok("You're already on the shore.")
+            return
+        else:
+            self.parser.ok("Row, row, row your boat. Life is but a dream.")
+            _relocate(self.game, self.character, "Middle of Pond")
+        # Describe the place we arrived (exits + hints), the way walking does --
+        # so the player at the middle sees how to get back without having to look.
+        actions.Describe(self.game, command="look")()
 
 
 class EnterBoat(actions.Action):
@@ -750,7 +771,7 @@ def build_game() -> ActionCastle2:
     middle_pond = L(
         "Middle of Pond",
         "You are in a rowboat in the middle of the old pond. It's quiet, peaceful "
-        "and romantic here.",
+        "and romantic here. Row the boat to head back to shore.",
     )
     hermit_cave = L("Hermit's Cave", "An old man sits by a fire outside a dark cave.")
     bend = L(
