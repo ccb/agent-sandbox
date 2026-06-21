@@ -29,6 +29,31 @@ def _fmt_date(dt: datetime.datetime) -> str:
     return f"{dt:%B} {dt.day}, {dt.year}"
 
 
+def _fmt_clock(dt: datetime.datetime) -> str:
+    """Compact wall-clock for a memory's timestamp on the card, e.g. '08:16'."""
+    return f"{dt:%H:%M}"
+
+
+def _stamp_memory_times(
+    frame: dict, start_dt: datetime.datetime, sec_per_step: int
+) -> None:
+    """Add a human ``time`` to each retrieved memory in *frame*, in place.
+
+    A memory carries ``created_turn`` (the step it was formed); we turn that into
+    the same wall-clock the replay's navbar shows (``start_dt + turn * step``), so
+    the agent card can label *when* each memory entered the stream. Idempotent --
+    a memory dict shared across consecutive frames is stamped once (same value),
+    so re-running is harmless.
+    """
+    for entry in frame.values():
+        for mem in entry.get("memories", []):
+            if "time" not in mem and "created_turn" in mem:
+                mem_dt = start_dt + datetime.timedelta(
+                    seconds=mem["created_turn"] * sec_per_step
+                )
+                mem["time"] = _fmt_clock(mem_dt)
+
+
 def write_simulation(
     storage_root: str,
     sim_code: str,
@@ -58,6 +83,8 @@ def write_simulation(
     # Per-step movement files.
     for step, frame in enumerate(frames):
         curr = start_dt + datetime.timedelta(seconds=step * sec_per_step)
+        # Label each retrieved memory with the time it was formed (see card).
+        _stamp_memory_times(frame, start_dt, sec_per_step)
         payload = {"persona": frame, "meta": {"curr_time": _fmt_time(curr)}}
         _dump(os.path.join(movement_dir, f"{step}.json"), payload)
 

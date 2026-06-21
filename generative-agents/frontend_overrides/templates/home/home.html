@@ -22,6 +22,16 @@
 					<i class="glyphicon glyphicon-pause"></i> Pause
 				</button>
 			</span>
+			<!-- Playback speed. movement_speed must divide the 32px tile, so the
+			     slider walks the powers of two 1..32: left is slow (more animation
+			     frames per step, easy to follow step by step), right is full speed.
+			     Wired up in home/main_script.html. -->
+			<span class="speed-control" {% if mode == 'simulate' %}style="display:none"{% endif %} title="Playback speed">
+				<span class="speed-icon">🐢</span>
+				<input id="speed_slider" type="range" min="0" max="5" step="1" value="2">
+				<span class="speed-icon">🐇</span>
+				<span id="speed_readout" class="speed-readout"></span>
+			</span>
 			<button id="reset_button" type="button" class="btn btn-default" title="Restart from the beginning">
 				<i class="glyphicon glyphicon-repeat"></i> Reset
 			</button>

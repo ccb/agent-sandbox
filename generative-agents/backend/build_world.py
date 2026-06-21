@@ -38,15 +38,64 @@ def _load_world_data() -> tuple[list[dict], list[dict]]:
 #   home        the location they wake in (must be a name in _LOCATIONS)
 #   persona     the first-person identity the agent reasons as (innate traits +
 #               background, condensed from the upstream scratch.json profile)
-#   destination where they head for the day (must be a name in _LOCATIONS)
-#   activity    what they do once they arrive (the on-screen action label)
-#   emoji       the pronunciatio bubble shown above the sprite while performing
+#   emoji       the default pronunciatio bubble shown above the sprite
 #   start_tile  the [x, y] tile they spawn on -- matches the base sim's
 #               environment/0.json so the frontend places them exactly as upstream
+#
+# A persona's *day* is given one of two ways:
+#   schedule    an ordered list of stops the agent works through over the run.
+#               Each stop is {place, activity, emoji?, steps?}: travel to <place>,
+#               then <activity> there for <steps> steps before moving on (omit
+#               <steps> to stay for the rest of the day -- the natural choice for
+#               the last stop). emoji defaults to the persona's. This is what makes
+#               memory evolve: every stop adds new travel/perform memories and
+#               lets co-located residents perceive each other.
+#   destination/activity
+#               a single place + activity (the upstream-style one-stop day). The
+#               inactive 25-resident roster uses this; _normalize_personas turns it
+#               into a one-stop schedule so the step loop has a single code path.
 #
 # Each location entry has name, description, address (Smallville tile address or
 # null for the hub), and optionally hub: true for the town center.
 _ALL_PERSONAS, _LOCATIONS = _load_world_data()
+
+
+def _normalize_personas(personas: list[dict]) -> list[dict]:
+    """Give every persona a uniform ``schedule`` list (mutates in place).
+
+    A persona authored with a ``schedule:`` keeps it (each stop filled out with a
+    default emoji and an explicit ``steps`` of ``None`` when omitted); its legacy
+    ``destination``/``activity`` are mirrored from the first stop so code and tests
+    that read those fields still work. A persona authored with only
+    ``destination``/``activity`` gets a synthesized one-stop schedule that stays
+    put for the whole run -- the original single-activity behavior.
+    """
+    for spec in personas:
+        if spec.get("schedule"):
+            spec["schedule"] = [
+                {
+                    "place": stop["place"],
+                    "activity": stop["activity"],
+                    "emoji": stop.get("emoji", spec["emoji"]),
+                    "steps": stop.get("steps"),  # None => stay for the rest of the day
+                }
+                for stop in spec["schedule"]
+            ]
+            spec["destination"] = spec["schedule"][0]["place"]
+            spec["activity"] = spec["schedule"][0]["activity"]
+        else:
+            spec["schedule"] = [
+                {
+                    "place": spec["destination"],
+                    "activity": spec["activity"],
+                    "emoji": spec["emoji"],
+                    "steps": None,
+                }
+            ]
+    return personas
+
+
+_normalize_personas(_ALL_PERSONAS)
 
 # Active cast size. The full 25-resident roster still loads from world_data.yaml
 # (nothing is deleted) -- we just run a smaller subset so the demo's per-agent
@@ -76,13 +125,18 @@ def build_world():
         if spec.get("hub"):
             hub = spec["name"]
 
-    # Catch a typo in a persona's home/destination early, with a clear message,
-    # rather than failing deep inside the parser at simulate() time.
+    # Catch a typo in a persona's home or any scheduled place early, with a clear
+    # message, rather than failing deep inside the parser at simulate() time.
     for spec in PERSONAS:
-        for key in ("home", "destination"):
-            if spec[key] not in locations:
+        if spec["home"] not in locations:
+            raise ValueError(
+                f"{spec['name']}'s home '{spec['home']}' is not a known location"
+            )
+        for stop in spec["schedule"]:
+            if stop["place"] not in locations:
                 raise ValueError(
-                    f"{spec['name']}'s {key} '{spec[key]}' is not a known location"
+                    f"{spec['name']}'s scheduled place '{stop['place']}' "
+                    "is not a known location"
                 )
 
     # Wire every location to the hub so Game.__init__ discovers them all (it

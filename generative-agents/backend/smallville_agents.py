@@ -25,12 +25,53 @@ from . import seed
 
 
 class SmallvilleMockClient(MockReActClient):
-    """Deterministic mock LLM for one persona's morning routine."""
+    """Deterministic mock LLM that walks a persona through a *schedule* of stops.
 
-    def __init__(self, destination: str, activity: str, config=None, ledger=None):
+    A schedule is an ordered list of ``{place, activity, emoji, steps}`` stops
+    (built by :func:`build_world._normalize_personas`). The brain only ever looks
+    at the *current* stop -- travel until it is standing in ``place``, then perform
+    ``activity`` there. The step loop (:func:`run_simulation.simulate`) owns the
+    clock: when a stop's ``steps`` have elapsed it calls :meth:`advance` to point
+    the brain at the next stop, and the agent walks on. That hand-off is what makes
+    each agent keep acting -- and keep accumulating memories -- all run long,
+    instead of freezing in a single activity.
+    """
+
+    def __init__(self, schedule: list[dict], config=None, ledger=None):
         super().__init__(config, ledger=ledger)
-        self.destination = destination
-        self.activity = activity
+        self.schedule = schedule
+        self.stop_index = 0
+
+    @property
+    def _stop(self) -> dict:
+        """The stop the agent is currently working on."""
+        return self.schedule[self.stop_index]
+
+    # The brain reads these off the current stop; advancing the schedule (below)
+    # is all it takes to re-point travel/perform at the next place + activity.
+    @property
+    def destination(self) -> str:
+        return self._stop["place"]
+
+    @property
+    def activity(self) -> str:
+        return self._stop["activity"]
+
+    @property
+    def emoji(self) -> str:
+        return self._stop["emoji"]
+
+    @property
+    def steps(self):
+        """Steps to perform the current activity, or ``None`` to stay put."""
+        return self._stop["steps"]
+
+    def advance(self) -> bool:
+        """Move to the next scheduled stop. Returns ``False`` if none remain."""
+        if self.stop_index + 1 < len(self.schedule):
+            self.stop_index += 1
+            return True
+        return False
 
     def _current_location(self, observation: str) -> str:
         """describe_for() puts the location name (UPPERCASE) on the first line."""
@@ -133,9 +174,7 @@ def attach_agents(
     )
     for spec in personas:
         char = characters[spec["name"]]
-        client = SmallvilleMockClient(
-            spec["destination"], spec["activity"], ledger=ledger
-        )
+        client = SmallvilleMockClient(spec["schedule"], ledger=ledger)
         agent = LLMAgent(
             client, persona=char.persona, embedding_client=embedding_client
         )
@@ -143,10 +182,17 @@ def attach_agents(
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
-        # Bind the private memory to this character and seed the day's plan.
+        # Bind the private memory to this character and seed the day's plan: the
+        # whole itinerary, so retrieval has the agent's intentions to surface from
+        # turn 0 (and the first stop still mentions destination + activity, which
+        # the seeding tests assert on).
         agent.memory.owner = char.name
+        itinerary = ", then ".join(
+            f"{stop['activity']} at {stop['place']}" for stop in spec["schedule"]
+        )
         agent.memory.add_plan(
-            f"Plan: go to {spec['destination']} and {spec['activity']}.",
+            f"Plan: go to {spec['destination']} and {spec['activity']}. "
+            f"Today's stops: {itinerary}.",
             turn=0,
             importance=5.0,
         )
@@ -195,14 +241,23 @@ def memories_for_frame(records) -> list[dict]:
 
     ``observe_and_decide`` stashes the records it retrieved on ``agent`` as
     ``last_retrieved``; this turns them into the small JSON shape the frontend's
-    agent card renders (kind / importance / text), so the viewer can watch which
-    memories surfaced for each decision. Returns ``[]`` for an empty/None list.
+    agent card renders, so the viewer can watch which memories surfaced for each
+    decision:
+
+    * ``kind`` -- observation / plan / reflection (the card colour-codes it),
+    * ``importance`` -- the 1-10 poignancy, kept quiet next to the text,
+    * ``text`` -- the memory itself,
+    * ``created_turn`` -- the step the memory was formed; the exporter turns this
+      into a wall-clock ``time`` so the card can show *when* it entered the stream.
+
+    Returns ``[]`` for an empty/None list.
     """
     return [
         {
             "kind": r.kind.value,
             "importance": round(float(r.importance), 1),
             "text": r.text,
+            "created_turn": r.created_turn,
         }
         for r in (records or [])
     ]
