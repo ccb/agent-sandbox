@@ -2,6 +2,8 @@
 
 Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
+<!-- Copy the template from README.md to the top each working day. -->
+
 ## 2026-06-21
 
 **Focus:** Merging the summer interns' PR batch; prototyping a Parsely-game
@@ -40,15 +42,30 @@ conversion onto our engine, and the parser improvements it surfaced.
     from the registered action names via structured outputs, so it can't
     hallucinate an action; `anthropic` lazily imported). Two parsers now: the
     verb-noun default and the LLM one.
-- **Built a parser accuracy leaderboard + effect tests** (scratch). The verb-noun
-  default scores 100% on canonical/alias commands but 0% on natural language;
-  the LLM parser is what holds up as commands get conversational. Effect tests
-  (8/8) assert correct game state after each action is applied.
+- **Built a parser accuracy leaderboard + effect tests** (scratch) — detail in
+  the leaderboard note below.
 - **Mentoring / admin:** scoped the codegen work with Frankie (set the reusable
   PDF→game pipeline aside; generate each Parsely game as a notebook on the engine
   — #107) and Tingen with Mark (build it on our engine, commit to a `game/tingen`
   branch — #108); introduced Mark, Maxine, and Artemis to compare notes on AI map
   generation.
+
+**Parser accuracy leaderboard (`parser_leaderboard.py`).** Two halves: an
+*accuracy leaderboard* — which action each parser picks, scored over a tiered
+command set (canonical `VERB NOUN` → aliases / light paraphrase → natural
+language) — and *deterministic effect tests* — once the right action is chosen,
+applying it must yield the right game state (8/8 pass). Today's numbers:
+
+| parser | canonical | alias / paraphrase | natural language | overall |
+|---|---|---|---|---|
+| verb-noun (default) | 10/10 | 6/6 | 0/6 | 72% |
+| llm (claude, enum) | _ready entrant — skipped offline (no API key)_ | | | |
+
+The gradient is the point: deterministic substring matching is excellent on
+canonical and aliased commands and collapses on natural language (0%) — exactly
+where the LLM parser earns its place. A leaderboard (not a single pass/fail) is
+the right way to compare parsers as we open the game to free-form input, and the
+harness is ready to score the LLM entrant the moment an API key is set.
 
 **Blockers / questions:**
 - Parser branch needs a PR, plus a decision on where *Action Castle II* and the
