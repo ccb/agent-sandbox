@@ -165,6 +165,8 @@ class ActionName(_StrEnum):
     ATTACK = "attack"
     SAY = "say"
     TALK = "talk"
+    FOLLOW = "follow"
+    UNFOLLOW = "stop following"
 
     # Consumables
     EAT = "eat"
