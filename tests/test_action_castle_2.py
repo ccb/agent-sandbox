@@ -142,6 +142,17 @@ def test_give_smith_the_axe_also_sharpens_it():
     assert "axe" not in game.characters["smith"].inventory  # handed back
 
 
+def test_axe_is_embedded_in_the_stump_surface():
+    game, cap = _play(["out", "east", "north"])  # -> Bend in the Road
+    stump = game.player.location.items["stump"]
+    assert stump.get_property("is_surface") and "axe" in stump.contents
+    assert "axe" not in game.player.location.items  # in the stump, not loose
+    game.do_command("examine stump")
+    assert _said(cap, "On it you see an axe.")
+    game.do_command("take axe")
+    assert "axe" in game.player.inventory and "axe" not in stump.contents
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory
