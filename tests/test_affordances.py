@@ -178,7 +178,7 @@ def test_give_fails_on_worn_item():
 
 
 def test_wear_crown_requires_royalty_and_crowns_on_success():
-    from notebooks.hw1_solution.action_castle import Wear_Crown
+    from text_adventure_games.adventures.action_castle import Wear_Crown
 
     game = _one_char_game()
     crown = things.Item("crown", "a golden crown")

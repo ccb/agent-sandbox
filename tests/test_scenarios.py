@@ -14,7 +14,7 @@ The generic, game-agnostic helpers (`play`, `blocked`, `prop`, `at`, `has_item`)
 live in `text_adventure_games.scenario` so an agent eval can import them too.
 """
 
-from notebooks.hw1_solution.action_castle import Darkness, build_game
+from text_adventure_games.adventures.action_castle import Darkness, build_game
 from text_adventure_games import games, things
 from text_adventure_games.scenario import at, blocked, has_item, play, prop
 
