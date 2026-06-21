@@ -4,6 +4,47 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-21 (cont. 2)
+
+**Focus:** Engine features the AC2 port pulled for -- containers, surfaces, and
+a general follow -- plus landing the games as a package.
+
+**Done:**
+- **`text_adventure_games/adventures/` package** (PR #111): `action_castle.py`
+  (moved from `notebooks/hw1_solution/`, history preserved + a re-export shim so
+  the course notebooks are untouched) and `action_castle_2.py`. Nesting *inside*
+  the installed package makes them importable in notebooks/tests/web app with no
+  `sys.path` setup -- and it couldn't be `games/` (collides with the `games.py`
+  Game-class module).
+- **Room containers, then surfaces (PR #114).** `Get`/`Examine`/`get_items_in_scope`
+  reach into an open holder via a single `Item.accessible_contents()`. Added a
+  **surface** (supporter) as a *sibling flag sharing the container storage*
+  (`is_surface`; chosen over a class hierarchy or a unified holder+preposition
+  flag), unified behind `is_holder`/`is_open`/`accessible_contents`/`preposition`.
+  New verbs **Put** (`put X in/on Y`) and **Open/Close**. "The candle is on the
+  table" works; AC2's Dungeon Stairs lamp now rests on a ledge (PR #116).
+- **General-purpose follow (PR #115, closes #112).** Chose **cascade-on-move**
+  over a turn behavior: following is a consequence of the *leader's* move (the
+  engine drags followers the instant a `Go` resolves, recursively + cycle-safe),
+  so it's correct in sequential *and* simultaneous mode, player- or NPC-led, and
+  for chains -- a follower travels *during the leader's move*, not on its own
+  later turn. `Character.following` + a `follow_filter` for no-go zones; `Follow`/
+  `Unfollow` verbs. Rosemary migrated off her bespoke behavior, so `ask rosemary
+  to follow` works (declines "too chilly" until the blanket); the boat ride
+  carries her along.
+- **AC2 smith via trigger (PR #116, #113).** Replaced the `GiveAxeToSmith`
+  custom action with a trigger reacting to "the smith holds the unsharpened
+  axe", so `give smith the axe` (word order) sharpens it too -- the built-in
+  `Give` is phrasing-agnostic; the parser no longer has to be guessed at.
+- Captured TODOs as issues from playtesting: **#112** (follow, now done),
+  **#113** (give word-order, now done for the smith), **#110** (dialog-aware
+  parsing, still design-only).
+
+**Next:**
+- The give-reaction hook (cleaner systematic #113) and the holder-tree refactor
+  remain optional north stars -- only if games get deep with containment.
+- A live-key `LlmParser` run to fill the leaderboard's LLM row.
+
 ## 2026-06-21 (cont.)
 
 **Focus:** Playtesting the *Action Castle II* port, fixing what it surfaced, and
