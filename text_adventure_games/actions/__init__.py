@@ -12,7 +12,7 @@ from .fish import Catch_Fish
 from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
 from .things import Get, Drop, Inventory, Examine, Give
-from .talk import Say
+from .talk import Say, Talk
 from .goals import AdoptGoal, DropGoal
 
 __all__ = [
@@ -39,6 +39,7 @@ __all__ = [
     "Pick_Rose",
     "Smell_Rose",
     "Say",
+    "Talk",
     "AdoptGoal",
     "DropGoal",
 ]

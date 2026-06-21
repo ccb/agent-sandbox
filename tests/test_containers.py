@@ -318,3 +318,136 @@ def test_inventory_empty_is_unchanged():
     thing_actions.Inventory(game, "inventory", actor=player)()
     text = "\n".join(cap.texts(Channel.NARRATION))
     assert "empty" in text
+
+
+# ---------------------------------------------------------------------------
+# Containers sitting in a ROOM: take items out of them, and examine to peek in.
+# (A boat holding a blanket; a chest holding a key.)
+# ---------------------------------------------------------------------------
+
+
+def _room_chest(room, *, closed=False, gettable=False):
+    """A non-gettable chest container placed in *room*."""
+    chest = things.Item("chest", "a wooden chest", "An old oak chest.")
+    chest.set_property("gettable", gettable)
+    chest.make_container()
+    if closed:
+        chest.set_property("is_closed", True)
+    room.add_item(chest)
+    return chest
+
+
+def test_get_takes_item_from_open_room_container():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)
+    key = things.Item("key", "a brass key")
+    chest.add_item(key)
+
+    thing_actions.Get(game, "take key", actor=player)()
+
+    assert "key" in player.inventory  # now in hand
+    assert "key" not in chest.contents  # removed from the chest
+    assert key.container is None
+    assert cap.texts(Channel.NARRATION)  # a success message was emitted
+
+
+def test_get_from_room_container_overflows_into_backpack():
+    game, room, player, cap = _capture_game(player_capacity=1)
+    pack = _backpack(capacity=2)
+    player.add_to_inventory(pack)  # the one hand slot is now full
+    chest = _room_chest(room)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    thing_actions.Get(game, "take key", actor=player)()
+
+    assert "key" not in player.inventory  # hands were full
+    assert "key" in pack.contents  # stowed in the carried pack
+    assert "key" not in chest.contents  # left the chest
+
+
+def test_non_gettable_room_container_itself_cannot_be_taken():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    _room_chest(room)  # gettable=False
+    action = thing_actions.Get(game, "take chest", actor=player)
+    assert action.check_preconditions() is False
+    assert "chest" in room.items  # the chest stays put
+
+
+def test_closed_room_container_hides_contents_from_get():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room, closed=True)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    action = thing_actions.Get(game, "take key", actor=player)
+    assert action.check_preconditions() is False  # can't take what you can't see
+    assert "key" in chest.contents  # still inside the closed chest
+
+
+def test_examine_lists_open_container_contents():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    thing_actions.Examine(game, "examine chest", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "An old oak chest." in text
+    assert "It contains a brass key." in text
+
+
+def test_examine_joins_multiple_contents():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)
+    chest.add_item(things.Item("key", "a brass key"))
+    chest.add_item(things.Item("coin", "a gold coin"))
+
+    thing_actions.Examine(game, "examine chest", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "It contains a brass key and a gold coin." in text
+
+
+def test_examine_empty_container_omits_contents_sentence():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    _room_chest(room)  # empty
+
+    thing_actions.Examine(game, "examine chest", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "An old oak chest." in text
+    assert "It contains" not in text  # no contents line, no "It's empty" noise
+
+
+def test_examine_closed_container_omits_contents_sentence():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room, closed=True)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    thing_actions.Examine(game, "examine chest", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "It contains" not in text
+
+
+def test_examine_item_inside_open_room_container():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)
+    chest.add_item(things.Item("key", "a brass key", "A small brass key, worn smooth."))
+
+    thing_actions.Examine(game, "examine key", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "worn smooth" in text  # reachable by name even though it's in the chest
+
+
+def test_take_from_container_then_drop_to_room():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    thing_actions.Get(game, "take key", actor=player)()
+    thing_actions.Drop(game, "drop key", actor=player)()
+
+    assert "key" in room.items  # back in the room, loose
+    assert "key" not in chest.contents
+    assert "key" not in player.inventory
