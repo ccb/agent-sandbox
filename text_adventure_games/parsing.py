@@ -8,6 +8,7 @@ The implementation that I have given below only uses simple keyword matching.
 """
 
 import inspect
+import re
 
 from text_adventure_games import games
 
@@ -26,24 +27,37 @@ _DIRECTION_ALIASES: dict[str, Direction] = {
     "w": Direction.WEST,
 }
 
-# Direction members whose name should be detected when it appears anywhere in
-# the command ("you may travel north" -> Direction.NORTH). These are the
-# cardinals; up/down/in/out are too easily mistaken for unrelated words
-# (e.g. "drink water" contains "in"), so they require the explicit "go up"
-# form below.
+# Canonical direction names recognized by get_direction (alongside any exit
+# names a location declares). The cardinals and the vertical/in-out set are
+# matched the same way now -- on word boundaries, and only when the command is
+# bare or movement-verb-led (see get_direction) -- so short names like "in"
+# no longer misfire inside unrelated words ("examine", "drink").
 _SUBSTRING_DIRECTIONS = (
     Direction.NORTH,
     Direction.SOUTH,
     Direction.EAST,
     Direction.WEST,
 )
-
-# Direction members usable as "go <name>" -- avoids the substring ambiguity.
 _GO_SUFFIX_DIRECTIONS = (
     Direction.UP,
     Direction.DOWN,
     Direction.OUT,
     Direction.IN,
+)
+
+# Verbs that introduce a movement command. A direction/exit is treated as a GO
+# only when the command is one of these followed by a destination, or is a bare
+# direction/exit -- never merely because a direction's letters appear in some
+# other word. ("enter"/"exit"/"leave" are deliberately excluded: exit names can
+# themselves start with them, e.g. the "enter tunnel" connection.)
+_MOVEMENT_VERBS = (
+    "go",
+    "walk",
+    "run",
+    "head",
+    "travel",
+    "move",
+    "climb",
 )
 
 
@@ -174,7 +188,19 @@ class Parser:
         if "," in command:
             # Let the player type in a comma separted sequence of commands
             return ActionName.SEQUENCE
-        elif (
+
+        # Specific-first: if a registered action's MULTI-WORD name or alias
+        # appears in the command, it wins over the generic verb keywords below.
+        # This lets game-defined verbs ("give axe to smith", "say yes") and
+        # multi-word aliases route to their own action instead of being
+        # pre-empted by "give"/"say"/"drop". Single-word verbs, directions, and
+        # everything else fall through to the keyword logic. (Generalizes the
+        # ad hoc "adopt goal" / "take off"-before-"take" precedence hacks below.)
+        specific = self._match_specific_action(command)
+        if specific is not None:
+            return specific
+
+        if (
             command.startswith("say ")
             or command.startswith("speak ")
             or command in ("say", "speak")
@@ -237,6 +263,25 @@ class Parser:
                     if best_match is None or len(special_command) > len(best_match):
                         best_match = special_command
             return best_match
+
+    def _match_specific_action(self, command):
+        """The longest registered ACTION_NAME / ACTION_ALIAS that is MULTI-WORD
+        and appears in *command* (already lowercased), or None.
+
+        Multi-word only, so single-word generic verbs (give/say/drop/...) are
+        still resolved by the keyword chain in determine_intent. Aliases are
+        honored here (the keyword fallback ignores them)."""
+        best = None
+        best_name = None
+        for _, action in self.actions.items():
+            phrases = [action.action_name()] + list(
+                getattr(action, "ACTION_ALIASES", []) or []
+            )
+            for phrase in phrases:
+                if phrase and " " in phrase and phrase.lower() in command:
+                    if best is None or len(phrase) > len(best):
+                        best, best_name = phrase, action.action_name()
+        return best_name
 
     def parse_action(self, command: str, actor=None) -> actions.Action:
         """
@@ -434,24 +479,122 @@ class Parser:
         the str-mixin enum, so the return type is compatible with the
         existing dict lookups in Location.connections).
         """
-        command = command.lower()
+        command = command.lower().strip()
         # Single-letter shortcuts only fire on the bare command -- "n", "s",
         # not "open the box".
         if command in _DIRECTION_ALIASES:
             return _DIRECTION_ALIASES[command]
-        # Cardinal name appearing anywhere in the command.
-        for direction in _SUBSTRING_DIRECTIONS:
-            if direction in command:
-                return direction
-        # Vertical / in-out require the explicit "go <name>" form so we don't
-        # mis-fire on words like "drink" containing "in".
-        for direction in _GO_SUFFIX_DIRECTIONS:
-            if command.endswith(f"go {direction}"):
-                return direction
-        # Fall back to any exit name the location declares -- supports games
-        # that invent custom direction tokens like "through the portal".
+
+        # NPC commands are actor-prefixed ("troll go north"); strip a leading
+        # character name so the movement-verb check below sees "go north".
+        for cname in self.game.characters:
+            cl = cname.lower()
+            if command.startswith(cl + " "):
+                command = command[len(cl) + 1 :].strip()
+                break
+
+        # Candidate names: canonical directions plus any exit names this
+        # location declares. Longest first, so a multi-word exit ("to hobbs
+        # cafe") wins over a short one ("to") that is a prefix of it.
+        names = [(str(d), d) for d in _SUBSTRING_DIRECTIONS + _GO_SUFFIX_DIRECTIONS]
         if location:
-            for exit in location.connections.keys():
-                if exit.lower() in command:
-                    return exit
+            names += [(exit.lower(), exit) for exit in location.connections.keys()]
+        names.sort(key=lambda pair: len(pair[0]), reverse=True)
+
+        # Strip a leading movement verb ("go north" -> target "north"). A bare
+        # movement verb names no destination.
+        target = command
+        led = False
+        for verb in _MOVEMENT_VERBS:
+            if command == verb:
+                return None
+            if command.startswith(verb + " "):
+                target = command[len(verb) + 1 :].strip()
+                led = True
+                break
+
+        # Movement is recognized when the (verb-stripped) command IS a direction
+        # / exit name, or -- only if a movement verb led the command -- a name
+        # appears in it on word boundaries ("go through the north gate"). A bare
+        # direction with no verb is matched by the exact check. Crucially, a
+        # name is NEVER matched as a mere substring of another word, so an "in"
+        # exit no longer fires inside "examine".
+        for name, value in names:
+            if target == name:
+                return value
+            if led and re.search(rf"\b{re.escape(name)}\b", target):
+                return value
         return None
+
+
+class LlmParser(Parser):
+    """Intent determination via an LLM, constrained to the registered actions.
+
+    The second of the engine's two parsers (the default ``Parser`` handles
+    verb-noun commands, ranking multi-word actions specific-first). ``LlmParser``
+    handles flexible natural-language commands ("hand the blacksmith my axe",
+    "rouse the dragon") that a deterministic parser can't map.
+
+    It is the modern form of the classic GPT parser: rather than a regex over
+    free-form model output, the action is chosen from an *enum* of the game's
+    registered ACTION_NAMEs via structured outputs, so the model cannot
+    hallucinate an action that doesn't exist. Custom actions are first-class
+    candidates (described to the model by ACTION_DESCRIPTION + ACTION_ALIASES),
+    so there is no keyword pre-emption. Argument matching (get_character /
+    match_item / get_direction) still uses the base implementations; override
+    those too for fully natural-language argument resolution.
+
+    ``anthropic`` is imported lazily, so importing this module adds no hard
+    dependency. Requires the SDK + ANTHROPIC_API_KEY at construction; the
+    default model is ``claude-opus-4-8``.
+    """
+
+    def __init__(self, game, model="claude-opus-4-8", echo_commands=False):
+        super().__init__(game, echo_commands=echo_commands)
+        import anthropic
+
+        self.client = anthropic.Anthropic()
+        self.model = model
+        self._catalog = [
+            (a.action_name(), a.ACTION_DESCRIPTION or "", list(a.ACTION_ALIASES or []))
+            for _, a in self.actions.items()
+        ]
+
+    def determine_intent(self, command, actor=None):
+        import json
+
+        names = sorted({n for n, _, _ in self._catalog})
+        listing = "\n".join(
+            f"- {n}: {d}" + (f"  (aliases: {', '.join(al)})" if al else "")
+            for n, d, al in self._catalog
+        )
+        system = (
+            "You are the command parser for a text-adventure game. Map the "
+            "player's command to exactly ONE action_name from the list, choosing "
+            "the closest match by meaning. If nothing fits, choose the most "
+            "plausible action."
+        )
+        user = (
+            f"Actions:\n{listing}\n\nPlayer command: {command!r}\nPick one action_name."
+        )
+        resp = self.client.messages.create(
+            model=self.model,
+            max_tokens=64,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "action_name": {"type": "string", "enum": names}
+                        },
+                        "required": ["action_name"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+        )
+        text = next((b.text for b in resp.content if b.type == "text"), "{}")
+        return json.loads(text).get("action_name")
