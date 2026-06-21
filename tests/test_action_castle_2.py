@@ -151,6 +151,12 @@ def test_axe_is_embedded_in_the_stump_surface():
     assert _said(cap, "On it you see an axe.")
     game.do_command("take axe")
     assert "axe" in game.player.inventory and "axe" not in stump.contents
+    # The listing is generated from live contents, so once the axe is gone the
+    # examine text no longer claims it's there (no stale, baked-in mention).
+    fresh = CaptureRenderer()
+    game.parser.set_renderer(fresh)
+    game.do_command("examine stump")
+    assert not _said(fresh, "axe")
 
 
 def test_drop_penny_in_well_scores_the_wish():
