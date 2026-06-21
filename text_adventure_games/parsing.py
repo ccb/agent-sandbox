@@ -469,13 +469,12 @@ class Parser:
             items_in_scope[item_name] = character.location.items[item_name]
         for item_name in character.inventory:
             items_in_scope[item_name] = character.inventory[item_name]
-        # Items inside an OPEN container that is itself in scope are reachable
-        # too -- e.g. a blanket inside a boat in the room, or inside a carried
-        # bag -- so they can be examined/referenced by name. One level deep.
+        # Items inside an OPEN holder that is itself in scope are reachable too
+        # -- a blanket in a boat, a candle on a table, an item in a carried bag
+        # -- so they can be examined/referenced by name. One level deep.
         for it in list(items_in_scope.values()):
-            if it.get_property("is_container") and not it.get_property("is_closed"):
-                for cname, citem in it.contents.items():
-                    items_in_scope.setdefault(cname, citem)
+            for cname, citem in it.accessible_contents().items():
+                items_in_scope.setdefault(cname, citem)
         return items_in_scope
 
     def get_direction(self, command: str, location: Location = None) -> str:

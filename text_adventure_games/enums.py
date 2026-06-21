@@ -156,6 +156,10 @@ class ActionName(_StrEnum):
     EXAMINE = "examine"
     GIVE = "give"
     UNLOCK_DOOR = "unlock door"
+    # Holders: put things in containers / on surfaces, and open/close containers
+    PUT = "put"
+    OPEN = "open"
+    CLOSE = "close"
 
     # Combat / social
     ATTACK = "attack"
