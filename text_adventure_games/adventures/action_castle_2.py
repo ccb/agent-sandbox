@@ -887,9 +887,20 @@ def build_game() -> ActionCastle2:
     boat.add_item(blanket)  # in the boat, not loose at the pond
     old_pond.add_item(boat)
 
+    # The axe is embedded in the tree stump (rulebook), so the stump is a
+    # surface holding it -- TAKE AXE pulls it from the stump, and EXAMINE STUMP
+    # lists it. (A surface, per the engine's supporter feature.)
+    stump = things.Item(
+        "stump",
+        "an old tree stump",
+        "Judging by the size of its stump, this tree must have been enormous.",
+    )
+    stump.set_property("gettable", False)
+    stump.make_surface()
     axe = things.Item("axe", "an axe", "The axe is dulled from frequent use.")
     axe.set_property("is_weapon", True)
-    bend.add_item(axe)
+    stump.add_item(axe)
+    bend.add_item(stump)
 
     armor = things.Item(
         "armor", "fire-scorched armor", "It bears the heraldry of Action Castle."
@@ -930,7 +941,6 @@ def build_game() -> ActionCastle2:
         'It reads, "Please don\'t pick the roses."',
         pond_road,
     )
-    scenery("stump", "an old tree stump", "There's an axe embedded in the stump.", bend)
     scenery(
         "moat",
         "the castle moat",
