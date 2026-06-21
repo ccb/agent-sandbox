@@ -555,18 +555,22 @@ class LlmParser(Parser):
 
         self.client = anthropic.Anthropic()
         self.model = model
-        self._catalog = [
-            (a.action_name(), a.ACTION_DESCRIPTION or "", list(a.ACTION_ALIASES or []))
-            for _, a in self.actions.items()
-        ]
 
     def determine_intent(self, command, actor=None):
         import json
 
-        names = sorted({n for n, _, _ in self._catalog})
+        # Build the catalogue from the CURRENT action set on every call: custom
+        # actions are registered AFTER __init__ (via set_parser / add_action),
+        # so caching it at construction would silently omit every game-defined
+        # verb from the enum the model must choose from.
+        catalog = [
+            (a.action_name(), a.ACTION_DESCRIPTION or "", list(a.ACTION_ALIASES or []))
+            for _, a in self.actions.items()
+        ]
+        names = sorted({n for n, _, _ in catalog})
         listing = "\n".join(
             f"- {n}: {d}" + (f"  (aliases: {', '.join(al)})" if al else "")
-            for n, d, al in self._catalog
+            for n, d, al in catalog
         )
         system = (
             "You are the command parser for a text-adventure game. Map the "
