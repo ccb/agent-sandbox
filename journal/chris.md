@@ -4,6 +4,49 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-21 (cont.)
+
+**Focus:** Playtesting the *Action Castle II* port, fixing what it surfaced, and
+landing it (and Action Castle I) as checked-in games.
+
+**Done:**
+- **Playtested AC2 interactively** and fixed real issues: a one-way-door
+  soft-lock plus junk/duplicate exits, all from canonical-direction auto-reverse
+  *collisions* (multiple buildings' `out` fighting over `town_square["in"]`) —
+  fixed by wiring those links one-way; and a wield-the-sword →
+  arrested-in-the-courtyard soft-lock, because quest checks read only
+  `inventory` while `WEAR`/`WIELD` move items into `worn`/`wielded` (fixed with a
+  "held = inventory ∪ worn ∪ wielded" helper).
+- **Engine affordances → `main` (`75f020a`, from `proto/specific-first-parser`):**
+  `Examine` now works on NPCs; a generic `Talk` verb (`talk to <npc>` speaks a
+  character's `talk_text`, never the private `persona` that drives the LLM
+  agent); a `Wear` **fit gate** (an item declares `fit_property` + value, so it
+  can be wearable yet only fit certain wearers); and **room containers** — `Get`
+  takes an item out of an open container in the room, `Examine` lists an open
+  container's contents, `get_items_in_scope` reaches one level in. + tests.
+- **PDF faithfulness pass** (ran `/pdf-to-markdown` on the rulebook, diffed vs.
+  the port): real **max score is 100** (I'd undercounted to 97 — missing the +5
+  "finish without saving", and a self-added Middle-of-Pond room inflated the
+  location count); the workshop is **NORTH** of the Town Square (not `in`);
+  `WEAR SLIPPERS` → **"The slippers don't fit."** (wearable but *sized* — only
+  the king/hermit carry the matching `shoe_size="imperial_foot"`); the blanket
+  lives **in the boat** (a container), takeable from shore; restored the
+  prophecy/slippers-gated riddle hint.
+- **Landed the games (PR #111 → `main` `6863913`):** new
+  **`text_adventure_games/adventures/`** package with `action_castle.py` (moved
+  from `notebooks/hw1_solution/`, history preserved + a re-export shim so the
+  course notebooks are untouched) and `action_castle_2.py`. Nesting *inside* the
+  installed package makes them importable in notebooks/tests/webapp with **no
+  `sys.path` setup** — and it couldn't be `games/` (collides with the `games.py`
+  Game-class module). Added `tests/test_action_castle_2.py`. Full suite **457
+  passed**.
+
+**Next:**
+- Research stronger **container/supporter** representations (Inform 7 / TADS
+  conventions) and add **surfaces** — "the candle is on the table": PUT X ON Y,
+  and LOOK/EXAMINE listing what rests on a supporter.
+- Live-key run of `LlmParser` to fill the leaderboard's LLM row.
+
 ## 2026-06-21
 
 **Focus:** Merging the summer interns' PR batch; prototyping a Parsely-game
