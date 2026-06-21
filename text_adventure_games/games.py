@@ -237,6 +237,49 @@ class Game:
         self.triggers.append(trigger)
         return trigger
 
+    def relocate(self, character, destination) -> None:
+        """Move *character* to *destination* (bookkeeping only -- no narration).
+
+        The single low-level "a character changes location" primitive. Movement
+        verbs (Go) and games that teleport characters route through here, so
+        following (drag_followers) and any future location-change concerns have
+        one chokepoint."""
+        src = character.location
+        if src is not None and character.name in getattr(src, "characters", {}):
+            src.remove_character(character)
+        destination.add_character(character)  # also sets character.location
+
+    def drag_followers(self, leader, _visited=None) -> None:
+        """Move everyone following *leader* to the leader's current location, then
+        recurse (so a follow-chain A->B->C all arrives together). Cycle-safe.
+
+        Called as part of the leader's MOVE (see Go / a game's relocate), so a
+        follower travels during the leader's turn -- not on its own later turn --
+        which keeps following correct regardless of turn order or turn mode. A
+        follower may decline a destination via its ``follow_filter`` (e.g. a
+        companion who won't enter the castle); it then stays put but keeps
+        following, ready to rejoin when the leader returns."""
+        if _visited is None:
+            _visited = {leader.name}
+        dest = leader.location
+        if dest is None:
+            return
+        leader_ref = "you" if leader is self.player else leader.name
+        for other in list(self.characters.values()):
+            if (
+                other.name in _visited
+                or getattr(other, "following", None) is not leader
+            ):
+                continue
+            _visited.add(other.name)
+            follow_filter = getattr(other, "follow_filter", None)
+            if follow_filter is not None and not follow_filter(dest):
+                self.parser.npc_ok(f"{other.name.capitalize()} won't go any farther.")
+                continue
+            self.relocate(other, dest)
+            self.parser.npc_ok(f"{other.name.capitalize()} follows {leader_ref}.")
+            self.drag_followers(other, _visited)
+
     def _run_triggers(self):
         """React phase: fire triggers whose conditions are now true.
 
