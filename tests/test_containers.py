@@ -451,3 +451,152 @@ def test_take_from_container_then_drop_to_room():
     assert "key" in room.items  # back in the room, loose
     assert "key" not in chest.contents
     assert "key" not in player.inventory
+
+
+# ---------------------------------------------------------------------------
+# Surfaces (surfaces): things rest ON them and are always in view. PUT to
+# place, GET to take, OPEN/CLOSE for containers. (A candle on a table.)
+# ---------------------------------------------------------------------------
+
+
+def _room_surface(room, *, capacity=None):
+    table = things.Item("table", "a sturdy table", "An oak table.")
+    table.set_property("gettable", False)
+    table.make_surface(capacity=capacity)
+    room.add_item(table)
+    return table
+
+
+def test_make_surface_sets_holder_properties():
+    table = things.Item("table", "a table")
+    table.make_surface()
+    assert table.get_property("is_surface")
+    assert table.is_holder() and table.is_open()  # surfaces are always open
+    assert table.preposition() == "on"
+
+
+def test_get_takes_item_off_a_room_surface():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room)
+    table.add_item(things.Item("candle", "a wax candle"))
+
+    thing_actions.Get(game, "take candle", actor=player)()
+
+    assert "candle" in player.inventory
+    assert "candle" not in table.contents
+
+
+def test_examine_surface_lists_what_is_on_it():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room)
+    table.add_item(things.Item("candle", "a wax candle"))
+
+    thing_actions.Examine(game, "examine table", actor=player)()
+
+    text = "\n".join(cap.texts(Channel.NARRATION))
+    assert "An oak table." in text
+    assert "On it you see a wax candle." in text
+
+
+def test_room_description_shows_items_on_a_surface():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room)
+    table.add_item(things.Item("candle", "a wax candle"))
+
+    desc = game.describe_items()
+    assert "table" in desc
+    assert "on it: a wax candle" in desc
+
+
+def test_put_item_on_a_surface():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room)
+    player.add_to_inventory(things.Item("candle", "a wax candle"))
+
+    game.do_command("put candle on table")
+
+    assert "candle" in table.contents
+    assert "candle" not in player.inventory
+
+
+def test_put_item_in_a_container():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)  # an open container in the room
+    player.add_to_inventory(things.Item("coin", "a gold coin"))
+
+    game.do_command("put coin in chest")
+
+    assert "coin" in chest.contents
+    assert "coin" not in player.inventory
+
+
+def test_put_wrong_relation_is_refused():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room)  # a surface wants "on", not "in"
+    player.add_to_inventory(things.Item("coin", "a gold coin"))
+
+    game.do_command("put coin in table")
+
+    assert "coin" not in table.contents
+    assert "coin" in player.inventory
+    assert "can't put things in the table" in (game.parser.last_fail_message or "")
+
+
+def test_put_into_closed_container_is_refused():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    _room_chest(room, closed=True)
+    player.add_to_inventory(things.Item("coin", "a gold coin"))
+
+    game.do_command("put coin in chest")
+
+    assert "closed" in (game.parser.last_fail_message or "").lower()
+
+
+def test_put_respects_capacity():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    table = _room_surface(room, capacity=1)
+    table.add_item(things.Item("vase", "a vase"))  # fills the surface
+    player.add_to_inventory(things.Item("candle", "a wax candle"))
+
+    game.do_command("put candle on table")
+
+    assert "candle" not in table.contents
+    assert "full" in (game.parser.last_fail_message or "").lower()
+
+
+def test_open_makes_container_contents_takeable():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room, closed=True)
+    chest.add_item(things.Item("key", "a brass key"))
+
+    # closed -> can't take what you can't see
+    assert (
+        thing_actions.Get(game, "take key", actor=player).check_preconditions() is False
+    )
+    game.do_command("open chest")
+    assert chest.get_property("is_closed") is False
+    game.do_command("take key")
+    assert "key" in player.inventory
+
+
+def test_close_hides_container_contents_from_examine():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    chest = _room_chest(room)  # open
+    chest.add_item(things.Item("key", "a brass key"))
+
+    game.do_command("close chest")
+    assert chest.get_property("is_closed") is True
+
+    fresh = CaptureRenderer()
+    game.parser.set_renderer(fresh)
+    game.do_command("examine chest")
+    assert "It contains" not in "\n".join(fresh.texts(Channel.NARRATION))
+
+
+def test_open_non_container_is_refused():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    _room_surface(room)  # a table can't be opened
+
+    game.do_command("open table")
+
+    assert "can't open the table" in (game.parser.last_fail_message or "")

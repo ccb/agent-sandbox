@@ -139,3 +139,39 @@ class Item(Thing):
         """Take `item` out of this container, clearing its back-reference."""
         self.contents.pop(item.name, None)
         item.container = None
+
+    def make_surface(self, capacity=None):
+        """Declare this item a surface: things rest ON it and are always in
+        view (no open/closed). A surface shares the container storage --
+        ``contents`` / ``add_item`` / ``remove_item`` / ``capacity`` -- so it's a
+        holder like a container; it differs only in the spatial relation ("on"
+        vs "in") and in never being closed. Returns self so authors can chain."""
+        self.set_property("is_surface", True)
+        self.capacity = capacity
+        return self
+
+    def is_holder(self) -> bool:
+        """True if this item can hold other items -- a container ("in") or a
+        surface ("on")."""
+        return bool(
+            self.get_property("is_container") or self.get_property("is_surface")
+        )
+
+    def is_open(self) -> bool:
+        """Whether a holder's contents are reachable/visible right now.
+        Surfaces are always open; a container is open unless ``is_closed``."""
+        return not (
+            self.get_property("is_container") and self.get_property("is_closed")
+        )
+
+    def accessible_contents(self):
+        """The held items reachable from outside right now: ``contents`` if this
+        is an OPEN holder, else an empty dict. This is the single place the
+        engine asks "what's inside/on this that I can see or take?" -- shared by
+        scope resolution, Get, and Examine, so containers and surfaces are
+        handled uniformly."""
+        return self.contents if (self.is_holder() and self.is_open()) else {}
+
+    def preposition(self) -> str:
+        """ "on" for a surface, "in" for a container -- for listings/messages."""
+        return "on" if self.get_property("is_surface") else "in"
