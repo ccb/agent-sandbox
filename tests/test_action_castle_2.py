@@ -189,6 +189,17 @@ def test_axe_is_embedded_in_the_stump_surface():
     assert not _said(fresh, "axe")
 
 
+def test_row_back_from_the_middle_of_the_pond():
+    # At the middle, the room tells you how to leave, and natural "row back" /
+    # "row to shore" / "exit boat" phrasings all return you to shore.
+    for back_cmd in ("row boat", "row back", "row to shore", "exit boat"):
+        game, cap = _play(["out", "east", "south", "row boat"])  # -> Middle of Pond
+        assert game.player.location.name == "Middle of Pond"
+        assert _said(cap, "Row the boat to head back to shore")  # the hint is shown
+        game.do_command(back_cmd)
+        assert game.player.location.name == "Old Pond", back_cmd
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory
