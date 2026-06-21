@@ -409,6 +409,10 @@ class Game:
                     special_commands = item.get_command_hints()
                     for cmd in special_commands:
                         description += "\n\t" + cmd
+                # A surface's contents are always in view ("on the table...").
+                if item.get_property("is_surface"):
+                    for inner in item.contents.values():
+                        description += f"\n   - on it: {inner.description}"
         return description
 
     def describe_characters(self) -> str:

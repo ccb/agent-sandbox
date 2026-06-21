@@ -16,21 +16,23 @@ class Get(base.Action):
         # You can pick up items lying in the room, and items inside an OPEN
         # container sitting in the room (e.g. a blanket inside a boat). Track
         # which container an item came from so apply_effects removes it there.
+        # You can pick up items lying in the room, and items inside an OPEN
+        # holder sitting in the room -- a container (blanket in a boat) or a
+        # surface (candle on a table). Track the source holder so apply_effects
+        # removes the item from there.
         scope = dict(self.location.items)
-        self.room_containers = [
-            it
-            for it in self.location.items.values()
-            if it.get_property("is_container") and not it.get_property("is_closed")
+        self.room_holders = [
+            it for it in self.location.items.values() if it.accessible_contents()
         ]
-        for c in self.room_containers:
-            for cname, citem in c.contents.items():
+        for h in self.room_holders:
+            for cname, citem in h.accessible_contents().items():
                 scope.setdefault(cname, citem)
         self.item = self.parser.match_item(command, scope, hint="thing to get")
-        self.source_container = None
+        self.source_holder = None
         if self.item is not None and self.item.name not in self.location.items:
-            for c in self.room_containers:
-                if self.item.name in c.contents:
-                    self.source_container = c
+            for h in self.room_holders:
+                if self.item.name in h.contents:
+                    self.source_holder = h
                     break
 
     def claimed_resource(self):
@@ -52,8 +54,8 @@ class Get(base.Action):
         if not self.at(self.character, self.location):
             return False
         # The item is reachable if it lies in the room, or sits in an open
-        # container that is in the room.
-        if self.source_container is None and not self.at(self.item, self.location):
+        # holder (container or surface) that is in the room.
+        if self.source_holder is None and not self.at(self.item, self.location):
             return False
         if not self.has_property(
             self.item,
@@ -72,12 +74,12 @@ class Get(base.Action):
 
     def apply_effects(self):
         """
-        Get's an item from the location (or an open container in the room) and
+        Get's an item from the location (or an open holder in the room) and
         adds it to the character's inventory or, if their hands are full, a
         carried container with space.
         """
-        if self.source_container is not None:
-            self.source_container.remove_item(self.item)
+        if self.source_holder is not None:
+            self.source_holder.remove_item(self.item)
         self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
@@ -226,19 +228,22 @@ class Examine(base.Action):
 
     @staticmethod
     def _contents_sentence(item):
-        """For an OPEN, non-empty container, a sentence listing what's inside
-        (so 'examine boat' reads '... It contains a warm wool blanket.')."""
-        if not item.get_property("is_container") or item.get_property("is_closed"):
+        """For an OPEN, non-empty holder, a sentence listing what's inside (a
+        container) or what rests on it (a surface) -- so 'examine boat' reads
+        '... It contains a warm wool blanket.' and 'examine table' reads
+        '... On it you see a candle.'."""
+        contents = item.accessible_contents()
+        if not contents:
             return ""
-        descs = [c.description for c in item.contents.values()]
-        if not descs:
-            return ""
+        descs = [c.description for c in contents.values()]
         if len(descs) == 1:
             listed = descs[0]
         elif len(descs) == 2:
             listed = f"{descs[0]} and {descs[1]}"
         else:
             listed = ", ".join(descs[:-1]) + f", and {descs[-1]}"
+        if item.get_property("is_surface"):
+            return f" On it you see {listed}."
         return f" It contains {listed}."
 
     def apply_effects(self):
@@ -369,6 +374,141 @@ class Give(base.Action):
             )
             smell = Smell_Rose(self.game, command)
             smell()
+
+
+class Put(base.Action):
+    """Put a held item into a container or onto a surface.
+
+    Grammar: ``put <item> in <container>`` / ``put <item> on <surface>``. The
+    relation must match the holder (you can't put things *in* a table), and a
+    container must be open and have room.
+    """
+
+    ACTION_NAME = ActionName.PUT
+    ACTION_DESCRIPTION = "Put something into a container or onto a surface"
+    ACTION_ALIASES = ["place", "set"]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to put something")
+        cmd = command.lower()
+        self.relation = None
+        item_phrase = holder_phrase = ""
+        # split on the first " in "/" on " into (item) <rel> (holder)
+        for rel, kw in (("in", " in "), ("on", " on ")):
+            if kw in cmd:
+                self.relation = rel
+                left, _, right = cmd.partition(kw)
+                for verb in ("put", "place", "set"):  # drop the leading verb
+                    if verb in left:
+                        left = left.split(verb, 1)[1]
+                        break
+                item_phrase, holder_phrase = left.strip(), right.strip()
+                break
+        self.item = (
+            self.parser.match_item(
+                item_phrase, self.character.carried_items(), hint="thing to put"
+            )
+            if item_phrase
+            else None
+        )
+        scope = {**self.character.location.items, **self.character.inventory}
+        self.holder = (
+            self.parser.match_item(holder_phrase, scope, hint="where to put it")
+            if holder_phrase
+            else None
+        )
+
+    def check_preconditions(self) -> bool:
+        if self.relation is None:
+            self.parser.fail('Put it where? Try "put X in Y" or "put X on Y".')
+            return False
+        if not self.was_matched(self.item, "You aren't holding that."):
+            return False
+        if not self.was_matched(self.holder, "You don't see that here."):
+            return False
+        if self.holder is self.item or not self.holder.is_holder():
+            self.parser.fail(
+                f"You can't put things {self.relation} the {self.holder.name}."
+            )
+            return False
+        if self.relation != self.holder.preposition():
+            self.parser.fail(
+                f"You can't put things {self.relation} the {self.holder.name}."
+            )
+            return False
+        if not self.holder.is_open():
+            self.parser.fail(f"The {self.holder.name} is closed.")
+            return False
+        if not self.holder.has_space():
+            self.parser.fail(f"The {self.holder.name} is full.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.discard_item(self.item)
+        self.holder.add_item(self.item)
+        self.parser.ok(
+            f"{self.character.name.capitalize()} puts the {self.item.name} "
+            f"{self.holder.preposition()} the {self.holder.name}."
+        )
+
+
+class Open(base.Action):
+    ACTION_NAME = ActionName.OPEN
+    ACTION_DESCRIPTION = "Open a container"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to open something")
+        scope = {**self.character.location.items, **self.character.inventory}
+        self.item = self.parser.match_item(command, scope, hint="thing to open")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.item, "I don't see it."):
+            return False
+        if not self.item.get_property("is_container"):
+            self.parser.fail(f"You can't open the {self.item.name}.")
+            return False
+        if not self.item.get_property("is_closed"):
+            self.parser.fail(f"The {self.item.name} is already open.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.item.set_property("is_closed", False)
+        self.parser.ok(
+            f"{self.character.name.capitalize()} opens the {self.item.name}."
+        )
+
+
+class Close(base.Action):
+    ACTION_NAME = ActionName.CLOSE
+    ACTION_DESCRIPTION = "Close a container"
+    ACTION_ALIASES = ["shut"]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to close something")
+        scope = {**self.character.location.items, **self.character.inventory}
+        self.item = self.parser.match_item(command, scope, hint="thing to close")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.item, "I don't see it."):
+            return False
+        if not self.item.get_property("is_container"):
+            self.parser.fail(f"You can't close the {self.item.name}.")
+            return False
+        if self.item.get_property("is_closed"):
+            self.parser.fail(f"The {self.item.name} is already closed.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.item.set_property("is_closed", True)
+        self.parser.ok(
+            f"{self.character.name.capitalize()} closes the {self.item.name}."
+        )
 
 
 class Unlock_Door(base.Action):
