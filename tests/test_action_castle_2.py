@@ -100,6 +100,36 @@ def test_talk_to_smith_speaks_his_line():
     assert _said(cap, "Whaddya want? I'm busy!")
 
 
+def _at_hermit():
+    return _play(["out", "east", "south", "south"])  # -> Hermit's Cave
+
+
+def test_talk_to_hermit_mumbles_about_a_prophecy():
+    game, cap = _at_hermit()
+    game.do_command("talk to hermit")
+    assert _said(cap, "mumbles something about a prophecy")
+    assert not _said(cap, "A champion will arise")  # the topic line isn't given yet
+
+
+def test_talk_to_hermit_about_prophecy_evokes_it():
+    game, cap = _at_hermit()
+    game.do_command("talk to hermit about prophecy")
+    assert _said(cap, "A champion will arise from humble beginnings")
+
+
+def test_ask_hermit_about_the_prophecy_also_works():
+    game, cap = _at_hermit()
+    game.do_command("ask hermit about the prophecy")  # the "ask ... about" form
+    assert _said(cap, "A champion will arise from humble beginnings")
+
+
+def test_ask_hermit_about_unknown_topic_is_declined():
+    game, cap = _at_hermit()
+    game.do_command("ask hermit about the weather")
+    assert _said(cap, "has nothing to say about that")
+    assert not _said(cap, "A champion will arise")
+
+
 # --- map topology (one-way connection fixes) -------------------------------
 
 

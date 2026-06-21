@@ -82,6 +82,13 @@ class Character(Thing):
         # not serialized.
         self.following = None
         self.follow_filter = None
+        # Canned dialogue surfaced by the Talk action (player-facing, authored;
+        # runtime-only like `behavior`). `talk_text` is the default line for
+        # "talk to X"; `talk_topics` maps a topic keyword to a line for
+        # "talk to X about <topic>" / "ask X about <topic>". Lines are printed
+        # verbatim (write them as full narration, with any quotes included).
+        self.talk_text = ""
+        self.talk_topics: dict[str, str] = {}
         self.goals = goals if goals else []
         # Recently perceived utterances (e.g. speech heard this round). Scoped
         # per-character: only lines delivered here are visible to this

@@ -216,6 +216,11 @@ class Parser:
             return "adopt goal"
         elif command.startswith("drop goal"):
             return "drop goal"
+        elif command.startswith("ask ") and " about " in command:
+            # "ask <npc> about <topic>" is a Talk. ("talk to X about Y" already
+            # routes via the specific-first "talk to" alias.) Gated on " about "
+            # so "ask <npc> to follow" still falls through to the follow verb.
+            return ActionName.TALK
         elif self.get_direction(command, character.location):
             # Check for the direction intent
             return ActionName.GO
@@ -458,6 +463,20 @@ class Parser:
             item = matched_items[item_name]
             return item
 
+    def match_topic(self, command: str, topics: dict[str, str]) -> str | None:
+        """Pick the conversation topic a command refers to, or None.
+
+        *topics* maps a topic keyword to its canned line (the Talk action looks
+        up the line). The deterministic parser matches by substring -- the
+        longest topic keyword that appears in the command wins, so "ask the
+        hermit about the prophecy" resolves to "prophecy". The LLM parser
+        overrides this to match by meaning."""
+        command = command.lower()
+        for key in sorted(topics, key=len, reverse=True):
+            if key.lower() in command:
+                return key
+        return None
+
     def get_items_in_scope(self, character=None) -> dict[str, Item]:
         """
         Returns a list of items in character's location and in their inventory
@@ -683,6 +702,22 @@ class LlmParser(Parser):
         return (
             item if item is not None else super().match_item(command, item_dict, hint)
         )
+
+    def match_topic(self, command: str, topics: dict[str, str]) -> str | None:
+        if not topics:
+            return None
+        # Describe each topic by its line so the model can match by meaning
+        # ("about the end of days" -> a "prophecy" topic), not just keyword.
+        options = {key: (line, key) for key, line in topics.items()}
+        instructions = (
+            "You are the parser for a text-adventure game. The player is talking "
+            "to a character; pick the topic they're asking about, or none."
+        )
+        try:
+            topic = self._pick_one(instructions, options, command, allow_none=True)
+        except Exception:
+            topic = None
+        return topic if topic is not None else super().match_topic(command, topics)
 
     def get_direction(self, command: str, location: Location = None) -> str:
         options = {}
