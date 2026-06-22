@@ -382,30 +382,8 @@ class Guard_Block(blocks.Block):
         return False
 
 
-class Darkness(blocks.Block):
-    """
-    Blocks progress in this direction unless the character has something that lights the way.
-    """
-
-    def __init__(self, location: things.Location, skeleton=False):
-        super().__init__("Darkness blocks your way", "It's too dark to go that way.")
-        self.location = location
-        self.location.set_property("is_dark", True)
-
-    def is_blocked(self) -> bool:
-        # Conditions of block:
-        # * The location is dark
-        # * Unblocked if any character at the location is carrying a lit item (like a lamp or candle)
-
-        if not self.location.get_property("is_dark"):
-            return False
-        for character_name in self.location.characters:
-            character = self.location.characters[character_name]
-            for item_name in character.inventory:
-                item = character.inventory[item_name]
-                if item.get_property("is_lit"):
-                    return False
-        return True
+# Darkness is now an engine block (text_adventure_games.blocks.Darkness); this
+# adventure uses it directly (see where dungeon_stairs is wired below).
 
 
 class Door_Block(blocks.Block):
@@ -913,7 +891,9 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     drawbridge.add_block("east", troll_block)
     guard_block = Guard_Block(courtyard, guard)
     courtyard.add_block("east", guard_block)
-    darkness_block = Darkness(dungeon_stairs)
+    darkness_block = blocks.Darkness(
+        dungeon_stairs, description="It's too dark to go that way."
+    )
     dungeon_stairs.add_block("down", darkness_block)
     locked_door_block = Door_Block(tower_stairs, door)
     tower_stairs.add_block("up", locked_door_block)
