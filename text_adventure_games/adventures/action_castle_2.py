@@ -31,7 +31,8 @@ from text_adventure_games import games, things, actions
 # Locations Rosemary/Sage refuses to enter while following (south of the Old
 # Pond, and anywhere inside the castle east of the Bend) -- see ACII pages 35/37.
 ROSEMARY_NO_FOLLOW = {
-    "Hermit's Cave",
+    "Outside Hermit's Cave",
+    "Cave",
     "Action Castle",
     "Moat",
     "Underground",
@@ -41,6 +42,10 @@ ROSEMARY_NO_FOLLOW = {
     "Courtyard",
     "Throne Room",
 }
+
+# The cave is never enterable (rulebook). Shared by the CaveBlock (on "go in")
+# and the EnterCave action (the literal "enter cave" verb).
+CAVE_TOO_DARK = "It's too dark and scary in there. Also: It smells."
 
 
 def _relocate(game, character, dest_name):
@@ -460,14 +465,14 @@ class ChooseRing(_ChooseReward):
             '"A human who loves pretty rocks? Typical!" With a sweep of its tail, the '
             "dragon opens a chute beneath your feet, and you tumble down into the darkness..."
         )
-        # The chute drops you out at the Hermit's Cave; the hermit is long gone.
+        # The chute drops you out outside the Hermit's Cave; the hermit is gone.
         hermit = self.game.characters.get("hermit")
-        cave = self.game.locations["Hermit's Cave"]
-        if hermit is not None and hermit.location is cave:
-            cave.remove_character(hermit)
+        outside_cave = self.game.locations["Outside Hermit's Cave"]
+        if hermit is not None and hermit.location is outside_cave:
+            outside_cave.remove_character(hermit)
             hermit.location = None
-        _relocate(self.game, self.character, "Hermit's Cave")
-        self.parser.ok(cave.description)
+        _relocate(self.game, self.character, "Outside Hermit's Cave")
+        self.parser.ok(outside_cave.description)
 
 
 # --- castle endgame ---------------------------------------------------------
@@ -743,6 +748,30 @@ class EnterBoat(actions.Action):
         self.parser.ok("You're now in the boat.")
 
 
+class EnterCave(actions.Action):
+    """The literal ENTER CAVE verb (rulebook). The cave is also a blocked "in"
+    exit (CaveBlock), so "go in" works too; this answers "enter cave" with the
+    same refusal -- it's too dark and scary in there."""
+
+    ACTION_NAME = "enter cave"
+    ACTION_DESCRIPTION = "Try to enter the dark cave"
+    ACTION_ALIASES = ["enter the cave", "go into the cave", "go in the cave"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.parser.get_character(command)
+
+    def check_preconditions(self) -> bool:
+        loc = self.character.location
+        if loc is None or loc.name != "Outside Hermit's Cave":
+            self.parser.fail("There's no cave here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(CAVE_TOO_DARK)
+
+
 class Propose(actions.Action):
     ACTION_NAME = "propose"
     ACTION_DESCRIPTION = "Propose marriage to your beloved"
@@ -820,7 +849,15 @@ def build_game() -> ActionCastle2:
         "You are in a rowboat in the middle of the old pond. It's quiet, peaceful "
         "and romantic here. Row the boat to head back to shore.",
     )
-    hermit_cave = L("Hermit's Cave", "An old man sits by a fire outside a dark cave.")
+    hermit_cave = L(
+        "Outside Hermit's Cave",
+        "An old man sits by a fire outside a dark cave. The cave mouth gapes "
+        "darkly before you.",
+    )
+    cave = L(
+        "Cave",
+        "Pitch black. You can't see a thing -- and the smell is unspeakable.",
+    )
     bend = L(
         "Bend in the Road",
         "You arrive at a bend in the road. There is an old tree stump here.",
@@ -874,6 +911,7 @@ def build_game() -> ActionCastle2:
     pond_road.add_connection("north", bend)
     pond_road.add_connection("south", old_pond)
     old_pond.add_connection("south", hermit_cave)
+    hermit_cave.add_connection("in", cave)  # "go in" -- but blocked (see CaveBlock)
     bend.add_connection("east", castle)
     # Moat is reached ONLY via the EnterMoat action (the catfish gate) -- we
     # deliberately give it no connection back to Action Castle, because a
@@ -1311,6 +1349,7 @@ def build_game() -> ActionCastle2:
         SayNo,
         RowBoat,
         EnterBoat,
+        EnterCave,
         Propose,
     ]
     characters = [rosemary, smith, hermit, dragon, guards, king]
@@ -1330,6 +1369,7 @@ def build_game() -> ActionCastle2:
         old_pond,
         middle_pond,
         hermit_cave,
+        cave,
         bend,
         castle,
         moat,
@@ -1360,6 +1400,18 @@ def build_game() -> ActionCastle2:
             return not self.moat.get_property("stone_moved")
 
     moat.add_block("enter tunnel", TunnelBlock(moat))
+
+    # The cave is never enterable -- "go in" is permanently blocked (rulebook:
+    # ENTER CAVE -> "It's too dark and scary in there. Also: It smells."). The
+    # EnterCave action answers the literal "enter cave" verb with the same line.
+    class CaveBlock(blocks.Block):
+        def __init__(self):
+            super().__init__("The cave is impassable", CAVE_TOO_DARK)
+
+        def is_blocked(self) -> bool:
+            return True
+
+    hermit_cave.add_block("in", CaveBlock())
     # NOTE: build_game is parser-agnostic. It returns the game with the engine's
     # default parser; the caller chooses a parser via game.set_parser(...).
     return game
