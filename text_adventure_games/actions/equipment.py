@@ -43,14 +43,26 @@ class Wear(base.Action):
                 f"{self.character.name.capitalize()} is already wearing the {self.item.name}."
             )
             return False
+        # Wear slot: an item may declare a ``wear_slot`` (a body location, e.g.
+        # "feet"/"head"/"body"). Only one item occupies a slot unless the item
+        # being put on declares ``wear_over`` (it layers atop -- a cloak over a
+        # gown). Otherwise the wearer must take off the occupant first.
+        slot = self.item.get_property("wear_slot")
+        if slot and not self.item.get_property("wear_over"):
+            for worn in self.character.worn.values():
+                if worn is not self.item and worn.get_property("wear_slot") == slot:
+                    self.parser.fail(f"You'll have to take off the {worn.name} first.")
+                    return False
         if not self.is_in_inventory(self.character, self.item):
             return False
         return True
 
     def apply_effects(self):
         self.character.wear(self.item)
+        # Items may carry their own flavor for being put on (``wear_text``).
         self.parser.ok(
-            f"{self.character.name.capitalize()} puts on the {self.item.name}."
+            self.item.get_property("wear_text")
+            or f"{self.character.name.capitalize()} puts on the {self.item.name}."
         )
 
 
