@@ -164,7 +164,7 @@ def test_companions_start_in_the_expected_rooms():
     assert "elf" in game.locations["Dark Forest"].characters
     assert "wizard" in game.locations["Wizard's Tower"].characters
     assert "dwarf" in game.locations["Spider Lair"].characters
-    assert "man" in game.locations["Torture Chamber"].characters  # the captive cleric
+    assert "cleric" in game.locations["Torture Chamber"].characters  # the captive
     assert "goblin queen" in game.locations["Throne Room"].characters
 
 
@@ -192,3 +192,110 @@ def test_skeleton_walkthrough_runs_and_ends():
     game, _ = _play(ac3.WALKTHROUGH_SKELETON)
     assert game.is_game_over()
     assert "home" in game._scored_keys
+
+
+# --- Phase 3: recruiting the party -----------------------------------------
+
+# Reach the captured cleric (Torture Chamber), filling the waterskin on the way.
+RECRUIT_CLERIC = [
+    "take lantern",
+    "light lantern",
+    "west",  # Crossroads -> Dark Forest
+    "south",  # -> Cavern Entrance
+    "fill waterskin",
+    "north",  # -> Dark Forest
+    "east",  # -> Crossroads
+    "east",  # -> Castle Ruins
+    "down",  # -> Dungeon (lantern lit)
+    "east",  # -> Dark Corridor
+    "east",  # -> Torture Chamber
+]
+
+
+def test_invite_elf_recruits_her_and_she_follows():
+    game, cap = _play(["west", "invite elf"])  # -> Dark Forest
+    elf = game.characters["elf"]
+    assert elf.following is game.player
+    assert _said(cap, "Together, nothing can stop us")
+    # the party cascades when the player moves
+    game.do_command("east")  # -> Crossroads
+    assert game.player.location.name == "Crossroads"
+    assert "elf" in game.player.location.characters
+
+
+def test_invite_wizard_recruits_him():
+    game, cap = _play(["take lantern", "light lantern", "east", "up", "invite wizard"])
+    assert game.characters["wizard"].following is game.player
+    assert _said(cap, "May the stars guide us")
+
+
+def test_cannot_invite_the_cleric_before_rescuing_him():
+    game, cap = _play(RECRUIT_CLERIC + ["invite cleric"])
+    assert game.player.location.name == "Torture Chamber"
+    assert _said(cap, "too weak to follow")
+    assert game.characters["cleric"].following is not game.player
+
+
+def test_rescuing_the_cleric_recruits_him_and_scores():
+    game, cap = _play(RECRUIT_CLERIC + ["give water", "free man", "invite cleric"])
+    cleric = game.characters["cleric"]
+    assert _said(cap, "wounds knit shut")  # he heals once watered AND freed
+    assert cleric.following is game.player
+    assert "cleric" in game._scored_keys and game.score >= 10
+    # he travels with the party
+    game.do_command("west")  # -> Dark Corridor
+    assert "cleric" in game.player.location.characters
+
+
+def test_freeing_the_dwarf_with_the_spider_present_is_fatal():
+    game, cap = _play(
+        [
+            "take lantern",
+            "light lantern",
+            "west",
+            "south",
+            "enter cavern",
+            "east",
+            "south",
+        ]
+    )  # -> Spider Lair, spider still here
+    assert game.player.location.name == "Spider Lair"
+    game.do_command("free dwarf")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "wrapped in a cocoon")
+
+
+def test_full_dwarf_recruit_chain_needs_the_cleric_and_a_driven_off_spider():
+    # Recruit the cleric, then march the party to the Spider Lair.
+    game, cap = _play(
+        RECRUIT_CLERIC
+        + ["give water", "free man", "invite cleric"]
+        + [
+            "west",
+            "west",
+            "up",
+            "west",
+            "west",
+            "south",
+            "enter cavern",
+            "east",
+            "south",
+        ]
+    )
+    assert game.player.location.name == "Spider Lair"
+    assert "cleric" in game.player.location.characters  # the cleric followed
+
+    # Stand in for SHOOT SPIDER (next PR): drive the spider off so freeing is safe.
+    game.characters["spider"].set_property("driven_off", True)
+    game.do_command("free dwarf")
+    assert game.characters["dwarf"].get_property("freed")
+    assert game.characters["dwarf"].get_property("poisoned")  # still poisoned
+
+    game.do_command("invite dwarf")  # refused: still poisoned
+    assert game.characters["dwarf"].following is not game.player
+
+    game.do_command("heal dwarf")  # the cleric cures the poison
+    assert not game.characters["dwarf"].get_property("poisoned")
+    game.do_command("invite dwarf")
+    assert game.characters["dwarf"].following is game.player
+    assert "dwarf" in game._scored_keys
