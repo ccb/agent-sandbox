@@ -323,6 +323,18 @@ def test_bare_answers_drive_the_whole_champion_dialogue():
     assert game.is_won() and game.player.get_property("is_champion")
 
 
+def test_lingering_wake_also_poses_the_wits_or_steel_prompt():
+    # The dragon can wake two ways -- the WAKE DRAGON verb and lingering (the
+    # dragon_stirs trigger). Both must pose the choice, or a bare "wits" after a
+    # linger-wake fails ("I'm not sure what you want to do").
+    game, cap = _at_trove()  # arrival: the dragon stirs
+    game.do_command("look")  # lingering rouses it via the trigger
+    assert game.characters["dragon"].get_property("awake")
+    assert game.pending_prompt() is not None
+    game.do_command("wits")  # the bare answer must work on this path too
+    assert _said(cap, "Answer my riddle")  # routed to choose wits -> riddle posed
+
+
 def test_bare_steel_answers_the_dragon_and_is_fatal():
     game, cap = _at_trove()
     game.do_command("wake dragon")

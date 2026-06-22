@@ -240,6 +240,23 @@ class EnterMoat(actions.Action):
 # --- the dragon's dialogue, as a small property state machine ---------------
 
 
+def _wake_and_challenge(game, dragon, roar):
+    """Wake the dragon, deliver its *roar*, and pose the wits/steel choice so a
+    bare "wits" / "steel" answers it (#110). Shared by every path that rouses
+    the dragon -- the WAKE DRAGON verb and the linger trigger -- so the prompt
+    is posed no matter how it woke (the explicit CHOOSE WITS / CHOOSE STEEL
+    verbs still work too)."""
+    dragon.set_property("awake", True)
+    game.parser.ok(roar)
+    game.pose_prompt(
+        Prompt(
+            text="Choose a weapon: wits or steel.",
+            options={"wits": "choose wits", "steel": "choose steel"},
+            speaker="dragon",
+        )
+    )
+
+
 class WakeDragon(actions.Action):
     ACTION_NAME = "wake dragon"
     ACTION_DESCRIPTION = "Wake the sleeping dragon"
@@ -258,19 +275,11 @@ class WakeDragon(actions.Action):
         return True
 
     def apply_effects(self):
-        self.dragon.set_property("awake", True)
-        self.parser.ok(
+        _wake_and_challenge(
+            self.game,
+            self.dragon,
             'The dragon wakes up, eyes you hungrily and roars, "Another mortal dares '
-            'challenge me? Choose a weapon: wits or steel."'
-        )
-        # Pose the choice so a bare "wits" / "steel" answers it (#110); the
-        # explicit CHOOSE WITS / CHOOSE STEEL verbs still work too.
-        self.game.pose_prompt(
-            Prompt(
-                text="Choose a weapon: wits or steel.",
-                options={"wits": "choose wits", "steel": "choose steel"},
-                speaker="dragon",
-            )
+            'challenge me? Choose a weapon: wits or steel."',
         )
 
 
@@ -1309,10 +1318,11 @@ def build_game() -> ActionCastle2:
                 "The dragon stirs in its sleep, one claw twitching. Best not linger."
             )
         else:
-            dragon.set_property("awake", True)
-            g.parser.ok(
+            _wake_and_challenge(
+                g,
+                dragon,
                 'The dragon wakes, eyes you hungrily and roars, "Another mortal '
-                'dares challenge me? Choose a weapon: wits or steel."'
+                'dares challenge me? Choose a weapon: wits or steel."',
             )
 
     game_triggers.append(
