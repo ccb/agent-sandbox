@@ -557,3 +557,80 @@ def test_giving_water_still_works_with_water_as_an_item():
     game, _ = _play(RECRUIT_CLERIC + ["give water", "free man", "invite cleric"])
     assert game.characters["cleric"].following is game.player
     assert "water" not in game.player.inventory["waterskin"].contents
+
+
+# --- Phase 4 (baby): rescue, crying-deaths, feeding ------------------------
+
+# Reach the Dark Cavern with the lantern lit (the fissure is off it).
+TO_DARK_CAVERN = ["take lantern", "light lantern", "west", "south", "enter cavern"]
+
+
+def test_fissure_needs_the_backpack_dropped():
+    game, cap = _play(TO_DARK_CAVERN)
+    assert game.player.location.name == "Dark Cavern"
+    game.do_command("enter fissure")  # still wearing the pack
+    assert _said(cap, "squeeze into the fissure")
+    assert game.player.location.name == "Dark Cavern"
+    game.do_command("drop backpack")
+    game.do_command("enter fissure")
+    assert game.player.location.name == "Fissure"
+
+
+def test_take_baby_rescues_it_scores_and_it_cries():
+    game, cap = _play(TO_DARK_CAVERN + ["drop backpack", "enter fissure", "take baby"])
+    baby = game.player.inventory.get("baby goblin")
+    assert baby is not None and baby.get_property("crying")
+    assert "baby_rescue" in game._scored_keys and game.score >= 5
+
+
+def test_you_cannot_drop_the_baby():
+    game, cap = _play(TO_DARK_CAVERN + ["drop backpack", "enter fissure", "take baby"])
+    game.do_command("drop baby")
+    assert _said(cap, "can't just abandon")
+    assert "baby goblin" in game.player.inventory
+
+
+def _with_crying_baby(game):
+    baby = things.Item("baby goblin", "a goblin baby")
+    baby.set_property("crying", True)
+    game.player.add_to_inventory(baby)
+    return baby
+
+
+def test_crying_baby_is_fatal_at_the_bandit_camp():
+    game, cap = _game()
+    _with_crying_baby(game)
+    _solo_to(game, "Dark Forest")
+    game.do_command("west")  # -> Bandit Camp
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "bandits")
+
+
+def test_crying_baby_is_fatal_at_the_deep_ravine():
+    game, cap = _game()
+    _with_crying_baby(game)
+    _solo_to(game, "Deep Ravine")
+    game.do_command("look")  # lingering with the wailing baby
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "stirges")
+
+
+def test_feeding_stew_quiets_the_baby_and_makes_it_safe():
+    game, cap = _game()
+    baby = _with_crying_baby(game)
+    game.player.add_to_inventory(things.Item("stew", "a bowl of mushroom stew"))
+    game.do_command("feed baby")
+    assert not baby.get_property("crying")
+    assert "stew" not in game.player.inventory  # eaten
+    # now the bandit camp is safe
+    _solo_to(game, "Dark Forest")
+    game.do_command("west")  # -> Bandit Camp
+    assert not game.is_game_over()
+    assert game.player.location.name == "Bandit Camp"
+
+
+def test_feeding_needs_stew():
+    game, cap = _game()
+    _with_crying_baby(game)
+    game.do_command("feed baby")
+    assert _said(cap, "only wants mushroom stew")
