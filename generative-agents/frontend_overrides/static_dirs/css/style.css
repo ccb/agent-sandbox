@@ -342,7 +342,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2.5vh 2.5vw;
+  padding: 10vh 10vw;   /* the dialog fills the rest -> ~10% margin on every side */
 }
 #state-modal[hidden] {
   display: none;        /* [hidden] alone would be overridden by display:flex */
@@ -356,13 +356,12 @@ body,
 }
 
 /* The white card that holds the embedded page; the iframe fills it edge to edge.
-   Sized to the dense persona-state content (~720px) so the card feels focused
-   rather than a near-fullscreen page with empty margins. */
+   It fills the space left by #state-modal's padding, so it spans most of the
+   screen with ~10% margins on every side. */
 #state-modal .state-modal-dialog {
   position: relative;
   width: 100%;
-  max-width: 760px;
-  height: 90vh;
+  height: 100%;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
