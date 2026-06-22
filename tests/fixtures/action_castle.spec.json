@@ -1,0 +1,488 @@
+{
+  "version": "1",
+  "game_name": "Action Castle",
+  "class_name": "ActionCastle",
+  "source": { "pdf": "Parsely_r31_final.pdf", "pages": [15, 28] },
+  "start_at": "Cottage",
+  "win_condition": {
+    "kind": "any_character_property",
+    "property": "is_reigning",
+    "equals": true,
+    "ok_message": "{name} now reigns in ACTION CASTLE! {name} has won the game!"
+  },
+
+  "locations": [
+    {
+      "name": "Cottage",
+      "description": "You are standing in a small cottage.",
+      "exits": [{ "direction": "out", "to": "Garden Path" }]
+    },
+    {
+      "name": "Garden Path",
+      "description": "You are standing on a lush garden path. There is a cottage here.",
+      "exits": [
+        { "direction": "south", "to": "Fishing Pond" },
+        { "direction": "north", "to": "Winding Path" }
+      ]
+    },
+    {
+      "name": "Fishing Pond",
+      "description": "You are at the edge of a small fishing pond.",
+      "properties": { "has_fish": true },
+      "exits": []
+    },
+    {
+      "name": "Winding Path",
+      "description": "You are walking along a winding path. There is a tall tree here.",
+      "exits": [
+        { "direction": "up", "to": "Top of the Tall Tree" },
+        { "direction": "east", "to": "Drawbridge" }
+      ]
+    },
+    {
+      "name": "Top of the Tall Tree",
+      "description": "You are at the top of the tall tree.",
+      "exits": [{ "direction": "jump", "to": "The Afterlife" }]
+    },
+    {
+      "name": "Drawbridge",
+      "description": "You are standing on one side of a drawbridge leading to ACTION CASTLE.",
+      "exits": [{ "direction": "east", "to": "Courtyard" }]
+    },
+    {
+      "name": "Courtyard",
+      "description": "You are in the courtyard of ACTION CASTLE.",
+      "exits": [
+        { "direction": "up", "to": "Tower Stairs" },
+        { "direction": "down", "to": "Dungeon Stairs" },
+        { "direction": "east", "to": "Great Feasting Hall" }
+      ]
+    },
+    {
+      "name": "Tower Stairs",
+      "description": "You are climbing the stairs to the tower. There is a locked door here.",
+      "exits": [{ "direction": "up", "to": "Tower" }]
+    },
+    { "name": "Tower", "description": "You are inside a tower.", "exits": [] },
+    {
+      "name": "Dungeon Stairs",
+      "description": "You are climbing the stairs down to the dungeon.",
+      "properties": { "is_dark": true },
+      "exits": [{ "direction": "down", "to": "Dungeon" }]
+    },
+    {
+      "name": "Dungeon",
+      "description": "You are in the dungeon. There is a spooky ghost here.",
+      "exits": []
+    },
+    {
+      "name": "Great Feasting Hall",
+      "description": "You stand inside the Great Feasting Hall.",
+      "exits": [{ "direction": "east", "to": "Throne Room" }]
+    },
+    {
+      "name": "Throne Room",
+      "description": "This is the throne room of ACTION CASTLE.",
+      "exits": []
+    },
+    {
+      "name": "The Afterlife",
+      "description": "You are dead. GAME OVER.",
+      "properties": { "game_over": true },
+      "exits": []
+    }
+  ],
+
+  "items": [
+    {
+      "name": "pole",
+      "description": "a fishing pole",
+      "examine_text": "A SIMPLE FISHING POLE.",
+      "at": { "location": "Cottage" }
+    },
+    {
+      "name": "branch",
+      "description": "a stout, dead branch",
+      "examine_text": "IT LOOKS LIKE IT WOULD MAKE A GOOD CLUB.",
+      "at": { "location": "Top of the Tall Tree" },
+      "properties": { "is_weapon": true, "is_fragile": true }
+    },
+    {
+      "name": "candle",
+      "description": "a strange candle",
+      "examine_text": "THE CANDLE IS COVERED IN STRANGE RUNES.",
+      "at": { "location": "Great Feasting Hall" },
+      "properties": { "is_lightable": true, "is_lit": false },
+      "command_hints": ["light candle", "read runes"]
+    },
+    {
+      "name": "pond",
+      "description": "a small fishing pond",
+      "examine_text": "THERE ARE FISH IN THE POND.",
+      "at": { "location": "Fishing Pond" },
+      "properties": { "gettable": false, "has_fish": true },
+      "command_hints": ["catch fish", "catch fish with pole"]
+    },
+    {
+      "name": "rosebush",
+      "description": "a rosebush",
+      "examine_text": "THE ROSEBUSH CONTAINS A SINGLE RED ROSE. IT IS BEAUTIFUL.",
+      "at": { "location": "Garden Path" },
+      "properties": { "gettable": false, "has_rose": true },
+      "command_hints": ["pick rose"]
+    },
+    {
+      "name": "throne",
+      "description": "An ornate golden throne.",
+      "at": { "location": "Throne Room" },
+      "properties": { "gettable": false },
+      "command_hints": ["sit on throne"]
+    },
+    {
+      "name": "door",
+      "description": "a door",
+      "examine_text": "THE DOOR IS SECURELY LOCKED.",
+      "at": { "location": "Tower Stairs" },
+      "properties": { "gettable": false, "is_locked": true },
+      "command_hints": ["unlock door"]
+    },
+    {
+      "name": "club",
+      "description": "a heavy club",
+      "examine_text": "A CRUDE BUT DEADLY WEAPON.",
+      "at": { "owner": "troll" },
+      "properties": { "is_weapon": true }
+    },
+    {
+      "name": "key",
+      "description": "a brass key",
+      "examine_text": "THIS LOOKS USEFUL",
+      "at": { "owner": "guard" }
+    },
+    {
+      "name": "sword",
+      "description": "a short sword",
+      "examine_text": "A SHARP SHORT SWORD.",
+      "at": { "owner": "guard" },
+      "properties": { "is_weapon": true }
+    },
+    {
+      "name": "crown",
+      "description": "a crown",
+      "examine_text": "A CROWN FIT FOR A KING.",
+      "at": { "owner": "ghost" },
+      "command_hints": ["wear crown"]
+    }
+  ],
+
+  "characters": [
+    {
+      "name": "troll",
+      "description": "A mean troll",
+      "persona": "I am hungry. The guard promised to feed me if I guard the drawbridge and keep people out of the castle.",
+      "at": "Drawbridge",
+      "properties": { "is_hungry": true, "character_type": "troll" },
+      "inventory": ["club"],
+      "behavior": {
+        "kind": "escalating_commands",
+        "commands": ["growl {player}", "snarl {player}", "pound fists"],
+        "fallback": "attack {player} with club",
+        "guard": { "property": "is_hungry", "equals": true }
+      }
+    },
+    {
+      "name": "guard",
+      "description": "A castle guard",
+      "persona": "I am suspicious of anyone trying to enter the castle. I will prevent keep people from entering and learning the castle's dark secrets.",
+      "at": "Courtyard",
+      "properties": {
+        "is_conscious": true,
+        "emotional_state": "suspicious",
+        "character_type": "human"
+      },
+      "inventory": ["key", "sword"],
+      "behavior": {
+        "kind": "escalating_commands",
+        "commands": ["warn {player}", "threaten {player}", "threaten {player}"],
+        "fallback": "attack {player} with sword",
+        "guard": { "property": "emotional_state", "equals": "suspicious" }
+      }
+    },
+    {
+      "name": "princess",
+      "description": "A princess who is beautiful and lonely. She awaits her non-gender-stereotypical soulmate.",
+      "persona": "I am the princess. I am grieving my father's death. I feel alone.",
+      "at": "Tower",
+      "properties": {
+        "is_royal": true,
+        "emotional_state": "sad and lonely",
+        "is_married": false,
+        "character_type": "human"
+      },
+      "inventory": [],
+      "behavior": { "kind": "none" }
+    },
+    {
+      "name": "ghost",
+      "description": "A ghost with bony, claw-like fingers and who is wearing a crown.",
+      "persona": "I was murdered by the guard. I will haunt this castle until banished. If you linger before my apparition, I will plunge my ghostly hand inside you and stop your heart.",
+      "at": "Dungeon",
+      "properties": {
+        "character_type": "ghost",
+        "is_undead": true,
+        "is_banished": false,
+        "is_royal": true
+      },
+      "inventory": ["crown"],
+      "behavior": {
+        "kind": "escalating_commands",
+        "commands": ["haunt {player}"],
+        "fallback": "ghost touch {player}",
+        "guard": { "property": "is_banished", "equals": false }
+      }
+    }
+  ],
+
+  "blocks": [
+    {
+      "id": "troll_block",
+      "template": "property_block",
+      "name": "Troll_Block",
+      "at_location": "Drawbridge",
+      "direction": "east",
+      "description": "A troll blocks your way",
+      "block_message": "A hungry troll blocks your way",
+      "obstacle": { "kind": "character", "name": "troll" },
+      "conditions": [
+        { "target": "obstacle", "property": "is_dead", "equals": false },
+        { "target": "obstacle", "property": "is_unconscious", "equals": false },
+        { "target": "obstacle", "property": "is_hungry", "equals": true }
+      ]
+    },
+    {
+      "id": "guard_block",
+      "template": "property_block",
+      "name": "Guard_Block",
+      "at_location": "Courtyard",
+      "direction": "east",
+      "description": "A guard blocks your way",
+      "block_message": "The guard refuses to let you pass.",
+      "obstacle": { "kind": "character", "name": "guard" },
+      "conditions": [
+        { "target": "obstacle", "property": "is_dead", "equals": false },
+        { "target": "obstacle", "property": "is_unconscious", "equals": false },
+        {
+          "target": "obstacle",
+          "property": "emotional_state",
+          "equals": "suspicious"
+        }
+      ]
+    },
+    {
+      "id": "darkness_block",
+      "template": "darkness_block",
+      "name": "Darkness",
+      "at_location": "Dungeon Stairs",
+      "direction": "down",
+      "description": "Darkness blocks your way",
+      "block_message": "It's too dark to go that way.",
+      "unblocked_if_inventory_has_property": "is_lit"
+    },
+    {
+      "id": "door_block",
+      "template": "property_block",
+      "name": "Door_Block",
+      "at_location": "Tower Stairs",
+      "direction": "up",
+      "description": "A locked door blocks your way",
+      "block_message": "The door ahead is locked.",
+      "obstacle": { "kind": "item", "name": "door" },
+      "conditions": [
+        { "target": "obstacle", "property": "is_locked", "equals": true }
+      ]
+    }
+  ],
+
+  "custom_actions": [
+    {
+      "id": "unlock_door",
+      "template": "unlock_with_key",
+      "params": {
+        "lock_item": "door",
+        "key_item": "key",
+        "unlocked_property": "is_locked"
+      }
+    },
+    {
+      "id": "read_runes",
+      "template": "read_inscription_to_banish",
+      "params": {
+        "action_name": "read runes",
+        "action_description": "Read runes off of the candle",
+        "inscribed_item": "candle",
+        "target_character": "ghost",
+        "required_property": "is_lit",
+        "banished_property": "is_banished",
+        "drop_target_inventory": true,
+        "remove_target_from_scene": true
+      }
+    },
+    {
+      "id": "propose",
+      "template": "propose_marriage",
+      "params": {
+        "required_emotional_state": "happy",
+        "set_property_on_pair": "is_married",
+        "royalty_property": "is_royal"
+      }
+    },
+    {
+      "id": "wear_crown",
+      "template": "wear_item",
+      "params": {
+        "item": "crown",
+        "required_actor_property": "is_royal",
+        "set_actor_property": "is_crowned"
+      }
+    },
+    {
+      "id": "sit_on_throne",
+      "template": "sit_on_furniture",
+      "params": {
+        "furniture_item": "throne",
+        "required_actor_property": "is_crowned",
+        "set_actor_property": "is_reigning"
+      }
+    },
+    {
+      "id": "growl",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "growl",
+        "action_description": "Growl menacingly at someone",
+        "template_string": "{actor.title} growls menacingly at {target}."
+      }
+    },
+    {
+      "id": "snarl",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "snarl",
+        "action_description": "Snarl and bare teeth at someone",
+        "template_string": "{actor.title} snarls and bares its teeth at {target}."
+      }
+    },
+    {
+      "id": "pound_fists",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "pound fists",
+        "action_description": "Pound fists on the ground in rage",
+        "template_string": "{actor.title} pounds its fists on the ground."
+      }
+    },
+    {
+      "id": "warn",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "warn",
+        "action_description": "Issue a verbal warning to someone",
+        "template_string": "{actor.title} warns {target}: \"You don't belong here.\""
+      }
+    },
+    {
+      "id": "threaten",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "threaten",
+        "action_description": "Make a threatening gesture or statement",
+        "template_string": "{actor.title} threatens {target}: \"This is your LAST warning!\""
+      }
+    },
+    {
+      "id": "haunt",
+      "template": "npc_taunt",
+      "params": {
+        "verb": "haunt",
+        "action_description": "Make a ghostly threat to frighten someone",
+        "template_string": "{actor.title} turns its hollow eyes toward {target}. \"Leave this place, mortal... or join me in death.\"",
+        "requires_actor_property_falsy": "is_banished"
+      }
+    },
+    {
+      "id": "ghost_touch",
+      "template": "npc_kill",
+      "params": {
+        "verb": "ghost touch",
+        "action_description": "Plunge a ghostly hand into someone's chest",
+        "template_string": "{actor.title} plunges its icy hand into {target}'s chest and stops their heart.",
+        "sets_target_property": "is_dead",
+        "requires_actor_property_falsy": "is_banished"
+      }
+    }
+  ],
+
+  "player": {
+    "name": "The player",
+    "description": "You are a simple peasant destined for greatness.",
+    "persona": "I am on an adventure.",
+    "properties": { "character_type": "human" },
+    "inventory": [
+      {
+        "name": "lamp",
+        "description": "a lamp",
+        "examine_text": "A LAMP.",
+        "properties": { "is_lightable": true, "is_lit": false },
+        "command_hints": ["light lamp"]
+      }
+    ]
+  },
+
+  "walkthrough": {
+    "expects_win": true,
+    "commands": [
+      "get pole",
+      "go out",
+      "go south",
+      "catch fish with pole",
+      "go north",
+      "go north",
+      "go east",
+      "give fish to troll",
+      "go west",
+      "go up",
+      "get branch",
+      "go down",
+      "go south",
+      "pick rose",
+      "smell rose",
+      "go north",
+      "go east",
+      "go east",
+      "attack guard with branch",
+      "get key",
+      "get sword",
+      "go east",
+      "get candle",
+      "go west",
+      "go up",
+      "unlock door",
+      "go up",
+      "give rose to princess",
+      "propose princess",
+      "go down",
+      "go down",
+      "light candle",
+      "go down",
+      "go down",
+      "read runes",
+      "get crown",
+      "wear crown",
+      "go up",
+      "go up",
+      "go east",
+      "go east",
+      "sit on throne"
+    ]
+  }
+}
