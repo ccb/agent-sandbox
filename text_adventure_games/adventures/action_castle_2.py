@@ -4,25 +4,24 @@ A faithful port of the Parsely game (Action Castle II) to our engine, authored t
 same way as ``action_castle.py`` (its sibling in this package): a ``build_game()`` that
 assembles locations / items / characters, a small ``ActionCastle2`` Game subclass
 holding the win condition + score, a handful of custom ``Action`` subclasses for the
-genuinely novel verbs, one following-NPC behavior (Rosemary), and reaction
-*triggers* for the gift/wish interactions.
+genuinely novel verbs (including the multi-word gift verbs ``GIVE X TO Y`` /
+``DROP PENNY IN WELL``, which the specific-first parser routes ahead of the
+built-in ``give``/``drop``), one following-NPC behavior (Rosemary), and a few
+reaction *triggers* (smith sharpens the axe, the dragon stirs/kills, scoring).
 
-WHY TRIGGERS FOR GIFTS:  the engine's parser routes any command containing a
-built-in keyword (give / drop / take / say / examine / attack / ...) to the
-built-in action *before* it ever checks custom actions (parsing.determine_intent
-is a hardcoded keyword chain; custom actions are the longest-substring fallback in
-the ``else``). So Parsely's signature verbs -- ``GIVE X TO Y``, ``DROP PENNY IN
-WELL`` -- cannot be custom actions. Instead we let the built-in Give/Drop run and
-attach the special effect via a trigger that reacts to the resulting state
-(e.g. "smith now holds the axe" -> sharpen it and hand it back). This is the main
-engine limitation this port surfaces; see the notes at the bottom of the file.
+DIALOGUE FORKS use posed prompts (engine #110, ``prompts.py``): where the game
+asks a question -- the dragon's "wits or steel?", its riddle, the reward choice,
+the king's "do you accept?" -- it poses a Prompt so a bare ``wits`` / ``a wise
+man`` / ``sword`` / ``yes`` answers it. The explicit verbs (``CHOOSE WITS``,
+``ANSWER RIDDLE ...``, ``SAY YES``) still work; the prompt just spares the player
+from having to know them, which is why the parenthetical syntax hints are gone.
 
 Run interactively:   python action_castle_2.py
 Run the walkthrough:  python action_castle_2.py --walk        (champion ending)
                       python action_castle_2.py --walk-marry  (marriage ending)
 """
 
-from text_adventure_games import games, things, actions
+from text_adventure_games import games, things, actions, Prompt
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -264,6 +263,15 @@ class WakeDragon(actions.Action):
             'The dragon wakes up, eyes you hungrily and roars, "Another mortal dares '
             'challenge me? Choose a weapon: wits or steel."'
         )
+        # Pose the choice so a bare "wits" / "steel" answers it (#110); the
+        # explicit CHOOSE WITS / CHOOSE STEEL verbs still work too.
+        self.game.pose_prompt(
+            Prompt(
+                text="Choose a weapon: wits or steel.",
+                options={"wits": "choose wits", "steel": "choose steel"},
+                speaker="dragon",
+            )
+        )
 
 
 class ChooseSteel(actions.Action):
@@ -354,7 +362,16 @@ class ChooseWits(actions.Action):
         self.dragon.set_property("riddle_posed", True)
         self.parser.ok(
             '"Excellent! Answer my riddle correctly or be burned alive and eaten!  '
-            'Who owns nothing yet has everything?"  (try: ANSWER RIDDLE ...)'
+            'Who owns nothing yet has everything?"'
+        )
+        # Free-text: whatever the player says next is taken as their answer and
+        # forwarded to ANSWER RIDDLE (#110), so "a wise man" works directly.
+        self.game.pose_prompt(
+            Prompt(
+                text="Who owns nothing yet has everything?",
+                forward_as="answer riddle",
+                speaker="dragon",
+            )
         )
 
 
@@ -383,8 +400,18 @@ class AnswerRiddle(actions.Action):
             self.game.award("riddle", 10)
             self.parser.ok(
                 'The dragon laughs. "Well done! You succeeded where all others '
-                'failed. Now, choose your reward!"  '
-                "(CHOOSE GOLD, CHOOSE SWORD, or CHOOSE RING)"
+                'failed. Now, choose your reward: gold, the sword, or the ring!"'
+            )
+            self.game.pose_prompt(
+                Prompt(
+                    text="Choose your reward: gold, the sword, or the ring.",
+                    options={
+                        "gold": "choose gold",
+                        "sword": "choose sword",
+                        "ring": "choose ring",
+                    },
+                    speaker="dragon",
+                )
             )
         else:
             _die(
@@ -615,8 +642,15 @@ class GiveSwordToKing(actions.Action):
         self.king.set_property("offered_championship", True)
         self.parser.ok(
             "\"This kingdom needs a clever mind as much as a keen blade. And as I'm "
-            'in need of a new champion, I offer you the position! Do you accept?"  '
-            "(SAY YES or SAY NO)"
+            'in need of a new champion, I offer you the position! Do you accept?"'
+        )
+        # A bare "yes" / "no" now answers the king (#110).
+        self.game.pose_prompt(
+            Prompt(
+                text="The king offers you the championship. Do you accept?",
+                options={"yes": "say yes", "no": "say no"},
+                speaker="king",
+            )
         )
 
 
