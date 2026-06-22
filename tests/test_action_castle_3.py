@@ -846,14 +846,17 @@ def test_cannot_push_the_cultist_while_the_demon_stands():
     assert not game.player.get_property("killed_cultist")
 
 
-def test_full_endgame_banish_then_kill_is_a_win():
+def test_full_endgame_banish_then_kill_sets_the_win_flags():
     game, cap = _game()
     _summon_demon(game)
     game.do_command("throw javelin at demon")
     game.do_command("push cultist")
+    assert game.player.get_property("banished_demon")
     assert game.player.get_property("killed_cultist")
     assert "kill_cultist" in game._scored_keys
-    assert game.is_won()
+    # Not won yet -- the adventure only finishes (and is_won) once you go home.
+    assert not game.is_won()
+    assert not game.is_game_over()
 
 
 def test_examining_the_demon_is_safe_and_you_can_still_throw():
@@ -863,3 +866,41 @@ def test_examining_the_demon_is_safe_and_you_can_still_throw():
     assert not game.is_game_over()
     game.do_command("throw javelin at demon")
     assert game.player.get_property("banished_demon")
+
+
+# --- Phase 5 (epilogues + the full win) ------------------------------------
+
+
+def test_full_walkthrough_wins_with_max_score():
+    game, _ = _play(ac3.WALKTHROUGH)
+    assert game.is_game_over() and game.is_won()
+    assert game.score == 100 and game.max_score == 100
+    assert game.player.get_property("banished_demon")
+    assert game.player.get_property("killed_cultist")
+
+
+def test_epilogue_returning_home_with_the_baby_raises_it():
+    game, cap = _game()
+    baby = things.Item("baby goblin", "a goblin baby")
+    baby.set_property("crying", False)
+    game.player.add_to_inventory(baby)
+    game.do_command("go home")
+    game.do_command("yes")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "Mipple")
+    assert "raise_baby" in game._scored_keys
+
+
+def test_epilogue_returning_with_the_javelin_returns_the_artifact():
+    game, cap = _game()
+    game.player.add_to_inventory(things.Item("bronze javelin", "a bronze javelin"))
+    game.do_command("go home")
+    game.do_command("yes")
+    assert _said(cap, "stronghold")
+    assert "return_artifact" in game._scored_keys
+
+
+def test_epilogue_no_progress_is_a_lonely_one():
+    game, cap = _play(["go home", "yes"])
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "die alone")
