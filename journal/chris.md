@@ -306,3 +306,32 @@ clears the web), CAST SLEEP (wizard+spellbook, sleeps the bandits for the bow),
 USE WAND (wizard, freezes the ooze), TURN UNDEAD (cleric+pendant, Crypt) — then
 the baby + mushroom-stew + crying-death chain, the goblin-queen exchanges, and
 ooze/lockbox/crown. The interlock is the whole game; I'll land it in slices.
+
+### AC3 Phase 4a/4b — the bow chain + spider/web (#132, #133)
+
+The hardest interlock in AC3, landed in two slices.
+
+**4a — bow chain (#132):** the long quest that arms the elf, threading the
+cleric and wizard abilities through it: SEARCH dungeon -> pendant -> GIVE PENDANT
+TO CLERIC -> Crypt (TAKE BOOK wakes skeletons; cleric+pendant TURN UNDEAD them,
+else death) -> spell book -> GIVE SPELL BOOK TO WIZARD (+5) -> CAST SLEEP drops
+the bandits -> take bow -> GIVE BOW TO ELF (+5). Ability-verbs gate on the
+companion being in the party AND co-located (_in_party). The multi-word
+give/take verbs route specific-first ahead of built-in give/take (the AC2 trick).
+
+**4b — spider/web (#133):** SHOOT SPIDER (armed elf, +10) drives the spider off;
+USE HATCHET (dwarf) clears the web blocking west -- but only after the spider's
+gone (hacking the web while it watches = death). WebBlock gates Spider Lair west.
+Deep Ravine now reachable.
+
+602 tests. The pattern is settling nicely: each ability is a small custom action
+gated on (companion in party + present) + (required item flag), and deaths are
+the faithful gates that force the right order.
+
+**Remaining (Phase 4 tail + 5):** baby (DROP BACKPACK -> fissure -> take baby) +
+mushroom stew (spring water + cave mushroom cooked at the bandit pot) + the
+crying-baby death triggers (Bandit Camp, Deep Ravine) + feeding to quiet it;
+goblin-caves net trap + queen exchanges (baby, crown->javelin); ooze/lockbox/
+crown (USE WAND freezes the ooze) + statue slide-trap; then the endgame (javelin
+summons + THROW JAVELIN banishes the demon, push cultist into pit) and the
+score-branched epilogues. Plus a full win walkthrough + faithfulness audit.
