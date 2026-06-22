@@ -992,6 +992,127 @@ class FeedBaby(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The goblin queen: the Goblin Caves net trap (SHOW BABY) and the Throne Room
+# exchanges (GIVE BABY to be let go; GIVE CROWN as tribute -> the bronze javelin).
+# ---------------------------------------------------------------------------
+
+
+class ShowBaby(actions.Action):
+    """Show the netted goblins the baby -- they recognize it and free you."""
+
+    ACTION_NAME = "show baby"
+    ACTION_DESCRIPTION = "Show the goblins the baby"
+    ACTION_ALIASES = [
+        "show the baby",
+        "show baby to goblins",
+        "show baby goblin",
+        "show the goblins the baby",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Goblin Caves":
+            self.parser.fail("There's no one here to show the baby to.")
+            return False
+        if not _is_holding(self.player, "baby goblin"):
+            self.parser.fail("You have no baby to show.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("baby_shown", True)
+        self.parser.ok(
+            "The goblins whisper to one another, and you are freed from the net. "
+            "One of them prods you toward the eastern exit with a spear."
+        )
+
+
+class GiveBaby(actions.Action):
+    """Give the goblin queen the baby -- she'll let you leave (rulebook)."""
+
+    ACTION_NAME = "give baby"
+    ACTION_DESCRIPTION = "Give the baby to the goblin queen"
+    ACTION_ALIASES = [
+        "give baby to queen",
+        "give the baby to the queen",
+        "give baby goblin",
+        "give the queen the baby",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.queen = _present(game, "goblin queen")
+
+    def check_preconditions(self) -> bool:
+        if self.queen is None:
+            self.parser.fail("The goblin queen isn't here.")
+            return False
+        if not _is_holding(self.player, "baby goblin"):
+            self.parser.fail("You have no baby to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.queen.add_to_inventory(_take_held(self.player, "baby goblin"))
+        self.queen.set_property("baby_given", True)
+        self.game.award(
+            "baby_to_queen",
+            5,
+            "The goblin queen showers the baby with kisses and coos lovingly at it.",
+        )
+
+
+class GiveCrown(actions.Action):
+    """Pay the queen's tribute with the gold crown -- she trades a tarnished
+    artifact (the bronze javelin) for it."""
+
+    ACTION_NAME = "give crown"
+    ACTION_DESCRIPTION = "Give the gold crown to the goblin queen"
+    ACTION_ALIASES = [
+        "give crown to queen",
+        "give the crown to the queen",
+        "give the queen the crown",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.queen = _present(game, "goblin queen")
+
+    def check_preconditions(self) -> bool:
+        if self.queen is None:
+            self.parser.fail("The goblin queen isn't here.")
+            return False
+        if not _is_holding(self.player, "crown"):
+            self.parser.fail("You have no crown to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.queen.add_to_inventory(_take_held(self.player, "crown"))
+        self.queen.set_property("crown_given", True)
+        self.player.accept_item(
+            _item(
+                "bronze javelin",
+                "a tarnished bronze javelin",
+                "A hammered bronze javelin shaped like a lightning bolt.",
+            )
+        )
+        self.game.award(
+            "crown_to_queen",
+            5,
+            "The goblin queen claps with delight and crowns herself, then rummages "
+            "through her hoard and throws a tarnished bronze javelin at your feet. "
+            "You pick it up.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -1178,6 +1299,30 @@ def build_game() -> ActionCastle3:
             )
 
     dark_cavern.add_block("enter fissure", PackBlock(dark_cavern))
+
+    # The goblin net: once it drops, the goblins hold you until you SHOW BABY,
+    # then prod you east to the queen. North stays barred during the captivity;
+    # after the throne-room audience (audience_done) the caves are free.
+    class NetBlock(blocks.Block):
+        def __init__(self, caves, direction):
+            super().__init__(
+                "The goblins block your way",
+                "The goblins poke at you with their spears, herding you east.",
+            )
+            self.caves = caves
+            self.direction = direction
+
+        def is_blocked(self) -> bool:
+            if self.caves.get_property("audience_done"):
+                return False
+            if not self.caves.get_property("net_dropped"):
+                return False
+            if self.direction == "east":
+                return not self.caves.get_property("baby_shown")
+            return True  # north: barred for the whole captivity
+
+    goblin_caves.add_block("east", NetBlock(goblin_caves, "east"))
+    goblin_caves.add_block("north", NetBlock(goblin_caves, "north"))
 
     # --- World items -------------------------------------------------------
     bandit_camp.add_item(
@@ -1444,6 +1589,9 @@ def build_game() -> ActionCastle3:
         TakeBaby,
         DropBaby,
         FeedBaby,
+        ShowBaby,
+        GiveBaby,
+        GiveCrown,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
@@ -1541,6 +1689,52 @@ def build_game() -> ActionCastle3:
         != g.player.location.name,
         baby_wails,
         repeatable=True,
+    )
+
+    # Goblin Caves net trap: on arrival the net drops. No baby -> enslaved (THE
+    # END). With the baby you're held until SHOW BABY; the audience pacifies the
+    # caves for good.
+    def goblin_net(g):
+        if not _is_holding(g.player, "baby goblin"):
+            _die(
+                g,
+                "The goblins enslave you and your allies; you spend the rest of your "
+                "miserable lives turning big rocks into little rocks. THE END.",
+            )
+            return
+        goblin_caves.set_property("net_dropped", True)
+        g.parser.ok(
+            "A net drops from the ceiling, ensnaring you! Goblins emerge brandishing "
+            "spears and surround you. (Try SHOW BABY.)"
+        )
+
+    game.add_trigger(
+        "goblin_net",
+        lambda g: g.player.location is goblin_caves
+        and not goblin_caves.get_property("net_dropped")
+        and not goblin_caves.get_property("audience_done"),
+        goblin_net,
+        repeatable=True,
+    )
+
+    # After the audience (baby given, and the crown too if you carried one), the
+    # goblins escort you back up to the surface and the caves are pacified.
+    def throne_escort(g):
+        g.parser.ok(
+            "The audience over, the goblins march you out through the caverns and "
+            "back up to the Cavern Entrance."
+        )
+        goblin_caves.set_property("audience_done", True)
+        _relocate(g, g.player, "Cavern Entrance")
+
+    game.add_trigger(
+        "throne_escort",
+        lambda g: g.player.location is throne_room
+        and queen.get_property("baby_given")
+        and (not _is_holding(g.player, "crown") or queen.get_property("crown_given"))
+        and not goblin_caves.get_property("audience_done"),
+        throne_escort,
+        repeatable=False,
     )
 
     return game
