@@ -58,6 +58,8 @@ _MOVEMENT_VERBS = (
     "travel",
     "move",
     "climb",
+    "ride",
+    "drive",
 )
 
 
@@ -231,8 +233,24 @@ class Parser:
             # so "ask <npc> to follow" still falls through to the follow verb.
             return ActionName.TALK
         elif self.get_direction(command, character.location):
-            # Check for the direction intent
+            # Check for the direction intent. (Checked before mount/dismount so
+            # "ride west" / "drive east" stay MOVEMENT -- you ride a *direction*
+            # when already aboard -- while "ride horse" falls through to MOUNT.)
             return ActionName.GO
+        elif (
+            command == "dismount"
+            or command.startswith("dismount")
+            or command.startswith("get off")
+        ):
+            return ActionName.DISMOUNT
+        elif command.split(" ", 1)[0] in (
+            "ride",
+            "mount",
+            "board",
+        ) or command.startswith(("get on", "hop on", "climb aboard")):
+            # Get aboard a vehicle (see vehicles.py / Item.make_vehicle). "get
+            # on"/"hop on" are caught here, before the "get "/GET branch below.
+            return ActionName.MOUNT
         elif command == "look" or command == "l":
             # when the user issues a "look" command, re-describe what they see
             return ActionName.DESCRIBE
