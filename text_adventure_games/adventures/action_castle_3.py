@@ -525,19 +525,14 @@ def build_game() -> ActionCastle3:
 
     # --- Player start inventory --------------------------------------------
     # The rulebook starts you with a backpack containing a lantern, dagger,
-    # lockpicks and a waterskin. The lantern is carried in hand so it can be lit
-    # immediately; the rest ride in the pack.
-    #
-    # TODO (engine, Phase 3 prelude): GET only reaches holders sitting in the
-    # room, not the player's own carried containers, so you can't yet pull the
-    # dagger/lockpicks/waterskin out of the pack. AC3 leans on that ("the party
-    # carries a pack and pulls gear out"), so the next reusable engine feature is
-    # letting GET/scope reach into carried open containers -- then the lantern
-    # can live in the pack too and DROP BACKPACK (the fissure puzzle) bites.
+    # lockpicks and a waterskin. GET reaches into a carried open container, so
+    # the player pulls gear out of the pack as needed ("take lantern", "light
+    # lantern"). DROP BACKPACK (the fissure puzzle) drops the whole kit.
     backpack = _item("backpack", "a sturdy leather backpack").make_container()
     lantern = _item("lantern", "a brass lantern", "A brass lantern, currently unlit.")
     lantern.set_property(Property.FLAMMABLE, True)
     lantern.set_property(Property.IS_LIT, False)
+    backpack.add_item(lantern)
     backpack.add_item(
         _item("dagger", "a simple dagger", "A plain but serviceable dagger.")
     )
@@ -553,7 +548,6 @@ def build_game() -> ActionCastle3:
     custom_actions = [GoHome, ConfirmHome, Stay]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
-    player.add_to_inventory(lantern)
 
     # Going north ends the adventure: arriving Home reads the epilogue.
     def epilogue(g):
@@ -581,7 +575,8 @@ def build_game() -> ActionCastle3:
 # ---------------------------------------------------------------------------
 
 WALKTHROUGH_SKELETON = [
-    "light lantern",  # carried in hand from the start
+    "take lantern",  # out of the backpack
+    "light lantern",
     "west",  # Crossroads -> Dark Forest
     "south",  # -> Cavern Entrance
     "enter cavern",  # darkness gate: passable now the lantern is lit
