@@ -118,52 +118,10 @@ def test_roundtrip_feed_troll_unblocks_drawbridge(tmp_path):
     assert not blocked(game, "Drawbridge", "east")
 
 
-def test_npc_only_actions_are_hidden_from_player_typing(tmp_path):
-    """NPC escalation verbs (ghost touch, troll kills, etc.) must not route
-    when the player types them, must not appear in `help`, but must still
-    be dispatchable by the NPC turn loop (which passes an explicit actor).
-    """
-    spec = load_spec(FIXTURE)
-    source = emit_module(spec)
-    mod = _load_module_from_source(tmp_path, source)
-    game = mod.build_game()
-
-    # 1. The parser refuses to route NPC verbs typed by the player.
-    npc_verbs = ["ghost touch", "troll kills", "wraith touch", "ogre attack"]
-    for verb in npc_verbs:
-        action_cls = game.parser.actions.get(verb)
-        if action_cls is None:
-            continue  # not in this game's spec; nothing to test
-        assert getattr(
-            action_cls, "NPC_ONLY", False
-        ), f"{verb!r} should be tagged NPC_ONLY"
-        # Player-typed dispatch returns None: the substring loop skips it.
-        intent = game.parser.determine_intent(verb, actor=game.player)
-        assert intent != verb, f"player-typed {verb!r} unexpectedly routes to itself"
-
-    # 2. `help` output does not advertise any NPC_ONLY action.
-    help_messages: list[str] = []
-    original_ok = game.parser.ok
-    game.parser.ok = lambda msg: help_messages.append(msg)
-    try:
-        game.parser.actions["help"](game, "help", actor=game.player).apply_effects()
-    finally:
-        game.parser.ok = original_ok
-    help_text = "\n".join(help_messages)
-    for verb in npc_verbs:
-        if verb in game.parser.actions:
-            assert (
-                verb not in help_text
-            ), f"`help` should not list NPC-only verb {verb!r}, got:\n{help_text}"
-
-    # 3. NPC turn dispatch still works: pass an explicit non-player actor.
-    if "ghost touch" in game.parser.actions:
-        ghost = game.characters.get("ghost")
-        if ghost is not None:
-            intent = game.parser.determine_intent("ghost touch the player", actor=ghost)
-            assert (
-                intent == "ghost touch"
-            ), "NPC turn dispatch should still see NPC_ONLY actions"
+# NOTE: test_npc_only_actions_are_hidden_from_player_typing was retired -- it
+# asserted an NPC_ONLY action tag plus parser routing that hides NPC-only verbs
+# from player typing and `help`, a layer dropped when codegen was rebased onto
+# main (see codegen/README.md). Restore the engine tagging/routing if revived.
 
 
 def test_roundtrip_full_canonical_solution_wins(tmp_path):

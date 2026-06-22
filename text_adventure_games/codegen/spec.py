@@ -23,6 +23,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any
 
+from .directions import canonical_opposite
+
 # ----------------------------------------------------------------------
 # Property normalization
 # ----------------------------------------------------------------------
@@ -726,8 +728,6 @@ def _effective_connections(spec: GameSpec) -> dict[str, dict[str, str]]:
 
     Returns ``{loc_name: {direction: target_name}}`` after auto-reverse.
     """
-    from ..enums import canonical_opposite  # local: avoid cycle at import time
-
     location_names = {loc.name for loc in spec.locations}
     graph: dict[str, dict[str, str]] = {name: {} for name in location_names}
     for loc in spec.locations:
@@ -756,8 +756,6 @@ def lint(spec: GameSpec) -> list[str]:
     human-readable report and folded into the extractor's retry prompt so
     the LLM can correct itself.
     """
-    from ..enums import canonical_opposite  # local: avoid cycle at import time
-
     warnings: list[str] = []
 
     # 1. Named antagonists with no turn behavior.
