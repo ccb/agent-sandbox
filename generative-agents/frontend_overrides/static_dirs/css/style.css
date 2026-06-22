@@ -330,6 +330,29 @@ body,
   display: block;
 }
 
+/* When a new memory arrives on a card as the replay plays, its row flashes for a
+   few seconds so you can see what the agent just took in. main_script.html adds
+   .is-new only to genuinely new rows (never on the initial load); the animation
+   pulses an amber highlight twice and ends transparent, so the row settles back
+   into its normal look. */
+@keyframes mem-flash-in {
+  0%   { background-color: rgba(255, 214, 102, 0); }
+  8%   { background-color: rgba(255, 214, 102, 0.9); }
+  32%  { background-color: rgba(255, 214, 102, 0.15); }
+  56%  { background-color: rgba(255, 214, 102, 0.9); }
+  80%  { background-color: rgba(255, 214, 102, 0.15); }
+  100% { background-color: rgba(255, 214, 102, 0); }
+}
+.agent-card .mem-list li.is-new {
+  animation: mem-flash-in 4s ease-in-out 1;
+}
+/* Respect users who prefer less motion: skip the flash entirely for them. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-card .mem-list li.is-new {
+    animation: none;
+  }
+}
+
 /* ---------- State Details popup -------------------------------------------- */
 /* The per-agent "State Details" link opens the full persona-state page in this
    overlay (an <iframe>) instead of navigating away, so the replay keeps running
