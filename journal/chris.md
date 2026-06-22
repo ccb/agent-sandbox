@@ -389,3 +389,15 @@ trigger whisks you to the surface once the audience is satisfied (baby given,
 crown too if carried) and pacifies the caves. 632 tests. Crown source (lockbox)
 comes next; GIVE CROWN tested with a placed crown. Remaining: ooze/lockbox/crown
 + statue slide-trap, then endgame (demon/cultist) + epilogues + win walkthrough.
+
+### AC3 Phase 4 (ooze/crown) — #140
+
+Dark Corridor gray ooze: LOOK UP reveals it; PICK LOCK / TAKE LOCKBOX while it
+lives = death; USE WAND ON OOZE (wizard's wand) freezes it (+10). Then PICK LOCK
+(starting lockpicks) yields the gold crown -> the queen's tribute -> the bronze
+javelin. Vault statue slide-trap (PUSH STATUE) drops you to the Mushroom Garden.
+639 tests; the full crown->queen->javelin loop is tested end to end. All puzzle
+pieces now in. Remaining: the endgame (javelin summons + THROW JAVELIN banishes
+the demon, push cultist into pit) + score-branched epilogues + win walkthrough +
+faithfulness audit. Possible polish: OPEN DOOR (spiked door) / OPEN IRON MAIDEN
+gates were left ungated to avoid churning routes -- revisit in the endgame slice.
