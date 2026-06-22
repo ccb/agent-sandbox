@@ -100,6 +100,27 @@ Then write a **canonical walkthrough** in your head (the shortest winning path).
 That becomes your `WALKTHROUGH` and your first test. Build the world incrementally
 and keep the walkthrough running green as you go.
 
+### Pulling the source one slice at a time
+
+Don't paste the whole book — feed yourself (or Claude) just the rooms a slice
+needs. `codegen.render_source` renders a scoped slice of the PDF as compact
+markdown (room headings, interactions with their rules, and exits *with their
+cross-reference pages*), so each authoring turn sees a small, self-contained
+chunk:
+
+```bash
+# One game (resolved via the PDF's table of contents):
+python -m text_adventure_games.codegen.source --pdf parsely_pdfs/<book>.pdf --game "Action Castle II"
+# An explicit page range:
+python -m text_adventure_games.codegen.source --pdf parsely_pdfs/<book>.pdf --pages 51-58
+# A room plus the rooms its exits lead to — the natural "one slice" unit:
+python -m text_adventure_games.codegen.source --pdf parsely_pdfs/<book>.pdf --game "Action Castle II" --room "Dungeon Stairs"
+```
+
+Or from Python: `from text_adventure_games.codegen import render_source`. This is
+the alive, tested ingest half of `codegen` (the spec→module emission half is
+retired — Claude writes better game code directly).
+
 ---
 
 ## 3. A minimal runnable game
