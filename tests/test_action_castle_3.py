@@ -435,3 +435,55 @@ def test_crypt_questline_integration():
     assert not game.is_game_over()
     assert "spell book" in game.player.inventory
     assert game.characters["cleric"].get_property("has_pendant")
+
+
+# --- Phase 4b: spider + web (opening the western path) ---------------------
+
+
+def test_web_blocks_the_way_west_until_cleared():
+    game, cap = _game()
+    _solo_to(game, "Spider Lair")
+    game.do_command("west")
+    assert _said(cap, "web blocks")
+    assert game.player.location.name == "Spider Lair"
+
+
+def test_armed_elf_shoots_the_spider_and_scores():
+    game, cap = _game()
+    _solo_to(game, "Spider Lair")
+    _join(game, "elf").set_property("has_bow", True)
+    game.do_command("shoot spider")
+    spider = game.characters["spider"]
+    assert spider.get_property("driven_off")
+    assert "spider" not in game.player.location.characters  # it fled
+    assert "spider" in game._scored_keys and game.score >= 10
+
+
+def test_shooting_needs_the_elf_and_her_bow():
+    game, cap = _game()
+    _solo_to(game, "Spider Lair")
+    _join(game, "elf")  # no bow
+    game.do_command("shoot spider")
+    assert _said(cap, "elf and her bow")
+    assert not game.characters["spider"].get_property("driven_off")
+
+
+def test_clearing_the_web_with_the_spider_present_is_fatal():
+    game, cap = _game()
+    _solo_to(game, "Spider Lair")
+    _join(game, "dwarf")  # spider still here
+    game.do_command("use hatchet")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "wrapped in a cocoon")
+
+
+def test_shoot_then_hatchet_opens_the_ravine():
+    game, _ = _game()
+    _solo_to(game, "Spider Lair")
+    _join(game, "elf").set_property("has_bow", True)
+    _join(game, "dwarf")
+    game.do_command("shoot spider")
+    game.do_command("use hatchet")
+    assert game.player.location.get_property("web_cleared")
+    game.do_command("west")
+    assert game.player.location.name == "Deep Ravine"
