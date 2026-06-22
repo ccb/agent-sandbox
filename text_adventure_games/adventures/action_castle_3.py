@@ -878,6 +878,120 @@ class TakeMushroom(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The goblin baby: rescue it, then keep it quiet (it cries on entering a new
+# room; mushroom stew sates it). A crying baby is fatal at the Bandit Camp and
+# the Deep Ravine -- handled by triggers wired in build_game.
+# ---------------------------------------------------------------------------
+
+
+class TakeBaby(actions.Action):
+    """Pick the abandoned goblin baby out of the fissure. It starts crying."""
+
+    ACTION_NAME = "take baby"
+    ACTION_DESCRIPTION = "Pick up the goblin baby"
+    ACTION_ALIASES = [
+        "take bundle",
+        "take the baby",
+        "take baby goblin",
+        "get baby",
+        "pick up baby",
+        "pick up the baby",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.baby = (
+            self.player.location.items.get("baby goblin")
+            if self.player.location
+            else None
+        )
+
+    def check_preconditions(self) -> bool:
+        if self.baby is None:
+            self.parser.fail("There's no baby here to take.")
+            return False
+        if not self.player.can_accept_item():
+            self.parser.fail("Your hands are full.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.remove_item(self.baby)
+        self.baby.set_property("gettable", True)
+        self.baby.set_property("crying", True)
+        self.player.accept_item(self.baby)
+        self.game.award(
+            "baby_rescue",
+            5,
+            "The hungry baby shrieks and cries as you pick it up. You can't just "
+            "leave the little guy here.",
+        )
+
+
+class DropBaby(actions.Action):
+    """You can't abandon the baby (rulebook)."""
+
+    ACTION_NAME = "drop baby"
+    ACTION_DESCRIPTION = "Try to put the baby down"
+    ACTION_ALIASES = ["drop baby goblin", "drop bundle", "abandon baby", "leave baby"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if not _is_holding(self.player, "baby goblin"):
+            self.parser.fail("You're not carrying a baby.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "Being a parent is an awesome responsibility. You can't just abandon "
+            "the little guy."
+        )
+
+
+class FeedBaby(actions.Action):
+    """Feed the baby mushroom stew -- it eats, quiets, and falls asleep. It won't
+    take anything else."""
+
+    ACTION_NAME = "feed baby"
+    ACTION_DESCRIPTION = "Feed the goblin baby"
+    ACTION_ALIASES = [
+        "feed the baby",
+        "feed baby goblin",
+        "feed baby stew",
+        "give stew to baby",
+        "give baby stew",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if not _is_holding(self.player, "baby goblin"):
+            self.parser.fail("You have no baby to feed.")
+            return False
+        if not _is_holding(self.player, "stew"):
+            self.parser.fail(
+                "The baby turns up its nose -- it only wants mushroom stew."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        _take_held(self.player, "stew")
+        _held_item(self.player, "baby goblin").set_property("crying", False)
+        self.parser.ok(
+            "The baby greedily eats the mushroom stew, then yawns and falls fast "
+            "asleep in your arms."
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -1047,6 +1161,24 @@ def build_game() -> ActionCastle3:
 
     spider_lair.add_block("west", WebBlock(spider_lair))
 
+    # You can't squeeze into the fissure while wearing your pack (rulebook):
+    # DROP BACKPACK in the Dark Cavern first.
+    class PackBlock(blocks.Block):
+        def __init__(self, cavern):
+            super().__init__(
+                "Too tight with the pack on",
+                "You can't squeeze into the fissure while wearing your pack. "
+                "(Try DROP BACKPACK first.)",
+            )
+            self.cavern = cavern
+
+        def is_blocked(self) -> bool:
+            return any(
+                "backpack" in ch.inventory for ch in self.cavern.characters.values()
+            )
+
+    dark_cavern.add_block("enter fissure", PackBlock(dark_cavern))
+
     # --- World items -------------------------------------------------------
     bandit_camp.add_item(
         _fixture(
@@ -1069,13 +1201,17 @@ def build_game() -> ActionCastle3:
             "The water looks clean and clear, but looks can be deceiving.",
         )
     )
-    fissure.add_item(
-        _item(
-            "bundle",
-            "a bundle wrapped in rags",
-            "A wrinkly green face with yellow catlike eyes and a tuft of red hair. It's a baby goblin, probably abandoned.",
-        )
+    # The goblin baby (a "bundle" until you look): TAKE BABY is the path (it
+    # starts crying), so it's not a plain GET.
+    baby = _item(
+        "baby goblin",
+        "a bundle wrapped in rags",
+        "A wrinkly green face with yellow catlike eyes and a tuft of red hair. It's a "
+        "baby goblin, probably abandoned.",
     )
+    baby.set_property("gettable", False)
+    baby.set_property("crying", False)
+    fissure.add_item(baby)
     mushroom_garden.add_item(
         _fixture(
             "mushrooms",
@@ -1305,6 +1441,9 @@ def build_game() -> ActionCastle3:
         ShootSpider,
         UseHatchet,
         TakeMushroom,
+        TakeBaby,
+        DropBaby,
+        FeedBaby,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
@@ -1346,6 +1485,62 @@ def build_game() -> ActionCastle3:
         lambda g: g.player.location is not None and g.player.location.name == "Home",
         epilogue,
         repeatable=False,
+    )
+
+    # The goblin baby. While it's crying it wails in each new room, and that
+    # wailing is fatal at the Bandit Camp (alerts the bandits) and the Deep
+    # Ravine (alerts the stirges). Feeding it mushroom stew quiets it.
+    def _carrying_crying_baby(g):
+        baby = _held_item(g.player, "baby goblin")
+        return baby is not None and baby.get_property("crying")
+
+    def baby_alerts_bandits(g):
+        _die(
+            g,
+            "The baby's wailing alerts the bandits. They overwhelm you and drag you "
+            "off into the woods to be eaten by wild animals. THE END.",
+        )
+
+    game.add_trigger(
+        "baby_alerts_bandits",
+        lambda g: _carrying_crying_baby(g)
+        and g.player.location is not None
+        and g.player.location.name == "Bandit Camp",
+        baby_alerts_bandits,
+        repeatable=False,
+    )
+
+    def baby_alerts_stirges(g):
+        _die(
+            g,
+            "The baby's wailing alerts the stirges. They swarm you, stabbing with "
+            "their needle beaks and draining your blood. THE END.",
+        )
+
+    game.add_trigger(
+        "baby_alerts_stirges",
+        lambda g: _carrying_crying_baby(g)
+        and g.player.location is not None
+        and g.player.location.name == "Deep Ravine",
+        baby_alerts_stirges,
+        repeatable=False,
+    )
+
+    # Flavor: the baby wails once each time you carry it into a new room (so the
+    # danger is signposted before the fatal rooms).
+    def baby_wails(g):
+        baby = _held_item(g.player, "baby goblin")
+        baby.set_property("last_cry_loc", g.player.location.name)
+        g.parser.ok("The goblin baby wails as you enter.")
+
+    game.add_trigger(
+        "baby_wails",
+        lambda g: _carrying_crying_baby(g)
+        and g.player.location is not None
+        and _held_item(g.player, "baby goblin").get_property("last_cry_loc")
+        != g.player.location.name,
+        baby_wails,
+        repeatable=True,
     )
 
     return game
