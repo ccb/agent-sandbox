@@ -282,6 +282,15 @@ class Game:
             src.remove_character(character)
         destination.add_character(character)  # also sets character.location
 
+        # A ridden vehicle/mount travels with its rider (actions/vehicles.py):
+        # move it into the destination room so it's there to dismount or ride on.
+        vehicle = getattr(character, "riding", None)
+        if vehicle is not None:
+            src_room = getattr(vehicle, "location", None)
+            if src_room is not None and vehicle.name in getattr(src_room, "items", {}):
+                src_room.remove_item(vehicle)
+            destination.add_item(vehicle)
+
         # A posed question (issue #110) is moot once the player walks away from
         # where it was asked -- unless it was marked sticky.
         prompt = self._pending_prompt

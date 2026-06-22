@@ -170,6 +170,22 @@ class Item(Thing):
         self.contents.pop(item.name, None)
         item.container = None
 
+    def make_vehicle(self, ready: bool = True):
+        """Declare this item a vehicle/mount the player can ride (see
+        actions/vehicles.py). A vehicle that needs activation first -- a key for
+        a motorcycle, taming for a horse -- starts ``ready=False``; a
+        game-specific verb flips ``vehicle_ready`` true. Returns self for
+        chaining."""
+        self.set_property("is_vehicle", True)
+        self.set_property("vehicle_ready", ready)
+        return self
+
+    def is_vehicle(self) -> bool:
+        return bool(self.get_property("is_vehicle"))
+
+    def vehicle_ready(self) -> bool:
+        return bool(self.get_property("vehicle_ready"))
+
     def make_surface(self, capacity=None):
         """Declare this item a surface: things rest ON it and are always in
         view (no open/closed). A surface shares the container storage --
