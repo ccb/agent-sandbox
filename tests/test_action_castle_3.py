@@ -212,6 +212,7 @@ RECRUIT_CLERIC = [
     "east",  # -> Castle Ruins
     "down",  # -> Dungeon (lantern lit)
     "east",  # -> Dark Corridor
+    "open door",  # the spiked door bars the way east
     "east",  # -> Torture Chamber
 ]
 
@@ -337,7 +338,9 @@ def test_taking_the_spell_book_without_the_cleric_is_fatal():
             "east",
             "down",
             "east",
+            "open door",
             "east",
+            "open iron maiden",
             "down",
             "west",
             "south",
@@ -422,11 +425,13 @@ def test_crypt_questline_integration():
         "search",
         "take pendant",
         "east",
+        "open door",
         "east",  # Torture Chamber
         "give water",
         "free man",
         "invite cleric",
         "give pendant to cleric",
+        "open iron maiden",
         "down",
         "west",
         "south",  # -> Crypt (cleric in tow)
@@ -769,3 +774,92 @@ def test_crown_from_the_lockbox_buys_the_javelin_from_the_queen():
     game.do_command("give baby")
     game.do_command("give crown")
     assert "bronze javelin" in game.player.inventory
+
+
+# --- Phase 5 (endgame): door/maiden gates, demon, cultist ------------------
+
+
+def test_open_door_opens_the_corridor():
+    game, cap = _play(["take lantern", "light lantern", "east", "down", "east"])
+    assert game.player.location.name == "Dark Corridor"
+    game.do_command("east")  # the spiked door bars the way
+    assert game.player.location.name == "Dark Corridor"
+    game.do_command("open door")
+    game.do_command("east")
+    assert game.player.location.name == "Torture Chamber"
+
+
+def test_open_iron_maiden_opens_the_stairs():
+    game, cap = _play(
+        ["take lantern", "light lantern", "east", "down", "east", "open door", "east"]
+    )
+    assert game.player.location.name == "Torture Chamber"
+    game.do_command("down")  # the maiden is shut
+    assert game.player.location.name == "Torture Chamber"
+    game.do_command("open iron maiden")
+    game.do_command("down")
+    assert game.player.location.name == "Sanctum"
+
+
+def _summon_demon(game):
+    game.player.add_to_inventory(things.Item("bronze javelin", "a bronze javelin"))
+    _solo_to(game, "Chaos Chapel")
+    game.do_command("look")  # arrival round -> the summon trigger fires
+    return game
+
+
+def test_javelin_summons_the_demon():
+    game, _ = _game()
+    _summon_demon(game)
+    chapel = game.locations["Chaos Chapel"]
+    assert chapel.get_property("demon_present") and chapel.get_property(
+        "cultist_present"
+    )
+    assert "demon" in chapel.characters
+
+
+def test_dawdling_in_front_of_the_demon_is_fatal():
+    game, cap = _game()
+    _summon_demon(game)
+    game.do_command("south")  # trying to flee (or do anything) -> devoured
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "nothing left to bury")
+
+
+def test_throw_javelin_banishes_the_demon_and_scores():
+    game, cap = _game()
+    _summon_demon(game)
+    game.do_command("throw javelin at demon")
+    chapel = game.locations["Chaos Chapel"]
+    assert not chapel.get_property("demon_present")
+    assert game.player.get_property("banished_demon")
+    assert "bronze javelin" not in game.player.inventory  # spent
+    assert "banish_demon" in game._scored_keys
+    assert not game.is_game_over()  # the cultist remains; you survive
+
+
+def test_cannot_push_the_cultist_while_the_demon_stands():
+    game, cap = _game()
+    _summon_demon(game)
+    game.do_command("push cultist")
+    assert _said(cap, "demon is between")
+    assert not game.player.get_property("killed_cultist")
+
+
+def test_full_endgame_banish_then_kill_is_a_win():
+    game, cap = _game()
+    _summon_demon(game)
+    game.do_command("throw javelin at demon")
+    game.do_command("push cultist")
+    assert game.player.get_property("killed_cultist")
+    assert "kill_cultist" in game._scored_keys
+    assert game.is_won()
+
+
+def test_examining_the_demon_is_safe_and_you_can_still_throw():
+    game, cap = _game()
+    _summon_demon(game)
+    game.do_command("examine demon")
+    assert not game.is_game_over()
+    game.do_command("throw javelin at demon")
+    assert game.player.get_property("banished_demon")
