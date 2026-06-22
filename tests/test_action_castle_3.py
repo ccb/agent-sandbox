@@ -117,9 +117,12 @@ def test_player_starts_with_a_backpack_of_essentials():
     game, _ = _game()
     backpack = game.player.inventory["backpack"]
     assert backpack.get_property("is_container")
-    assert set(backpack.contents) == {"lantern", "dagger", "lockpicks", "waterskin"}
+    assert set(backpack.contents) == {"lantern", "dagger", "lockpicks"}
     assert backpack.contents["lantern"].get_property("flammable")
     assert not backpack.contents["lantern"].get_property("is_lit")
+    # The waterskin is its own carried container (so its water sits one level deep).
+    waterskin = game.player.inventory["waterskin"]
+    assert waterskin.get_property("is_container") and not waterskin.contents
 
 
 def test_max_score_is_100():
@@ -487,3 +490,70 @@ def test_shoot_then_hatchet_opens_the_ravine():
     assert game.player.location.get_property("web_cleared")
     game.do_command("west")
     assert game.player.location.name == "Deep Ravine"
+
+
+# --- Phase 4 (stew): crafting applied --------------------------------------
+
+
+def test_fill_waterskin_puts_water_in_it():
+    game, cap = _play(["west", "south", "fill waterskin"])  # -> Cavern Entrance
+    assert game.player.location.name == "Cavern Entrance"
+    waterskin = game.player.inventory["waterskin"]
+    assert "water" in waterskin.contents
+
+
+def test_take_mushroom_yields_a_cave_mushroom():
+    game, _ = _play(
+        [
+            "take lantern",
+            "light lantern",
+            "west",
+            "south",
+            "enter cavern",
+            "east",
+            "take mushroom",
+        ]
+    )
+    assert game.player.location.name == "Mushroom Garden"
+    assert "cave mushroom" in game.player.inventory
+
+
+def test_cooking_stew_needs_the_pot():
+    # Hold the ingredients but stand somewhere without the pot.
+    game, cap = _game()
+    game.player.inventory["waterskin"].add_item(things.Item("water", "spring water"))
+    game.player.add_to_inventory(things.Item("cave mushroom", "a cave mushroom"))
+    game.do_command("make stew")  # at the Crossroads -- no pot
+    assert _said(cap, "You need pot")
+    assert "stew" not in game.player.inventory
+
+
+def test_make_mushroom_stew_at_the_pot():
+    # Gather water + a mushroom, carry them to the bandit-camp pot, and cook.
+    cmds = [
+        "take lantern",
+        "light lantern",
+        "west",  # Dark Forest
+        "south",  # Cavern Entrance
+        "fill waterskin",
+        "enter cavern",  # Dark Cavern
+        "east",  # Mushroom Garden
+        "take mushroom",
+        "west",  # Dark Cavern
+        "up",  # Cavern Entrance
+        "north",  # Dark Forest
+        "west",  # Bandit Camp (the pot)
+        "make stew",
+    ]
+    game, cap = _play(cmds)
+    assert game.player.location.name == "Bandit Camp"
+    assert "stew" in game.player.inventory
+    assert "cave mushroom" not in game.player.inventory  # consumed
+    assert "water" not in game.player.inventory["waterskin"].contents  # consumed
+
+
+def test_giving_water_still_works_with_water_as_an_item():
+    # The cleric rescue consumes the `water` item from the waterskin.
+    game, _ = _play(RECRUIT_CLERIC + ["give water", "free man", "invite cleric"])
+    assert game.characters["cleric"].following is game.player
+    assert "water" not in game.player.inventory["waterskin"].contents
