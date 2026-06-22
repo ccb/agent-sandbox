@@ -14,6 +14,7 @@ from .locations import Go
 from .things import Get, Drop, Inventory, Examine, Give, Put, Open, Close, Craft
 from .talk import Say, Talk, Follow, Unfollow
 from .goals import AdoptGoal, DropGoal
+from .vehicles import Mount, Dismount
 
 __all__ = [
     "Action",
@@ -48,4 +49,6 @@ __all__ = [
     "Unfollow",
     "AdoptGoal",
     "DropGoal",
+    "Mount",
+    "Dismount",
 ]

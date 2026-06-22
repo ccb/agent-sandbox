@@ -82,6 +82,10 @@ class Character(Thing):
         # not serialized.
         self.following = None
         self.follow_filter = None
+        # The vehicle/mount this character is currently riding, or None (issue:
+        # vehicles). When the rider moves, the engine brings the vehicle along
+        # (Game.relocate). Runtime ref; serialized by name like `following`.
+        self.riding = None
         # Canned dialogue surfaced by the Talk action (player-facing, authored;
         # runtime-only like `behavior`). `talk_text` is the default line for
         # "talk to X"; `talk_topics` maps a topic keyword to a line for
@@ -131,6 +135,8 @@ class Character(Thing):
         # only (the runtime ref is re-established by the game, like `behavior`).
         if self.following is not None:
             thing_data["following"] = getattr(self.following, "name", self.following)
+        if self.riding is not None:
+            thing_data["riding"] = getattr(self.riding, "name", self.riding)
         thing_data["goals"] = [
             {"description": g.description, "type": g.type.value, "done": g.done}
             for g in self.goals
