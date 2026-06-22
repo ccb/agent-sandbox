@@ -704,3 +704,68 @@ def test_tribute_crown_yields_the_bronze_javelin():
     assert "bronze javelin" in game.player.inventory
     assert "crown_to_queen" in game._scored_keys
     assert game.player.location.name == "Cavern Entrance"  # now escorted out
+
+
+# --- Phase 4 (ooze / lockbox / crown + statue slide-trap) ------------------
+
+# Reach the Dark Corridor (the lockpicks ride in the starting pack).
+TO_DARK_CORRIDOR = ["take lantern", "light lantern", "east", "down", "east"]
+
+
+def test_pick_lock_with_a_live_ooze_is_fatal():
+    game, cap = _play(TO_DARK_CORRIDOR + ["pick lock"])
+    assert game.player.location.name == "Dark Corridor"
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "dissolved and digested")
+
+
+def test_taking_the_lockbox_with_a_live_ooze_is_fatal():
+    game, cap = _play(TO_DARK_CORRIDOR + ["take lockbox"])
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "dissolved and digested")
+
+
+def test_look_up_reveals_the_ooze():
+    game, cap = _play(TO_DARK_CORRIDOR + ["look up"])
+    assert _said(cap, "gray ooze") or _said(cap, "protoplasm")
+
+
+def test_use_wand_freezes_the_ooze_and_scores():
+    game, cap = _game()
+    game.player.add_to_inventory(things.Item("wand", "an icy wand"))
+    for c in TO_DARK_CORRIDOR + ["use wand on ooze"]:
+        game.do_command(c)
+    assert game.player.location.get_property("ooze_frozen")
+    assert "ooze" in game._scored_keys and game.score >= 10
+
+
+def test_pick_lock_after_freezing_yields_the_crown():
+    game, cap = _game()
+    game.player.add_to_inventory(things.Item("wand", "an icy wand"))
+    for c in TO_DARK_CORRIDOR + ["use wand on ooze", "pick lock"]:
+        game.do_command(c)
+    assert "crown" in game.player.inventory
+    assert not game.is_game_over()
+
+
+def test_statue_slide_trap_drops_you_into_the_mushroom_garden():
+    game, cap = _play(
+        ["take lantern", "light lantern", "east", "down", "west", "push statue"]
+    )
+    assert game.player.location.name == "Mushroom Garden"
+    assert game.locations["Vault"].get_property("trap_sprung")
+    assert game.locations["Mushroom Garden"].get_property("mushrooms_smashed")
+
+
+def test_crown_from_the_lockbox_buys_the_javelin_from_the_queen():
+    # The real crown (picked from the lockbox) is the queen's tribute.
+    game, cap = _game()
+    game.player.add_to_inventory(things.Item("wand", "an icy wand"))
+    for c in TO_DARK_CORRIDOR + ["use wand on ooze", "pick lock"]:
+        game.do_command(c)
+    assert "crown" in game.player.inventory
+    _give_baby_to_player(game)
+    _solo_to(game, "Throne Room")
+    game.do_command("give baby")
+    game.do_command("give crown")
+    assert "bronze javelin" in game.player.inventory
