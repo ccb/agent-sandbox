@@ -195,3 +195,5 @@ docs/superpowers/
 # External upstream repo clones (e.g. generative_agents) — kept local for
 # reference/experiments; never commit them into our tree.
 /external/
+
+parsely_pdfs/*.pdf
