@@ -322,7 +322,19 @@ shipped, tested, reusable feature — use it rather than reinventing it per game
 `item.make_surface()` (things rest *on*, always in view). `Get`/`Put`/`Examine`
 reach into open holders — including a container the player is **carrying** (pull
 the lamp out of your pack). A surface lists its contents in the room description.
-*Used by:* AC2 boat/stump/treasure; AC3 backpack/waterskin.
+A holder may set `contents_relation` (a full intro phrase) to voice its contents
+on examine — `"Under the stained mattress you see…"`, `"Behind the curtain hangs…"` —
+instead of the default "It contains…" / "On it you see…"; it's driven by the live
+contents, so it self-updates as they're taken. *Used by:* AC2 boat/stump/treasure;
+AC3 backpack/waterskin; AC4 cot (boots hidden under the mattress, revealed on examine).
+
+### Wearables & equipment slots (`#156`)
+A wearable (`Property.WEARABLE`) may declare a `wear_slot` (a body location —
+`"feet"`, `"head"`, `"body"`); only one item occupies a slot at a time unless the
+incoming item sets `wear_over` (a cloak layers over a gown). `wear_text` gives an
+item its own flavor line on wearing, and `TAKE OFF` / `REMOVE` frees a slot.
+*Used by:* AC4 (the gown + tiara start worn; the army boots displace nothing but
+enforce one-pair-of-shoes; the glass/ruby-slipper gags).
 
 ### Item stacks / quantities (`#134`)
 `item.make_stackable(n)` makes an item N identical, fungible units in one entry;
@@ -662,11 +674,16 @@ two-column, and the OCR **interleaves the columns**, which is where the trouble
 > **Intervention 4 — sequencing.** *Refactor the boat now or later?* Defer to a
 > separate PR so the AC4 work and the AC2 changes stay independently reviewable.
 
-> **Intervention 5 — a smell the tooling caught.** The rulebook says "ride east OR
-> west onto the highway," which tempted a `Highway` room with two exits. The
-> **duplicate-destination topology test flagged it**, prompting the call that
-> *endings are action-effects, not rooms* (you "ride off," you don't "walk to the
-> Highway"). Same for the Rancher ending. Lesson: invariants surface design smells.
+> **Intervention 5 — a smell the tooling caught, then a later reversal.** The
+> rulebook says "ride east OR west onto the highway," which tempted a `Highway` room
+> with two exits. The **duplicate-destination topology test flagged it**, prompting
+> the (Slice-2) call that *endings are action-effects, not rooms*. But in Slice 5,
+> with the bike ending concrete, that reversed for the highway: riding out *is*
+> genuinely travel, so a terminal `Highway` reached by two roads is the faithful
+> model — the lint was overzealous, and it now exempts that one case. The Rancher
+> ending, which is pure dialogue (`SAY YES`), stayed an action effect. Lesson:
+> invariants surface design smells, but a smell is a question, not a verdict — and
+> the answer can change once a later slice makes the shape concrete.
 
 > **Intervention 6 — correcting the LLM's reading.** The model (reasonably) read the
 > tower escape as "one canonical route + a locked-in recovery." The human knew the
@@ -693,6 +710,30 @@ two-column, and the OCR **interleaves the columns**, which is where the trouble
 > the process is a loop and not a prompt: **an LLM cannot reliably distinguish a
 > death from a gag from a clue in a jumbled OCR — but it states its guess with total
 > confidence.** Verify against the source at every slice.
+
+> **Intervention 9 — generalize the one-off the playtest exposed.** A playtest found
+> the boots needed `WEAR BOOTS` but the first cut hard-coded a `WearBoots(_WearSlippers)`
+> class. The human's call: *don't special-case footwear — let a wearable declare
+> where it's worn and whether it layers.* That became the engine `wear_slot` /
+> `wear_over` / `wear_text` feature (one item per slot; a cloak layers over a gown),
+> and the AC4 hack was deleted. Same instinct as Intervention 3: a second instance of
+> a pattern is the cue to lift it into the engine.
+
+> **Intervention 10 — model with a primitive, not machinery.** The boots were "under
+> the mattress" but showed up in the room listing. The tempting fix was a new
+> `open_on_examine` flag; the simpler truth was that the cot is just an **open
+> container** (its contents don't appear in the room listing, but `examine cot`
+> reveals them and self-updates as they're taken). The only gap was voice — "It
+> contains…" reads wrong for a mattress — so we added a tiny reusable `contents_relation`
+> phrase override ("Under the stained mattress you see…"). Rerouting to existing
+> primitives beat inventing a mechanism.
+
+> **Intervention 11 — verb collisions are real.** The natural highway command is
+> `RIDE EAST`, but `ride` is already a `MOUNT` alias, so `ride east` tries to *board*
+> a vehicle, not travel. The fix wasn't to fight the parser — it was to gate the
+> roadhouse's plain `east`/`west` exits on being astride the *started motorcycle*
+> (not the horse, not on foot) and let bare-direction movement carry the ending.
+> Playtest the actual words a player will type.
 
 ### How a single slice actually goes
 
