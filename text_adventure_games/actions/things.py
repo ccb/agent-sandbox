@@ -538,3 +538,159 @@ class Unlock_Door(base.Action):
     def apply_effects(self):
         self.door.set_property(Property.IS_LOCKED, False)
         self.parser.ok("Door is unlocked")
+
+
+# Crafting verbs the parser routes to Craft (see Parser.determine_intent). The
+# canonical name is "craft"; the rest are recognized phrasings.
+CRAFT_VERBS = (
+    "craft",
+    "make",
+    "cook",
+    "brew",
+    "forge",
+    "mix",
+    "combine",
+    "assemble",
+    "build",
+)
+
+
+class Craft(base.Action):
+    """Combine ingredients into a new item per a registered recipe (crafting.py).
+
+    Resolves a recipe three ways, friendliest first: by the output's name
+    ("make stew"), by the named ingredients ("combine string and stick"), or --
+    for a bare verb at a station ("cook") -- the first recipe whose ingredients,
+    tools and location are all satisfied right now. Inputs are consumed from the
+    crafter's held items; tools (a pot, a forge, a hammer) must be present but
+    are not consumed; the output lands in hand (or an open carried container)."""
+
+    ACTION_NAME = ActionName.CRAFT
+    ACTION_DESCRIPTION = "Combine ingredients into something new"
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command.lower().strip()
+        self.character = self.acting_character(command, hint="crafter")
+        self.target = self._strip_verb(self.command)
+        self.recipe = None
+        self.named = False  # did the player name a recipe/ingredients?
+        self._resolve()
+
+    # -- resolution ----------------------------------------------------------
+
+    def _strip_verb(self, command: str) -> str:
+        first, _, rest = command.partition(" ")
+        target = rest if first in CRAFT_VERBS else command
+        for lead in ("a ", "an ", "the ", "some "):
+            if target.startswith(lead):
+                target = target[len(lead) :]
+        return target.strip()
+
+    def _recipes(self):
+        return list(getattr(self.game, "recipes", []) or [])
+
+    def _held(self):
+        """name -> item across the crafter's hands and open carried containers."""
+        return self.character.carried_items()
+
+    def _present(self):
+        """Items the crafter could use as a tool: held + lying in the room."""
+        scope = dict(self._held())
+        loc = self.character.location
+        if loc is not None:
+            for name, item in loc.items.items():
+                scope.setdefault(name, item)
+        return scope
+
+    def _find_count(self, ingredient, pool) -> list:
+        """Up to ingredient.count items from *pool* (a name->item dict) that the
+        ingredient matches."""
+        hits = [it for it in pool.values() if ingredient.matches(it)]
+        return hits[: ingredient.count]
+
+    def _satisfiable(self, recipe) -> bool:
+        ok, _ = self._check(recipe)
+        return ok
+
+    def _check(self, recipe):
+        """(ok, gap_message) for whether *recipe* can be made right now."""
+        if recipe.location and (
+            self.character.location is None
+            or self.character.location.name != recipe.location
+        ):
+            return False, "You can't make that here."
+        present = self._present()
+        for tool in recipe.tools:
+            if len(self._find_count(tool, present)) < tool.count:
+                return False, f"You need {tool.label()} to make that."
+        held = self._held()
+        for ing in recipe.inputs:
+            if len(self._find_count(ing, held)) < ing.count:
+                return False, f"You need {ing.label()} to make that."
+        if not self.character.can_accept_item():
+            return False, "Your hands are full to make anything."
+        return True, None
+
+    def _resolve(self):
+        recipes = self._recipes()
+        if not recipes:
+            return
+        # 1) by output name / alias appearing in the target (longest wins).
+        if self.target:
+            best, best_len = None, -1
+            for r in recipes:
+                for n in r.names():
+                    if n and n in self.target and len(n) > best_len:
+                        best, best_len = r, len(n)
+            if best is not None:
+                self.recipe, self.named = best, True
+                return
+        # 2) by named ingredients: every input named in the target, and the
+        #    target mentions nothing extra a smaller recipe wouldn't.
+        if self.target:
+            tokens = self.target
+            for r in sorted(recipes, key=lambda r: len(r.inputs), reverse=True):
+                if r.inputs and all(
+                    (ing.name and ing.name in tokens) for ing in r.inputs
+                ):
+                    self.recipe, self.named = r, True
+                    return
+        # 3) bare verb: the first recipe satisfiable right here.
+        for r in recipes:
+            if self._satisfiable(r):
+                self.recipe = r
+                return
+
+    # -- action --------------------------------------------------------------
+
+    def check_preconditions(self) -> bool:
+        if self.recipe is None:
+            if self.target:
+                self.parser.fail(f"You don't know how to make '{self.target}'.")
+            else:
+                self.parser.fail("There's nothing you can make here right now.")
+            return False
+        ok, gap = self._check(self.recipe)
+        if not ok:
+            self.parser.fail(gap)
+            return False
+        return True
+
+    def apply_effects(self):
+        recipe = self.recipe
+        held, present = self._held(), self._present()
+        # Consume inputs from the crafter's held items.
+        for ing in recipe.inputs:
+            for item in self._find_count(ing, held):
+                self.character.discard_item(item)
+        # Produce the output(s).
+        produced = recipe.output(self.game)
+        outputs = produced if isinstance(produced, (list, tuple)) else [produced]
+        names = []
+        for item in outputs:
+            self.character.accept_item(item)
+            names.append(item.name)
+        msg = recipe.result_text or "You make {}.".format(", ".join(names))
+        self.parser.ok(msg)
+        self.game.log_event(self.character.name, "craft", recipe.name or names[0])

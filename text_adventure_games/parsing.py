@@ -200,6 +200,15 @@ class Parser:
         if specific is not None:
             return specific
 
+        # Crafting verbs ("make stew", "cook", "combine string and stick") route
+        # to CRAFT -- but only when the game has registered recipes, so a game
+        # without crafting is unaffected (and "make a wish"-style multi-word
+        # aliases already won above via specific-first). See crafting.py.
+        if getattr(self.game, "recipes", None):
+            first = command.split(" ", 1)[0]
+            if first in actions.things.CRAFT_VERBS:
+                return ActionName.CRAFT
+
         if (
             command.startswith("say ")
             or command.startswith("speak ")
