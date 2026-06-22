@@ -77,6 +77,20 @@ def _is_holding(character, name):
     return False
 
 
+def _take_held(character, name):
+    """Remove and return a held item by name -- from hands/worn/wielded or an
+    open carried container -- else None."""
+    for store in (character.inventory, character.worn, character.wielded):
+        if name in store:
+            return store.pop(name)
+    for item in character.inventory.values():
+        if name in item.accessible_contents():
+            held = item.contents[name]
+            item.remove_item(held)
+            return held
+    return None
+
+
 def _fixture(name, description, examine_text=""):
     """A scenery item -- examinable but not gettable (springs, statues, pits)."""
     it = things.Item(name, description, examine_text or description)
@@ -466,6 +480,274 @@ class HealDwarf(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The bow chain: search -> pendant -> crypt (turn undead) -> spell book ->
+# wizard -> CAST SLEEP -> bow -> elf. This is the long interlock that arms the
+# elf so she can later drive off the spider; it threads the cleric (pendant) and
+# wizard (spell book) abilities through it.
+# ---------------------------------------------------------------------------
+
+
+class Search(actions.Action):
+    """Search the dungeon cells -- turns up a pewter holy symbol (the pendant)."""
+
+    ACTION_NAME = "search"
+    ACTION_DESCRIPTION = "Search your surroundings"
+    ACTION_ALIASES = ["search cells", "search the cells"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        if (
+            loc is not None
+            and loc.name == "Dungeon"
+            and not loc.get_property("searched")
+        ):
+            loc.set_property("searched", True)
+            pendant = _item(
+                "pendant",
+                "a pewter holy symbol",
+                "A holy symbol shaped like a fist holding a lightning bolt. Cheap "
+                "pewter, worth only a few copper pieces.",
+            )
+            loc.add_item(pendant)
+            self.parser.ok(
+                "You search the cells and find a shiny pendant buried under the straw."
+            )
+        else:
+            self.parser.ok("You search around but find nothing of interest.")
+
+
+class GivePendantToCleric(actions.Action):
+    """Hand the holy symbol to the cleric -- with it he can turn the undead."""
+
+    ACTION_NAME = "give pendant to cleric"
+    ACTION_DESCRIPTION = "Give the holy symbol to the cleric"
+    ACTION_ALIASES = [
+        "give the pendant to the cleric",
+        "give cleric pendant",
+        "give pendant",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.cleric = _in_party(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        if self.cleric is None:
+            self.parser.fail("The cleric isn't here with you.")
+            return False
+        if not _is_holding(self.player, "pendant"):
+            self.parser.fail("You have no pendant to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.cleric.add_to_inventory(_take_held(self.player, "pendant"))
+        self.cleric.set_property("has_pendant", True)
+        self.parser.ok(
+            '"Thank you! With this I can destroy any undead that plagues the living," '
+            "says the cleric."
+        )
+
+
+class TurnUndead(actions.Action):
+    """The cleric turns the risen skeletons to ash (needs the pendant)."""
+
+    ACTION_NAME = "turn undead"
+    ACTION_DESCRIPTION = "Have the cleric turn the undead"
+    ACTION_ALIASES = ["use pendant", "use the pendant", "turn the undead"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.cleric = _in_party(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Crypt":
+            self.parser.fail("There's nothing unholy here to turn.")
+            return False
+        if self.cleric is None or not self.cleric.get_property("has_pendant"):
+            self.parser.fail("Only the cleric, holding his holy symbol, can do that.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("skeletons_cleared", True)
+        self.parser.ok(
+            "A flash of light from the pendant turns the skeletal warriors to ash."
+        )
+
+
+class TakeBook(actions.Action):
+    """Take the spell book from the skeleton's grip. The skeletons rise -- the
+    cleric (with the pendant) must turn them, or you join their ranks."""
+
+    ACTION_NAME = "take book"
+    ACTION_DESCRIPTION = "Take the spell book from the skeleton"
+    ACTION_ALIASES = [
+        "take spell book",
+        "take spellbook",
+        "take the spell book",
+        "get spell book",
+        "get spellbook",
+        "get book",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.cleric = _in_party(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Crypt":
+            self.parser.fail("There's no spell book here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        book = loc.items.get("spell book")
+        cleric_ready = self.cleric is not None and self.cleric.get_property(
+            "has_pendant"
+        )
+        if not loc.get_property("skeletons_cleared"):
+            if cleric_ready:
+                loc.set_property("skeletons_cleared", True)
+                self.parser.ok(
+                    "The skeletal warriors rise, weapons drawn -- but the cleric "
+                    "raises his pendant and a flash of light turns them to ash."
+                )
+            else:
+                _die(
+                    self.game,
+                    "The skeletal warriors rise, weapons drawn. They close in, and you "
+                    "soon join their unholy ranks! THE END.",
+                )
+                return
+        if book is not None:
+            book.set_property(Property.GETTABLE, True)
+            loc.remove_item(book)
+            self.player.add_to_inventory(book)
+            self.parser.ok("You take the spell book.")
+
+
+class GiveSpellbookToWizard(actions.Action):
+    """Return the wizard's lost spell book -- and with it, his magic (CAST SLEEP)."""
+
+    ACTION_NAME = "give spell book to wizard"
+    ACTION_DESCRIPTION = "Return the spell book to the wizard"
+    ACTION_ALIASES = [
+        "give spellbook to wizard",
+        "give book to wizard",
+        "give the spell book to the wizard",
+        "show spell book to wizard",
+        "show the wizard the spell book",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.wizard = _in_party(game, "wizard")
+
+    def check_preconditions(self) -> bool:
+        if self.wizard is None:
+            self.parser.fail("The wizard isn't here with you.")
+            return False
+        if not _is_holding(self.player, "spell book"):
+            self.parser.fail("You have no spell book to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.wizard.add_to_inventory(_take_held(self.player, "spell book"))
+        self.wizard.set_property("has_spellbook", True)
+        self.game.award(
+            "spellbook",
+            5,
+            '"My spell book! I must have dropped it when I fled the crypt," says the '
+            "wizard, leafing through it eagerly.",
+        )
+
+
+class CastSleep(actions.Action):
+    """The wizard casts Sleep. Its use here: put the bandits under so you can
+    take the elf's bow (needs the wizard and his returned spell book)."""
+
+    ACTION_NAME = "cast sleep"
+    ACTION_DESCRIPTION = "Have the wizard cast the Sleep spell"
+    ACTION_ALIASES = [
+        "cast sleep on bandits",
+        "cast the sleep spell",
+        "cast sleep spell",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.wizard = _in_party(game, "wizard")
+        self.bandits = _present(game, "bandits")
+
+    def check_preconditions(self) -> bool:
+        if self.wizard is None or not self.wizard.get_property("has_spellbook"):
+            self.parser.fail("You'd need the wizard and his spell book to cast that.")
+            return False
+        if self.bandits is None or self.bandits.get_property("asleep"):
+            self.parser.fail("There's no one here to put to sleep.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.bandits.set_property("asleep", True)
+        bow = self.game.locations["Bandit Camp"].items.get("bow")
+        if bow is not None:
+            bow.set_property(Property.GETTABLE, True)
+        self.parser.ok(
+            "The wizard intones the Spell of Sleep. One by one the bandits slump "
+            "snoring to the ground. The elvish bow lies unguarded."
+        )
+
+
+class GiveBowToElf(actions.Action):
+    """Return the elf's bow -- armed, she can shoot the spider (a later step)."""
+
+    ACTION_NAME = "give bow to elf"
+    ACTION_DESCRIPTION = "Return the bow to the elf"
+    ACTION_ALIASES = ["give the bow to the elf", "give elf bow", "give bow"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.elf = _in_party(game, "elf")
+
+    def check_preconditions(self) -> bool:
+        if self.elf is None:
+            self.parser.fail("The elf isn't here with you.")
+            return False
+        if not _is_holding(self.player, "bow"):
+            self.parser.fail("You have no bow to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.elf.add_to_inventory(_take_held(self.player, "bow"))
+        self.elf.set_property("has_bow", True)
+        self.game.award(
+            "bow",
+            5,
+            'The elf takes up her bow. "Now I can fight at your side!"',
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -736,6 +1018,16 @@ def build_game() -> ActionCastle3:
             "One of the skeletons grips a spell book in its bony hands.",
         )
     )
+    # The spell book is in a skeleton's grip; TAKE BOOK is the real path (it
+    # wakes the skeletons), so it starts non-gettable as a backstop against a
+    # plain GET sneaking it out without consequence.
+    spell_book = _item(
+        "spell book",
+        "an arcane spell book",
+        "It's covered in cosmological symbols. The contents are indecipherable to you.",
+    )
+    spell_book.set_property(Property.GETTABLE, False)
+    crypt.add_item(spell_book)
 
     # --- Characters --------------------------------------------------------
     player = things.Character(
@@ -800,6 +1092,14 @@ def build_game() -> ActionCastle3:
         "I am a great wolf spider, nearly camouflaged against the rock.",
     )
     spider.set_property("driven_off", False)
+
+    bandits = things.Character(
+        "bandits",
+        "a group of bandits gathered around a campfire",
+        "We are bandits. Don't even think about it.",
+    )
+    bandits.talk_text = "The bandits jeer and wave you off."
+    bandits.set_property("asleep", False)
     queen = things.Character(
         "goblin queen",
         "the goblin queen, in looted finery",
@@ -813,6 +1113,7 @@ def build_game() -> ActionCastle3:
     spider_lair.add_character(spider)
     torture_chamber.add_character(cleric)
     throne_room.add_character(queen)
+    bandit_camp.add_character(bandits)
 
     # --- Player start inventory --------------------------------------------
     # The rulebook starts you with a backpack containing a lantern, dagger,
@@ -835,7 +1136,7 @@ def build_game() -> ActionCastle3:
     )
 
     # --- Assemble ----------------------------------------------------------
-    characters = [elf, wizard, dwarf, cleric, spider, queen]
+    characters = [elf, wizard, dwarf, cleric, spider, queen, bandits]
     custom_actions = [
         GoHome,
         ConfirmHome,
@@ -846,6 +1147,13 @@ def build_game() -> ActionCastle3:
         FreeCaptive,
         FreeDwarf,
         HealDwarf,
+        Search,
+        GivePendantToCleric,
+        TurnUndead,
+        TakeBook,
+        GiveSpellbookToWizard,
+        CastSleep,
+        GiveBowToElf,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
