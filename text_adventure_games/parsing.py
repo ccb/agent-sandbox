@@ -602,7 +602,11 @@ class Parser:
             character = self.game.player
         items_in_scope = {}
         for item_name in character.location.items:
-            items_in_scope[item_name] = character.location.items[item_name]
+            item = character.location.items[item_name]
+            # Hidden items stay out of scope until a SEARCH reveals them.
+            if item.get_property("is_hidden"):
+                continue
+            items_in_scope[item_name] = item
         for item_name in character.inventory:
             items_in_scope[item_name] = character.inventory[item_name]
         # Items inside an OPEN holder that is itself in scope are reachable too
