@@ -522,27 +522,50 @@ See `docs/TESTING.md` for the house testing conventions.
 
 ---
 
-## 12. Authoring with Claude
+## 12. Authoring with Claude — it's a loop, not a prompt
 
-If you're generating the port with Claude (this is the recommended flow):
+The biggest mindset correction: **converting a game is not "paste the PDF into one
+prompt and get a finished game."** It's an iterative loop, because an LLM will
+confidently *misread* an ambiguous rulebook and *drift* over a thousand lines, and
+several decisions (how faithfully to model a fail-state, whether a verb should be
+a one-off or a reusable engine feature) are genuinely yours to make. The human in
+the loop is what makes the port correct. The loop:
 
-- **Point it at the references and this guide:** "Port this Parsely game the way
-  `action_castle_3.py` does it; follow `docs/converting-parsely-games.md`; reuse
-  the engine's containers/follow/prompts/crafting/darkness features rather than
-  reimplementing them."
+```
+        ┌───────────────────────────────────────────────┐
+        │  plan  →  slice  →  for each slice:            │
+        │            prompt → generate → run tests → fix │
+        │  →  walkthrough (wins at full score)           │
+        └───────────────────────────────────────────────┘
+                 ▲                              │
+                 └──── you steer the forks ─────┘
+```
+
+Each turn through it is small and verifiable. You are not reviewing 1500 generated
+lines once; you are approving a 100-line slice with a passing test, then the next.
+
+Concretely:
+
+- **Point Claude at the references and this guide:** "Port this Parsely game the
+  way `action_castle_3.py` does it; follow `docs/converting-parsely-games.md`; reuse
+  the engine's containers/follow/prompts/crafting/darkness/vehicle features rather
+  than reimplementing them."
 - **Give it the parser rule explicitly:** custom verbs that collide with built-in
   keywords (give/take/drop/say/attack/open) must use **multi-word `ACTION_NAME`s**
   so they route specific-first. This prevents the #1 generation failure ("the
   action isn't wired up").
 - **Build in slices, verify each:** generate the world skeleton + topology test
-  first, then companions/verbs, then the endgame — running `pytest` between slices
-  rather than generating 1500 lines blind.
+  first, then the puzzles, then the endgame — running `pytest` between slices.
+- **Expect to intervene at the ambiguities.** When the rulebook is unclear (and a
+  two-column PDF often is), the LLM will pick *an* interpretation and sound sure of
+  it. Read its output against the source and correct it. These corrections are the
+  whole point — see the worked example in §15 for real ones.
 - **Demand the walkthrough.** A `WALKTHROUGH` that wins at full score is the proof
   the port is complete and correct; make Claude produce and pass it.
 - **Generalize as you go.** When Claude writes a verb that's really generic
-  (light, talk, a yes/no choice, combining items), have it lift the mechanic into
-  the engine (with its own tests) and use it from the game — that's how the shared
-  engine grows and the *next* game starts ahead.
+  (light, talk, a yes/no choice, combining items, riding a vehicle), have it lift
+  the mechanic into the engine (with its own tests) and use it from the game —
+  that's how the shared engine grows and the *next* game starts ahead.
 
 ---
 
@@ -579,11 +602,108 @@ If you're generating the port with Claude (this is the recommended flow):
 | `text_adventure_games/things/` | `Item`, `Character`, `Location` |
 | `text_adventure_games/actions/` | built-in actions; subclass `actions.Action` |
 | `text_adventure_games/parsing.py` | `Parser` (routing) + `LlmParser` |
-| `text_adventure_games/blocks/` | `Block`, `Darkness`, `Locked_Door` |
+| `text_adventure_games/blocks/` | `Block`, `Darkness`, `Locked_Door`, `RequiresVehicle` |
+| `text_adventure_games/actions/vehicles.py` | `Mount`, `Dismount` (+ `Item.make_vehicle`) |
 | `text_adventure_games/crafting.py` | `Recipe`, `Ingredient` |
 | `text_adventure_games/prompts.py` | `Prompt` (posed dialogue) |
 | `text_adventure_games/games.py` | `Game` (loop, triggers, recipes, relocate) |
-| `journal/chris.md` | the narrative of how AC2/AC3 were built + why |
+| `text_adventure_games/adventures/action_castle_4.py` | the §15 worked example (in progress) |
+| `journal/chris.md` | the narrative of how the ports were built + why |
 
 When in doubt, find the same situation in `action_castle_3.py` — almost every
 mechanic in this guide is exercised there.
+
+---
+
+## 15. Worked example: porting Action Castle 4
+
+This walks the real process of porting **Action Castle IV — "Escape from Action
+Castle"** (the princess escapes her tower and rides off into a road-trip). The
+point isn't the finished code — it's to show **where a human steers**, because the
+rulebook is ambiguous and the LLM will confidently get things wrong. Every
+"Intervention" below is a decision a person made, not the model.
+
+### The shape
+
+~14 rooms in a mostly-linear chain — Tower → Guardroom → Gardens/Drawbridge →
+Down by the River (get a horse) → Old Woods/Deep Woods (a poacher + a deer) →
+Clearing → Ranch / Roadhouse → a biker bar. Two winning endings: settle as a
+**Rancher** (+40) or ride off down the **Highway** (+50, the 100-point best run),
+plus dead-ends. Smaller and more linear than AC3 — but its source PDF is
+two-column, and the OCR **interleaves the columns**, which is where the trouble
+(and the interventions) come from.
+
+### The slices
+
+1. **Engine: a vehicle/mount feature.** AC4 needs riding (horse, motorcycle), which
+   the engine lacked — so the first slice extracted a reusable feature, not game code.
+2. **World skeleton.** All rooms, exits, items, characters, start state; topology test.
+3. **Tower escape.** The puzzle: cut hair → rope → climb out, or sneak down through
+   the guardroom; plus dead-ends.
+4. **Horse + poacher/deer.** Taming the mare; the crossbow; saving the deer.
+5. **Ranch / roadhouse / bar + endings.** The "Wade sent me" gate, the bar brawl for
+   the keys, and the two scored endings + a full winning walkthrough.
+
+### The interventions (what the human actually decided)
+
+> **Intervention 1 — reach vs. effort.** *Build it slice-by-slice (with tests/PRs),
+> or document it on paper?* Chose to build, so the real bugs surface.
+
+> **Intervention 2 — fidelity.** *How faithfully to model the tower's fail-states?*
+> Chose full fidelity (the catch-and-lock, the slipper/trapped dead-ends), not a
+> simplified "you just walk out."
+
+> **Intervention 3 — reuse vs. one-off.** Riding shows up twice (horse, motorcycle)
+> and AC2's boat is the same idea. *Custom actions, or a reusable engine feature?*
+> Chose to **generalize a `vehicle/mount` feature** — and to fold the AC2 boat onto
+> it later. This is the "generalize the reusable verbs" principle in action: one
+> decision turned three bespoke mechanics into one shared feature.
+
+> **Intervention 4 — sequencing.** *Refactor the boat now or later?* Defer to a
+> separate PR so the AC4 work and the AC2 changes stay independently reviewable.
+
+> **Intervention 5 — a smell the tooling caught.** The rulebook says "ride east OR
+> west onto the highway," which tempted a `Highway` room with two exits. The
+> **duplicate-destination topology test flagged it**, prompting the call that
+> *endings are action-effects, not rooms* (you "ride off," you don't "walk to the
+> Highway"). Same for the Rancher ending. Lesson: invariants surface design smells.
+
+> **Intervention 6 — correcting the LLM's reading.** The model (reasonably) read the
+> tower escape as "one canonical route + a locked-in recovery." The human knew the
+> game better: **both routes are real wins**, and the guard-capture is *avoidable*
+> (you only get caught if you bolt west off the stairs — you can instead grab the
+> dagger and rope out the window). The model encoded the corrected logic.
+
+> **Intervention 7 — spotting a reuse opportunity.** *Should `MAKE ROPE` be a
+> crafting recipe?* Yes — hair → rope is a one-input recipe, so `make rope` routes to
+> the crafting system for free and `braid hair` resolves it by ingredient (after
+> adding `braid` to the craft verbs). The human recognized a Parsely verb as an
+> instance of an existing engine mechanic.
+
+> **Intervention 8 — catching OCR misreads (the big one).** The two-column layout
+> glued unrelated lines together, and the LLM inherited the mistakes:
+> - It made **`WEAR GLASS SLIPPERS` a death** ("nineteen years… THE END"). Wrong —
+>   wearing the slippers is a *gag* ("doesn't hurt… much"); the "nineteen years"
+>   ending belongs to the **trapped-forever** condition (no dagger), a different
+>   trigger entirely.
+> - It made **`KILL SELF` a death**. Wrong — it's a **clue**: a falling hair slices
+>   the dagger ("Hmm…"), hinting that her hair can be cut.
+>
+> A human reading the source caught both. This is the single most important reason
+> the process is a loop and not a prompt: **an LLM cannot reliably distinguish a
+> death from a gag from a clue in a jumbled OCR — but it states its guess with total
+> confidence.** Verify against the source at every slice.
+
+### How a single slice actually goes
+
+Take Slice 3. The prompt is roughly: *"Add the tower escape to `action_castle_4.py`,
+following the guide. Both the sneak-down-through-the-guardroom route and the
+cut-hair → rope → climb-out-the-window route should win; the guard is an avoidable
+block on the stairs' west exit. Model `make rope` as a crafting recipe (hair →
+rope). Add tests."* Claude generates the actions, blocks, recipe, scoring triggers,
+and tests; you run `uv run pytest tests/test_action_castle_4.py -q`; you read the
+flavor against the rulebook — and that's where you catch that the slippers aren't
+fatal and `KILL SELF` is a clue. Fix, re-run, commit. Then Slice 4.
+
+The deliverable of each slice is a green test and a diff small enough to actually
+read. The deliverable of the whole port is a `WALKTHROUGH` that wins at full score.
