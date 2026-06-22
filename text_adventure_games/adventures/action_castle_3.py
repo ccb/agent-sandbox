@@ -1310,6 +1310,174 @@ class PushStatue(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The endgame: carrying the bronze javelin into the Chaos Chapel summons the
+# cultist and the demon. THROW JAVELIN banishes the demon; then PUSH CULTIST
+# (into the pit) finishes him. Doing anything else while the demon looms is
+# fatal. Also the two flavor gates the rulebook puts on the way down: OPEN DOOR
+# (the spiked door) and OPEN IRON MAIDEN (the staircase to the Sanctum).
+# ---------------------------------------------------------------------------
+
+# Actions that don't count as "doing something" in front of the demon -- you may
+# look at it before you act, but anything else gets you devoured.
+_DEMON_SAFE_ACTIONS = {"examine", "describe", "inventory"}
+
+_DEMON_DEATH = (
+    "The demon falls upon you with tooth, tusk and tentacle. When it is done, "
+    "there is nothing left to bury. THE END."
+)
+
+
+class OpenDoor(actions.Action):
+    """Wrench open the spiked iron door at the end of the Dark Corridor."""
+
+    ACTION_NAME = "open door"
+    ACTION_DESCRIPTION = "Open the spiked iron door"
+    ACTION_ALIASES = [
+        "open the door",
+        "open spiked door",
+        "open the spiked door",
+        "open iron door",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Dark Corridor":
+            self.parser.fail("There's no such door here.")
+            return False
+        if loc.get_property("door_open"):
+            self.parser.fail("The door is already open.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("door_open", True)
+        self.parser.ok(
+            "The massive door makes an awful screech as you wrench it open. "
+            "Fortunately, nothing else happens -- the noise is just to scare you."
+        )
+
+
+class OpenIronMaiden(actions.Action):
+    """Open the iron maiden in the Torture Chamber -- a staircase spirals down."""
+
+    ACTION_NAME = "open iron maiden"
+    ACTION_DESCRIPTION = "Open the iron maiden"
+    ACTION_ALIASES = ["open the iron maiden", "open maiden", "open the maiden"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Torture Chamber":
+            self.parser.fail("There's no iron maiden here.")
+            return False
+        if loc.get_property("maiden_open"):
+            self.parser.fail("The iron maiden is already open.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("maiden_open", True)
+        self.parser.ok(
+            "The front of the maiden swings open, revealing a spiked interior... "
+            "and a descending spiral staircase."
+        )
+
+
+class ThrowJavelin(actions.Action):
+    """Hurl the bronze javelin at the demon -- it transforms into a bolt of pure
+    energy and banishes it."""
+
+    ACTION_NAME = "throw javelin"
+    ACTION_DESCRIPTION = "Throw the bronze javelin at the demon"
+    ACTION_ALIASES = [
+        "throw javelin at demon",
+        "throw the javelin",
+        "throw javelin at the demon",
+        "throw the javelin at the demon",
+        "hurl javelin",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.chapel = self.game.locations["Chaos Chapel"]
+
+    def check_preconditions(self) -> bool:
+        if not self.chapel.get_property("demon_present"):
+            self.parser.fail("There's nothing here to throw it at.")
+            return False
+        if not _is_holding(self.player, "bronze javelin"):
+            self.parser.fail("You have no javelin to throw.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _take_held(self.player, "bronze javelin")  # it becomes a bolt of energy
+        self.chapel.set_property("demon_present", False)
+        demon = self.game.characters.get("demon")
+        if demon is not None and demon.location is self.chapel:
+            self.chapel.remove_character(demon)
+        self.player.set_property("banished_demon", True)
+        self.game.award(
+            "banish_demon",
+            10,
+            "The javelin transforms into a bolt of pure energy and pierces the "
+            "demon's heart. Thunder cracks, white light dazzles you -- and the demon "
+            "is gone! The cultist sneers, \"You fool! You've only delayed the "
+            'inevitable!" and begins to chant; the room darkens.',
+        )
+
+
+class PushCultist(actions.Action):
+    """Shove the Chaos cultist into his own pit (once the demon is banished)."""
+
+    ACTION_NAME = "push cultist"
+    ACTION_DESCRIPTION = "Push the cultist into the pit"
+    ACTION_ALIASES = [
+        "push cultist into pit",
+        "push the cultist",
+        "push the cultist into the pit",
+        "shove cultist",
+        "shove cultist into pit",
+        "kick cultist into pit",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.chapel = self.game.locations["Chaos Chapel"]
+
+    def check_preconditions(self) -> bool:
+        if not self.chapel.get_property("cultist_present"):
+            self.parser.fail("There's no cultist here.")
+            return False
+        if self.chapel.get_property("demon_present"):
+            self.parser.fail("The demon is between you and the cultist!")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.chapel.set_property("cultist_present", False)
+        cultist = self.game.characters.get("cultist")
+        if cultist is not None and cultist.location is self.chapel:
+            self.chapel.remove_character(cultist)
+        self.player.set_property("killed_cultist", True)
+        self.game.award(
+            "kill_cultist",
+            10,
+            "You rush the chanting cultist and shove him into the spiked pit. His "
+            "scream is cut short. The darkness lifts.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -1520,6 +1688,29 @@ def build_game() -> ActionCastle3:
 
     goblin_caves.add_block("east", NetBlock(goblin_caves, "east"))
     goblin_caves.add_block("north", NetBlock(goblin_caves, "north"))
+
+    # Two flavor gates on the way down to the temple: the spiked door (OPEN
+    # DOOR) and the iron maiden's hidden staircase (OPEN IRON MAIDEN).
+    class FlagBlock(blocks.Block):
+        def __init__(self, loc, flag, description):
+            super().__init__("The way is shut", description)
+            self.loc = loc
+            self.flag = flag
+
+        def is_blocked(self) -> bool:
+            return not self.loc.get_property(self.flag)
+
+    dark_corridor.add_block(
+        "east", FlagBlock(dark_corridor, "door_open", "The spiked iron door is closed.")
+    )
+    torture_chamber.add_block(
+        "down",
+        FlagBlock(
+            torture_chamber,
+            "maiden_open",
+            "The only way down is through the iron maiden -- and it's shut.",
+        ),
+    )
 
     # --- World items -------------------------------------------------------
     bandit_camp.add_item(
@@ -1747,6 +1938,19 @@ def build_game() -> ActionCastle3:
     )
     queen.talk_text = 'The goblin queen shrieks, "Tribute!"'
 
+    # The cultist + demon don't start on stage; the summon trigger drops them
+    # into the Chaos Chapel when you arrive there carrying the bronze javelin.
+    cultist = things.Character(
+        "cultist",
+        "a black-robed Chaos cultist",
+        "I serve the Dark One; when the stars are right, he will rise.",
+    )
+    demon = things.Character(
+        "demon",
+        "a twelve-foot horned, tusked demon wreathed in writhing tentacles",
+        "I am a demon of Chaos, clawed up from the infernal pit.",
+    )
+
     dark_forest.add_character(elf)
     wizard_tower.add_character(wizard)
     spider_lair.add_character(dwarf)
@@ -1779,7 +1983,7 @@ def build_game() -> ActionCastle3:
     ).make_container()
 
     # --- Assemble ----------------------------------------------------------
-    characters = [elf, wizard, dwarf, cleric, spider, queen, bandits]
+    characters = [elf, wizard, dwarf, cleric, spider, queen, bandits, cultist, demon]
     custom_actions = [
         GoHome,
         ConfirmHome,
@@ -1811,6 +2015,10 @@ def build_game() -> ActionCastle3:
         TakeLockbox,
         PickLock,
         PushStatue,
+        OpenDoor,
+        OpenIronMaiden,
+        ThrowJavelin,
+        PushCultist,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
@@ -1954,6 +2162,50 @@ def build_game() -> ActionCastle3:
         and not goblin_caves.get_property("audience_done"),
         throne_escort,
         repeatable=False,
+    )
+
+    # Endgame: carrying the bronze javelin into the Chaos Chapel summons the
+    # cultist, who calls up the demon from the pit.
+    def summon_demon(g):
+        chaos_chapel.set_property("demon_summoned", True)
+        chaos_chapel.set_property("demon_present", True)
+        chaos_chapel.set_property("cultist_present", True)
+        chaos_chapel.set_property("demon_summoned_turn", g.turn)
+        chaos_chapel.add_character(cultist)
+        chaos_chapel.add_character(demon)
+        g.parser.ok(
+            "A black-robed man is here, chanting in a foul tongue. He utters a word "
+            "of power and green flame erupts from the pit -- a monstrous demon claws "
+            "its way up from the infernal depths! (THROW JAVELIN at it -- fast.)"
+        )
+
+    game.add_trigger(
+        "summon_demon",
+        lambda g: g.player.location is chaos_chapel
+        and _is_holding(g.player, "bronze javelin")
+        and not chaos_chapel.get_property("demon_summoned")
+        and not g.player.get_property("banished_demon"),
+        summon_demon,
+        repeatable=True,
+    )
+
+    # While the demon looms, anything but throwing the javelin (you may look at
+    # it first) gets you devoured.
+    def demon_devours(g):
+        _die(g, _DEMON_DEATH)
+
+    def _demon_will_devour(g):
+        if not chaos_chapel.get_property("demon_present"):
+            return False
+        if g.turn <= (chaos_chapel.get_property("demon_summoned_turn") or 0):
+            return False  # the turn it's summoned is a grace turn
+        last = g.parser.last_action
+        if last is None:
+            return False
+        return last.action_name() not in _DEMON_SAFE_ACTIONS
+
+    game.add_trigger(
+        "demon_devours", _demon_will_devour, demon_devours, repeatable=True
     )
 
     return game
