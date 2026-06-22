@@ -173,6 +173,35 @@ def test_get_overflows_into_backpack():
     assert "rock" not in room.items  # left the room
 
 
+def test_get_pulls_gear_out_of_a_carried_backpack():
+    # GET reaches into an OPEN container the character is carrying, so you can
+    # pull stowed gear into your hands (a lantern out of your pack).
+    game, room, player, cap = _capture_game(player_capacity=None)
+    pack = _backpack(capacity=3)
+    player.add_to_inventory(pack)
+    lantern = things.Item("lantern", "a brass lantern")
+    pack.add_item(lantern)
+
+    thing_actions.Get(game, "get lantern", actor=player)()
+
+    assert "lantern" in player.inventory  # now in hand
+    assert "lantern" not in pack.contents  # out of the pack
+    assert lantern.container is None
+
+
+def test_cannot_get_gear_from_a_closed_carried_container():
+    game, room, player, cap = _capture_game(player_capacity=None)
+    pack = _backpack(capacity=3)
+    pack.set_property("is_closed", True)
+    player.add_to_inventory(pack)
+    lantern = things.Item("lantern", "a brass lantern")
+    pack.add_item(lantern)
+
+    action = thing_actions.Get(game, "get lantern", actor=player)
+    assert action.check_preconditions() is False  # not reachable while closed
+    assert "lantern" in pack.contents  # unchanged
+
+
 def test_get_fails_gracefully_when_full():
     game, room, player, cap = _capture_game(player_capacity=1)
     pack = _backpack(capacity=1)

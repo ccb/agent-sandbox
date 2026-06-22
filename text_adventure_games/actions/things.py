@@ -13,24 +13,22 @@ class Get(base.Action):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to get something")
         self.location = self.character.location
-        # You can pick up items lying in the room, and items inside an OPEN
-        # container sitting in the room (e.g. a blanket inside a boat). Track
-        # which container an item came from so apply_effects removes it there.
-        # You can pick up items lying in the room, and items inside an OPEN
-        # holder sitting in the room -- a container (blanket in a boat) or a
-        # surface (candle on a table). Track the source holder so apply_effects
-        # removes the item from there.
-        scope = dict(self.location.items)
-        self.room_holders = [
+        # You can pick up items lying in the room, items inside an OPEN holder
+        # sitting in the room -- a container (blanket in a boat) or a surface
+        # (candle on a table) -- and items inside an OPEN holder the character
+        # is carrying (gear stowed in a backpack). Track the source holder so
+        # apply_effects removes the item from there.
+        self.holders = [
             it for it in self.location.items.values() if it.accessible_contents()
-        ]
-        for h in self.room_holders:
+        ] + [it for it in self.character.inventory.values() if it.accessible_contents()]
+        scope = dict(self.location.items)
+        for h in self.holders:
             for cname, citem in h.accessible_contents().items():
                 scope.setdefault(cname, citem)
         self.item = self.parser.match_item(command, scope, hint="thing to get")
         self.source_holder = None
         if self.item is not None and self.item.name not in self.location.items:
-            for h in self.room_holders:
+            for h in self.holders:
                 if self.item.name in h.contents:
                     self.source_holder = h
                     break
