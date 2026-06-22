@@ -379,3 +379,13 @@ Notable: the stew (crafting PR) now has its consumer, and the death triggers
 reuse the same carry-a-crying-baby predicate -- clean. Remaining AC3: goblin
 queen (net trap SHOW BABY, GIVE BABY, crown->javelin), ooze/lockbox/crown, then
 the endgame (demon/cultist) + scored epilogues + full win walkthrough.
+
+### AC3 Phase 4 (goblin queen) — net trap + throne exchanges (#139)
+
+Goblin Caves net trap (no baby -> enslaved death; SHOW BABY frees you, NetBlock
+herds you east), Throne Room GIVE BABY (+5, lets you leave) and GIVE CROWN (+5,
+trades the crown for the bronze javelin -- the endgame key). A throne_escort
+trigger whisks you to the surface once the audience is satisfied (baby given,
+crown too if carried) and pacifies the caves. 632 tests. Crown source (lockbox)
+comes next; GIVE CROWN tested with a placed crown. Remaining: ooze/lockbox/crown
++ statue slide-trap, then endgame (demon/cultist) + epilogues + win walkthrough.
