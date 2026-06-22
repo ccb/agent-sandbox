@@ -87,6 +87,16 @@ def _item(name, description, examine_text=""):
     return things.Item(name, description, examine_text or description)
 
 
+def _footwear(name, description, wear_text, examine_text=""):
+    """A wearable shoe in the "feet" slot (so only one is worn at a time -- the
+    engine Wear action enforces the slot). ``wear_text`` is the flavor on wearing."""
+    it = _item(name, description, examine_text)
+    it.set_property(Property.WEARABLE, True)
+    it.set_property("wear_slot", "feet")
+    it.set_property("wear_text", wear_text)
+    return it
+
+
 # ---------------------------------------------------------------------------
 # Game subclass: scoring + endings
 # ---------------------------------------------------------------------------
@@ -199,46 +209,11 @@ class TieRope(actions.Action):
         )
 
 
-class _WearSlippers(actions.Action):
-    """Shared base for the two slipper gags (rulebook: neither is a death)."""
-
-    SLIPPERS = ""
-    GAG = ""
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-
-    def check_preconditions(self) -> bool:
-        if not _is_holding(self.player, self.SLIPPERS):
-            self.parser.fail(f"You don't have the {self.SLIPPERS}.")
-            return False
-        return True
-
-    def apply_effects(self):
-        # Move them into `worn` (from inventory), then deliver the gag. Not fatal.
-        if self.SLIPPERS in self.player.inventory:
-            self.player.wear(self.player.inventory[self.SLIPPERS])
-        self.parser.ok(self.GAG)
-
-
-class WearGlassSlippers(_WearSlippers):
-    ACTION_NAME = "wear glass slippers"
-    ACTION_DESCRIPTION = "Wear the glass slippers"
-    ACTION_ALIASES = ["put on glass slippers", "put on the glass slippers"]
-    SLIPPERS = "glass slippers"
-    GAG = (
-        "You cram your size 9's inside the tortuous footwear. If you step lightly, "
-        "it doesn't hurt... much."
-    )
-
-
-class WearRubySlippers(_WearSlippers):
-    ACTION_NAME = "wear ruby slippers"
-    ACTION_DESCRIPTION = "Wear the ruby slippers"
-    ACTION_ALIASES = ["put on ruby slippers", "put on the ruby slippers"]
-    SLIPPERS = "ruby slippers"
-    GAG = "You click your heels together. It does not send you back to Kansas."
+# The slippers and boots are ordinary WEARABLE items in the "feet" slot, so the
+# engine Wear action handles them: WEAR GLASS/RUBY SLIPPERS deliver their gag
+# (wear_text), WEAR BOOTS its line, and the slot rule means only one is worn at a
+# time -- "wear boots" while slippers are on is refused until you take them off.
+# (No custom wear actions needed -- this is the wear_slot generalization.)
 
 
 class KillSelf(actions.Action):
@@ -409,6 +384,104 @@ class BrushHorse(_TameHorse):
 
 
 # ---------------------------------------------------------------------------
+# The poacher + the deer (Slice 4b). Ride after the deer into the Deep Woods,
+# where a poacher has it in his sights. SHOOT POACHER (with the crossbow) saves
+# the deer (+5) and he flees, dropping his coin purse (+5 to take) and cloak.
+# Hesitate -- any committal action but shooting -- and the deer dies: THE END.
+# ---------------------------------------------------------------------------
+
+# Read-only actions that don't "let the poacher loose his arrow" (you may look).
+_DEER_SAFE_ACTIONS = {"examine", "describe", "inventory"}
+
+
+class FollowDeer(actions.Action):
+    """Ride after the deer (from the Old Woods) into the Deep Woods."""
+
+    ACTION_NAME = "follow deer"
+    ACTION_DESCRIPTION = "Ride after the deer"
+    ACTION_ALIASES = ["follow the deer", "chase deer", "follow doe", "enter deep woods"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Old Woods":
+            self.parser.fail("There's no deer to follow here.")
+            return False
+        if self.player.riding is None:
+            self.parser.fail("You'd never catch her on foot -- you'll need the horse.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You click your tongue and nudge the white mare down a hidden path into "
+            "the Deep Woods."
+        )
+        _relocate(self.game, self.player, "Deep Woods")
+
+
+class ShootPoacher(actions.Action):
+    """Loose the crossbow at the poacher -- he flees, dropping his purse + cloak,
+    and the deer is saved."""
+
+    ACTION_NAME = "shoot poacher"
+    ACTION_DESCRIPTION = "Fire the crossbow at the poacher"
+    ACTION_ALIASES = [
+        "shoot the poacher",
+        "fire at poacher",
+        "fire crossbow at poacher",
+        "shoot crossbow",
+        "shoot crossbow at poacher",
+        "threaten poacher",
+        "show crossbow",
+        "show crossbow to poacher",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.deep_woods = self.game.locations["Deep Woods"]
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is not self.deep_woods:
+            self.parser.fail("There's no poacher here.")
+            return False
+        if self.deep_woods.get_property("poacher_dealt"):
+            self.parser.fail("The poacher is already dealt with.")
+            return False
+        if not _is_holding(self.player, "crossbow"):
+            self.parser.fail("You have nothing to shoot him with.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.deep_woods.set_property("poacher_dealt", True)
+        poacher = self.game.characters.get("poacher")
+        if poacher is not None and poacher.location is self.deep_woods:
+            self.deep_woods.remove_character(poacher)
+        purse = _item(
+            "coin purse",
+            "a small coin purse",
+            "A few silver coins, each stamped with your father's face.",
+        ).make_container()
+        purse.add_item(_item("silver coins", "silver coins").make_stackable(3))
+        cloak = _item(
+            "cloak", "a stained cloak", "The poacher's stained traveling cloak."
+        )
+        self.deep_woods.add_item(purse)
+        self.deep_woods.add_item(cloak)
+        self.game.award(
+            "shoot",
+            5,
+            "You fire, pinning the poacher to a tree with your bolt! He thrashes free "
+            "and flees, dropping his coin purse and cloak. The doe, safe, nuzzles your "
+            "hand before bounding off -- as if to say thanks.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -571,6 +644,21 @@ def build_game() -> ActionCastle4:
 
     old_woods.add_block("enter", DismountBlock(old_woods))
 
+    # The Deep Woods north exit (-> Clearing) is barred until the poacher is
+    # dealt with (you can't ride past while he stalks the deer).
+    class PoacherBlock(blocks.Block):
+        def __init__(self, woods):
+            super().__init__(
+                "The poacher",
+                "You can't ride on while the poacher still stalks the deer.",
+            )
+            self.woods = woods
+
+        def is_blocked(self) -> bool:
+            return not self.woods.get_property("poacher_dealt")
+
+    deep_woods.add_block("north", PoacherBlock(deep_woods))
+
     # --- Items (fixtures + key objects; puzzle wiring comes in later slices) ---
     tower.add_item(
         _fixture(
@@ -613,12 +701,17 @@ def build_game() -> ActionCastle4:
             "A heavy door with a large iron ring for a handle.",
         )
     )
-    glass_slippers = _item(
-        "glass slippers", "a pair of glass slippers", "Glass? Yes, glass."
+    glass_slippers = _footwear(
+        "glass slippers",
+        "a pair of glass slippers",
+        "You cram your size 9's inside the tortuous footwear. If you step lightly, "
+        "it doesn't hurt... much.",
+        "Glass? Yes, glass.",
     )
-    ruby_slippers = _item(
+    ruby_slippers = _footwear(
         "ruby slippers",
         "a pair of ruby slippers",
+        "You click your heels together. It does not send you back to Kansas.",
         "There's no place like home? I guess.",
     )
     tower.add_item(glass_slippers)
@@ -641,12 +734,13 @@ def build_game() -> ActionCastle4:
         )
     )
     guardroom.add_item(footlocker)
-    boots = _item(
-        "army boots",
-        "a pair of army boots",
+    # Named "boots" so GET/WEAR BOOTS work as well as "army boots".
+    boots = _footwear(
+        "boots",
+        "a pair of old army boots",
+        "You lace up the army boots. Now you can actually walk.",
         "A little big, but your feet aren't petite.",
     )
-    boots.set_property(Property.WEARABLE, True)
     guardroom.add_item(boots)
     gardens.add_item(
         _fixture(
@@ -761,7 +855,11 @@ def build_game() -> ActionCastle4:
         "a sparkly gown",
         "Much layers. So sparkle. It weighs almost as much as you.",
     )
+    gown.set_property(Property.WEARABLE, True)
+    gown.set_property("wear_slot", "body")
     tiara = _item("tiara", "a jeweled tiara", "Pretty, but pinchy.")
+    tiara.set_property(Property.WEARABLE, True)
+    tiara.set_property("wear_slot", "head")
     player.inventory["gown"] = gown
     player.inventory["tiara"] = tiara
     player.wear(gown)
@@ -771,13 +869,13 @@ def build_game() -> ActionCastle4:
     custom_actions = [
         CutHair,
         TieRope,
-        WearGlassSlippers,
-        WearRubySlippers,
         KillSelf,
         PickApple,
         EatApple,
         GiveAppleToHorse,
         BrushHorse,
+        FollowDeer,
+        ShootPoacher,
     ]
     game = ActionCastle4(tower, player, characters, custom_actions)
 
@@ -807,7 +905,7 @@ def build_game() -> ActionCastle4:
     )
     game.add_trigger(
         "score_boots",
-        lambda g: "army boots" in g.player.worn and "boots" not in g._scored_keys,
+        lambda g: "boots" in g.player.worn and "boots" not in g._scored_keys,
         lambda g: g.award(
             "boots", 5, "Laced into the army boots, you can actually walk."
         ),
@@ -819,6 +917,56 @@ def build_game() -> ActionCastle4:
         and g.player.location.name in ("Gardens", "Drawbridge")
         and "escape" not in g._scored_keys,
         lambda g: g.award("escape", 5, "You're free of that blasted tower!"),
+        repeatable=True,
+    )
+    deep_woods = game.locations["Deep Woods"]
+    game.add_trigger(
+        "score_purse",
+        lambda g: _is_holding(g.player, "coin purse") and "purse" not in g._scored_keys,
+        lambda g: g.award("purse", 5, "You pocket the poacher's coin purse."),
+        repeatable=True,
+    )
+
+    # The deer flees into the Deep Woods and the poacher confrontation begins,
+    # with one grace turn (you arrive, then must act). Hesitating -- any committal
+    # action but shooting -- lets him kill the deer and you're lost: THE END.
+    def deer_confrontation(g):
+        deer = g.characters.get("deer")
+        if deer is not None and deer.location is not deep_woods:
+            if deer.location is not None:
+                deer.location.remove_character(deer)
+            deep_woods.add_character(deer)
+        if not deep_woods.get_property(
+            "confront_started"
+        ) and not deep_woods.get_property("poacher_dealt"):
+            deep_woods.set_property("confront_started", True)
+            deep_woods.set_property("confront_turn", g.turn)
+
+    game.add_trigger(
+        "deer_confrontation",
+        lambda g: g.player.location is deep_woods,
+        deer_confrontation,
+        repeatable=True,
+    )
+
+    def _poacher_kills_deer(g):
+        if deep_woods.get_property("poacher_dealt"):
+            return False
+        if not deep_woods.get_property("confront_started"):
+            return False
+        if g.turn <= deep_woods.get_property("confront_turn"):
+            return False  # the grace turn (you just rode in)
+        last = g.parser.last_action
+        return last is not None and last.action_name() not in _DEER_SAFE_ACTIONS
+
+    game.add_trigger(
+        "poacher_kills_deer",
+        _poacher_kills_deer,
+        lambda g: _die(
+            g,
+            "You hesitate, and the poacher looses his arrow -- the doe drops. With no "
+            "guide, you wander the Deep Woods until you are hopelessly lost. THE END.",
+        ),
         repeatable=True,
     )
 
