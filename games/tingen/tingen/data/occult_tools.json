@@ -1,0 +1,39 @@
+{
+	"divination": {
+		"description": "Cast the lots and read the omens — points you toward where the corruption is gathering.",
+		"name": "Divination",
+		"item_id": "divination_kit",
+		"fatigue_cost": 8.0,
+		"attention_cost": 4.0,
+		"ingredient_cost": { "candle": 1 },
+		"uses_per_run": -1
+	},
+	"residue_sight": {
+		"description": "See the spiritual residue clinging to a place or object; recent presences linger there.",
+		"name": "Residue Sight",
+		"item_id": "spirit_lens",
+		"fatigue_cost": 6.0,
+		"attention_cost": 2.0,
+		"ingredient_cost": {},
+		"uses_per_run": -1
+	},
+	"dream_fragments": {
+		"description": "Sift a sleeper's dream for fragments of what they witnessed.",
+		"name": "Dream Fragments",
+		"item_id": "dream_draught",
+		"fatigue_cost": 12.0,
+		"attention_cost": 0.0,
+		"ingredient_cost": { "dream_herb": 1 },
+		"uses_per_run": -1,
+		"produces": { "dream_residue": 1 }
+	},
+	"gray_fog": {
+		"description": "Reconstruct a scene out of the Gray Fog — vivid, but it draws the Fog's attention to you.",
+		"name": "Gray-Fog Reconstruction",
+		"item_id": "gray_fog_focus",
+		"fatigue_cost": 15.0,
+		"attention_cost": 8.0,
+		"ingredient_cost": { "consecrated_chalk": 1 },
+		"uses_per_run": 3
+	}
+}

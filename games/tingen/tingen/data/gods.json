@@ -1,0 +1,38 @@
+{
+	"outer_god": {
+		"name": "The Descending One",
+		"name_zh": "外神",
+		"domain": ["descent", "gate", "void", "hunger", "ruin"],
+		"register": "ravenous",
+		"wrath": 1.0,
+		"opposes_cult": false,
+		"blurb": "The evil god the Iron Cross cell labors to pull into Tingen. It answers — but every gift widens the gate it is coming through."
+	},
+	"goddess_of_night": {
+		"name": "The Goddess of Night",
+		"name_zh": "黑夜女神",
+		"domain": ["night", "dream", "secrets", "shelter", "mercy"],
+		"register": "veiled",
+		"wrath": 0.4,
+		"opposes_cult": true,
+		"blurb": "Mistress of night and dream; the Church of Evernight shelters the fearful. She rewards the humble and the watchful."
+	},
+	"eternal_blazing_sun": {
+		"name": "The Eternal Blazing Sun",
+		"name_zh": "永恒烈阳",
+		"domain": ["sun", "fire", "judgment", "purge", "courage"],
+		"register": "burning",
+		"wrath": 0.8,
+		"opposes_cult": true,
+		"blurb": "Lord of sun and fire; the Church of the Sun purges corruption by flame. Zealous, and quick to punish the unclean."
+	},
+	"the_fool": {
+		"name": "The Fool",
+		"name_zh": "愚者",
+		"domain": ["fate", "mystery", "fortune", "travelers", "secrets"],
+		"register": "tarot",
+		"wrath": 0.3,
+		"opposes_cult": true,
+		"blurb": "The Mysterious Sovereign above the gray fog. Answers obliquely, in the language of the tarot — if it answers at all."
+	}
+}

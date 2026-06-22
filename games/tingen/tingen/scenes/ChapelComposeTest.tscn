@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://doqs3xx3e4vms"]
+
+[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/ground_test.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://caomhj8tyuxdp" path="res://assets/props/chapel_test.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://bmj1c5ncnobx8" path="res://assets/characters/klein_down.png" id="3"]
+[ext_resource type="Script" uid="uid://1kkeqbcocw01" path="res://scenes/_map_capture.gd" id="4"]
+
+[node name="ChapelComposeTest" type="Node2D" unique_id=1848017059]
+script = ExtResource("4")
+
+[node name="Ground" type="Sprite2D" parent="." unique_id=699656433]
+texture_filter = 2
+scale = Vector2(5, 5)
+texture = ExtResource("1")
+centered = false
+
+[node name="Chapel" type="Sprite2D" parent="." unique_id=644779239]
+texture_filter = 2
+position = Vector2(2094, 5062)
+texture = ExtResource("2")
+
+[node name="Klein" type="Sprite2D" parent="." unique_id=752351908]
+position = Vector2(2741, 5239)
+scale = Vector2(0.069, 0.069)
+texture = ExtResource("3")
+offset = Vector2(0, -470)
+
+[node name="Cam" type="Camera2D" parent="." unique_id=820897375]
+position = Vector2(2531, 5218)
+zoom = Vector2(1.5, 1.5)

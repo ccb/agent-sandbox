@@ -1,0 +1,64 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/cathedral_crypt.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="h_wall"]
+size = Vector2(1382, 24)
+
+[sub_resource type="RectangleShape2D" id="v_wall"]
+size = Vector2(24, 922)
+
+[sub_resource type="RectangleShape2D" id="p_stair"]
+size = Vector2(160, 160)
+
+[node name="CathedralCrypt" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.02, 0.02, 0.04, 1)
+polygon = PackedVector2Array(-600, -600, 2000, -600, 2000, 1520, -600, 1520)
+
+[node name="Floor" type="Sprite2D" parent="."]
+texture_filter = 2
+centered = false
+scale = Vector2(0.9, 0.9)
+texture = ExtResource("1")
+
+[node name="Walls" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Walls"]
+position = Vector2(691, 6)
+shape = SubResource("h_wall")
+
+[node name="WBottom" type="CollisionShape2D" parent="Walls"]
+position = Vector2(691, 916)
+shape = SubResource("h_wall")
+
+[node name="WLeft" type="CollisionShape2D" parent="Walls"]
+position = Vector2(6, 461)
+shape = SubResource("v_wall")
+
+[node name="WRight" type="CollisionShape2D" parent="Walls"]
+position = Vector2(1376, 461)
+shape = SubResource("v_wall")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(691, 500)
+
+[node name="StairsUp" type="Area2D" parent="."]
+position = Vector2(1260, 120)
+script = ExtResource("3")
+target_scene = "res://scenes/CathedralNave.tscn"
+
+[node name="StairShape" type="CollisionShape2D" parent="StairsUp"]
+shape = SubResource("p_stair")
+
+[node name="HintLayer" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="HintLayer"]
+offset_left = 40.0
+offset_top = 24.0
+offset_right = 1040.0
+offset_bottom = 48.0
+text = "The crypt — sealed-artifact vault & ritual site    ·    top-right stairs → back up to the nave"

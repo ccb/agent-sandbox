@@ -1,0 +1,112 @@
+[
+	{
+		"id": "spirit_pendulum",
+		"name": "Spirit Pendulum",
+		"category": "divination_focus",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["divination", "focus", "reusable"],
+		"description": "A brass plumb on a fine chain; it leans toward what the spirit world notices.",
+		"on_use": null
+	},
+	{
+		"id": "divination_kit",
+		"name": "Divination Kit",
+		"category": "occult_tool",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["divination", "tool"],
+		"description": "Cards, chalk, and a steady hand for reading the city's drift.",
+		"on_use": null
+	},
+	{
+		"id": "spirit_lens",
+		"name": "Spirit Lens",
+		"category": "occult_tool",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["residue", "tool"],
+		"description": "A smoked glass that shows what lingers where a thing once happened.",
+		"on_use": null
+	},
+	{
+		"id": "dream_draught",
+		"name": "Dream Draught",
+		"category": "occult_tool",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["dream", "tool"],
+		"description": "A bitter tincture that lets sleep do the connecting.",
+		"on_use": null
+	},
+	{
+		"id": "gray_fog_focus",
+		"name": "Gray-Fog Focus",
+		"category": "occult_tool",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["gray_fog", "tool"],
+		"description": "A focus that briefly steadies a corner of the Gray Fog for reading.",
+		"on_use": null
+	},
+	{
+		"id": "consecrated_chalk",
+		"name": "Consecrated Chalk",
+		"category": "ingredient",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["ritual", "marking"],
+		"description": "For drawing a ritual circle that holds its shape against the Gray Fog.",
+		"on_use": null
+	},
+	{
+		"id": "candle",
+		"name": "Tallow Candle",
+		"category": "ingredient",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["ritual", "light"],
+		"description": "Cheap, smoky, and necessary for the smallest divinations.",
+		"on_use": null
+	},
+	{
+		"id": "dream_herb",
+		"name": "Dream Herb",
+		"category": "ingredient",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["ritual", "dream"],
+		"description": "Dried gray leaves that thin the wall between waking and sleep.",
+		"on_use": null
+	},
+	{
+		"id": "dream_residue",
+		"name": "Dream Residue",
+		"category": "ingredient",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["ritual", "byproduct"],
+		"description": "A faint condensate left after a dream-reading; still potent.",
+		"on_use": null
+	},
+	{
+		"id": "ritual_salt",
+		"name": "Ritual Salt",
+		"category": "ingredient",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["ritual", "summoning"],
+		"description": "Coarse gray salt the cell hoards for the warehouse circle.",
+		"on_use": null
+	},
+	{
+		"id": "rye_bread",
+		"name": "Rye Bread",
+		"category": "sustenance",
+		"stackable": true,
+		"max_stack": 5,
+		"tags": ["food"],
+		"description": "Dense, sour, filling.",
+		"on_use": { "effect": "adjust_pressure", "var": "fatigue", "delta": -12.0 }
+	}
+]

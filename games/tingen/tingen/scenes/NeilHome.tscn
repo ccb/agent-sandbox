@@ -1,0 +1,164 @@
+[gd_scene format=3 uid="uid://jvfwgxje07d"]
+
+[ext_resource type="PackedScene" uid="uid://b68b38m8u16ym" path="res://scenes/Interactable.tscn" id="interactable"]
+[ext_resource type="Texture2D" uid="uid://d26kxjt8gqcfa" path="res://assets/characters/archive_clerk_finch.png" id="neil_art"]
+[ext_resource type="Texture2D" uid="uid://c2uw2lmj61t08" path="res://assets/backgrounds/neil_home_normal.png" id="neil_bg"]
+[ext_resource type="PackedScene" uid="uid://cujesusiidnnk" path="res://scenes/Player.tscn" id="player"]
+[ext_resource type="Script" path="res://src/RoomState.gd" id="roomstate"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/neil_home_lost_control.png" id="neil_lost"]
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(896, 48)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(54, 598)
+
+[sub_resource type="RectangleShape2D" id="s_piano"]
+size = Vector2(230, 70)
+
+[sub_resource type="RectangleShape2D" id="s_cabinet"]
+size = Vector2(190, 70)
+
+[sub_resource type="RectangleShape2D" id="s_table"]
+size = Vector2(190, 120)
+
+[sub_resource type="RectangleShape2D" id="s_astro"]
+size = Vector2(150, 140)
+
+[sub_resource type="RectangleShape2D" id="s_chair"]
+size = Vector2(90, 80)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(110, 100)
+
+[node name="NeilHome" type="Node2D" unique_id=658597379]
+
+[node name="Background" type="Polygon2D" parent="." unique_id=933827517]
+color = Color(0.07, 0.05, 0.04, 1)
+polygon = PackedVector2Array(-200, -200, 1100, -200, 1100, 800, -200, 800)
+
+[node name="RoomPhoto" type="Sprite2D" parent="." unique_id=1666329348]
+scale = Vector2(0.5837, 0.5837)
+texture = ExtResource("neil_bg")
+centered = false
+
+[node name="Solids" type="StaticBody2D" parent="." unique_id=100231225]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids" unique_id=1835384940]
+position = Vector2(448, 24)
+shape = SubResource("wall_h")
+
+[node name="WBottom" type="CollisionShape2D" parent="Solids" unique_id=1422425559]
+position = Vector2(448, 574)
+shape = SubResource("wall_h")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids" unique_id=781306398]
+position = Vector2(27, 299)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids" unique_id=1188651801]
+position = Vector2(869, 299)
+shape = SubResource("wall_v")
+
+[node name="FPiano" type="CollisionShape2D" parent="Solids" unique_id=1043056238]
+position = Vector2(448, 120)
+shape = SubResource("s_piano")
+
+[node name="FCabinet" type="CollisionShape2D" parent="Solids" unique_id=896494020]
+position = Vector2(636, 120)
+shape = SubResource("s_cabinet")
+
+[node name="FShelfTL" type="CollisionShape2D" parent="Solids" unique_id=201212177]
+position = Vector2(233, 110)
+shape = SubResource("s_cabinet")
+
+[node name="FTable" type="CollisionShape2D" parent="Solids" unique_id=2031837848]
+position = Vector2(269, 311)
+shape = SubResource("s_table")
+
+[node name="FAstro" type="CollisionShape2D" parent="Solids" unique_id=144763001]
+position = Vector2(762, 257)
+shape = SubResource("s_astro")
+
+[node name="FChairTL" type="CollisionShape2D" parent="Solids" unique_id=2116992353]
+position = Vector2(179, 200)
+shape = SubResource("s_chair")
+
+[node name="FDeskR" type="CollisionShape2D" parent="Solids" unique_id=403404753]
+position = Vector2(806, 377)
+shape = SubResource("s_desk")
+
+[node name="Player" parent="." unique_id=1146968580 instance=ExtResource("player")]
+position = Vector2(448, 490)
+
+[node name="RoomCam" type="Camera2D" parent="." unique_id=42602351]
+position = Vector2(448, 299)
+zoom = Vector2(1.2, 1.2)
+
+[node name="OldNeil" parent="." unique_id=358914912 instance=ExtResource("interactable")]
+position = Vector2(390, 311)
+prompt_text = "Speak to Old Neil"
+icon = ExtResource("neil_art")
+icon_px = 92.0
+dialogue_id = "old_neil"
+agent_id = "old_neil"
+
+[node name="PianoPortrait" parent="." unique_id=1235764244 instance=ExtResource("interactable")]
+position = Vector2(448, 180)
+thought = "她的画像挂在钢琴上方，纤尘不染。 (Her portrait hangs above the piano, kept free of dust — a shrine to someone long dead.)"
+prompt_text = "Look at the portrait above the piano"
+tint = Color(0.7, 0.66, 0.6, 0)
+clue_id = "celeste_grief"
+
+[node name="VialCabinet" parent="." unique_id=913718727 instance=ExtResource("interactable")]
+position = Vector2(636, 185)
+thought = "一排排标着日期的小瓶，暗红——是他自己的血。 (Rows of small dated vials of dark red — his own blood, drawn in careful measures.)"
+prompt_text = "Examine the cabinet of vials"
+tint = Color(0.7, 0.66, 0.6, 0)
+clue_id = "stored_blood"
+
+[node name="Worktable" parent="." unique_id=1090497293 instance=ExtResource("interactable")]
+position = Vector2(269, 390)
+thought = "蒸馏器、盐，还有一本摊开的禁忌图谱——“炼成生命”。 (Retorts, salts, and an open diagram of something forbidden: 'Alchemical Life.')"
+prompt_text = "Study the workbench"
+tint = Color(0.7, 0.66, 0.6, 0)
+clue_id = "alchemical_life_ritual"
+
+[node name="LettersDesk" parent="." unique_id=176757284 instance=ExtResource("interactable")]
+position = Vector2(760, 430)
+thought = "二十年的信，写给同一个人，每一封都记着又一次失败。 (Twenty years of letters to the same woman, each recording another failure.)"
+prompt_text = "Read the scattered letters"
+tint = Color(0.7, 0.66, 0.6, 0)
+clue_id = "neils_obsession"
+
+[node name="Door" parent="." unique_id=1446204110 instance=ExtResource("interactable")]
+position = Vector2(430, 548)
+prompt_text = "Leave — out to the city"
+tint = Color(0.7, 0.66, 0.6, 0)
+target_scene = "res://scenes/City.tscn"
+
+[node name="RoomState" type="Node" parent="."]
+script = ExtResource("roomstate")
+room_photo_path = NodePath("../RoomPhoto")
+old_neil_path = NodePath("../OldNeil")
+normal_texture = ExtResource("neil_bg")
+lost_texture = ExtResource("neil_lost")
+corruption_threshold = 60.0
+
+[node name="RitualTrigger" parent="." instance=ExtResource("interactable")]
+position = Vector2(560, 360)
+prompt_text = "Disturb the ritual focus"
+tint = Color(0.9, 0.15, 0.5, 0)
+room_state_toggle = true
+
+[node name="Mark" type="Polygon2D" parent="RitualTrigger"]
+color = Color(0.9, 0.15, 0.5, 0.85)
+polygon = PackedVector2Array(-26, -26, 26, -26, 26, 26, -26, 26)
+
+[node name="Hint" type="Label" parent="." unique_id=1867587939]
+offset_left = 300.0
+offset_top = 24.0
+offset_right = 600.0
+offset_bottom = 44.0
+text = "WASD / Arrows to move   .   E to interact"
+horizontal_alignment = 1

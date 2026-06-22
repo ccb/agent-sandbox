@@ -1,0 +1,132 @@
+[gd_scene load_steps=11 format=3 uid="uid://b1tngnhq000001"]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/hq_interior.png" id="hq_bg"]
+[ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="interactable"]
+[ext_resource type="Texture2D" path="res://assets/characters/nighthawk_captain.png" id="cap_art"]
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(896, 48)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(54, 597)
+
+[sub_resource type="RectangleShape2D" id="s_table"]
+size = Vector2(180, 120)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(120, 92)
+
+[sub_resource type="RectangleShape2D" id="s_cabinet"]
+size = Vector2(200, 80)
+
+[sub_resource type="RectangleShape2D" id="s_apparatus"]
+size = Vector2(120, 80)
+
+[node name="NighthawksHQ" type="Node2D"]
+y_sort_enabled = false
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.06, 0.05, 0.04, 1)
+polygon = PackedVector2Array(-200, -200, 1100, -200, 1100, 800, -200, 800)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+centered = false
+texture = ExtResource("hq_bg")
+scale = Vector2(0.5833, 0.5833)
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 24)
+shape = SubResource("wall_h")
+
+[node name="WBottom" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 573)
+shape = SubResource("wall_h")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(27, 298)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(869, 298)
+shape = SubResource("wall_v")
+
+[node name="FTable" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 250)
+shape = SubResource("s_table")
+
+[node name="FDeskTL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(215, 227)
+shape = SubResource("s_desk")
+
+[node name="FDeskBL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(215, 376)
+shape = SubResource("s_desk")
+
+[node name="FDeskTR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(681, 227)
+shape = SubResource("s_desk")
+
+[node name="FDeskBR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(681, 376)
+shape = SubResource("s_desk")
+
+[node name="FCabinetL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(193, 90)
+shape = SubResource("s_cabinet")
+
+[node name="FCabinetR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(703, 90)
+shape = SubResource("s_cabinet")
+
+[node name="FApparatus" type="CollisionShape2D" parent="Solids"]
+position = Vector2(708, 507)
+shape = SubResource("s_apparatus")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+position = Vector2(448, 470)
+
+[node name="Sprite2D" parent="Player" index="0"]
+scale = Vector2(0.073, 0.073)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(448, 298)
+zoom = Vector2(1.2, 1.2)
+
+[node name="Captain" parent="." instance=ExtResource("interactable")]
+position = Vector2(448, 315)
+prompt_text = "Talk to the Captain"
+icon = ExtResource("cap_art")
+icon_px = 90.0
+dialogue_id = "captain"
+
+[node name="CaseBoard" parent="." instance=ExtResource("interactable")]
+position = Vector2(448, 150)
+thought = "线索：值夜者的调查墙——教会、笔记本、还有我。 (The Nighthawks' case wall: the Church, the notebook, and me, pinned in red thread.)"
+prompt_text = "Examine the case board"
+tint = Color(0.7, 0.72, 0.78, 0)
+
+[node name="Records" parent="." instance=ExtResource("interactable")]
+position = Vector2(193, 150)
+thought = "值夜者的档案柜，按教区归档。 (Nighthawk records, filed by parish — names the Church would rather forget.)"
+prompt_text = "Search the records"
+tint = Color(0.7, 0.72, 0.78, 0)
+
+[node name="Door" parent="." instance=ExtResource("interactable")]
+position = Vector2(448, 525)
+prompt_text = "Leave — out to the city"
+tint = Color(0.7, 0.72, 0.78, 0)
+target_scene = "res://scenes/CityBlocks.tscn"
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 300.0
+offset_top = 24.0
+offset_right = 600.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "WASD / Arrows to move   .   E to interact"

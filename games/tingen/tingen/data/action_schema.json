@@ -1,0 +1,15 @@
+{
+	"verbs": {
+		"move_to": ["target"],
+		"talk_to": ["agent", "topic"],
+		"gather_item": ["item_id"],
+		"perform_ritual_step": ["step"],
+		"hide": [],
+		"flee": ["from"],
+		"attack": ["target"],
+		"recruit": ["agent"],
+		"report": ["to", "info"],
+		"pray": ["god", "prayer"],
+		"idle": []
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"summoning_descent": {
+		"name": "The Descent",
+		"actor": "cult",
+		"description": "The Iron Cross cell's rite to call the descending god (外神) into Tingen. Each ingredient binds another thread of the gate; the final step demands the marked sacrifice.",
+		"ingredients": { "ritual_salt": 3, "consecrated_chalk": 2, "candle": 3 },
+		"steps": [
+			"Inscribe the consecrated circle in chalk.",
+			"Set and light the three candles at its points.",
+			"Lay the salt wards and speak the descending name.",
+			"Offer the marked sacrifice to open the gate."
+		]
+	}
+}

@@ -1,0 +1,72 @@
+[
+	{
+		"id": "lamp_gutters_out",
+		"title": "A street lamp gutters out",
+		"body": "Down Iron Cross Street a gas lamp dies on its own. Passers-by pretend not to notice.",
+		"weight": 1.0,
+		"cooldown": 2,
+		"conditions": [],
+		"effects": [
+			{ "type": "pressure", "target": "attention", "delta": 2.0 },
+			{ "type": "notify", "channel": "ambient" }
+		]
+	},
+	{
+		"id": "harbor_rumor",
+		"title": "Dock rumor reaches you",
+		"body": "Sailors whisper of a barge that unloaded crates after curfew and left no manifest.",
+		"weight": 1.2,
+		"cooldown": 3,
+		"conditions": [
+			{ "type": "stage_in", "value": ["awakening", "investigation"] }
+		],
+		"effects": [
+			{ "type": "pressure", "target": "cult_readiness", "delta": 3.0 },
+			{ "type": "lead", "text": "Find the unlisted barge at the harbor." },
+			{ "type": "notify", "channel": "lead" }
+		]
+	},
+	{
+		"id": "panic_in_market",
+		"title": "Panic in the night market",
+		"body": "A woman screams that her reflection 'turned to look at her'. The crowd scatters.",
+		"weight": 1.5,
+		"cooldown": 4,
+		"conditions": [
+			{ "type": "pressure_gte", "target": "corruption", "value": 30 }
+		],
+		"effects": [
+			{ "type": "pressure", "target": "panic", "delta": 8.0 },
+			{ "type": "pressure", "target": "corruption", "delta": 2.0 },
+			{ "type": "notify", "channel": "alert" }
+		]
+	},
+	{
+		"id": "beyond_pressure",
+		"title": "The Beyond presses closer",
+		"body": "For a heartbeat every shadow in the district points the same wrong way.",
+		"weight": 2.0,
+		"cooldown": 5,
+		"conditions": [
+			{ "type": "pressure_gte", "target": "cult_readiness", "value": 60 }
+		],
+		"effects": [
+			{ "type": "pressure", "target": "corruption", "delta": 5.0 },
+			{ "type": "pressure", "target": "attention", "delta": 6.0 },
+			{ "type": "stage_hint", "text": "The ritual is near. Pressure is climbing fast." },
+			{ "type": "notify", "channel": "alert" }
+		]
+	},
+	{
+		"id": "quiet_watch",
+		"title": "A quiet watch",
+		"body": "Nothing stirs. The fatigue of the long night settles into your shoulders.",
+		"weight": 0.8,
+		"cooldown": 1,
+		"conditions": [],
+		"effects": [
+			{ "type": "pressure", "target": "fatigue", "delta": 1.0 },
+			{ "type": "notify", "channel": "ambient" }
+		]
+	}
+]

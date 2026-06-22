@@ -1,0 +1,157 @@
+[gd_scene format=3 uid="uid://cujes0uqfyvnk"]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/university_archive.png" id="arc_bg"]
+[ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="interactable"]
+[ext_resource type="Texture2D" path="res://assets/characters/archive_clerk_finch.png" id="finch_art"]
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(896, 48)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(54, 597)
+
+[sub_resource type="RectangleShape2D" id="s_stack"]
+size = Vector2(180, 58)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(280, 54)
+
+[sub_resource type="RectangleShape2D" id="s_table"]
+size = Vector2(175, 62)
+
+[sub_resource type="RectangleShape2D" id="s_catalog"]
+size = Vector2(124, 62)
+
+[node name="UniversityArchive" type="Node2D"]
+y_sort_enabled = false
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.07, 0.05, 0.04, 1)
+polygon = PackedVector2Array(-200, -200, 1100, -200, 1100, 800, -200, 800)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+centered = false
+texture = ExtResource("arc_bg")
+scale = Vector2(0.5833, 0.5833)
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 24)
+shape = SubResource("wall_h")
+
+[node name="WBottom" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 573)
+shape = SubResource("wall_h")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(27, 298)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(869, 298)
+shape = SubResource("wall_v")
+
+[node name="SR1C1" type="CollisionShape2D" parent="Solids"]
+position = Vector2(160, 73)
+shape = SubResource("s_stack")
+
+[node name="SR1C2" type="CollisionShape2D" parent="Solids"]
+position = Vector2(390, 73)
+shape = SubResource("s_stack")
+
+[node name="SR1C3" type="CollisionShape2D" parent="Solids"]
+position = Vector2(628, 73)
+shape = SubResource("s_stack")
+
+[node name="SR2C1" type="CollisionShape2D" parent="Solids"]
+position = Vector2(160, 170)
+shape = SubResource("s_stack")
+
+[node name="SR2C2" type="CollisionShape2D" parent="Solids"]
+position = Vector2(390, 170)
+shape = SubResource("s_stack")
+
+[node name="SR2C3" type="CollisionShape2D" parent="Solids"]
+position = Vector2(628, 170)
+shape = SubResource("s_stack")
+
+[node name="SR3C1" type="CollisionShape2D" parent="Solids"]
+position = Vector2(160, 278)
+shape = SubResource("s_stack")
+
+[node name="SR3C2" type="CollisionShape2D" parent="Solids"]
+position = Vector2(390, 278)
+shape = SubResource("s_stack")
+
+[node name="SR3C3" type="CollisionShape2D" parent="Solids"]
+position = Vector2(628, 278)
+shape = SubResource("s_stack")
+
+[node name="FDesk" type="CollisionShape2D" parent="Solids"]
+position = Vector2(446, 458)
+shape = SubResource("s_desk")
+
+[node name="FTable" type="CollisionShape2D" parent="Solids"]
+position = Vector2(145, 460)
+shape = SubResource("s_table")
+
+[node name="FCatalog" type="CollisionShape2D" parent="Solids"]
+position = Vector2(683, 448)
+shape = SubResource("s_catalog")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+position = Vector2(446, 525)
+
+[node name="Sprite2D" parent="Player" index="0"]
+scale = Vector2(0.073, 0.073)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(448, 298)
+zoom = Vector2(1.2, 1.2)
+
+[node name="Finch" parent="." instance=ExtResource("interactable")]
+position = Vector2(445, 465)
+prompt_text = "Speak to the records clerk"
+icon = ExtResource("finch_art")
+icon_px = 90.0
+dialogue_id = "finch"
+
+[node name="CardCatalog" parent="." instance=ExtResource("interactable")]
+position = Vector2(683, 490)
+thought = "卡片目录里确有其人——安提哥努斯，一位早已作古的信徒。索书号还在，架上却没有那本书。 (The card catalogue does list him — Antigonus, a devotee long dead. The call number remains; the book is gone from the shelf.)"
+prompt_text = "Read the card catalogue"
+tint = Color(0.7, 0.72, 0.78, 0)
+clue_id = "archive_antigonus"
+
+[node name="RestrictedShelf" parent="." instance=ExtResource("interactable")]
+position = Vector2(511, 170)
+thought = "禁阅架上空了一格，尘影边缘还很新。有人刚把安提哥努斯的卷册取走，就在我前头。 (One slot on the restricted shelf sits empty, its dust-shadow still sharp. Someone lifted Antigonus' volume only just ahead of me.)"
+prompt_text = "Examine the restricted shelf"
+tint = Color(0.7, 0.72, 0.78, 0)
+clue_id = "restricted_volume_missing"
+
+[node name="ReadingDeskNotes" parent="." instance=ExtResource("interactable")]
+position = Vector2(145, 495)
+thought = "废弃的旁注，一行接一行：读过这本笔记的人——韦尔奇和他的同伴——一个个发疯，然后死去。名单的尽头，是韦尔奇的寓所。 (Abandoned marginalia, line after line: every reader of this notebook — Welch and his circle — driven mad, then dead. The list ends at Welch's lodging.)"
+prompt_text = "Read the abandoned notes"
+tint = Color(0.7, 0.72, 0.78, 0)
+clue_id = "contamination_chain"
+
+[node name="Door" parent="." instance=ExtResource("interactable")]
+position = Vector2(446, 548)
+prompt_text = "Leave — back to the quad"
+tint = Color(0.7, 0.72, 0.78, 0)
+target_scene = "res://scenes/CityBlocks.tscn"
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 300.0
+offset_top = 24.0
+offset_right = 600.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "WASD / Arrows to move   .   E to interact"
