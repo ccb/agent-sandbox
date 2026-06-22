@@ -105,6 +105,14 @@ def _item(name, description, examine_text=""):
     return things.Item(name, description, examine_text or description)
 
 
+# The gray ooze drops and digests you if you disturb the lockbox while it lives.
+_OOZE_DEATH = (
+    "Something slimy and wet drops from the ceiling and engulfs you in corrosive "
+    "gray slime. You try to scream, but no sound comes out as you are slowly "
+    "dissolved and digested. THE END."
+)
+
+
 # ---------------------------------------------------------------------------
 # Game subclass: scoring + ending
 # ---------------------------------------------------------------------------
@@ -1113,6 +1121,195 @@ class GiveCrown(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The gray ooze + the crown: an ooze lurks on the Dark Corridor ceiling; freeze
+# it with the wizard's wand, then pick the lockbox for the gold crown (the
+# queen's tribute). Disturbing the lockbox while the ooze lives is fatal.
+# ---------------------------------------------------------------------------
+
+
+class LookUp(actions.Action):
+    """Look at the ceiling -- in the Dark Corridor, that reveals the gray ooze."""
+
+    ACTION_NAME = "look up"
+    ACTION_DESCRIPTION = "Look up at the ceiling"
+    ACTION_ALIASES = [
+        "look ceiling",
+        "look at ceiling",
+        "look at the ceiling",
+        "examine ceiling",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        if loc is not None and loc.name == "Dark Corridor":
+            loc.set_property("ooze_revealed", True)
+            self.parser.ok(
+                "Looking up, you see an undulating mass of translucent gray "
+                "protoplasm clinging to the ceiling, almost invisible in the "
+                "flickering lantern light. A gray ooze!"
+            )
+        else:
+            self.parser.ok("You look up. Nothing out of the ordinary.")
+
+
+class UseWand(actions.Action):
+    """Freeze the gray ooze solid with the wizard's icy wand."""
+
+    ACTION_NAME = "use wand"
+    ACTION_DESCRIPTION = "Use the icy wand on the ooze"
+    ACTION_ALIASES = [
+        "use wand on ooze",
+        "use the wand",
+        "use wand on the ooze",
+        "use the wand on the ooze",
+        "freeze ooze",
+        "zap ooze",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Dark Corridor":
+            self.parser.fail("There's nothing here to use the wand on.")
+            return False
+        if not _is_holding(self.player, "wand"):
+            self.parser.fail("You have no wand.")
+            return False
+        if loc.get_property("ooze_frozen"):
+            self.parser.fail("The ooze is already frozen.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("ooze_frozen", True)
+        self.game.award(
+            "ooze",
+            10,
+            "A ray of frost from the wand strikes the ceiling. The gray blob "
+            "freezes solid, falls to the floor and shatters.",
+        )
+
+
+class TakeLockbox(actions.Action):
+    """Grab the lockbox from the severed arms -- fatal while the ooze lurks."""
+
+    ACTION_NAME = "take lockbox"
+    ACTION_DESCRIPTION = "Take the lockbox"
+    ACTION_ALIASES = ["take the lockbox", "get lockbox", "take box", "grab lockbox"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Dark Corridor":
+            self.parser.fail("There's no lockbox here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if not self.player.location.get_property("ooze_frozen"):
+            _die(self.game, _OOZE_DEATH)
+            return
+        self.parser.ok("The lockbox is locked tight. You'll have to pick the lock.")
+
+
+class PickLock(actions.Action):
+    """Pick the lockbox (needs lockpicks) -- inside is the gold crown. Fatal if
+    the ooze hasn't been dealt with first."""
+
+    ACTION_NAME = "pick lock"
+    ACTION_DESCRIPTION = "Pick the lock on the lockbox"
+    ACTION_ALIASES = [
+        "pick the lock",
+        "pick lockbox",
+        "pick the lockbox",
+        "unlock lockbox",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Dark Corridor":
+            self.parser.fail("There's no lock here to pick.")
+            return False
+        if not _is_holding(self.player, "lockpicks"):
+            self.parser.fail("You have no lockpicks.")
+            return False
+        lockbox = loc.items.get("lockbox")
+        if lockbox is None or "crown" not in lockbox.contents:
+            self.parser.fail("You've already emptied the lockbox.")
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        if not loc.get_property("ooze_frozen"):
+            _die(self.game, _OOZE_DEATH)
+            return
+        lockbox = loc.items["lockbox"]
+        crown = lockbox.contents["crown"]
+        crown.set_property("gettable", True)
+        lockbox.remove_item(crown)
+        lockbox.set_property("is_closed", False)
+        self.player.accept_item(crown)
+        self.parser.ok(
+            "It takes time, but you pick the lock. Inside is a gold crown -- you "
+            "take it."
+        )
+
+
+class PushStatue(actions.Action):
+    """Tampering with the Vault statue springs a slide trap to the caves below."""
+
+    ACTION_NAME = "push statue"
+    ACTION_DESCRIPTION = "Push (or pull) the stone statue"
+    ACTION_ALIASES = [
+        "pull statue",
+        "move statue",
+        "push the statue",
+        "pull the statue",
+        "tamper with statue",
+        "shove statue",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Vault":
+            self.parser.fail("There's no statue here to push.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.set_property("trap_sprung", True)
+        self.game.locations["Mushroom Garden"].set_property("mushrooms_smashed", True)
+        self.parser.ok(
+            "A trapdoor opens beneath your feet, dropping you down a steep chute. "
+            "You land in a heap atop a cluster of cave mushrooms -- they break your "
+            "fall, leaving only minor bruises."
+        )
+        _relocate(self.game, self.player, "Mushroom Garden")
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -1418,6 +1615,23 @@ def build_game() -> ActionCastle3:
             "A pair of severed arms clutching a small metal lockbox. The stone underneath is stained and corroded.",
         )
     )
+    # The lockbox holds the gold crown -- a closed fixture; PICK LOCK is the path
+    # (and a gray ooze on the ceiling kills the careless: see USE WAND / PickLock).
+    lockbox = _fixture(
+        "lockbox", "a small metal lockbox", "It's a box. It's locked. It's a lockbox."
+    )
+    lockbox.make_container()
+    lockbox.set_property("is_closed", True)
+    lockbox.add_item(
+        _item(
+            "crown",
+            "a gold crown",
+            "It must have belonged to the ruler of Action Castle -- solid gold, "
+            "encrusted with gems, and fit for a king... or a queen.",
+        )
+    )
+    dark_corridor.add_item(lockbox)
+    dark_corridor.set_property("ooze_frozen", False)
     torture_chamber.add_item(
         _fixture(
             "iron maiden",
@@ -1592,6 +1806,11 @@ def build_game() -> ActionCastle3:
         ShowBaby,
         GiveBaby,
         GiveCrown,
+        LookUp,
+        UseWand,
+        TakeLockbox,
+        PickLock,
+        PushStatue,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
