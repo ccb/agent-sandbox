@@ -26,13 +26,11 @@ Recipes hold a factory callable, so they are runtime-only (re-registered by
 
 INGREDIENT MATCHING. An ``Ingredient`` matches a held item by ``name`` OR by a
 ``tag`` (any item whose ``tag`` property is truthy -- e.g. ``tag="plank"`` for a
-"2 planks" recipe). ``count`` consumes that many; because the engine keys an
-inventory by name (no two items share a name), ``count > 1`` only works with
-``tag`` matching -- that's the one Minecraft-style gap, and tags cover the real
-cases ("any 2 planks").
+"any 2 planks" recipe). ``count`` consumes that many, summed over the matching
+items' ``quantity``: a stackable named item (Item.make_stackable, #134) can
+supply ``count > 1`` from a single stack ("2 sticks"), and tag matches sum
+across distinct items.
 
-TODO(#134): support ``count > 1`` for same-named ingredients (a quantity/stack
-    model on Item) so recipes can require e.g. "2 sticks", not just tagged sets.
 TODO(#135): "known" recipes -- gate recipes on discovery (a recipe book / NPC),
     instead of every registered recipe always being craftable.
 """

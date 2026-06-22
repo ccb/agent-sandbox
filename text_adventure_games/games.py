@@ -491,7 +491,9 @@ class Game:
             description = "You see:"
             for item_name in self.player.location.items:
                 item = self.player.location.items[item_name]
-                description += f"\n * {item.name} - {item.description}"
+                qty = getattr(item, "quantity", 1)
+                count = f" (x{qty})" if qty > 1 else ""
+                description += f"\n * {item.name}{count} - {item.description}"
                 if self.give_hints:
                     special_commands = item.get_command_hints()
                     for cmd in special_commands:
