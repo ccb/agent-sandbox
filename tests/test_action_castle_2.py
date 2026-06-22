@@ -304,6 +304,55 @@ def test_addressing_the_dragon_is_not_mistaken_for_a_move():
         assert not _said(fresh, "does not have an exit"), bad
 
 
+# --- posed-prompt dialogue (#110): bare answers to the game's questions ----
+
+
+def test_bare_answers_drive_the_whole_champion_dialogue():
+    # Every dialogue fork now poses a prompt, so the player can answer in plain
+    # words instead of the CHOOSE/ANSWER/SAY verbs: "wits" (choice), "a wise
+    # man" (free-text riddle), "sword" (choice), "yes" (choice). The champion
+    # walkthrough still wins with all four replaced by their bare answers.
+    swap = {
+        "choose wits": "wits",
+        "answer riddle a wise man": "a wise man",
+        "choose sword": "sword",
+        "say yes": "yes",
+    }
+    cmds = [swap.get(c, c) for c in ac2.WALKTHROUGH_CHAMPION]
+    game, _ = _play(cmds)
+    assert game.is_won() and game.player.get_property("is_champion")
+
+
+def test_bare_steel_answers_the_dragon_and_is_fatal():
+    game, cap = _at_trove()
+    game.do_command("wake dragon")
+    game.do_command("steel")  # the choice prompt routes this to "choose steel"
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "breathes fire on you")
+
+
+def test_a_wrong_free_text_riddle_answer_is_fatal():
+    # The riddle is a free-text prompt: whatever you say is taken as the answer.
+    game, cap = _at_trove()
+    game.do_command("wake dragon")
+    game.do_command("wits")
+    game.do_command("a fool")  # forwarded to "answer riddle a fool" -> wrong
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "Wrong!")
+
+
+def test_dialogue_prompt_is_not_modal_and_expires_on_leaving():
+    game, cap = _at_trove()
+    game.do_command("wake dragon")
+    assert game.pending_prompt() is not None  # "wits or steel?" is posed
+    game.do_command("look")  # a real verb still works mid-conversation
+    assert not game.is_game_over()
+    assert game.pending_prompt() is not None  # look didn't answer it
+    game.do_command("north")  # walk away -> the question is moot
+    assert game.player.location.name == "Underground"
+    assert game.pending_prompt() is None
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory
