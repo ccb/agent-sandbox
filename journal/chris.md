@@ -423,3 +423,25 @@ Across AC3 the "each finding -> reusable engine feature" pattern held: it drove
 the Darkness block (#128), GET-from-carried-container (#130), and the whole
 crafting system (#136). 651 tests. Optional flavor left unported (noted in the
 docstring): topic dialogue, the telescope/journal hints, FIGHT BANDITS death.
+
+### #134 — opt-in item stacks/quantities (#148)
+
+The real blocker behind "a recipe needs 2 sticks" wasn't crafting -- it's that
+every holder keys items by name, so you can't hold two identical items at all.
+Rejected the big refactor (list/id-keyed holders); went with a quantity on Item.
+
+Item.quantity (default 1) + make_stackable(n). Stackable items merge on add
+across all three holders (inventory/container/location); a stack is one slot.
+The safety property: stacking is OPT-IN, so non-stackable items never merge or
+show counts and the name->item shape is unchanged -- zero regression risk, full
+suite stayed green by construction. Crafting sums quantity for availability and
+decrements stacks on consume, so Ingredient(count=2) works against a single
+named stack or across tag matches. (x N) in listings; quantity serializes.
+
+Shipped Tier 1+2; deferred Tier 3 (partial-count commands like "drop 2 sticks",
+which need parser number-handling). #135 (known/recipe-book recipes) still open.
+
+Also today: reviewed Alistair's PR #109 (5-agent replay + memory/reasoning UI) --
+green CI, all within generative-agents/, engine untouched; left for CCB to merge.
+Drafted a Slack reply to Frankie pointing him at the AC2/AC3 ports, their tests
+(the command spec), the journal, and the reusable engine features to build on.
