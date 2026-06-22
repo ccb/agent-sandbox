@@ -1,0 +1,86 @@
+[gd_scene format=3 uid="uid://bx4bm262xeqyl"]
+
+[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/ground_test.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://caomhj8tyuxdp" path="res://assets/props/chapel_test.png" id="2"]
+[ext_resource type="PackedScene" uid="uid://cujesusiidnnk" path="res://scenes/Player.tscn" id="3"]
+[ext_resource type="Script" uid="uid://db0lqqotc32a" path="res://src/Portal.gd" id="4"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_xw602"]
+radius = 383.047
+
+[sub_resource type="RectangleShape2D" id="h_edge"]
+size = Vector2(6270, 60)
+
+[sub_resource type="RectangleShape2D" id="v_edge"]
+size = Vector2(60, 6270)
+
+[sub_resource type="RectangleShape2D" id="door"]
+size = Vector2(101, 123)
+
+[node name="City" type="Node2D" unique_id=1090555206]
+y_sort_enabled = true
+
+[node name="Solids" type="StaticBody2D" parent="." unique_id=2125282252]
+
+[node name="Church" type="CollisionShape2D" parent="Solids" unique_id=1341003367]
+top_level = true
+position = Vector2(3158, 3032)
+shape = SubResource("CircleShape2D_xw602")
+
+[node name="EdgeTop" type="CollisionShape2D" parent="Solids" unique_id=828669043]
+position = Vector2(3135, 0)
+shape = SubResource("h_edge")
+
+[node name="EdgeBottom" type="CollisionShape2D" parent="Solids" unique_id=229788389]
+position = Vector2(3135, 6270)
+shape = SubResource("h_edge")
+
+[node name="EdgeLeft" type="CollisionShape2D" parent="Solids" unique_id=1958891037]
+position = Vector2(0, 3135)
+shape = SubResource("v_edge")
+
+[node name="EdgeRight" type="CollisionShape2D" parent="Solids" unique_id=2040502604]
+position = Vector2(6270, 3135)
+shape = SubResource("v_edge")
+
+[node name="Ground" type="Sprite2D" parent="." unique_id=1647879393]
+texture_filter = 2
+scale = Vector2(5, 5)
+texture = ExtResource("1")
+centered = false
+
+[node name="Chapel" type="Sprite2D" parent="." unique_id=912121814]
+texture_filter = 2
+position = Vector2(3100, 3000)
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("2")
+
+[node name="Player" parent="." unique_id=976192019 instance=ExtResource("3")]
+position = Vector2(3328, 3666)
+
+[node name="ChapelDoor" type="Area2D" parent="." unique_id=142974700]
+position = Vector2(2998, 3360)
+script = ExtResource("4")
+target_scene = "res://scenes/CathedralNave.tscn"
+flash_on_enter = true
+
+[node name="DoorShape" type="CollisionShape2D" parent="ChapelDoor" unique_id=581355398]
+position = Vector2(213.5, 27.5)
+shape = SubResource("door")
+
+[node name="NeilHomeDoor" type="Area2D" parent="."]
+position = Vector2(2700, 3600)
+script = ExtResource("4")
+target_scene = "res://scenes/NeilHome.tscn"
+
+[node name="NeilDoorShape" type="CollisionShape2D" parent="NeilHomeDoor"]
+shape = SubResource("door")
+
+[node name="HintLayer" type="CanvasLayer" parent="." unique_id=1083835837]
+
+[node name="Hint" type="Label" parent="HintLayer" unique_id=1306356140]
+offset_left = 40.0
+offset_top = 24.0
+offset_right = 920.0
+offset_bottom = 48.0
+text = "WASD / Arrows to move    ·    walk onto the chapel steps to enter"

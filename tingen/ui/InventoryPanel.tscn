@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://b1tngninvp001"]
+
+[ext_resource type="Script" path="res://src/InventoryPanel.gd" id="1"]
+
+[node name="InventoryPanel" type="Panel"]
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 56.0
+offset_right = 360.0
+offset_bottom = -12.0
+script = ExtResource("1")
+
+[node name="Margin" type="MarginContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="Body" type="VBoxContainer" parent="Margin"]
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Margin/Body"]
+text = "Inventory"
+theme_override_font_sizes/font_size = 18
+
+[node name="Summary" type="Label" parent="Margin/Body"]
+text = ""
+theme_override_colors/font_color = Color(0.7, 0.7, 0.74, 1)
+
+[node name="Sep" type="HSeparator" parent="Margin/Body"]
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/Body"]
+size_flags_vertical = 3
+
+[node name="List" type="VBoxContainer" parent="Margin/Body/Scroll"]
+custom_minimum_size = Vector2(312, 0)
+theme_override_constants/separation = 2
+
+[node name="Hint" type="Label" parent="Margin/Body"]
+text = "I or Esc to close"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)

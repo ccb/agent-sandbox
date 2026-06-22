@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://cujesisojyvnk"]
+
+[ext_resource type="Script" path="res://src/DialoguePanel.gd" id="1"]
+
+[node name="DialoguePanel" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+script = ExtResource("1")
+
+[node name="Box" type="Panel" parent="."]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -360.0
+offset_top = -300.0
+offset_right = 360.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="Box"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 14
+
+[node name="Body" type="VBoxContainer" parent="Box/Margin"]
+theme_override_constants/separation = 8
+
+[node name="Speaker" type="Label" parent="Box/Margin/Body"]
+text = "Speaker"
+theme_override_colors/font_color = Color(0.8, 0.78, 0.6, 1)
+
+[node name="Text" type="Label" parent="Box/Margin/Body"]
+custom_minimum_size = Vector2(0, 70)
+autowrap_mode = 2
+text = "..."
+
+[node name="Rule" type="HSeparator" parent="Box/Margin/Body"]
+
+[node name="Options" type="VBoxContainer" parent="Box/Margin/Body"]
+theme_override_constants/separation = 4

@@ -1,0 +1,132 @@
+[
+	{
+		"id": "celeste_grief",
+		"name": "A Shrine to Celeste",
+		"description": "Every surface honours a woman named Celeste — her portrait above the piano, kept free of dust. Old Neil never stopped mourning her.",
+		"type": "testimony",
+		"importance": "supporting",
+		"location": "neil_home",
+		"topics": ["old_neil", "the_resurrection"],
+		"linked_entities": ["old_neil", "celeste"]
+	},
+	{
+		"id": "stored_blood",
+		"name": "Vials of His Own Blood",
+		"description": "Racks of small, carefully dated vials of dark red. Old Neil bled himself in measured amounts over years — unwilling to spill anyone else's.",
+		"type": "physical",
+		"importance": "supporting",
+		"location": "neil_home",
+		"topics": ["old_neil", "the_resurrection"],
+		"linked_entities": ["old_neil"]
+	},
+	{
+		"id": "alchemical_life_ritual",
+		"name": "The Alchemical Life Diagram",
+		"description": "A forbidden 'Alchemical Life' diagram, copied from something that names itself the Hidden Sage — a method to make the dead live again, paid for in blood.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "neil_home",
+		"topics": ["old_neil", "the_resurrection"],
+		"linked_entities": ["old_neil"]
+	},
+	{
+		"id": "neils_obsession",
+		"name": "Twenty Years of Letters",
+		"description": "Two decades of letters to Celeste, each recording another failed attempt to bring her back. The hope in them has curdled into something past reason.",
+		"type": "testimony",
+		"importance": "supporting",
+		"location": "neil_home",
+		"topics": ["old_neil", "the_resurrection"],
+		"linked_entities": ["old_neil", "celeste"]
+	},
+	{
+		"id": "antigonus_notebook",
+		"name": "Antigonus' Notebook",
+		"description": "A leather notebook whose symbols seem to crawl when unobserved. Plainly a corrupting Beyonder artifact.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "intro_room",
+		"topics": ["antigonus_notebook", "beyonder_artifacts"],
+		"linked_entities": ["nighthawk"]
+	},
+	{
+		"id": "spent_revolver",
+		"name": "Spent Revolver",
+		"description": "A service revolver, one chamber fired, the barrel still faintly warm.",
+		"type": "physical",
+		"importance": "supporting",
+		"location": "intro_room",
+		"topics": ["the_gunshot"],
+		"linked_entities": []
+	},
+	{
+		"id": "wrong_reflection",
+		"name": "The Wrong Reflection",
+		"description": "The face in the mirror is not the one you remember wearing. You woke in a stranger's life.",
+		"type": "behavioral",
+		"importance": "pivotal",
+		"location": "intro_room",
+		"topics": ["the_transmigration"],
+		"linked_entities": []
+	},
+	{
+		"id": "nighthawk_warning",
+		"name": "Nighthawk's Warning",
+		"description": "A Nighthawk admits the Church is already hunting the notebook — and you with it.",
+		"type": "testimony",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["the_nighthawks", "church_of_evernight"],
+		"linked_entities": ["nighthawk"]
+	},
+	{
+		"id": "captain_briefing",
+		"name": "The Captain's Charge",
+		"description": "The Nighthawk captain set you on the trail: Antigonus' notebook is a key the Church will kill for, and the University archives hold his name.",
+		"type": "testimony",
+		"importance": "pivotal",
+		"location": "nighthawk_hq",
+		"topics": ["the_nighthawks", "antigonus_notebook"],
+		"linked_entities": ["nighthawk_captain"]
+	},
+	{
+		"id": "archive_antigonus",
+		"name": "Antigonus in the Catalogue",
+		"description": "The card catalogue confirms Antigonus was real — a long-dead devotee whose key volume has a call number but no book on the shelf.",
+		"type": "occult",
+		"importance": "supporting",
+		"location": "university_archive",
+		"topics": ["antigonus_notebook", "the_university"],
+		"linked_entities": ["antigonus"]
+	},
+	{
+		"id": "restricted_volume_missing",
+		"name": "The Missing Volume",
+		"description": "The restricted shelf has one empty slot, its dust-shadow still fresh. Someone removed Antigonus' volume only recently.",
+		"type": "physical",
+		"importance": "supporting",
+		"location": "university_archive",
+		"topics": ["antigonus_notebook", "the_theft"],
+		"linked_entities": ["ledger_finch"]
+	},
+	{
+		"id": "contamination_chain",
+		"name": "The Chain of Owners",
+		"description": "Abandoned marginalia traces the notebook through Welch and his circle — each reader driven mad, then dead. The list ends at Welch's lodging.",
+		"type": "testimony",
+		"importance": "pivotal",
+		"location": "university_archive",
+		"topics": ["antigonus_notebook", "the_contamination"],
+		"linked_entities": ["welch"]
+	},
+	{
+		"id": "finch_cover",
+		"name": "The Clerk's Excuse",
+		"description": "The records clerk insists the restricted volume is 'out for rebinding' — a shade too quickly. He is covering for its disappearance.",
+		"type": "testimony",
+		"importance": "supporting",
+		"location": "university_archive",
+		"topics": ["the_theft"],
+		"linked_entities": ["ledger_finch"]
+	}
+]

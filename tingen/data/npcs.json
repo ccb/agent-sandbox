@@ -1,0 +1,69 @@
+{
+	"old_neil": {
+		"name": "Old Neil",
+		"dialogue_id": "old_neil",
+		"faction": "civilian",
+		"role": "alchemist",
+		"intent": "Bring his dead fiancée Celeste back through the forbidden Alchemical Life ritual, before grief and the Hidden Sage's whispers finish hollowing him out.",
+		"tint": [0.62, 0.56, 0.66]
+	},
+	"clerk_voss": {
+		"name": "Clerk Voss",
+		"dialogue_id": "",
+		"faction": "cult",
+		"role": "leader",
+		"intent": "Complete the warehouse summoning to escape mortality. Plan the ritual steps, direct the acolytes, recruit quietly, and keep the cell hidden from the Nighthawks and the player.",
+		"tint": [0.6, 0.5, 0.7],
+		"schedule": {
+			"morning": [1793, 1327],
+			"afternoon": [1830, 1220],
+			"dusk": [1793, 1263],
+			"night": [1757, 1284],
+			"late-night": [1775, 1284]
+		}
+	},
+	"fishwife_dalia": {
+		"name": "Dalia the Fishwife",
+		"dialogue_id": "",
+		"faction": "cult",
+		"role": "logistics",
+		"intent": "Move ritual ingredients through the harbor to the warehouse, and run decoy errands that mislead anyone investigating the cell.",
+		"tint": [0.5, 0.7, 0.65],
+		"schedule": {
+			"morning": [2010, 1260],
+			"afternoon": [1848, 1260],
+			"dusk": [1812, 1242],
+			"night": [1757, 1284]
+		}
+	},
+	"lamplighter_orin": {
+		"name": "Orin the Lamplighter",
+		"dialogue_id": "orin_waverer",
+		"faction": "cult",
+		"role": "scout_waverer",
+		"intent": "Scout the district while lighting the lamps, reporting movements to Voss. Increasingly doubts what the cell is about to do, and can be turned by someone who reaches him.",
+		"tint": [0.85, 0.7, 0.4],
+		"schedule": {
+			"early-morning": [1703, 1050],
+			"morning": [1595, 1220],
+			"afternoon": [1884, 1220],
+			"dusk": [1866, 1284],
+			"night": [1721, 1284],
+			"late-night": [1694, 1284]
+		}
+	},
+	"dockhand_pell": {
+		"name": "Dockhand Pell",
+		"dialogue_id": "",
+		"faction": "civilian",
+		"role": "victim",
+		"intent": "Get through the workday and back home. Unaware that the cell has marked him as the intended sacrifice for the summoning.",
+		"tint": [0.7, 0.65, 0.55],
+		"schedule": {
+			"morning": [1866, 1260],
+			"afternoon": [1866, 1284],
+			"dusk": [1848, 1306],
+			"night": [1721, 1220]
+		}
+	}
+}

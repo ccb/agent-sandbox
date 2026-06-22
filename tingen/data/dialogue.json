@@ -1,0 +1,170 @@
+{
+	"old_neil": {
+		"start": "root",
+		"nodes": {
+			"root": {
+				"speaker": "Old Neil",
+				"text": "Forgive the dust, friend. I keep to myself these days. Was there something you needed?",
+				"options": [
+					{ "label": "Who is the woman in the portrait?", "goto": "celeste" },
+					{ "label": "What are you working on?", "goto": "work" },
+					{ "label": "(Leave him to his grief)", "goto": "end" }
+				]
+			},
+			"celeste": {
+				"speaker": "Old Neil",
+				"text": "Celeste. My betrothed. A fever took her, a long time ago now. They tell me to let her rest — they do not understand how close I am.",
+				"options": [
+					{ "label": "Close to what?", "goto": "work" },
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"work": {
+				"speaker": "Old Neil",
+				"text": "An old man's hobbies. Glass and salts and patience. Nothing to trouble a guest with. Only — mind your step. The chalk is still wet.",
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			}
+		}
+	},
+	"nighthawk": {
+		"start": "root",
+		"nodes": {
+			"root": {
+				"speaker": "Nighthawk",
+				"text": "You there. You have the look of someone who woke up in the wrong life. Speak quickly — the fog has ears.",
+				"options": [
+					{ "label": "Who are you?", "goto": "who" },
+					{ "label": "Ask about the Nighthawks", "goto": "org" },
+					{ "label": "About this notebook...", "goto": "notebook", "requires_topic": "antigonus_notebook" },
+					{ "label": "That face in the mirror wasn't mine.", "goto": "mirror", "requires_topic": "the_transmigration", "contradiction": true },
+					{ "label": "(Leave)", "goto": "end" }
+				]
+			},
+			"who": {
+				"speaker": "Nighthawk",
+				"text": "A watchman of the dark. We hunt what the Church is too proud to admit walks these streets.",
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"org": {
+				"speaker": "Nighthawk",
+				"text": "The Nighthawks answer to no parish. The Church of Evernight already moves on the notebook — and on whoever carries it.",
+				"effects": [ { "type": "collect", "clue": "nighthawk_warning" } ],
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"notebook": {
+				"speaker": "Nighthawk",
+				"text": "So you HAVE seen it. Antigonus' notebook. Keep it hidden, or it will hollow you out and wear you like a coat.",
+				"effects": [ { "type": "pressure", "target": "attention", "delta": 8.0 } ],
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"mirror": {
+				"speaker": "Nighthawk",
+				"text": "Transmigration. The previous tenant didn't leave willingly. Whatever pulled you here wanted this body in the city — tonight.",
+				"effects": [ { "type": "lead", "text": "线索：查清这具身体的前主人 (Learn who wore this body before you)." } ],
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			}
+		}
+	},
+	"captain": {
+		"start": "root",
+		"nodes": {
+			"root": {
+				"speaker": "Nighthawk Captain",
+				"text": "So you're the one the street watch flagged. Sit. You carry Antigonus' notebook, and that makes you the most hunted soul in Tingen tonight.",
+				"options": [
+					{ "label": "Who are the Nighthawks?", "goto": "who" },
+					{ "label": "What do you need from me?", "goto": "charge" },
+					{ "label": "(Leave)", "goto": "end" }
+				]
+			},
+			"who": {
+				"speaker": "Nighthawk Captain",
+				"text": "Watchmen against the things the Church buries. We don't answer to the parish, and right now we're the only reason you're still breathing.",
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"charge": {
+				"speaker": "Nighthawk Captain",
+				"text": "That notebook is a key the Church of Evernight will kill to claim. Antigonus wrote it — and the University archives still hold his name. Go there. Learn who he was before the Church learns where you are.",
+				"effects": [
+					{ "type": "collect", "clue": "captain_briefing" },
+					{ "type": "lead", "text": "线索：前往廷根大学档案馆，查清安提哥努斯其人 (Search the Tingen University archives for Antigonus)." }
+				],
+				"options": [
+					{ "label": "Understood.", "goto": "end" }
+				]
+			}
+		}
+	},
+	"orin_waverer": {
+		"start": "root",
+		"nodes": {
+			"root": {
+				"speaker": "Orin the Lamplighter",
+				"text": "Keep your voice down. The others are at the warehouse already, setting the circle. I'm only the lookout. That's all I am.",
+				"options": [
+					{ "label": "What are they summoning?", "goto": "rite" },
+					{ "label": "[Persuade] You don't have to go through with this.", "goto": "turned", "requires_agent_faction": { "agent": "lamplighter_orin", "faction": "cult" }, "effects": [ { "type": "social_influence", "agent": "lamplighter_orin" } ] },
+					{ "label": "(Leave)", "goto": "end" }
+				]
+			},
+			"rite": {
+				"speaker": "Orin the Lamplighter",
+				"text": "Something that descends. Voss calls it a god; the chalk and the salt and the marked one are just the door. I lit the candles myself. God help me, I lit them.",
+				"effects": [ { "type": "lead", "text": "线索：教徒在铁十字仓库布置降临法阵 (The cult is laying the descent circle at the Iron Cross warehouse)." } ],
+				"options": [
+					{ "label": "[Persuade] Then help me stop it.", "goto": "turned", "requires_agent_faction": { "agent": "lamplighter_orin", "faction": "cult" }, "effects": [ { "type": "social_influence", "agent": "lamplighter_orin" } ] },
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"turned": {
+				"speaker": "Orin the Lamplighter",
+				"text": "...You're right. I won't carry their lamp another night. Tell me what to do — I'll point them the wrong way, slow the salt, whatever it takes.",
+				"options": [
+					{ "label": "Stay quiet and wait for my signal.", "goto": "end" }
+				]
+			}
+		}
+	},
+	"finch": {
+		"start": "root",
+		"nodes": {
+			"root": {
+				"speaker": "Ledger Finch",
+				"text": "(He looks up sharply, ink-stained fingers going still on a ledger.) Oh — the records desk is closed for cataloguing just now. Mostly. Was there something you needed? Please, be quick about it.",
+				"options": [
+					{ "label": "Anything on Antigonus?", "goto": "antigonus" },
+					{ "label": "What happened to the restricted volume?", "goto": "volume" },
+					{ "label": "(Leave)", "goto": "end" }
+				]
+			},
+			"antigonus": {
+				"speaker": "Ledger Finch",
+				"text": "Antigonus...? (He stiffens.) That name belongs to the restricted collection. I really couldn't say. The catalogue is over there if you must — but the section is sealed. Please don't make trouble for me.",
+				"options": [
+					{ "label": "Back", "goto": "root" }
+				]
+			},
+			"volume": {
+				"speaker": "Ledger Finch",
+				"text": "The restricted volume? It's out — out for rebinding. At the bindery. Routine, entirely routine. (He answers a shade too fast, eyes flicking to the gap on the shelf.) It will be back any day now. Any day.",
+				"effects": [ { "type": "collect", "clue": "finch_cover" } ],
+				"options": [
+					{ "label": "Back", "goto": "root" },
+					{ "label": "Understood.", "goto": "end" }
+				]
+			}
+		}
+	}
+}

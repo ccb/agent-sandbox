@@ -1,0 +1,185 @@
+[gd_scene load_steps=19 format=3 uid="uid://b1tngnintro001"]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player"]
+[ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="interactable"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/klein_room.png" id="klein_room"]
+[ext_resource type="Texture2D" path="res://assets/props/revolver_0.png" id="icon_gun"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/klein_bedroom.png" id="klein_bedroom"]
+[ext_resource type="Script" path="res://src/IntroCard.gd" id="introcard"]
+[ext_resource type="Texture2D" path="res://assets/ui/vignette.png" id="vignette"]
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(896, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 597)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(155, 70)
+
+[sub_resource type="RectangleShape2D" id="s_chair"]
+size = Vector2(80, 67)
+
+[sub_resource type="RectangleShape2D" id="s_shelf"]
+size = Vector2(83, 105)
+
+[sub_resource type="RectangleShape2D" id="s_ns1"]
+size = Vector2(105, 70)
+
+[sub_resource type="RectangleShape2D" id="s_bed"]
+size = Vector2(204, 265)
+
+[sub_resource type="RectangleShape2D" id="s_ward"]
+size = Vector2(174, 114)
+
+[sub_resource type="RectangleShape2D" id="s_dress"]
+size = Vector2(126, 134)
+
+[sub_resource type="RectangleShape2D" id="s_ns2"]
+size = Vector2(95, 85)
+
+[sub_resource type="RectangleShape2D" id="s_chest"]
+size = Vector2(110, 75)
+
+[node name="IntroRoom" type="Node2D"]
+y_sort_enabled = false
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.08, 0.07, 0.06, 1)
+polygon = PackedVector2Array(-200, -200, 1100, -200, 1100, 800, -200, 800)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+centered = false
+texture = ExtResource("klein_room")
+scale = Vector2(0.5833, 0.5833)
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 8)
+shape = SubResource("wall_h")
+
+[node name="WBottom" type="CollisionShape2D" parent="Solids"]
+position = Vector2(448, 589)
+shape = SubResource("wall_h")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 298)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(888, 298)
+shape = SubResource("wall_v")
+
+[node name="Desk" type="CollisionShape2D" parent="Solids"]
+position = Vector2(78, 150)
+shape = SubResource("s_desk")
+
+[node name="Chair" type="CollisionShape2D" parent="Solids"]
+position = Vector2(100, 212)
+shape = SubResource("s_chair")
+
+[node name="Bookshelf" type="CollisionShape2D" parent="Solids"]
+position = Vector2(216, 82)
+shape = SubResource("s_shelf")
+
+[node name="Nightstand1" type="CollisionShape2D" parent="Solids"]
+position = Vector2(352, 130)
+shape = SubResource("s_ns1")
+
+[node name="Bed" type="CollisionShape2D" parent="Solids"]
+position = Vector2(390, 167)
+shape = SubResource("s_bed")
+
+[node name="Wardrobe" type="CollisionShape2D" parent="Solids"]
+position = Vector2(685, 85)
+shape = SubResource("s_ward")
+
+[node name="Dresser" type="CollisionShape2D" parent="Solids"]
+position = Vector2(833, 195)
+shape = SubResource("s_dress")
+
+[node name="Nightstand2" type="CollisionShape2D" parent="Solids"]
+position = Vector2(515, 351)
+shape = SubResource("s_ns2")
+
+[node name="Chest" type="CollisionShape2D" parent="Solids"]
+position = Vector2(670, 336)
+shape = SubResource("s_chest")
+
+[node name="Player" parent="." instance=ExtResource("player")]
+position = Vector2(415, 470)
+
+[node name="Sprite2D" parent="Player" index="0"]
+scale = Vector2(0.073, 0.073)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(448, 298)
+zoom = Vector2(1.2, 1.2)
+
+[node name="Notebook" parent="." instance=ExtResource("interactable")]
+position = Vector2(140, 170)
+thought = "这东西不对劲。 (This notebook is wrong. The symbols crawl when I look away.)"
+prompt_text = "Examine notebook"
+tint = Color(0.6, 0.4, 0.85, 0)
+clue_id = "antigonus_notebook"
+
+[node name="Gun" parent="." instance=ExtResource("interactable")]
+position = Vector2(110, 360)
+thought = "是我开的枪？ (Did I fire this? The barrel is still warm.)"
+prompt_text = "Examine revolver"
+tint = Color(0.7, 0.7, 0.74, 1)
+clue_id = "spent_revolver"
+icon = ExtResource("icon_gun")
+icon_px = 46.0
+
+[node name="Mirror" parent="." instance=ExtResource("interactable")]
+position = Vector2(775, 250)
+thought = "这不是我。 (That is not my face in the glass.)"
+prompt_text = "Look in the mirror"
+tint = Color(0.5, 0.75, 0.85, 0)
+clue_id = "wrong_reflection"
+
+[node name="Door" parent="." instance=ExtResource("interactable")]
+position = Vector2(845, 400)
+prompt_text = "Open the door"
+tint = Color(0.7, 0.55, 0.4, 0)
+target_scene = "res://scenes/City.tscn"
+lead_on_use = "线索：寻找值夜者 (Find the Nighthawks)."
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 300.0
+offset_top = 24.0
+offset_right = 600.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "WASD / Arrows to move   .   E to examine   .   Tab for notebook"
+
+[node name="Vignette" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="VignetteRect" type="TextureRect" parent="Vignette"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("vignette")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="IntroCard" type="CanvasLayer" parent="."]
+layer = 2
+script = ExtResource("introcard")
+
+[node name="TextureRect" type="TextureRect" parent="IntroCard"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("klein_bedroom")
+expand_mode = 1
+stretch_mode = 6

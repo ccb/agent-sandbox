@@ -1,0 +1,159 @@
+[gd_scene load_steps=12 format=3 uid="uid://b1tngnhud00001"]
+
+[ext_resource type="Script" path="res://src/HUD.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ui/InvestigationBoard.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ui/DialoguePanel.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://ui/Toasts.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://ui/DistrictMap.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://ui/CharacterCard.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://ui/CultProgressPanel.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://ui/RitualPanel.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://ui/PrayerPanel.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://ui/DebugLogPanel.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://ui/InventoryPanel.tscn" id="11"]
+
+[node name="HUD" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Top" type="PanelContainer" parent="."]
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 40.0
+
+[node name="Bar" type="HBoxContainer" parent="Top"]
+theme_override_constants/separation = 16
+
+[node name="Time" type="Label" parent="Top/Bar"]
+text = "Night - 02:14"
+
+[node name="Sep" type="VSeparator" parent="Top/Bar"]
+
+[node name="Lead" type="Label" parent="Top/Bar"]
+size_flags_horizontal = 3
+text = "Lead: ..."
+
+[node name="Controls" type="Label" parent="."]
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 42.0
+offset_right = -8.0
+offset_bottom = 60.0
+horizontal_alignment = 1
+text = "Tab Board   ·   M Map   ·   I Inventory   ·   C Cult   ·   R Rituals   ·   P Prayer   ·   L Log   ·   ` Console"
+theme_override_colors/font_color = Color(0.72, 0.74, 0.8, 0.8)
+theme_override_font_sizes/font_size = 12
+
+[node name="Meters" type="VBoxContainer" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -250.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 150.0
+grow_horizontal = 0
+theme_override_constants/separation = 6
+
+[node name="Stability" type="HBoxContainer" parent="Meters"]
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Meters/Stability"]
+custom_minimum_size = Vector2(84, 0)
+text = "Stability"
+
+[node name="Bar" type="ProgressBar" parent="Meters/Stability"]
+custom_minimum_size = Vector2(150, 14)
+modulate = Color(0.5, 0.9, 0.6, 1)
+size_flags_horizontal = 3
+max_value = 100.0
+value = 80.0
+show_percentage = false
+
+[node name="Corruption" type="HBoxContainer" parent="Meters"]
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Meters/Corruption"]
+custom_minimum_size = Vector2(84, 0)
+text = "Corruption"
+
+[node name="Bar" type="ProgressBar" parent="Meters/Corruption"]
+custom_minimum_size = Vector2(150, 14)
+modulate = Color(0.7, 0.45, 0.85, 1)
+size_flags_horizontal = 3
+max_value = 100.0
+value = 5.0
+show_percentage = false
+
+[node name="Panic" type="HBoxContainer" parent="Meters"]
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Meters/Panic"]
+custom_minimum_size = Vector2(84, 0)
+text = "Panic"
+
+[node name="Bar" type="ProgressBar" parent="Meters/Panic"]
+custom_minimum_size = Vector2(150, 14)
+modulate = Color(0.9, 0.5, 0.45, 1)
+size_flags_horizontal = 3
+max_value = 100.0
+value = 5.0
+show_percentage = false
+
+[node name="ThoughtPanel" type="Panel" parent="."]
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 120.0
+offset_top = -150.0
+offset_right = -120.0
+offset_bottom = -28.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="ThoughtPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 14
+
+[node name="Text" type="Label" parent="ThoughtPanel/Margin"]
+autowrap_mode = 2
+vertical_alignment = 1
+text = ""
+
+[node name="ThoughtTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="InvestigationBoard" parent="." instance=ExtResource("2")]
+visible = false
+
+[node name="DialoguePanel" parent="." instance=ExtResource("3")]
+
+[node name="Toasts" parent="." instance=ExtResource("4")]
+
+[node name="DistrictMap" parent="." instance=ExtResource("5")]
+visible = false
+
+[node name="CharacterCard" parent="." instance=ExtResource("6")]
+visible = false
+
+[node name="CultProgress" parent="." instance=ExtResource("7")]
+visible = false
+
+[node name="RitualPanel" parent="." instance=ExtResource("8")]
+visible = false
+
+[node name="PrayerPanel" parent="." instance=ExtResource("9")]
+visible = false
+
+[node name="DebugLogPanel" parent="." instance=ExtResource("10")]
+visible = false
+
+[node name="InventoryPanel" parent="." instance=ExtResource("11")]
+visible = false

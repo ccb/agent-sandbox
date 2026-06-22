@@ -1,0 +1,580 @@
+[gd_scene load_steps=5 format=3 uid="uid://difnihtxt0xu7"]
+
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player"]
+[ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="interactable"]
+[ext_resource type="PackedScene" path="res://scenes/NPC.tscn" id="npc"]
+[ext_resource type="Script" path="res://src/DayNightTint.gd" id="tint"]
+
+[node name="CityBlocks" type="Node2D"]
+
+[node name="Ground" type="Polygon2D" parent="."]
+color = Color(0.12, 0.13, 0.16, 1)
+polygon = PackedVector2Array(0, 0, 2400, 0, 2400, 1700, 0, 1700)
+
+[node name="Warehouse" type="Polygon2D" parent="."]
+position = Vector2(1862.5, 1255.7)
+color = Color(0.235, 0.13, 0.13, 1)
+polygon = PackedVector2Array(-120, -100, 120, -100, 120, 100, -120, 100)
+
+[node name="Name" type="Label" parent="Warehouse"]
+offset_left = -110.0
+offset_top = -96.0
+text = "Iron Cross Warehouse"
+theme_override_font_sizes/font_size = 24
+
+[node name="Buildings" type="Node2D" parent="."]
+
+[node name="B_r0_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c0"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c0"]
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="B_r0_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c1"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c1"]
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="B_r0_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c2"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c2"]
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="B_r0_c3" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1067.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c3"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c3"]
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="B_r0_c4" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1332.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c4"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c4"]
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="B_r0_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c5"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c5"]
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="B_r0_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c6"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c6"]
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="B_r0_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 241.4)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r0_c7"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r0_c7"]
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="B_r1_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c0"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c0"]
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="B_r1_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c1"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c1"]
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="B_r1_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c2"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c2"]
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="B_r1_c3" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1067.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c3"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c3"]
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="B_r1_c4" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1332.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c4"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c4"]
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="B_r1_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c5"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c5"]
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="B_r1_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c6"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c6"]
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="B_r1_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 444.3)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r1_c7"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r1_c7"]
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="B_r2_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c0"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c0"]
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="B_r2_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c1"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c1"]
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="B_r2_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c2"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c2"]
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="B_r2_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c5"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c5"]
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="B_r2_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c6"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c6"]
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="B_r2_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 647.1)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r2_c7"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r2_c7"]
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="B_r3_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c0"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-92.8, -62.9, 92.8, -62.9, 92.8, 62.9, -92.8, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c0"]
+polygon = PackedVector2Array(-92.8, -62.9, 92.8, -62.9, 92.8, 62.9, -92.8, 62.9)
+
+[node name="B_r3_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c1"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-87.4, -71, 87.4, -71, 87.4, 71, -87.4, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c1"]
+polygon = PackedVector2Array(-87.4, -71, 87.4, -71, 87.4, 71, -87.4, 71)
+
+[node name="B_r3_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c2"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-82.2, -62.9, 82.2, -62.9, 82.2, 62.9, -82.2, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c2"]
+polygon = PackedVector2Array(-82.2, -62.9, 82.2, -62.9, 82.2, 62.9, -82.2, 62.9)
+
+[node name="B_r3_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c5"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-87.4, -71, 87.4, -71, 87.4, 71, -87.4, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c5"]
+polygon = PackedVector2Array(-87.4, -71, 87.4, -71, 87.4, 71, -87.4, 71)
+
+[node name="B_r3_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c6"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-82.2, -62.9, 82.2, -62.9, 82.2, 62.9, -82.2, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c6"]
+polygon = PackedVector2Array(-82.2, -62.9, 82.2, -62.9, 82.2, 62.9, -82.2, 62.9)
+
+[node name="B_r3_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 850)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r3_c7"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-76.8, -71, 76.8, -71, 76.8, 71, -76.8, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r3_c7"]
+polygon = PackedVector2Array(-76.8, -71, 76.8, -71, 76.8, 71, -76.8, 71)
+
+[node name="B_r4_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c0"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c0"]
+polygon = PackedVector2Array(-76.8, -58.8, 76.8, -58.8, 76.8, 58.8, -76.8, 58.8)
+
+[node name="B_r4_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c1"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c1"]
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="B_r4_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c2"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c2"]
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="B_r4_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c5"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c5"]
+polygon = PackedVector2Array(-92.8, -66.9, 92.8, -66.9, 92.8, 66.9, -92.8, 66.9)
+
+[node name="B_r4_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c6"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c6"]
+polygon = PackedVector2Array(-87.4, -58.8, 87.4, -58.8, 87.4, 58.8, -87.4, 58.8)
+
+[node name="B_r4_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 1052.9)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r4_c7"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r4_c7"]
+polygon = PackedVector2Array(-82.2, -66.9, 82.2, -66.9, 82.2, 66.9, -82.2, 66.9)
+
+[node name="B_r5_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c0"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c0"]
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="B_r5_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c1"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c1"]
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="B_r5_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c2"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c2"]
+polygon = PackedVector2Array(-92.8, -71, 92.8, -71, 92.8, 71, -92.8, 71)
+
+[node name="B_r5_c3" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1067.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c3"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c3"]
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="B_r5_c4" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1332.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c4"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c4"]
+polygon = PackedVector2Array(-82.2, -71, 82.2, -71, 82.2, 71, -82.2, 71)
+
+[node name="B_r5_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c5"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c5"]
+polygon = PackedVector2Array(-76.8, -62.9, 76.8, -62.9, 76.8, 62.9, -76.8, 62.9)
+
+[node name="B_r5_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 1255.7)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r5_c7"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r5_c7"]
+polygon = PackedVector2Array(-87.4, -62.9, 87.4, -62.9, 87.4, 62.9, -87.4, 62.9)
+
+[node name="B_r6_c0" type="StaticBody2D" parent="Buildings"]
+position = Vector2(272.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c0"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c0"]
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="B_r6_c1" type="StaticBody2D" parent="Buildings"]
+position = Vector2(537.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c1"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c1"]
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="B_r6_c2" type="StaticBody2D" parent="Buildings"]
+position = Vector2(802.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c2"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c2"]
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="B_r6_c3" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1067.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c3"]
+color = Color(0.36, 0.33, 0.3, 1)
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c3"]
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="B_r6_c4" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1332.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c4"]
+color = Color(0.29, 0.33, 0.34, 1)
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c4"]
+polygon = PackedVector2Array(-87.4, -66.9, 87.4, -66.9, 87.4, 66.9, -87.4, 66.9)
+
+[node name="B_r6_c5" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1597.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c5"]
+color = Color(0.34, 0.34, 0.31, 1)
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c5"]
+polygon = PackedVector2Array(-82.2, -58.8, 82.2, -58.8, 82.2, 58.8, -82.2, 58.8)
+
+[node name="B_r6_c6" type="StaticBody2D" parent="Buildings"]
+position = Vector2(1862.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c6"]
+color = Color(0.31, 0.3, 0.35, 1)
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c6"]
+polygon = PackedVector2Array(-76.8, -66.9, 76.8, -66.9, 76.8, 66.9, -76.8, 66.9)
+
+[node name="B_r6_c7" type="StaticBody2D" parent="Buildings"]
+position = Vector2(2127.5, 1458.6)
+
+[node name="Polygon2D" type="Polygon2D" parent="Buildings/B_r6_c7"]
+color = Color(0.32, 0.32, 0.37, 1)
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Buildings/B_r6_c7"]
+polygon = PackedVector2Array(-92.8, -58.8, 92.8, -58.8, 92.8, 58.8, -92.8, 58.8)
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="WallTop" type="StaticBody2D" parent="Walls"]
+position = Vector2(1200, 8)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Walls/WallTop"]
+polygon = PackedVector2Array(-1200, -8, 1200, -8, 1200, 8, -1200, 8)
+
+[node name="WallBottom" type="StaticBody2D" parent="Walls"]
+position = Vector2(1200, 1692)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Walls/WallBottom"]
+polygon = PackedVector2Array(-1200, -8, 1200, -8, 1200, 8, -1200, 8)
+
+[node name="WallLeft" type="StaticBody2D" parent="Walls"]
+position = Vector2(8, 850)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Walls/WallLeft"]
+polygon = PackedVector2Array(-8, -850, 8, -850, 8, 850, -8, 850)
+
+[node name="WallRight" type="StaticBody2D" parent="Walls"]
+position = Vector2(2392, 850)
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Walls/WallRight"]
+polygon = PackedVector2Array(-8, -850, 8, -850, 8, 850, -8, 850)
+
+[node name="Player" parent="." instance=ExtResource("player")]
+position = Vector2(1200, 850)
+
+[node name="DayNight" type="CanvasModulate" parent="."]
+script = ExtResource("tint")
+
+[node name="Orin" parent="." instance=ExtResource("npc")]
+position = Vector2(1010, 640)
+npc_id = "lamplighter_orin"
+
+[node name="Dalia" parent="." instance=ExtResource("npc")]
+position = Vector2(1390, 640)
+npc_id = "fishwife_dalia"
+
+[node name="Nighthawk" parent="." instance=ExtResource("interactable")]
+position = Vector2(1200, 660)
+prompt_text = "Speak to the Nighthawk"
+tint = Color(0.45, 0.55, 0.8, 1)
+dialogue_id = "nighthawk"
+
+[node name="HQDoor" parent="." instance=ExtResource("interactable")]
+position = Vector2(1010, 1060)
+prompt_text = "Enter the Nighthawks' headquarters"
+tint = Color(0.55, 0.62, 0.85, 1)
+target_scene = "res://scenes/NighthawksHQ.tscn"
+lead_on_use = "线索：进入值夜者总部，面见队长。 (Report to the Nighthawk captain at headquarters.)"
+
+[node name="UniversityDoor" parent="." instance=ExtResource("interactable")]
+position = Vector2(1390, 1060)
+prompt_text = "Enter the University archive"
+tint = Color(0.72, 0.6, 0.42, 1)
+target_scene = "res://scenes/UniversityArchive.tscn"
+
+[node name="WarehouseCache" parent="." instance=ExtResource("interactable")]
+position = Vector2(1802.5, 1302)
+prompt_text = "Spoil the summoning cache"
+tint = Color(0.85, 0.35, 0.3, 1)
+sabotage_cache = true
