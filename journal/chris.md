@@ -366,3 +366,16 @@ backpack) to keep its water reachable. TAKE MUSHROOM yields a cave mushroom.
 
 620 tests. Next: the baby/stew feeding + crying-death chain (the stew now has a
 consumer), goblin-queen exchanges, ooze/lockbox/crown, then the endgame.
+
+### AC3 Phase 4 (baby) — rescue + crying-deaths + feeding (#138)
+
+The chain that ties the fissure, the stew, and the death triggers together.
+DROP BACKPACK (a PackBlock) to squeeze into the fissure; TAKE BABY (+5), and it
+cries. Crying baby = fatal at the Bandit Camp and Deep Ravine (triggers); FEED
+BABY consumes the stew and quiets it. The intended order is emergent: cook stew
+at the camp before fetching the baby, then feed it right after rescue. 627 tests.
+
+Notable: the stew (crafting PR) now has its consumer, and the death triggers
+reuse the same carry-a-crying-baby predicate -- clean. Remaining AC3: goblin
+queen (net trap SHOW BABY, GIVE BABY, crown->javelin), ooze/lockbox/crown, then
+the endgame (demon/cultist) + scored epilogues + full win walkthrough.
