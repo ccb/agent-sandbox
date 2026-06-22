@@ -4,6 +4,12 @@ from .rose import Smell_Rose
 from ..enums import ActionName, Property
 
 
+def _qty_suffix(item) -> str:
+    """' (xN)' for a stack of more than one (#134), else ''."""
+    qty = getattr(item, "quantity", 1)
+    return f" (x{qty})" if qty > 1 else ""
+
+
 class Get(base.Action):
     ACTION_NAME = ActionName.GET
     ACTION_DESCRIPTION = "Get something and add it to the inventory"
@@ -185,9 +191,13 @@ class Inventory(base.Action):
                     )
                     for inner_name in item.contents:
                         inner = item.contents[inner_name]
-                        description += "    - {item}\n".format(item=inner.description)
+                        description += "    - {item}{qty}\n".format(
+                            item=inner.description, qty=_qty_suffix(inner)
+                        )
                 else:
-                    description += "* {item}\n".format(item=item.description)
+                    description += "* {item}{qty}\n".format(
+                        item=item.description, qty=_qty_suffix(item)
+                    )
             self.parser.ok(description)
 
 
@@ -603,11 +613,28 @@ class Craft(base.Action):
                 scope.setdefault(name, item)
         return scope
 
-    def _find_count(self, ingredient, pool) -> list:
-        """Up to ingredient.count items from *pool* (a name->item dict) that the
-        ingredient matches."""
-        hits = [it for it in pool.values() if ingredient.matches(it)]
-        return hits[: ingredient.count]
+    def _available(self, ingredient, pool) -> int:
+        """How many matching units *pool* (a name->item dict) holds -- summing
+        item quantities, so a stack of 2 sticks counts as 2 (#134)."""
+        return sum(
+            getattr(it, "quantity", 1) for it in pool.values() if ingredient.matches(it)
+        )
+
+    def _consume(self, ingredient):
+        """Remove ingredient.count matching units from the crafter's held items,
+        decrementing stacks and discarding any that hit zero."""
+        need = ingredient.count
+        for it in list(self.character.carried_items().values()):
+            if need <= 0:
+                break
+            if not ingredient.matches(it):
+                continue
+            qty = getattr(it, "quantity", 1)
+            take = min(qty, need)
+            it.quantity = qty - take
+            need -= take
+            if it.quantity <= 0:
+                self.character.discard_item(it)
 
     def _satisfiable(self, recipe) -> bool:
         ok, _ = self._check(recipe)
@@ -622,11 +649,11 @@ class Craft(base.Action):
             return False, "You can't make that here."
         present = self._present()
         for tool in recipe.tools:
-            if len(self._find_count(tool, present)) < tool.count:
+            if self._available(tool, present) < tool.count:
                 return False, f"You need {tool.label()} to make that."
         held = self._held()
         for ing in recipe.inputs:
-            if len(self._find_count(ing, held)) < ing.count:
+            if self._available(ing, held) < ing.count:
                 return False, f"You need {ing.label()} to make that."
         if not self.character.can_accept_item():
             return False, "Your hands are full to make anything."
@@ -679,11 +706,9 @@ class Craft(base.Action):
 
     def apply_effects(self):
         recipe = self.recipe
-        held, present = self._held(), self._present()
-        # Consume inputs from the crafter's held items.
+        # Consume inputs from the crafter's held items (quantity-aware).
         for ing in recipe.inputs:
-            for item in self._find_count(ing, held):
-                self.character.discard_item(item)
+            self._consume(ing)
         # Produce the output(s).
         produced = recipe.output(self.game)
         outputs = produced if isinstance(produced, (list, tuple)) else [produced]

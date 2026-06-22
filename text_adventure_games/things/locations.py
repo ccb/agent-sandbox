@@ -161,8 +161,13 @@ class Location(Thing):
 
     def add_item(self, item):
         """
-        Put an item in this location.
+        Put an item in this location. A stackable item merges into a same-named
+        stack already here (#134).
         """
+        existing = self.items.get(item.name)
+        if item.is_stackable() and existing is not None and existing.is_stackable():
+            existing.quantity += item.quantity
+            return
         self.items[item.name] = item
         item.location = self
         item.owner = None
