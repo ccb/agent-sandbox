@@ -263,6 +263,21 @@ def memories_for_frame(records) -> list[dict]:
     ]
 
 
+def memory_stream_for_persona(agent) -> list[dict]:
+    """Format an agent's *entire* memory stream as UI-ready dicts.
+
+    Same shape as :func:`memories_for_frame`, but over ``agent.memory.records``
+    -- every memory the agent has formed, not just the handful retrieved for one
+    decision. The exporter writes this per persona so the State Details panel can
+    show the full stream alongside a step's retrieved set (the same records the
+    card surfaces are a subset of these). Returns ``[]`` if the agent has no
+    memory bound.
+    """
+    memory = getattr(agent, "memory", None)
+    records = memory.records if memory is not None else []
+    return memories_for_frame(records)
+
+
 def remember_outcome(char, command: str, step: int) -> None:
     """Record ``char``'s own successful action as a first-person memory.
 
