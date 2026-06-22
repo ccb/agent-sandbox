@@ -5,6 +5,7 @@ GO-NORTH-home ending. Companions, puzzles and the endgame land in later phases;
 these tests guard the scaffold they'll build on.
 """
 
+from text_adventure_games import things
 from text_adventure_games.adventures import action_castle_3 as ac3
 from text_adventure_games.reporting import CaptureRenderer, Channel
 
@@ -299,3 +300,138 @@ def test_full_dwarf_recruit_chain_needs_the_cleric_and_a_driven_off_spider():
     game.do_command("invite dwarf")
     assert game.characters["dwarf"].following is game.player
     assert "dwarf" in game._scored_keys
+
+
+# --- Phase 4a: the bow chain (search -> crypt -> spell book -> sleep -> bow) -
+
+
+def _solo_to(game, room):
+    """Teleport just the player to a room (test-only shortcut past navigation)."""
+    game.relocate(game.player, game.locations[room])
+
+
+def _join(game, name):
+    """Put a companion in the party at the player's side (test-only)."""
+    ch = game.characters[name]
+    ch.following = game.player
+    game.relocate(ch, game.player.location)
+    return ch
+
+
+def test_search_dungeon_finds_the_pendant():
+    game, cap = _play(["take lantern", "light lantern", "east", "down", "search"])
+    assert game.player.location.name == "Dungeon"
+    assert _said(cap, "find a shiny pendant")
+    game.do_command("take pendant")
+    assert "pendant" in game.player.inventory
+
+
+def test_taking_the_spell_book_without_the_cleric_is_fatal():
+    game, cap = _play(
+        [
+            "take lantern",
+            "light lantern",
+            "east",
+            "down",
+            "east",
+            "east",
+            "down",
+            "west",
+            "south",
+        ]
+    )  # -> Crypt, alone
+    assert game.player.location.name == "Crypt"
+    game.do_command("take book")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "unholy ranks")
+
+
+def test_cleric_with_pendant_turns_undead_and_you_take_the_book():
+    game, _ = _game()
+    _solo_to(game, "Crypt")
+    cleric = _join(game, "cleric")
+    cleric.set_property("has_pendant", True)
+    game.do_command("turn undead")
+    assert game.player.location.get_property("skeletons_cleared")
+    game.do_command("take book")
+    assert "spell book" in game.player.inventory
+    assert not game.is_game_over()
+
+
+def test_take_book_auto_turns_when_the_cleric_is_ready():
+    game, _ = _game()
+    _solo_to(game, "Crypt")
+    _join(game, "cleric").set_property("has_pendant", True)
+    game.do_command("take book")  # no explicit turn undead first
+    assert "spell book" in game.player.inventory
+    assert not game.is_game_over()
+
+
+def test_returning_the_spell_book_to_the_wizard_scores():
+    game, cap = _game()
+    wizard = _join(game, "wizard")
+    game.player.add_to_inventory(things.Item("spell book", "an arcane spell book"))
+    game.do_command("give spell book to wizard")
+    assert wizard.get_property("has_spellbook")
+    assert "spell book" in wizard.inventory
+    assert "spellbook" in game._scored_keys and game.score >= 5
+
+
+def test_cast_sleep_needs_the_wizard_and_book_then_frees_the_bow():
+    game, cap = _game()
+    _solo_to(game, "Bandit Camp")
+    wizard = _join(game, "wizard")
+    # Without the spell book, the wizard can't cast.
+    game.do_command("cast sleep")
+    assert _said(cap, "wizard and his spell book")
+    assert not game.characters["bandits"].get_property("asleep")
+    # With it, the bandits drop and the bow becomes takeable.
+    wizard.set_property("has_spellbook", True)
+    game.do_command("cast sleep")
+    assert game.characters["bandits"].get_property("asleep")
+    game.do_command("take bow")
+    assert "bow" in game.player.inventory
+
+
+def test_returning_the_bow_to_the_elf_scores():
+    game, _ = _game()
+    elf = _join(game, "elf")
+    game.player.add_to_inventory(things.Item("bow", "a fine elvish bow"))
+    game.do_command("give bow to elf")
+    assert elf.get_property("has_bow")
+    assert "bow" in elf.inventory
+    assert "bow" in game._scored_keys and game.score >= 5
+
+
+def test_crypt_questline_integration():
+    # Recruit the cleric, grab the pendant in the dungeon en route, and clear the
+    # crypt for the spell book -- the whole cleric+pendant arc, end to end.
+    cmds = [
+        "take lantern",
+        "light lantern",
+        "west",
+        "south",  # Cavern Entrance
+        "fill waterskin",
+        "north",
+        "east",
+        "east",  # Castle Ruins
+        "down",  # Dungeon
+        "search",
+        "take pendant",
+        "east",
+        "east",  # Torture Chamber
+        "give water",
+        "free man",
+        "invite cleric",
+        "give pendant to cleric",
+        "down",
+        "west",
+        "south",  # -> Crypt (cleric in tow)
+        "turn undead",
+        "take book",
+    ]
+    game, _ = _play(cmds)
+    assert game.player.location.name == "Crypt"
+    assert not game.is_game_over()
+    assert "spell book" in game.player.inventory
+    assert game.characters["cleric"].get_property("has_pendant")
