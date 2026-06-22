@@ -412,3 +412,45 @@ def test_lamp_rests_on_a_surface_and_is_takeable():
     assert "lamp" in game.player.inventory and "lamp" not in ledge.contents
     game.do_command("put lamp on ledge")
     assert "lamp" in ledge.contents and "lamp" not in game.player.inventory
+
+
+# --- playtest fixes: directional look, readable sign, scenery, guard --------
+
+
+def test_look_in_a_direction_surveys_the_exit():
+    game, cap = _game()
+    game.do_command("look out")  # the workshop's only exit
+    assert _said(cap, "To the out, you see Town Square")
+
+
+def test_look_in_a_direction_with_no_exit_is_graceful():
+    game, cap = _game()
+    game.do_command("look north")  # no north exit from the workshop
+    assert _said(cap, "nothing special that way")
+
+
+def test_look_at_an_item_still_examines_it():
+    # The new "look <direction>" routing must not steal "look at <thing>".
+    game, cap = _game()
+    game.do_command("look at slippers")
+    assert _said(cap, "velvet slippers")
+
+
+def test_read_sign_reads_its_writing():
+    game, cap = _play(["out", "east"])  # Old Pond Road
+    game.do_command("read sign")
+    assert _said(cap, "Please don't pick the roses")
+
+
+def test_examine_walls_reveals_the_loose_stone():
+    game, cap = _game()
+    game.relocate(game.player, game.locations["Moat"])
+    game.do_command("examine walls")
+    assert _said(cap, "loose stone in the wall")
+
+
+def test_throne_room_west_is_barred_by_the_guards():
+    game, cap = _game()
+    game.relocate(game.player, game.locations["Throne Room"])
+    game.do_command("go west")
+    assert _said(cap, "guards step into your path")

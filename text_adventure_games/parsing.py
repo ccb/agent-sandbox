@@ -254,6 +254,18 @@ class Parser:
         elif command == "look" or command == "l":
             # when the user issues a "look" command, re-describe what they see
             return ActionName.DESCRIBE
+        elif command.startswith("look ") or command.startswith("l "):
+            # "look around/here" re-describes the room; "look <direction>"
+            # surveys that exit (handled by Describe); "look [at] <thing>"
+            # examines it. Without this, "look north" matched nothing.
+            rest = command.split(" ", 1)[1].strip()
+            if rest.startswith("at "):
+                rest = rest[3:].strip()
+            if rest in ("around", "round", "here", ""):
+                return ActionName.DESCRIBE
+            if self.get_direction(rest, character.location):
+                return ActionName.DESCRIBE
+            return ActionName.EXAMINE
         elif "examine " in command or command.startswith("x "):
             return ActionName.EXAMINE
         elif command.startswith("take off") or command.startswith("remove "):

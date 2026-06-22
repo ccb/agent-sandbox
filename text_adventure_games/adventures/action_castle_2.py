@@ -1043,12 +1043,15 @@ def build_game() -> ActionCastle2:
         "If you put your nose to it, you might make something of yourself.",
         smithy,
     )
-    scenery(
+    sign = scenery(
         "sign",
         "a weather-beaten sign",
         'It reads, "Please don\'t pick the roses."',
         pond_road,
+        ["read sign"],
     )
+    # READ SIGN surfaces its writing (the generic Read verb reads read_text).
+    sign.set_property("read_text", 'It reads, "Please don\'t pick the roses."')
     scenery(
         "moat",
         "the castle moat",
@@ -1060,6 +1063,14 @@ def build_game() -> ActionCastle2:
         "stone",
         "a loose stone in the wall",
         "Peering closely, you notice a loose stone.",
+        moat,
+        ["move stone"],
+    )
+    # EXAMINE WALL(S) points at the loose stone too (matches "examine walls").
+    scenery(
+        "wall",
+        "the castle's stone wall",
+        "Peering closely, you notice a loose stone in the wall.",
         moat,
         ["move stone"],
     )
@@ -1435,6 +1446,24 @@ def build_game() -> ActionCastle2:
             return True
 
     hermit_cave.add_block("in", CaveBlock())
+
+    # The king's guards bar the throne room's west door -- GO WEST gets a flavor
+    # refusal rather than the bare "no exit" error. A permanently-blocked
+    # one-way exit (the connection exists so Go reaches the block, which never
+    # opens), mirroring the CaveBlock pattern above.
+    class ThroneGuardBlock(blocks.Block):
+        def __init__(self):
+            super().__init__(
+                "The guards bar the way",
+                "The king's guards step into your path. \"No one leaves the "
+                "king's presence unbidden.\"",
+            )
+
+        def is_blocked(self) -> bool:
+            return True
+
+    _one_way(throne_room, "west", courtyard)
+    throne_room.add_block("west", ThroneGuardBlock())
     # NOTE: build_game is parser-agnostic. It returns the game with the engine's
     # default parser; the caller chooses a parser via game.set_parser(...).
     return game
