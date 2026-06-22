@@ -223,6 +223,14 @@ def _load_replay_memories(sim_code, step, persona_name):
 
     Both are best-effort: a sim exported without them (e.g. the upstream demo)
     just yields empty lists, so the page never errors.
+
+    Both are also sliced to *this replay step*: each record carries the sim turn it
+    was formed on (``created_turn``), and a replay paused at step S shows the world
+    after S steps -- so a memory formed on a later turn hasn't "happened" yet and
+    must stay hidden (e.g. a 9am memory should not show while the clock reads 8am).
+    The comparison is strict (``< step``) so that at step 0, before the sim has
+    advanced at all, both lists are empty; memories then surface as the replay
+    reaches the step that formed them.
     """
 
     def _first_existing(*paths):
@@ -254,7 +262,11 @@ def _load_replay_memories(sim_code, step, persona_name):
     except (OSError, ValueError):
         all_memories = []
 
-    return retrieved, all_memories
+    # Only surface memories that exist as of this replay step (see docstring).
+    def _before_step(memories):
+        return [m for m in memories if m.get("created_turn", 0) < step]
+
+    return _before_step(retrieved), _before_step(all_memories)
 
 
 def replay_persona_state(request, sim_code, step, persona_name):
