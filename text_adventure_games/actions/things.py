@@ -239,7 +239,13 @@ class Examine(base.Action):
         """For an OPEN, non-empty holder, a sentence listing what's inside (a
         container) or what rests on it (a surface) -- so 'examine boat' reads
         '... It contains a warm wool blanket.' and 'examine table' reads
-        '... On it you see a candle.'."""
+        '... On it you see a candle.'.
+
+        A holder may set ``contents_relation`` -- the full intro phrase -- to
+        voice the listing naturally ("Under the stained mattress you see ...",
+        "Behind the curtain hangs ..."), overriding the generic defaults.
+        Because it's driven by the live contents, it's self-updating: take the
+        last item and the sentence disappears (no stale text)."""
         contents = item.accessible_contents()
         if not contents:
             return ""
@@ -250,6 +256,9 @@ class Examine(base.Action):
             listed = f"{descs[0]} and {descs[1]}"
         else:
             listed = ", ".join(descs[:-1]) + f", and {descs[-1]}"
+        relation = item.get_property("contents_relation")
+        if relation:
+            return f" {relation} {listed}."
         if item.get_property("is_surface"):
             return f" On it you see {listed}."
         return f" It contains {listed}."

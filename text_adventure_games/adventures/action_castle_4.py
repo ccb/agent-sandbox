@@ -716,13 +716,14 @@ def build_game() -> ActionCastle4:
     )
     tower.add_item(glass_slippers)
     tower.add_item(ruby_slippers)
-    guardroom.add_item(
-        _fixture(
-            "army cot",
-            "an army cot",
-            "Under the stained mattress is a pair of old army boots.",
-        )
+    # The cot is an open container concealing the boots: they're not listed in
+    # the room ("look"), but EXAMINE ARMY COT reveals them under the mattress
+    # (contents_relation), and the listing self-updates once they're taken.
+    cot = _fixture(
+        "army cot", "an army cot", "A grubby army cot with a stained mattress."
     )
+    cot.make_container()
+    cot.set_property("contents_relation", "Under the stained mattress you see")
     footlocker = _fixture("footlocker", "a footlocker", "The guard's footlocker.")
     footlocker.make_container()
     footlocker.set_property("is_closed", True)  # OPEN FOOTLOCKER -> a dagger
@@ -734,14 +735,16 @@ def build_game() -> ActionCastle4:
         )
     )
     guardroom.add_item(footlocker)
-    # Named "boots" so GET/WEAR BOOTS work as well as "army boots".
+    # Named "boots" so GET/WEAR BOOTS work as well as "army boots". They live
+    # inside the cot (under the mattress), revealed by examining it.
     boots = _footwear(
         "boots",
         "a pair of old army boots",
         "You lace up the army boots. Now you can actually walk.",
         "A little big, but your feet aren't petite.",
     )
-    guardroom.add_item(boots)
+    cot.add_item(boots)
+    guardroom.add_item(cot)
     gardens.add_item(
         _fixture(
             "rosebushes",
