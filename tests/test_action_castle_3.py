@@ -634,3 +634,73 @@ def test_feeding_needs_stew():
     _with_crying_baby(game)
     game.do_command("feed baby")
     assert _said(cap, "only wants mushroom stew")
+
+
+# --- Phase 4 (goblin queen): net trap + throne-room exchanges --------------
+
+
+def _give_baby_to_player(game, crying=False):
+    baby = things.Item("baby goblin", "a goblin baby")
+    baby.set_property("crying", crying)
+    game.player.add_to_inventory(baby)
+    return baby
+
+
+def test_goblin_net_without_a_baby_is_fatal():
+    game, cap = _game()
+    _solo_to(game, "Goblin Caves")
+    game.do_command("look")  # the net drops
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "enslave")
+
+
+def test_show_baby_frees_you_and_opens_the_east_exit():
+    game, cap = _game()
+    _give_baby_to_player(game)
+    _solo_to(game, "Goblin Caves")
+    game.do_command("look")  # net drops
+    assert game.locations["Goblin Caves"].get_property("net_dropped")
+    game.do_command("east")  # barred until you show the baby
+    assert game.player.location.name == "Goblin Caves"
+    game.do_command("show baby")
+    game.do_command("east")
+    assert game.player.location.name == "Throne Room"
+
+
+def test_north_is_barred_during_the_captivity():
+    game, cap = _game()
+    _give_baby_to_player(game)
+    _solo_to(game, "Goblin Caves")
+    game.do_command("look")
+    game.do_command("show baby")
+    game.do_command("north")
+    assert game.player.location.name == "Goblin Caves"  # herded east, not north
+
+
+def test_giving_the_baby_scores_and_escorts_you_out():
+    game, cap = _game()
+    _give_baby_to_player(game)
+    _solo_to(game, "Throne Room")
+    game.do_command("give baby")
+    assert "baby_to_queen" in game._scored_keys
+    assert "baby goblin" in game.characters["goblin queen"].inventory
+    # the audience over (no crown carried), the goblins escort you to the surface
+    assert game.player.location.name == "Cavern Entrance"
+    assert game.locations["Goblin Caves"].get_property("audience_done")
+    # and the caves are now pacified -- no net on a return visit
+    _solo_to(game, "Goblin Caves")
+    game.do_command("look")
+    assert not game.is_game_over()
+
+
+def test_tribute_crown_yields_the_bronze_javelin():
+    game, cap = _game()
+    _give_baby_to_player(game)
+    game.player.add_to_inventory(things.Item("crown", "a gold crown"))
+    _solo_to(game, "Throne Room")
+    game.do_command("give baby")  # carrying the crown, the escort waits for tribute
+    assert game.player.location.name == "Throne Room"
+    game.do_command("give crown")
+    assert "bronze javelin" in game.player.inventory
+    assert "crown_to_queen" in game._scored_keys
+    assert game.player.location.name == "Cavern Entrance"  # now escorted out
