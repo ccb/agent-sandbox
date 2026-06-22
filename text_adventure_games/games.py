@@ -347,9 +347,22 @@ class Game:
             _visited.add(other.name)
             follow_filter = getattr(other, "follow_filter", None)
             if follow_filter is not None and not follow_filter(dest):
-                self.parser.npc_ok(f"{other.name.capitalize()} won't go any farther.")
+                # Announce the refusal once per "stuck" episode, not again on
+                # every subsequent step the leader takes while it waits behind.
+                if not getattr(other, "_follow_refusal_announced", False):
+                    self.parser.npc_ok(
+                        f"{other.name.capitalize()} won't go any farther."
+                    )
+                    other._follow_refusal_announced = True
+                continue
+            if other.location is dest:
+                # The leader stepped back into the room where the follower was
+                # waiting -- it's already at their side, so don't re-announce.
+                other._follow_refusal_announced = False
+                self.drag_followers(other, _visited)
                 continue
             self.relocate(other, dest)
+            other._follow_refusal_announced = False
             self.parser.npc_ok(f"{other.name.capitalize()} follows {leader_ref}.")
             self.drag_followers(other, _visited)
 

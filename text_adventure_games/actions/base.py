@@ -390,4 +390,24 @@ class Describe(Action):
         return True
 
     def apply_effects(self):
+        cmd = (self.command or "").strip().lower()
+        rest = cmd
+        for lead in ("look at ", "look ", "l "):
+            if cmd.startswith(lead):
+                rest = cmd[len(lead) :].strip()
+                break
+        # "look <direction>" surveys an exit instead of re-describing the room.
+        if rest and rest != cmd and rest not in ("around", "round", "here"):
+            looker = self.actor if self.actor is not None else self.game.player
+            loc = looker.location
+            direction = self.parser.get_direction(rest, loc)
+            if direction:
+                if loc.is_blocked(direction):
+                    return self.parser.ok(loc.get_block_description(direction))
+                dest = loc.connections.get(direction)
+                if dest is None:
+                    return self.parser.ok("You see nothing special that way.")
+                travel = loc.travel_descriptions.get(direction) or ""
+                line = f"To the {direction}, you see {dest.name}."
+                return self.parser.ok(f"{line} {travel}".strip())
         self.parser.ok(self.game.describe())
