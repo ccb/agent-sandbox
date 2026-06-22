@@ -306,3 +306,130 @@ def test_eat_apple_is_a_gag_that_spends_it():
     game, cap = _play(["out", "down", "west", "north", "pick apple", "eat apple"])
     assert _said(cap, "CRUNCH")
     assert "apple" not in game.player.inventory
+
+
+# --- Slice 4b: the poacher + the deer --------------------------------------
+
+# Tame the mare, ride to the Old Woods, get the crossbow, and ride into the Deep
+# Woods after the deer.
+TO_DEEP_WOODS = TO_RIVER_WITH_APPLE + [
+    "give apple to horse",
+    "ride horse",
+    "north",
+    "west",  # -> Old Woods (mounted)
+    "dismount",
+    "enter",
+    "take crossbow",
+    "out",  # crossbow in hand
+    "ride horse",
+    "follow deer",  # -> Deep Woods
+]
+
+
+def test_follow_deer_needs_the_horse():
+    game, cap = _play(
+        TO_RIVER_WITH_APPLE
+        + [
+            "give apple to horse",
+            "ride horse",
+            "north",
+            "west",
+            "dismount",
+            "follow deer",
+        ]
+    )
+    assert _said(cap, "on foot")
+    assert game.player.location.name == "Old Woods"
+
+
+def test_shoot_poacher_saves_the_deer_and_drops_the_purse():
+    game, cap = _play(TO_DEEP_WOODS + ["shoot poacher"])
+    assert game.player.location.name == "Deep Woods"
+    assert game.locations["Deep Woods"].get_property("poacher_dealt")
+    assert "shoot" in game._scored_keys
+    assert "coin purse" in game.locations["Deep Woods"].items  # dropped
+
+
+def test_shooting_needs_the_crossbow():
+    # Ride in without the crossbow (skip the shack), then it's the wrong tool.
+    game, cap = _play(
+        TO_RIVER_WITH_APPLE
+        + [
+            "give apple to horse",
+            "ride horse",
+            "north",
+            "west",
+            "follow deer",
+            "shoot poacher",
+        ]
+    )
+    assert _said(cap, "nothing to shoot")
+
+
+def test_taking_the_purse_scores_and_north_opens():
+    game, _ = _play(TO_DEEP_WOODS + ["shoot poacher", "take coin purse", "north"])
+    assert "purse" in game._scored_keys
+    assert game.player.location.name == "Clearing"
+
+
+def test_north_is_barred_until_the_poacher_is_dealt_with():
+    game, cap = _play(TO_DEEP_WOODS + ["north"])
+    assert _said(cap, "stalks the deer")
+    assert game.player.location.name == "Deep Woods"
+
+
+def test_hesitating_lets_the_poacher_kill_the_deer():
+    game, cap = _play(TO_DEEP_WOODS + ["south"])  # flee instead of shooting
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "doe drops")
+
+
+def test_examining_in_the_deep_woods_is_safe():
+    game, cap = _play(TO_DEEP_WOODS + ["examine poacher"])  # a look isn't fatal
+    assert not game.is_game_over()
+    game.do_command("shoot poacher")
+    assert game.locations["Deep Woods"].get_property("poacher_dealt")
+
+
+# --- boots playtest fixes (get/wear "boots"; one footwear at a time) -------
+
+
+def test_boots_can_be_taken_by_short_or_full_name():
+    game, _ = _play(["out", "down", "get boots"])
+    assert "boots" in game.player.inventory
+    game2, _ = _play(["out", "down", "get army boots"])  # the descriptive name too
+    assert "boots" in game2.player.inventory
+
+
+def test_wearing_boots_scores_and_works_by_either_name():
+    game, cap = _play(["out", "down", "get boots", "wear boots"])
+    assert "boots" in game.player.worn and "boots" in game._scored_keys
+    game2, _ = _play(["out", "down", "get boots", "wear army boots"])
+    assert "boots" in game2.player.worn
+
+
+def test_only_one_footwear_at_a_time():
+    game, cap = _play(
+        [
+            "out",
+            "down",
+            "get boots",
+            "up",
+            "enter",
+            "take glass slippers",
+            "wear glass slippers",
+        ]
+    )
+    assert "glass slippers" in game.player.worn
+    game.do_command("wear boots")  # blocked: slippers occupy the feet slot
+    assert _said(cap, "take off")
+    assert "boots" not in game.player.worn
+    game.do_command("take off glass slippers")
+    game.do_command("wear boots")
+    assert "boots" in game.player.worn and "glass slippers" not in game.player.worn
+
+
+def test_slipper_gags_run_through_the_engine_wear():
+    game, cap = _play(["take glass slippers", "wear glass slippers"])
+    assert not game.is_game_over()  # a gag, not a death
+    assert _said(cap, "doesn't hurt")
