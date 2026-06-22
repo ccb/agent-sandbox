@@ -101,7 +101,24 @@ def test_talk_to_smith_speaks_his_line():
 
 
 def _at_hermit():
-    return _play(["out", "east", "south", "south"])  # -> Hermit's Cave
+    return _play(["out", "east", "south", "south"])  # -> Outside Hermit's Cave
+
+
+def test_hermit_is_outside_a_blocked_cave():
+    game, _ = _game()
+    assert "Outside Hermit's Cave" in game.locations
+    assert "Cave" in game.locations  # a real (if unenterable) location
+
+
+def test_cave_is_too_dark_to_enter():
+    game, cap = _at_hermit()
+    assert game.player.location.name == "Outside Hermit's Cave"
+    game.do_command("go in")  # blocked exit
+    assert _said(cap, "too dark and scary")
+    assert game.player.location.name == "Outside Hermit's Cave"  # didn't enter
+    game.do_command("enter cave")  # the rulebook verb
+    assert _said(cap, "too dark and scary")
+    assert game.player.location.name == "Outside Hermit's Cave"
 
 
 def test_talk_to_hermit_mumbles_about_a_prophecy():
