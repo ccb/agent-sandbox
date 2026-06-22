@@ -401,3 +401,25 @@ pieces now in. Remaining: the endgame (javelin summons + THROW JAVELIN banishes
 the demon, push cultist into pit) + score-branched epilogues + win walkthrough +
 faithfulness audit. Possible polish: OPEN DOOR (spiked door) / OPEN IRON MAIDEN
 gates were left ungated to avoid churning routes -- revisit in the endgame slice.
+
+### AC3 COMPLETE — endgame + scored epilogues (#141, #142, #143)
+
+Action Castle III is winnable end to end: the WALKTHROUGH scores 100/100 and
+hits the "TO BE CONTINUED!" hero ending.
+
+- #141 endgame: the bronze javelin summons the cultist + demon in the Chaos
+  Chapel; THROW JAVELIN banishes the demon (dawdling in front of it = death),
+  PUSH CULTIST finishes him. Plus the two way-down flavor gates (OPEN DOOR,
+  OPEN IRON MAIDEN); updated the cleric/crypt routes through them.
+- #142 epilogues: rulebook page-72 branch-by-progress endings (hero / banished-
+  only / return-artifact / sell-crown / raise-baby / die-alone), home +10 and
+  finish +5 always. Plus a real WALKTHROUGH (--walk) and the 100/100 win test.
+- Gotcha fixed: is_game_over() consults is_won(), so an is_won() that returned
+  True on killing the cultist ended the game before going home (score 85).
+  Re-gated is_won() on game_over -- the adventure only finishes on GO NORTH.
+- #143: marked the port complete in the docstring.
+
+Across AC3 the "each finding -> reusable engine feature" pattern held: it drove
+the Darkness block (#128), GET-from-carried-container (#130), and the whole
+crafting system (#136). 651 tests. Optional flavor left unported (noted in the
+docstring): topic dialogue, the telescope/journal hints, FIGHT BANDITS death.
