@@ -335,3 +335,34 @@ goblin-caves net trap + queen exchanges (baby, crown->javelin); ooze/lockbox/
 crown (USE WAND freezes the ooze) + statue slide-trap; then the endgame (javelin
 summons + THROW JAVELIN banishes the demon, push cultist into pit) and the
 score-branched epilogues. Plus a full win walkthrough + faithfulness audit.
+
+### Reusable crafting system (#136) + AC3 stew (#137)
+
+Chris asked (ultrathink) for a general crafting system -- stew = water + mushroom,
+but also Minecraft-style string + stick -> bow, possibly requiring an instrument.
+
+**Design that shipped (#136):** declarative `Recipe` + `Ingredient` (crafting.py),
+one generic `Craft` action. Inputs are consumed from held items; *tools* are
+required present (held or in room) but NOT consumed -- so a pot, a forge, and a
+hammer are all just "tools" (station vs instrument is only a scope difference).
+Ingredients match by name or by a property *tag* (tag="plank", count=2 -> any
+two planks). Output is a factory (g -> Item|list) so recipes repeat. The parser
+routes make/craft/cook/brew/forge/mix/combine/assemble/build to CRAFT, gated on
+the game having recipes (non-crafting games unaffected; "make a wish" still wins
+specific-first). Resolve by output name / by ingredients / bare-verb-at-station.
+
+Two decisions Chris made: liquids = waterskin-as-container (a `water` item in
+the skin) over a provider protocol; and build engine-first then AC3.
+
+Two limits filed as issues rather than solved now: **#134** count>1 for
+same-named items (engine keys inventory by name; tags cover the real cases), and
+**#135** "known"/recipe-book gating (every recipe is always craftable for now).
+
+**AC3 (#137):** stew is a Recipe (water + cave mushroom at the pot). Waterskin
+became a container -- FILL puts a `water` item in it; GIVE WATER and the stew
+both consume it. Key gotcha: nested containers only resolve one level deep in
+the held-scope helpers, so the waterskin rides directly in inventory (not in the
+backpack) to keep its water reachable. TAKE MUSHROOM yields a cave mushroom.
+
+620 tests. Next: the baby/stew feeding + crying-death chain (the stew now has a
+consumer), goblin-queen exchanges, ooze/lockbox/crown, then the endgame.
