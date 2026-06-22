@@ -346,10 +346,16 @@ body,
 .agent-card .mem-list li.is-new {
   animation: mem-flash-in 4s ease-in-out 1;
 }
-/* Respect users who prefer less motion: skip the flash entirely for them. */
+/* Reduced-motion: keep a visible "new memory" cue, but swap the two-pulse flash
+   for a single gentle fade -- a brief background tint, no repeated pulsing. */
+@keyframes mem-flash-soft {
+  0%   { background-color: rgba(255, 214, 102, 0); }
+  15%  { background-color: rgba(255, 214, 102, 0.8); }
+  100% { background-color: rgba(255, 214, 102, 0); }
+}
 @media (prefers-reduced-motion: reduce) {
   .agent-card .mem-list li.is-new {
-    animation: none;
+    animation: mem-flash-soft 2.5s ease-out 1;
   }
 }
 
