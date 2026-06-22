@@ -175,6 +175,32 @@ green CI, all within generative-agents/, engine untouched; left for CCB to merge
 Sent Frankie a Slack DM pointing him at the AC2/AC3 ports, their tests (the
 command spec), the journal, and the reusable engine features to build on.
 
+### Parsely conversion guide + AC4 worked example (#151-154)
+
+Wrote a comprehensive how-to for converting Parsely games to the engine
+(docs/converting-parsely-games.md, #154), aimed at Frankie. Headline framing he
+needed: it's an iterative LOOP, not one prompt -- plan, slice, prompt/generate/
+test/fix per slice, walkthrough -- because the LLM confidently misreads ambiguous
+rulebooks. Covers the parser routing rule (multi-word ACTION_NAMEs beat built-in
+keywords = the #1 "missing action" fix), the reusable engine features, and the
+is_won/is_game_over gotcha.
+
+To make it concrete, started porting AC4 ("Escape from Action Castle") WITH Chris,
+slice by slice, capturing the real points of intervention (now §15 of the guide):
+- #151 vehicle/mount engine feature (Chris's call to generalize, not hand-code;
+  horse + motorcycle ride on it; AC2 boat refactor deferred).
+- #152 AC4 world skeleton (14 rooms). The "ride east OR west onto the highway"
+  tempted a Highway room with two exits; the dup-destination topology test caught
+  it -> endings are action-effects, not rooms.
+- #153 tower escape: cut hair -> MAKE ROPE (a crafting recipe!) -> climb out, OR
+  sneak down through the guardroom. Chris corrected two of my OCR misreads: WEAR
+  GLASS/RUBY SLIPPERS are gags (not deaths) and KILL SELF is a clue (a falling
+  hair slices the dagger), not a death. Exactly the "human catches the confident
+  misread" lesson the guide preaches.
+
+AC4 slices 4-5 (horse+poacher/deer; ranch/roadhouse/bar + endings + full
+walkthrough) still to do. 683 tests green.
+
 ---
 
 ## 2026-06-21 (cont. 2)
