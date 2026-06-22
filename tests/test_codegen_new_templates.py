@@ -193,110 +193,12 @@ def load_spec_from_dict(data: dict):
     return GameSpec.from_dict(copy.deepcopy(data))
 
 
-# --------------------------------------------------------------------------
-# New declarative fields on the spec: read_text, use_responses, dialogue,
-# greeting. All four route to engine built-ins (Read, Use_On, Talk_To) so the
-# LLM can encode these patterns without inventing custom actions.
-# --------------------------------------------------------------------------
-
-
-def test_read_text_on_item_routes_to_engine_read(tmp_path):
-    """An item with ``read_text`` becomes readable via the built-in Read."""
-    data = _good_data()
-    data["items"].append(
-        {
-            "name": "scroll",
-            "description": "a parchment scroll",
-            "examine_text": "ROLLED.",
-            "at": {"location": "Cottage"},
-            "properties": {},
-            "command_hints": ["read scroll"],
-            "read_text": "Beware the troll on the drawbridge.",
-        }
-    )
-    src = emit_module(load_spec_from_dict(data))
-    mod = _load(tmp_path, src)
-    game = mod.build_game()
-    ok = game.do_command("read scroll")
-    assert ok is True
-    history = " ".join(e["content"] for e in game.parser.command_history)
-    assert "Beware the troll" in history
-
-
-def test_use_responses_on_item_route_to_engine_use_on(tmp_path):
-    """``use <tool> on <item>`` fires the matching UseResponse."""
-    data = _good_data()
-    # Replace the lamp's properties with a use_responses entry that turns
-    # an unlit-but-flammable candle into a lit one when used on the lamp.
-    data["items"].append(
-        {
-            "name": "tinder",
-            "description": "dry tinder",
-            "examine_text": "",
-            "at": {"location": "Cottage"},
-            "properties": {},
-            "command_hints": [],
-            "use_responses": [
-                {
-                    "tool": "lamp",
-                    "requires_tool_properties": {"is_lit": True},
-                    "sets_target_properties": {"is_lit": True},
-                    "response_text": "The tinder catches fire.",
-                }
-            ],
-        }
-    )
-    src = emit_module(load_spec_from_dict(data))
-    mod = _load(tmp_path, src)
-    game = mod.build_game()
-    # The player starts with the lamp; light it first, then apply.
-    assert game.do_command("light lamp") is True
-    ok = game.do_command("use lamp on tinder")
-    assert ok is True
-    tinder = game.locations["Cottage"].items["tinder"]
-    assert tinder.get_property("is_lit") is True
-
-
-def test_dialogue_greeting_on_character_routes_to_talk_to(tmp_path):
-    """``talk to`` returns the greeting; ``ask about`` returns the topic."""
-    data = _good_data()
-    # The princess already exists in the gold spec; teach her some lines.
-    princess = next(c for c in data["characters"] if c["name"] == "princess")
-    princess["greeting"] = "Help me, brave traveler!"
-    princess["dialogue"] = {"ghost": "The dungeon ghost stole my crown."}
-
-    src = emit_module(load_spec_from_dict(data))
-    mod = _load(tmp_path, src)
-    game = mod.build_game()
-    # Travel to the Tower where the princess is. Reuse the canonical solution
-    # up through `go up` to Tower.
-    commands = [
-        "get pole",
-        "go out",
-        "go south",
-        "catch fish with pole",
-        "go north",
-        "go north",
-        "go east",
-        "give fish to troll",
-        "go east",
-        "attack guard with branch",  # branch in inventory? No -- skip
-    ]
-    # Simpler: synthesize a co-located NPC test instead of replaying AC.
-    # Move the princess into the Cottage so the player can talk to her
-    # without traversing the whole castle.
-    game = mod.build_game()
-    princess_obj = game.characters["princess"]
-    princess_obj.location.characters.pop("princess", None)
-    cottage = game.locations["Cottage"]
-    cottage.add_character(princess_obj)
-
-    assert game.do_command("talk to princess") is True
-    history = " ".join(e["content"] for e in game.parser.command_history)
-    assert "Help me, brave traveler!" in history
-    assert game.do_command("ask princess about ghost") is True
-    history = " ".join(e["content"] for e in game.parser.command_history)
-    assert "stole my crown" in history
+# NOTE: tests for the declarative read_text / use_responses / dialogue+greeting
+# fields were retired -- they exercised an engine UseResponse / built-in Read /
+# Character greeting layer that was dropped when codegen was rebased onto main
+# (see codegen/README.md). The spec dataclasses still parse those fields; the
+# engine routing they asserted no longer exists. Restore the engine layer if
+# that pattern is revived.
 
 
 def test_legacy_property_aliases_are_normalized():
