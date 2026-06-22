@@ -4,6 +4,179 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-22 — Action Castle III (Phases 3–5), crafting, item stacks
+
+(Continues the 6-21 AC3 analysis + Phases 1-2 logged in the day below.)
+
+### AC3 Phase 3 — carried-container GET + party recruitment (#130, #131)
+
+**Engine (#130):** GET now reaches into the player's own carried open containers,
+not just holders sitting in the room. AC3 needs it — the party starts with a
+backpack and pulls gear out (lantern, dagger, lockpicks, waterskin). "take
+lantern" moves it pack -> hand; a closed pack hides its contents. Lantern went
+back into the pack in AC3 (rulebook-faithful).
+
+**AC3 (#131):** recruiting the four companions. The nice realization held up:
+recruitment is just the engine's follow mechanism plus refuses_follow as the
+gate. Elf/wizard join on sight; the cleric and dwarf must be rescued first
+(give water + free; drive off spider + free + heal poison), and clearing the
+refusal IS the rescue (+10 each). INVITE reports why a recruit won't come yet.
+The whole party cascades when you move (drag_followers).
+
+One faithfulness nick: the captive cleric is named "cleric" throughout (the
+rulebook calls him "the man" until rescued). One canonical character name is far
+cleaner than renaming a dict key mid-game; his description keeps the tortured-man
+flavor, and the rescue verbs (give water / free man) target him by location, not
+name, so "free man" still works.
+
+**Next (Phase 4):** the ability-verbs and their puzzle items — SHOOT SPIDER
+(elf+bow, drives off the spider so FREE DWARF is safe), USE HATCHET (dwarf,
+clears the web), CAST SLEEP (wizard+spellbook, sleeps the bandits for the bow),
+USE WAND (wizard, freezes the ooze), TURN UNDEAD (cleric+pendant, Crypt) — then
+the baby + mushroom-stew + crying-death chain, the goblin-queen exchanges, and
+ooze/lockbox/crown. The interlock is the whole game; I'll land it in slices.
+
+### AC3 Phase 4a/4b — the bow chain + spider/web (#132, #133)
+
+The hardest interlock in AC3, landed in two slices.
+
+**4a — bow chain (#132):** the long quest that arms the elf, threading the
+cleric and wizard abilities through it: SEARCH dungeon -> pendant -> GIVE PENDANT
+TO CLERIC -> Crypt (TAKE BOOK wakes skeletons; cleric+pendant TURN UNDEAD them,
+else death) -> spell book -> GIVE SPELL BOOK TO WIZARD (+5) -> CAST SLEEP drops
+the bandits -> take bow -> GIVE BOW TO ELF (+5). Ability-verbs gate on the
+companion being in the party AND co-located (_in_party). The multi-word
+give/take verbs route specific-first ahead of built-in give/take (the AC2 trick).
+
+**4b — spider/web (#133):** SHOOT SPIDER (armed elf, +10) drives the spider off;
+USE HATCHET (dwarf) clears the web blocking west -- but only after the spider's
+gone (hacking the web while it watches = death). WebBlock gates Spider Lair west.
+Deep Ravine now reachable.
+
+602 tests. The pattern is settling nicely: each ability is a small custom action
+gated on (companion in party + present) + (required item flag), and deaths are
+the faithful gates that force the right order.
+
+**Remaining (Phase 4 tail + 5):** baby (DROP BACKPACK -> fissure -> take baby) +
+mushroom stew (spring water + cave mushroom cooked at the bandit pot) + the
+crying-baby death triggers (Bandit Camp, Deep Ravine) + feeding to quiet it;
+goblin-caves net trap + queen exchanges (baby, crown->javelin); ooze/lockbox/
+crown (USE WAND freezes the ooze) + statue slide-trap; then the endgame (javelin
+summons + THROW JAVELIN banishes the demon, push cultist into pit) and the
+score-branched epilogues. Plus a full win walkthrough + faithfulness audit.
+
+### Reusable crafting system (#136) + AC3 stew (#137)
+
+Chris asked (ultrathink) for a general crafting system -- stew = water + mushroom,
+but also Minecraft-style string + stick -> bow, possibly requiring an instrument.
+
+**Design that shipped (#136):** declarative `Recipe` + `Ingredient` (crafting.py),
+one generic `Craft` action. Inputs are consumed from held items; *tools* are
+required present (held or in room) but NOT consumed -- so a pot, a forge, and a
+hammer are all just "tools" (station vs instrument is only a scope difference).
+Ingredients match by name or by a property *tag* (tag="plank", count=2 -> any
+two planks). Output is a factory (g -> Item|list) so recipes repeat. The parser
+routes make/craft/cook/brew/forge/mix/combine/assemble/build to CRAFT, gated on
+the game having recipes (non-crafting games unaffected; "make a wish" still wins
+specific-first). Resolve by output name / by ingredients / bare-verb-at-station.
+
+Two decisions Chris made: liquids = waterskin-as-container (a `water` item in
+the skin) over a provider protocol; and build engine-first then AC3.
+
+Two limits filed as issues rather than solved now: **#134** count>1 for
+same-named items (engine keys inventory by name; tags cover the real cases), and
+**#135** "known"/recipe-book gating (every recipe is always craftable for now).
+
+**AC3 (#137):** stew is a Recipe (water + cave mushroom at the pot). Waterskin
+became a container -- FILL puts a `water` item in it; GIVE WATER and the stew
+both consume it. Key gotcha: nested containers only resolve one level deep in
+the held-scope helpers, so the waterskin rides directly in inventory (not in the
+backpack) to keep its water reachable. TAKE MUSHROOM yields a cave mushroom.
+
+620 tests. Next: the baby/stew feeding + crying-death chain (the stew now has a
+consumer), goblin-queen exchanges, ooze/lockbox/crown, then the endgame.
+
+### AC3 Phase 4 (baby) — rescue + crying-deaths + feeding (#138)
+
+The chain that ties the fissure, the stew, and the death triggers together.
+DROP BACKPACK (a PackBlock) to squeeze into the fissure; TAKE BABY (+5), and it
+cries. Crying baby = fatal at the Bandit Camp and Deep Ravine (triggers); FEED
+BABY consumes the stew and quiets it. The intended order is emergent: cook stew
+at the camp before fetching the baby, then feed it right after rescue. 627 tests.
+
+Notable: the stew (crafting PR) now has its consumer, and the death triggers
+reuse the same carry-a-crying-baby predicate -- clean. Remaining AC3: goblin
+queen (net trap SHOW BABY, GIVE BABY, crown->javelin), ooze/lockbox/crown, then
+the endgame (demon/cultist) + scored epilogues + full win walkthrough.
+
+### AC3 Phase 4 (goblin queen) — net trap + throne exchanges (#139)
+
+Goblin Caves net trap (no baby -> enslaved death; SHOW BABY frees you, NetBlock
+herds you east), Throne Room GIVE BABY (+5, lets you leave) and GIVE CROWN (+5,
+trades the crown for the bronze javelin -- the endgame key). A throne_escort
+trigger whisks you to the surface once the audience is satisfied (baby given,
+crown too if carried) and pacifies the caves. 632 tests. Crown source (lockbox)
+comes next; GIVE CROWN tested with a placed crown. Remaining: ooze/lockbox/crown
++ statue slide-trap, then endgame (demon/cultist) + epilogues + win walkthrough.
+
+### AC3 Phase 4 (ooze/crown) — #140
+
+Dark Corridor gray ooze: LOOK UP reveals it; PICK LOCK / TAKE LOCKBOX while it
+lives = death; USE WAND ON OOZE (wizard's wand) freezes it (+10). Then PICK LOCK
+(starting lockpicks) yields the gold crown -> the queen's tribute -> the bronze
+javelin. Vault statue slide-trap (PUSH STATUE) drops you to the Mushroom Garden.
+639 tests; the full crown->queen->javelin loop is tested end to end. All puzzle
+pieces now in. Remaining: the endgame (javelin summons + THROW JAVELIN banishes
+the demon, push cultist into pit) + score-branched epilogues + win walkthrough +
+faithfulness audit. Possible polish: OPEN DOOR (spiked door) / OPEN IRON MAIDEN
+gates were left ungated to avoid churning routes -- revisit in the endgame slice.
+
+### AC3 COMPLETE — endgame + scored epilogues (#141, #142, #143)
+
+Action Castle III is winnable end to end: the WALKTHROUGH scores 100/100 and
+hits the "TO BE CONTINUED!" hero ending.
+
+- #141 endgame: the bronze javelin summons the cultist + demon in the Chaos
+  Chapel; THROW JAVELIN banishes the demon (dawdling in front of it = death),
+  PUSH CULTIST finishes him. Plus the two way-down flavor gates (OPEN DOOR,
+  OPEN IRON MAIDEN); updated the cleric/crypt routes through them.
+- #142 epilogues: rulebook page-72 branch-by-progress endings (hero / banished-
+  only / return-artifact / sell-crown / raise-baby / die-alone), home +10 and
+  finish +5 always. Plus a real WALKTHROUGH (--walk) and the 100/100 win test.
+- Gotcha fixed: is_game_over() consults is_won(), so an is_won() that returned
+  True on killing the cultist ended the game before going home (score 85).
+  Re-gated is_won() on game_over -- the adventure only finishes on GO NORTH.
+- #143: marked the port complete in the docstring.
+
+Across AC3 the "each finding -> reusable engine feature" pattern held: it drove
+the Darkness block (#128), GET-from-carried-container (#130), and the whole
+crafting system (#136). 651 tests. Optional flavor left unported (noted in the
+docstring): topic dialogue, the telescope/journal hints, FIGHT BANDITS death.
+
+### #134 — opt-in item stacks/quantities (#148)
+
+The real blocker behind "a recipe needs 2 sticks" wasn't crafting -- it's that
+every holder keys items by name, so you can't hold two identical items at all.
+Rejected the big refactor (list/id-keyed holders); went with a quantity on Item.
+
+Item.quantity (default 1) + make_stackable(n). Stackable items merge on add
+across all three holders (inventory/container/location); a stack is one slot.
+The safety property: stacking is OPT-IN, so non-stackable items never merge or
+show counts and the name->item shape is unchanged -- zero regression risk, full
+suite stayed green by construction. Crafting sums quantity for availability and
+decrements stacks on consume, so Ingredient(count=2) works against a single
+named stack or across tag matches. (x N) in listings; quantity serializes.
+
+Shipped Tier 1+2; deferred Tier 3 (partial-count commands like "drop 2 sticks",
+which need parser number-handling). #135 (known/recipe-book recipes) still open.
+
+Also today: reviewed Alistair's PR #109 (5-agent replay + memory/reasoning UI) --
+green CI, all within generative-agents/, engine untouched; left for CCB to merge.
+Sent Frankie a Slack DM pointing him at the AC2/AC3 ports, their tests (the
+command spec), the journal, and the reusable engine features to build on.
+
+---
+
 ## 2026-06-21 (cont. 2)
 
 **Focus:** Engine features the AC2 port pulled for -- containers, surfaces, and
@@ -279,169 +452,3 @@ walkthrough + faithfulness audit. A couple of rulebook ambiguities to pin down:
 how the wand is used (player vs wizard-in-party), and whether the stew pot needs
 the bandits asleep first.
 
-### AC3 Phase 3 — carried-container GET + party recruitment (#130, #131)
-
-**Engine (#130):** GET now reaches into the player's own carried open containers,
-not just holders sitting in the room. AC3 needs it — the party starts with a
-backpack and pulls gear out (lantern, dagger, lockpicks, waterskin). "take
-lantern" moves it pack -> hand; a closed pack hides its contents. Lantern went
-back into the pack in AC3 (rulebook-faithful).
-
-**AC3 (#131):** recruiting the four companions. The nice realization held up:
-recruitment is just the engine's follow mechanism plus refuses_follow as the
-gate. Elf/wizard join on sight; the cleric and dwarf must be rescued first
-(give water + free; drive off spider + free + heal poison), and clearing the
-refusal IS the rescue (+10 each). INVITE reports why a recruit won't come yet.
-The whole party cascades when you move (drag_followers).
-
-One faithfulness nick: the captive cleric is named "cleric" throughout (the
-rulebook calls him "the man" until rescued). One canonical character name is far
-cleaner than renaming a dict key mid-game; his description keeps the tortured-man
-flavor, and the rescue verbs (give water / free man) target him by location, not
-name, so "free man" still works.
-
-**Next (Phase 4):** the ability-verbs and their puzzle items — SHOOT SPIDER
-(elf+bow, drives off the spider so FREE DWARF is safe), USE HATCHET (dwarf,
-clears the web), CAST SLEEP (wizard+spellbook, sleeps the bandits for the bow),
-USE WAND (wizard, freezes the ooze), TURN UNDEAD (cleric+pendant, Crypt) — then
-the baby + mushroom-stew + crying-death chain, the goblin-queen exchanges, and
-ooze/lockbox/crown. The interlock is the whole game; I'll land it in slices.
-
-### AC3 Phase 4a/4b — the bow chain + spider/web (#132, #133)
-
-The hardest interlock in AC3, landed in two slices.
-
-**4a — bow chain (#132):** the long quest that arms the elf, threading the
-cleric and wizard abilities through it: SEARCH dungeon -> pendant -> GIVE PENDANT
-TO CLERIC -> Crypt (TAKE BOOK wakes skeletons; cleric+pendant TURN UNDEAD them,
-else death) -> spell book -> GIVE SPELL BOOK TO WIZARD (+5) -> CAST SLEEP drops
-the bandits -> take bow -> GIVE BOW TO ELF (+5). Ability-verbs gate on the
-companion being in the party AND co-located (_in_party). The multi-word
-give/take verbs route specific-first ahead of built-in give/take (the AC2 trick).
-
-**4b — spider/web (#133):** SHOOT SPIDER (armed elf, +10) drives the spider off;
-USE HATCHET (dwarf) clears the web blocking west -- but only after the spider's
-gone (hacking the web while it watches = death). WebBlock gates Spider Lair west.
-Deep Ravine now reachable.
-
-602 tests. The pattern is settling nicely: each ability is a small custom action
-gated on (companion in party + present) + (required item flag), and deaths are
-the faithful gates that force the right order.
-
-**Remaining (Phase 4 tail + 5):** baby (DROP BACKPACK -> fissure -> take baby) +
-mushroom stew (spring water + cave mushroom cooked at the bandit pot) + the
-crying-baby death triggers (Bandit Camp, Deep Ravine) + feeding to quiet it;
-goblin-caves net trap + queen exchanges (baby, crown->javelin); ooze/lockbox/
-crown (USE WAND freezes the ooze) + statue slide-trap; then the endgame (javelin
-summons + THROW JAVELIN banishes the demon, push cultist into pit) and the
-score-branched epilogues. Plus a full win walkthrough + faithfulness audit.
-
-### Reusable crafting system (#136) + AC3 stew (#137)
-
-Chris asked (ultrathink) for a general crafting system -- stew = water + mushroom,
-but also Minecraft-style string + stick -> bow, possibly requiring an instrument.
-
-**Design that shipped (#136):** declarative `Recipe` + `Ingredient` (crafting.py),
-one generic `Craft` action. Inputs are consumed from held items; *tools* are
-required present (held or in room) but NOT consumed -- so a pot, a forge, and a
-hammer are all just "tools" (station vs instrument is only a scope difference).
-Ingredients match by name or by a property *tag* (tag="plank", count=2 -> any
-two planks). Output is a factory (g -> Item|list) so recipes repeat. The parser
-routes make/craft/cook/brew/forge/mix/combine/assemble/build to CRAFT, gated on
-the game having recipes (non-crafting games unaffected; "make a wish" still wins
-specific-first). Resolve by output name / by ingredients / bare-verb-at-station.
-
-Two decisions Chris made: liquids = waterskin-as-container (a `water` item in
-the skin) over a provider protocol; and build engine-first then AC3.
-
-Two limits filed as issues rather than solved now: **#134** count>1 for
-same-named items (engine keys inventory by name; tags cover the real cases), and
-**#135** "known"/recipe-book gating (every recipe is always craftable for now).
-
-**AC3 (#137):** stew is a Recipe (water + cave mushroom at the pot). Waterskin
-became a container -- FILL puts a `water` item in it; GIVE WATER and the stew
-both consume it. Key gotcha: nested containers only resolve one level deep in
-the held-scope helpers, so the waterskin rides directly in inventory (not in the
-backpack) to keep its water reachable. TAKE MUSHROOM yields a cave mushroom.
-
-620 tests. Next: the baby/stew feeding + crying-death chain (the stew now has a
-consumer), goblin-queen exchanges, ooze/lockbox/crown, then the endgame.
-
-### AC3 Phase 4 (baby) — rescue + crying-deaths + feeding (#138)
-
-The chain that ties the fissure, the stew, and the death triggers together.
-DROP BACKPACK (a PackBlock) to squeeze into the fissure; TAKE BABY (+5), and it
-cries. Crying baby = fatal at the Bandit Camp and Deep Ravine (triggers); FEED
-BABY consumes the stew and quiets it. The intended order is emergent: cook stew
-at the camp before fetching the baby, then feed it right after rescue. 627 tests.
-
-Notable: the stew (crafting PR) now has its consumer, and the death triggers
-reuse the same carry-a-crying-baby predicate -- clean. Remaining AC3: goblin
-queen (net trap SHOW BABY, GIVE BABY, crown->javelin), ooze/lockbox/crown, then
-the endgame (demon/cultist) + scored epilogues + full win walkthrough.
-
-### AC3 Phase 4 (goblin queen) — net trap + throne exchanges (#139)
-
-Goblin Caves net trap (no baby -> enslaved death; SHOW BABY frees you, NetBlock
-herds you east), Throne Room GIVE BABY (+5, lets you leave) and GIVE CROWN (+5,
-trades the crown for the bronze javelin -- the endgame key). A throne_escort
-trigger whisks you to the surface once the audience is satisfied (baby given,
-crown too if carried) and pacifies the caves. 632 tests. Crown source (lockbox)
-comes next; GIVE CROWN tested with a placed crown. Remaining: ooze/lockbox/crown
-+ statue slide-trap, then endgame (demon/cultist) + epilogues + win walkthrough.
-
-### AC3 Phase 4 (ooze/crown) — #140
-
-Dark Corridor gray ooze: LOOK UP reveals it; PICK LOCK / TAKE LOCKBOX while it
-lives = death; USE WAND ON OOZE (wizard's wand) freezes it (+10). Then PICK LOCK
-(starting lockpicks) yields the gold crown -> the queen's tribute -> the bronze
-javelin. Vault statue slide-trap (PUSH STATUE) drops you to the Mushroom Garden.
-639 tests; the full crown->queen->javelin loop is tested end to end. All puzzle
-pieces now in. Remaining: the endgame (javelin summons + THROW JAVELIN banishes
-the demon, push cultist into pit) + score-branched epilogues + win walkthrough +
-faithfulness audit. Possible polish: OPEN DOOR (spiked door) / OPEN IRON MAIDEN
-gates were left ungated to avoid churning routes -- revisit in the endgame slice.
-
-### AC3 COMPLETE — endgame + scored epilogues (#141, #142, #143)
-
-Action Castle III is winnable end to end: the WALKTHROUGH scores 100/100 and
-hits the "TO BE CONTINUED!" hero ending.
-
-- #141 endgame: the bronze javelin summons the cultist + demon in the Chaos
-  Chapel; THROW JAVELIN banishes the demon (dawdling in front of it = death),
-  PUSH CULTIST finishes him. Plus the two way-down flavor gates (OPEN DOOR,
-  OPEN IRON MAIDEN); updated the cleric/crypt routes through them.
-- #142 epilogues: rulebook page-72 branch-by-progress endings (hero / banished-
-  only / return-artifact / sell-crown / raise-baby / die-alone), home +10 and
-  finish +5 always. Plus a real WALKTHROUGH (--walk) and the 100/100 win test.
-- Gotcha fixed: is_game_over() consults is_won(), so an is_won() that returned
-  True on killing the cultist ended the game before going home (score 85).
-  Re-gated is_won() on game_over -- the adventure only finishes on GO NORTH.
-- #143: marked the port complete in the docstring.
-
-Across AC3 the "each finding -> reusable engine feature" pattern held: it drove
-the Darkness block (#128), GET-from-carried-container (#130), and the whole
-crafting system (#136). 651 tests. Optional flavor left unported (noted in the
-docstring): topic dialogue, the telescope/journal hints, FIGHT BANDITS death.
-
-### #134 — opt-in item stacks/quantities (#148)
-
-The real blocker behind "a recipe needs 2 sticks" wasn't crafting -- it's that
-every holder keys items by name, so you can't hold two identical items at all.
-Rejected the big refactor (list/id-keyed holders); went with a quantity on Item.
-
-Item.quantity (default 1) + make_stackable(n). Stackable items merge on add
-across all three holders (inventory/container/location); a stack is one slot.
-The safety property: stacking is OPT-IN, so non-stackable items never merge or
-show counts and the name->item shape is unchanged -- zero regression risk, full
-suite stayed green by construction. Crafting sums quantity for availability and
-decrements stacks on consume, so Ingredient(count=2) works against a single
-named stack or across tag matches. (x N) in listings; quantity serializes.
-
-Shipped Tier 1+2; deferred Tier 3 (partial-count commands like "drop 2 sticks",
-which need parser number-handling). #135 (known/recipe-book recipes) still open.
-
-Also today: reviewed Alistair's PR #109 (5-agent replay + memory/reasoning UI) --
-green CI, all within generative-agents/, engine untouched; left for CCB to merge.
-Drafted a Slack reply to Frankie pointing him at the AC2/AC3 ports, their tests
-(the command spec), the journal, and the reusable engine features to build on.
