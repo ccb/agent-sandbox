@@ -112,6 +112,12 @@ class Game:
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
 
+        # Posed prompt (issue #110): a question the game is currently asking the
+        # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
+        # for an otherwise-unrecognized command. Transient conversational state,
+        # like a character's behavior -- not serialized. See prompts.py.
+        self._pending_prompt = None
+
         # Optional in-game clock (issue #7). Time is opt-in: with neither a
         # time_config nor an enabled clock in the config, the turn counter still
         # increments but no clock exists. An explicit time_config (a GameClock or
@@ -237,6 +243,22 @@ class Game:
         self.triggers.append(trigger)
         return trigger
 
+    def pose_prompt(self, prompt):
+        """Pose a question to the player (issue #110). While it is pending, the
+        parser reads an otherwise-unrecognized command as the answer. Posing a
+        new prompt replaces any previous one. See prompts.py."""
+        prompt.location = self.player.location.name if self.player.location else None
+        self._pending_prompt = prompt
+        return prompt
+
+    def pending_prompt(self):
+        """The question currently posed to the player, or None."""
+        return self._pending_prompt
+
+    def clear_prompt(self):
+        """Withdraw any posed prompt."""
+        self._pending_prompt = None
+
     def relocate(self, character, destination) -> None:
         """Move *character* to *destination* (bookkeeping only -- no narration).
 
@@ -248,6 +270,17 @@ class Game:
         if src is not None and character.name in getattr(src, "characters", {}):
             src.remove_character(character)
         destination.add_character(character)  # also sets character.location
+
+        # A posed question (issue #110) is moot once the player walks away from
+        # where it was asked -- unless it was marked sticky.
+        prompt = self._pending_prompt
+        if (
+            character is self.player
+            and prompt is not None
+            and not prompt.sticky
+            and prompt.location != destination.name
+        ):
+            self._pending_prompt = None
 
     def drag_followers(self, leader, _visited=None) -> None:
         """Move everyone following *leader* to the leader's current location, then
