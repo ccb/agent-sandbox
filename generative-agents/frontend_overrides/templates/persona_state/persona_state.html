@@ -111,15 +111,32 @@
 		margin: 0 0 0.4em;
 		padding: 0;
 	}
-	.persona-state .ps-mem-list li {
+	/* Memories formed at the same in-game time are clustered under one time header,
+	   so a burst of same-moment memories reads as a single group instead of
+	   repeating the timestamp on every row. A hairline above each header (after the
+	   first) separates one timestamp's group from the next. */
+	.persona-state .ps-mem-list .ps-mem-group-head {
+		font-size: 0.78em;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: #8a90a0;
+		font-variant-numeric: tabular-nums;
+		padding: 0.25em 0.6em 0.15em;
+	}
+	.persona-state .ps-mem-list .ps-mem-group-head:not(:first-child) {
+		margin-top: 0.3em;
+		padding-top: 0.5em;
+		border-top: 1px solid #e3e6ee;
+	}
+	.persona-state .ps-mem-list .ps-mem-item {
 		/* Right padding gives the flash highlight breathing room past the
 		   importance score, so it doesn't end flush against the row's edge. */
 		padding: 0.4em 0.7em 0.4em 0.6em;
-		border-bottom: 1px solid #eceef3;
 		border-left: 3px solid transparent;
 	}
-	.persona-state .ps-mem-list li:last-child {
-		border-bottom: none;
+	.persona-state .ps-mem-list .ps-mem-item + .ps-mem-item {
+		border-top: 1px solid #eceef3;
 	}
 	.persona-state .ps-mem-list .ps-mem-meta {
 		display: flex;
@@ -136,11 +153,6 @@
 		padding: 0.1em 0.45em;
 		color: #5b6478;
 		background: #eef0f5;
-	}
-	.persona-state .ps-mem-list .ps-mem-time {
-		font-size: 0.82em;
-		color: #6b7280;
-		font-variant-numeric: tabular-nums;
 	}
 	.persona-state .ps-mem-list .ps-mem-imp {
 		margin-left: auto;
@@ -171,7 +183,7 @@
 		80%  { background-color: rgba(255, 214, 102, 0.15); }
 		100% { background-color: rgba(255, 214, 102, 0); }
 	}
-	.persona-state .ps-mem-list li.is-new {
+	.persona-state .ps-mem-list .ps-mem-item.is-new {
 		animation: ps-mem-flash-in 4s ease-in-out 1;
 	}
 	/* Reduced-motion: keep a visible "new memory" cue, but swap the two-pulse flash
@@ -182,7 +194,7 @@
 		100% { background-color: rgba(255, 214, 102, 0); }
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.persona-state .ps-mem-list li.is-new {
+		.persona-state .ps-mem-list .ps-mem-item.is-new {
 			animation: ps-mem-flash-soft 2.5s ease-out 1;
 		}
 	}
@@ -273,16 +285,22 @@
 	<div class="ps-sub">Retrieved for this step (<span id="ps-retrieved-count">{{ retrieved_memories|length }}</span>)</div>
 	<div id="ps-retrieved-body">
 		{% if retrieved_memories %}
+		{# Cluster memories sharing an in-game time under one header (regroup keys
+		   consecutive runs, matching the live-sync script -- the stream is
+		   time-ordered, so same-time memories are adjacent). #}
 		<ul class="ps-mem-list">
-			{% for m in retrieved_memories %}
-			<li class="ps-mem-{{ m.kind }}">
+			{% regroup retrieved_memories by time as ret_time_groups %}
+			{% for tg in ret_time_groups %}
+			{% if tg.grouper %}<li class="ps-mem-group-head">{{ tg.grouper }}</li>{% endif %}
+			{% for m in tg.list %}
+			<li class="ps-mem-item ps-mem-{{ m.kind }}">
 				<div class="ps-mem-meta">
 					<span class="ps-mem-kind">{{ m.kind }}</span>
-					{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
 					<span class="ps-mem-imp">importance {{ m.importance }}</span>
 				</div>
 				<span class="ps-mem-text">{{ m.text }}</span>
 			</li>
+			{% endfor %}
 			{% endfor %}
 		</ul>
 		{% else %}
@@ -296,16 +314,20 @@
 	<div class="ps-sub">All memories (<span id="ps-all-count">{{ all_memories|length }}</span>)</div>
 	<div id="ps-all-body">
 		{% if all_memories %}
+		{# Same time-grouping as the retrieved list above. #}
 		<ul class="ps-mem-list">
-			{% for m in all_memories %}
-			<li class="ps-mem-{{ m.kind }}">
+			{% regroup all_memories by time as all_time_groups %}
+			{% for tg in all_time_groups %}
+			{% if tg.grouper %}<li class="ps-mem-group-head">{{ tg.grouper }}</li>{% endif %}
+			{% for m in tg.list %}
+			<li class="ps-mem-item ps-mem-{{ m.kind }}">
 				<div class="ps-mem-meta">
 					<span class="ps-mem-kind">{{ m.kind }}</span>
-					{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
 					<span class="ps-mem-imp">importance {{ m.importance }}</span>
 				</div>
 				<span class="ps-mem-text">{{ m.text }}</span>
 			</li>
+			{% endfor %}
 			{% endfor %}
 		</ul>
 		{% else %}
@@ -390,18 +412,41 @@
 	}
 
 	// Render one memory <li>, matching the agent card's markup so the two read alike.
+	// The in-game time isn't shown here -- it sits in the group header (see memListHtml).
 	function memHtml(m) {
 		var kind = String(m.kind == null ? "" : m.kind);
 		// kind is a fixed enum (observation/plan/reflection); keep only word chars
 		// for the CSS modifier class that colours the pill + left accent.
 		var kindClass = "ps-mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
 		var meta = "<span class='ps-mem-kind'>" + escapeHtml(kind) + "</span>";
-		if (m.time) meta += "<span class='ps-mem-time'>" + escapeHtml(String(m.time)) + "</span>";
 		meta += "<span class='ps-mem-imp'>importance " + escapeHtml(String(m.importance)) + "</span>";
-		return "<li class='" + kindClass + "'>"
+		return "<li class='ps-mem-item " + kindClass + "'>"
 			+ "<div class='ps-mem-meta'>" + meta + "</div>"
 			+ "<span class='ps-mem-text'>" + escapeHtml(m.text) + "</span>"
 			+ "</li>";
+	}
+
+	// Build the grouped <ul>: memories sharing an in-game time sit under one time
+	// header, so a burst of same-moment memories reads as one cluster rather than
+	// repeating the timestamp on every row (mirrors the agent card + the server-
+	// rendered {% templatetag openblock %} regroup {% templatetag closeblock %} above).
+	// The stream is time-ordered, so same-time memories are adjacent: emit a header
+	// whenever the time changes (one even for a lone memory, so every row still shows
+	// when it formed). Memory rows are the only .ps-mem-item nodes and keep document
+	// order, so renderSection's is-new flash mapping stays valid.
+	function memListHtml(mems) {
+		var parts = ["<ul class='ps-mem-list'>"];
+		var lastTime = null;
+		for (var i = 0; i < mems.length; i++) {
+			var time = mems[i].time == null ? "" : String(mems[i].time);
+			if (time && time !== lastTime) {
+				parts.push("<li class='ps-mem-group-head'>" + escapeHtml(time) + "</li>");
+			}
+			lastTime = time;
+			parts.push(memHtml(mems[i]));
+		}
+		parts.push("</ul>");
+		return parts.join("");
 	}
 
 	// Re-render a list section (its count + body), flashing rows whose memory we
@@ -416,14 +461,16 @@
 		var first = seen._seeded === undefined;
 		if (first) seen._seeded = true;
 		var html = mems.length
-			? "<ul class='ps-mem-list'>" + mems.map(memHtml).join("") + "</ul>"
+			? memListHtml(mems)
 			: "<p class='ps-mem-empty'>" + emptyText + "</p>";
 		// Memories are unchanged between an agent's decision points; only rewrite
 		// the DOM when the rendered HTML actually differs (mirrors the agent card).
 		if (body._lastHtml === html) return;
 		body._lastHtml = html;
 		body.innerHTML = html;
-		var rows = body.querySelectorAll(".ps-mem-list li");
+		// Only memory rows are .ps-mem-item (group headers aren't), so this lines up
+		// one-to-one with mems for the is-new check below.
+		var rows = body.querySelectorAll(".ps-mem-item");
 		for (var i = 0; i < rows.length; i++) {
 			var key = memKey(mems[i]);
 			if (!seen[key]) {

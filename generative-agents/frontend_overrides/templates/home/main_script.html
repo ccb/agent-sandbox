@@ -748,26 +748,43 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	          let mem_keys = mems.map(function (m) {
 	            return m.created_turn + "|" + (m.kind == null ? "" : m.kind) + "|" + m.text;
 	          });
-	          let memories_html = mems.length
-	            ? "<ul class='mem-list'>" + mems.map(function (m) {
-	                let kind = String(m.kind == null ? "" : m.kind);
-	                // kind is a fixed enum (observation/plan/reflection); keep
-	                // only word chars for the CSS modifier class that colours it.
-	                let kindClass = "mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
-	                // A meta line (kind pill + when the memory formed + its quiet
-	                // importance) sits above the memory text, so kinds read at a glance.
-	                let meta = "<span class='mem-kind'>" + escapeHtml(kind) + "</span>";
-	                if (m.time) {
-	                  meta += "<span class='mem-time'>" + escapeHtml(String(m.time)) + "</span>";
-	                }
-	                meta += "<span class='mem-imp' title='retrieval importance'>"
-	                  + escapeHtml(String(m.importance)) + "</span>";
-	                return "<li class='mem-item " + kindClass + "'>"
-	                  + "<div class='mem-meta'>" + meta + "</div>"
-	                  + "<div class='mem-text'>" + escapeHtml(m.text) + "</div>"
-	                  + "</li>";
-	              }).join("") + "</ul>"
-	            : "<em>None retrieved</em>";
+	          // Memories formed at the same in-game time are grouped under one time
+	          // header so a burst of same-moment memories reads as a single cluster
+	          // rather than repeating the timestamp on every row. The stream is
+	          // time-ordered, so same-time memories are already adjacent: we emit a
+	          // header whenever the time changes (one even for a lone memory, so every
+	          // row still shows when it formed) and the header carries the time, so the
+	          // per-row meta line drops it. Memory rows stay .mem-item in document
+	          // order (headers aren't), so the is-new flash mapping below is unaffected.
+	          let memories_html;
+	          if (!mems.length) {
+	            memories_html = "<em>None retrieved</em>";
+	          } else {
+	            let parts = ["<ul class='mem-list'>"];
+	            let last_time = null;
+	            mems.forEach(function (m) {
+	              let time = m.time == null ? "" : String(m.time);
+	              if (time && time !== last_time) {
+	                parts.push("<li class='mem-group-head'>" + escapeHtml(time) + "</li>");
+	              }
+	              last_time = time;
+	              let kind = String(m.kind == null ? "" : m.kind);
+	              // kind is a fixed enum (observation/plan/reflection); keep
+	              // only word chars for the CSS modifier class that colours it.
+	              let kindClass = "mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
+	              // A meta line (kind pill + its quiet importance) sits above the
+	              // memory text, so kinds read at a glance.
+	              let meta = "<span class='mem-kind'>" + escapeHtml(kind) + "</span>"
+	                + "<span class='mem-imp' title='retrieval importance'>"
+	                + escapeHtml(String(m.importance)) + "</span>";
+	              parts.push("<li class='mem-item " + kindClass + "'>"
+	                + "<div class='mem-meta'>" + meta + "</div>"
+	                + "<div class='mem-text'>" + escapeHtml(m.text) + "</div>"
+	                + "</li>");
+	            });
+	            parts.push("</ul>");
+	            memories_html = parts.join("");
+	          }
 	          // Retrieved memories only change at an agent's decision points -- they
 	          // carry forward unchanged on the steps in between. Rebuilding the list
 	          // every step would recreate the <li> nodes and snap .mem-list's scroll
