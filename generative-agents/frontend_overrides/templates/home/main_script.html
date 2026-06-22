@@ -933,6 +933,45 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	}
 	showSelectedAgent();
 
+	// *** STATE DETAILS POPUP ***
+	// Each card's "State Details" link opens that agent's full persona-state page
+	// in an overlay <iframe> instead of leaving the replay. We append ?embed=1 to
+	// the existing URL so the persona-state page hides its own "Return to
+	// simulation" header (it would otherwise navigate the iframe away). The links
+	// keep their href, so right-click "open in new tab" still works.
+	var state_modal = document.getElementById("state-modal");
+	var state_modal_frame = document.getElementById("state-modal-frame");
+
+	function openStateModal(url) {
+		if (!state_modal || !state_modal_frame || !url) return;
+		state_modal_frame.src = url + (url.indexOf("?") === -1 ? "?" : "&") + "embed=1";
+		state_modal.hidden = false;
+	}
+	function closeStateModal() {
+		if (!state_modal || !state_modal_frame) return;
+		state_modal.hidden = true;
+		state_modal_frame.src = "about:blank";   // stop the now-hidden page loading
+	}
+
+	var stateLinks = document.querySelectorAll(".agent-state-link");
+	for (var si = 0; si < stateLinks.length; si++) {
+		stateLinks[si].addEventListener("click", function (e) {
+			e.preventDefault();
+			openStateModal(this.getAttribute("href"));
+		});
+	}
+	// Close via the X button or by clicking the dark backdrop (both carry
+	// data-close-modal), or by pressing Escape.
+	var stateClosers = document.querySelectorAll("#state-modal [data-close-modal]");
+	for (var ci = 0; ci < stateClosers.length; ci++) {
+		stateClosers[ci].addEventListener("click", closeStateModal);
+	}
+	document.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" && state_modal && !state_modal.hidden) {
+			closeStateModal();
+		}
+	});
+
 	// *** RESET ***
 	// Restart the replay from the beginning. The page is served at the start step
 	// in the normal run-replay flow, so a reload re-spawns every sprite at its
