@@ -165,3 +165,45 @@ harness is ready to score the LLM entrant the moment an API key is set.
   test.
 - Review Alistair's #106 rebase once it's green; encourage spreading the
   Smallville-wiring changes so the parallel branches stop colliding.
+
+---
+
+## 2026-06-21 (cont.) — Posed prompts: the game can ask a question (#110)
+
+Closed out two playtest snags and then built the dialog feature they pointed at.
+
+**The parser glitch (#124).** At the dragon, `tell dragon wits` printed
+"Treasure trove does not have an exit 'None'". Root cause was the oldest bug in
+the book: `determine_intent`'s else-fallback matched a registered action name
+*anywhere* in the command as a raw substring — and `"go"` lives inside
+`"dra-go-n"`, so anything mentioning the dragon routed to GO with no direction.
+Fixed by matching action names on word boundaries (same fix class as `"give"`
+inside `"forgive"`, which the journal flagged earlier), plus a guard so a `None`
+direction can never render that message ("Go where?").
+
+**Posed prompts (#110, #125 + #126).** The deeper itch: every dialogue fork in
+AC2 was a bespoke verb (`choose wits`, `say yes`) and we *leaked the syntax* to
+the player in parentheses so they'd know the magic words. So I built a general
+"the game poses a question" mechanism:
+
+- A `Prompt` (engine `prompts.py`); `Game.pose_prompt`/`pending_prompt`/
+  `clear_prompt`. The parser consults a posed prompt **as a fallback** — only
+  after a command fails to resolve to a real action — so it's never modal
+  (`look`/`inventory` still work mid-conversation). Choice prompts map a keyword
+  to a command; free-text prompts forward the whole reply to a verb. Word-
+  boundary matching so `no` doesn't fire inside `snowing`. Expires when
+  answered, replaced, or when the player leaves the room.
+- AC2 wired on: the dragon's "wits or steel?", its riddle (free-text), the
+  reward, and the king's yes/no all take bare answers now (`wits`, `a wise man`,
+  `sword`, `yes`). All four parenthetical hints deleted. The conversation finally
+  reads like one.
+
+The LLM parser gets a `match_prompt` override (choices by meaning); free-text
+just forwards. 559 tests green.
+
+**Next:**
+- The free-text riddle prompt is faithful but a footgun — a typo at the riddle
+  counts as a (fatal) wrong answer. Fine for old-school parser play; revisit if
+  it annoys playtesters.
+- If a branching multi-turn dialog *tree* is ever wanted (vs. the single posed
+  question), that's a follow-up beyond #110.
