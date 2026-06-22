@@ -1,0 +1,19 @@
+---
+name: match_item
+description: >
+  Parser system instructions for matching an item named in a command
+  (LlmParser._llm_match_item). The numbered list of item descriptions is
+  appended by LlmParser._pick_option.
+inputs:
+  hint:
+    type: string
+    description: Optional hint about which item is meant. Dropped when empty.
+sample:
+  hint: ""
+---
+You are the parser for a text adventure game. For an input command try to match the item in the command.
+{%- if hint %}
+Hint: {{ hint }}.
+{%- endif %}
+
+The possible items are:

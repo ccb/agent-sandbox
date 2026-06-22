@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import re
 
+from . import prompt_templates
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .memory import AgentMemory, render_memories
@@ -55,15 +56,6 @@ _DURATION_TOKEN = ReActLabel.DURATION.lower()
 # against a model returning an absurd number that would let one action soak up
 # many turns' worth of budget.
 _MAX_DURATION = 24 * 60
-
-
-_DECISION_INSTRUCTION = (
-    "Based on your persona, goals, and the current situation, choose a single "
-    "game command to execute. Reply with exactly three lines:\n"
-    f"{ReActLabel.REASONING} <one short sentence explaining your choice>\n"
-    f"{ReActLabel.ACTION} <the command, e.g. 'attack player', 'go north', 'take sword'>\n"
-    f"{ReActLabel.DURATION} <estimated in-game minutes this action takes, e.g. 5>"
-)
 
 
 # Dialogue seam (issue #86). A conversation asks the agent for one line at a
@@ -164,8 +156,8 @@ def _parse_decision(
 ) -> tuple[str | None, str | None, int | None]:
     """Split an LLM reply into ``(reasoning, command, duration)``.
 
-    Understands the labeled format requested by ``_DECISION_INSTRUCTION``
-    ("Reasoning: ...\\nAction: ...\\nDuration: ..."; "Thought:" is accepted as a
+    Understands the labeled format requested by the ``npc_decision`` prompt
+    template ("Reasoning: ...\\nAction: ...\\nDuration: ..."; "Thought:" is accepted as a
     synonym for the reasoning line). ``duration`` is the estimated in-game
     minutes for the action (clamped to *max_duration*), or ``None`` when the
     line is absent or unusable. Falls back to treating the first non-empty line
@@ -434,32 +426,35 @@ class LLMAgent(Agent):
             sections.append(f"{self._TIER_LABELS[tier]}:\n{bullets}")
         return "\n".join(sections) if sections else None
 
-    def _base_system_lines(self) -> list[str]:
-        # The character's name is deliberately left out of this prompt: an
-        # agent's identity rides on its first-person persona string (and the
-        # observation already names the scene and the other characters in it),
-        # so the model speaks as "I" without being told its own name. Add the
-        # name here only if a future persona needs the model to refer to itself
-        # by name.
-        lines = ["You are an NPC in a text adventure game."]
-        if self.persona:
-            lines.append(f"Persona: {self.persona}")
-        formatted = self._format_goals()
-        if formatted:
-            lines.append("Goals:")
-            lines.append(formatted)
-        return lines
+    def _render_system(self, include_instruction: bool) -> str:
+        """Render the decision system message from the ``npc_decision`` template.
+
+        The persona line and the Goals section drop out when empty (the template
+        trims them). ``include_instruction`` selects the path: the free-text
+        path appends the labeled Reasoning/Action/Duration instruction, while the
+        structured (tool-calling) path omits it because the tool schema is the
+        output contract. The ReAct labels are passed in (rather than hard-coded
+        in the template) so ``ReActLabel`` stays the single source of truth for
+        both this prompt and the reply parser (``_parse_decision``).
+        """
+        return prompt_templates.render(
+            "npc_decision",
+            persona=self.persona,
+            goals_block=self._format_goals() or "",
+            include_instruction=include_instruction,
+            reasoning_label=ReActLabel.REASONING,
+            action_label=ReActLabel.ACTION,
+            duration_label=ReActLabel.DURATION,
+        )
 
     def _system_message(self) -> str:
-        # Free-text path: persona/goals plus the labeled two-line instruction.
-        lines = self._base_system_lines()
-        lines.append(_DECISION_INSTRUCTION)
-        return "\n".join(lines)
+        # Free-text path: persona/goals plus the labeled instruction.
+        return self._render_system(include_instruction=True)
 
     def _structured_system_message(self) -> str:
         # Structured path: the tool schema IS the output contract, so the
-        # two-line Reasoning/Action instruction is omitted.
-        return "\n".join(self._base_system_lines())
+        # Reasoning/Action/Duration instruction is omitted.
+        return self._render_system(include_instruction=False)
 
     def _call(self, observation: str) -> str | None:
         """Call the backend, supporting both the chat protocol and callables."""

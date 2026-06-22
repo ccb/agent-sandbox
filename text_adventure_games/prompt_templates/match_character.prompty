@@ -1,0 +1,23 @@
+---
+name: match_character
+description: >
+  Parser system instructions for matching a character named in a command
+  (LlmParser._llm_get_character). The numbered list of character descriptions is
+  appended by LlmParser._pick_option.
+inputs:
+  player_name:
+    type: string
+    description: The player's name, used as the default when no character is named.
+  hint:
+    type: string
+    description: Optional role hint, e.g. "the one being attacked". Dropped when empty.
+sample:
+  player_name: player
+  hint: ""
+---
+You are the parser for a text adventure game. For an input command try to match the character in the command (if no character is mentioned in the command, then default to '{{ player_name }}').
+{%- if hint %}
+Hint: the character you are looking for is the {{ hint }}.
+{%- endif %}
+
+The possible characters are:
