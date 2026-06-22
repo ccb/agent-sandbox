@@ -278,3 +278,31 @@ summons + banishes the demon, push the cultist) and the scored epilogues; full
 walkthrough + faithfulness audit. A couple of rulebook ambiguities to pin down:
 how the wand is used (player vs wizard-in-party), and whether the stew pot needs
 the bandits asleep first.
+
+### AC3 Phase 3 — carried-container GET + party recruitment (#130, #131)
+
+**Engine (#130):** GET now reaches into the player's own carried open containers,
+not just holders sitting in the room. AC3 needs it — the party starts with a
+backpack and pulls gear out (lantern, dagger, lockpicks, waterskin). "take
+lantern" moves it pack -> hand; a closed pack hides its contents. Lantern went
+back into the pack in AC3 (rulebook-faithful).
+
+**AC3 (#131):** recruiting the four companions. The nice realization held up:
+recruitment is just the engine's follow mechanism plus refuses_follow as the
+gate. Elf/wizard join on sight; the cleric and dwarf must be rescued first
+(give water + free; drive off spider + free + heal poison), and clearing the
+refusal IS the rescue (+10 each). INVITE reports why a recruit won't come yet.
+The whole party cascades when you move (drag_followers).
+
+One faithfulness nick: the captive cleric is named "cleric" throughout (the
+rulebook calls him "the man" until rescued). One canonical character name is far
+cleaner than renaming a dict key mid-game; his description keeps the tortured-man
+flavor, and the rescue verbs (give water / free man) target him by location, not
+name, so "free man" still works.
+
+**Next (Phase 4):** the ability-verbs and their puzzle items — SHOOT SPIDER
+(elf+bow, drives off the spider so FREE DWARF is safe), USE HATCHET (dwarf,
+clears the web), CAST SLEEP (wizard+spellbook, sleeps the bandits for the bow),
+USE WAND (wizard, freezes the ooze), TURN UNDEAD (cleric+pendant, Crypt) — then
+the baby + mushroom-stew + crying-death chain, the goblin-queen exchanges, and
+ooze/lockbox/crown. The interlock is the whole game; I'll land it in slices.
