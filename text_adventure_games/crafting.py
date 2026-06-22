@@ -1,0 +1,94 @@
+"""Crafting: combine ingredients into a new item (issue: reusable crafting).
+
+A game declares **recipes** as data -- the way it declares locations and
+triggers -- and one generic :class:`~text_adventure_games.actions.things.Craft`
+action drives all of them. A recipe consumes a set of ingredients from the
+crafter's held items, optionally requires one or more *tools* present but not
+consumed (a cooking pot, a forge, a hammer -- station and instrument are the
+same thing here), and produces one or more new items.
+
+    game.add_recipe(Recipe(
+        name="stew", aliases=["mushroom stew"],
+        inputs=[Ingredient("water"), Ingredient("cave mushroom")],
+        tools=[Ingredient("pot")],                       # required present, not consumed
+        output=lambda g: Item("stew", "a bowl of mushroom stew"),
+        result_text="You simmer the mushrooms in spring water into a stew.",
+    ))
+
+The player crafts with ``make`` / ``craft`` / ``cook`` / ``combine`` / ... :
+
+    > make stew                 # by output name
+    > combine string and stick  # by ingredients
+    > cook                       # bare verb: the first recipe satisfiable here
+
+Recipes hold a factory callable, so they are runtime-only (re-registered by
+``build_game``, like triggers and behaviors) and not serialized.
+
+INGREDIENT MATCHING. An ``Ingredient`` matches a held item by ``name`` OR by a
+``tag`` (any item whose ``tag`` property is truthy -- e.g. ``tag="plank"`` for a
+"2 planks" recipe). ``count`` consumes that many; because the engine keys an
+inventory by name (no two items share a name), ``count > 1`` only works with
+``tag`` matching -- that's the one Minecraft-style gap, and tags cover the real
+cases ("any 2 planks").
+
+TODO(#134): support ``count > 1`` for same-named ingredients (a quantity/stack
+    model on Item) so recipes can require e.g. "2 sticks", not just tagged sets.
+TODO(#135): "known" recipes -- gate recipes on discovery (a recipe book / NPC),
+    instead of every registered recipe always being craftable.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Callable
+
+
+@dataclass
+class Ingredient:
+    """One requirement of a recipe -- matched against a held (or, for tools,
+    present) item by name or by a property tag."""
+
+    name: str | None = None
+    tag: str | None = None
+    count: int = 1
+
+    def matches(self, item) -> bool:
+        if self.name is not None and getattr(item, "name", None) == self.name:
+            return True
+        if self.tag is not None and item.get_property(self.tag):
+            return True
+        return False
+
+    def label(self) -> str:
+        base = self.name or (f"{self.tag}" if self.tag else "something")
+        return f"{self.count} {base}" if self.count > 1 else base
+
+
+def _as_ingredient(spec) -> Ingredient:
+    """Coerce a plain string (a name) or an Ingredient into an Ingredient, so
+    authors can write ``inputs=["water", "cave mushroom"]``."""
+    if isinstance(spec, Ingredient):
+        return spec
+    return Ingredient(name=str(spec))
+
+
+@dataclass
+class Recipe:
+    """A declarative crafting rule. See the module docstring."""
+
+    output: Callable[["object"], object]  # (game) -> Item | list[Item]
+    inputs: list = field(default_factory=list)  # consumed, from held items
+    tools: list = field(default_factory=list)  # required present, NOT consumed
+    name: str | None = None  # craftable name for "make <name>"; default = output's
+    aliases: list = field(default_factory=list)
+    location: str | None = None  # optional: must be crafted in this room
+    result_text: str | None = None
+
+    def __post_init__(self):
+        self.inputs = [_as_ingredient(i) for i in self.inputs]
+        self.tools = [_as_ingredient(t) for t in self.tools]
+
+    def names(self) -> list[str]:
+        """The names this recipe answers to for 'make <name>' lookups."""
+        out = [n for n in [self.name, *self.aliases] if n]
+        return [n.lower() for n in out]
