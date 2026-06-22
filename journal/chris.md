@@ -230,3 +230,51 @@ enough here.
 **Noted, not fixed:** the Treasure Trove's static description still says "A huge
 dragon slumbers here" even once it's awake. Cosmetic; would need a
 state-aware room description. Offered to Chris; parked unless it grates in play.
+
+---
+
+## 2026-06-21 (cont.) — Action Castle III: analysis + Phases 1-2
+
+Chris pointed me at Action Castle III ("Beneath Action Castle") and asked for an
+AC2-style port plan. Ran the PDF through /pdf-to-markdown and read all 28 pages.
+
+**What AC3 is.** A party-based dungeon crawl — a real step up from AC2. You
+recruit four companions (elf, dwarf, cleric, wizard), each unlocking an
+ability-verb (SHOOT SPIDER, USE HATCHET, TURN UNDEAD, CAST SLEEP, USE WAND), and
+nearly every obstacle is gated on having the right companion present with the
+right item. ~21 rooms in three regions off a Crossroads hub. Not a single win:
+GO NORTH home ends it and an epilogue is chosen by score (max 100); the best
+ending banishes the demon AND kills the cultist. The puzzle graph interlocks
+hard (bow needs sleep needs spellbook needs crypt needs cleric+pendant...),
+forcing you to bounce between the cave and castle regions.
+
+**The big realization:** the party maps cleanly onto AC2's follow system
+(multi-follower cascade), and the one genuinely new *reusable* engine feature is
+darkness/light. Everything else reuses AC2 machinery (containers, triggers,
+gift/exchange actions, posed prompts, scoring).
+
+**Phase 1 (#128):** promoted Darkness from a hand-rolled class inside AC1 to a
+real engine block (blocks/darkness.py). Clears when anyone present holds a lit
+item — including one inside an *open* carried container (a lit lantern in an
+open pack). AC1 now uses it; its local copy is gone.
+
+**Phase 2 (#129):** the AC3 skeleton — all 21 rooms, exits, populated fixtures,
+the four companions placed, both darkness gates, a backpack container, and the
+GO-NORTH-home ending via a yes/no confirm prompt + arrival epilogue stub. 14
+topology/gate/ending tests.
+
+**Finding worth its own PR:** GET only reaches holders sitting in the *room*,
+not the player's own carried containers — so you can't pull gear out of the
+pack. AC3 leans on exactly that (lockpicks, dagger, waterskin all start in the
+pack), so the next engine feature is "GET into carried open containers." Parked
+the lantern in-hand for now and left a TODO; build it when Phase 3 needs the
+other gear out.
+
+**Next (Phases 3-5):** the carried-container GET feature; recruit the four
+companions (follow) + ability-verbs; the puzzle chain (bow/sleep, spider, webs,
+baby + mushroom stew + crying-death triggers, goblin queen exchanges,
+pendant/crypt, ooze/lockbox/crown, statue slide-trap); the endgame (javelin
+summons + banishes the demon, push the cultist) and the scored epilogues; full
+walkthrough + faithfulness audit. A couple of rulebook ambiguities to pin down:
+how the wand is used (player vs wizard-in-party), and whether the stew pot needs
+the bandits asleep first.
