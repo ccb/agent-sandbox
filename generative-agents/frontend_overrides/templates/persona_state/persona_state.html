@@ -4,217 +4,206 @@
 {% block content %}
 
 <style>
-	.scratch_table {
-		font-size: 1.3em;
+	/*
+	 * Dense, uniform "State Details" card. This page is shown inside the replay's
+	 * State Details popup (a white card in an <iframe>), so the old layout's wide
+	 * 80% column, large top margins and gray media box read as wasted space and a
+	 * second background. Here everything sits on ONE uniform background, hard up
+	 * against the top, with tighter spacing and smaller type so more fits at a
+	 * glance.
+	 */
+	.persona-state {
+		box-sizing: border-box;
+		width: 100%;
+		max-width: 720px;
+		margin: 0 auto;
+		padding: 1.1em 1.6em 1.8em;
+		color: #2b2f3a;
+		font-size: 13px;
+		line-height: 1.4;
+	}
+	/* When embedded in the popup, keep the heading clear of the floating X. */
+	.persona-state.is-embed {
+		padding-top: 1.3em;
+		padding-right: 2.6em;
+	}
+
+	.persona-state .ps-back {
+		display: block;
+		margin: 0 0 0.6em;
+		font-size: 1.05em;
+	}
+
+	.persona-state .ps-head {
+		display: flex;
+		align-items: center;
+		gap: 0.85em;
+		margin-bottom: 0.5em;
+	}
+	.persona-state .ps-portrait {
+		width: 3.1em;
+		height: 3.1em;
+		flex: none;
+		border-radius: 8px;
+		image-rendering: pixelated;
+		background: #f0f0f0;
+	}
+	.persona-state .ps-name {
+		margin: 0;
+		font-size: 1.55em;
+		line-height: 1.15;
+		font-weight: 700;
+	}
+
+	/* Section heading: a quiet underlined label, far smaller than the old 1.65em
+	   <h3>s. Replaces both the <h3> headers and their <hr> dividers. */
+	.persona-state .ps-section {
+		margin: 0.9em 0 0.4em;
+		padding-bottom: 0.2em;
+		font-size: 1.05em;
+		font-weight: 700;
+		border-bottom: 1px solid #e1e4ea;
+	}
+	.persona-state .ps-sub {
+		margin: 0.7em 0 0.25em;
+		font-size: 0.95em;
+		font-weight: 700;
+		color: #5b6478;
+	}
+
+	.persona-state table.scratch_table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+	.persona-state table.scratch_table td {
+		padding: 0.12em 0.5em 0.12em 0;
+		vertical-align: top;
+	}
+	.persona-state table.scratch_table td:first-child {
+		width: 34%;
+		font-weight: 700;
+		color: #5b6478;
+	}
+	.persona-state table.scratch_table ol {
+		margin: 0;
+		padding-left: 1.2em;
+	}
+
+	/* Memory entries: compact paragraphs, the meta (depth/evidence, chat speaker)
+	   muted so the description leads. */
+	.persona-state .ps-mem p {
+		margin: 0 0 0.45em;
+	}
+	.persona-state .ps-mem .ps-mem-meta {
+		color: #6b7280;
+		font-size: 0.92em;
+	}
+	.persona-state .ps-mem .ps-speaker {
+		font-style: italic;
 	}
 </style>
-
 
 <!-- "Return to simulation" back-link. Hidden when the page is opened inside the
      replay's State Details popup (?embed=1): there the page lives in an <iframe>
      and the viewer closes it with the popup's own X / backdrop / Esc, so this
      link (which navigates the iframe back to the referrer) would only confuse. -->
-{% if not request.GET.embed %}
-<h3 style="width:80%; margin:0 auto; margin-top:5em; padding:1em; padding-left:3.5em; padding-right:2em; border-radius:10px; padding-top:3em"><a href="{{request.META.HTTP_REFERER}}">< Return to simulation</a></h3>
-{% endif %}
+<div class="persona-state{% if request.GET.embed %} is-embed{% endif %}">
 
+	{% if not request.GET.embed %}
+	<a class="ps-back" href="{{request.META.HTTP_REFERER}}">&lt; Return to simulation</a>
+	{% endif %}
 
-<div class="media" style="width:80%; margin:0 auto; margin-top:2em; background-color:#EEEEEE; padding:1em; padding-left:3.5em; padding-right:2em; border-radius:10px; padding-top:3em">
-  <div class="media-left media">
-    <a href="#">
-    	{% with 'assets/characters/profile/'|add:persona_name_underscore|add:'.png' as image_static %}
-      <img class="media-object" src="{% static image_static %}" style="width:5em">
-      {% endwith %}
-    </a>
-  </div>
-  <div class="media-body" style='padding-left:3em; padding-top:0.5em; padding-bottom:1em'>
-  	<div class="row">
-    	<h1 class="col-md-8" style="margin-bottom:0.8em; font-size:2em; ">
-    		{{persona_name}}
-    	</h1>
-    </div>
-    <div style="">
+	<div class="ps-head">
+		{% with 'assets/characters/profile/'|add:persona_name_underscore|add:'.png' as image_static %}
+		<img class="ps-portrait" src="{% static image_static %}">
+		{% endwith %}
+		<h1 class="ps-name">{{persona_name}}</h1>
+	</div>
 
-		  <h3 style="font-size:1.65em"><strong>Basic information</strong></h3>
-		  <table class="scratch_table" style="width:100%">
-			  <tr>
-			    <td style="width:20%; font-weight:800">First name</td>
-			    <td>{{scratch.first_name}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Last name</td>
-			    <td>{{scratch.last_name}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Age</td>
-			    <td>{{scratch.age}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Current time</td>
-			    <td>{{scratch.curr_time}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Current tile</td>
-			    <td>{{scratch.curr_tile}}</td>
-			  </tr>
-			</table>
-			<br>
+	<div class="ps-section">Basic information</div>
+	<table class="scratch_table">
+		<tr><td>First name</td><td>{{scratch.first_name}}</td></tr>
+		<tr><td>Last name</td><td>{{scratch.last_name}}</td></tr>
+		<tr><td>Age</td><td>{{scratch.age}}</td></tr>
+		<tr><td>Current time</td><td>{{scratch.curr_time}}</td></tr>
+		<tr><td>Current tile</td><td>{{scratch.curr_tile}}</td></tr>
+	</table>
 
+	<div class="ps-section">Settings</div>
+	<table class="scratch_table">
+		<tr><td>Vision Radius</td><td>{{scratch.vision_r}}</td></tr>
+		<tr><td>Attention Bandwidth</td><td>{{scratch.att_bandwidth}}</td></tr>
+		<tr><td>Retention</td><td>{{scratch.retention}}</td></tr>
+	</table>
 
-			<hr style="border:solid; border-width:1px">
-			<h3 style="font-size:1.65em"><strong>Settings</strong></h3>
-		  <table class="scratch_table" style="width:100%">
-			  <tr>
-			    <td style="width:20%; font-weight:800">Vision Radius</td>
-			    <td>{{scratch.vision_r}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Attention Bandwidth</td>
-			    <td>{{scratch.att_bandwidth}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Retention</td>
-			    <td>{{scratch.retention}}</td>
-			  </tr>
-			</table>
-			<br>
+	<div class="ps-section">Personality and Lifestyle</div>
+	<table class="scratch_table">
+		<tr><td>Innate tendency</td><td>{{scratch.innate}}</td></tr>
+		<tr><td>Learned tendency</td><td>{{scratch.learned}}</td></tr>
+		<tr><td>Currently</td><td>{{scratch.currently}}</td></tr>
+		<tr><td>Lifestyle</td><td>{{scratch.lifestyle}}</td></tr>
+	</table>
 
+	<div class="ps-section">Current Action State</div>
+	<table class="scratch_table">
+		<tr>
+			<td>Daily Requirement</td>
+			<td>
+				<ol>
+				{% for i in scratch.daily_req %}
+					<li>{{ i }}</li>
+				{% endfor %}
+				</ol>
+			</td>
+		</tr>
+		<tr>
+			<td>Daily Schedule</td>
+			<td>
+				<ol>
+				{% for i in scratch.f_daily_schedule %}
+					<li>{{ i }}</li>
+				{% endfor %}
+				</ol>
+			</td>
+		</tr>
+		<tr><td>Action Address</td><td>{{scratch.act_address}}</td></tr>
+		<tr><td>Action Start Time</td><td>{{scratch.act_start_time}}</td></tr>
+		<tr><td>Action Duration</td><td>{{scratch.act_duration}}</td></tr>
+		<tr><td>Action Description</td><td>{{scratch.act_description}}</td></tr>
+		<tr><td>Action Pronunciatio</td><td>{{scratch.act_pronunciatio}}</td></tr>
+	</table>
 
-			<hr style="border:solid; border-width:1px">
-			<h3 style="font-size:1.65em"><strong>Personality and Lifestyle</strong></h3>
-			<table class="scratch_table" style="width:100%">
-			  <tr>
-			    <td style="font-weight:800">Innate tendency</td>
-			    <td>{{scratch.innate}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Learned tendency</td>
-			    <td>{{scratch.learned}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Currently</td>
-			    <td>{{scratch.currently}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Lifestyle</td>
-			    <td>{{scratch.lifestyle}}</td>
-			  </tr>
-			</table>
-			<br>
+	<div class="ps-section">Agent's Memory</div>
 
+	<div class="ps-sub">Event</div>
+	<div class="ps-mem">
+		{% for node_details in a_mem_event %}
+		<p>[node_{{ node_details.node_count }}] {{ node_details.created }}: <strong>{{ node_details.description }}</strong></p>
+		{% endfor %}
+	</div>
 
-			<hr style="border:solid; border-width:1px">
-			<h3 style="font-size:1.65em; "><strong>Current Action State</strong></h3>
-			<table class="scratch_table" style="width:100%">
-			  <tr>
-			    <td style="width:20%; font-weight:800">Daily Requirement</td>
-			    <td>
-			    	<ol>
-			    	{% for i in scratch.daily_req %}
-			    	  <li>{{ i }}</li>
-			    	{% endfor %}
-			    	</ol>
-			    </td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Daily Schedule</td>
-			    <td>
-			    	<ol>
-			    	{% for i in scratch.f_daily_schedule %}
-			    	  <li>{{ i }}</li>
-			    	{% endfor %}
-			    	</ol>
-			    </td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Action Address</td>
-			    <td>{{scratch.act_address}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Action Start Time</td>
-			    <td>{{scratch.act_start_time}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Action Duration</td>
-			    <td>{{scratch.act_duration}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Action Description</td>
-			    <td>{{scratch.act_description}}</td>
-			  </tr>
-			  <tr>
-			    <td style="font-weight:800">Action Pronunciatio</td>
-			    <td>{{scratch.act_pronunciatio}}</td>
-			  </tr>
-			</table>
-			<br>
+	<div class="ps-sub">Conversation History</div>
+	<div class="ps-mem">
+		{% for node_details in a_mem_chat %}
+		<p>
+			<span class="ps-mem-meta">{{ node_details.created }}</span><br>
+			{{ node_details.description }}
+			{% for name, utt in node_details.filling %}
+			<br><span class="ps-speaker">{{ name }}</span>: {{ utt }}
+			{% endfor %}
+		</p>
+		{% endfor %}
+	</div>
 
+	<div class="ps-sub">Thought</div>
+	<div class="ps-mem">
+		{% for node_details in a_mem_thought %}
+		<p>
+			[node_{{ node_details.node_count }}] {{ node_details.created }}: <strong>{{ node_details.description }}</strong>
+			<br><span class="ps-mem-meta">(Depth: {{ node_details.depth }}; Evidence: {{ node_details.filling }})</span>
+		</p>
+		{% endfor %}
+	</div>
 
-
-			<hr style="border:solid; border-width:1px">
-			<h3 style="font-size:1.65em"><strong>Agent's Memory</strong></h3>
-			<h4 style="font-size:1.45em"><strong>Event</strong></h4>
-			<div class="" style="width:100%">
-			  {% for node_details in a_mem_event %}
-				  <p>
-				  	<!-- <strong>Node ID: node_{{ node_details.node_count }}</strong><br> -->
-				  	<!-- Node Count: {{ node_details.node_count }} ||  -->
-				  	<!-- Type Count: {{ node_details.type_count }}  -->
-				  	<!-- <br> -->
-				  	[node_{{ node_details.node_count }}] {{ node_details.created }}: <strong>{{ node_details.description }}</strong>
-				  	<!-- || -->
-				  	<!-- Expiration: {{ node_details.expiration }} -->
-				  	<!-- <br> -->
-				  	<!-- S, P, O
-				  	 node_details.subject ,
-				  	 node_details.predicate ,
-				  	 node_details.object
-				  	<br> -->
-				  	<!-- Description: {{ node_details.description }} -->
-				  	<!-- <br> -->
-				  	<!-- Keywords: {{ node_details.keywords }} -->
-				  	<!-- <br> -->
-				  	<!-- Filling: {{ node_details.filling }} -->
-				  </p>
-
-			  {% endfor %}
-			</div>
-			<br>
-
-
-			<h4 style="font-size:1.45em"><strong>Agent's Conversation History</strong></h4>
-			<div class="" style="width:100%">
-			  {% for node_details in a_mem_chat %}
-				  <p>
-				  	Created: {{ node_details.created }}
-				  	<br>
-				  	Description: {{ node_details.description }}
-				  	<br>
-				  	Filling: <br>
-				  	{% for name, utt in node_details.filling %}
-				  	<span style="font-style: italic;">{{ name }}</span>: {{ utt }}<br>
-				  	{% endfor %}
-				  </p>
-			  {% endfor %}
-			</div>
-			<br>
-
-			<h4 style="font-size:1.45em"><strong>Agent's Thought</strong></h4>
-			<div class="" style="width:100%">
-			  {% for node_details in a_mem_thought %}
-				  <p>
-				  	[node_{{ node_details.node_count }}] {{ node_details.created }}: <strong>{{ node_details.description }}</strong>
-
-				  	<br>(Depth: {{ node_details.depth }}; Evidence: {{ node_details.filling }})
-
-				  </p>
-			  {% endfor %}
-			</div>
-			<br>
-
-
-
-		</div>
-  </div>
 </div>
 {% endblock content %}
