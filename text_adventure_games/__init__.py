@@ -19,6 +19,7 @@ from .config import (
     RenderConfig,
 )
 from .prompts import Prompt
+from .crafting import Recipe, Ingredient
 
 __all__ = [
     "ActionName",
@@ -36,4 +37,6 @@ __all__ = [
     "ObservabilityConfig",
     "RenderConfig",
     "Prompt",
+    "Recipe",
+    "Ingredient",
 ]

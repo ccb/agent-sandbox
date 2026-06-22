@@ -112,6 +112,11 @@ class Game:
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
 
+        # Crafting recipes (see crafting.py). Empty by default, so games without
+        # crafting are unchanged and the parser's crafting verbs stay inert.
+        # Runtime-only (recipes hold a factory callable), like triggers.
+        self.recipes = []
+
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
         # for an otherwise-unrecognized command. Transient conversational state,
@@ -242,6 +247,12 @@ class Game:
         trigger = Trigger(name, condition, action, repeatable)
         self.triggers.append(trigger)
         return trigger
+
+    def add_recipe(self, recipe):
+        """Register a crafting Recipe (see crafting.py). The Craft action and the
+        parser's crafting verbs consult ``self.recipes``."""
+        self.recipes.append(recipe)
+        return recipe
 
     def pose_prompt(self, prompt):
         """Pose a question to the player (issue #110). While it is pending, the
