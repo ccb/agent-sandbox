@@ -13,20 +13,24 @@ gated on having the right companion present with the right item. It's not a sing
 the game ends when you GO NORTH home, and one of several EPILOGUES is chosen by your
 progress (max 100 points). The best ending banishes the Chaos demon AND kills the cultist.
 
-PORTED IN PHASES (this file grows over several PRs, like AC2 did):
-  * Phase 1 (engine): a reusable Darkness block (text_adventure_games.blocks.Darkness).
-  * Phase 2: the world skeleton -- all rooms, exits, the three regions off the Crossroads
-    hub, start inventory (a backpack container), the darkness-gated cave and dungeon
-    descents, populated rooms, and the GO-NORTH-home ending stub.
-  * Phase 3: GET reaches into carried containers; recruiting the party -- INVITE (the
-    engine follow/refusal mechanism), and the rescue chains that unlock the cleric (give
-    water + free) and the dwarf (drive off the spider, free, heal the poison).
-  * Phase 4 (THIS, in slices): the bow chain (search -> pendant -> crypt/turn-undead ->
-    spell book -> wizard -> CAST SLEEP -> bow -> elf) and SHOOT SPIDER + USE HATCHET, which
-    open the western path out of the Spider Lair.
-  * Phase 4 remaining + 5 (TODO): the baby + mushroom stew + crying-death chain, the goblin
-    queen exchanges, the ooze/lockbox/crown and statue slide-trap, then the endgame (javelin
-    summons + banishes the demon, push the cultist) and the scored epilogues.
+COMPLETE -- the port is winnable end to end (WALKTHROUGH scores 100/100). It was
+built over several PRs, each driving a reusable engine feature where one was
+warranted (like AC2 before it):
+  * Engine features extracted along the way: a reusable Darkness block; GET that
+    reaches into a carried open container; and a declarative crafting system
+    (crafting.py) -- the mushroom stew is a Recipe.
+  * The party (elf/dwarf/cleric/wizard) rides on the follow system; recruitment
+    is the engine's refuses_follow gate, cleared by each rescue chain.
+  * The interlock: pendant -> crypt (turn undead) -> spell book -> wizard ->
+    CAST SLEEP -> bow -> elf -> SHOOT SPIDER; dwarf -> USE HATCHET -> the west
+    path; freeze the ooze (USE WAND) -> the crown; rescue + feed the baby ->
+    past the stirges -> the goblin queen -> baby + crown -> the bronze javelin
+    -> banish the demon (THROW JAVELIN) -> kill the cultist (PUSH CULTIST).
+  * GO NORTH home ends the adventure with a score-branched epilogue.
+
+Optional flavor not yet ported (all non-blocking): topic dialogue (ASK ELF/
+CLERIC ABOUT ...), the wizard's telescope/prophecy and the Ecology-of-the-Ooze
+journal hint, and the FIGHT BANDITS death (CAST SLEEP is the intended path).
 
 Run interactively:   python action_castle_3.py
 """
