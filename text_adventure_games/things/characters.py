@@ -170,11 +170,17 @@ class Character(Thing):
 
     def add_to_inventory(self, item):
         """
-        Add an item to the character's inventory.
+        Add an item to the character's inventory. A stackable item merges into a
+        same-named stack already held (#134).
         """
         if item.location is not None:
             item.location.remove_item(item)
             item.location = None
+        existing = self.inventory.get(item.name)
+        if item.is_stackable() and existing is not None and existing.is_stackable():
+            existing.quantity += item.quantity
+            existing.set_owner(self)
+            return
         self.inventory[item.name] = item
         item.set_owner(self)
 
