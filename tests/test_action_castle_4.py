@@ -1,7 +1,8 @@
-"""Regression tests for the Action Castle IV skeleton (Slice 2).
+"""Regression tests for Action Castle IV ("Escape from Action Castle").
 
-Locks in the world topology, the start state (the princess wears a gown + tiara),
-and the vehicle-gated woods exit. Puzzles + endings land in later slices.
+Locks in the world topology and start state (Slice 2), the tower escape (Slice 3),
+the horse + poacher (Slice 4), and the finale -- ranch, roadhouse, bar brawl, and
+the two scored endings (Slice 5), including the full 100-point winning run.
 """
 
 from text_adventure_games.adventures import action_castle_4 as ac4
@@ -45,6 +46,7 @@ EXPECTED_ROOMS = {
     "Dirt Road",
     "Roadhouse",
     "The Breakpoint",
+    "Highway",
 }
 
 
@@ -63,7 +65,9 @@ def test_every_exit_resolves():
 def test_no_duplicate_destination_exits():
     game, _ = _game()
     for name, loc in game.locations.items():
-        dests = [d.name for d in loc.connections.values()]
+        # The Roadhouse deliberately has two roads (east + west) onto the one
+        # Highway ending -- that's faithful, not a copy-paste bug, so allow it.
+        dests = [d.name for d in loc.connections.values() if d.name != "Highway"]
         assert len(dests) == len(set(dests)), f"{name} has a duplicate-destination exit"
 
 
@@ -113,8 +117,10 @@ def test_cannot_cross_to_the_woods_on_foot():
     assert _said(cap, "too far")
 
 
-def test_skeleton_smoke_path_navigates():
-    game, _ = _play(ac4.WALKTHROUGH_SKELETON)
+def test_escape_prefix_navigates_to_the_drawbridge():
+    # The first leg of the winning run (sneak out in the boots) reaches the
+    # Drawbridge without ending the game.
+    game, _ = _play(ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("west") + 1])
     assert game.player.location.name == "Drawbridge"
     assert not game.is_game_over()
 
@@ -452,3 +458,58 @@ def test_boots_are_hidden_under_the_cot_until_examined():
     game.parser.set_renderer(after)
     game.do_command("examine army cot")  # self-updates: no stale mention
     assert not _said(after, "Under the stained mattress")
+
+
+# --- Slice 5: the finale (ranch, roadhouse, bar, endings) ------------------
+
+
+def test_winning_run_scores_100_and_wins():
+    game, _ = _play(ac4.WALKTHROUGH_WIN)
+    assert game.is_game_over()
+    assert game.is_won()
+    assert game.score == 100
+    assert game.player.get_property("rode_the_highway")
+
+
+def test_rancher_ending_is_a_good_finish_not_the_win():
+    # Same run, but accept Wade's job instead of declining it.
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("say no")] + ["say yes"]
+    game, _ = _play(cmds)
+    assert game.is_game_over()
+    assert not game.is_won()  # the Rancher ending isn't the 100-point run
+    assert game.score == 80
+
+
+def test_dalton_bars_the_bar_without_wade():
+    # Drive to the roadhouse on the bike-less path and try to enter cold.
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("give horse to rancher")]
+    cmds += ["northeast", "west", "north", "enter"]  # Clearing -> road -> roadhouse
+    game, cap = _play(cmds)
+    assert game.player.location.name == "Roadhouse"  # blocked at the door
+    assert _said(cap, "I.D.")
+
+
+def test_say_wade_sent_me_needs_having_met_wade():
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("give horse to rancher")]
+    cmds += ["northeast", "west", "north", "say wade sent me"]
+    game, cap = _play(cmds)
+    assert _said(cap, "Wade who?")
+    assert not game.locations["Roadhouse"].get_property("admitted")
+
+
+def test_brawl_requires_provoking_the_biker_first():
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("talk to bartender") + 1]
+    cmds += ["punch biker"]  # before serving table four
+    game, cap = _play(cmds)
+    assert _said(cap, "Nobody's looking for a fight")
+    assert "keys" not in game.player.location.items
+
+
+def test_cannot_ride_the_horse_onto_the_highway():
+    # Skip the ranch entirely and arrive at the roadhouse still mounted; the
+    # highway exits demand the motorcycle specifically.
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("give horse to rancher")]
+    cmds += ["northeast", "west", "north", "east"]
+    game, cap = _play(cmds)
+    assert game.player.location.name == "Roadhouse"
+    assert _said(cap, "motor vehicle")

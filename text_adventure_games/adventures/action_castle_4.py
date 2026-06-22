@@ -13,17 +13,19 @@ Highway (+50, the 100-point best run); plus several dead-ends.
 
 PORTED IN SLICES (this is the worked example in docs/converting-parsely-games.md):
   * Slice 1 (engine): a reusable vehicle/mount feature (the horse + motorcycle ride on it).
-  * Slice 2 (THIS): the world skeleton -- rooms, exits, items, characters, start state
+  * Slice 2: the world skeleton -- rooms, exits, items, characters, start state
     (the princess wears a gown + tiara), the vehicle-gated woods exit, and the ending stubs.
-  * Slices 3-5 (TODO): the full-fidelity tower escape (dagger -> cut hair -> rope -> climb
-    out, the guard-catch soft-lock, slipper dead-ends); the horse (tame with apple/brush)
-    + poacher/deer; the ranch + roadhouse "Wade sent me" gate + bar brawl -> keys; the two
-    scored endings + epilogue.
+  * Slice 3: the full-fidelity tower escape (the guardroom sneak route + the cut-hair/
+    braid-rope/climb-out window route; the guard-catch and KILL SELF dead-ends).
+  * Slice 4: the horse (tame with apple/brush, then ride) + the poacher/deer confrontation.
+  * Slice 5: the finale -- the ranch (GIVE HORSE -> a yes/no job offer), the roadhouse
+    "Wade sent me" gate, the bar brawl (tray -> table four -> keys), the started motorcycle,
+    and the two scored endings (Rancher +40, Highway +50; a full run scores 100/100).
 
 Run interactively:   python action_castle_4.py
 """
 
-from text_adventure_games import games, things, actions, blocks, Recipe
+from text_adventure_games import games, things, actions, blocks, Recipe, Prompt
 from text_adventure_games.enums import Property
 
 # ---------------------------------------------------------------------------
@@ -482,6 +484,359 @@ class ShootPoacher(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The finale (Slice 5): the Ranch, the Roadhouse, and the Breakpoint bar.
+#
+# Two winning routes diverge at the Ranch. GIVE HORSE TO RANCHER pairs your mare
+# with Wade's stallion and earns a job offer (a posed yes/no Prompt, #110):
+#   * SAY YES -> settle as a Rancher (+40, a good ending).
+#   * SAY NO  -> Wade sends you to Dalton at the roadhouse ("tell him Wade sent
+#     ya"), which unlocks the bar. Inside, wait tables -> start a brawl -> a ring
+#     of motorcycle keys flies loose -> start the bike -> ride onto the Highway
+#     (+50, the 100-point best run).
+# ---------------------------------------------------------------------------
+
+
+def _find_horse(game):
+    """The mare, whether the player is still mounted or has dismounted here."""
+    player = game.player
+    if getattr(player, "riding", None) is not None and player.riding.name == "horse":
+        return player.riding
+    if player.location is not None:
+        return player.location.items.get("horse")
+    return None
+
+
+class GiveHorseToRancher(actions.Action):
+    ACTION_NAME = "give horse to rancher"
+    ACTION_DESCRIPTION = "Give your mare to Wade the rancher"
+    ACTION_ALIASES = [
+        "give the horse to the rancher",
+        "give horse to wade",
+        "give the horse to wade",
+        "give mare to rancher",
+        "give the mare to the rancher",
+        "give horse to the rancher",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.rancher = self.game.characters.get("rancher")
+
+    def check_preconditions(self) -> bool:
+        if self.rancher is None or self.rancher.location is not self.player.location:
+            self.parser.fail("There's no rancher here.")
+            return False
+        if _find_horse(self.game) is None:
+            self.parser.fail("You don't have a horse to give.")
+            return False
+        return True
+
+    def apply_effects(self):
+        horse = _find_horse(self.game)
+        if self.player.riding is horse:
+            self.player.riding = None
+        if self.player.location is not None and "horse" in self.player.location.items:
+            self.player.location.remove_item(horse)
+        self.rancher.set_property("offered_job", True)
+        self.game.award(
+            "gift_horse",
+            5,
+            "The mare and ol' Champ nuzzle like old friends. Wade beams: \"Aww, they "
+            "took a shine to each other! Say -- you look like a hard worker. I could "
+            'use a hand here on the Double-Deuce. Whaddya say?"',
+        )
+        self.game.pose_prompt(
+            Prompt(
+                text="Stay and work the ranch? (yes / no)",
+                options={"yes": "say yes", "no": "say no"},
+                speaker="rancher",
+            )
+        )
+
+
+class SayYes(actions.Action):
+    ACTION_NAME = "say yes"
+    ACTION_DESCRIPTION = "Accept Wade's offer to work the ranch"
+    ACTION_ALIASES = ["accept", "accept the job", "yes please"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.rancher = self.game.characters.get("rancher")
+
+    def check_preconditions(self) -> bool:
+        if self.rancher is None or not self.rancher.get_property("offered_job"):
+            self.parser.fail("No one's asked you anything.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.game.award("rancher", 40)
+        self.game.award("finish", 5)
+        ending = (
+            "You hang up your tiara and take up ranching. The work is honest, the "
+            "sunsets are long, and ol' Champ and your mare raise a whole herd of foals. "
+            "Years later, when Wade retires, the Double-Deuce is yours. THE END."
+        )
+        self.parser.ok(ending)
+        self.game.game_over = True
+        self.game.game_over_description = ending
+
+
+class SayNo(actions.Action):
+    ACTION_NAME = "say no"
+    ACTION_DESCRIPTION = "Decline Wade's offer to work the ranch"
+    ACTION_ALIASES = ["decline", "no thanks", "no thank you"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.rancher = self.game.characters.get("rancher")
+
+    def check_preconditions(self) -> bool:
+        if self.rancher is None or not self.rancher.get_property("offered_job"):
+            self.parser.fail("No one's asked you anything.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.set_property("knows_wade", True)
+        self.parser.ok(
+            "\"Well, I understand -- ranchin' ain't for everyone.\" Wade tips his hat. "
+            "\"If it's a ride you're after, go see Dalton up at the Breakpoint. Tell him "
+            "Wade sent ya, and he'll let you in.\""
+        )
+
+
+class SayWadeSentMe(actions.Action):
+    ACTION_NAME = "say wade sent me"
+    ACTION_DESCRIPTION = "Tell Dalton that Wade sent you"
+    ACTION_ALIASES = [
+        "wade sent me",
+        "tell dalton wade sent me",
+        "tell him wade sent me",
+        "say wade sent me to dalton",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Roadhouse":
+            self.parser.fail("There's no one here to say that to.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if not self.player.get_property("knows_wade"):
+            self.parser.ok(
+                'Dalton raises an eyebrow. "Wade who? No I.D., no entry, darlin\'."'
+            )
+            return
+        self.player.location.set_property("admitted", True)
+        self.parser.ok(
+            "Dalton grins. \"Aw heck, any friend o' Wade's a friend o' mine. Stick to "
+            "ginger ale -- and if anyone asks, you're the new waitress.\" He stands aside."
+        )
+
+
+class TalkToBartender(actions.Action):
+    ACTION_NAME = "talk to bartender"
+    ACTION_DESCRIPTION = "See what the harried bartender wants"
+    ACTION_ALIASES = [
+        "talk to the bartender",
+        "speak to bartender",
+        "speak to the bartender",
+        "ask bartender",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if (
+            self.player.location is None
+            or self.player.location.name != "The Breakpoint"
+        ):
+            self.parser.fail("There's no bartender here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if _is_holding(self.player, "tray"):
+            self.parser.ok("\"Quit dawdlin' -- table four's waitin'!\"")
+            return
+        tray = _item(
+            "tray",
+            "a tray of drinks",
+            "A tray of longnecks and a basket of fries, going warm.",
+        )
+        self.player.add_to_inventory(tray)
+        self.parser.ok(
+            "The bartender shoves a loaded tray into your hands without looking up. "
+            '"You the new girl? Good. Table four -- the big fella in the leather. GO."'
+        )
+
+
+class ServeTableFour(actions.Action):
+    ACTION_NAME = "take tray to table four"
+    ACTION_DESCRIPTION = "Carry the tray of drinks to table four"
+    ACTION_ALIASES = [
+        "bring tray to table four",
+        "take the tray to table four",
+        "serve table four",
+        "give tray to table four",
+        "deliver tray",
+        "deliver the tray",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if (
+            self.player.location is None
+            or self.player.location.name != "The Breakpoint"
+        ):
+            self.parser.fail("There's no table four here.")
+            return False
+        if not _is_holding(self.player, "tray"):
+            self.parser.fail("You've nothing to serve. (Ask the BARTENDER.)")
+            return False
+        return True
+
+    def apply_effects(self):
+        _take_held(self.player, "tray")
+        self.player.location.set_property("provoked", True)
+        self.parser.ok(
+            "You set the drinks at table four. A mountain of a biker lurches up, beer "
+            'sloshing down his vest. "You spill on my colors?! Nobody disrespects the '
+            'Steel Vipers!" The whole bar goes quiet, waiting. (Best act first.)'
+        )
+
+
+class StartBrawl(actions.Action):
+    ACTION_NAME = "punch biker"
+    ACTION_DESCRIPTION = "Throw the first punch and start a bar brawl"
+    ACTION_ALIASES = [
+        "hit biker",
+        "punch the biker",
+        "hit the biker",
+        "smash biker",
+        "smash bottle",
+        "smash bottle over his head",
+        "throw drink",
+        "throw drink in his face",
+        "deck the biker",
+        "start a fight",
+        "start a brawl",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "The Breakpoint":
+            self.parser.fail("There's no one here to fight.")
+            return False
+        if not loc.get_property("provoked"):
+            self.parser.fail("Nobody's looking for a fight just yet.")
+            return False
+        if loc.get_property("brawled"):
+            self.parser.fail("The brawl's already in full swing.")
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        loc.set_property("brawled", True)
+        keys = _item(
+            "keys",
+            "a ring of motorcycle keys",
+            "A heavy skull keyring stamped ROCK HARD, RIDE FREE.",
+        )
+        loc.add_item(keys)
+        self.game.award(
+            "brawl",
+            5,
+            "You crack a bottle over his head and the Breakpoint ERUPTS -- fists, "
+            "stools, and longnecks flying. In the chaos a ring of motorcycle keys is "
+            "knocked loose and skitters across the floor. (Quick -- CATCH KEYS!)",
+        )
+
+
+class CatchKeys(actions.Action):
+    ACTION_NAME = "catch keys"
+    ACTION_DESCRIPTION = "Snatch the keys loose in the brawl"
+    ACTION_ALIASES = ["catch the keys", "grab keys", "grab the keys", "snatch keys"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "keys" not in loc.items:
+            self.parser.fail("There are no keys here to catch.")
+            return False
+        return True
+
+    def apply_effects(self):
+        keys = self.player.location.items["keys"]
+        self.player.location.remove_item(keys)
+        self.player.add_to_inventory(keys)
+        self.parser.ok(
+            "You snatch the keys out of the air and bolt for the door before anyone's "
+            "the wiser."
+        )
+
+
+class UseKeyOnMotorcycle(actions.Action):
+    ACTION_NAME = "use key on motorcycle"
+    ACTION_DESCRIPTION = "Start the chopper with the stolen keys"
+    ACTION_ALIASES = [
+        "use keys on motorcycle",
+        "use key on bike",
+        "use keys on bike",
+        "start the motorcycle",
+        "start motorcycle",
+        "start the bike",
+        "start the chopper",
+        "put key in motorcycle",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "motorcycle" not in loc.items:
+            self.parser.fail("There's no motorcycle here.")
+            return False
+        if not _is_holding(self.player, "keys"):
+            self.parser.fail("You don't have any keys.")
+            return False
+        if loc.items["motorcycle"].vehicle_ready():
+            self.parser.fail("The chopper's already running.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.items["motorcycle"].set_property("vehicle_ready", True)
+        self.parser.ok(
+            "You slot the skull key home and thumb the starter. The chopper coughs, "
+            "catches, and ROARS to life. (Now GET ON THE MOTORCYCLE and head EAST or "
+            "WEST onto the highway.)"
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -555,6 +910,11 @@ def build_game() -> ActionCastle4:
         "The Breakpoint Bar & Grill -- rowdy and packed with bikers and ranchers. There's "
         "a jukebox here, and a bartender tending bar.",
     )
+    highway = L(
+        "Highway",
+        "Open road, as far as you can see. The wind takes your hair and the kingdom "
+        "shrinks in the chrome mirrors behind you.",
+    )
 
     # --- Connections (geography resolved from each room's exit block) ------
     # Castle
@@ -582,11 +942,14 @@ def build_game() -> ActionCastle4:
     ranch.add_connection("north", dirt_road)  # auto: dirt_road south -> ranch
     dirt_road.add_connection("north", roadhouse)  # auto: roadhouse south -> dirt_road
     # Roadhouse / bar / highway
-    _one_way(roadhouse, "enter", breakpoint)
+    _one_way(roadhouse, "enter", breakpoint)  # gated by Dalton until "Wade sent me"
     _one_way(breakpoint, "out", roadhouse)
-    # The two endings (ride onto the Highway; settle as a Rancher) are action
-    # *effects*, not rooms -- they land as custom actions in Slice 5, not as
-    # exits here. ("ride east"/"ride west" off the bike, "say yes" at the ranch.)
+    # The highway runs east-west: either direction rides out onto the open road
+    # (the +50 ending). Both are one-way (no coming back) and gated on actually
+    # being astride the started motorcycle. The Rancher ending, by contrast, is
+    # pure dialog (SAY YES) -- no travel -- so it stays an action effect.
+    _one_way(roadhouse, "east", highway)
+    _one_way(roadhouse, "west", highway)
 
     # --- Vehicle gate: the woods are too far on foot -----------------------
     drawbridge.add_block(
@@ -658,6 +1021,43 @@ def build_game() -> ActionCastle4:
             return not self.woods.get_property("poacher_dealt")
 
     deep_woods.add_block("north", PoacherBlock(deep_woods))
+
+    # Dalton bars the bar until you've said "Wade sent me" (SAY WADE SENT ME,
+    # which needs you to have met Wade and turned down the ranch job).
+    class DaltonBlock(blocks.Block):
+        def __init__(self, roadhouse):
+            super().__init__(
+                "Dalton",
+                "Dalton blocks the door. \"Hold up, darlin' -- the Breakpoint's "
+                "twenty-one and over. Let's see some I.D.\" He doesn't budge.",
+            )
+            self.roadhouse = roadhouse
+
+        def is_blocked(self) -> bool:
+            return not self.roadhouse.get_property("admitted")
+
+    roadhouse.add_block("enter", DaltonBlock(roadhouse))
+
+    # You can only ride onto the highway astride the *started* motorcycle -- not
+    # on foot, and not on the horse (the rulebook's "you need a motor vehicle").
+    class OnMotorcycleBlock(blocks.Block):
+        def __init__(self, game_ref):
+            super().__init__(
+                "No wheels",
+                "You'll need a motor vehicle to take the highway. (Start the "
+                "MOTORCYCLE, then GET ON it.)",
+            )
+            self.game_ref = game_ref
+
+        def is_blocked(self) -> bool:
+            player = self.game_ref["game"].player
+            riding = getattr(player, "riding", None)
+            return riding is None or riding.name != "motorcycle"
+
+    # The Game isn't built yet; hand the block a holder we fill in below.
+    _game_ref = {}
+    roadhouse.add_block("east", OnMotorcycleBlock(_game_ref))
+    roadhouse.add_block("west", OnMotorcycleBlock(_game_ref))
 
     # --- Items (fixtures + key objects; puzzle wiring comes in later slices) ---
     tower.add_item(
@@ -879,8 +1279,18 @@ def build_game() -> ActionCastle4:
         BrushHorse,
         FollowDeer,
         ShootPoacher,
+        GiveHorseToRancher,
+        SayYes,
+        SayNo,
+        SayWadeSentMe,
+        TalkToBartender,
+        ServeTableFour,
+        StartBrawl,
+        CatchKeys,
+        UseKeyOnMotorcycle,
     ]
     game = ActionCastle4(tower, player, characters, custom_actions)
+    _game_ref["game"] = game  # back-fill the OnMotorcycleBlock's Game handle
 
     # MAKE ROPE / BRAID HAIR: a one-input crafting recipe (hair -> rope), reusing
     # the crafting system. The surrounding steps (CUT HAIR, TIE ROPE) are custom.
@@ -927,6 +1337,50 @@ def build_game() -> ActionCastle4:
         "score_purse",
         lambda g: _is_holding(g.player, "coin purse") and "purse" not in g._scored_keys,
         lambda g: g.award("purse", 5, "You pocket the poacher's coin purse."),
+        repeatable=True,
+    )
+
+    # Finale scoring (rulebook page 19): mounting the mare +5, getting inside the
+    # Breakpoint +5. (Gifting the horse +5 and starting the brawl +5 are awarded
+    # in their actions.)
+    game.add_trigger(
+        "score_horse",
+        lambda g: getattr(g.player, "riding", None) is not None
+        and g.player.riding.name == "horse"
+        and "horse" not in g._scored_keys,
+        lambda g: g.award("horse", 5, "You swing up into the saddle."),
+        repeatable=True,
+    )
+    game.add_trigger(
+        "score_roadhouse",
+        lambda g: g.player.location is not None
+        and g.player.location.name == "The Breakpoint"
+        and "roadhouse" not in g._scored_keys,
+        lambda g: g.award("roadhouse", 5, "You're inside the Breakpoint."),
+        repeatable=True,
+    )
+
+    # The Highway ending (+50, the best run): reaching the Highway means you rode
+    # out astride the started bike (the exits are gated). Award + finish + end.
+    def _ride_off(g):
+        g.player.set_property("rode_the_highway", True)
+        g.award("highway", 50)
+        g.award("finish", 5)
+        ending = (
+            "You open the throttle and the Breakpoint vanishes behind you. No tower, "
+            "no curse, no prince -- just you, the bike, and the whole wide world. You "
+            "ride off into your own happily-ever-after. THE END."
+        )
+        g.parser.ok(ending)
+        g.game_over = True
+        g.game_over_description = ending
+
+    game.add_trigger(
+        "highway_ending",
+        lambda g: g.player.location is not None
+        and g.player.location.name == "Highway"
+        and not g.game_over,
+        _ride_off,
         repeatable=True,
     )
 
@@ -977,17 +1431,55 @@ def build_game() -> ActionCastle4:
 
 
 # ---------------------------------------------------------------------------
-# Walkthrough (a skeleton smoke path for now; the winning run lands in Slice 5)
+# Walkthrough: the 100-point winning run (sneak out -> tame the mare -> deal
+# with the poacher -> gift the horse, decline the job -> the bar -> ride off).
 # ---------------------------------------------------------------------------
 
-WALKTHROUGH_SKELETON = [
+WALKTHROUGH_WIN = [
+    # Escape the tower by the guardroom (sneak route), in the army boots.
     "out",  # Tower -> Tower Stairs
-    "down",  # -> Guardroom
-    "west",  # -> Drawbridge
-    "south",  # -> Down by the River
-    "north",  # -> Drawbridge
+    "down",  # -> Guardroom              (+5 guardroom)
+    "examine army cot",  # reveals the boots under the mattress
+    "take boots",
+    "wear boots",  # (+5 boots)
+    "west",  # -> Drawbridge             (+5 escape)
+    # Fetch an apple from the gardens and tame the skittish mare with it.
     "north",  # -> Gardens
+    "pick apple",
     "south",  # -> Drawbridge
+    "south",  # -> Down by the River
+    "give apple to horse",  # tames the mare
+    "get on horse",  # (+5 horse)
+    # Ride to the woods; the warden's shack has the crossbow.
+    "north",  # -> Drawbridge
+    "west",  # -> Old Woods (vehicle-gated; ok, mounted)
+    "dismount",
+    "enter",  # -> Old Shack
+    "take crossbow",
+    "out",  # -> Old Woods
+    "get on horse",
+    "north",  # -> Deep Woods (the deer flees here; the poacher stalks it)
+    "shoot poacher",  # (+5 shoot) -- drops a coin purse + cloak
+    "take coin purse",  # (+5 purse)
+    "north",  # -> Clearing
+    "southwest",  # -> Ranch
+    # Gift the mare; turn down the job so Wade sends you to the roadhouse.
+    "give horse to rancher",  # (+5 gift_horse) -- poses the yes/no offer
+    "say no",  # learn "Wade sent me"
+    "north",  # -> Dirt Road
+    "north",  # -> Roadhouse
+    "say wade sent me",  # Dalton admits you
+    "enter",  # -> The Breakpoint        (+5 roadhouse)
+    # Wait a table, start the brawl, grab the keys that fly loose.
+    "talk to bartender",  # get a tray
+    "take tray to table four",  # provoke the biker
+    "punch biker",  # (+5 brawl) -- keys skitter loose
+    "catch keys",
+    "out",  # -> Roadhouse
+    # Start the chopper and ride off down the highway.
+    "use key on motorcycle",
+    "get on motorcycle",
+    "east",  # -> Highway                (+50 highway, +5 finish) -- THE END
 ]
 
 
@@ -1010,6 +1502,6 @@ if __name__ == "__main__":
     import sys
 
     if "--walk" in sys.argv:
-        _run(WALKTHROUGH_SKELETON)
+        _run(WALKTHROUGH_WIN)
     else:
         build_game().game_loop()
