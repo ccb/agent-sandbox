@@ -942,8 +942,22 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	var state_modal = document.getElementById("state-modal");
 	var state_modal_frame = document.getElementById("state-modal-frame");
 
+	// Rewrite the link's step segment to the LIVE replay step, so the persona
+	// state page shows the memories retrieved at the moment you opened it -- i.e.
+	// the same set on the card. The href is built by Django at the start step
+	// (/replay_persona_state/<sim>/<step>/<name>/); we swap <step> for `step`.
+	function urlAtCurrentStep(url) {
+		var parts = url.split("/");
+		var idx = parts.indexOf("replay_persona_state");
+		if (idx !== -1 && parts.length > idx + 2) {
+			parts[idx + 2] = String(step);
+		}
+		return parts.join("/");
+	}
+
 	function openStateModal(url) {
 		if (!state_modal || !state_modal_frame || !url) return;
+		url = urlAtCurrentStep(url);
 		state_modal_frame.src = url + (url.indexOf("?") === -1 ? "?" : "&") + "embed=1";
 		state_modal.hidden = false;
 	}

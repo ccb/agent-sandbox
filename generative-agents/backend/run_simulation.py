@@ -40,6 +40,7 @@ from .build_world import PERSONAS, build_world
 from .smallville_agents import (
     attach_agents,
     memories_for_frame,
+    memory_stream_for_persona,
     observe_and_decide,
     remember_outcome,
 )
@@ -121,6 +122,7 @@ def simulate(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
+    out_memories: dict | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -140,6 +142,13 @@ def simulate(
     known-places into knowledge (issue #79, via :func:`attach_agents`). Both are
     optional: tests call ``simulate`` without them and stay byte-identical, while
     a real run (:func:`main`) points them at ``frontend/``.
+
+    Pass an ``out_memories`` dict to also collect each agent's *full* memory
+    stream (``{persona_name: [memory dicts]}``) at the end of the run -- the
+    exporter writes it per persona so the State Details panel can show every
+    memory an agent formed, not just the few retrieved per step. It's an
+    out-parameter (not part of the return) so the many ``frames = simulate(...)``
+    callers and the determinism tests stay unchanged.
     """
     game, chars = build_world()
     attach_agents(
@@ -258,6 +267,11 @@ def simulate(
                 "memories": st["memories"],
             }
         frames.append(frame)
+
+    # Hand back each agent's complete memory stream, if the caller asked for it.
+    if out_memories is not None:
+        for name in order:
+            out_memories[name] = memory_stream_for_persona(chars[name].agent)
 
     return frames
 
@@ -389,6 +403,10 @@ def main() -> None:
     run_log = config.build_run_log(
         provider="mock", model="mock", turn_mode="simultaneous"
     )
+    # Collect every agent's full memory stream alongside the frames, so the
+    # exporter can give the State Details panel the complete history (not just
+    # the per-step retrieved set the cards show).
+    memory_streams: dict = {}
     with run_log or nullcontext():
         if run_log is not None:
             run_log.attach(ledger)
@@ -399,6 +417,7 @@ def main() -> None:
             embedding_client=embedding_client,
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
+            out_memories=memory_streams,
         )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     _print_cost_summary(ledger)
@@ -414,6 +433,7 @@ def main() -> None:
         start_tiles=start_tiles,
         base_personas_dir=base_personas,
         sec_per_step=args.sec_per_step,
+        memory_streams=memory_streams,
     )
     print(f"Wrote simulation to {sim_dir}")
     print(

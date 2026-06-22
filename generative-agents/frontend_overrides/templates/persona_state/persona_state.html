@@ -101,6 +101,67 @@
 	.persona-state .ps-mem .ps-speaker {
 		font-style: italic;
 	}
+
+	/* Memory lists (retrieved-this-step + full stream). These mirror the replay
+	   agent card's kind-pill styling so the State Details panel reads the same as
+	   the card. All rules are qualified under .ps-mem-list so they never touch the
+	   seed event/chat/thought blocks above (which use .ps-mem). */
+	.persona-state .ps-mem-list {
+		list-style: none;
+		margin: 0 0 0.4em;
+		padding: 0;
+	}
+	.persona-state .ps-mem-list li {
+		padding: 0.4em 0 0.4em 0.6em;
+		border-bottom: 1px solid #eceef3;
+		border-left: 3px solid transparent;
+	}
+	.persona-state .ps-mem-list li:last-child {
+		border-bottom: none;
+	}
+	.persona-state .ps-mem-list .ps-mem-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.4em;
+		margin-bottom: 0.2em;
+	}
+	.persona-state .ps-mem-list .ps-mem-kind {
+		font-size: 0.72em;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		border-radius: 4px;
+		padding: 0.1em 0.45em;
+		color: #5b6478;
+		background: #eef0f5;
+	}
+	.persona-state .ps-mem-list .ps-mem-time {
+		font-size: 0.82em;
+		color: #6b7280;
+		font-variant-numeric: tabular-nums;
+	}
+	.persona-state .ps-mem-list .ps-mem-imp {
+		margin-left: auto;
+		font-size: 0.82em;
+		color: #9aa0b0;
+	}
+	.persona-state .ps-mem-list .ps-mem-text {
+		display: block;
+	}
+	/* Per-kind accent + pill colour, matching the card (observation=blue,
+	   plan=amber, reflection=purple). */
+	.persona-state .ps-mem-list .ps-mem-observation { border-left-color: #9cc0f5; }
+	.persona-state .ps-mem-list .ps-mem-observation .ps-mem-kind { color: #1a56b8; background: #e6f0fe; }
+	.persona-state .ps-mem-list .ps-mem-plan { border-left-color: #f0c071; }
+	.persona-state .ps-mem-list .ps-mem-plan .ps-mem-kind { color: #b06a00; background: #fdf0db; }
+	.persona-state .ps-mem-list .ps-mem-reflection { border-left-color: #c79cf0; }
+	.persona-state .ps-mem-list .ps-mem-reflection .ps-mem-kind { color: #6b29b8; background: #f1e6fd; }
+
+	.persona-state .ps-mem-empty {
+		margin: 0 0 0.4em;
+		color: #9aa0b0;
+		font-style: italic;
+	}
 </style>
 
 <!-- "Return to simulation" back-link. Hidden when the page is opened inside the
@@ -175,13 +236,60 @@
 
 	<div class="ps-section">Agent's Memory</div>
 
+	<!-- The memories retrieved for THIS step's decision -- exactly what the
+	     replay's agent card shows at this point. The popup opens at the live
+	     replay step, so these match the card you clicked from. -->
+	<div class="ps-sub">Retrieved for this step ({{ retrieved_memories|length }})</div>
+	{% if retrieved_memories %}
+	<ul class="ps-mem-list">
+		{% for m in retrieved_memories %}
+		<li class="ps-mem-{{ m.kind }}">
+			<div class="ps-mem-meta">
+				<span class="ps-mem-kind">{{ m.kind }}</span>
+				{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
+				<span class="ps-mem-imp">importance {{ m.importance }}</span>
+			</div>
+			<span class="ps-mem-text">{{ m.text }}</span>
+		</li>
+		{% endfor %}
+	</ul>
+	{% else %}
+	<p class="ps-mem-empty">No memories retrieved at this step.</p>
+	{% endif %}
+
+	<!-- The agent's complete memory stream (newest first): every memory it has
+	     formed, of which the retrieved set above is a subset. -->
+	<div class="ps-sub">All memories ({{ all_memories|length }})</div>
+	{% if all_memories %}
+	<ul class="ps-mem-list">
+		{% for m in all_memories %}
+		<li class="ps-mem-{{ m.kind }}">
+			<div class="ps-mem-meta">
+				<span class="ps-mem-kind">{{ m.kind }}</span>
+				{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
+				<span class="ps-mem-imp">importance {{ m.importance }}</span>
+			</div>
+			<span class="ps-mem-text">{{ m.text }}</span>
+		</li>
+		{% endfor %}
+	</ul>
+	{% else %}
+	<p class="ps-mem-empty">No memories recorded.</p>
+	{% endif %}
+
+	<!-- Upstream seed memory (associative_memory/nodes.json). Our mock sim doesn't
+	     write to it, so these are shown only when present -- e.g. on the upstream
+	     demo sim -- and stay hidden (rather than rendering empty) otherwise. -->
+	{% if a_mem_event %}
 	<div class="ps-sub">Event</div>
 	<div class="ps-mem">
 		{% for node_details in a_mem_event %}
 		<p>[node_{{ node_details.node_count }}] {{ node_details.created }}: <strong>{{ node_details.description }}</strong></p>
 		{% endfor %}
 	</div>
+	{% endif %}
 
+	{% if a_mem_chat %}
 	<div class="ps-sub">Conversation History</div>
 	<div class="ps-mem">
 		{% for node_details in a_mem_chat %}
@@ -194,7 +302,9 @@
 		</p>
 		{% endfor %}
 	</div>
+	{% endif %}
 
+	{% if a_mem_thought %}
 	<div class="ps-sub">Thought</div>
 	<div class="ps-mem">
 		{% for node_details in a_mem_thought %}
@@ -204,6 +314,7 @@
 		</p>
 		{% endfor %}
 	</div>
+	{% endif %}
 
 </div>
 {% endblock content %}
