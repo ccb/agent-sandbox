@@ -15,12 +15,16 @@ progress (max 100 points). The best ending banishes the Chaos demon AND kills th
 
 PORTED IN PHASES (this file grows over several PRs, like AC2 did):
   * Phase 1 (engine): a reusable Darkness block (text_adventure_games.blocks.Darkness).
-  * Phase 2 (THIS): the world skeleton -- all rooms, exits, the three regions off the
-    Crossroads hub, start inventory (a backpack container), the darkness-gated cave and
-    dungeon descents, populated rooms, and the GO-NORTH-home ending stub.
-  * Phases 3-5 (TODO): companions + ability-verbs; the puzzle chain (bow/sleep, spider,
-    webs, baby + stew, goblin queen, pendant/crypt, ooze/lockbox/crown, slide trap); the
-    endgame (javelin summons + banishes the demon, push the cultist) and scored epilogues.
+  * Phase 2: the world skeleton -- all rooms, exits, the three regions off the Crossroads
+    hub, start inventory (a backpack container), the darkness-gated cave and dungeon
+    descents, populated rooms, and the GO-NORTH-home ending stub.
+  * Phase 3 (engine + THIS): GET reaches into carried containers; recruiting the party --
+    INVITE (the engine follow/refusal mechanism), and the rescue chains that unlock the
+    cleric (give water + free) and the dwarf (drive off the spider, free, heal the poison).
+  * Phases 4-5 (TODO): the ability-verbs (SHOOT SPIDER, USE HATCHET, CAST SLEEP, USE WAND,
+    TURN UNDEAD) and the puzzle chain (bow/sleep, spider, webs, baby + stew, goblin queen,
+    pendant/crypt, ooze/lockbox/crown, slide trap); the endgame (javelin summons + banishes
+    the demon, push the cultist) and the scored epilogues.
 
 Run interactively:   python action_castle_3.py
 """
@@ -192,6 +196,273 @@ class Stay(actions.Action):
 
     def apply_effects(self):
         self.parser.ok("You decide your adventure isn't over yet.")
+
+
+# ---------------------------------------------------------------------------
+# The party: recruitment (#112 follow) + the chains that unlock it
+# ---------------------------------------------------------------------------
+#
+# Companions follow the player (Game.drag_followers cascades the whole party
+# along), and an ability-verb is gated on the right companion being present.
+# A companion that isn't recruitable yet REFUSES to follow (the engine's
+# refuses_follow / follow_refusal_message): the elf and wizard join on sight,
+# while the cleric and dwarf must be rescued first (give water + free; free +
+# heal the poison). Clearing the refusal is what "rescues" them.
+
+
+def _present(game, name):
+    """The named character if it's in the player's location, else None."""
+    return game.player.location.characters.get(name) if game.player.location else None
+
+
+def _in_party(game, name):
+    """The named character if it has joined the party (is following you) and is
+    here with you, else None. Ability-verbs gate on this."""
+    ch = _present(game, name)
+    return ch if (ch is not None and ch.following is game.player) else None
+
+
+class Invite(actions.Action):
+    """Recruit a co-located character into the party (rulebook: INVITE <X>).
+
+    Routes through the engine's following mechanism: a recruit that isn't ready
+    refuses (refuses_follow), so INVITE reports why ("too weak to follow"); once
+    its chain is done the refusal is cleared and INVITE makes it follow. Each
+    companion prints its own join line (``join_text``); rescuing the cleric or
+    dwarf scores."""
+
+    ACTION_NAME = "invite"
+    ACTION_DESCRIPTION = "Invite a companion to join your party"
+    ACTION_ALIASES = ["recruit"]
+
+    SCORES = {"cleric": ("cleric", 10), "dwarf": ("dwarf", 10)}
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        # The target is the named character in the room (never the player).
+        self.target = self.parser.get_character(
+            command, hint="companion", exclude=self.player
+        )
+
+    def check_preconditions(self) -> bool:
+        if self.target is None or self.target.location is not self.player.location:
+            self.parser.fail("There's no one here by that name to invite.")
+            return False
+        if self.target.following is self.player:
+            self.parser.fail(f"{self.target.name.capitalize()} is already with you.")
+            return False
+        if self.target.get_property("refuses_follow"):
+            self.parser.fail(
+                self.target.get_property("follow_refusal_message")
+                or f"{self.target.name.capitalize()} won't come with you yet."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.target.following = self.player
+        self.parser.ok(
+            getattr(self.target, "join_text", None)
+            or f"{self.target.name.capitalize()} joins your party."
+        )
+        scored = self.SCORES.get(self.target.name)
+        if scored:
+            key, points = scored
+            self.game.award(key, points)
+
+
+class FillWaterskin(actions.Action):
+    """Fill the waterskin at the spring (Cavern Entrance)."""
+
+    ACTION_NAME = "fill waterskin"
+    ACTION_DESCRIPTION = "Fill your waterskin at the spring"
+    ACTION_ALIASES = ["fill the waterskin", "fill waterskin at spring"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Cavern Entrance":
+            self.parser.fail("There's no spring here to fill it from.")
+            return False
+        if not _is_holding(self.player, "waterskin"):
+            self.parser.fail("You have no waterskin to fill.")
+            return False
+        return True
+
+    def apply_effects(self):
+        skin = _held_item(self.player, "waterskin")
+        skin.set_property("has_water", True)
+        self.parser.ok("You replenish your water supply.")
+
+
+def _held_item(character, name):
+    """The held Item by name, including inside a carried open container."""
+    held = _all_held(character)
+    if name in held:
+        return held[name]
+    for item in character.inventory.values():
+        if name in item.accessible_contents():
+            return item.contents[name]
+    return None
+
+
+def _heal_cleric_if_ready(game, cleric):
+    """Once the captive has been given water AND freed, he heals himself and is
+    ready to be invited (the refusal lifts)."""
+    if cleric.get_property("given_water") and cleric.get_property("freed"):
+        if cleric.get_property("refuses_follow"):
+            cleric.set_property("refuses_follow", False)
+            game.parser.ok(
+                'The cleric invokes a prayer -- "By the Power of the Light..." -- '
+                "and his wounds knit shut. He climbs to his feet, restored."
+            )
+
+
+class GiveWater(actions.Action):
+    """Give the tortured cleric a drink (rulebook: he croaks 'Water...')."""
+
+    ACTION_NAME = "give water"
+    ACTION_DESCRIPTION = "Give water to the tortured man"
+    ACTION_ALIASES = ["give water to man", "give water to cleric", "give the man water"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.cleric = _present(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        if self.cleric is None:
+            self.parser.fail("There's no one here who needs water.")
+            return False
+        skin = _held_item(self.player, "waterskin")
+        if skin is None or not skin.get_property("has_water"):
+            self.parser.fail("Your waterskin is empty.")
+            return False
+        return True
+
+    def apply_effects(self):
+        skin = _held_item(self.player, "waterskin")
+        skin.set_property("has_water", False)
+        self.cleric.set_property("given_water", True)
+        self.parser.ok("The man drinks greedily. Some color returns to his face.")
+        _heal_cleric_if_ready(self.game, self.cleric)
+
+
+class FreeCaptive(actions.Action):
+    """Cut the tortured cleric loose from the table."""
+
+    ACTION_NAME = "free man"
+    ACTION_DESCRIPTION = "Free the tortured man from his bonds"
+    ACTION_ALIASES = [
+        "free cleric",
+        "untie man",
+        "untie cleric",
+        "release man",
+        "free the man",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.cleric = _present(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        if self.cleric is None:
+            self.parser.fail("There's no one here to free.")
+            return False
+        if self.cleric.get_property("freed"):
+            self.parser.fail("He's already free.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.cleric.set_property("freed", True)
+        self.parser.ok("You cut the man loose from the table.")
+        _heal_cleric_if_ready(self.game, self.cleric)
+
+
+class FreeDwarf(actions.Action):
+    """Cut the cocooned dwarf down. Fatal if the spider is still here -- you must
+    drive it off (SHOOT SPIDER) first."""
+
+    ACTION_NAME = "free dwarf"
+    ACTION_DESCRIPTION = "Cut the captured dwarf out of his cocoon"
+    ACTION_ALIASES = [
+        "free the dwarf",
+        "cut dwarf loose",
+        "untie dwarf",
+        "release dwarf",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.dwarf = _present(game, "dwarf")
+        self.spider = _present(game, "spider")
+
+    def check_preconditions(self) -> bool:
+        if self.dwarf is None:
+            self.parser.fail("There's no captive dwarf here.")
+            return False
+        if self.dwarf.get_property("freed"):
+            self.parser.fail("The dwarf is already free.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if self.spider is not None and not self.spider.get_property("driven_off"):
+            _die(
+                self.game,
+                "The spider pounces as you approach, sinking its fangs into your body. "
+                "Paralyzed, you're wrapped in a cocoon and hung from the ceiling. THE END.",
+            )
+            return
+        self.dwarf.set_property("freed", True)
+        self.parser.ok(
+            "You cut the dwarf's bonds. He slumps down, too weak to move -- a pair of "
+            "puncture marks on his leg ooze a dark, foul-smelling poison."
+        )
+
+
+class HealDwarf(actions.Action):
+    """The cleric cures the dwarf's spider poison so he can travel."""
+
+    ACTION_NAME = "heal dwarf"
+    ACTION_DESCRIPTION = "Have the cleric heal the poisoned dwarf"
+    ACTION_ALIASES = ["cure dwarf", "heal the dwarf"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.dwarf = _present(game, "dwarf")
+        self.cleric = _in_party(game, "cleric")
+
+    def check_preconditions(self) -> bool:
+        if self.dwarf is None:
+            self.parser.fail("There's no dwarf here to heal.")
+            return False
+        if self.cleric is None:
+            self.parser.fail("Only the cleric can heal him, and he isn't here.")
+            return False
+        if not self.dwarf.get_property("freed"):
+            self.parser.fail("He's still cocooned -- free him first.")
+            return False
+        if not self.dwarf.get_property("poisoned"):
+            self.parser.fail("The dwarf isn't poisoned.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.dwarf.set_property("poisoned", False)
+        self.dwarf.set_property("refuses_follow", False)  # now fit to join
+        self.parser.ok(
+            "The cleric utters a prayer and the poisoned bite is healed. The dwarf "
+            "stands, hefting his pickaxe."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -473,15 +744,16 @@ def build_game() -> ActionCastle3:
         persona="I am an adventurer seeking glory beneath the ruins of Action Castle.",
     )
 
-    # The four would-be companions (recruitment is Phase 3). Placed with their
-    # canned lines so EXAMINE/TALK already work.
+    # The four would-be companions. The elf and wizard join on sight; the cleric
+    # and dwarf REFUSE (refuses_follow) until rescued -- clearing the refusal is
+    # what recruits them. Each has a join_text the Invite action prints.
     elf = things.Character(
         "elf",
         "a green-cloaked elf with pointed ears",
         "I am an elf who fled bandits in the ruins.",
     )
     elf.talk_text = '"A group of bandits ambushed me in the ruins. I dropped my bow during my escape."'
-    elf.location = None
+    elf.join_text = 'The elf clasps your wrist. "Together, nothing can stop us!"'
 
     wizard = things.Character(
         "wizard",
@@ -489,6 +761,7 @@ def build_game() -> ActionCastle3:
         "I am a wizard who has misplaced his spell book.",
     )
     wizard.talk_text = '"Have you come across a spell book in your travels? I seem to have misplaced mine!"'
+    wizard.join_text = 'The wizard puts on his hat. "May the stars guide us!"'
 
     dwarf = things.Character(
         "dwarf",
@@ -496,19 +769,37 @@ def build_game() -> ActionCastle3:
         "I am a dwarf who was searching for gold when the spider ambushed me.",
     )
     dwarf.talk_text = '"I was searching for gold and gems when the spider ambushed me!"'
+    dwarf.join_text = 'The dwarf hefts his pickaxe. "Aye, let\'s go bash some heads!"'
+    # Cocooned and poisoned: must be freed (FREE DWARF, only safe once the spider
+    # is driven off) and healed (HEAL DWARF, by the cleric) before he'll join.
+    dwarf.set_property("refuses_follow", True)
+    dwarf.set_property(
+        "follow_refusal_message", "The dwarf is in no shape to travel yet."
+    )
+    dwarf.set_property("freed", False)
+    dwarf.set_property("poisoned", True)
 
+    # The captured cleric -- named "cleric" (the rulebook calls him "the man"
+    # until rescued; his description keeps that flavor). He must be given water
+    # and freed before he heals himself and can be invited.
     cleric = things.Character(
-        "man",
-        "a tortured man with a lightning-bolt sigil on his tabard",
+        "cleric",
+        "a tortured man with a lightning-bolt sigil on his tabard -- a captive cleric",
         "I am a cleric of the Lord of Law, taken and tortured by the cultists.",
     )
     cleric.talk_text = '"Water..."'
+    cleric.join_text = '"By the Light, we shall defeat the forces of Chaos!"'
+    cleric.set_property("refuses_follow", True)
+    cleric.set_property("follow_refusal_message", "The man is too weak to follow you.")
+    cleric.set_property("given_water", False)
+    cleric.set_property("freed", False)
 
     spider = things.Character(
         "spider",
         "a wolf spider the size of a small horse",
         "I am a great wolf spider, nearly camouflaged against the rock.",
     )
+    spider.set_property("driven_off", False)
     queen = things.Character(
         "goblin queen",
         "the goblin queen, in looted finery",
@@ -545,7 +836,17 @@ def build_game() -> ActionCastle3:
 
     # --- Assemble ----------------------------------------------------------
     characters = [elf, wizard, dwarf, cleric, spider, queen]
-    custom_actions = [GoHome, ConfirmHome, Stay]
+    custom_actions = [
+        GoHome,
+        ConfirmHome,
+        Stay,
+        Invite,
+        FillWaterskin,
+        GiveWater,
+        FreeCaptive,
+        FreeDwarf,
+        HealDwarf,
+    ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
 
