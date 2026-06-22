@@ -102,6 +102,24 @@ Try it on the **terminal** (Chris's preferred way), and also experiment with the
 desktop app and an IDE integration (Mekides uses Cursor). Share anything cool you
 learn in Slack — we're all figuring out the best workflows together.
 
+### Recommended Claude Code plugins
+
+We enable two [Claude Code plugins](https://code.claude.com/docs/en/plugins) for
+everyone via `.claude/settings.json` — when you open the repo, Claude Code prompts
+you to install them from the auto-registered `claude-plugins-official` marketplace:
+
+- **`pyright-lsp`** — gives Claude live Python type-checking after every edit, so it
+  catches mistakes as it works. Needs `pyright` on your machine
+  (`uv tool install pyright`, or `npm i -g pyright`); without it the plugin just
+  stays idle.
+- **`github`** — native GitHub issue/PR context, so Claude reads and works with the
+  tracker directly instead of shelling out to `gh`.
+
+Browse more with `/plugin` (Discover tab). A couple worth trying solo:
+`learning-output-style` / `explanatory-output-style` (Claude narrates *why*, nice
+while you're still learning the engine) and `pr-review-toolkit` (dedicated PR-review
+agents). Run `/reload-plugins` after installing to apply without restarting.
+
 ## 4. Read the engine (in this order)
 
 Once HW1 makes sense, read the actual framework. A good reading order, smallest to
