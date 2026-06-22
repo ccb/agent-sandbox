@@ -231,6 +231,11 @@ def _load_replay_memories(sim_code, step, persona_name):
     The comparison is strict (``< step``) so that at step 0, before the sim has
     advanced at all, both lists are empty; memories then surface as the replay
     reaches the step that formed them.
+
+    Returns ``(retrieved, all_sliced, all_full)``. The first two are sliced to this
+    step (the server-rendered initial view); ``all_full`` is the complete stream,
+    unsliced, which the popup embeds so it can re-slice to the *live* step as the
+    replay plays underneath it (the panel tracks the replay instead of freezing).
     """
 
     def _first_existing(*paths):
@@ -266,7 +271,7 @@ def _load_replay_memories(sim_code, step, persona_name):
     def _before_step(memories):
         return [m for m in memories if m.get("created_turn", 0) < step]
 
-    return _before_step(retrieved), _before_step(all_memories)
+    return _before_step(retrieved), _before_step(all_memories), all_memories
 
 
 def replay_persona_state(request, sim_code, step, persona_name):
@@ -308,7 +313,8 @@ def replay_persona_state(request, sim_code, step, persona_name):
             a_mem_thought += [node_details]
 
     # agent-sandbox port: the live memory our sim produces (see helper above).
-    retrieved_memories, all_memories = _load_replay_memories(
+    # all_memories_full is the unsliced stream the popup re-slices to the live step.
+    retrieved_memories, all_memories, all_memories_full = _load_replay_memories(
         sim_code, step, persona_name
     )
 
@@ -324,6 +330,7 @@ def replay_persona_state(request, sim_code, step, persona_name):
         "a_mem_thought": a_mem_thought,
         "retrieved_memories": retrieved_memories,
         "all_memories": all_memories,
+        "all_memories_full": all_memories_full,
     }
     template = "persona_state/persona_state.html"
     return render(request, template, context)
