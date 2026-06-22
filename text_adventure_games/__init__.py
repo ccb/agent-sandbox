@@ -18,6 +18,7 @@ from .config import (
     ObservabilityConfig,
     RenderConfig,
 )
+from .prompts import Prompt
 
 __all__ = [
     "ActionName",
@@ -34,4 +35,5 @@ __all__ = [
     "GameConfig",
     "ObservabilityConfig",
     "RenderConfig",
+    "Prompt",
 ]

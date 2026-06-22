@@ -373,6 +373,15 @@ class Parser:
         self.add_command_to_history(command)
         action = self.parse_action(command, actor=actor)
         if not action:
+            # The command didn't name an action. If the game has posed a
+            # question (issue #110, Game.pose_prompt), read this as the answer
+            # before giving up -- e.g. a bare "wits" answers "wits or steel?".
+            forwarded = self._answer_to_prompt(command, actor)
+            if forwarded is not None:
+                # Clear first so the dispatched command may pose a new prompt
+                # (and so a non-matching answer can't loop back in here).
+                self.game.clear_prompt()
+                return self.parse_command(forwarded, actor=actor)
             self.fail("I'm not sure what you want to do.")
             return False
         action()
@@ -479,6 +488,34 @@ class Parser:
         for key in sorted(topics, key=len, reverse=True):
             if key.lower() in command:
                 return key
+        return None
+
+    def _answer_to_prompt(self, command: str, actor) -> str | None:
+        """If a prompt is posed (issue #110) and *command* answers it, return the
+        command to dispatch in its place; else None. Only the player answers
+        prompts -- an NPC actor (acting via its behavior) is never reading the
+        question posed to the player."""
+        if actor is not None and actor is not self.game.player:
+            return None
+        prompt = self.game.pending_prompt()
+        if prompt is None:
+            return None
+        return self.match_prompt(command, prompt)
+
+    def match_prompt(self, command: str, prompt) -> str | None:
+        """Read *command* as an answer to a posed Prompt (see prompts.py), and
+        return the command to dispatch, or None if it doesn't answer it.
+
+        A free-text prompt forwards the whole reply to its verb. A choice prompt
+        matches the player's words against the option keywords (longest first,
+        on word boundaries so "no" doesn't fire inside "north"); the LLM parser
+        overrides this to match by meaning."""
+        if prompt.free_text:
+            return f"{prompt.forward_as} {command}".strip()
+        cmd = command.lower()
+        for keyword in sorted(prompt.options, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(keyword.lower())}\b", cmd):
+                return prompt.options[keyword]
         return None
 
     def get_items_in_scope(self, character=None) -> dict[str, Item]:
@@ -722,6 +759,26 @@ class LlmParser(Parser):
         except Exception:
             topic = None
         return topic if topic is not None else super().match_topic(command, topics)
+
+    def match_prompt(self, command: str, prompt) -> str | None:
+        # Free-text answers are forwarded verbatim -- no model needed. Choice
+        # answers are matched by meaning ("the clever option" -> "wits").
+        if prompt.free_text or not prompt.options:
+            return super().match_prompt(command, prompt)
+        options = {kw: (kw, kw) for kw in prompt.options}
+        instructions = (
+            "You are the parser for a text-adventure game. The game asked the "
+            "player a question; pick the option their reply chooses, or none."
+        )
+        if prompt.text:
+            instructions += f" The question was: {prompt.text}"
+        try:
+            kw = self._pick_one(instructions, options, command, allow_none=True)
+        except Exception:
+            kw = None
+        if kw is not None:
+            return prompt.options[kw]
+        return super().match_prompt(command, prompt)
 
     def get_direction(self, command: str, location: Location = None) -> str:
         options = {}
