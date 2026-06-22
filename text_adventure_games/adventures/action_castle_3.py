@@ -139,10 +139,16 @@ class ActionCastle3(games.Game):
             self.parser.ok(msg)
 
     def is_won(self) -> bool:
-        # The "TO BE CONTINUED!" ending: the demon banished and the cultist dead.
+        # The "TO BE CONTINUED!" ending: you returned home (the game is over and
+        # you're alive) having banished the demon AND killed the cultist. Gated on
+        # game_over so it doesn't end the game early -- is_game_over() consults
+        # is_won(); the adventure only finishes when you GO NORTH home (or die).
         p = self.player
         return bool(
-            p.get_property("banished_demon") and p.get_property("killed_cultist")
+            self.game_over
+            and not p.get_property("is_dead")
+            and p.get_property("banished_demon")
+            and p.get_property("killed_cultist")
         )
 
 
@@ -2044,16 +2050,56 @@ def build_game() -> ActionCastle3:
         )
     )
 
-    # Going north ends the adventure: arriving Home reads the epilogue.
+    # Going north ends the adventure: arriving Home reads one of several
+    # epilogues, chosen by how much you accomplished (rulebook page 72).
     def epilogue(g):
-        # Phase 5 will branch this by score/flags; for now, one stub ending.
-        g.award("home", 10)
-        g.parser.ok(
-            "You return to your village. (Scored epilogues arrive in a later phase.)  "
-            f"THE END.  (Score: {g.score}/{g.max_score})"
-        )
+        p = g.player
+        g.award("home", 10)  # returning home
+        g.award("finish", 5)  # finishing without saving (no save mechanic here)
+        if p.get_property("banished_demon") and p.get_property("killed_cultist"):
+            text = (
+                "Word of your exploits travels far and wide. You retire a celebrated "
+                "hero. Years later, while drinking at the local tavern, a familiar "
+                "party appears -- an elf, a dwarf, a cleric and a wizard -- and from "
+                "behind them a red-haired goblin warrior steps forward with a treasure "
+                'map and asks, "Will you join us?" TO BE CONTINUED!'
+            )
+        elif p.get_property("banished_demon"):
+            text = (
+                "Weeks later you find yourself gazing up at the stars, pondering the "
+                "cultist's prophecy. When the stars are right once more, will you dare "
+                "journey beneath Action Castle again? THE END?"
+            )
+        elif _is_holding(p, "bronze javelin"):
+            g.award("return_artifact", 5)
+            text = (
+                "Your party journeys to the cleric's stronghold, where he returns the "
+                "artifact. You are awarded a medal and a certificate of heroism at a "
+                "ceremony, after which there is a small but tasteful reception. Wine "
+                "and cheese are served. THE END."
+            )
+        elif _is_holding(p, "crown"):
+            text = (
+                "You sell the crown to an antiques dealer and make a small fortune, "
+                "which you promptly and foolishly gamble away. THE END."
+            )
+        elif _is_holding(p, "baby goblin"):
+            g.award("raise_baby", 5)
+            text = (
+                "You return to your village and raise the baby as your own. Years "
+                "later, inspired by your tales of adventure, the young goblin sets off "
+                "to explore Action Castle. You never see him again, but one day a "
+                "letter arrives -- from Mipple, the Goblin Prince. You couldn't be "
+                "more proud. THE END."
+            )
+        else:
+            text = (
+                "It seems a life of adventure just isn't for you. You return to your "
+                "village, grow old, and die alone and unloved. THE END."
+            )
+        g.parser.ok(f"{text}  (Score: {g.score}/{g.max_score})")
         g.game_over = True
-        g.game_over_description = "You returned home."
+        g.game_over_description = text
 
     game.add_trigger(
         "epilogue_home",
@@ -2212,9 +2258,122 @@ def build_game() -> ActionCastle3:
 
 
 # ---------------------------------------------------------------------------
-# Skeleton navigation smoke-path (a real walkthrough comes with the puzzles)
+# Walkthroughs
 # ---------------------------------------------------------------------------
 
+# The full max-score (100/100) run: recruit the whole party, work the interlock
+# (pendant -> crypt -> spell book -> wizard -> sleep -> bow -> elf; freeze the
+# ooze -> crown; rescue + feed the baby; spider + web), trade baby + crown to
+# the goblin queen for the javelin, banish the demon and kill the cultist, then
+# go home. Also serves as the end-to-end regression test for the whole game.
+WALKTHROUGH = [
+    "take lantern",
+    "light lantern",
+    # Elf + water + a cave mushroom (stew ingredient) on the way through.
+    "west",
+    "invite elf",  # Dark Forest
+    "south",
+    "fill waterskin",  # Cavern Entrance
+    "enter cavern",
+    "east",
+    "take mushroom",  # Mushroom Garden
+    "west",
+    "up",  # back to Cavern Entrance
+    # Castle: wizard (+ his wand), pendant, the crown (freeze the ooze), the
+    # cleric, and the crypt's spell book.
+    "north",
+    "east",
+    "east",  # -> Castle Ruins
+    "up",
+    "invite wizard",
+    "take wand",
+    "down",
+    "down",  # -> Dungeon
+    "search",
+    "take pendant",
+    "east",  # -> Dark Corridor
+    "use wand on ooze",
+    "pick lock",  # freeze the ooze (+10), take the crown
+    "open door",
+    "east",  # -> Torture Chamber
+    "give water",
+    "free man",
+    "invite cleric",
+    "give pendant to cleric",
+    "open iron maiden",
+    "down",  # -> Sanctum
+    "west",
+    "south",  # -> Chaos Chapel -> Crypt (no javelin yet)
+    "turn undead",
+    "take book",
+    "give spell book to wizard",
+    # Climb back to the surface.
+    "north",
+    "east",
+    "up",  # Crypt -> Chapel -> Sanctum -> Torture
+    "west",
+    "west",
+    "up",
+    "west",  # Torture -> Corridor -> Dungeon -> Ruins -> Crossroads
+    # Refill water; cook the stew and free the bow at the bandit camp.
+    "west",
+    "south",
+    "fill waterskin",  # Cavern Entrance
+    "north",
+    "west",  # Dark Forest -> Bandit Camp
+    "make stew",
+    "cast sleep",
+    "take bow",
+    "give bow to elf",
+    # Rescue and feed the baby.
+    "east",
+    "south",
+    "enter cavern",  # -> Dark Cavern
+    "drop backpack",
+    "enter fissure",
+    "take baby",
+    "feed baby",
+    "out",
+    "take backpack",
+    # Cave combat: spider, dwarf, web.
+    "east",
+    "south",  # -> Spider Lair
+    "shoot spider",
+    "free dwarf",
+    "heal dwarf",
+    "invite dwarf",
+    "use hatchet",
+    # The goblin queen: baby + crown -> the bronze javelin.
+    "west",
+    "down",  # Spider Lair -> Deep Ravine -> Goblin Caves
+    "show baby",
+    "east",  # -> Throne Room
+    "give baby",
+    "give crown",  # -> javelin; escorted to the Cavern Entrance
+    # Carry the javelin to the Chaos Chapel and finish it.
+    "north",
+    "east",
+    "east",  # -> Castle Ruins
+    "down",
+    "east",
+    "east",
+    "down",  # Dungeon -> Corridor -> Torture -> Sanctum
+    "west",  # -> Chaos Chapel (the javelin summons the demon)
+    "throw javelin at demon",
+    "push cultist",
+    # Home.
+    "east",
+    "up",
+    "west",
+    "west",
+    "up",
+    "west",  # back to the Crossroads
+    "go home",
+    "yes",
+]
+
+
+# A short navigation smoke-path (kept for the topology/ending regression).
 WALKTHROUGH_SKELETON = [
     "take lantern",  # out of the backpack
     "light lantern",
@@ -2257,6 +2416,8 @@ if __name__ == "__main__":
     import sys
 
     if "--walk" in sys.argv:
+        _run(WALKTHROUGH)
+    elif "--walk-skeleton" in sys.argv:
         _run(WALKTHROUGH_SKELETON)
     else:
         build_game().game_loop()
