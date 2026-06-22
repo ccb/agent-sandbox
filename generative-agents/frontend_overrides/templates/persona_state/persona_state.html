@@ -157,6 +157,25 @@
 	.persona-state .ps-mem-list .ps-mem-reflection { border-left-color: #c79cf0; }
 	.persona-state .ps-mem-list .ps-mem-reflection .ps-mem-kind { color: #6b29b8; background: #f1e6fd; }
 
+	/* When a memory arrives while this panel is open (the replay plays underneath),
+	   its row flashes for a few seconds so you can see what just came in -- the same
+	   amber two-pulse highlight the agent cards use. The script below adds .is-new
+	   only to genuinely new rows, never on the first render. */
+	@keyframes ps-mem-flash-in {
+		0%   { background-color: rgba(255, 214, 102, 0); }
+		8%   { background-color: rgba(255, 214, 102, 0.9); }
+		32%  { background-color: rgba(255, 214, 102, 0.15); }
+		56%  { background-color: rgba(255, 214, 102, 0.9); }
+		80%  { background-color: rgba(255, 214, 102, 0.15); }
+		100% { background-color: rgba(255, 214, 102, 0); }
+	}
+	.persona-state .ps-mem-list li.is-new {
+		animation: ps-mem-flash-in 4s ease-in-out 1;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.persona-state .ps-mem-list li.is-new { animation: none; }
+	}
+
 	.persona-state .ps-mem-empty {
 		margin: 0 0 0.4em;
 		color: #9aa0b0;
@@ -186,7 +205,7 @@
 		<tr><td>First name</td><td>{{scratch.first_name}}</td></tr>
 		<tr><td>Last name</td><td>{{scratch.last_name}}</td></tr>
 		<tr><td>Age</td><td>{{scratch.age}}</td></tr>
-		<tr><td>Current time</td><td>{{scratch.curr_time}}</td></tr>
+		<tr><td>Current time</td><td id="ps-curr-time">{{scratch.curr_time}}</td></tr>
 		<tr><td>Current tile</td><td>{{scratch.curr_tile}}</td></tr>
 	</table>
 
@@ -238,44 +257,50 @@
 
 	<!-- The memories retrieved for THIS step's decision -- exactly what the
 	     replay's agent card shows at this point. The popup opens at the live
-	     replay step, so these match the card you clicked from. -->
-	<div class="ps-sub">Retrieved for this step ({{ retrieved_memories|length }})</div>
-	{% if retrieved_memories %}
-	<ul class="ps-mem-list">
-		{% for m in retrieved_memories %}
-		<li class="ps-mem-{{ m.kind }}">
-			<div class="ps-mem-meta">
-				<span class="ps-mem-kind">{{ m.kind }}</span>
-				{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
-				<span class="ps-mem-imp">importance {{ m.importance }}</span>
-			</div>
-			<span class="ps-mem-text">{{ m.text }}</span>
-		</li>
-		{% endfor %}
-	</ul>
-	{% else %}
-	<p class="ps-mem-empty">No memories retrieved at this step.</p>
-	{% endif %}
+	     replay step, and the script below keeps it in sync as the replay plays:
+	     the count + body are rewritten in place (newly-arrived rows flash). -->
+	<div class="ps-sub">Retrieved for this step (<span id="ps-retrieved-count">{{ retrieved_memories|length }}</span>)</div>
+	<div id="ps-retrieved-body">
+		{% if retrieved_memories %}
+		<ul class="ps-mem-list">
+			{% for m in retrieved_memories %}
+			<li class="ps-mem-{{ m.kind }}">
+				<div class="ps-mem-meta">
+					<span class="ps-mem-kind">{{ m.kind }}</span>
+					{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
+					<span class="ps-mem-imp">importance {{ m.importance }}</span>
+				</div>
+				<span class="ps-mem-text">{{ m.text }}</span>
+			</li>
+			{% endfor %}
+		</ul>
+		{% else %}
+		<p class="ps-mem-empty">No memories retrieved at this step.</p>
+		{% endif %}
+	</div>
 
 	<!-- The agent's complete memory stream (newest first): every memory it has
-	     formed, of which the retrieved set above is a subset. -->
-	<div class="ps-sub">All memories ({{ all_memories|length }})</div>
-	{% if all_memories %}
-	<ul class="ps-mem-list">
-		{% for m in all_memories %}
-		<li class="ps-mem-{{ m.kind }}">
-			<div class="ps-mem-meta">
-				<span class="ps-mem-kind">{{ m.kind }}</span>
-				{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
-				<span class="ps-mem-imp">importance {{ m.importance }}</span>
-			</div>
-			<span class="ps-mem-text">{{ m.text }}</span>
-		</li>
-		{% endfor %}
-	</ul>
-	{% else %}
-	<p class="ps-mem-empty">No memories recorded.</p>
-	{% endif %}
+	     formed, of which the retrieved set above is a subset. Grows live as the
+	     replay reaches the step each memory was formed on. -->
+	<div class="ps-sub">All memories (<span id="ps-all-count">{{ all_memories|length }}</span>)</div>
+	<div id="ps-all-body">
+		{% if all_memories %}
+		<ul class="ps-mem-list">
+			{% for m in all_memories %}
+			<li class="ps-mem-{{ m.kind }}">
+				<div class="ps-mem-meta">
+					<span class="ps-mem-kind">{{ m.kind }}</span>
+					{% if m.time %}<span class="ps-mem-time">{{ m.time }}</span>{% endif %}
+					<span class="ps-mem-imp">importance {{ m.importance }}</span>
+				</div>
+				<span class="ps-mem-text">{{ m.text }}</span>
+			</li>
+			{% endfor %}
+		</ul>
+		{% else %}
+		<p class="ps-mem-empty">No memories recorded.</p>
+		{% endif %}
+	</div>
 
 	<!-- Upstream seed memory (associative_memory/nodes.json). Our mock sim doesn't
 	     write to it, so these are shown only when present -- e.g. on the upstream
@@ -317,4 +342,114 @@
 	{% endif %}
 
 </div>
+
+<!-- The agent's complete memory stream (unsliced), so the script below can
+     re-slice it to the live replay step as the popup tracks the replay. -->
+{{ all_memories_full|json_script:"ps-all-memories-data" }}
+
+<script>
+(function () {
+	// *** LIVE-SYNC THE STATE DETAILS POPUP WITH THE REPLAY ***
+	// This page is shown inside the replay's popup as a same-origin <iframe>.
+	// Without this it was a frozen snapshot of the step it was opened on -- a new
+	// memory only appeared if you closed and re-opened the popup. Here we listen
+	// for step updates the replay page posts (postMessage) and re-render the memory
+	// lists in place, flashing any newly-arrived row so you can see what just came
+	// in -- mirroring the agent cards on the replay page.
+	var origin = window.location.origin;
+
+	// The agent's complete memory stream (newest first), embedded by the view. We
+	// slice it to the live step client-side so "All memories" grows as the replay
+	// plays. Guard for the no-data / upstream-demo case so the page never errors.
+	var allStream = [];
+	var dataEl = document.getElementById("ps-all-memories-data");
+	if (dataEl) {
+		try { allStream = JSON.parse(dataEl.textContent) || []; } catch (e) { allStream = []; }
+	}
+
+	function escapeHtml(value) {
+		return String(value == null ? "" : value)
+			.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+	}
+
+	// A stable id per memory so we can tell which rows are newly arrived.
+	function memKey(m) {
+		return m.created_turn + "|" + (m.kind == null ? "" : m.kind) + "|" + m.text;
+	}
+
+	// Render one memory <li>, matching the agent card's markup so the two read alike.
+	function memHtml(m) {
+		var kind = String(m.kind == null ? "" : m.kind);
+		// kind is a fixed enum (observation/plan/reflection); keep only word chars
+		// for the CSS modifier class that colours the pill + left accent.
+		var kindClass = "ps-mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
+		var meta = "<span class='ps-mem-kind'>" + escapeHtml(kind) + "</span>";
+		if (m.time) meta += "<span class='ps-mem-time'>" + escapeHtml(String(m.time)) + "</span>";
+		meta += "<span class='ps-mem-imp'>importance " + escapeHtml(String(m.importance)) + "</span>";
+		return "<li class='" + kindClass + "'>"
+			+ "<div class='ps-mem-meta'>" + meta + "</div>"
+			+ "<span class='ps-mem-text'>" + escapeHtml(m.text) + "</span>"
+			+ "</li>";
+	}
+
+	// Re-render a list section (its count + body), flashing rows whose memory we
+	// haven't shown before. On the FIRST render we only seed the seen-set (no flash)
+	// so the memories already present when you open the popup don't all flash at
+	// once -- only ones that arrive later, as the replay plays, count as new.
+	function renderSection(bodyId, countId, mems, seen, emptyText) {
+		var body = document.getElementById(bodyId);
+		if (!body) return;
+		var count = document.getElementById(countId);
+		if (count) count.textContent = String(mems.length);
+		var first = seen._seeded === undefined;
+		if (first) seen._seeded = true;
+		var html = mems.length
+			? "<ul class='ps-mem-list'>" + mems.map(memHtml).join("") + "</ul>"
+			: "<p class='ps-mem-empty'>" + emptyText + "</p>";
+		// Memories are unchanged between an agent's decision points; only rewrite
+		// the DOM when the rendered HTML actually differs (mirrors the agent card).
+		if (body._lastHtml === html) return;
+		body._lastHtml = html;
+		body.innerHTML = html;
+		var rows = body.querySelectorAll(".ps-mem-list li");
+		for (var i = 0; i < rows.length; i++) {
+			var key = memKey(mems[i]);
+			if (!seen[key]) {
+				seen[key] = true;
+				if (!first) rows[i].classList.add("is-new");
+			}
+		}
+	}
+
+	var seenRetrieved = {};
+	var seenAll = {};
+
+	function syncStep(data) {
+		var step = data.step;
+		// Retrieved set is supplied by the replay page (the exact list the card
+		// shows at this step); "All memories" is the embedded stream up to this step.
+		renderSection("ps-retrieved-body", "ps-retrieved-count", data.retrieved || [],
+			seenRetrieved, "No memories retrieved at this step.");
+		var all = allStream.filter(function (m) { return (m.created_turn || 0) < step; });
+		renderSection("ps-all-body", "ps-all-count", all, seenAll, "No memories recorded.");
+		// Keep the clock cell honest so it doesn't read stale next to live memories.
+		if (data.curr_time) {
+			var ct = document.getElementById("ps-curr-time");
+			if (ct) ct.textContent = data.curr_time;
+		}
+	}
+
+	window.addEventListener("message", function (e) {
+		if (e.origin !== origin) return;
+		if (e.data && e.data.type === "replay-step") syncStep(e.data);
+	});
+
+	// Tell the replay page we're ready so it pushes the current step immediately,
+	// rather than us waiting for the next step tick to sync.
+	if (window.parent && window.parent !== window) {
+		window.parent.postMessage({ type: "persona-state-ready" }, origin);
+	}
+})();
+</script>
 {% endblock content %}

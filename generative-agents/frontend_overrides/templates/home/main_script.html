@@ -797,6 +797,10 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	        }
 	      }
 
+	      // The cards' memory lists were just refreshed; mirror the live step into
+	      // the open State Details popup so it tracks the replay (once per step).
+	      pushStateModalStep();
+
 	    }
 
 	    execute_count = execute_count - 1;
@@ -964,6 +968,9 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	// keep their href, so right-click "open in new tab" still works.
 	var state_modal = document.getElementById("state-modal");
 	var state_modal_frame = document.getElementById("state-modal-frame");
+	// Which persona the popup is currently showing (underscored, as in the URL), so
+	// we can push live step updates into it as the replay plays. Null when closed.
+	var state_modal_persona = null;
 
 	// Rewrite the link's step segment to the LIVE replay step, so the persona
 	// state page shows the memories retrieved at the moment you opened it -- i.e.
@@ -981,14 +988,56 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	function openStateModal(url) {
 		if (!state_modal || !state_modal_frame || !url) return;
 		url = urlAtCurrentStep(url);
+		// Remember the persona segment (.../replay_persona_state/<sim>/<step>/<name>/),
+		// underscored, so pushStateModalStep can find it in execute_movement.
+		var parts = url.split("/");
+		var idx = parts.indexOf("replay_persona_state");
+		state_modal_persona = (idx !== -1 && parts.length > idx + 3) ? parts[idx + 3] : null;
 		state_modal_frame.src = url + (url.indexOf("?") === -1 ? "?" : "&") + "embed=1";
 		state_modal.hidden = false;
 	}
 	function closeStateModal() {
 		if (!state_modal || !state_modal_frame) return;
 		state_modal.hidden = true;
+		state_modal_persona = null;
 		state_modal_frame.src = "about:blank";   // stop the now-hidden page loading
 	}
+
+	// Push the live replay step into the open State Details popup so its memory
+	// lists (and clock) track the replay instead of freezing at the step it was
+	// opened on. The popup is a same-origin <iframe>; it slices its embedded memory
+	// stream to this step and flashes any newly-arrived row. No-op unless the popup
+	// is open and pointed at a persona we can find. Called once per step below.
+	function pushStateModalStep() {
+		if (!state_modal || state_modal.hidden || !state_modal_persona) return;
+		if (!state_modal_frame || !state_modal_frame.contentWindow) return;
+		if (!execute_movement || !execute_movement["persona"]) return;
+		// execute_movement keys are display names ("Isabella Rodriguez"); the popup
+		// URL (and so state_modal_persona) uses the underscored form.
+		var retrieved = [];
+		var people = execute_movement["persona"];
+		for (var name in people) {
+			if (name.replace(/ /g, "_") === state_modal_persona) {
+				retrieved = people[name]["memories"] || [];
+				break;
+			}
+		}
+		var curr_time = (execute_movement["meta"] || {})["curr_time"] || "";
+		state_modal_frame.contentWindow.postMessage({
+			type: "replay-step",
+			step: step,
+			retrieved: retrieved,
+			curr_time: curr_time
+		}, window.location.origin);
+	}
+
+	// The embedded persona-state page posts this once it has loaded and wired its
+	// own listener; reply with the current step so it syncs immediately instead of
+	// waiting for the next step tick.
+	window.addEventListener("message", function (e) {
+		if (e.origin !== window.location.origin) return;
+		if (e.data && e.data.type === "persona-state-ready") pushStateModalStep();
+	});
 
 	var stateLinks = document.querySelectorAll(".agent-state-link");
 	for (var si = 0; si < stateLinks.length; si++) {
