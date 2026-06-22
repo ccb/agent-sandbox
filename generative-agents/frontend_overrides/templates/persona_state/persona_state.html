@@ -172,8 +172,17 @@
 	.persona-state .ps-mem-list li.is-new {
 		animation: ps-mem-flash-in 4s ease-in-out 1;
 	}
+	/* Reduced-motion: keep a visible "new memory" cue, but swap the two-pulse flash
+	   for a single gentle fade -- a brief background tint, no repeated pulsing. */
+	@keyframes ps-mem-flash-soft {
+		0%   { background-color: rgba(255, 214, 102, 0); }
+		15%  { background-color: rgba(255, 214, 102, 0.8); }
+		100% { background-color: rgba(255, 214, 102, 0); }
+	}
 	@media (prefers-reduced-motion: reduce) {
-		.persona-state .ps-mem-list li.is-new { animation: none; }
+		.persona-state .ps-mem-list li.is-new {
+			animation: ps-mem-flash-soft 2.5s ease-out 1;
+		}
 	}
 
 	.persona-state .ps-mem-empty {
