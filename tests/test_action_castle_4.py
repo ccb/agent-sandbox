@@ -117,3 +117,103 @@ def test_skeleton_smoke_path_navigates():
     game, _ = _play(ac4.WALKTHROUGH_SKELETON)
     assert game.player.location.name == "Drawbridge"
     assert not game.is_game_over()
+
+
+# --- Slice 3: the tower escape --------------------------------------------
+
+
+def test_door_route_escape_scores_guardroom_boots_and_escape():
+    game, cap = _play(
+        [
+            "out",  # Tower -> Tower Stairs
+            "down",  # -> Guardroom (sneak, +5)
+            "take army boots",
+            "wear army boots",  # +5
+            "west",  # -> Drawbridge (escape, +5)
+        ]
+    )
+    assert game.player.location.name == "Drawbridge"
+    assert {"guardroom", "boots", "escape"} <= game._scored_keys
+    assert game.score >= 15
+
+
+def test_window_rope_route_escape_via_crafting():
+    game, cap = _play(
+        [
+            "out",
+            "down",  # -> Guardroom
+            "open footlocker",
+            "take dagger",
+            "up",
+            "enter",  # back up into the Tower
+            "cut hair",  # yields the hair
+            "make rope",  # crafting recipe: hair -> rope
+            "tie rope",
+            "down",  # the window route -> Gardens (escape +5)
+        ]
+    )
+    assert game.player.location.name == "Gardens"  # climbed out the window
+    assert game.player.get_property("hair_cut")
+    assert "escape" in game._scored_keys
+
+
+def test_cannot_climb_down_without_a_tied_rope():
+    game, cap = _play(["look"])  # start in the Tower
+    game.do_command("down")
+    assert _said(cap, "rope")
+    assert game.player.location.name == "Tower"
+
+
+def test_braid_hair_reaches_the_same_rope_recipe():
+    game, cap = _play(
+        [
+            "out",
+            "down",
+            "open footlocker",
+            "take dagger",
+            "up",
+            "enter",
+            "cut hair",
+            "braid hair",
+        ]
+    )
+    assert "rope" in game.player.inventory
+
+
+def test_cut_hair_needs_the_dagger():
+    game, cap = _play(["cut hair"])  # in the Tower, no dagger
+    assert _said(cap, "nothing sharp")
+    assert not game.player.get_property("hair_cut")
+
+
+def test_make_rope_needs_hair():
+    game, cap = _play(["make rope"])  # no hair yet
+    assert _said(cap, "You need")
+    assert "rope" not in game.player.inventory
+
+
+def test_wearing_glass_slippers_is_a_gag_not_a_death():
+    game, cap = _play(["take glass slippers", "wear glass slippers"])
+    assert not game.is_game_over()
+    assert _said(cap, "doesn't hurt")
+    assert "glass slippers" in game.player.worn
+
+
+def test_wearing_ruby_slippers_is_a_gag_not_a_death():
+    game, cap = _play(["take ruby slippers", "wear ruby slippers"])
+    assert not game.is_game_over()
+    assert _said(cap, "Kansas")
+
+
+def test_kill_self_is_a_clue_not_a_death():
+    game, cap = _play(
+        ["out", "down", "open footlocker", "take dagger", "up", "enter", "kill self"]
+    )
+    assert not game.is_game_over()
+    assert _said(cap, "Hmm")
+
+
+def test_bolting_west_off_the_stairs_runs_into_the_guard():
+    game, cap = _play(["out", "west"])  # Tower -> Stairs -> (try) west
+    assert _said(cap, "guard")
+    assert game.player.location.name == "Tower Stairs"

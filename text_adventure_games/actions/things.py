@@ -562,6 +562,7 @@ CRAFT_VERBS = (
     "combine",
     "assemble",
     "build",
+    "braid",
 )
 
 
