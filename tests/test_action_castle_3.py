@@ -112,15 +112,13 @@ def test_key_connections_match_the_rulebook():
 # --- start inventory -------------------------------------------------------
 
 
-def test_player_starts_with_a_backpack_and_a_lantern():
+def test_player_starts_with_a_backpack_of_essentials():
     game, _ = _game()
     backpack = game.player.inventory["backpack"]
     assert backpack.get_property("is_container")
-    # The pack holds the gear; the lantern is carried in hand so it can be lit.
-    assert set(backpack.contents) == {"dagger", "lockpicks", "waterskin"}
-    lantern = game.player.inventory["lantern"]
-    assert lantern.get_property("flammable")
-    assert not lantern.get_property("is_lit")
+    assert set(backpack.contents) == {"lantern", "dagger", "lockpicks", "waterskin"}
+    assert backpack.contents["lantern"].get_property("flammable")
+    assert not backpack.contents["lantern"].get_property("is_lit")
 
 
 def test_max_score_is_100():
@@ -141,7 +139,7 @@ def test_cannot_enter_caverns_without_a_lit_lantern():
 
 
 def test_lit_lantern_opens_the_cavern():
-    game, _ = _play(["light lantern", "west", "south", "enter cavern"])
+    game, _ = _play(["take lantern", "light lantern", "west", "south", "enter cavern"])
     assert game.player.location.name == "Dark Cavern"
 
 
@@ -154,7 +152,7 @@ def test_cannot_descend_to_dungeon_without_a_lit_lantern():
 
 
 def test_lit_lantern_opens_the_dungeon():
-    game, _ = _play(["light lantern", "east", "down"])
+    game, _ = _play(["take lantern", "light lantern", "east", "down"])
     assert game.player.location.name == "Dungeon"
 
 
