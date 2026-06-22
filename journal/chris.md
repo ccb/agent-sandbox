@@ -201,6 +201,26 @@ slice by slice, capturing the real points of intervention (now §15 of the guide
 AC4 slices 4-5 (horse+poacher/deer; ranch/roadhouse/bar + endings + full
 walkthrough) still to do. 683 tests green.
 
+### AC4 Slice 4 (horse + poacher) + wearable slots generalization (#155, #156)
+
+- #155 horse (Slice 4a): PICK APPLE / BRUSH (hairbrush) tames the skittish mare
+  (first real use of the vehicle feature); ride west into the Old Woods, DISMOUNT
+  to enter the shack for the crossbow.
+- #156 poacher/deer (Slice 4b): FOLLOW DEER rides into the Deep Woods; SHOOT
+  POACHER (crossbow) saves the deer (+5), drops the coin purse (+5); hesitating
+  (any committal action but shooting) lets him kill the deer = THE END (the AC3
+  demon pattern reused).
+- Playtest-driven (Chris): boots gettable/wearable as "boots" or "army boots";
+  and -- Chris's call to generalize rather than special-case -- a reusable engine
+  WEAR-SLOT feature (#156): items declare wear_slot ("feet"/"head"/"body") +
+  wear_over (layering) + wear_text; the Wear action enforces one-per-slot. AC4's
+  footwear now rides on it (only one pair worn at a time); deleted the bespoke
+  WearBoots/footwear hack. Good "spot the playtest bug -> generalize it" example.
+
+Remaining: AC4 Slice 5 (ranch / roadhouse "Wade sent me" gate / bar brawl -> keys
+-> motorcycle -> highway ending; rancher ending; full winning walkthrough). Plus
+the deferred AC2-boat-onto-vehicles refactor. 707 tests green.
+
 ---
 
 ## 2026-06-21 (cont. 2)
