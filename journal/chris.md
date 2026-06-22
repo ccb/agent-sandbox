@@ -217,9 +217,38 @@ walkthrough) still to do. 683 tests green.
   footwear now rides on it (only one pair worn at a time); deleted the bespoke
   WearBoots/footwear hack. Good "spot the playtest bug -> generalize it" example.
 
-Remaining: AC4 Slice 5 (ranch / roadhouse "Wade sent me" gate / bar brawl -> keys
--> motorcycle -> highway ending; rancher ending; full winning walkthrough). Plus
-the deferred AC2-boat-onto-vehicles refactor. 707 tests green.
+### contents_relation + AC4 cot (#157)
+
+A playtest nit: the army boots, meant to be "under the mattress," showed in the
+Guardroom listing. Walked through the primitives with Chris (open_on_examine?
+surface? secret_topic?) and landed on the simplest: the cot is just an **open
+container** -- its contents don't show in the room listing, but EXAMINE COT
+reveals them and self-updates as they're taken. The only gap was voice, so added
+a tiny reusable `contents_relation` phrase override on a holder ("Under the
+stained mattress you see...") instead of the default "It contains...". ~3 lines
+in Examine. Good "reach for a primitive, not new machinery" example.
+
+### AC4 Slice 5 -- the finale, AC4 done (#158)
+
+Finished AC4 as a winnable 100/100. The ranch: GIVE HORSE TO RANCHER earns a
+yes/no job offer (posed Prompt, #110) -- SAY YES = Rancher ending (+40, score
+80); SAY NO sends you to Dalton at the roadhouse. Dalton bars the bar until SAY
+WADE SENT ME. Inside: TALK TO BARTENDER (tray) -> TAKE TRAY TO TABLE FOUR
+(provoke) -> PUNCH BIKER (+5, keys fly) -> CATCH KEYS -> USE KEY ON MOTORCYCLE.
+
+Two real decisions this slice:
+- **Reversed the Slice-2 "endings are actions" call for the highway.** With the
+  bike ending concrete, riding out IS travel, so a terminal Highway room reached
+  by two roads (east + west) is the faithful model; relaxed the dup-destination
+  lint for that one case. The Rancher ending (pure dialogue) stayed an action.
+- **Verb collision:** RIDE EAST can't work (ride is a MOUNT alias -> tries to
+  board), so the highway exits are plain east/west gated on being astride the
+  *started* motorcycle (not the horse, not on foot). Playtest the actual words.
+
+WALKTHROUGH_WIN now plays the full 100-point run. Updated the conversion guide's
+§15 worked example (interventions 9-11: generalize-the-playtest-bug, primitive-
+not-machinery, verb-collisions) and §7 (advertised wear-slots + contents_relation).
+716 tests green. AC4 complete; deferred AC2-boat-onto-vehicles refactor remains.
 
 ---
 
