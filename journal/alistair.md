@@ -4,6 +4,100 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-22
+
+**Focus:** finish the replay-UI polish; team tooling; propose a prompt-management system
+
+**Done today:**
+- Continued **PR #109** (replay UI): turned the **State Details** page into an in-place **popup** (now spans most of the screen, densified card), wired it to show **real memory** sliced to the current replay step and **live-sync** with the replay, added a **flash** when a new memory arrives (with a reduced-motion fallback and row padding so it isn't clipped at the edge), and **grouped same-timestamp memories** under one time header. Still all under `generative-agents/`; engine untouched.
+- Opened **PR #144** (`chore/claude-code-plugins`): enable two recommended **Claude Code plugins** for the team via `.claude/settings.json` — **`pyright-lsp`** (live type diagnostics on this pure-Python repo) and **`github`** (MCP for our `gh pr` / `gh issue` workflow). Both come from the auto-registered `claude-plugins-official` marketplace; documented in `ONBOARDING.md` §3.
+- Opened **issue #145**: proposal to adopt a **prompt management system** (in-repo **Jinja + Prompty**). A quick survey found ~15 inline f-string prompt sites (e.g. `npc.py`'s ReAct decision instruction) with no central registry — they're getting hard to find, edit, version, and test as the port grows.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **PR #109** reviewed/merged; land **#106** (perception) and **#100** (`SimulationConfig`).
+- Discuss **#145** with the team. **#61** / **#62** still awaiting review.
+- Phase D next: daily planning (#83), periodic reflection (#84), time mapping (#85).
+
+## 2026-06-21
+
+**Focus:** make the Smallville replay watchable — a 5-agent run with on-screen cognition
+
+**Done today:**
+- Opened **PR #109** (`ga-5-agents-memory-reasoning-ui`): run **5 active agents** (the other 20 are kept, not deleted) and surface **memory + reasoning on each agent card**, then added **daily schedules**, a **speed slider**, and richer memory cards so the morning actually evolves and is easy to follow. The UI is a *replay of exported JSON frames*, so memory/reasoning are captured during the sim and baked into each movement frame before render.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Polish the State Details view; open the plugins chore.
+
+## 2026-06-20
+
+**Focus:** finish Phase B integration in the sim; start Phase C perception
+
+**Done today:**
+- Merged **PR #98** (closes **#79**): the 25 residents now start the day with social structure + a partial world model instead of as blank slates.
+- Landed **embeddings in the Smallville sim** (issue **#102**, commit `e0787be`, via PR #104): the sim now does semantic memory retrieval through the #76 `EmbeddingClient`. (#104 shows CLOSED on GitHub — it was a worktree branch — but the work is on `main`; **#102** closed.)
+- Opened **PR #106** (`feat/vision-perception`): Phase C perception end to end — **#80** vision-radius perception (engine) + **#82** Smallville tile-proximity mapping. New `Game.perceivable_locations()` visibility seam (BFS over `connections` to `vision_r` hops) and one `AgentMemory.perceive()` entry point, unifying perception across the sequential/simultaneous/Smallville call sites that had diverged. Superseded an earlier cut (**#105**, closed).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Get **#106** reviewed; build the watchable replay UI.
+
+## 2026-06-19
+
+**Focus:** land the Generative Agents port and the whole Phase A + B foundation
+
+**Done today:** (big merge day)
+- Merged **PR #72**: the **Generative Agents (Smallville) port** — mock-LLM backend pre-generates a ~1-hour, **25-resident** morning replay through the real `Agent.decide` seam; everything under `generative-agents/`, **no engine code changed**.
+- Merged **PR #59** (issue **#47**): the temp multi-step **planning-benchmark plan**; moved it from in-flight to Shipped in `PROGRESS.md`.
+- **Phase A landed:**
+  - **PR #91** (closes **#73**): **LLM cost & token observability** — `chat()` / `call_tool()` now capture the response `usage` block (previously discarded), plus a per-agent cost report and run artifacts. Prompt caching and record/replay scoped out as separate follow-ups.
+  - **PR #95**: unified **`GameConfig`** (`AgentConfig` / `EngineConfig` / `ClockConfig` / `RenderConfig` + existing `LlmConfig`) — gathers scattered module constants and inline literals into one object a game author builds once (Python or YAML/JSON). Every field defaults to today's behavior.
+- **Phase B landed:**
+  - **PR #94** (closes **#75**): append-only **agent memory stream** — every `Agent` gets a private, timestamped, importance-scored memory (`memory.py`, mirrors `knowledge.py`), and the Smallville residents perceive / remember / retrieve through that same `Agent.memory` seam.
+  - **PR #99** (issue **#76**, squash `beb062e`): pluggable **`EmbeddingClient`** for memory-retrieval relevance — 4 backends (mock, `model2vec` default, sentence-transformers, openai), pure-Python cosine, opt-in (keyword default). GitHub marks #99 CLOSED (stacked on #94's branch) but the work is on `main`. Opened follow-up **#102** (use embeddings in the sim); also opened+closed a redundant re-PR **#103** by mistake.
+  - Opened **PR #98** (closes **#79**, stacked on #94): seed the 25 residents at t=0 — relationships → turn-0 memories (importance 3.0), known places → `Knowledge` beliefs, from the upstream `the_ville_n25` bootstrap data; port-only.
+- **Phase C started:** merged **PR #96** (closes **#81**): generalize action target resolution so any co-located agent can be targeted, and an unnamed non-player target fails cleanly instead of silently misfiring at the player.
+- Merged **PR #101** (refs **#97**): survey doc for a 2025 Godot multi-agent playground (project + assets).
+- Opened **PR #100**: real **`SimulationConfig`** for the generative-agents sim — composes `GameConfig`, adds sim knobs (start / steps / sec-per-step, retrieval, …); every field defaults to current behavior.
+- Tooling: added a manual **`/update-progress`** slash command and made `PROGRESS.md` sync **manual-only** (not a `PostToolUse` hook); ignored Claude Code local worktrees in `.gitignore`.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Merge **#98** (seed personas) and the embeddings-in-sim work (#102); review **#100**.
+- **#61** / **#62** still awaiting review.
+
+## 2026-06-18
+
+**Focus:** turn the Generative Agents port into a sequenced production roadmap; open the first implementation PRs
+
+**Done today:**
+- Broke the Generative Agents work into a full **Phase A–F roadmap** — opened issues **#73–#90**:
+  - **Phase A (foundations):** #73 LLM cost & token observability, #74 sim params via CLI flags, #78 swap the Smallville mock for a real LLM client.
+  - **Phase B (memory):** #75 append-only memory stream on `Agent`, #76 retrieval scoring (recency × relevance × importance), #77 inject retrieved memories into the observation, #79 seed personas at t=0.
+  - **Phase C (perception / targeting):** #80 vision-radius perception, #81 let actions target other agents, #82 map Smallville proximity onto perception.
+  - **Phase D (planning / reflection / time):** #83 daily planning (day → hourly → minute), #84 periodic reflection (memory synthesis), #85 continuous Smallville time ↔ engine turns.
+  - **Phase E (dialogue):** #86 agent-to-agent dialogue seam, #87 surface chat end to end.
+  - **Phase F:** #88 live (non-replay) step-by-step serving.
+  - **[GA] cross-cutting:** #89 grow the offline test suite, #90 structured observations + world-state export API.
+- **#63 closed:** Chris approved prioritizing the agent-memory layer alongside the planning benchmark — Phase B is greenlit.
+- Opened the first implementation PRs: **#91** (Phase A cost observability, closes #73), **#94** (Phase B append-only memory stream, #75), **#95** (unified `GameConfig`). Closed **#74** (superseded by the `GameConfig` / `SimulationConfig` config approach) and **#77** (duplicate of #76's inject step).
+- Docs hygiene on `main`: filed the implemented design docs under `docs/design/implemented/` and pointed lingering `simultaneous-actions.md` references at the new path; tidied `PROGRESS.md`.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land the Phase A/B PRs (#91, #94, #95); finally merge **#72** (the port) and **#59** (planning-benchmark plan).
+
 ## 2026-06-17
 
 **Focus:** land the repo-hygiene queue (#64–#65, #68–#69); open the Generative Agents port for review (#72)
