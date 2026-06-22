@@ -217,3 +217,92 @@ def test_bolting_west_off_the_stairs_runs_into_the_guard():
     game, cap = _play(["out", "west"])  # Tower -> Stairs -> (try) west
     assert _said(cap, "guard")
     assert game.player.location.name == "Tower Stairs"
+
+
+# --- Slice 4a: the horse ---------------------------------------------------
+
+# Escape (door route) and reach the river with an apple in hand.
+TO_RIVER_WITH_APPLE = [
+    "out",
+    "down",
+    "west",  # escape -> Drawbridge
+    "north",
+    "pick apple",
+    "south",  # Gardens: pluck an apple
+    "south",  # Drawbridge -> Down by the River
+]
+
+
+def test_pick_apple_in_the_gardens():
+    game, _ = _play(["out", "down", "west", "north", "pick apple"])
+    assert "apple" in game.player.inventory
+
+
+def test_cannot_ride_the_untamed_mare():
+    game, cap = _play(TO_RIVER_WITH_APPLE + ["ride horse"])
+    assert _said(cap, "whinnies")
+    assert game.player.riding is None
+
+
+def test_apple_tames_the_mare():
+    game, _ = _play(TO_RIVER_WITH_APPLE + ["give apple to horse", "ride horse"])
+    assert game.player.riding is not None and game.player.riding.name == "horse"
+    assert "apple" not in game.player.inventory  # consumed
+
+
+def test_brushing_also_tames_the_mare():
+    game, _ = _play(
+        [
+            "open dresser",
+            "take hairbrush",  # the hairbrush is in the tower dresser
+            "out",
+            "down",
+            "west",
+            "south",  # -> Down by the River
+            "brush horse",
+            "ride horse",
+        ]
+    )
+    assert game.player.riding is not None
+
+
+def test_must_dismount_to_enter_the_shack():
+    game, cap = _play(
+        TO_RIVER_WITH_APPLE
+        + [
+            "give apple to horse",
+            "ride horse",
+            "north",
+            "west",
+        ]  # -> Old Woods, mounted
+    )
+    assert game.player.location.name == "Old Woods"
+    game.do_command("enter")  # can't enter the shack on horseback
+    assert _said(cap, "get off the horse")
+    assert game.player.location.name == "Old Woods"
+    game.do_command("dismount")
+    game.do_command("enter")
+    assert game.player.location.name == "Old Shack"
+
+
+def test_ride_to_the_woods_and_get_the_crossbow():
+    game, _ = _play(
+        TO_RIVER_WITH_APPLE
+        + [
+            "give apple to horse",
+            "ride horse",
+            "north",
+            "west",  # -> Old Woods (mounted; the gate opens)
+            "dismount",
+            "enter",
+            "take crossbow",
+        ]
+    )
+    assert game.player.location.name == "Old Shack"
+    assert "crossbow" in game.player.inventory
+
+
+def test_eat_apple_is_a_gag_that_spends_it():
+    game, cap = _play(["out", "down", "west", "north", "pick apple", "eat apple"])
+    assert _said(cap, "CRUNCH")
+    assert "apple" not in game.player.inventory

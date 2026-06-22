@@ -63,6 +63,20 @@ def _is_holding(character, name):
     return False
 
 
+def _take_held(character, name):
+    """Remove and return a held item by name -- from hands/worn/wielded or an
+    open carried container -- else None."""
+    for store in (character.inventory, character.worn, character.wielded):
+        if name in store:
+            return store.pop(name)
+    for item in character.inventory.values():
+        if name in item.accessible_contents():
+            held = item.contents[name]
+            item.remove_item(held)
+            return held
+    return None
+
+
 def _fixture(name, description, examine_text=""):
     it = things.Item(name, description, examine_text or description)
     it.set_property(Property.GETTABLE, False)
@@ -261,6 +275,140 @@ class KillSelf(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# The horse (Slice 4a). The white mare is a vehicle (engine #vehicles) but
+# skittish until tamed -- GIVE APPLE TO HORSE or BRUSH HORSE makes it rideable.
+# Then ride west into the Old Woods; dismount to enter the shack for the crossbow.
+# ---------------------------------------------------------------------------
+
+
+class PickApple(actions.Action):
+    """Pluck a ripe apple from the gardens' fruit trees (taming the mare)."""
+
+    ACTION_NAME = "pick apple"
+    ACTION_DESCRIPTION = "Pick an apple from the fruit trees"
+    ACTION_ALIASES = ["pick an apple", "pluck apple", "pick apples", "take apple"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Gardens":
+            self.parser.fail("There are no apple trees here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.add_to_inventory(
+            _item("apple", "a shiny red apple", "A shiny red apple, plucked yourself.")
+        )
+        self.parser.ok(
+            "You pluck a shiny red apple from the tree. Doing it yourself is rather "
+            "satisfying!"
+        )
+
+
+class EatApple(actions.Action):
+    """Eat the apple (a gag -- and it spends your horse-taming treat)."""
+
+    ACTION_NAME = "eat apple"
+    ACTION_DESCRIPTION = "Eat the apple"
+    ACTION_ALIASES = ["eat the apple"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if not _is_holding(self.player, "apple"):
+            self.parser.fail("You have no apple.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _take_held(self.player, "apple")
+        self.parser.ok(
+            "*CRUNCH* You can't help but feel there's some symbolism at play here."
+        )
+
+
+class _TameHorse(actions.Action):
+    """Shared base: make the skittish mare rideable, at Down by the River."""
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.mare = self.game.locations["Down by the River"].items.get("horse")
+
+    def _tame(self, message):
+        self.mare.set_property("vehicle_ready", True)
+        self.parser.ok(message)
+
+
+class GiveAppleToHorse(_TameHorse):
+    ACTION_NAME = "give apple to horse"
+    ACTION_DESCRIPTION = "Offer the mare an apple"
+    ACTION_ALIASES = [
+        "feed apple to horse",
+        "feed horse apple",
+        "feed the horse an apple",
+        "give horse apple",
+        "give horse an apple",
+        "give the horse an apple",
+    ]
+
+    def check_preconditions(self) -> bool:
+        if (
+            self.player.location is None
+            or self.player.location.name != "Down by the River"
+        ):
+            self.parser.fail("There's no horse here.")
+            return False
+        if not _is_holding(self.player, "apple"):
+            self.parser.fail("You have no apple to offer.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _take_held(self.player, "apple")
+        self._tame(
+            "The mare lips the apple from your palm, then nuzzles you. She'll let you "
+            "ride her now."
+        )
+
+
+class BrushHorse(_TameHorse):
+    ACTION_NAME = "brush horse"
+    ACTION_DESCRIPTION = "Brush the mare's mane"
+    ACTION_ALIASES = [
+        "brush the horse",
+        "brush mare",
+        "brush the mare",
+        "brush the mare's mane",
+        "groom horse",
+        "groom the horse",
+    ]
+
+    def check_preconditions(self) -> bool:
+        if (
+            self.player.location is None
+            or self.player.location.name != "Down by the River"
+        ):
+            self.parser.fail("There's no horse here.")
+            return False
+        if not _is_holding(self.player, "hairbrush"):
+            self.parser.fail("You have nothing to brush her with.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self._tame(
+            "You brush the mare's silver mane until it gleams. She calms and lets you "
+            "approach. She'll let you ride her now."
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -406,6 +554,23 @@ def build_game() -> ActionCastle4:
     _one_way(tower_stairs, "west", drawbridge)  # the "break for it" the guard foils
     tower_stairs.add_block("west", GuardBlock())
 
+    # You must get off the horse to squeeze into the warden's shack.
+    class DismountBlock(blocks.Block):
+        def __init__(self, loc):
+            super().__init__(
+                "Not on horseback",
+                "You'll have to get off the horse first. (Try DISMOUNT.)",
+            )
+            self.loc = loc
+
+        def is_blocked(self) -> bool:
+            return any(
+                getattr(c, "riding", None) is not None
+                for c in self.loc.characters.values()
+            )
+
+    old_woods.add_block("enter", DismountBlock(old_woods))
+
     # --- Items (fixtures + key objects; puzzle wiring comes in later slices) ---
     tower.add_item(
         _fixture(
@@ -504,7 +669,7 @@ def build_game() -> ActionCastle4:
     )
     river.add_item(mare)
     old_shack.add_item(
-        _fixture(
+        _item(
             "crossbow",
             "a loaded crossbow",
             "Drawn back and ready -- for scaring poachers, not killing.",
@@ -609,6 +774,10 @@ def build_game() -> ActionCastle4:
         WearGlassSlippers,
         WearRubySlippers,
         KillSelf,
+        PickApple,
+        EatApple,
+        GiveAppleToHorse,
+        BrushHorse,
     ]
     game = ActionCastle4(tower, player, characters, custom_actions)
 
