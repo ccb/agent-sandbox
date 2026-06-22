@@ -6,19 +6,21 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 ## 2026-06-22
 
-**Focus:** finish the replay-UI polish; team tooling; propose a prompt-management system
+**Focus:** finish the replay-UI polish; team tooling; propose *and* start a prompt-management system; forward-looking Godot / world-authoring research
 
 **Done today:**
 - Continued **PR #109** (replay UI): turned the **State Details** page into an in-place **popup** (now spans most of the screen, densified card), wired it to show **real memory** sliced to the current replay step and **live-sync** with the replay, added a **flash** when a new memory arrives (with a reduced-motion fallback and row padding so it isn't clipped at the edge), and **grouped same-timestamp memories** under one time header. Still all under `generative-agents/`; engine untouched.
 - Opened **PR #144** (`chore/claude-code-plugins`): enable two recommended **Claude Code plugins** for the team via `.claude/settings.json` — **`pyright-lsp`** (live type diagnostics on this pure-Python repo) and **`github`** (MCP for our `gh pr` / `gh issue` workflow). Both come from the auto-registered `claude-plugins-official` marketplace; documented in `ONBOARDING.md` §3.
 - Opened **issue #145**: proposal to adopt a **prompt management system** (in-repo **Jinja + Prompty**). A quick survey found ~15 inline f-string prompt sites (e.g. `npc.py`'s ReAct decision instruction) with no central registry — they're getting hard to find, edit, version, and test as the port grows.
+- Opened **PR #150** (`feat/prompt-management`): a first implementation of **#145**, scoped to the **`text_adventure_games`** library. Moved the engine's LLM prompts out of inline f-strings into **eight versioned `.prompty` templates** (YAML frontmatter + Jinja2 body) under a new `prompt_templates/` package, rendered in-process via the **prompty** library — no external prompt service, so a prompt change stays a normal code change. Covers `npc.py`'s ReAct `npc_decision` plus the seven `llm_parser.py` narration / intent / entity-matching instructions; output is **byte-identical** (full suite **628 passed, 1 skipped**, new `tests/test_prompt_templates.py` pins each template's exact text), with a `prompt_templates/README.md` usage map and a CLAUDE.md keep-in-sync note. Named `prompt_templates/` to avoid colliding with the in-game `prompts.py` (the Prompt choice mechanism, #110). Does **not** close **#145** — the generative-agents / Smallville prompts are a follow-up.
+- Opened **PR #146** (`docs/godot-frontend-port-guidance`): two forward-looking research docs, guidance only (no engine/sim code). (1) A "porting the replay frontend to **Godot**" section appended to `generative-agents/NEXT-STEPS.md` — the dependency-ordered prerequisites for swapping the Django/Phaser web replay for a Godot 4 renderer (freeze the JSON export as the renderer-agnostic contract, confirm replay needs no server, reuse the Tiled map + sprite assets, rebuild the view + tile-motion layer in Godot, a live-mode-only Godot↔Python transport, carry chat through once it lands; cross-links ROADMAP Phase 3, the `JSONRenderer`/Stage 10 work, the playground survey, #9/#10). (2) `docs/design/custom-world-authoring.md` — research notes on authoring **our own world + sprites** instead of reusing the upstream `the_ville` assets (asset provenance, the data contract that defines a world, what the 2025 Godot project did + its asset-licensing caveats, three authoring options, open questions); backs new **issue #147** ([GA] Research: author our own world + sprites).
 
 **Blockers / questions:**
 - none
 
 **Next:**
-- Get **PR #109** reviewed/merged; land **#106** (perception) and **#100** (`SimulationConfig`).
-- Discuss **#145** with the team. **#61** / **#62** still awaiting review.
+- Get **PR #109**, **#144**, **#146**, and **#150** reviewed/merged; land **#106** (perception) and **#100** (`SimulationConfig`).
+- Port the remaining **generative-agents / Smallville** prompts onto `.prompty` to fully close **#145**; pick up the world-authoring research (**#147**). **#61** / **#62** still awaiting review.
 - Phase D next: daily planning (#83), periodic reflection (#84), time mapping (#85).
 
 ## 2026-06-21
