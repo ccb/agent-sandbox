@@ -292,6 +292,18 @@ def test_lingering_wakes_the_dragon_but_leaving_is_safe():
     assert not game2.characters["dragon"].get_property("awake")
 
 
+def test_addressing_the_dragon_is_not_mistaken_for_a_move():
+    # "dragon"/"tell dragon wits" used to route to GO (the action name "go" is a
+    # substring of "dra-go-n"), producing "Treasure trove does not have an exit
+    # 'None'". The fallback now matches action names on word boundaries.
+    game, cap = _at_trove()
+    for bad in ("dragon", "tell dragon", "tell dragon wits"):
+        fresh = CaptureRenderer()
+        game.parser.set_renderer(fresh)
+        game.do_command(bad)
+        assert not _said(fresh, "does not have an exit"), bad
+
+
 def test_drop_penny_in_well_scores_the_wish():
     game, _ = _play(["out", "drop penny in well"])
     assert "penny" not in game.player.inventory

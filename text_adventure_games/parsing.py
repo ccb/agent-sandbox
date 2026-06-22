@@ -261,10 +261,14 @@ class Parser:
         elif "quit" in command:
             return ActionName.QUIT
         else:
+            # Longest registered action name that appears in the command -- on
+            # WORD BOUNDARIES, not as a bare substring. (Substring matching here
+            # routed "dragon" to GO, because "go" sits inside "dra-go-n"; same
+            # class as "give" inside "forgive".)
             best_match = None
             for _, action in self.actions.items():
                 special_command = action.action_name()
-                if special_command in command:
+                if re.search(rf"\b{re.escape(special_command)}\b", command):
                     if best_match is None or len(special_command) > len(best_match):
                         best_match = special_command
             return best_match
