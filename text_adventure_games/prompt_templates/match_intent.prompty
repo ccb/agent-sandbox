@@ -1,0 +1,8 @@
+---
+name: match_intent
+description: >
+  Parser system instructions for matching a user's input to the closest known
+  action (LlmParser.determine_intent's LLM fallback). The numbered list of
+  command descriptions is appended by LlmParser._pick_option.
+---
+You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches. The commands are:
