@@ -31,7 +31,7 @@ PORTED IN PHASES (this file grows over several PRs, like AC2 did):
 Run interactively:   python action_castle_3.py
 """
 
-from text_adventure_games import games, things, actions, blocks
+from text_adventure_games import games, things, actions, blocks, Recipe
 from text_adventure_games.enums import Property
 
 # ---------------------------------------------------------------------------
@@ -311,8 +311,11 @@ class FillWaterskin(actions.Action):
 
     def apply_effects(self):
         skin = _held_item(self.player, "waterskin")
-        skin.set_property("has_water", True)
-        self.parser.ok("You replenish your water supply.")
+        if "water" in skin.contents:
+            self.parser.ok("Your waterskin is already full.")
+            return
+        skin.add_item(_item("water", "spring water", "Cool, clear spring water."))
+        self.parser.ok("You fill the waterskin at the spring.")
 
 
 def _held_item(character, name):
@@ -354,15 +357,13 @@ class GiveWater(actions.Action):
         if self.cleric is None:
             self.parser.fail("There's no one here who needs water.")
             return False
-        skin = _held_item(self.player, "waterskin")
-        if skin is None or not skin.get_property("has_water"):
-            self.parser.fail("Your waterskin is empty.")
+        if not _is_holding(self.player, "water"):
+            self.parser.fail("You have no water to give -- your waterskin is empty.")
             return False
         return True
 
     def apply_effects(self):
-        skin = _held_item(self.player, "waterskin")
-        skin.set_property("has_water", False)
+        _take_held(self.player, "water")  # he drinks it (from the waterskin)
         self.cleric.set_property("given_water", True)
         self.parser.ok("The man drinks greedily. Some color returns to his face.")
         _heal_cleric_if_ready(self.game, self.cleric)
@@ -836,6 +837,46 @@ class UseHatchet(actions.Action):
         )
 
 
+class TakeMushroom(actions.Action):
+    """Break off a chunk of cave mushroom (a stew ingredient). Repeatable."""
+
+    ACTION_NAME = "take mushroom"
+    ACTION_DESCRIPTION = "Break off a chunk of cave mushroom"
+    ACTION_ALIASES = [
+        "take cave mushroom",
+        "take a mushroom",
+        "get mushroom",
+        "pick mushroom",
+        "take mushrooms",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Mushroom Garden":
+            self.parser.fail("There are no mushrooms here.")
+            return False
+        if not self.player.can_accept_item():
+            self.parser.fail("Your hands are full.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.accept_item(
+            _item(
+                "cave mushroom",
+                "a chunk of cave mushroom",
+                "A fist-sized hunk of purple-spotted cave mushroom.",
+            )
+        )
+        self.parser.ok(
+            "You break off a chunk of cave mushroom and stuff it into your pack."
+        )
+
+
 # ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
@@ -1220,10 +1261,13 @@ def build_game() -> ActionCastle3:
     bandit_camp.add_character(bandits)
 
     # --- Player start inventory --------------------------------------------
-    # The rulebook starts you with a backpack containing a lantern, dagger,
-    # lockpicks and a waterskin. GET reaches into a carried open container, so
-    # the player pulls gear out of the pack as needed ("take lantern", "light
-    # lantern"). DROP BACKPACK (the fissure puzzle) drops the whole kit.
+    # The rulebook starts you with a backpack of gear plus a waterskin. GET
+    # reaches into a carried open container, so the player pulls gear out of the
+    # pack as needed ("take lantern", "light lantern"); DROP BACKPACK (the
+    # fissure puzzle) drops the kit. The waterskin is its own carried container
+    # (FILL WATERSKIN puts a `water` item in it) -- held directly rather than
+    # nested in the pack, so its water is one level deep and reachable by GET /
+    # crafting / GIVE WATER (the engine's held-scope helpers look one level in).
     backpack = _item("backpack", "a sturdy leather backpack").make_container()
     lantern = _item("lantern", "a brass lantern", "A brass lantern, currently unlit.")
     lantern.set_property(Property.FLAMMABLE, True)
@@ -1235,9 +1279,9 @@ def build_game() -> ActionCastle3:
     backpack.add_item(
         _item("lockpicks", "a set of lockpicks", "A slim set of lockpicks.")
     )
-    backpack.add_item(
-        _item("waterskin", "a waterskin", "A leather waterskin. It's empty.")
-    )
+    waterskin = _item(
+        "waterskin", "a waterskin", "A leather waterskin."
+    ).make_container()
 
     # --- Assemble ----------------------------------------------------------
     characters = [elf, wizard, dwarf, cleric, spider, queen, bandits]
@@ -1260,9 +1304,31 @@ def build_game() -> ActionCastle3:
         GiveBowToElf,
         ShootSpider,
         UseHatchet,
+        TakeMushroom,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
+    player.add_to_inventory(waterskin)
+
+    # Mushroom stew (crafting): spring water + a cave mushroom, simmered at the
+    # bandits' pot. Feeds the crying goblin baby (the baby/stew slice wires that).
+    game.add_recipe(
+        Recipe(
+            name="stew",
+            aliases=["mushroom stew"],
+            inputs=["water", "cave mushroom"],
+            tools=["pot"],
+            output=lambda g: _item(
+                "stew",
+                "a bowl of mushroom stew",
+                "Hot mushroom stew. A hungry goblin baby might just eat this.",
+            ),
+            result_text=(
+                "You simmer the cave mushrooms in spring water at the bandits' pot "
+                "until you have a passable mushroom stew."
+            ),
+        )
+    )
 
     # Going north ends the adventure: arriving Home reads the epilogue.
     def epilogue(g):
