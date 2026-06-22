@@ -140,9 +140,8 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	let tile_width = 32;
 	// Important: tile_width % movement_speed has to be 0.
 	// <movement_speed> determines how fast we move at each upate cylce.
-	// Default to a slow 4 (= 8 frames per tile, ~8x slower than the upstream 32)
-	// so the replay is easy to follow step by step; the speed slider in the nav
-	// bar (wired up below) lets the viewer change it live, up to full speed (32).
+	// A slow 4 (= 8 frames per tile, ~8x slower than the upstream 32) keeps the
+	// replay easy to follow step by step.
 	let movement_speed = 4;
 
 	// <timer_max> determines how frequently our update function will query the 
@@ -843,32 +842,6 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 		update_playback_buttons();
 	};
 	update_playback_buttons();
-
-	// *** SPEED CONTROL ***
-	// movement_speed is how many pixels a sprite advances per animation frame.
-	// One replay step plays out over execute_count_max = tile_width/movement_speed
-	// frames, so a SMALLER movement_speed means MORE frames per step -> a slower,
-	// easier-to-follow replay. movement_speed must divide the 32px tile, so the
-	// slider walks the powers of two (1,2,4,8,16,32); position p -> 2^p. Sprites
-	// snap to their exact tile at each step boundary, so changing speed mid-step
-	// is safe -- at worst one tile animates unevenly before the next snap.
-	var speed_slider = document.getElementById("speed_slider");
-	var speed_readout = document.getElementById("speed_readout");
-	function update_speed_readout() {
-		if (!speed_readout) return;
-		var factor = tile_width / movement_speed;  // how many x slower than full speed
-		speed_readout.innerHTML = factor > 1 ? (factor + "&times; slower") : "full speed";
-	}
-	if (speed_slider) {
-		// Start the slider where movement_speed already is (its default above).
-		speed_slider.value = Math.round(Math.log2(movement_speed));
-		speed_slider.oninput = function () {
-			movement_speed = Math.pow(2, parseInt(speed_slider.value, 10));
-			execute_count_max = tile_width / movement_speed;  // keep one tile per step
-			update_speed_readout();
-		};
-	}
-	update_speed_readout();
 
 	// *** ZOOM CONTROL BUTTONS ***
 	// These DOM buttons reach the Phaser camera through the global `mainCamera`

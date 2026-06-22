@@ -56,28 +56,6 @@ body,
   gap: 0.5em;
 }
 
-/* Playback-speed slider: turtle/hare icons flank the range input, with a small
-   readout ("8x slower" / "full speed") whose width is fixed so the bar doesn't
-   shift as the label changes. */
-#sim-navbar .speed-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35em;
-}
-#sim-navbar .speed-control input[type="range"] {
-  width: 90px;
-  cursor: pointer;
-}
-#sim-navbar .speed-icon {
-  font-size: 1em;
-  line-height: 1;
-}
-#sim-navbar .speed-readout {
-  min-width: 5.5em;
-  font-size: 0.85em;
-  color: #555;
-}
-
 /* ---------- Main row: map (left) + single agent card (right) ---------------- */
 #sim-main {
   display: flex;
