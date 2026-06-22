@@ -330,6 +330,73 @@ body,
   display: block;
 }
 
+/* ---------- State Details popup -------------------------------------------- */
+/* The per-agent "State Details" link opens the full persona-state page in this
+   overlay (an <iframe>) instead of navigating away, so the replay keeps running
+   behind it. Everything is scoped under #state-modal so the shared demo page,
+   which has no modal, is untouched. */
+#state-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5vh 2.5vw;
+}
+#state-modal[hidden] {
+  display: none;        /* [hidden] alone would be overridden by display:flex */
+}
+
+/* A dim backdrop; clicking it closes the popup (it carries data-close-modal). */
+#state-modal .state-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 22, 30, 0.55);
+}
+
+/* The white card that holds the embedded page; the iframe fills it edge to edge. */
+#state-modal .state-modal-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 1000px;
+  height: 95vh;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;     /* clip the iframe's square corners to the rounded card */
+}
+
+#state-modal .state-modal-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* A round close button floating over the top-right corner of the embedded page. */
+#state-modal .state-modal-close {
+  position: absolute;
+  top: 0.6em;
+  right: 0.7em;
+  z-index: 2;
+  width: 1.7em;
+  height: 1.7em;
+  padding: 0;
+  font-size: 1.5em;
+  line-height: 1.6em;
+  text-align: center;
+  color: #fff;
+  background: #2b2f3a;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+#state-modal .state-modal-close:hover {
+  background: #1f2330;
+}
+
 /* ---------- Narrow screens: stack the map above the agent card -------------- */
 @media (max-width: 900px) {
   #sim-app {

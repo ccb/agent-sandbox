@@ -130,6 +130,19 @@
 	</div>
 </div>
 
+<!-- STATE DETAILS POPUP: each card's "State Details" link opens that agent's
+     full persona-state page in this overlay instead of navigating away, so the
+     replay keeps running underneath. We load the existing page into an <iframe>
+     (with ?embed=1 so it drops its in-page "Return to simulation" header) rather
+     than duplicating its markup. Wired up in home/main_script.html. -->
+<div id="state-modal" hidden>
+	<div class="state-modal-backdrop" data-close-modal></div>
+	<div class="state-modal-dialog" role="dialog" aria-modal="true" aria-label="Agent state details">
+		<button id="state_modal_close" type="button" class="state-modal-close" title="Close (Esc)" data-close-modal>&times;</button>
+		<iframe id="state-modal-frame" class="state-modal-frame" title="Agent state details" src="about:blank"></iframe>
+	</div>
+</div>
+
 <!-- partial -->
 <script src='https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js'></script>
 {% include 'home/main_script.html' %}
