@@ -1632,8 +1632,8 @@ def build_game() -> ActionCastle3:
     castle_ruins.add_connection("down", dungeon)  # darkness-gated
     dungeon.add_connection("west", vault)
     dungeon.add_connection("east", dark_corridor)
-    dark_corridor.add_connection("east", torture_chamber)  # door-gated (TODO Phase 4)
-    torture_chamber.add_connection("down", sanctum)  # iron-maiden-gated (TODO Phase 4)
+    dark_corridor.add_connection("east", torture_chamber)  # gated by OPEN DOOR (FlagBlock)
+    torture_chamber.add_connection("down", sanctum)  # gated by OPEN IRON MAIDEN (FlagBlock)
     sanctum.add_connection("west", chaos_chapel)
     chaos_chapel.add_connection("south", crypt)
 
