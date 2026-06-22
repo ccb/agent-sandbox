@@ -54,6 +54,12 @@ class Go(base.Action):
         * The location must have an exit in the specified direction
         * The direction must not be blocked
         """
+        if self.direction is None:
+            # A malformed move ("go" with no/unknown direction) -- don't render
+            # "does not have an exit 'None'".
+            self.parser.fail("Go where?")
+            return False
+
         if not self.location.here(self.character):
             message = "{name} is not at {location_name}".format(
                 name=self.character.capitalize(),
