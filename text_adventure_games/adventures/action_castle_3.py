@@ -18,13 +18,15 @@ PORTED IN PHASES (this file grows over several PRs, like AC2 did):
   * Phase 2: the world skeleton -- all rooms, exits, the three regions off the Crossroads
     hub, start inventory (a backpack container), the darkness-gated cave and dungeon
     descents, populated rooms, and the GO-NORTH-home ending stub.
-  * Phase 3 (engine + THIS): GET reaches into carried containers; recruiting the party --
-    INVITE (the engine follow/refusal mechanism), and the rescue chains that unlock the
-    cleric (give water + free) and the dwarf (drive off the spider, free, heal the poison).
-  * Phases 4-5 (TODO): the ability-verbs (SHOOT SPIDER, USE HATCHET, CAST SLEEP, USE WAND,
-    TURN UNDEAD) and the puzzle chain (bow/sleep, spider, webs, baby + stew, goblin queen,
-    pendant/crypt, ooze/lockbox/crown, slide trap); the endgame (javelin summons + banishes
-    the demon, push the cultist) and the scored epilogues.
+  * Phase 3: GET reaches into carried containers; recruiting the party -- INVITE (the
+    engine follow/refusal mechanism), and the rescue chains that unlock the cleric (give
+    water + free) and the dwarf (drive off the spider, free, heal the poison).
+  * Phase 4 (THIS, in slices): the bow chain (search -> pendant -> crypt/turn-undead ->
+    spell book -> wizard -> CAST SLEEP -> bow -> elf) and SHOOT SPIDER + USE HATCHET, which
+    open the western path out of the Spider Lair.
+  * Phase 4 remaining + 5 (TODO): the baby + mushroom stew + crying-death chain, the goblin
+    queen exchanges, the ooze/lockbox/crown and statue slide-trap, then the endgame (javelin
+    summons + banishes the demon, push the cultist) and the scored epilogues.
 
 Run interactively:   python action_castle_3.py
 """
@@ -748,6 +750,93 @@ class GiveBowToElf(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# Spider + web: open the western path out of the Spider Lair
+# ---------------------------------------------------------------------------
+
+
+class ShootSpider(actions.Action):
+    """The armed elf shoots the wolf spider, driving it off (rulebook: it
+    retreats west). Needed before the dwarf can safely clear the web."""
+
+    ACTION_NAME = "shoot spider"
+    ACTION_DESCRIPTION = "Have the elf shoot the spider with her bow"
+    ACTION_ALIASES = ["shoot the spider", "fire at spider", "shoot bow at spider"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.elf = _in_party(game, "elf")
+        self.spider = _present(game, "spider")
+
+    def check_preconditions(self) -> bool:
+        if self.spider is None:
+            self.parser.fail("There's no spider here to shoot.")
+            return False
+        if self.elf is None or not self.elf.get_property("has_bow"):
+            self.parser.fail("You'd need the elf and her bow to make that shot.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.spider.set_property("driven_off", True)
+        self.player.location.remove_character(self.spider)  # it flees west
+        self.game.award(
+            "spider",
+            10,
+            "The elf draws back her bow and fires an arrow deep into the spider's "
+            "abdomen. The creature hisses and retreats through the western exit.",
+        )
+
+
+class UseHatchet(actions.Action):
+    """The dwarf hacks the web blocking the western exit -- but only once the
+    spider is gone; disturbing the web while it watches is fatal."""
+
+    ACTION_NAME = "use hatchet"
+    ACTION_DESCRIPTION = "Have the dwarf clear the web with his hatchet"
+    ACTION_ALIASES = [
+        "use the hatchet",
+        "chop web",
+        "cut web",
+        "cut the web",
+        "clear web",
+        "clear the web",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.dwarf = _in_party(game, "dwarf")
+        self.spider = _present(game, "spider")
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Spider Lair":
+            self.parser.fail("There's no web here to clear.")
+            return False
+        if loc.get_property("web_cleared"):
+            self.parser.fail("The way west is already clear.")
+            return False
+        if self.dwarf is None:
+            self.parser.fail("You have no one here who can hack through the web.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if self.spider is not None and not self.spider.get_property("driven_off"):
+            _die(
+                self.game,
+                "As the dwarf hacks at the web, the spider pounces and sinks its fangs "
+                "into you. Paralyzed, you're wrapped in a cocoon. THE END.",
+            )
+            return
+        self.player.location.set_property("web_cleared", True)
+        self.parser.ok(
+            "The dwarf hacks the great web apart with his hatchet. The way west is clear."
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -883,7 +972,7 @@ def build_game() -> ActionCastle3:
     _one_way(dark_cavern, "enter fissure", fissure)
     _one_way(fissure, "out", dark_cavern)
     mushroom_garden.add_connection("south", spider_lair)
-    spider_lair.add_connection("west", deep_ravine)  # web-blocked (TODO Phase 4)
+    spider_lair.add_connection("west", deep_ravine)  # web-blocked (WebBlock, below)
     _one_way(deep_ravine, "down", goblin_caves)
     _one_way(goblin_caves, "north", deep_ravine)
     goblin_caves.add_connection("east", throne_room)
@@ -901,6 +990,21 @@ def build_game() -> ActionCastle3:
     # You can't enter the caverns or descend to the dungeon without a lit lantern.
     cavern_entrance.add_block("enter cavern", blocks.Darkness(cavern_entrance))
     castle_ruins.add_block("down", blocks.Darkness(castle_ruins))
+
+    # The spider's web blocks the way west out of the Spider Lair until the
+    # dwarf hacks it apart (USE HATCHET, only safe once the spider is driven off).
+    class WebBlock(blocks.Block):
+        def __init__(self, lair):
+            super().__init__(
+                "A great web blocks your way",
+                "A thick spiderweb blocks the passage west.",
+            )
+            self.lair = lair
+
+        def is_blocked(self) -> bool:
+            return not self.lair.get_property("web_cleared")
+
+    spider_lair.add_block("west", WebBlock(spider_lair))
 
     # --- World items -------------------------------------------------------
     bandit_camp.add_item(
@@ -1154,6 +1258,8 @@ def build_game() -> ActionCastle3:
         GiveSpellbookToWizard,
         CastSleep,
         GiveBowToElf,
+        ShootSpider,
+        UseHatchet,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
