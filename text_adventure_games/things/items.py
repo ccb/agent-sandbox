@@ -37,6 +37,28 @@ class Item(Thing):
         # or sitting at a location).
         self.container = None
 
+        # Stacking (issue #134). A plain item is a single unit. An item declared
+        # `stackable` represents a quantity of identical, fungible units: a
+        # holder keeps ONE name->item entry whose `quantity` is the count, and
+        # same-named stackable items MERGE on add. Default items never stack, so
+        # unique narrative objects (a lit lamp, a named sword) are unaffected.
+        self.quantity = 1
+
+    def make_stackable(self, quantity: int = 1):
+        """Declare this item a stack of `quantity` identical units. Stackable
+        items merge with same-named stackable items when added to a holder, and
+        crafting/inventory count their `quantity`. Returns self for chaining.
+
+        Stackable implies FUNGIBLE: don't mark something stackable if individual
+        units carry their own state (a lit vs. unlit lantern), since merging
+        treats them as interchangeable."""
+        self.set_property("stackable", True)
+        self.quantity = quantity
+        return self
+
+    def is_stackable(self) -> bool:
+        return bool(self.get_property("stackable"))
+
     def to_primitive(self):
         """
         Converts this object into a dictionary of values the can be safely
@@ -64,6 +86,8 @@ class Item(Thing):
             thing_data["owner"] = self.owner
 
         thing_data["capacity"] = self.capacity
+        if self.quantity != 1:
+            thing_data["quantity"] = self.quantity
         if self.contents:
             contents = {}
             for k, v in self.contents.items():
@@ -91,6 +115,7 @@ class Item(Thing):
         if "owner" in data:
             instance.owner = data["owner"]
         instance.capacity = data.get("capacity", None)
+        instance.quantity = data.get("quantity", 1)  # default 1 for pre-#134 saves
         if "contents" in data:
             instance.contents = {
                 k: Item.from_primitive(v) for k, v in data["contents"].items()
@@ -127,10 +152,15 @@ class Item(Thing):
 
     def add_item(self, item):
         """Put `item` inside this container. Removes it from any location and
-        records the back-reference and carrying owner."""
+        records the back-reference and carrying owner. A stackable item merges
+        into a same-named stack already here (#134)."""
         if item.location is not None and hasattr(item.location, "remove_item"):
             item.location.remove_item(item)
             item.location = None
+        existing = self.contents.get(item.name)
+        if item.is_stackable() and existing is not None and existing.is_stackable():
+            existing.quantity += item.quantity
+            return
         self.contents[item.name] = item
         item.container = self
         item.set_owner(self.owner)
