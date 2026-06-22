@@ -207,3 +207,26 @@ just forwards. 559 tests green.
   it annoys playtesters.
 - If a branching multi-turn dialog *tree* is ever wanted (vs. the single posed
   question), that's a follow-up beyond #110.
+
+### Playtest follow-up — the linger-wake prompt gap (#127)
+
+Chris caught it in live play: after the dragon woke *by lingering* (the
+`dragon_stirs` trigger), a bare `wits` printed "I'm not sure what you want to
+do." The prompt was only posed by the `WAKE DRAGON` *verb* — the trigger woke
+the dragon and printed the same roar but never called `pose_prompt`. The two
+paths had also duplicated and drifted the roar text ("wakes up" vs "wakes").
+
+Fix: factored `_wake_and_challenge(game, dragon, roar)` (set awake → roar →
+pose the wits/steel choice) and called it from both paths, so the prompt is
+posed however the dragon wakes. Regression test covers linger-wake → bare
+`wits`. 560 green.
+
+Lesson worth keeping: when a feature hooks one path to a state transition,
+audit *every* path that makes that transition. The dragon has two (verb +
+trigger); a third would have been the same trap. The general engine answer is
+to pose prompts on the state change, not in the action — but a shared helper is
+enough here.
+
+**Noted, not fixed:** the Treasure Trove's static description still says "A huge
+dragon slumbers here" even once it's awake. Cosmetic; would need a
+state-aware room description. Offered to Chris; parked unless it grates in play.
