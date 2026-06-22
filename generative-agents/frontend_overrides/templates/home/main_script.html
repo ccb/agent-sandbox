@@ -742,6 +742,12 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	        let memories_el = document.getElementById("memories__"+curr_persona_name_os);
 	        if (memories_el) {
 	          let mems = persona_frame["memories"] || [];
+	          // A stable id per memory. After we rebuild the list we read the rows
+	          // back in document order (matching this array) to tell which ones are
+	          // newly arrived, so only those flash -- no DOM data attribute needed.
+	          let mem_keys = mems.map(function (m) {
+	            return m.created_turn + "|" + (m.kind == null ? "" : m.kind) + "|" + m.text;
+	          });
 	          let memories_html = mems.length
 	            ? "<ul class='mem-list'>" + mems.map(function (m) {
 	                let kind = String(m.kind == null ? "" : m.kind);
@@ -767,9 +773,26 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	          // every step would recreate the <li> nodes and snap .mem-list's scroll
 	          // back to the top each step (the glitch you saw while scrolling), so we
 	          // only rewrite the DOM when the rendered HTML actually differs.
+	          // The first time we touch this card, record the memories already on
+	          // it as the baseline so they don't flash -- only memories that arrive
+	          // *later*, as the replay plays, count as new and flash when they come in.
+	          let mem_first_touch = memories_el._seenMemKeys === undefined;
+	          if (mem_first_touch) memories_el._seenMemKeys = {};
 	          if (memories_el._lastHtml !== memories_html) {
 	            memories_el.innerHTML = memories_html;
 	            memories_el._lastHtml = memories_html;
+	            // Flash each row whose memory we haven't shown on this card before.
+	            // The .is-new class is added here (not baked into memories_html) so the
+	            // html stays stable between decisions and the scroll guard above still
+	            // suppresses needless rebuilds; the CSS animation runs once, ~4s.
+	            let mem_rows = memories_el.querySelectorAll(".mem-item");
+	            for (let mi = 0; mi < mem_rows.length; mi++) {
+	              let mem_key = mem_keys[mi];
+	              if (!memories_el._seenMemKeys[mem_key]) {
+	                memories_el._seenMemKeys[mem_key] = true;
+	                if (!mem_first_touch) mem_rows[mi].classList.add("is-new");
+	              }
+	            }
 	          }
 	        }
 	      }
