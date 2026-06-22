@@ -433,3 +433,22 @@ def test_slipper_gags_run_through_the_engine_wear():
     game, cap = _play(["take glass slippers", "wear glass slippers"])
     assert not game.is_game_over()  # a gag, not a death
     assert _said(cap, "doesn't hurt")
+
+
+def test_boots_are_hidden_under_the_cot_until_examined():
+    game, cap = _play(["out", "down"])  # -> Guardroom
+    # The boots aren't advertised in the room listing...
+    assert not _said(cap, "army boots") or not any(
+        "You see" in t and "boots" in t for t in cap.texts(Channel.NARRATION)
+    )
+    assert "boots" not in game.locations["Guardroom"].items  # they're in the cot
+    fresh = CaptureRenderer()
+    game.parser.set_renderer(fresh)
+    game.do_command("examine army cot")  # ...revealed by looking under the mattress
+    assert _said(fresh, "Under the stained mattress you see a pair of old army boots")
+    game.do_command("take boots")
+    assert "boots" in game.player.inventory
+    after = CaptureRenderer()
+    game.parser.set_renderer(after)
+    game.do_command("examine army cot")  # self-updates: no stale mention
+    assert not _said(after, "Under the stained mattress")
