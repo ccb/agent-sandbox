@@ -131,6 +131,43 @@ def structure_pages(pages: list[ColorTaggedPage]) -> list[StructuredPage]:
     return [_structure_one_page(p) for p in pages]
 
 
+def format_location(loc: LocationBlock) -> str:
+    """Render one ``LocationBlock`` as compact, LLM-friendly text.
+
+    The block starts at column 0 with ``location: '<name>'`` and nests its
+    description, interactions (verb header + response + rule bullets), and
+    exit table (each with its cross-reference page) underneath. This is the
+    shared rendering used by both :func:`extract._format_pages` (the codegen
+    prompt) and :func:`source_view.render_source` (the porting view), so the
+    two can't drift.
+    """
+    lines = [f"location: {loc.name!r}"]
+    if loc.description:
+        lines.append(f"  description: {loc.description!r}")
+    if loc.underlined_nouns:
+        lines.append(f"  underlined_nouns: {loc.underlined_nouns!r}")
+    for note in loc.designer_notes:
+        lines.append(f"  designer_note: {note!r}")
+    if loc.interactions:
+        lines.append("  interactions:")
+        for ix in loc.interactions:
+            lines.append(f"    - verb: {ix.verb_header!r}")
+            if ix.response:
+                lines.append(f"      response: {ix.response!r}")
+            for rule in ix.rules:
+                lines.append(f"      rule: {rule!r}")
+            if ix.underlined_nouns:
+                lines.append(f"      underlined_nouns: {ix.underlined_nouns!r}")
+    if loc.exits:
+        lines.append("  exits:")
+        for ex in loc.exits:
+            page = f" (page {ex.target_page})" if ex.target_page is not None else ""
+            lines.append(
+                f"    - direction: {ex.direction!r} -> target: {ex.target_name!r}{page}"
+            )
+    return "\n".join(lines)
+
+
 # ----------------------------------------------------------------------
 # Internals
 # ----------------------------------------------------------------------

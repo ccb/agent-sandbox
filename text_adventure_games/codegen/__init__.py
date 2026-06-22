@@ -24,6 +24,8 @@ from .spec import (
     legal_command_hints,
 )
 from .emit import emit_module, emit_module_to_file, emit_walkthrough_module
+from .pdf_structure import format_location
+from .source_view import render_source
 
 # Note: pdf_ingest is imported lazily where used so PyMuPDF stays an
 # optional dependency. Tests in ``tests/test_codegen_pdf_ingest.py`` use
@@ -48,6 +50,8 @@ __all__ = [
     "emit_module",
     "emit_module_to_file",
     "emit_walkthrough_module",
+    "format_location",
+    "render_source",
     "ingest_pdf",
     "game_page_ranges",
     "ColorTaggedPage",

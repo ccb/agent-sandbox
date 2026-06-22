@@ -488,44 +488,16 @@ def _format_pages(pages: "list[ColorTaggedPage]") -> str:
     ``floating_spans`` so nothing the model might need silently
     disappears.
     """
-    from .pdf_structure import structure_pages
+    import textwrap
+
+    from .pdf_structure import structure_pages, format_location
 
     structured = structure_pages(pages)
     blocks: list[str] = []
     for sp in structured:
         page_block: list[str] = [f"[page {sp.page_number}]"]
         for loc in sp.locations:
-            page_block.append(f"  location: {loc.name!r}")
-            if loc.description:
-                page_block.append(f"    description: {loc.description!r}")
-            if loc.underlined_nouns:
-                page_block.append(f"    underlined_nouns: {loc.underlined_nouns!r}")
-            for note in loc.designer_notes:
-                page_block.append(f"    designer_note: {note!r}")
-            if loc.interactions:
-                page_block.append("    interactions:")
-                for ix in loc.interactions:
-                    page_block.append(f"      - verb: {ix.verb_header!r}")
-                    if ix.response:
-                        page_block.append(f"        response: {ix.response!r}")
-                    for rule in ix.rules:
-                        page_block.append(f"        rule: {rule!r}")
-                    if ix.underlined_nouns:
-                        page_block.append(
-                            f"        underlined_nouns: {ix.underlined_nouns!r}"
-                        )
-            if loc.exits:
-                page_block.append("    exits:")
-                for ex in loc.exits:
-                    page_part = (
-                        f" (page {ex.target_page})"
-                        if ex.target_page is not None
-                        else ""
-                    )
-                    page_block.append(
-                        f"      - direction: {ex.direction!r} -> "
-                        f"target: {ex.target_name!r}{page_part}"
-                    )
+            page_block.append(textwrap.indent(format_location(loc), "  "))
         for floating in sp.floating_spans:
             page_block.append(f"  floating_span: {floating}")
         blocks.append("\n".join(page_block))
