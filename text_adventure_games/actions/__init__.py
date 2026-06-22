@@ -12,9 +12,11 @@ from .fish import Catch_Fish
 from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
 from .things import Get, Drop, Inventory, Examine, Give, Put, Open, Close, Craft
+from .investigate import Read, Search
 from .talk import Say, Talk, Follow, Unfollow
 from .goals import AdoptGoal, DropGoal
 from .vehicles import Mount, Dismount
+from .use import use_item_on
 
 __all__ = [
     "Action",
@@ -32,6 +34,8 @@ __all__ = [
     "Open",
     "Close",
     "Craft",
+    "Read",
+    "Search",
     "Eat",
     "Drink",
     "Light",
@@ -51,4 +55,5 @@ __all__ = [
     "DropGoal",
     "Mount",
     "Dismount",
+    "use_item_on",
 ]

@@ -27,7 +27,12 @@ class Get(base.Action):
         self.holders = [
             it for it in self.location.items.values() if it.accessible_contents()
         ] + [it for it in self.character.inventory.values() if it.accessible_contents()]
-        scope = dict(self.location.items)
+        # Hidden items can't be grabbed until a SEARCH reveals them.
+        scope = {
+            name: it
+            for name, it in self.location.items.items()
+            if not it.get_property("is_hidden")
+        }
         for h in self.holders:
             for cname, citem in h.accessible_contents().items():
                 scope.setdefault(cname, citem)
