@@ -15,6 +15,12 @@ def _capture_game(player_capacity=None):
     return game, room, player, cap
 
 
+def _said(cap, sub):
+    return any(
+        sub in t for ch in (Channel.NARRATION, Channel.BLOCKED) for t in cap.texts(ch)
+    )
+
+
 def _backpack(capacity=5):
     pack = things.Item("backpack", "a sturdy backpack")
     pack.make_container(capacity=capacity)
@@ -629,3 +635,39 @@ def test_open_non_container_is_refused():
     game.do_command("open table")
 
     assert "can't open the table" in (game.parser.last_fail_message or "")
+
+
+def test_examine_uses_contents_relation_when_set():
+    # A holder can voice its listing naturally and self-update as it empties.
+    game, room, player, cap = _capture_game()
+    cot = things.Item("cot", "an army cot", "A grubby army cot.")
+    cot.make_container()
+    cot.set_property("contents_relation", "Under the stained mattress you see")
+    boots = things.Item("boots", "a pair of old army boots")
+    cot.add_item(boots)
+    room.add_item(cot)
+
+    thing_actions.Examine(game, "examine cot", actor=player)()
+    assert _said(cap, "Under the stained mattress you see a pair of old army boots")
+
+    # Take the boots -> the listing self-updates (no stale "under the mattress").
+    fresh = CaptureRenderer()
+    game.parser.set_renderer(fresh)
+    thing_actions.Get(game, "get boots", actor=player)()
+    thing_actions.Examine(game, "examine cot", actor=player)()
+    assert _said(fresh, "A grubby army cot.")
+    assert not _said(fresh, "Under the stained mattress")
+
+
+def test_default_holders_keep_their_phrasing():
+    game, room, player, cap = _capture_game()
+    box = things.Item("box", "a box").make_container()
+    box.add_item(things.Item("gem", "a gem"))
+    table = things.Item("table", "a table").make_surface()
+    table.add_item(things.Item("candle", "a candle"))
+    room.add_item(box)
+    room.add_item(table)
+    thing_actions.Examine(game, "examine box", actor=player)()
+    assert _said(cap, "It contains a gem")
+    thing_actions.Examine(game, "examine table", actor=player)()
+    assert _said(cap, "On it you see a candle")
