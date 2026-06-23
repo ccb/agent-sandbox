@@ -152,11 +152,13 @@ class ActionName(_StrEnum):
     DESCRIBE = "describe"
     WAIT = "wait"
     QUIT = "quit"
+    HELP = "help"
     SEQUENCE = "sequence"
 
     # Object handling
     GET = "get"
     DROP = "drop"
+    BREAK = "break"
     INVENTORY = "inventory"
     EXAMINE = "examine"
     READ = "read"

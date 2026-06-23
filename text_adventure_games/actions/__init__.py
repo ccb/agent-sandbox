@@ -3,6 +3,7 @@ from .base import (
     ActionSequence,
     Wait,
     Quit,
+    Help,
     Describe,
 )
 from .consume import Eat, Drink, Light
@@ -11,7 +12,7 @@ from .fight import Attack
 from .fish import Catch_Fish
 from .rose import Pick_Rose, Smell_Rose
 from .locations import Go
-from .things import Get, Drop, Inventory, Examine, Give, Put, Open, Close, Craft
+from .things import Get, Drop, Break, Inventory, Examine, Give, Put, Open, Close, Craft
 from .investigate import Read, Search
 from .talk import Say, Talk, Follow, Unfollow
 from .goals import AdoptGoal, DropGoal
@@ -23,10 +24,12 @@ __all__ = [
     "ActionSequence",
     "Wait",
     "Quit",
+    "Help",
     "Describe",
     "Go",
     "Get",
     "Drop",
+    "Break",
     "Inventory",
     "Examine",
     "Give",
