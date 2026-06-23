@@ -4,6 +4,76 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-23
+
+**Focus:** #108 — get Tingen into the lab repo + capture the map workflow.
+
+**Done today:**
+- Vendored the Tingen game into `ccb/agent-sandbox` on a `game/tingen` branch via `git subtree` (satisfies #108's "version-control the materials, not just my laptop"); kept the heavy asset-gen scratch out of tracking, source of truth stays my `Tingen-Game` repo.
+- Wrote an end-to-end city-map generation tutorial notebook (`games/tingen/asset-gen/map_generation_tutorial.ipynb`) for Artemis & Maxine — prompt → relabel to canon → strip-to-background → buildings-only → compose-with-colliders — self-contained with embedded screenshots.
+- Filed #92 (off-scene room simulation / catch-up) and #93 (master "director" LLM for pacing/tension) out of the design discussion.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Share the notebook with Artemis & Maxine; log the workflow tie-in for Frankie.
+- Start the #92 off-scene-sim probe; double-check how much of Tingen actually runs on `text_adventure_games` vs. the Godot/sidecar layer.
+
+## 2026-06-22
+
+**Focus:** Tingen Godot scenes + city-map asset generation.
+
+**Done today:**
+- Godot: `SceneFade` autoload (scene-transition fade overlay), Old Neil's home scene, persistent-HUD fades, and run-from-anywhere scene transitions.
+- Generated the Tingen city map end-to-end in the ChatGPT in-app image tool (GPT-Image): generate a top-down district → relabel to canon → strip to bare walkable ground → isolate building compounds (e.g. St. Selena's = chapel + churchyard + fence) on transparency; composed background + building colliders in the `City` / `CityBlocks` scenes.
+
+**Blockers / questions:**
+- AI image tools garble small lettering — relabeling needs careful prompting and some manual fixes.
+
+**Next:**
+- Vendor the materials into the lab repo (#108) and write up the asset workflow.
+
+## 2026-06-19
+
+**Focus:** Tingen asset generation / Godot interiors. _(reconstructed — no commits this day; correct me)_
+
+**Done today:**
+- [confirm] Continued asset generation and interior scene work (cathedral / Nighthawks HQ / archive).
+
+**Blockers / questions:**
+- [confirm]
+
+**Next:**
+- City map generation.
+
+## 2026-06-18
+
+**Focus:** Asset generation in the ChatGPT in-app image tool. _(reconstructed — no commits this day; correct me)_
+
+**Done today:**
+- Generated Tingen character/scene art via the ChatGPT in-app image tool (GPT-Image), iterating toward the *Lord of the Mysteries* canon look; exported into `asset-gen/my_assets/` (e.g. the Jun-18 export).
+
+**Blockers / questions:**
+- [confirm]
+
+**Next:**
+- City-map generation + relabel.
+
+## 2026-06-17
+
+**Focus:** Tingen Godot front-end ergonomics.
+
+**Done today:**
+- Added persistent on-screen panel-key hints to the HUD.
+- Added a dev `StandaloneBoot` so any world scene can run solo with the HUD + controls — much faster iteration when building scenes.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- More scene content and asset generation.
+
 ## 2026-06-16
 
 **Focus:** Follow-up cleanup on the just-landed agent layer — #66 (disambiguate `MockReActClient.tool_calls`).
