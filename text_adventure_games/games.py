@@ -588,12 +588,22 @@ class Game:
                     special_commands = item.get_command_hints()
                     for cmd in special_commands:
                         description += "\n\t" + cmd
-                # A surface's contents are always in view ("on the table...").
-                if item.get_property("is_surface"):
+                # A surface's contents are always in view ("on the table..."). A
+                # container can opt in via ``contents_visible`` -- an open rowboat
+                # you can see into, so its blanket is listed (and matches what GET
+                # can already reach). The treasure hoard deliberately does NOT set
+                # it, keeping its loot hidden until EXAMINE.
+                shows_contents = item.get_property("is_surface") or (
+                    item.get_property("is_container")
+                    and item.is_open()
+                    and item.get_property("contents_visible")
+                )
+                if shows_contents:
+                    prep = item.preposition()
                     for inner in item.contents.values():
                         if inner.get_property("is_hidden"):
                             continue
-                        description += f"\n   - on it: {inner.description}"
+                        description += f"\n   - {prep} it: {inner.description}"
         return description
 
     def describe_characters(self) -> str:
