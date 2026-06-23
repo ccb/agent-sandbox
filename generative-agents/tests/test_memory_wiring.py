@@ -98,15 +98,28 @@ def test_simulate_reaches_activity_unchanged(world_map):
     assert "tending the cafe counter" in frames[-1]["Isabella Rodriguez"]["description"]
 
 
-def test_simulate_with_embedding_client_is_byte_identical(world_map):
-    # Semantic memory relevance (issue #76) must not change the replay: the mock
-    # brain decides from location alone, so embeddings only reorder the (ignored)
-    # memory block. Frames stay byte-for-byte identical to the keyword default.
+def test_simulate_with_embedding_client_replay_is_byte_identical(world_map):
+    # Semantic memory relevance (issue #76) must not change the *replay*: the mock
+    # brain decides from the location line alone, so sprite movement, emoji, and
+    # labels stay byte-for-byte identical with or without embeddings. The one field
+    # embeddings *do* change is the per-agent "memories" panel (issue #109) -- with
+    # vision-radius perception (#82) each agent forms enough memories that semantic
+    # vs keyword relevance surface a different top-k. That divergence is the whole
+    # point of embeddings, so it's excluded from this replay comparison.
+    def replay(frames):
+        return [
+            {
+                name: {k: v for k, v in entry.items() if k != "memories"}
+                for name, entry in frame.items()
+            }
+            for frame in frames
+        ]
+
     baseline = simulate(world_map, num_steps=20)
     with_embeddings = simulate(
         world_map, num_steps=20, embedding_client=MockEmbeddingClient()
     )
-    assert with_embeddings == baseline
+    assert replay(with_embeddings) == replay(baseline)
 
 
 def test_embedding_client_reaches_retrieval():

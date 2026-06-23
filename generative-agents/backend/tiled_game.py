@@ -52,6 +52,13 @@ class TiledGame(games.Game):
         origin = getattr(loc, "tile_address", None)
         if self.world_map is None or origin is None or radius <= 0:
             return [loc]
+        # Perf note (#106): this scans every location once per call, and the step
+        # loop calls it once per acting agent per tick -- so perception is
+        # O(agents x locations) per tick. Totally fine at Smallville's scale
+        # (~25 agents, ~20 arenas); `tile_gap` is O(1) on precomputed bounding
+        # boxes. If a future map ever has thousands of locations, index the
+        # arenas spatially (e.g. a tile grid / bucket by region) instead of this
+        # linear scan -- future-you, this is the line to revisit.
         near = [
             other
             for other in self.locations.values()
