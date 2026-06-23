@@ -30,11 +30,11 @@ dependencies = [
     "pyyaml", # GameConfig.from_file() reads YAML config files (see config.py).
     # JSON config files work without it; the YAML branch lazy-imports yaml and
     # raises a clear hint if it's somehow absent.
-    # Prompt management (issue #145): prompts live as .prompty files under
-    # text_adventure_games/prompt_templates/ and are rendered in-process.
-    # `prompty` loads the files; `jinja2` (which prompty also uses) renders the
-    # templates. No external prompt service -- a prompt change is a normal code
-    # change.
+    # Prompt management (issue #145): LLM prompts and agent-generated text live
+    # as .prompty files (under */prompt_templates/) rendered in-process, instead
+    # of inline f-strings. `prompty` loads the files; `jinja2` (which prompty
+    # also uses) renders the templates. No external prompt service -- a prompt
+    # change is a normal code change.
     "jinja2>=3.1.6",
     "prompty>=0.1.50",
 ]

@@ -1,0 +1,26 @@
+---
+name: spatial_knowledge
+description: >
+  One place a persona knows up front, rendered as a Belief in its Knowledge
+  (backend/seed.py, seed_spatial_knowledge) and shown in the observation's
+  "What you know:" section. Names the place and, when it has known areas, lists
+  them; objects within an area are intentionally left out to keep the section
+  readable.
+inputs:
+  place:
+    type: string
+    description: The place name, e.g. "Hobbs Cafe".
+  areas:
+    type: string
+    description: >
+      Comma-joined area names within the place, e.g. "hallway, library". Empty
+      when the place has no known areas -- then only the place is named.
+sample:
+  place: Oak Hill College
+  areas: hallway, library
+---
+{%- if areas -%}
+You know {{ place }} — its {{ areas }}.
+{%- else -%}
+You know {{ place }}.
+{%- endif -%}

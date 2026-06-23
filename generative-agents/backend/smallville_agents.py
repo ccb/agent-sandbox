@@ -42,6 +42,7 @@ CONVERSATION_MAX_EXCHANGES = 6
 from . import seed
 from .build_world import LOCATION_NAMES
 from .planner import LLMPlanner, MockPlanner
+from .prompt_templates import render
 
 
 class SmallvilleMockClient(MockReActClient):
@@ -268,8 +269,12 @@ def attach_agents(
             f"{stop['activity']} at {stop['place']}" for stop in spec["schedule"]
         )
         agent.memory.add_plan(
-            f"Plan: go to {spec['destination']} and {spec['activity']}. "
-            f"Today's stops: {itinerary}.",
+            render(
+                "plan_memory",
+                destination=spec["destination"],
+                activity=spec["activity"],
+                itinerary=itinerary,
+            ),
             turn=0,
             importance=5.0,
         )
@@ -457,14 +462,14 @@ def remember_outcome(char, command: str, step: int) -> None:
     agent = char.agent
     verb, _, rest = command.partition(" ")
     if verb == "travel":
-        text = f"I traveled to {char.location.name}."
+        text = render("reflection", verb=verb, location=char.location.name)
         importance = 2.0
     elif verb == "perform":
         activity = char.get_property("activity") or rest.strip()
-        text = f"I am {activity}."
+        text = render("reflection", verb=verb, activity=activity)
         importance = 2.0
     else:
-        text = f'I did "{command}".'
+        text = render("reflection", verb=verb, command=command)
         importance = 1.0
     agent.memory.add_observation(text, turn=step, importance=importance)
 
