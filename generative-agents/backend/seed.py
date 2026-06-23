@@ -27,6 +27,8 @@ import csv
 import json
 import os
 
+from .prompt_templates import render
+
 # Importance (the paper's 1-10 poignancy scale) for a seeded relationship memory.
 # Above a mundane perceived event (1.0) but below the day's plan (5.0): social
 # priors are notable background, not the agent's active intention. Tunable.
@@ -113,10 +115,7 @@ def seed_spatial_knowledge(character, tree: dict) -> int:
     added = 0
     for place, areas in world.items():
         area_names = list(areas.keys()) if isinstance(areas, dict) else []
-        if area_names:
-            text = f"You know {place} — its {', '.join(area_names)}."
-        else:
-            text = f"You know {place}."
+        text = render("spatial_knowledge", place=place, areas=", ".join(area_names))
         character.add_belief(text)
         added += 1
     return added
