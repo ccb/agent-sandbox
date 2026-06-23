@@ -28,9 +28,11 @@ warranted (like AC2 before it):
     -> banish the demon (THROW JAVELIN) -> kill the cultist (PUSH CULTIST).
   * GO NORTH home ends the adventure with a score-branched epilogue.
 
-Optional flavor not yet ported (all non-blocking): topic dialogue (ASK ELF/
-CLERIC ABOUT ...), the wizard's telescope/prophecy and the Ecology-of-the-Ooze
-journal hint, and the FIGHT BANDITS death (CAST SLEEP is the intended path).
+Flavor verbs the rulebook calls out, all now ported: topic dialogue (ASK ELF
+ABOUT SPRING -- the elf vouches for the spring water; talk_topics), the wizard's
+telescope/prophecy (USE TELESCOPE) and the Ecology-of-the-Ooze journal hint
+(READ JOURNAL), and the two fatal wrong answers -- FIGHT BANDITS (CAST SLEEP is
+the intended path) and ATTACK WIZARD.
 
 Run interactively:   python action_castle_3.py
 """
@@ -1444,6 +1446,120 @@ class PushCultist(actions.Action):
 
 
 # ---------------------------------------------------------------------------
+# Flavor verbs the rulebook calls out: the two fatal fights (FIGHT BANDITS /
+# ATTACK WIZARD -- both wrong answers, fatal) and the wizard's telescope.
+# ---------------------------------------------------------------------------
+
+
+class FightBandits(actions.Action):
+    """Wading into the bandit camp swinging is suicide -- they're too many. The
+    intended path is CAST SLEEP (rulebook). Fatal while they're awake."""
+
+    ACTION_NAME = "fight bandits"
+    ACTION_DESCRIPTION = "Attack the bandits (a very bad idea)"
+    ACTION_ALIASES = [
+        "attack bandits",
+        "fight the bandits",
+        "attack the bandits",
+        "kill bandits",
+        "kill the bandits",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.bandits = _present(game, "bandits")
+
+    def check_preconditions(self) -> bool:
+        if self.bandits is None:
+            self.parser.fail("There are no bandits here to fight.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if self.bandits.get_property("asleep"):
+            self.parser.ok(
+                "The bandits are fast asleep. There's no honor in butchering them "
+                "-- and no need."
+            )
+            return
+        _die(
+            self.game,
+            "You charge the bandits with your dagger drawn. There are far too many "
+            "of them; they swarm you, and the last thing you see is the glint of a "
+            "dozen blades. THE END.",
+        )
+
+
+class AttackWizard(actions.Action):
+    """Turning on the wizard is a fatal mistake -- he is, after all, a wizard."""
+
+    ACTION_NAME = "attack wizard"
+    ACTION_DESCRIPTION = "Attack the wizard (a very bad idea)"
+    ACTION_ALIASES = [
+        "fight wizard",
+        "attack the wizard",
+        "fight the wizard",
+        "kill wizard",
+        "kill the wizard",
+        "stab wizard",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.wizard = _present(game, "wizard")
+
+    def check_preconditions(self) -> bool:
+        if self.wizard is None:
+            self.parser.fail("There's no wizard here to attack.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _die(
+            self.game,
+            "You raise your blade against the wizard. He barely looks up -- a word "
+            "of power, a flash of light, and you are reduced to a smoking pair of "
+            "boots. Never attack a wizard. THE END.",
+        )
+
+
+class UseTelescope(actions.Action):
+    """Peer through the wizard's telescope -- a glimpse of the ill-omened stars
+    the cultist's prophecy turns on (rulebook flavor)."""
+
+    ACTION_NAME = "use telescope"
+    ACTION_DESCRIPTION = "Peer through the wizard's telescope"
+    ACTION_ALIASES = [
+        "look through telescope",
+        "look through the telescope",
+        "peer through telescope",
+        "peer through the telescope",
+        "use the telescope",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Wizard's Tower":
+            self.parser.fail("There's no telescope here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You squint through the brass telescope. The night sky wheels with "
+            "cold, unfamiliar constellations, slowly grinding into alignment. "
+            '"When the stars are right," the wizard murmurs at your shoulder, "the '
+            'Dark One stirs beneath the castle. Pray we are not too late."'
+        )
+
+
+# ---------------------------------------------------------------------------
 # World
 # ---------------------------------------------------------------------------
 
@@ -1748,6 +1864,22 @@ def build_game() -> ActionCastle3:
             "A dizzying array of occult tomes. One you can read is a journal: Ecology of the Ooze.",
         )
     )
+    # READ JOURNAL -- the wizard's field notes, a hint that the gray ooze hangs
+    # from the ceiling and dislikes cold (USE WAND freezes it). Read by the
+    # built-in READ verb (it prints an item's ``read_text``).
+    journal = _fixture(
+        "journal",
+        'a journal titled "Ecology of the Ooze"',
+        'A naturalist\'s journal, "Ecology of the Ooze."',
+    )
+    journal.set_property(
+        "read_text",
+        'From "Ecology of the Ooze": "The gray ooze is a patient ambusher, '
+        "clinging unseen to cave ceilings and dropping on prey below to dissolve "
+        "it alive. Look up in its haunts. Sluggish and nearly mindless, it has but "
+        'one dread: cold, which freezes its protoplasm solid in an instant."',
+    )
+    wizard_tower.add_item(journal)
     wizard_tower.add_item(
         _item(
             "wand",
@@ -1859,6 +1991,15 @@ def build_game() -> ActionCastle3:
     )
     elf.talk_text = '"A group of bandits ambushed me in the ruins. I dropped my bow during my escape."'
     elf.join_text = 'The elf clasps your wrist. "Together, nothing can stop us!"'
+    # ASK ELF ABOUT SPRING / WATER -- she vouches for the spring (rulebook hint).
+    elf.talk_topics = {
+        "spring": '"That spring by the cavern mouth? Sweet and clean -- the water is '
+        'safe to drink. Fill your skin there," says the elf.',
+        "water": '"The spring water is safe to drink -- I refilled there myself," '
+        "says the elf.",
+        "bandits": '"They ambushed me in the ruins and took my bow. Foul company," '
+        "the elf mutters.",
+    }
 
     wizard = things.Character(
         "wizard",
@@ -2001,6 +2142,9 @@ def build_game() -> ActionCastle3:
         OpenIronMaiden,
         ThrowJavelin,
         PushCultist,
+        FightBandits,
+        AttackWizard,
+        UseTelescope,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
