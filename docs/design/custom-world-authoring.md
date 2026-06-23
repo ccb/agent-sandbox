@@ -106,8 +106,11 @@ path is real, but it diverges from our current Phaser/Tiled + maze-CSV contract.
   existing replay.
 - **B — Godot-native authoring** (like the 2025 project). Build the world directly in Godot
   `TileMapLayer`s and skip Tiled. Pairs naturally with the Godot frontend port (see
-  [`NEXT-STEPS.md`](../../generative-agents/NEXT-STEPS.md) bottom section + PR #146), but
-  means re-homing the semantic grid.
+  [`NEXT-STEPS.md`](../../generative-agents/NEXT-STEPS.md) bottom section + PR #162), but
+  means re-homing the semantic grid. A tiny working example of this Godot-native path ships
+  in [`godot-generative-agents/`](../../godot-generative-agents/README.md) (the mock world in
+  this same PR) — a code-built `TileMapLayer` ground with auto-wandering sprites from a free
+  asset pack.
 - **C — A small CSV-from-Tiled tool.** Write a converter that derives
   collision/sector/arena/object CSVs from a Tiled map's layers/object groups, so the visual
   map and the semantic grid can't drift. Useful regardless of A vs B.
@@ -124,7 +127,7 @@ with the visual map**, and **sprite/tileset licensing must be clean**.
 - **Cast size:** how many personas, and do we author full `scratch.json`/`spatial_memory`
   or start minimal?
 - **Sequencing:** author for the current Phaser replay now (A), or wait for the Godot port
-  (B) and author once? Relates to the Godot frontend-port guidance in PR #146.
+  (B) and author once? Relates to the Godot frontend-port guidance in PR #162.
 
 ## References
 
@@ -137,5 +140,7 @@ with the visual map**, and **sprite/tileset licensing must be clean**.
   [`backend/world_data.yaml`](../../generative-agents/backend/world_data.yaml)
 - Asset pipeline: [`generative-agents/setup.sh`](../../generative-agents/setup.sh),
   [`generative-agents/README.md`](../../generative-agents/README.md)
+- Working mock world (this PR): [`godot-generative-agents/`](../../godot-generative-agents/README.md)
+  — a minimal Godot-native `TileMapLayer` prototype with auto-wandering sprites.
 - Related: issue #108 (Tingen custom game on the engine), and the Godot frontend-port
-  guidance at the bottom of [`NEXT-STEPS.md`](../../generative-agents/NEXT-STEPS.md) (PR #146).
+  guidance at the bottom of [`NEXT-STEPS.md`](../../generative-agents/NEXT-STEPS.md) (PR #162).

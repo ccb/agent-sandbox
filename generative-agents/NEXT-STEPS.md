@@ -218,6 +218,11 @@ contract**; ROADMAP **Phase 3** ("2D Godot bridge", the game-leaning track) swap
 Godot 4 renderer reading that same feed. None of this blocks Phases A–F — it rides on the
 export. This is forward-looking guidance, not issues yet; roughly in dependency order:
 
+> **First proof-of-concept already in the repo:** [`godot-generative-agents/`](../godot-generative-agents/README.md)
+> is a tiny Godot 4 project — a code-built `TileMapLayer` world (grass, paths, a pond) with
+> sprites that auto-wander — standing in for the "rebuild the view layer" bullet below. It's
+> a mock, not wired to the export yet, but it proves the Godot-native tilemap + sprite path.
+
 - `[engine/port] M` **Freeze & document the export as the renderer-agnostic contract.**
   `backend/exporter.py` already emits everything a renderer needs — `reverie/meta.json`
   (cast, step count, `sec_per_step`), `environment/0.json` (start tiles),
