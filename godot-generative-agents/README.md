@@ -67,6 +67,18 @@ The first run regenerates the `.godot/` import cache (git-ignored); the committe
 `*.import` / `*.uid` sidecars let Godot recognize the assets without re-importing
 everything.
 
+## Where this fits — the full-port proposals
+
+This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
+It is **not** yet wired to the generative-agents simulation. Two design docs in this PR
+sketch the road from here to a real Godot frontend:
+
+- [`../docs/design/custom-world-authoring.md`](../docs/design/custom-world-authoring.md) —
+  authoring our own world + sprites (map layers, semantic maze CSVs, personas, licensing).
+- [`../generative-agents/NEXT-STEPS.md`](../generative-agents/NEXT-STEPS.md) (bottom section,
+  "porting the replay frontend to Godot") — turning the file-based replay export into a Godot
+  4 renderer.
+
 ## Assets & license
 
 Art is the **Cute Fantasy (Free)** pack by Kenmi, kept under `Cute_Fantasy_Free/`
