@@ -1,0 +1,62 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/wanderer.gd" id="1_wanderer"]
+[ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="2_player"]
+[ext_resource type="Texture2D" uid="uid://cf5c74b35lvyh" path="res://Cute_Fantasy_Free/Enemies/Skeleton.png" id="3_skeleton"]
+[ext_resource type="Texture2D" uid="uid://bgt3r07jmjjjo" path="res://Cute_Fantasy_Free/Animals/Pig/Pig.png" id="4_pig"]
+[ext_resource type="Texture2D" uid="uid://crmwonixf75pw" path="res://Cute_Fantasy_Free/Enemies/Slime_Green.png" id="5_slime"]
+
+[node name="Main" type="Node2D"]
+
+[node name="Grass" type="ColorRect" parent="."]
+offset_right = 1152.0
+offset_bottom = 648.0
+color = Color(0.353, 0.561, 0.235, 1)
+
+[node name="Player" type="Sprite2D" parent="."]
+position = Vector2(300, 250)
+scale = Vector2(3, 3)
+texture = ExtResource("2_player")
+script = ExtResource("1_wanderer")
+sheet_hframes = 6
+sheet_vframes = 10
+walk_row = 0
+walk_len = 6
+anim_fps = 8.0
+move_speed = 60.0
+
+[node name="Skeleton" type="Sprite2D" parent="."]
+position = Vector2(820, 410)
+scale = Vector2(3, 3)
+texture = ExtResource("3_skeleton")
+script = ExtResource("1_wanderer")
+sheet_hframes = 6
+sheet_vframes = 10
+walk_row = 0
+walk_len = 6
+anim_fps = 7.0
+move_speed = 50.0
+
+[node name="Pig" type="Sprite2D" parent="."]
+position = Vector2(480, 520)
+scale = Vector2(3, 3)
+texture = ExtResource("4_pig")
+script = ExtResource("1_wanderer")
+sheet_hframes = 2
+sheet_vframes = 2
+walk_row = 0
+walk_len = 2
+anim_fps = 4.0
+move_speed = 40.0
+
+[node name="Slime" type="Sprite2D" parent="."]
+position = Vector2(650, 160)
+scale = Vector2(2, 2)
+texture = ExtResource("5_slime")
+script = ExtResource("1_wanderer")
+sheet_hframes = 8
+sheet_vframes = 3
+walk_row = 1
+walk_len = 8
+anim_fps = 10.0
+move_speed = 45.0
