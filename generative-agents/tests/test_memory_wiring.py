@@ -199,6 +199,33 @@ def test_perform_records_activity_observation():
     assert "I am tending the cafe counter." in texts
 
 
+def test_memory_grows_as_agent_works_through_schedule():
+    # The payoff of schedules (issue #83): an agent that works through several
+    # stops keeps laying down new first-person memories, instead of the single
+    # travel + perform a frozen one-stop agent would have. We drive the *logical*
+    # transitions the step loop makes -- at each stop decide travel then perform,
+    # record the outcome, then advance -- skipping only the visual tile walk.
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS)
+    isabella = chars["Isabella Rodriguez"]
+    client = isabella.agent.llm_client
+    # Isabella's stops are at distinct places, so each is one travel + one perform.
+    for stop in range(len(client.schedule)):
+        for _ in range(2):
+            cmd = observe_and_decide(game, isabella, stop)
+            assert game.parser.parse_command(cmd, actor=isabella)
+            remember_outcome(isabella, cmd, stop)
+        client.advance()
+
+    texts = [r.text for r in isabella.agent.memory.records]
+    activities = {t for t in texts if t.startswith("I am ")}
+    travels = {t for t in texts if t.startswith("I traveled to ")}
+    # Several distinct activities + destinations -- a stream that grew with the
+    # day, not the lone pair a single-activity agent would be stuck with.
+    assert len(activities) >= 3
+    assert len(travels) >= 3
+
+
 def test_own_action_not_double_perceived():
     # The engine logs a GameEvent for the move; ingest_events must skip the
     # actor's OWN event (it's already a first-person memory) -- no double-count.

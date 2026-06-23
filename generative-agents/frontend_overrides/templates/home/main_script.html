@@ -138,9 +138,11 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 
 	// <tile_width> is the width of one individual tile (tiles are square)
 	let tile_width = 32;
-	// Important: tile_width % movement_speed has to be 0. 
-	// <movement_speed> determines how fast we move at each upate cylce. 
-	let movement_speed = 32; 
+	// Important: tile_width % movement_speed has to be 0.
+	// <movement_speed> determines how fast we move at each upate cylce.
+	// A slow 4 (= 8 frames per tile, ~8x slower than the upstream 32) keeps the
+	// replay easy to follow step by step.
+	let movement_speed = 4;
 
 	// <timer_max> determines how frequently our update function will query the 
 	// frontend server. If it's higher, we wait longer cycles. 
@@ -155,7 +157,19 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	let execute_count_max = tile_width/movement_speed;
 	let execute_count = execute_count_max;
 	let movement_target = {};
-	
+
+	// Escape text before injecting it into the agent cards. The reasoning and
+	// memory text come from the simulation data, so escape <, >, & and quotes to
+	// keep them from being parsed as HTML when we build the cards' innerHTML.
+	function escapeHtml(value) {
+		return String(value == null ? "" : value)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
 
 	// ###########################################################################
 	// ENGINE
@@ -708,8 +722,101 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 	        document.getElementById("current_action__"+curr_persona_name_os).innerHTML = description_content.split("@")[0];
 	        document.getElementById("target_address__"+curr_persona_name_os).innerHTML = description_content.split("@")[1];
 	        document.getElementById("chat__"+curr_persona_name_os).innerHTML = chat_content;
+
+	        // Memory + reasoning behind the current action. These keys are added by
+	        // the backend (run_simulation); guard for sims/pages that lack them so
+	        // the card degrades gracefully instead of erroring.
+	        let persona_frame = execute_movement["persona"][curr_persona_name];
+	        let reasoning_el = document.getElementById("reasoning__"+curr_persona_name_os);
+	        if (reasoning_el) {
+	          let reasoning_html = persona_frame["reasoning"]
+	            ? escapeHtml(persona_frame["reasoning"])
+	            : "<em>&mdash;</em>";
+	          // Only rewrite the DOM when it actually changes (see memories below).
+	          if (reasoning_el._lastHtml !== reasoning_html) {
+	            reasoning_el.innerHTML = reasoning_html;
+	            reasoning_el._lastHtml = reasoning_html;
+	          }
+	        }
+	        let memories_el = document.getElementById("memories__"+curr_persona_name_os);
+	        if (memories_el) {
+	          let mems = persona_frame["memories"] || [];
+	          // A stable id per memory. After we rebuild the list we read the rows
+	          // back in document order (matching this array) to tell which ones are
+	          // newly arrived, so only those flash -- no DOM data attribute needed.
+	          let mem_keys = mems.map(function (m) {
+	            return m.created_turn + "|" + (m.kind == null ? "" : m.kind) + "|" + m.text;
+	          });
+	          // Memories formed at the same in-game time are grouped under one time
+	          // header so a burst of same-moment memories reads as a single cluster
+	          // rather than repeating the timestamp on every row. The stream is
+	          // time-ordered, so same-time memories are already adjacent: we emit a
+	          // header whenever the time changes (one even for a lone memory, so every
+	          // row still shows when it formed) and the header carries the time, so the
+	          // per-row meta line drops it. Memory rows stay .mem-item in document
+	          // order (headers aren't), so the is-new flash mapping below is unaffected.
+	          let memories_html;
+	          if (!mems.length) {
+	            memories_html = "<em>None retrieved</em>";
+	          } else {
+	            let parts = ["<ul class='mem-list'>"];
+	            let last_time = null;
+	            mems.forEach(function (m) {
+	              let time = m.time == null ? "" : String(m.time);
+	              if (time && time !== last_time) {
+	                parts.push("<li class='mem-group-head'>" + escapeHtml(time) + "</li>");
+	              }
+	              last_time = time;
+	              let kind = String(m.kind == null ? "" : m.kind);
+	              // kind is a fixed enum (observation/plan/reflection); keep
+	              // only word chars for the CSS modifier class that colours it.
+	              let kindClass = "mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
+	              // A meta line (kind pill + its quiet importance) sits above the
+	              // memory text, so kinds read at a glance.
+	              let meta = "<span class='mem-kind'>" + escapeHtml(kind) + "</span>"
+	                + "<span class='mem-imp' title='retrieval importance'>"
+	                + escapeHtml(String(m.importance)) + "</span>";
+	              parts.push("<li class='mem-item " + kindClass + "'>"
+	                + "<div class='mem-meta'>" + meta + "</div>"
+	                + "<div class='mem-text'>" + escapeHtml(m.text) + "</div>"
+	                + "</li>");
+	            });
+	            parts.push("</ul>");
+	            memories_html = parts.join("");
+	          }
+	          // Retrieved memories only change at an agent's decision points -- they
+	          // carry forward unchanged on the steps in between. Rebuilding the list
+	          // every step would recreate the <li> nodes and snap .mem-list's scroll
+	          // back to the top each step (the glitch you saw while scrolling), so we
+	          // only rewrite the DOM when the rendered HTML actually differs.
+	          // The first time we touch this card, record the memories already on
+	          // it as the baseline so they don't flash -- only memories that arrive
+	          // *later*, as the replay plays, count as new and flash when they come in.
+	          let mem_first_touch = memories_el._seenMemKeys === undefined;
+	          if (mem_first_touch) memories_el._seenMemKeys = {};
+	          if (memories_el._lastHtml !== memories_html) {
+	            memories_el.innerHTML = memories_html;
+	            memories_el._lastHtml = memories_html;
+	            // Flash each row whose memory we haven't shown on this card before.
+	            // The .is-new class is added here (not baked into memories_html) so the
+	            // html stays stable between decisions and the scroll guard above still
+	            // suppresses needless rebuilds; the CSS animation runs once, ~4s.
+	            let mem_rows = memories_el.querySelectorAll(".mem-item");
+	            for (let mi = 0; mi < mem_rows.length; mi++) {
+	              let mem_key = mem_keys[mi];
+	              if (!memories_el._seenMemKeys[mem_key]) {
+	                memories_el._seenMemKeys[mem_key] = true;
+	                if (!mem_first_touch) mem_rows[mi].classList.add("is-new");
+	              }
+	            }
+	          }
+	        }
 	      }
-	      
+
+	      // The cards' memory lists were just refreshed; mirror the live step into
+	      // the open State Details popup so it tracks the replay (once per step).
+	      pushStateModalStep();
+
 	    }
 
 	    execute_count = execute_count - 1;
@@ -842,6 +949,104 @@ fixes, and per-persona sprites + portraits for all 25 residents.
 		};
 	}
 	showSelectedAgent();
+
+	// *** STATE DETAILS POPUP ***
+	// Each card's "State Details" link opens that agent's full persona-state page
+	// in an overlay <iframe> instead of leaving the replay. We append ?embed=1 to
+	// the existing URL so the persona-state page hides its own "Return to
+	// simulation" header (it would otherwise navigate the iframe away). The links
+	// keep their href, so right-click "open in new tab" still works.
+	var state_modal = document.getElementById("state-modal");
+	var state_modal_frame = document.getElementById("state-modal-frame");
+	// Which persona the popup is currently showing (underscored, as in the URL), so
+	// we can push live step updates into it as the replay plays. Null when closed.
+	var state_modal_persona = null;
+
+	// Rewrite the link's step segment to the LIVE replay step, so the persona
+	// state page shows the memories retrieved at the moment you opened it -- i.e.
+	// the same set on the card. The href is built by Django at the start step
+	// (/replay_persona_state/<sim>/<step>/<name>/); we swap <step> for `step`.
+	function urlAtCurrentStep(url) {
+		var parts = url.split("/");
+		var idx = parts.indexOf("replay_persona_state");
+		if (idx !== -1 && parts.length > idx + 2) {
+			parts[idx + 2] = String(step);
+		}
+		return parts.join("/");
+	}
+
+	function openStateModal(url) {
+		if (!state_modal || !state_modal_frame || !url) return;
+		url = urlAtCurrentStep(url);
+		// Remember the persona segment (.../replay_persona_state/<sim>/<step>/<name>/),
+		// underscored, so pushStateModalStep can find it in execute_movement.
+		var parts = url.split("/");
+		var idx = parts.indexOf("replay_persona_state");
+		state_modal_persona = (idx !== -1 && parts.length > idx + 3) ? parts[idx + 3] : null;
+		state_modal_frame.src = url + (url.indexOf("?") === -1 ? "?" : "&") + "embed=1";
+		state_modal.hidden = false;
+	}
+	function closeStateModal() {
+		if (!state_modal || !state_modal_frame) return;
+		state_modal.hidden = true;
+		state_modal_persona = null;
+		state_modal_frame.src = "about:blank";   // stop the now-hidden page loading
+	}
+
+	// Push the live replay step into the open State Details popup so its memory
+	// lists (and clock) track the replay instead of freezing at the step it was
+	// opened on. The popup is a same-origin <iframe>; it slices its embedded memory
+	// stream to this step and flashes any newly-arrived row. No-op unless the popup
+	// is open and pointed at a persona we can find. Called once per step below.
+	function pushStateModalStep() {
+		if (!state_modal || state_modal.hidden || !state_modal_persona) return;
+		if (!state_modal_frame || !state_modal_frame.contentWindow) return;
+		if (!execute_movement || !execute_movement["persona"]) return;
+		// execute_movement keys are display names ("Isabella Rodriguez"); the popup
+		// URL (and so state_modal_persona) uses the underscored form.
+		var retrieved = [];
+		var people = execute_movement["persona"];
+		for (var name in people) {
+			if (name.replace(/ /g, "_") === state_modal_persona) {
+				retrieved = people[name]["memories"] || [];
+				break;
+			}
+		}
+		var curr_time = (execute_movement["meta"] || {})["curr_time"] || "";
+		state_modal_frame.contentWindow.postMessage({
+			type: "replay-step",
+			step: step,
+			retrieved: retrieved,
+			curr_time: curr_time
+		}, window.location.origin);
+	}
+
+	// The embedded persona-state page posts this once it has loaded and wired its
+	// own listener; reply with the current step so it syncs immediately instead of
+	// waiting for the next step tick.
+	window.addEventListener("message", function (e) {
+		if (e.origin !== window.location.origin) return;
+		if (e.data && e.data.type === "persona-state-ready") pushStateModalStep();
+	});
+
+	var stateLinks = document.querySelectorAll(".agent-state-link");
+	for (var si = 0; si < stateLinks.length; si++) {
+		stateLinks[si].addEventListener("click", function (e) {
+			e.preventDefault();
+			openStateModal(this.getAttribute("href"));
+		});
+	}
+	// Close via the X button or by clicking the dark backdrop (both carry
+	// data-close-modal), or by pressing Escape.
+	var stateClosers = document.querySelectorAll("#state-modal [data-close-modal]");
+	for (var ci = 0; ci < stateClosers.length; ci++) {
+		stateClosers[ci].addEventListener("click", closeStateModal);
+	}
+	document.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" && state_modal && !state_modal.hidden) {
+			closeStateModal();
+		}
+	});
 
 	// *** RESET ***
 	// Restart the replay from the beginning. The page is served at the start step

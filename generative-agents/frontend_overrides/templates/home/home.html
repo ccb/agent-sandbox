@@ -97,6 +97,17 @@
 							<span class="agent-field-label">Location</span>
 							<span class="agent-field-value" id="target_address__{{ p_name_os }}"></span>
 						</div>
+						<!-- The agent's cognition behind its current action: which memories
+						     retrieval surfaced, then the reasoning it produced from them.
+						     Both are filled in live by home/main_script.html. -->
+						<div class="agent-field">
+							<span class="agent-field-label">Memories retrieved</span>
+							<span class="agent-field-value" id="memories__{{ p_name_os }}"></span>
+						</div>
+						<div class="agent-field">
+							<span class="agent-field-label">Reasoning</span>
+							<span class="agent-field-value" id="reasoning__{{ p_name_os }}"></span>
+						</div>
 						<div class="agent-field">
 							<span class="agent-field-label">Current Conversation</span>
 							<span class="agent-field-value" id="chat__{{ p_name_os }}"></span>
@@ -106,6 +117,19 @@
 			</div>
 		</div>
 
+	</div>
+</div>
+
+<!-- STATE DETAILS POPUP: each card's "State Details" link opens that agent's
+     full persona-state page in this overlay instead of navigating away, so the
+     replay keeps running underneath. We load the existing page into an <iframe>
+     (with ?embed=1 so it drops its in-page "Return to simulation" header) rather
+     than duplicating its markup. Wired up in home/main_script.html. -->
+<div id="state-modal" hidden>
+	<div class="state-modal-backdrop" data-close-modal></div>
+	<div class="state-modal-dialog" role="dialog" aria-modal="true" aria-label="Agent state details">
+		<button id="state_modal_close" type="button" class="state-modal-close" title="Close (Esc)" data-close-modal>&times;</button>
+		<iframe id="state-modal-frame" class="state-modal-frame" title="Agent state details" src="about:blank"></iframe>
 	</div>
 </div>
 
