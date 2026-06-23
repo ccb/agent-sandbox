@@ -27,6 +27,11 @@ class Thing:
         # A description of the thing
         self.description = description
 
+        # Alternate names the parser will also match -- so a multi-word "army
+        # cot" answers to "cot", or "coin purse" to "purse". Lowercased; matched
+        # by Parser.match_item alongside the canonical name.
+        self.aliases: set[str] = set()
+
         # A dictionary of properties and their values. Well-known boolean keys
         # are enumerated in text_adventure_games.enums.Property (gettable,
         # is_weapon, is_locked, is_dead, ...); games may declare new keys as
@@ -48,6 +53,7 @@ class Thing:
             "description": self.description,
             "commands": list(self.commands),
             "properties": self.properties,
+            "aliases": sorted(self.aliases),
         }
         return thing_data
 
@@ -66,6 +72,8 @@ class Thing:
             data["properties"] = {}
         for k, v in data["properties"].items():
             instance.set_property(k, v)
+        for a in data.get("aliases", []):
+            instance.add_alias(a)
         return instance
 
     def to_json(self):
@@ -99,6 +107,11 @@ class Thing:
         string or a :class:`~text_adventure_games.enums.Property` member.
         """
         return self.properties.get(property_name, False)
+
+    def add_alias(self, alias: str):
+        """Register an alternate name the parser will also match (e.g. ``cot``
+        for an item named ``army cot``)."""
+        self.aliases.add(alias.lower())
 
     def add_command_hint(self, command: str):
         """

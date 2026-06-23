@@ -13,15 +13,18 @@ The single most important idea up front:
 > engine so the next game gets it for free. That's what keeps the "missing
 > actions" problem from recurring.
 
-Two finished ports are your canonical references — read them alongside this guide:
+Three finished ports are your canonical references — read them alongside this guide:
 
 - `text_adventure_games/adventures/action_castle_2.py` — town, gifts, a follower,
   topic dialogue, a shoe-size fit gate, posed-prompt dialogue.
 - `text_adventure_games/adventures/action_castle_3.py` — a full party-based dungeon
   crawl: companions, ability-verbs, crafting, the whole interlock, scored epilogues.
-- Their test suites (`tests/test_action_castle_2.py`, `tests/test_action_castle_3.py`)
-  are the **spec of every supported command**, and AC3 ships a `--walk` walkthrough
-  that wins 100/100.
+- `text_adventure_games/adventures/action_castle_4.py` — vehicles/mounts, wearable
+  slots, hidden-container reveals, two branching endings; built slice-by-slice as
+  the §15 worked example.
+- Their test suites (`tests/test_action_castle_{2,3,4}.py`) are the **spec of every
+  supported command**, and AC3 and AC4 each ship a `--walk` walkthrough that wins
+  100/100.
 
 ---
 
@@ -336,6 +339,13 @@ item its own flavor line on wearing, and `TAKE OFF` / `REMOVE` frees a slot.
 *Used by:* AC4 (the gown + tiara start worn; the army boots displace nothing but
 enforce one-pair-of-shoes; the glass/ruby-slipper gags).
 
+### Object aliases
+A multi-word thing answers only to text that contains its full name, so an item
+named `"army cot"` won't match `examine cot`. Call `thing.add_alias("cot")` (on any
+`Item`/`Character`/`Location`) to register short forms the parser also matches —
+`"cot"` for `"army cot"`, `"purse"` for `"coin purse"`. Aliases serialize with the
+thing. Cheap insurance against "I don't see that here" on the obvious short noun.
+
 ### Item stacks / quantities (`#134`)
 `item.make_stackable(n)` makes an item N identical, fungible units in one entry;
 same-named stackable items merge on pickup. Recipes can then require `count > 1`
@@ -356,6 +366,22 @@ ready sets `npc.set_property("refuses_follow", True)` with an optional
 `follow_filter` lets a companion refuse certain rooms. *Used by:* AC2 Rosemary;
 AC3's whole 4-member party + `INVITE`.
 
+### Vehicles & mounts (`#151`)
+`item.make_vehicle(ready=True)` makes an item rideable; `MOUNT` (`ride` / `get on` /
+`board`) boards it and `DISMOUNT` (`get off`) leaves it. While `character.riding` is
+set, the engine brings the vehicle along whenever the rider moves, and
+`blocks.RequiresVehicle(loc, msg)` makes an exit passable only when mounted ("too far
+on foot"). A vehicle that must be **activated first** — a key for a motorcycle, an
+apple/brush for a skittish horse — starts `make_vehicle(ready=False)` with a
+`mount_refusal_message`; a game verb flips `vehicle_ready` true (`MOUNT` refuses
+until then). *Used by:* AC4's horse (tamed with an apple or the hairbrush) and
+motorcycle (started with the stolen keys); AC2's boat folds onto it next.
+
+> **Caveat (verb collision):** `ride` is a `MOUNT` alias, so `ride east` tries to
+> *board* a vehicle, not travel. For "ride a direction onto the road," gate a plain
+> `east`/`west` exit on `character.riding` instead of inventing a `ride east` verb
+> (see §15, Intervention 11).
+
 ### Posed prompts — dialogue forks (`#110`)
 When the game asks a question, `game.pose_prompt(Prompt(...))`. The parser reads
 the next otherwise-unrecognized reply as the answer — **non-modal** (`look`/
@@ -371,8 +397,9 @@ game.pose_prompt(Prompt(text="Answer the riddle.", forward_as="answer riddle"))
 ```
 
 Prompts expire when answered, replaced, or when the player leaves the room.
-*Used by:* AC3 dragon-less... the dragon lives in AC2; AC3 uses it for the
-GO-NORTH-home "are you sure?" and could for any yes/no.
+*Used by:* AC2's dragon (the riddle's free-text answer, then a `gold`/`sword`/`ring`
+reward choice); AC3's `GO NORTH` "are you sure you want to leave?" confirm; AC4's
+ranch job offer (a `yes`/`no` choice that forks the two endings).
 
 ### Crafting (`#136`)
 Declare recipes; one generic `Craft` action drives `make`/`cook`/`combine`/…:
@@ -609,8 +636,8 @@ Concretely:
 
 | Where | What |
 |---|---|
-| `text_adventure_games/adventures/action_castle{,_2,_3}.py` | the three reference ports |
-| `tests/test_action_castle_{2,3}.py` | their tests = the command spec |
+| `text_adventure_games/adventures/action_castle{,_2,_3,_4}.py` | the reference ports |
+| `tests/test_action_castle_{2,3,4}.py` | their tests = the command spec |
 | `text_adventure_games/things/` | `Item`, `Character`, `Location` |
 | `text_adventure_games/actions/` | built-in actions; subclass `actions.Action` |
 | `text_adventure_games/parsing.py` | `Parser` (routing) + `LlmParser` |
@@ -619,7 +646,7 @@ Concretely:
 | `text_adventure_games/crafting.py` | `Recipe`, `Ingredient` |
 | `text_adventure_games/prompts.py` | `Prompt` (posed dialogue) |
 | `text_adventure_games/games.py` | `Game` (loop, triggers, recipes, relocate) |
-| `text_adventure_games/adventures/action_castle_4.py` | the §15 worked example (in progress) |
+| `text_adventure_games/adventures/action_castle_4.py` | the §15 worked example (complete, wins 100/100) |
 | `journal/chris.md` | the narrative of how the ports were built + why |
 
 When in doubt, find the same situation in `action_castle_3.py` — almost every
@@ -650,8 +677,8 @@ two-column, and the OCR **interleaves the columns**, which is where the trouble
 1. **Engine: a vehicle/mount feature.** AC4 needs riding (horse, motorcycle), which
    the engine lacked — so the first slice extracted a reusable feature, not game code.
 2. **World skeleton.** All rooms, exits, items, characters, start state; topology test.
-3. **Tower escape.** The puzzle: cut hair → rope → climb out, or sneak down through
-   the guardroom; plus dead-ends.
+3. **Tower escape.** The puzzle: cut hair → braid a rope → climb out the window. The
+   front gate is a trap (the guard re-locks you); plus the trapped-forever dead-end.
 4. **Horse + poacher/deer.** Taming the mare; the crossbow; saving the deer.
 5. **Ranch / roadhouse / bar + endings.** The "Wade sent me" gate, the bar brawl for
    the keys, and the two scored endings + a full winning walkthrough.
@@ -685,11 +712,18 @@ two-column, and the OCR **interleaves the columns**, which is where the trouble
 > invariants surface design smells, but a smell is a question, not a verdict — and
 > the answer can change once a later slice makes the shape concrete.
 
-> **Intervention 6 — correcting the LLM's reading.** The model (reasonably) read the
-> tower escape as "one canonical route + a locked-in recovery." The human knew the
-> game better: **both routes are real wins**, and the guard-capture is *avoidable*
-> (you only get caught if you bolt west off the stairs — you can instead grab the
-> dagger and rope out the window). The model encoded the corrected logic.
+> **Intervention 6 — when *everyone's* memory is wrong, go back to the source.**
+> Both the model *and* the human first believed the tower had **two winning escapes**
+> (sneak out the front through the guardroom, or rope out the window), and the port
+> shipped that way. A playtest question ("isn't the guard supposed to catch me?")
+> sent us back to the actual rulebook pages — and the front gate turned out to be a
+> **trap**: `GUARDROOM → WEST` runs you into the guard, who marches you back upstairs
+> and *locks the door*, and if you never grabbed the dagger that's the "nineteen
+> years" ending. The **only** real escape is the window. The fix re-pointed the guard
+> from a fabricated stairs exit to a trigger on arriving at the bridge, made the lock
+> and the trapped-forever death real, and rewrote the walkthrough. Lesson: a
+> confident shared assumption is still an assumption — the rulebook page is the only
+> authority, and it's worth re-reading the moment a playtest smells off.
 
 > **Intervention 7 — spotting a reuse opportunity.** *Should `MAKE ROPE` be a
 > crafting recipe?* Yes — hair → rope is a one-input recipe, so `make rope` routes to
@@ -738,13 +772,20 @@ two-column, and the OCR **interleaves the columns**, which is where the trouble
 ### How a single slice actually goes
 
 Take Slice 3. The prompt is roughly: *"Add the tower escape to `action_castle_4.py`,
-following the guide. Both the sneak-down-through-the-guardroom route and the
-cut-hair → rope → climb-out-the-window route should win; the guard is an avoidable
-block on the stairs' west exit. Model `make rope` as a crafting recipe (hair →
-rope). Add tests."* Claude generates the actions, blocks, recipe, scoring triggers,
-and tests; you run `uv run pytest tests/test_action_castle_4.py -q`; you read the
-flavor against the rulebook — and that's where you catch that the slippers aren't
-fatal and `KILL SELF` is a clue. Fix, re-run, commit. Then Slice 4.
+following the guide. The escape is cut-hair → braid-rope → climb-out-the-window;
+model `make rope` as a crafting recipe (hair → rope). Add tests."* Claude generates
+the actions, blocks, recipe, scoring triggers, and tests; you run `uv run pytest
+tests/test_action_castle_4.py -q`; you read the flavor against the rulebook — and
+that's where you catch that the slippers aren't fatal and `KILL SELF` is a clue.
+Fix, re-run, commit. Then Slice 4. (And as Intervention 6 shows, some corrections
+only surface *later*, in a playtest — the guard trap was one such; the loop keeps
+running past the first green test.)
 
 The deliverable of each slice is a green test and a diff small enough to actually
 read. The deliverable of the whole port is a `WALKTHROUGH` that wins at full score.
+
+Five slices later, AC4 is a complete, winnable game (`python -m
+text_adventure_games.adventures.action_castle_4 --walk` → 100/100), and three of
+its slices left the *engine* richer — vehicles, wearable slots, `contents_relation`
+— so the next port starts further ahead. That compounding is the whole point: each
+game you convert this way pays the one after it forward.
