@@ -4,6 +4,54 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-23 — AC4 playtest fixes: object aliases, the guard trap, guide finished
+
+A morning of playtest-driven fixes to AC4, plus finishing Frankie's conversion guide.
+
+### Finished the conversion guide
+Closed the remaining gaps now that AC4 is complete: added a §7 entry for the
+vehicle/mount feature (it was the headline of Slice 1 but never documented as a
+reusable feature), fixed a garbled posed-prompts "Used by" line, de-staled the
+"two ports"/"in progress" markers (three ports now; AC4 wins 100/100), and added a
+§7 "Object aliases" entry.
+
+### Small engine + AC4 fixes from the playtest
+- **Object aliases (engine):** a multi-word thing only matched text containing its
+  full name, so `examine cot` failed for "army cot". Added `Thing.add_alias()` +
+  parser matching + serialization; aliased the cot ("cot") and the coin purse
+  ("purse"). General, cheap, reusable.
+- **brush hair:** added the missing BRUSH HAIR action (it errored before); matched
+  the rulebook's deliberately-anticlimactic flavor.
+- **Boots double-message:** the boots' wear_text and the score line both said "you
+  can actually walk"; reworded the score line.
+
+### The big one: the tower escape was wrong (read the source!)
+Both I *and* CCB believed the tower had two winning escapes (sneak out the front
+through the guardroom, or rope out the window). A playtest question -- "isn't the
+guard supposed to catch me?" -- sent me to the actual AC4 rulebook PDF (pages 4-7).
+The front gate is a **trap**: GUARDROOM → WEST runs you into the guard, who marches
+you back upstairs and **locks the door**; with no dagger to cut your hair, that's
+the "nineteen years" ending. The **only** real escape is the window.
+
+Fixes:
+- Removed the fabricated Tower-Stairs west exit + its GuardBlock (Tower Stairs has
+  only DOWN + ENTER, per the book -- CCB caught this first).
+- Per CCB's call, modeled the guard as a **trigger on arriving at the Drawbridge**
+  (the guard waiting at the bridge), not a block: it relocates you to the Tower and
+  locks the door, unless you've genuinely escaped via the window (an `escaped` flag
+  set on reaching the Gardens, the one window-only room).
+- Made GUARDROOM → WEST one-way ("returning to the castle is out of the question").
+- Added the locked-door block on the Tower's OUT exit and the trapped-forever death.
+- Rewrote WALKTHROUGH_WIN to the window route (still 100/100); fixed all the Slice-4
+  tests that had piggybacked on the bogus west shortcut (a shared ESCAPE_TO_GARDENS
+  helper now); added guard/lock/trapped tests.
+
+Updated the guide's Intervention 6 to tell this story straight -- a confident shared
+assumption is still an assumption; the rulebook page is the only authority. 723
+tests green.
+
+---
+
 ## 2026-06-22 — Action Castle III (Phases 3–5), crafting, item stacks
 
 (Continues the 6-21 AC3 analysis + Phases 1-2 logged in the day below.)

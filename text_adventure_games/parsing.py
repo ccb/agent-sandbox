@@ -477,12 +477,13 @@ class Parser:
         """
         matched_items = {}
         for item_name in item_dict:
-            # if this item is in the command, or in the hint then it matches
-            if item_name in command:
-                item = item_dict[item_name]
+            item = item_dict[item_name]
+            # the item matches if its name -- or any registered alias ("cot" for
+            # "army cot") -- appears in the command, or it matches the hint
+            names = [item_name, *getattr(item, "aliases", ())]
+            if any(n in command for n in names):
                 matched_items[item_name] = item
             if hint and (item_name in hint or hint in item_name):
-                item = item_dict[item_name]
                 matched_items[item_name] = item
 
         if len(matched_items) == 0:
