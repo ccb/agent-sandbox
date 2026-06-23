@@ -158,6 +158,12 @@ def test_wearing_glasses_blinds_you():
     assert not game._glasses_on()
 
 
+def test_wear_command_itself_emits_the_blur_gag():
+    # Page 78's joke lands on WEAR, not only on the next LOOK.
+    _, cap = _play(["get glasses", "wear glasses"])
+    assert _said(cap, "blurry and indistinct")
+
+
 # --- the combination lock --------------------------------------------------
 
 
