@@ -502,6 +502,9 @@ def build_game() -> BlackboardJungle:
         "The bedazzled cat-eye glasses aren't really your style.",
     )
     glasses.set_property("wearable", True)
+    # Page 78's signature gag fires on WEAR itself; Wear prints wear_text if set,
+    # so the joke lands on the command instead of waiting for the next LOOK.
+    glasses.set_property("wear_text", BlackboardJungle._BLUR)
     glasses.add_command_hint("wear glasses")
     glasses.add_command_hint("give glasses to librarian")
     case.add_item(glasses)
