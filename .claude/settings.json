@@ -8,6 +8,10 @@
       "Bash(git diff --stat *)"
     ]
   },
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": true,
+    "github@claude-plugins-official": true
+  },
   "hooks": {
     "PostToolUse": [
       {
