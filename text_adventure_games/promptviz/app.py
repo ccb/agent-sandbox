@@ -178,14 +178,19 @@ def create_app(chains: list[ChainSpec], runlog_path: str | None = None) -> Flask
 
 
 def _collect_specs(args: argparse.Namespace) -> list[ChainSpec]:
-    """Resolve chain specs from CLI args, defaulting to the bundled chains/ dir."""
+    """Resolve chain specs from CLI args.
+
+    The bundled chains/ are always loaded (so an app's own ``--spec`` shows up
+    *alongside* Action Castle in the dropdown -- the cross-both case) unless
+    ``--no-bundled`` is passed. ``--spec`` / ``--chains-dir`` add to them.
+    """
     paths: list[Path] = []
+    if not args.no_bundled:
+        paths.extend(sorted(_CHAINS_DIR.glob("*.yaml")))
     for s in args.spec or []:
         paths.append(Path(s))
     if args.chains_dir:
         paths.extend(sorted(Path(args.chains_dir).glob("*.yaml")))
-    if not paths:
-        paths.extend(sorted(_CHAINS_DIR.glob("*.yaml")))
 
     specs, seen = [], set()
     for p in paths:
@@ -206,9 +211,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--spec",
         action="append",
-        help="path to a chain-spec YAML (repeatable); defaults to the bundled chains/",
+        help="path to a chain-spec YAML (repeatable); added alongside the bundled chains",
     )
     parser.add_argument("--chains-dir", help="directory of chain-spec YAML files")
+    parser.add_argument(
+        "--no-bundled",
+        action="store_true",
+        help="don't load the bundled chains/ (show only --spec / --chains-dir)",
+    )
     parser.add_argument(
         "--runlog",
         help="RunLog JSONL from a mock run to overlay (best with log_prompts=True)",
