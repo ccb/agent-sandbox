@@ -27,10 +27,11 @@ from text_adventure_games import games, things, actions
 from text_adventure_games.things.characters import Goal, GoalType
 from text_adventure_games.npc import make_hybrid_behavior
 
-# Nights of rising corruption before the cult can complete the ritual. Tuned so
-# the cult reaches the crypt and crosses the threshold at about the same time —
-# the player has a handful of turns to gather evidence and stop them.
-RITUAL_THRESHOLD = 5
+# Nights of rising corruption before the cult can complete the ritual. The cult
+# reaches the crypt in ~2 turns then waits for the veil to thin; this window is
+# tuned so a focused player (gather two clues -> reach the crypt -> expose) can
+# beat them with a turn or two to spare, while idling loses the city.
+RITUAL_THRESHOLD = 8
 # Clues Klein must gather before he can expose the cult at the crypt.
 CLUES_TO_EXPOSE = 2
 
@@ -288,6 +289,11 @@ def build_game(llm_client=None, embedding_client=None) -> Tingen:
     eel.set_property(
         "clue_text",
         "a terrified witness who saw robed figures carry someone toward Selena's.",
+    )
+    cathedral.set_property("has_clue", True)
+    cathedral.set_property(
+        "clue_text",
+        "candle wax, chalk sigils, and a trapdoor to the crypt behind the altar.",
     )
 
     # --- The player: Klein ---
