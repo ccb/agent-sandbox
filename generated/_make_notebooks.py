@@ -5,10 +5,10 @@ notebook is the same shape: load the module by file path, describe the opening
 room, play the winning walkthrough turn-by-turn, report the final score, then
 leave a ``do("...")`` helper for free play. Run from anywhere:
 
-    uv run python test_gen/_make_notebooks.py
+    uv run python generated/_make_notebooks.py
 
-Covers the hand-ported Parsely games under ``test_gen/`` and the Action Castle
-sequels (AC2, AC3) under ``text_adventure_games/adventures/``. The AC1 notebook
+Covers the hand-ported Parsely games under ``generated/`` and the Action Castle
+sequels (AC2–AC4) under ``text_adventure_games/adventures/``. The AC1 notebook
 in ``notebooks/hw1_solution/`` is hand-written and is intentionally left alone.
 """
 
@@ -20,7 +20,7 @@ from pathlib import Path
 import nbformat as nbf
 
 ROOT = Path(__file__).resolve().parent.parent
-TEST_GEN = ROOT / "test_gen"
+GENERATED = ROOT / "generated"
 ADVENTURES = ROOT / "text_adventure_games" / "adventures"
 
 
@@ -62,13 +62,13 @@ def _specs() -> list[dict]:
         "spooky_manor",
         "z_ward",
     ]:
-        py = TEST_GEN / slug / f"{slug}.py"
+        py = GENERATED / slug / f"{slug}.py"
         specs.append(
             {
                 "title": title_of(slug),
                 "blurb": docstring_blurb(py, ("Authored the way",)),
                 "py": py,
-                "out": TEST_GEN / slug / f"{slug}.ipynb",
+                "out": GENERATED / slug / f"{slug}.ipynb",
                 "walkthrough": "WALKTHROUGH",
             }
         )
@@ -106,6 +106,22 @@ def _specs() -> list[dict]:
             "py": ADVENTURES / "action_castle_3.py",
             "out": ADVENTURES / "action_castle_3.ipynb",
             "walkthrough": "WALKTHROUGH",
+        }
+    )
+    specs.append(
+        {
+            "title": "Action Castle IV — Escape from Action Castle",
+            "blurb": (
+                "The fourth Action Castle, ported from Parsely — a road-trip. The "
+                "Princess escapes her tower (cut hair → braid a rope → climb out "
+                "the window) and rides off through the woods, a ranch, and a biker "
+                "bar. There are two winning endings: settle as a rancher (+40) or "
+                "ride off down the highway (+50). This walkthrough takes the "
+                "highway for a perfect 100/100."
+            ),
+            "py": ADVENTURES / "action_castle_4.py",
+            "out": ADVENTURES / "action_castle_4.ipynb",
+            "walkthrough": "WALKTHROUGH_WIN",
         }
     )
     return specs
