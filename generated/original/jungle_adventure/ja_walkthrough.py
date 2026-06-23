@@ -17,59 +17,59 @@ import importlib.util
 from pathlib import Path
 
 WALKTHROUGH = [
-    'unbuckle seatbelt',
-    'get backpack',
-    'wear backpack',
-    'get lighter',
-    'get compass',
-    'out',
-    'search wreckage',
-    'get rifle',
-    'jungle',
-    'south',
-    'enter warriors hut',
-    'give rifle to warriors',
-    'get spear',
-    'exit warriors hut',
-    'enter womens hut',
-    'get skirt',
-    'exit womens hut',
-    'west',
-    'search nest',
-    'get egg',
-    'west',
-    'cave',
-    'get fang',
-    'get bones',
-    'out',
-    'east',
-    'east',
-    'enter witch doctors hut',
-    'give fang to witch doctor',
-    'get necklace',
-    'wear necklace',
-    'exit witch doctors hut',
-    'cook egg',
-    'north',
-    'east',
-    'east',
-    'north',
-    'use lighter on bush',
-    'south',
-    'south',
-    'put bones on altar',
-    'south',
-    'give egg to monkey',
-    'get skull',
-    'north',
-    'north',
-    'north',
-    'wait for helicopter',
-    'enter helicopter',
+    "unbuckle seatbelt",
+    "get backpack",
+    "wear backpack",
+    "get lighter",
+    "get compass",
+    "out",
+    "search wreckage",
+    "get rifle",
+    "jungle",
+    "south",
+    "enter warriors hut",
+    "give rifle to warriors",
+    "get spear",
+    "exit warriors hut",
+    "enter womens hut",
+    "get skirt",
+    "exit womens hut",
+    "west",
+    "search nest",
+    "get egg",
+    "west",
+    "cave",
+    "get fang",
+    "get bones",
+    "out",
+    "east",
+    "east",
+    "enter witch doctors hut",
+    "give fang to witch doctor",
+    "get necklace",
+    "wear necklace",
+    "exit witch doctors hut",
+    "cook egg",
+    "north",
+    "east",
+    "east",
+    "north",
+    "use lighter on bush",
+    "south",
+    "south",
+    "put bones on altar",
+    "south",
+    "give egg to monkey",
+    "get skull",
+    "north",
+    "north",
+    "north",
+    "wait for helicopter",
+    "enter helicopter",
 ]
 EXPECTS_WIN = True
-MODULE_FILENAME = 'ja.py'
-MODULE_STEM = 'ja'
+MODULE_FILENAME = "ja.py"
+MODULE_STEM = "ja"
 
 
 def _load_game_module():
@@ -97,9 +97,9 @@ def run_walkthrough():
 def test_walkthrough_wins():
     game, results = run_walkthrough()
     if EXPECTS_WIN:
-        assert game.is_won() is True, (
-            f"walkthrough did not win; last command results: {results[-5:]}"
-        )
+        assert (
+            game.is_won() is True
+        ), f"walkthrough did not win; last command results: {results[-5:]}"
     else:
         assert not game.is_won(), "walkthrough unexpectedly won"
 

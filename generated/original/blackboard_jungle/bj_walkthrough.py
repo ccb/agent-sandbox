@@ -17,33 +17,33 @@ import importlib.util
 from pathlib import Path
 
 WALKTHROUGH = [
-    'get case',
-    'open case',
-    'get glasses',
-    'south',
-    'get bucket',
-    'get broom',
-    'north',
-    'east',
-    'use bucket on puddle',
-    'east',
-    'east',
-    'examine cubby',
-    'read book',
-    'give glasses to librarian',
-    'west',
-    'use combination 8-16-32',
-    'get homework',
-    'west',
-    'west',
-    'east',
-    'east',
-    'east',
-    'give homework to bushel',
+    "get case",
+    "open case",
+    "get glasses",
+    "south",
+    "get bucket",
+    "get broom",
+    "north",
+    "east",
+    "use bucket on puddle",
+    "east",
+    "east",
+    "examine cubby",
+    "read book",
+    "give glasses to librarian",
+    "west",
+    "use combination 8-16-32",
+    "get homework",
+    "west",
+    "west",
+    "east",
+    "east",
+    "east",
+    "give homework to bushel",
 ]
 EXPECTS_WIN = True
-MODULE_FILENAME = 'bj.py'
-MODULE_STEM = 'bj'
+MODULE_FILENAME = "bj.py"
+MODULE_STEM = "bj"
 
 
 def _load_game_module():
@@ -71,9 +71,9 @@ def run_walkthrough():
 def test_walkthrough_wins():
     game, results = run_walkthrough()
     if EXPECTS_WIN:
-        assert game.is_won() is True, (
-            f"walkthrough did not win; last command results: {results[-5:]}"
-        )
+        assert (
+            game.is_won() is True
+        ), f"walkthrough did not win; last command results: {results[-5:]}"
     else:
         assert not game.is_won(), "walkthrough unexpectedly won"
 
