@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Chain Visualizer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body
+    data-default-chain="{{ default_chain }}"
+    data-overlay-active="{{ 'true' if overlay_active else 'false' }}"
+  >
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo">⛓</span>
+        <span class="title">Prompt&nbsp;Chain&nbsp;Visualizer</span>
+      </div>
+      <div class="controls">
+        <label for="chain-select">chain</label>
+        <select id="chain-select" aria-label="chain"></select>
+      </div>
+      <div id="overlay-banner" class="overlay-banner" hidden></div>
+    </header>
+
+    <main id="layout">
+      <section id="graph-pane">
+        <div id="cy"></div>
+        <ul id="legend" aria-label="legend">
+          <li><span class="swatch k-start"></span>start</li>
+          <li><span class="swatch k-decision"></span>decision (LLM)</li>
+          <li><span class="swatch k-parse"></span>parse (LLM)</li>
+          <li><span class="swatch k-narrate"></span>narrate (LLM)</li>
+          <li><span class="swatch k-gate"></span>gate (no LLM)</li>
+          <li><span class="swatch fired-swatch"></span>fired in run</li>
+        </ul>
+      </section>
+
+      <aside id="panel" aria-live="polite">
+        <div id="panel-empty" class="panel-empty">
+          Click a node to read its prompt.
+        </div>
+        <div id="panel-body" hidden></div>
+      </aside>
+    </main>
+
+    <script src="{{ url_for('static', filename='vendor/cytoscape.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/dagre.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/cytoscape-dagre.js') }}"></script>
+    <script src="{{ url_for('static', filename='promptviz.js') }}"></script>
+  </body>
+</html>

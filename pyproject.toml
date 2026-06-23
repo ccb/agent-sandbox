@@ -96,3 +96,13 @@ include = ["text_adventure_games*"]
 # tree, so this only matters for a real wheel build.)
 [tool.setuptools.package-data]
 "text_adventure_games.prompt_templates" = ["*.prompty"]
+# The prompt-chain visualizer (promptviz) ships chain specs + its web assets
+# (templates, CSS/JS, and the vendored Cytoscape/dagre libs) as data files, for
+# the same reason as above: a built wheel would otherwise omit them.
+"text_adventure_games.promptviz" = [
+    "chains/*.yaml",
+    "webapp/templates/*.html",
+    "webapp/static/*.css",
+    "webapp/static/*.js",
+    "webapp/static/vendor/*.js",
+]

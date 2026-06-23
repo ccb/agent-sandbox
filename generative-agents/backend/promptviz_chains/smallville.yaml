@@ -1,0 +1,84 @@
+# Prompt-chain spec for the generative-agents (Smallville) app.
+#
+# Run the visualizer from the generative-agents/ directory so `backend` imports:
+#
+#   cd generative-agents
+#   python -m text_adventure_games.promptviz.app \
+#     --spec backend/promptviz_chains/smallville.yaml
+#
+# IMPORTANT: unlike the engine's Action Castle chain, the .prompty files here are
+# agent-generated MEMORY / BELIEF content, not model prompts -- the Smallville
+# decision currently runs on a deterministic mock brain that ignores prompts. So
+# this diagram is a persona's *memory lifecycle*, with the `decide` node marking
+# where a real decision prompt will plug in once gen-agents uses a live LLM.
+name: smallville
+description: >-
+  A Smallville persona's day: beliefs and a plan are seeded into memory at t=0,
+  then each step the persona perceives, retrieves memories, decides (mock today),
+  and records a reflection. Green boxes are .prompty templates -- but here they
+  hold memory/belief content, not model prompts.
+templates: backend.prompt_templates
+
+nodes:
+  - id: day_start
+    label: Day start (t=0)
+    kind: start
+    description: >-
+      Simulation bootstrap. Before the step loop, each persona is seeded with
+      what it knows and what it intends to do today.
+
+  - id: seed_knowledge
+    label: Seed spatial knowledge
+    kind: narrate
+    template: spatial_knowledge
+    description: >-
+      seed.seed_spatial_knowledge() -- each place a persona knows up front becomes
+      a Belief in its Knowledge, shown in later observations.
+
+  - id: seed_plan
+    label: Seed day plan
+    kind: narrate
+    template: plan_memory
+    description: >-
+      smallville_agents.attach_agents() -- the day's PLAN memory (destination +
+      activity), seeded at t=0 as the persona's own private intent.
+
+  - id: perceive
+    label: Perceive
+    kind: gate
+    description: >-
+      memory.ingest_events() -- co-located world events become private
+      observations. No LLM call (the ReAct "Observe" step).
+
+  - id: retrieve
+    label: Retrieve memories
+    kind: gate
+    description: >-
+      memory.retrieve() -- scores the memory stream by recency / importance /
+      relevance and returns the top-k. No LLM call.
+
+  - id: decide
+    label: Decide
+    kind: decision
+    description: >-
+      agent.decide() -- chooses travel/perform. Today a deterministic mock brain
+      (SmallvilleMockClient) reads the destination from the observation and
+      ignores prompts; wire a real client and set this node's `template` to show
+      the live decision prompt.
+
+  - id: reflect
+    label: Reflect (remember)
+    kind: narrate
+    template: reflection
+    description: >-
+      smallville_agents.remember_outcome() -- the persona's own successful action,
+      recorded as a first-person observation memory.
+
+edges:
+  - { from: day_start, to: seed_knowledge, label: seed beliefs }
+  - { from: seed_knowledge, to: seed_plan, label: then the plan }
+  - { from: seed_plan, to: perceive, label: begin step loop }
+  - { from: perceive, to: retrieve, label: observe }
+  - { from: retrieve, to: decide, label: top-k memories }
+  - { from: decide, to: reflect, label: act, then remember }
+  - { from: reflect, to: perceive, label: next step }
