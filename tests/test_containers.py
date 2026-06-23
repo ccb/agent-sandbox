@@ -671,3 +671,19 @@ def test_default_holders_keep_their_phrasing():
     assert _said(cap, "It contains a gem")
     thing_actions.Examine(game, "examine table", actor=player)()
     assert _said(cap, "On it you see a candle")
+
+
+def test_item_aliases_match_in_the_parser():
+    game, room, player, cap = _capture_game()
+    cot = things.Item("army cot", "an army cot", "A grubby cot.")
+    cot.add_alias("cot")
+    room.add_item(cot)
+    thing_actions.Examine(game, "examine cot", actor=player)()  # alias, not full name
+    assert _said(cap, "A grubby cot.")
+
+
+def test_aliases_survive_serialization():
+    cot = things.Item("army cot", "an army cot")
+    cot.add_alias("cot")
+    restored = things.Item.from_primitive(cot.to_primitive())
+    assert "cot" in restored.aliases

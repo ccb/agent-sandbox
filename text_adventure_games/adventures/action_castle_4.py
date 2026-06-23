@@ -15,8 +15,8 @@ PORTED IN SLICES (this is the worked example in docs/converting-parsely-games.md
   * Slice 1 (engine): a reusable vehicle/mount feature (the horse + motorcycle ride on it).
   * Slice 2: the world skeleton -- rooms, exits, items, characters, start state
     (the princess wears a gown + tiara), the vehicle-gated woods exit, and the ending stubs.
-  * Slice 3: the full-fidelity tower escape (the guardroom sneak route + the cut-hair/
-    braid-rope/climb-out window route; the guard-catch and KILL SELF dead-ends).
+  * Slice 3: the full-fidelity tower escape (cut hair -> braid a rope -> climb out the
+    window; the front gate is a guard trap that re-locks you, and KILL SELF is a clue).
   * Slice 4: the horse (tame with apple/brush, then ride) + the poacher/deer confrontation.
   * Slice 5: the finale -- the ranch (GIVE HORSE -> a yes/no job offer), the roadhouse
     "Wade sent me" gate, the bar brawl (tray -> table four -> keys), the started motorcycle,
@@ -130,10 +130,12 @@ class ActionCastle4(games.Game):
 
 
 # ---------------------------------------------------------------------------
-# Tower escape (Slice 3). Two winning routes: sneak down through the Guardroom
-# (-> Drawbridge), or cut your hair, braid it into a rope, tie it off and climb
-# out the window (-> Gardens). MAKE ROPE / BRAID HAIR is a crafting recipe
-# (hair -> rope); CUT HAIR (with the dagger) and TIE ROPE are bespoke steps.
+# Tower escape (Slice 3). The one real way out is the window: cut your hair, braid
+# it into a rope, tie it to the door's iron ring and climb down (-> Gardens). The
+# front gate (Guardroom WEST -> the bridge) is a trap -- the guard marches you back
+# and locks the door, and without the dagger that's the "trapped forever" ending.
+# MAKE ROPE / BRAID HAIR is a crafting recipe (hair -> rope); CUT HAIR (with the
+# dagger) and TIE ROPE are bespoke steps.
 # ---------------------------------------------------------------------------
 
 
@@ -385,6 +387,41 @@ class BrushHorse(_TameHorse):
         )
 
 
+class BrushHair(actions.Action):
+    """Brush your own (absurdly long) hair -- pure flavor, but it nudges you
+    toward the idea that all this hair might be good for something."""
+
+    ACTION_NAME = "brush hair"
+    ACTION_DESCRIPTION = "Brush your own hair with the hairbrush"
+    ACTION_ALIASES = [
+        "brush my hair",
+        "brush your hair",
+        "brush the hair",
+        "comb hair",
+        "comb my hair",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if not _is_holding(self.player, "hairbrush"):
+            self.parser.fail("You'll need a hairbrush for that.")
+            return False
+        if self.player.get_property("hair_cut"):
+            self.parser.fail("What's left of your hair hardly needs brushing now.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.set_property("hair_brushed", True)
+        self.parser.ok(
+            "You spend about two hours brushing out your impossibly long hair. "
+            "Well -- that was productive."
+        )
+
+
 # ---------------------------------------------------------------------------
 # The poacher + the deer (Slice 4b). Ride after the deer into the Deep Woods,
 # where a poacher has it in his sights. SHOOT POACHER (with the crossbow) saves
@@ -468,6 +505,7 @@ class ShootPoacher(actions.Action):
             "a small coin purse",
             "A few silver coins, each stamped with your father's face.",
         ).make_container()
+        purse.add_alias("purse")
         purse.add_item(_item("silver coins", "silver coins").make_stackable(3))
         cloak = _item(
             "cloak", "a stained cloak", "The poacher's stained traveling cloak."
@@ -922,7 +960,11 @@ def build_game() -> ActionCastle4:
     _one_way(tower, "down", gardens)  # climbing out the window on the hair rope
     _one_way(tower_stairs, "enter", tower)
     tower_stairs.add_connection("down", guardroom)  # auto: guardroom up -> stairs
-    guardroom.add_connection("west", drawbridge)  # auto: drawbridge east -> guardroom
+    # WEST out of the castle is one-way -- "returning to the castle is out of the
+    # question" (rulebook p9) -- and the guard is waiting at the bridge (trigger
+    # below): a break for it gets you marched back upstairs unless you've already
+    # slipped out the tower window.
+    _one_way(guardroom, "west", drawbridge)
     # Gardens / river
     gardens.add_connection("south", drawbridge)  # auto: drawbridge north -> gardens
     drawbridge.add_connection("south", river)  # auto: river north -> drawbridge
@@ -962,8 +1004,9 @@ def build_game() -> ActionCastle4:
     )
 
     # Tower escape gates. The window route (Tower down -> Gardens) needs the hair
-    # rope tied off; trying to bolt west off the stairs runs you into the guard
-    # (avoidable -- just don't go that way).
+    # rope tied off. The door route (OUT -> Tower Stairs) is open until the guard
+    # marches you back and locks it (see the guard trigger below); once locked,
+    # the only way out is the window -- and only if you grabbed the dagger first.
     class RopeBlock(blocks.Block):
         def __init__(self, tower):
             super().__init__(
@@ -976,19 +1019,19 @@ def build_game() -> ActionCastle4:
 
     tower.add_block("down", RopeBlock(tower))
 
-    class GuardBlock(blocks.Block):
-        def __init__(self):
+    class LockedDoorBlock(blocks.Block):
+        def __init__(self, tower):
             super().__init__(
-                "The guard",
-                "You make a break for it, but run smack into the tower's guard. "
-                '"Back to your chambers!" He turns you around. (Best not go this way.)',
+                "The door is locked",
+                "You grab the iron ring and pull, but the guard has locked the door "
+                "from the outside. The window is your only way out now.",
             )
+            self.tower = tower
 
         def is_blocked(self) -> bool:
-            return True
+            return bool(self.tower.get_property("door_locked"))
 
-    _one_way(tower_stairs, "west", drawbridge)  # the "break for it" the guard foils
-    tower_stairs.add_block("west", GuardBlock())
+    tower.add_block("out", LockedDoorBlock(tower))
 
     # You must get off the horse to squeeze into the warden's shack.
     class DismountBlock(blocks.Block):
@@ -1122,6 +1165,7 @@ def build_game() -> ActionCastle4:
     cot = _fixture(
         "army cot", "an army cot", "A grubby army cot with a stained mattress."
     )
+    cot.add_alias("cot")  # so "examine cot" works, not just "examine army cot"
     cot.make_container()
     cot.set_property("contents_relation", "Under the stained mattress you see")
     footlocker = _fixture("footlocker", "a footlocker", "The guard's footlocker.")
@@ -1277,6 +1321,7 @@ def build_game() -> ActionCastle4:
         EatApple,
         GiveAppleToHorse,
         BrushHorse,
+        BrushHair,
         FollowDeer,
         ShootPoacher,
         GiveHorseToRancher,
@@ -1319,17 +1364,69 @@ def build_game() -> ActionCastle4:
     game.add_trigger(
         "score_boots",
         lambda g: "boots" in g.player.worn and "boots" not in g._scored_keys,
-        lambda g: g.award(
-            "boots", 5, "Laced into the army boots, you can actually walk."
-        ),
+        lambda g: g.award("boots", 5, "Properly shod for the road ahead."),
+        repeatable=True,
+    )
+    # You've genuinely escaped only by climbing out the window into the Gardens
+    # (the one room reachable solely via the rope). Marking it here lets the
+    # guard trigger tell a real escape from a doomed break for the front gate.
+    game.add_trigger(
+        "mark_escaped",
+        lambda g: g.player.location is gardens and not g.player.get_property("escaped"),
+        lambda g: g.player.set_property("escaped", True),
         repeatable=True,
     )
     game.add_trigger(
         "score_escape",
-        lambda g: g.player.location is not None
-        and g.player.location.name in ("Gardens", "Drawbridge")
-        and "escape" not in g._scored_keys,
+        lambda g: g.player.get_property("escaped") and "escape" not in g._scored_keys,
         lambda g: g.award("escape", 5, "You're free of that blasted tower!"),
+        repeatable=True,
+    )
+
+    # The guard is waiting at the bridge. Bolt out the front (Guardroom WEST ->
+    # Drawbridge) without having slipped out the window and he marches you back
+    # upstairs and locks the door behind you (rulebook p7). If you never grabbed
+    # the dagger, that lock is fatal -- see the trapped-forever trigger.
+    def _guard_catches(g):
+        g.parser.ok(
+            "You make a break for it across the bridge -- and run smack into the "
+            "tower's guard. \"Hey! What are you doing sneaking around? Back to your "
+            "chambers at once!\" You're marched upstairs, and the door locks behind you."
+        )
+        tower.set_property("door_locked", True)
+        _relocate(g, g.player, "Tower")
+
+    game.add_trigger(
+        "guard_catches_at_bridge",
+        lambda g: g.player.location is drawbridge
+        and not g.player.get_property("escaped"),
+        _guard_catches,
+        repeatable=True,
+    )
+
+    # Locked back in the tower with no way to cut your hair = the "nineteen years"
+    # ending (rulebook p5): no dagger, no hair, no rope means no window escape.
+    def _has_escape_means(g):
+        held = _all_held(g.player)
+        return (
+            _is_holding(g.player, "dagger")
+            or g.player.get_property("hair_cut")
+            or "hair" in held
+            or "rope" in held
+        )
+
+    game.add_trigger(
+        "trapped_forever",
+        lambda g: tower.get_property("door_locked")
+        and g.player.location is tower
+        and not g.player.get_property("escaped")
+        and not _has_escape_means(g),
+        lambda g: _die(
+            g,
+            "The door is locked and you've nothing to cut your hair with. Someday your "
+            "prince may come, you tell yourself -- and you spend the next nineteen "
+            "years brushing your hair. THE END.",
+        ),
         repeatable=True,
     )
     deep_woods = game.locations["Deep Woods"]
@@ -1436,17 +1533,24 @@ def build_game() -> ActionCastle4:
 # ---------------------------------------------------------------------------
 
 WALKTHROUGH_WIN = [
-    # Escape the tower by the guardroom (sneak route), in the army boots.
+    # Grab the dagger + boots from the guardroom -- but the front gate is a trap
+    # (the guard marches you back), so escape out the tower window on a hair rope.
     "out",  # Tower -> Tower Stairs
     "down",  # -> Guardroom              (+5 guardroom)
+    "open footlocker",
+    "take dagger",  # needed to cut your hair (and to avoid being trapped)
     "examine army cot",  # reveals the boots under the mattress
     "take boots",
     "wear boots",  # (+5 boots)
-    "west",  # -> Drawbridge             (+5 escape)
-    # Fetch an apple from the gardens and tame the skittish mare with it.
-    "north",  # -> Gardens
+    "up",  # -> Tower Stairs
+    "enter",  # -> Tower
+    "cut hair",  # the dagger shears off your hair
+    "make rope",  # crafting: hair -> rope
+    "tie rope",  # tie it to the door's iron ring
+    "down",  # climb out the window -> Gardens   (+5 escape)
+    # Tame the skittish mare with an apple from the gardens.
     "pick apple",
-    "south",  # -> Drawbridge
+    "south",  # -> Drawbridge (the guard ignores you now -- you're already out)
     "south",  # -> Down by the River
     "give apple to horse",  # tames the mare
     "get on horse",  # (+5 horse)
