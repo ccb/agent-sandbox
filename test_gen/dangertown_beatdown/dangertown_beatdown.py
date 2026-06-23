@@ -158,7 +158,9 @@ def _verb(
 
     class _V(actions.Action):
         ACTION_NAME = name
-        ACTION_DESCRIPTION = description or name.capitalize()
+        # Leave the description empty unless given one -- echoing the command
+        # name back as its own "description" just clutters the HELP list.
+        ACTION_DESCRIPTION = description or ""
         ACTION_ALIASES = list(aliases or [])
 
         def __init__(self, game, command, actor=None):
@@ -239,7 +241,12 @@ class DangertownBeatdown(games.Game):
         self.thumb_scanned = False
         self.boss_searched = False
         self.arrested_boss = False
-        self.keys_granted = False
+        # "search X" reveals loot on the floor (you then TAKE it); these guard
+        # against re-searching the same body.
+        self.man_searched = False
+        self.goon_searched = False
+        self.rocco_searched = False
+        self.box_taken = False
         # references resolved in build_game()
         self.slade = None
         self.jetta = None
@@ -442,24 +449,36 @@ GiveObrienDonuts = actions.use_item_on(
 
 def _use_key_on_porsche(action):
     """Unlock the Porsche, load Slade into the passenger seat, and climb in --
-    you're now driving it (riding). If you slashed the tires earlier, the getaway
-    is doomed and Slade bleeds out (page 105)."""
+    you're now driving it (riding). Unlocking also flips the car to a ready
+    vehicle, so PARK / GET ON work on it afterward like any ride. If you slashed
+    the tires earlier, the getaway is doomed and Slade bleeds out (page 105)."""
     g = action.game
+    porsche = action.target  # the matched Porsche item
     if g.tires_slashed:
         g.end_in_death(
             "The tires you slashed are flat -- the car isn't going anywhere. "
             "Slade bleeds out before help arrives. THE END."
         )
         return
-    porsche = g.locations["Harbor View"].items.get("porsche")
-    if porsche is not None:
-        porsche.set_property("is_locked", False)
-    g.slade_aboard = True
+    porsche.set_property("is_locked", False)
+    porsche.set_property("vehicle_ready", True)
     action.character.riding = porsche
+    if g.slade_saved:
+        # Slade's already at the hospital -- this is just getting back behind
+        # the wheel.
+        g.parser.ok("You slide back into the driver's seat of the Porsche.")
+        return
+    if g.slade_aboard:
+        g.parser.ok(
+            "You're already behind the wheel, Slade slumped beside you. "
+            "(CALL 911, then DRIVE TO DOWNTOWN.)"
+        )
+        return
+    g.slade_aboard = True
     g._save_deadline = g.turn + DangertownBeatdown._SAVE_SLADE_DEADLINE
     g.parser.ok(
         "You unlock the car and manage to get Slade into the passenger seat. "
-        "There's a car phone here. (CALL 911, then DRIVE DOWNTOWN.)"
+        "There's a car phone here. (CALL 911, then DRIVE TO DOWNTOWN.)"
     )
 
 
@@ -562,7 +581,34 @@ SayYes = _verb(
     "say yes",
     requires=lambda a: None if _man_here(a) else "There's no offer on the table.",
     effect=_say_yes,
-    aliases=["take the bribe", "accept the bribe", "take envelope", "take the cash"],
+    aliases=["take the bribe", "accept the bribe"],
+)
+
+
+def _take_envelope(a):
+    """TAKE ENVELOPE/CASH (page 89-90). Before the fight it's the bribe prompt;
+    after you've knocked Rocco out it's blood money you leave behind."""
+    g = a.game
+    if g.rocco_ko:
+        g.parser.ok(
+            "It's tempting, but it's blood money. When this goon wakes up, he'll "
+            "take it back to his boss -- a clear message that you can't be bought. "
+            "You leave it."
+        )
+    else:
+        g.parser.ok("That's about six months' pay. Are you sure? (SAY YES or SAY NO.)")
+
+
+TakeEnvelope = _verb(
+    "take envelope",
+    room="Apartment",
+    requires=lambda a: (
+        None
+        if (a.game.rocco_at_door or a.game.rocco_ko)
+        else "There's no envelope here."
+    ),
+    effect=_take_envelope,
+    aliases=["take the envelope", "take cash", "take the cash", "get envelope"],
 )
 
 
@@ -630,21 +676,26 @@ HitManWithBat = _verb(
 
 
 def _search_man(a):
+    """Turn out the KO'd gangster's pockets -- the loot lands on the floor for
+    you to TAKE (matchbook, and a wallet holding the $100 bill + license)."""
     g = a.game
-    player = a.character
+    room = a.character.location
     matchbook = things.Item(
         "matchbook",
         "a matchbook",
         'A snarling tiger logo above the name "TIGER\'z DEN."',
     )
+    matchbook.add_command_hint("get matchbook")
     matchbook.add_command_hint("give matchbook to cat")
-    player.add_to_inventory(matchbook)
+    room.add_item(matchbook)
     wallet = things.Item(
         "wallet",
         "a leather wallet",
         "It holds a $100 bill and a California driver's license.",
     )
     wallet.make_container()
+    wallet.set_property("contents_visible", True)
+    wallet.add_command_hint("get wallet")
     bill = things.Item(
         "$100 bill", "a crisp $100 bill", "A hundred bucks of blood money."
     )
@@ -656,18 +707,26 @@ def _search_man(a):
     )
     wallet.add_item(bill)
     wallet.add_item(license_)
-    player.add_to_inventory(wallet)
+    room.add_item(wallet)
+    g.man_searched = True
 
 
 SearchMan = _verb(
     "search man",
     requires=lambda a: (
-        None
-        if a.game.rocco_ko and a.character.location.name == "Apartment"
-        else "There's no one to search."
+        "You already turned out his pockets."
+        if a.game.man_searched
+        else (
+            None
+            if a.game.rocco_ko and a.character.location.name == "Apartment"
+            else "There's no one to search."
+        )
     ),
     effect=_search_man,
-    success="You search his pockets: an empty matchbook and a wallet.",
+    success=(
+        "You search his pockets: an empty matchbook and a wallet fall to the "
+        "floor. (GET MATCHBOOK, GET WALLET.)"
+    ),
     aliases=["search the man", "search gangster", "search rocco", "frisk man"],
 )
 
@@ -831,6 +890,16 @@ FindBox = _verb(
 )
 
 
+TakeBox = _verb(
+    "take box",
+    room="Evidence Locker",
+    requires=lambda a: None if a.game.box_found else "You haven't found a box yet.",
+    effect=lambda a: None,
+    success="Carrying the entire box out would be too conspicuous. (TAKE AUDIOTAPE.)",
+    aliases=["take box #198x", "take the box", "take box 198x"],
+)
+
+
 def _take_audiotape(a):
     g = a.game
     tape = things.Item(
@@ -985,21 +1054,30 @@ AttackGoon = _verb(
 
 
 def _search_goon(a):
-    player = a.character
+    room = a.character.location
     candy = things.Item("candy bar", "a half-eaten candy bar", "Goon food.")
+    candy.add_command_hint("get candy bar")
     keys = things.Item(
         "porsche keys", "keys to a Porsche", "Keys to a white Porsche 911."
     )
+    keys.add_command_hint("get porsche keys")
     keys.add_command_hint("use key on porsche")
-    player.add_to_inventory(candy)
-    player.add_to_inventory(keys)
+    room.add_item(candy)
+    room.add_item(keys)
+    a.game.goon_searched = True
 
 
 SearchGoon = _verb(
     "search goon",
-    requires=lambda a: (None if a.game.goon_down else "Take him out first."),
+    requires=lambda a: (
+        "You already searched him."
+        if a.game.goon_searched
+        else (None if a.game.goon_down else "Take him out first.")
+    ),
     effect=_search_goon,
-    success="You find a half-eaten candy bar and keys to a Porsche.",
+    success=(
+        "You find a half-eaten candy bar and keys to a Porsche. " "(GET PORSCHE KEYS.)"
+    ),
     aliases=["search the goon", "frisk goon"],
 )
 
@@ -1184,7 +1262,9 @@ ScanThumb = _verb(
 
 def _search_rocco_elevator(a):
     colt = things.Item("colt .45", "a Colt .45 pistol", "Rocco's sidearm.")
-    a.character.add_to_inventory(colt)
+    colt.add_command_hint("get colt .45")
+    a.character.location.add_item(colt)
+    a.game.rocco_searched = True
 
 
 SearchRoccoElevator = _verb(
@@ -1192,15 +1272,15 @@ SearchRoccoElevator = _verb(
     room="Elevator",
     requires=lambda a: (
         None
-        if a.game.rocco_defeated and not _is_holding(a.character, "colt .45")
+        if a.game.rocco_defeated and not a.game.rocco_searched
         else (
             "You've already searched him."
-            if a.game.rocco_defeated
+            if a.game.rocco_searched
             else "Deal with him first."
         )
     ),
     effect=_search_rocco_elevator,
-    success="You find a Colt .45 pistol.",
+    success="You find a Colt .45 pistol. (GET COLT .45.)",
     aliases=["search rocco falcone", "frisk rocco"],
 )
 
@@ -1263,18 +1343,21 @@ TakeAttache = _verb(
 def _search_boss(a):
     g = a.game
     g.boss_searched = True
+    room = a.character.location
     tape = things.Item(
         "audiotape",
         "the stolen audiotape",
         "Evidence linking Boss D to your kidnapping.",
     )
+    tape.add_command_hint("get audiotape")
     revolver = things.Item(
         "s&w .38 special",
         "a pearl-handled S&W .38 Special",
         "Boss D's revolver -- now yours.",
     )
-    a.character.add_to_inventory(tape)
-    a.character.add_to_inventory(revolver)
+    revolver.add_command_hint("get .38 special")
+    room.add_item(tape)
+    room.add_item(revolver)
 
 
 SearchBossD = _verb(
@@ -1378,6 +1461,29 @@ ShootMayor = _verb(
     effect=lambda a: None,
     success="Although you feel the burning fires of revenge, they're not for this loser.",
     aliases=["shoot the mayor", "kill mayor"],
+)
+
+
+def _talk_to_chief(a):
+    g = a.game
+    if g.is_chang:
+        g.parser.ok(
+            "\"Detective Chang, consider yourself back on the case. Here's your "
+            "badge and gun. Now get the hell out of here and do what you gotta "
+            'do!" (GET BADGE, GET GUN.)'
+        )
+    else:
+        g.parser.ok(
+            '"Dammit, Slade! I thought I gave you a two-week suspension?! Now get '
+            'the hell out of my office before I make it a month!"'
+        )
+
+
+TalkToChief = _verb(
+    "talk to chief",
+    room="Chief's Office",
+    effect=_talk_to_chief,
+    aliases=["talk to the chief", "talk chief", "speak to chief"],
 )
 
 
@@ -1673,6 +1779,7 @@ def build_game() -> DangertownBeatdown:
     closet.set_property("gettable", False)
     closet.make_container()
     closet.set_property("is_closed", True)
+    closet.set_property("contents_visible", True)  # listed in LOOK once opened
     closet.add_command_hint("open closet")
     uniform = things.Item(
         "uniform", "a police dress uniform", 'The brass nameplate reads "J. SLADE."'
@@ -1682,9 +1789,24 @@ def build_game() -> DangertownBeatdown:
         "wear_text", "You wear your dress blues only for commendations and funerals."
     )
     jacket = things.Item(
-        "jacket", "a leather jacket", "Your keys jingle in the pocket."
+        "jacket",
+        "a leather jacket",
+        "Your apartment and motorcycle keys are in the pocket.",
     )
     jacket.set_property("wearable", True)
+    jacket.set_property(
+        "wear_text", "You put on the leather jacket. Your keys jingle in the pocket."
+    )
+    # The keys literally live in the jacket pocket (a small open container), so
+    # they come with the jacket and the held-scope helpers find them whether the
+    # jacket is carried or worn.
+    jacket.make_container()
+    jacket.set_property("contents_visible", True)
+    keys = things.Item(
+        "keys", "your keys", "The keys to your apartment and motorcycle."
+    )
+    keys.add_command_hint("get on motorcycle")
+    jacket.add_item(keys)
     jacket.add_command_hint("wear jacket")
     closet.add_item(uniform)
     closet.add_item(jacket)
@@ -1789,13 +1911,6 @@ def build_game() -> DangertownBeatdown:
     gun.add_command_hint("get gun")
     chiefs_office.add_item(badge)
     chiefs_office.add_item(gun)
-    scenery(
-        "chief",
-        "the police chief",
-        "He looks exactly how you picture him, but 25 percent meaner.",
-        chiefs_office,
-        ["talk to chief"],
-    )
 
     # Warehouse: the woman (Jetta) + Rocco + the attaché lives in the penthouse.
     scenery(
@@ -1943,6 +2058,18 @@ def build_game() -> DangertownBeatdown:
     penthouse.add_character(boss_d)
     penthouse.add_character(mayor)
 
+    chief = things.Character(
+        "chief",
+        "the police chief",
+        "He looks exactly how you picture him, but 25 percent meaner.",
+    )
+    # Static fallback line; TALK TO CHIEF (custom) branches Slade vs. Chang.
+    chief.talk_text = (
+        '"Dammit, Slade! I thought I gave you a two-week suspension?! '
+        'Now get the hell out of my office before I make it a month!"'
+    )
+    chiefs_office.add_character(chief)
+
     # --- Assemble ----------------------------------------------------------
     custom_actions = [
         # Act 1
@@ -1954,6 +2081,7 @@ def build_game() -> DangertownBeatdown:
         HitManWithKettle,
         HitManWithBat,
         SearchMan,
+        TakeEnvelope,
         TipDancers,
         GiveMatchbookToCat,
         UsePhone,
@@ -1964,12 +2092,14 @@ def build_game() -> DangertownBeatdown:
         DrinkCoffee,
         GiveObrienDonuts,
         FindBox,
+        TakeBox,
         TakeAudiotape,
         ReturnKeys,
         SlashTires,
         FindBay,
         FreeJettaChang,
         GiveTape,
+        TalkToChief,
         # Act 2
         AttackGoon,
         SearchGoon,
@@ -2008,6 +2138,7 @@ def build_game() -> DangertownBeatdown:
         knockout,
         boss_d,
         mayor,
+        chief,
     ]
     game = DangertownBeatdown(bedroom, slade, characters, custom_actions)
     game.slade = slade
@@ -2071,6 +2202,17 @@ def build_game() -> DangertownBeatdown:
             "You'll need someone to unlock it for you.",
         ),
     )
+    # Once Rocco kicks the apartment door in, he blocks the exit until you knock
+    # him out (page 89: "He kicks in the door and enters -- blocking the exit").
+    apartment.add_block(
+        "out",
+        FlagBlock(
+            game,
+            lambda g: not (g.rocco_at_door and not g.rocco_ko),
+            "The large man fills the doorway, baseball bat in hand. You're not "
+            "getting past him -- deal with him first.",
+        ),
+    )
     # The warehouse goons block the exit until you give Rocco the tape.
     warehouse.add_block(
         "out",
@@ -2082,23 +2224,6 @@ def build_game() -> DangertownBeatdown:
     )
 
     # --- Triggers ----------------------------------------------------------
-    # Wearing the leather jacket puts the keys in your pocket.
-    def _grant_keys(g):
-        keys = things.Item(
-            "keys", "your keys", "The keys to your apartment and motorcycle."
-        )
-        keys.add_command_hint("get on motorcycle")
-        g.player.add_to_inventory(keys)
-        g.keys_granted = True
-        g.parser.ok("Your keys jingle in the pocket.")
-
-    game.add_trigger(
-        "jacket_keys",
-        lambda g: ("jacket" in g.player.worn) and not g.keys_granted,
-        _grant_keys,
-        repeatable=True,
-    )
-
     # Refusing the bribe but failing to knock the gangster out -> bloody pulp.
     def _fight_death(g):
         if not g.fight_pending:
@@ -2210,7 +2335,9 @@ WALKTHROUGH = [
     "say no",  # +5 refuse_bribe; the fight
     "hit man with kettle",  # +5 kettle_ko; Rocco drops the bat
     "get bat",
-    "search man",  # matchbook + wallet ($100 bill, license)
+    "search man",  # spills matchbook + wallet onto the floor
+    "get matchbook",
+    "get wallet",  # holds the $100 bill + license
     "out",  # -> Southside
     "enter strip club",  # -> Strip Club
     "tip dancers",  # +5 tip; Cat Marco appears
@@ -2257,7 +2384,8 @@ WALKTHROUGH = [
     "give tape",  # shooting -> SWITCH to Jetta Chang
     # --- Act 2: Jetta Chang ------------------------------------------------
     "attack goon",  # +5 help_knockout
-    "search goon",  # candy bar + Porsche keys
+    "search goon",  # spills candy bar + Porsche keys onto the floor
+    "get porsche keys",
     "drag slade out",  # -> Harbor View; reveals the Porsche
     "use key on porsche",  # unlock + Slade aboard + drive
     "call 911",  # ambulance on the way
