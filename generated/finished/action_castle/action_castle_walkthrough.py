@@ -17,54 +17,54 @@ import importlib.util
 from pathlib import Path
 
 WALKTHROUGH = [
-    'get pole',
-    'out',
-    'pick rose',
-    'north',
-    'climb up tree',
-    'get branch',
-    'climb down tree',
-    'south',
-    'south',
-    'catch fish with pole',
-    'north',
-    'north',
-    'east',
-    'give fish to troll',
-    'east',
-    'attack guard with branch',
-    'get key',
-    'get sword',
-    'east',
-    'get candle',
-    'light candle',
-    'west',
-    'up',
-    'unlock door',
-    'up',
-    'give rose to princess',
-    'down',
-    'down',
-    'light lamp',
-    'down',
-    'down',
-    'read runes',
-    'get crown',
-    'up',
-    'up',
-    'up',
-    'up',
-    'give crown to princess',
-    'wear crown',
-    'down',
-    'down',
-    'east',
-    'east',
-    'sit on throne',
+    "get pole",
+    "out",
+    "pick rose",
+    "north",
+    "climb up tree",
+    "get branch",
+    "climb down tree",
+    "south",
+    "south",
+    "catch fish with pole",
+    "north",
+    "north",
+    "east",
+    "give fish to troll",
+    "east",
+    "attack guard with branch",
+    "get key",
+    "get sword",
+    "east",
+    "get candle",
+    "light candle",
+    "west",
+    "up",
+    "unlock door",
+    "up",
+    "give rose to princess",
+    "down",
+    "down",
+    "light lamp",
+    "down",
+    "down",
+    "read runes",
+    "get crown",
+    "up",
+    "up",
+    "up",
+    "up",
+    "give crown to princess",
+    "wear crown",
+    "down",
+    "down",
+    "east",
+    "east",
+    "sit on throne",
 ]
 EXPECTS_WIN = True
-MODULE_FILENAME = 'action_castle.py'
-MODULE_STEM = 'action_castle'
+MODULE_FILENAME = "action_castle.py"
+MODULE_STEM = "action_castle"
 
 
 def _load_game_module():
@@ -92,9 +92,9 @@ def run_walkthrough():
 def test_walkthrough_wins():
     game, results = run_walkthrough()
     if EXPECTS_WIN:
-        assert game.is_won() is True, (
-            f"walkthrough did not win; last command results: {results[-5:]}"
-        )
+        assert (
+            game.is_won() is True
+        ), f"walkthrough did not win; last command results: {results[-5:]}"
     else:
         assert not game.is_won(), "walkthrough unexpectedly won"
 
