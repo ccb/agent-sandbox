@@ -8,8 +8,13 @@ this is headed: the same auto-moving sprites are the substrate that LLM-driven a
 
 ## What's in the scene
 
-`scenes/main.tscn` puts four sprites on a grass-green background, each running
-`scripts/wanderer.gd`:
+`scenes/main.tscn` is a small top-down world built entirely from the pack's art:
+
+- a **tiled ground** (`scripts/ground.gd` on a `TileMapLayer`) — grass everywhere,
+  two crossing dirt paths, and a small pond with a proper shoreline;
+- a few **oak trees** for decoration, with `y_sort` enabled so characters pass in
+  front of / behind them correctly;
+- four **wandering characters** (`scripts/wanderer.gd`), each moving on its own:
 
 | Node     | Sheet                                  | What it does                     |
 |----------|----------------------------------------|----------------------------------|
@@ -18,14 +23,15 @@ this is headed: the same auto-moving sprites are the substrate that LLM-driven a
 | Pig      | `Cute_Fantasy_Free/Animals/Pig/Pig.png` | trots to random points          |
 | Slime    | `Cute_Fantasy_Free/Enemies/Slime_Green.png` | hops to random points       |
 
-Each one eases toward a random target, picks a new one on arrival, flips to face its
-direction of travel, and plays a walk/hop animation by stepping through one row of its
-sprite sheet.
+Each character eases toward a random target, picks a new one on arrival, flips to face
+its direction of travel, and plays a walk/hop animation by stepping through one row of
+its sprite sheet. (They wander the whole screen, including over the path and pond —
+there's no collision yet; that's a natural next step.)
 
-## How it works (the one script)
+## How it works (two small scripts)
 
-A sprite sheet is a grid of small frames. `wanderer.gd` hangs off a plain `Sprite2D`
-and is configured per-character in the scene via exported variables:
+**`wanderer.gd`** (on each character `Sprite2D`). A sprite sheet is a grid of small
+frames; the script is configured per-character in the scene via exported variables:
 
 - `sheet_hframes` / `sheet_vframes` — the sheet's grid (columns × rows)
 - `walk_row` / `walk_len` — which row is the walk cycle and how many frames it has
@@ -35,6 +41,13 @@ In `_ready()` it slices the sheet (`hframes`/`vframes`) and picks a first target
 `_process()` it moves, flips, and advances the animation frame. No `AnimationPlayer`
 or `SpriteFrames` resource — it's all a few lines of readable code, so it's easy to
 follow and easy to extend (e.g. replace `_pick_target()` with an agent's decision).
+
+**`ground.gd`** (on the `TileMapLayer`). It builds its `TileSet` in code from the
+pack's 16×16 tiles — grass and path are single fill tiles; the pond reuses the 3×3
+"water-in-grass" nine-slice (corners/edges/centre) from the `Water_Tile` sheet so its
+border blends into the grass. Then it just loops over `set_cell()` to lay down the
+grass, the crossing paths, and the pond. Building the set in code keeps everything in
+plain, readable GDScript with no binary tile data to hand-edit.
 
 ## Running it
 
