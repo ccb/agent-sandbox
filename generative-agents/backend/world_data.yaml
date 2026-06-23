@@ -3,52 +3,122 @@ personas:
   home: Isabella Rodriguez's apartment
   persona: I am Isabella Rodriguez, 34. I am friendly, outgoing, and hospitable. I own Hobbs Cafe and love making people feel
     welcome.
-  destination: Hobbs Cafe
-  activity: tending the cafe counter
   emoji: ☕
   start_tile:
   - 72
   - 14
+  schedule:
+  - place: Hobbs Cafe
+    activity: tending the cafe counter
+    emoji: ☕
+    steps: 220
+  - place: The Willows Market and Pharmacy
+    activity: buying fresh milk for the cafe
+    emoji: 🛒
+    steps: 150
+  - place: Hobbs Cafe
+    activity: chatting with the morning customers
+    emoji: 💬
+    steps: 200
+  - place: Johnson Park
+    activity: taking a quiet break on a bench
+    emoji: 🌳
 - name: Maria Lopez
   home: Dorm for Oak Hill College
   persona: I am Maria Lopez, 21. I am energetic, enthusiastic, and inquisitive. I study physics at Oak Hill College and spend
     most days studying at Hobbs Cafe.
-  destination: Hobbs Cafe
-  activity: studying at a cafe table
   emoji: 📚
   start_tile:
   - 123
   - 57
+  schedule:
+  - place: Hobbs Cafe
+    activity: studying at a cafe table
+    emoji: 📚
+    steps: 240
+  - place: Johnson Park
+    activity: walking to clear her head
+    emoji: 🚶
+    steps: 150
+  - place: Hobbs Cafe
+    activity: reviewing her physics notes
+    emoji: 📚
+    steps: 200
+  - place: Oak Hill College
+    activity: heading to an afternoon lecture
+    emoji: 🎓
 - name: Klaus Mueller
   home: Dorm for Oak Hill College
   persona: I am Klaus Mueller, 20. I am kind, inquisitive, and passionate. I study sociology at Oak Hill College and am writing
     a research paper in the college library.
-  destination: Oak Hill College
-  activity: writing a research paper
   emoji: ✍️
   start_tile:
   - 126
   - 46
+  schedule:
+  - place: Oak Hill College
+    activity: writing a research paper
+    emoji: ✍️
+    steps: 230
+  - place: Hobbs Cafe
+    activity: getting a coffee
+    emoji: ☕
+    steps: 150
+  - place: Oak Hill College
+    activity: reading sociology journals
+    emoji: 📑
+    steps: 200
+  - place: The Rose and Crown Pub
+    activity: meeting a friend for lunch
+    emoji: 🍻
 - name: Ayesha Khan
   home: Dorm for Oak Hill College
   persona: I am Ayesha Khan, 20. I am curious, determined, and independent. I study literature at Oak Hill College and research
     Shakespeare in the library.
-  destination: Oak Hill College
-  activity: studying in the library
   emoji: 📖
   start_tile:
   - 118
   - 61
+  schedule:
+  - place: Oak Hill College
+    activity: studying in the library
+    emoji: 📖
+    steps: 210
+  - place: Hobbs Cafe
+    activity: taking a coffee break
+    emoji: ☕
+    steps: 160
+  - place: Oak Hill College
+    activity: researching classic literature
+    emoji: 🎭
+    steps: 200
+  - place: Johnson Park
+    activity: reading under a tree
+    emoji: 🌳
 - name: Wolfgang Schulz
   home: Dorm for Oak Hill College
   persona: I am Wolfgang Schulz, 21. I am hardworking, passionate, and dedicated. I study chemistry at Oak Hill College and
     I am a student athlete who trains every morning.
-  destination: Johnson Park
-  activity: going for a morning run
   emoji: 🏃
   start_tile:
   - 107
   - 62
+  schedule:
+  - place: Johnson Park
+    activity: going for a morning run
+    emoji: 🏃
+    steps: 180
+  - place: Hobbs Cafe
+    activity: refueling with a big breakfast
+    emoji: 🍳
+    steps: 170
+  - place: Harvey Oak Supply Store
+    activity: buying new running shoes
+    emoji: 👟
+    steps: 150
+  - place: Oak Hill College
+    activity: heading to chemistry lab
+    emoji: ⚗️
 - name: Eddy Lin
   home: Lin family's house
   persona: I am Eddy Lin, 19. I am curious, analytical, and musical. I study music theory and composition at Oak Hill College.

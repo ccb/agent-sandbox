@@ -15,7 +15,7 @@ decision seam (``Agent.decide`` -> mock client) only at decision points:
 Run it (from the ``generative-agents`` directory; ``uv run`` finds the repo's
 project env that has the engine installed)::
 
-    uv run python -m backend.run_simulation            # 1 hour (360 steps)
+    uv run python -m backend.run_simulation            # 3 hours (1080 steps)
     uv run python -m backend.run_simulation --steps 120
     uv run python -m backend.run_simulation --start "2023-02-13 18:00:00"
     uv run python -m backend.run_simulation --sec-per-step 60   # 1 min/step
@@ -37,7 +37,13 @@ from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import PERSONAS, build_world
-from .smallville_agents import attach_agents, observe_and_decide, remember_outcome
+from .smallville_agents import (
+    attach_agents,
+    memories_for_frame,
+    memory_stream_for_persona,
+    observe_and_decide,
+    remember_outcome,
+)
 from .world_map import WorldMap
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,8 +58,10 @@ DEFAULT_STORAGE = os.path.join(_FRONTEND, "storage")
 DEFAULT_BASE_SIM = "base_the_ville_n25"
 DEFAULT_SIM_CODE = "mock_the_ville_n25"
 
-# 1 hour of in-game time at 10 seconds per step.
-DEFAULT_STEPS = 360
+# 3 hours of in-game time at 10 seconds per step (8-11am): long enough for each
+# agent to work through its daily schedule of stops, so memory keeps growing
+# across the run instead of freezing after the first activity.
+DEFAULT_STEPS = 1080
 # Start at 8am: the town is waking, the cafe opens, students head out -- a lively
 # hour. (The base sim starts at midnight, when everyone is asleep.)
 DEFAULT_START_DT = datetime.datetime(2023, 2, 13, 8, 0, 0)
@@ -114,6 +122,7 @@ def simulate(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
+    out_memories: dict | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -133,6 +142,13 @@ def simulate(
     known-places into knowledge (issue #79, via :func:`attach_agents`). Both are
     optional: tests call ``simulate`` without them and stay byte-identical, while
     a real run (:func:`main`) points them at ``frontend/``.
+
+    Pass an ``out_memories`` dict to also collect each agent's *full* memory
+    stream (``{persona_name: [memory dicts]}``) at the end of the run -- the
+    exporter writes it per persona so the State Details panel can show every
+    memory an agent formed, not just the few retrieved per step. It's an
+    out-parameter (not part of the return) so the many ``frames = simulate(...)``
+    callers and the determinism tests stay unchanged.
     """
     game, chars = build_world()
     attach_agents(
@@ -155,6 +171,14 @@ def simulate(
             "pron": emoji[char.name],
             "desc": f"waking up @ {char.location.tile_address}",
             "performing": False,
+            # The step at which the current activity is done and the agent should
+            # move on to its next scheduled stop (None = stay put indefinitely).
+            "perform_until": None,
+            # Latest reasoning + retrieved-memory block, surfaced on the replay's
+            # agent card. They update at each decision point and carry forward on
+            # the steps in between (like desc/pron), so the card is never blank.
+            "reasoning": "(waking up)",
+            "memories": [],
         }
 
     frames: list[dict] = []
@@ -169,6 +193,19 @@ def simulate(
             char = chars[name]
             st = state[name]
 
+            # Has the current activity run its course? Un-latch and point the brain
+            # at the next scheduled stop, so the agent becomes idle below and walks
+            # on. When the schedule is exhausted, just stop the timer and let it
+            # settle into this last activity for the rest of the run.
+            if (
+                st["performing"]
+                and st["perform_until"] is not None
+                and _step >= st["perform_until"]
+            ):
+                if char.agent.llm_client.advance():
+                    st["performing"] = False
+                st["perform_until"] = None
+
             # Decision point: idle and not yet settled into an activity.
             if not st["path"] and not st["performing"]:
                 # Attribute this LLM call to the persona and step (usage.py).
@@ -180,6 +217,16 @@ def simulate(
                 # The usage context above is set first so the decide() call
                 # inside observe_and_decide is attributed to this persona/step.
                 command = observe_and_decide(game, char, _step)
+                # Capture the thinking behind this decision for the replay card:
+                # the reasoning the agent produced and the memories it retrieved
+                # (stashed on the agent by observe_and_decide). They persist on
+                # st until the agent's next decision.
+                st["reasoning"] = (
+                    getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
+                )
+                st["memories"] = memories_for_frame(
+                    getattr(char.agent, "last_retrieved", None)
+                )
                 if command and game.parser.parse_command(command, actor=char):
                     remember_outcome(char, command, _step)
                     if command.startswith("travel"):
@@ -192,9 +239,17 @@ def simulate(
                         st["desc"] = f"walking to {dest.name} @ {address}"
                     elif command.startswith("perform"):
                         st["performing"] = True
-                        st["pron"] = emoji[name]
+                        # Per-stop emoji (the schedule may vary it from the
+                        # persona's default), falling back to the persona's.
+                        st["pron"] = char.agent.llm_client.emoji or emoji[name]
                         activity = char.get_property("activity") or "spending time"
                         st["desc"] = f"{activity} @ {char.location.tile_address}"
+                        # Schedule the move on to the next stop. None steps means
+                        # "stay" -- the agent settles here for the rest of the run.
+                        duration = char.agent.llm_client.steps
+                        st["perform_until"] = (
+                            _step + duration if duration is not None else None
+                        )
 
             # Advance one tile along any active walk.
             if st["path"]:
@@ -205,8 +260,18 @@ def simulate(
                 "pronunciatio": st["pron"],
                 "description": st["desc"],
                 "chat": None,
+                # Reasoning + retrieved memories for this agent's card (the
+                # exporter writes the frame verbatim, so these flow straight into
+                # movement/<step>.json for the replay to render).
+                "reasoning": st["reasoning"],
+                "memories": st["memories"],
             }
         frames.append(frame)
+
+    # Hand back each agent's complete memory stream, if the caller asked for it.
+    if out_memories is not None:
+        for name in order:
+            out_memories[name] = memory_stream_for_persona(chars[name].agent)
 
     return frames
 
@@ -238,7 +303,7 @@ def main() -> None:
         "--steps",
         type=int,
         default=DEFAULT_STEPS,
-        help="number of steps to simulate (default: %(default)s = 1 hour at 10s/step)",
+        help="number of steps to simulate (default: %(default)s = 3 hours at 10s/step)",
     )
     parser.add_argument(
         "--start",
@@ -338,6 +403,10 @@ def main() -> None:
     run_log = config.build_run_log(
         provider="mock", model="mock", turn_mode="simultaneous"
     )
+    # Collect every agent's full memory stream alongside the frames, so the
+    # exporter can give the State Details panel the complete history (not just
+    # the per-step retrieved set the cards show).
+    memory_streams: dict = {}
     with run_log or nullcontext():
         if run_log is not None:
             run_log.attach(ledger)
@@ -348,6 +417,7 @@ def main() -> None:
             embedding_client=embedding_client,
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
+            out_memories=memory_streams,
         )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     _print_cost_summary(ledger)
@@ -363,6 +433,7 @@ def main() -> None:
         start_tiles=start_tiles,
         base_personas_dir=base_personas,
         sec_per_step=args.sec_per_step,
+        memory_streams=memory_streams,
     )
     print(f"Wrote simulation to {sim_dir}")
     print(

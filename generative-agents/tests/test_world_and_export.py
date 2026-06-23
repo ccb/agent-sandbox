@@ -20,7 +20,12 @@ import os
 import pytest
 
 from backend import exporter
-from backend.build_world import PERSONAS, build_world
+from backend.build_world import (
+    _ALL_PERSONAS,
+    MAX_ACTIVE_PERSONAS,
+    PERSONAS,
+    build_world,
+)
 from backend.run_simulation import _print_cost_summary, simulate
 from backend.smallville_agents import attach_agents
 from backend.world_map import WorldMap
@@ -42,9 +47,11 @@ def world_map(tmp_path_factory):
 
 def test_build_world_places_cast_at_home():
     game, chars = build_world()
-    # The full 25-resident town is present.
-    assert len(PERSONAS) == 25
-    # Every persona is a character in the game...
+    # The full 25-resident roster still loads (nothing deleted), but we run a
+    # smaller active subset so the demo's memory/reasoning panels stay readable.
+    assert len(_ALL_PERSONAS) == 25
+    assert len(PERSONAS) == MAX_ACTIVE_PERSONAS == 5
+    # Every active persona is a character in the game...
     for spec in PERSONAS:
         assert spec["name"] in game.characters
         # ...and starts in their home location.
@@ -130,6 +137,18 @@ def test_simulate_reaches_activity(world_map):
     assert "tending the cafe counter" in last
 
 
+def test_simulate_advances_through_schedule(world_map):
+    # With a multi-stop schedule, an agent no longer freezes after its first
+    # activity: once a stop's duration elapses it travels on. Over a longer run
+    # Isabella's description should show both her first stop and a later one.
+    frames = simulate(world_map, num_steps=350)
+    activities = {
+        f["Isabella Rodriguez"]["description"].split(" @ ")[0] for f in frames
+    }
+    assert "tending the cafe counter" in activities  # first scheduled stop
+    assert "buying fresh milk for the cafe" in activities  # a later stop -> advanced
+
+
 def test_exporter_writes_replayable_layout(world_map, tmp_path):
     frames = simulate(world_map, num_steps=5)
     start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
@@ -152,6 +171,15 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
     assert set(mv0["persona"].keys()) == {p["name"] for p in PERSONAS}
     assert mv0["meta"]["curr_time"] == "February 13, 2023, 08:00:00"
 
+    # Each retrieved memory carries its created_turn and a wall-clock time stamped
+    # by the exporter, so the agent card can show when the memory formed. At step 0
+    # every memory was created at turn 0, i.e. the 08:00 start time.
+    mems0 = mv0["persona"]["Isabella Rodriguez"]["memories"]
+    assert mems0, "expected the seeded plan to be retrieved at step 0"
+    for mem in mems0:
+        assert mem["created_turn"] == 0
+        assert mem["time"] == "08:00"
+
     with open(os.path.join(sim_dir, "reverie", "meta.json")) as f:
         meta = json.load(f)
     assert meta["step"] == 5
@@ -160,6 +188,67 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
     with open(os.path.join(sim_dir, "environment", "0.json")) as f:
         env0 = json.load(f)
     assert env0["Isabella Rodriguez"]["x"] == 72
+
+
+def test_exporter_writes_full_memory_stream(world_map, tmp_path):
+    # The State Details panel needs each agent's FULL memory stream (not just the
+    # per-step retrieved set the cards show). simulate(out_memories=...) collects
+    # it and the exporter writes personas/<Name>/memory_stream.json: newest first,
+    # each memory carrying the same created_turn + wall-clock time as the cards.
+    import datetime
+
+    memory_streams: dict = {}
+    frames = simulate(world_map, num_steps=40, out_memories=memory_streams)
+
+    # Every persona has a collected stream, and it grows past the seeded plan.
+    assert set(memory_streams) == {p["name"] for p in PERSONAS}
+    assert len(memory_streams["Isabella Rodriguez"]) > 1
+
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="mem_stream_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+        memory_streams=memory_streams,
+    )
+
+    stream_path = os.path.join(
+        sim_dir, "personas", "Isabella Rodriguez", "memory_stream.json"
+    )
+    assert os.path.exists(stream_path)
+    with open(stream_path) as f:
+        stream = json.load(f)
+    assert stream["persona_name"] == "Isabella Rodriguez"
+    mems = stream["memories"]
+    assert mems, "expected a non-empty memory stream"
+
+    # Newest first (created_turn descending) and each carries a wall-clock time
+    # plus the same fields the cards render.
+    turns = [m["created_turn"] for m in mems]
+    assert turns == sorted(turns, reverse=True)
+    for m in mems:
+        assert "time" in m
+        assert {"kind", "importance", "text", "created_turn"} <= set(m)
+
+    # The retrieved set the card shows at a step is a subset of the full stream.
+    with open(os.path.join(sim_dir, "movement", "39.json")) as f:
+        frame39 = json.load(f)
+    retrieved = frame39["persona"]["Isabella Rodriguez"]["memories"]
+    stream_texts = {m["text"] for m in mems}
+    assert {r["text"] for r in retrieved} <= stream_texts
+
+
+def test_simulate_out_memories_is_optional(world_map):
+    # Default behaviour is unchanged: collecting the streams is purely additive,
+    # so the frames are byte-identical whether or not out_memories is passed.
+    plain = simulate(world_map, num_steps=12)
+    collected: dict = {}
+    with_mem = simulate(world_map, num_steps=12, out_memories=collected)
+    assert plain == with_mem
+    assert collected and set(collected) == {p["name"] for p in PERSONAS}
 
 
 def test_exporter_honors_start_time_and_sec_per_step(world_map, tmp_path):

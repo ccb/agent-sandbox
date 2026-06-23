@@ -214,6 +214,209 @@ body,
   overflow-wrap: anywhere;
 }
 
+/* ---------- Memory + reasoning panels on the agent card --------------------- */
+/* Scoped under .agent-card so the upstream demo page (which shares this file but
+   has no memory list) is untouched. The retrieved-memory block is a compact,
+   scrollable list so a card with several memories never grows unbounded. */
+.agent-card .mem-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 11em;
+  overflow-y: auto;
+}
+
+/* Memories formed at the same in-game time are clustered under one time header,
+   so a burst of same-moment memories reads as a single group instead of repeating
+   the timestamp on every row. The header is a small, muted caption; a hairline rule
+   above it separates one timestamp's group from the next. */
+.agent-card .mem-list .mem-group-head {
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a90a0;
+  font-variant-numeric: tabular-nums;
+  padding: 0.2em 0.55em 0.15em;
+}
+.agent-card .mem-list .mem-group-head:not(:first-child) {
+  margin-top: 0.25em;
+  padding-top: 0.5em;
+  border-top: 1px solid #e3e6ee;
+}
+
+/* Each retrieved memory is a small row: a meta line (kind pill + its quiet
+   importance) above the memory text. A faint left accent, coloured per kind, lets
+   you scan observation/plan/reflection at a glance even before reading the pill.
+   Rows in the same group are split by a hairline; the group header splits groups. */
+.agent-card .mem-list .mem-item {
+  font-size: 0.92em;
+  line-height: 1.35;
+  color: #2b2f3a;
+  /* Right padding gives the flash highlight breathing room past the importance
+     score (and keeps it clear of the list's scrollbar when it appears). */
+  padding: 0.45em 0.65em 0.45em 0.55em;
+  border-left: 3px solid transparent;
+}
+
+.agent-card .mem-list .mem-item + .mem-item {
+  border-top: 1px solid #f2f3f7;
+}
+
+/* Meta line: kind pill on the left, time then importance trailing right. */
+.agent-card .mem-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.25em;
+}
+
+/* A small pill marking the memory kind. Neutral by default; the per-kind rules
+   below recolour it (and the row's left accent) so the kinds are distinct. */
+.agent-card .mem-kind {
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 0.1em 0.45em;
+  color: #5b6478;
+  background: #eef0f5;
+}
+
+.agent-card .mem-observation {
+  border-left-color: #9cc0f5;
+}
+.agent-card .mem-observation .mem-kind {
+  color: #1a56b8;
+  background: #e6f0fe;
+}
+
+.agent-card .mem-plan {
+  border-left-color: #f0c071;
+}
+.agent-card .mem-plan .mem-kind {
+  color: #b06a00;
+  background: #fdf0db;
+}
+
+.agent-card .mem-reflection {
+  border-left-color: #c79cf0;
+}
+.agent-card .mem-reflection .mem-kind {
+  color: #6b29b8;
+  background: #f1e6fd;
+}
+
+/* The retrieval importance score, pushed to the right edge and kept quiet. */
+.agent-card .mem-imp {
+  margin-left: auto;
+  font-size: 0.78em;
+  color: #9aa0b0;
+}
+
+/* The memory text itself, beneath the meta line. */
+.agent-card .mem-text {
+  display: block;
+}
+
+/* When a new memory arrives on a card as the replay plays, its row flashes for a
+   few seconds so you can see what the agent just took in. main_script.html adds
+   .is-new only to genuinely new rows (never on the initial load); the animation
+   pulses an amber highlight twice and ends transparent, so the row settles back
+   into its normal look. */
+@keyframes mem-flash-in {
+  0%   { background-color: rgba(255, 214, 102, 0); }
+  8%   { background-color: rgba(255, 214, 102, 0.9); }
+  32%  { background-color: rgba(255, 214, 102, 0.15); }
+  56%  { background-color: rgba(255, 214, 102, 0.9); }
+  80%  { background-color: rgba(255, 214, 102, 0.15); }
+  100% { background-color: rgba(255, 214, 102, 0); }
+}
+.agent-card .mem-list .mem-item.is-new {
+  animation: mem-flash-in 4s ease-in-out 1;
+}
+/* Reduced-motion: keep a visible "new memory" cue, but swap the two-pulse flash
+   for a single gentle fade -- a brief background tint, no repeated pulsing. */
+@keyframes mem-flash-soft {
+  0%   { background-color: rgba(255, 214, 102, 0); }
+  15%  { background-color: rgba(255, 214, 102, 0.8); }
+  100% { background-color: rgba(255, 214, 102, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-card .mem-list .mem-item.is-new {
+    animation: mem-flash-soft 2.5s ease-out 1;
+  }
+}
+
+/* ---------- State Details popup -------------------------------------------- */
+/* The per-agent "State Details" link opens the full persona-state page in this
+   overlay (an <iframe>) instead of navigating away, so the replay keeps running
+   behind it. Everything is scoped under #state-modal so the shared demo page,
+   which has no modal, is untouched. */
+#state-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10vh 10vw;   /* the dialog fills the rest -> ~10% margin on every side */
+}
+#state-modal[hidden] {
+  display: none;        /* [hidden] alone would be overridden by display:flex */
+}
+
+/* A dim backdrop; clicking it closes the popup (it carries data-close-modal). */
+#state-modal .state-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 22, 30, 0.55);
+}
+
+/* The white card that holds the embedded page; the iframe fills it edge to edge.
+   It fills the space left by #state-modal's padding, so it spans most of the
+   screen with ~10% margins on every side. */
+#state-modal .state-modal-dialog {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;     /* clip the iframe's square corners to the rounded card */
+}
+
+#state-modal .state-modal-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* A round close button floating over the top-right corner of the embedded page. */
+#state-modal .state-modal-close {
+  position: absolute;
+  top: 0.6em;
+  right: 0.7em;
+  z-index: 2;
+  width: 1.7em;
+  height: 1.7em;
+  padding: 0;
+  font-size: 1.5em;
+  line-height: 1.6em;
+  text-align: center;
+  color: #fff;
+  background: #2b2f3a;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+#state-modal .state-modal-close:hover {
+  background: #1f2330;
+}
+
 /* ---------- Narrow screens: stack the map above the agent card -------------- */
 @media (max-width: 900px) {
   #sim-app {
