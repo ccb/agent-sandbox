@@ -280,6 +280,8 @@ class Parser:
             return ActionName.LIGHT
         elif "drop " in command:
             return ActionName.DROP
+        elif command.startswith("break") or command.startswith("smash"):
+            return ActionName.BREAK
         elif (
             "eat " in command
             or "eats " in command
@@ -303,6 +305,8 @@ class Parser:
             return ActionName.INVENTORY
         elif command == "wait" or command == "z":
             return ActionName.WAIT
+        elif command in ("help", "h", "commands", "?") or command.startswith("help"):
+            return ActionName.HELP
         elif "quit" in command:
             return ActionName.QUIT
         else:
