@@ -260,6 +260,7 @@ def test_slashing_the_tires_strands_the_getaway_car():
             "give tape",
             "attack goon",
             "search goon",
+            "get porsche keys",
             "drag slade out",
             "use key on porsche",
         ]
@@ -279,3 +280,61 @@ def test_shooting_boss_d_ends_the_game_without_a_win():
     assert "arrest" not in game._scored_keys
     assert game.score == 90  # 65 Slade + 25 Chang milestones, no arrest/finish bonus
     assert _said(cap, "vengeance")
+
+
+# --- interaction fixes -----------------------------------------------------
+
+
+def test_opening_the_closet_reveals_its_contents():
+    game, cap = _play(["open closet"])
+    assert _said(cap, "uniform") and _said(cap, "leather jacket")
+
+
+def test_keys_live_in_the_jacket_and_start_the_bike():
+    # Never call a key-granting trigger -- the keys ride inside the jacket.
+    game, cap = _play(_TO_SOUTHSIDE + ["get on motorcycle"])
+    assert game.player.riding is not None  # the bike started
+
+
+def test_the_man_blocks_the_apartment_exit_until_knocked_out():
+    blocked = _play(_through("read newspaper") + ["out"])
+    game, cap = blocked
+    assert game.player.location.name == "Apartment"  # couldn't leave past him
+    # Knock him out, then the door's clear.
+    for c in ["say no", "hit man with kettle", "out"]:
+        game.do_command(c)
+    assert game.player.location.name == "Southside"
+
+
+def test_searching_the_man_drops_loot_you_can_take():
+    game, cap = _play(_through("search man") + ["get matchbook", "get wallet"])
+    assert "matchbook" in game.player.inventory
+    assert "wallet" in game.player.inventory
+
+
+def test_take_box_is_too_conspicuous():
+    game, cap = _play(_through("find box") + ["take box"])
+    assert _said(cap, "too conspicuous")
+    assert not game.is_game_over()
+
+
+def test_take_envelope_after_the_knockout_is_refused_as_blood_money():
+    game, cap = _play(_through("hit man with kettle") + ["take envelope"])
+    assert _said(cap, "blood money")
+    assert not game.is_game_over()  # leaving it is not the bribe
+
+
+def test_talk_to_chief_works_for_both_protagonists():
+    slade, scap = _play(_TO_SOUTHSIDE)  # Slade is still the player here
+    # Reach the chief's office as Jetta (the walkthrough route).
+    game, cap = _play(_through("enter chief's office") + ["talk to chief"])
+    assert _said(cap, "back on the case")  # the Chang line
+    assert not game.is_game_over()
+
+
+def test_use_key_on_porsche_is_idempotent_and_leaves_a_drivable_car():
+    game, cap = _play(_through("use key on porsche") + ["use key on porsche"])
+    # Still in/driving the Porsche, not stuck, no repeated "into the passenger seat".
+    assert game.player.riding is not None
+    porsche = game.locations["Harbor View"].items.get("porsche")
+    assert porsche is not None and porsche.vehicle_ready()
