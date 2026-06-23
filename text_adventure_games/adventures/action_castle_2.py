@@ -797,11 +797,27 @@ class EnterCave(actions.Action):
 class Propose(actions.Action):
     ACTION_NAME = "propose"
     ACTION_DESCRIPTION = "Propose marriage to your beloved"
-    ACTION_ALIASES = []
+    # "give ring to rosemary" IS the proposal -- route it here (multi-word, so
+    # it wins specific-first over the built-in Give, which would otherwise hand
+    # the ring away and strand the marriage ending). Outside the Middle of the
+    # Pond it fails the location gate below WITHOUT transferring the ring.
+    ACTION_ALIASES = [
+        "give ring to rosemary",
+        "give the ring to rosemary",
+        "give ring to sage",
+        "give rosemary the ring",
+        "give rosemary ring",
+        "offer ring to rosemary",
+        "offer the ring to rosemary",
+        "hand rosemary the ring",
+    ]
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command)
+        # The proposer is the actor (the player for a typed command). Don't scan
+        # the command for a name -- "give ring to rosemary" names Rosemary, who
+        # is the beloved, not the one doing the proposing.
+        self.character = self.actor if self.actor is not None else self.game.player
         self.beloved = self.parser.get_character("rosemary")
 
     def check_preconditions(self) -> bool:
@@ -983,6 +999,9 @@ def build_game() -> ActionCastle2:
     )
     boat.set_property("gettable", False)
     boat.make_container()  # unlimited capacity, always open
+    # You can see into the open rowboat from shore, so the blanket it holds is
+    # listed in the room (and GET reaches it) rather than hidden until EXAMINE.
+    boat.set_property("contents_visible", True)
     boat.add_command_hint("enter boat")
     boat.add_command_hint("row boat")
 

@@ -454,3 +454,58 @@ def test_throne_room_west_is_barred_by_the_guards():
     game.relocate(game.player, game.locations["Throne Room"])
     game.do_command("go west")
     assert _said(cap, "guards step into your path")
+
+
+def test_blanket_is_listed_in_the_open_boat():
+    # The boat opts into contents_visible, so the blanket shows in the room
+    # listing (consistent with GET reaching it) instead of being hidden.
+    game, cap = _play(["out", "east", "south"])  # Old Pond
+    game.do_command("look")
+    assert _said(cap, "in it: a warm wool blanket")
+
+
+def test_treasure_hoard_contents_stay_hidden_in_the_room():
+    # Regression guard for the contents_visible feature: the trove deliberately
+    # does NOT opt in, so its loot is not listed (only revealed by EXAMINE).
+    game, cap = _game()
+    game.relocate(game.player, game.locations["Treasure Trove"])
+    game.do_command("look")
+    assert not _said(cap, "in it: a gleaming sword")
+    assert not _said(cap, "in it: a heavy sack of gold")
+
+
+def _player_with_ring_beside_rosemary(game):
+    """Put the ring in the player's hands and Rosemary at their side."""
+    hoard = game.locations["Treasure Trove"].items["treasure"]
+    ring = hoard.contents["ring"]
+    hoard.remove_item(ring)
+    game.player.add_to_inventory(ring)
+    rosemary = game.characters["rosemary"]
+    rosemary.location.remove_character(rosemary)
+    game.player.location.add_character(rosemary)
+    return ring, rosemary
+
+
+def test_give_ring_to_rosemary_outside_the_middle_keeps_the_ring():
+    # The built-in Give would hand the ring away and strand the marriage ending;
+    # routing the phrase to Propose gates it to the Middle of the Pond instead.
+    game, cap = _game()
+    ring, rosemary = _player_with_ring_beside_rosemary(game)  # in the Town Hall
+    game.do_command("give ring to rosemary")
+    assert "ring" in game.player.inventory  # still held
+    assert "ring" not in rosemary.inventory  # not transferred
+    assert _said(cap, "more romantic location")
+
+
+def test_give_ring_to_rosemary_in_the_middle_is_the_proposal():
+    game, cap = _game()
+    hoard = game.locations["Treasure Trove"].items["treasure"]
+    ring = hoard.contents["ring"]
+    hoard.remove_item(ring)
+    game.player.add_to_inventory(ring)
+    rosemary = game.characters["rosemary"]
+    rosemary.location.remove_character(rosemary)
+    game.relocate(game.player, game.locations["Middle of Pond"])
+    game.locations["Middle of Pond"].add_character(rosemary)
+    game.do_command("give ring to rosemary")
+    assert game.player.get_property("is_married") and game.is_won()
