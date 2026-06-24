@@ -120,6 +120,36 @@ URBAN_TILES = {
 }
 
 # --------------------------------------------------------------------------- #
+# Urban-theme variety. URBAN_TILES above gives every building/road/lawn the
+# *same* tile, so the campus reads as one uniform block. These add per-feature
+# variety on top, only for the "urban" theme. Values are 0-based indices into
+# the Kenney sheet (a Tiled GID is index + firstgid, and firstgid is 1 here).
+# --------------------------------------------------------------------------- #
+
+# Clean red/orange brick "field" tiles (no cornice or edge trim). Each building
+# footprint is filled with one, chosen deterministically — Penn is a red/brown
+# brick campus, so a spread of brick tones reads right while breaking up the
+# old "sea of identical red". (Also drops tile 18, whose tan eave-stripe was
+# what made every roof look striped.)
+ROOF_TILES = [72, 74, 75, 180, 182, 183]
+
+# Lane markings, stamped down the centreline of *major* roads only (minor and
+# service roads stay plain asphalt — that contrast is the road "variety"). The
+# Kenney sheet has a horizontal dash and a vertical dash; we pick by segment
+# orientation. DASH_H suits E–W roads, DASH_V suits N–S roads.
+MAJOR_ROADS = {"motorway", "trunk", "primary", "secondary"}
+DASH_H, DASH_V = 433, 462
+
+# Single-tile trees (whole tree — canopy + trunk — in one 16px cell). Scattered
+# on lawns and planted along footways so Locust Walk reads as a tree-lined spine.
+TREE_TILES = [238, 265, 292]
+
+# Bottom-to-top paint order. "trees" only exists in the urban theme (rasterise
+# adds that layer when variety is on); filtering by presence keeps placeholder
+# maps at their original six layers, byte-for-byte identical.
+LAYER_ORDER = ["ground", "landuse", "water", "paths", "roads", "buildings", "trees"]
+
+# --------------------------------------------------------------------------- #
 # 1. FETCH
 # --------------------------------------------------------------------------- #
 
@@ -137,6 +167,7 @@ def overpass_query(bbox: dict) -> str:
       way["leisure"]({b});
       way["landuse"]({b});
       way["natural"="wood"]({b});
+      node["natural"="tree"]({b});
     );
     out geom;
     """
@@ -323,6 +354,32 @@ def draw_line(
             y0 += sy
 
 
+def line_cells(p0: tuple, p1: tuple):
+    """Yield the integer (col,row) cells along a segment's centreline.
+
+    Same Bresenham walk as `draw_line`, but it just reports the centre cells
+    instead of stamping a thick line — used to lay lane markings down the
+    middle of a road.
+    """
+    x0, y0 = int(round(p0[0])), int(round(p0[1]))
+    x1, y1 = int(round(p1[0])), int(round(p1[1]))
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        yield x0, y0
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+
+
 # How wide (in extra tiles each side) to draw each road class.
 ROAD_RADIUS = {
     "motorway": 2,
@@ -379,7 +436,99 @@ def categorise(tags: dict) -> tuple[str, str] | None:
     return None
 
 
-def rasterise(osm: dict, proj: Projector, gid_of: dict) -> dict:
+def roof_gid(el: dict, pts: list) -> int:
+    """Pick a deterministic brick-roof GID for one building footprint.
+
+    Keyed on the OSM way id so a building keeps the same colour every time the
+    map is regenerated (a hash of the rounded centroid is the fallback for the
+    rare way with no id). `+ 1` turns the 0-based sheet index into a Tiled GID.
+    """
+    key = el.get("id")
+    if key is None:
+        cx = int(round(sum(p[0] for p in pts) / len(pts)))
+        cy = int(round(sum(p[1] for p in pts) / len(pts)))
+        key = cx * 73856093 ^ cy * 19349663
+    return ROOF_TILES[key % len(ROOF_TILES)] + 1
+
+
+def tree_gid(c: int, r: int) -> int:
+    """Deterministic single-tile tree GID for cell (c,r).
+
+    A fixed integer hash of the cell — never random — so regenerating the map
+    reproduces exactly the same trees.
+    """
+    return TREE_TILES[(c * 73856093 ^ r * 19349663) % len(TREE_TILES)] + 1
+
+
+def draw_dashes(grid: list, p0: tuple, p1: tuple, cols: int, rows: int) -> None:
+    """Stamp a dashed centre line (every other cell) along one road segment."""
+    horiz = abs(p1[0] - p0[0]) >= abs(p1[1] - p0[1])
+    dash = (DASH_H if horiz else DASH_V) + 1
+    for i, (c, r) in enumerate(line_cells(p0, p1)):
+        if i % 2 == 0 and 0 <= c < cols and 0 <= r < rows:
+            grid[r][c] = dash
+
+
+def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
+    """Fill the "trees" layer (urban theme only).
+
+    Three deterministic sources, none of which ever lands a tree on a built,
+    paved or watery cell:
+      1. real trees mapped in OSM (natural=tree nodes), placed exactly;
+      2. footway-lining — every few path cells, a tree a couple of tiles to each
+         side, so Locust Walk and the campus walks become tree-lined;
+      3. a sparse scatter across lawns.
+    """
+    cols, rows = proj.cols, proj.rows
+    trees = layers["trees"]
+
+    def occupied(c: int, r: int) -> bool:
+        return bool(
+            layers["buildings"][r][c]
+            or layers["water"][r][c]
+            or layers["roads"][r][c]
+            or layers["paths"][r][c]
+        )
+
+    # 1. Real OSM trees (nodes carry lat/lon directly, no geometry).
+    for el in osm.get("elements", []):
+        if el.get("type") != "node" or el.get("tags", {}).get("natural") != "tree":
+            continue
+        cf, rf = proj.to_tile(el["lat"], el["lon"])
+        c, r = int(cf), int(rf)
+        if 0 <= c < cols and 0 <= r < rows and not occupied(c, r):
+            trees[r][c] = tree_gid(c, r)
+
+    # 2. Line the footways: plant beside the walk, never on it.
+    spacing, offset = 3, 2
+    for r in range(rows):
+        for c in range(cols):
+            if not layers["paths"][r][c] or (c + r) % spacing:
+                continue
+            for dc, dr in ((offset, 0), (-offset, 0), (0, offset), (0, -offset)):
+                cc, rr = c + dc, r + dr
+                if (
+                    0 <= cc < cols
+                    and 0 <= rr < rows
+                    and not occupied(cc, rr)
+                    and not trees[rr][cc]
+                ):
+                    trees[rr][cc] = tree_gid(cc, rr)
+
+    # 3. Sparse, deterministic scatter across lawns.
+    grid_step = 5
+    for r in range(rows):
+        for c in range(cols):
+            if (
+                layers["landuse"][r][c]
+                and c % grid_step == r % grid_step
+                and not occupied(c, r)
+                and not trees[r][c]
+            ):
+                trees[r][c] = tree_gid(c, r)
+
+
+def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -> dict:
     """Return a dict of named tile layers (each a 2D grid of GIDs).
 
     `gid_of` maps each category (ground/grass/water/path/road/building) to the
@@ -398,6 +547,8 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict) -> dict:
         "roads": new_grid(cols, rows),
         "buildings": new_grid(cols, rows),
     }
+    if variety:  # urban-theme foliage, painted on top of everything else
+        layers["trees"] = new_grid(cols, rows)
     # Which physical layer each category paints into.
     layer_of = {
         "grass": "landuse",
@@ -425,6 +576,8 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict) -> dict:
         if kind == "area" and (
             is_closed(el) or category in ("building", "grass", "water")
         ):
+            if variety and category == "building":
+                gid = roof_gid(el, pts)  # vary the roof colour per building
             fill_polygon(grid, gid, pts, cols, rows)
         else:
             radius = 0
@@ -436,10 +589,16 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict) -> dict:
                 radius = 2
             for i in range(len(pts) - 1):
                 draw_line(grid, gid, pts[i], pts[i + 1], radius, cols, rows)
+            if variety and category == "road" and tags.get("highway") in MAJOR_ROADS:
+                for i in range(len(pts) - 1):  # lane markings on major roads
+                    draw_dashes(grid, pts[i], pts[i + 1], cols, rows)
 
         counts[category] += 1
         if category == "building" and tags.get("name"):
             named.append(tags["name"])
+
+    if variety:
+        stamp_trees(layers, osm, proj)
 
     return {"layers": layers, "counts": counts, "named": named}
 
@@ -505,7 +664,7 @@ def write_tmj(path: str, proj: Projector, layers: dict, tileset: dict) -> None:
     custom map properties so the map can be reproduced / round-tripped.
     """
     cols, rows = proj.cols, proj.rows
-    order = ["ground", "landuse", "water", "paths", "roads", "buildings"]
+    order = [name for name in LAYER_ORDER if name in layers]
     tmj = {
         "type": "map",
         "version": "1.10",
@@ -564,7 +723,7 @@ def write_preview_png(
     The preview always uses the placeholder category colours (a cheap legend),
     regardless of the real theme — it's a layout sanity-check, not the art.
     """
-    order = ["ground", "landuse", "water", "paths", "roads", "buildings"]
+    order = [name for name in LAYER_ORDER if name in layers]
     # Composite into a single GID per cell (topmost non-empty wins).
     flat = new_grid(cols, rows, base_gid)
     for name in order:
@@ -673,7 +832,7 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
     )
 
     t0 = time.time()
-    result = rasterise(osm, proj, gid_of)
+    result = rasterise(osm, proj, gid_of, variety=(theme == "urban"))
     print(f"[raster] done in {time.time() - t0:.1f}s")
     for cat, n in result["counts"].items():
         if n:
@@ -687,6 +846,16 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
     write_tmj(tmj_path, proj, result["layers"], tileset)
     # Preview uses the placeholder colours as a legend, keyed by this theme's GIDs.
     gid_to_rgba = {gid_of[cat]: PALETTE[cat][1] for cat in PALETTE}
+    if theme == "urban":
+        # Map the per-feature variety tiles back to their category colour so the
+        # layout preview stays legible (roofs read as buildings, dashes as road,
+        # trees as green) instead of rendering as undefined black cells.
+        for idx in ROOF_TILES:
+            gid_to_rgba[idx + 1] = PALETTE["building"][1]
+        gid_to_rgba[DASH_H + 1] = PALETTE["road"][1]
+        gid_to_rgba[DASH_V + 1] = PALETTE["road"][1]
+        for idx in TREE_TILES:
+            gid_to_rgba[idx + 1] = (60, 130, 60, 255)
     write_preview_png(
         preview_path,
         result["layers"],
