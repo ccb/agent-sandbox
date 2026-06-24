@@ -13,11 +13,10 @@ player_sheet = ExtResource("3_player")
 script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; The map is now 11200x7888 px (1 m/tile) — same campus overview as before, just at
-; a finer grid (crisper buildings/roads/paths). position is centred on where the
-; three agents actually walk (Van Pelt, Williams, Meyerson, College Hall, the
-; Locust Walk spine); zoom 0.25 keeps the whole spread in frame. Raise the zoom to
-; push into the middle (trees grow but agents wander out of frame).
+; The map is the 34th–36th x Spruce–Walnut core only (5632x7040 px at 1 m/tile),
+; so the whole frame IS the middle of campus. Centred on the map; zoom 0.155 fits
+; the full (tall) area in view. Raise the zoom to push in on the agents (Van Pelt,
+; College Hall, Meyerson, the Locust Walk spine) if you don't need the whole area.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(3500, 2000)
-zoom = Vector2(0.25, 0.25)
+position = Vector2(2810, 3510)
+zoom = Vector2(0.15, 0.15)

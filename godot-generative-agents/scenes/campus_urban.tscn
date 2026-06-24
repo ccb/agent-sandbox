@@ -10,10 +10,10 @@
 script = ExtResource("1_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; The map is now 11200x7888 px (1 m/tile) — a campus overview at a finer grid.
-; position = the built-up centroid; zoom 0.25 keeps the core in frame. Size the
-; view with the camera zoom, never by scaling the TileMapLayer (that leaves
-; sub-pixel white seams between cells). Raise the zoom to push into the middle.
+; The map is the 34th–36th x Spruce–Walnut core (5632x7040 px at 1 m/tile).
+; Centred on the map; zoom 0.15 fits the whole (tall) area in view. Size the view
+; with the camera zoom, never by scaling the TileMapLayer (that leaves sub-pixel
+; white seams between cells). Raise the zoom to push into the middle.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(5400, 3450)
-zoom = Vector2(0.25, 0.25)
+position = Vector2(2810, 3510)
+zoom = Vector2(0.15, 0.15)

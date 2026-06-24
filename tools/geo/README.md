@@ -103,14 +103,15 @@ and caches its own Overpass response, so they never clobber each other.
 | `--area` | Stem | Covers |
 |----------|------|--------|
 | `campus` *(default)* | `upenn` | the full UPenn campus (~1 km × 1.2 km) |
-| `core` | `upenn_core` | **34th–38th St between Spruce & Walnut** (~400 m × 650 m) — College Green, College Hall, Van Pelt, the Locust Walk core. A small frame for prototyping. |
+| `core` | `upenn_core` | **34th–36th St between Spruce & Walnut** (~300 m × 400 m) — College Green, College Hall, Van Pelt, Meyerson, the Locust Walk core. The tight two-block heart of campus, for prototyping. |
 
 Each area may pin its own resolution: `core` carries `"mpt": 1.0` (so it renders at a
-fine **1 m/tile** — ~700×493 tiles — giving features, multi-tile tree stands
-especially, room to read, and letting the camera zoom right into the middle of
-campus), while `campus` uses the 4 m/tile default. An explicit `--mpt` overrides
-either. Whatever resolution you build the map at, regenerate the matrix to match
-(`osm_to_ville.py` reads the same per-area `mpt`) or the agent replay will be misaligned.
+fine **1 m/tile** — ~352×440 tiles — giving features, multi-tile tree stands
+especially, room to read; and because the area is only two blocks, the whole frame
+*is* the middle of campus, no camera zoom needed), while `campus` uses the 4 m/tile
+default. An explicit `--mpt` overrides either. Whatever resolution you build the map
+at, regenerate the matrix to match (`osm_to_ville.py` reads the same per-area `mpt`)
+or the agent replay will be misaligned.
 
 The `core` bbox was derived from the real street-centreline geometry in the campus
 OSM data (the Philadelphia grid is rotated ~8°, so the axis-aligned box is the
