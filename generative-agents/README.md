@@ -100,6 +100,48 @@ They cover the world build + mock-driven decisions, address→tile resolution an
 collision-free pathing, and the exported movement-file contract. (They skip if
 the maze assets aren't present — run `./setup.sh` first.)
 
+## Trying it with a live LLM (Phase A)
+
+By default everything runs on the free, offline **mock** brain. To drive the
+agents' travel/perform decisions **and** their daily plans with a real model,
+install the LLM extra and set `LLM_PROVIDER`:
+
+```bash
+uv sync --extra llm                     # installs openai + anthropic
+export LLM_PROVIDER=anthropic           # or: openai
+export ANTHROPIC_API_KEY=sk-...         # or OPENAI_API_KEY; LLM_API_KEY also works
+# optional: export LLM_MODEL=claude-opus-4-8   # else the provider default
+```
+
+**Smoke-test first** (cheap, fast, **needs no `setup.sh` assets**). This builds the
+world, generates a couple of agents' days with the live model, and runs a handful
+of real decisions through the precondition gate — enough to catch prompt / parsing
+/ key / latency problems before a full run:
+
+```bash
+uv run python -m backend.smoke_llm                  # 2 agents, 6 decision rounds
+uv run python -m backend.smoke_llm --agents 3 --steps 10
+```
+
+It prints each generated plan, then each decision with whether it passed the gate
+(the usual failure is the model naming a place that isn't a known location — shown
+with the gate's reason), and finally a token/cost summary. With `LLM_PROVIDER`
+unset or `mock` it exits with a message instead of running.
+
+**Then a full replay** with the same env set (this *does* need the maze assets, so
+run `./setup.sh` first). Start small to keep cost down:
+
+```bash
+uv run python -m backend.run_simulation --steps 120
+```
+
+`run_simulation` prints which brain it's using (`LLM brain: anthropic …` vs
+`LLM brain: none …`) and a per-run cost summary, and writes a usage log when
+`--llm-log DIR` (or the config's `observability.log_path`) is set. Unset
+`LLM_PROVIDER` (or set it to `mock`) to return to the deterministic, byte-identical
+offline replay. To compare a single persona's static vs generated day without a
+full run, see `backend/compare_plans.py`.
+
 ## Extending it
 
 - **Different routines / more activities:** edit `PERSONAS` in
