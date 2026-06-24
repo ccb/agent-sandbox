@@ -41,7 +41,7 @@ reflect** (plus **converse** on agent-to-agent contact). Here is each piece toda
 | **Plan** | Hardcoded — one destination + one activity per persona (`build_world.py`) | Generated daily plan, decomposed day → hourly → minute |
 | **Execute** | Two verbs (`travel`, `perform`) through the precondition gate | Same gate, richer action set targeting objects and other agents |
 | **Reflect** | Skeleton only — `npc.py` reflects on command *failure*, not periodically | Periodic synthesis of recent memories into higher-level thoughts |
-| **Converse** | Absent — `"chat"` is always `null` in every movement frame (`exporter.py`) | Co-located agents talk; both memory streams update |
+| **Converse** | ✅ Done (#86) — co-located agents run a turn-taking dialogue (`conversation.py`); each line lands in both memory streams (`MemoryKind.CHAT`) and on the replay's chat card. Gated on a real brain; mock replay unchanged | Co-located agents talk; both memory streams update |
 | **Runtime** | Pre-baked: backend writes all movement JSON up front, Django replays it | Optional live mode: agents decide as the sim advances |
 
 What we already have going for us (don't rebuild these):
@@ -170,13 +170,25 @@ higher-level thoughts. This is the largest behavioral leap from today's demo.
 
 Goal: when agents meet, they talk, and the conversation changes what they each remember.
 
-- `[engine] L` **Agent-to-agent dialogue seam.** Co-located agents run a turn-taking
-  conversation; the resulting utterances land in **both** participants' memory streams
-  (this is how relationships and information actually propagate through the town).
-- `[port] S` **Surface chat end to end.** Populate the `"chat"` field in
-  `backend/exporter.py` (hardcoded `null` today) and render it in the frontend — the
-  agent panel template (`frontend_overrides/templates/home/home.html`) already has an
-  unused chat slot.
+- `[engine] L` ✅ **Done (#86) — Agent-to-agent dialogue seam.** A new engine
+  `text_adventure_games/conversation.py` runs a turn-taking exchange between co-located
+  agents: `converse(game, a, b)` alternates speakers, asking each for its next line via
+  a new `Agent.converse` seam (`LLMAgent` fills a structured `speak` tool, with a
+  free-text fallback; `ScriptedAgent` takes a `converse_rule`), and ends on a decline /
+  wrap-up flag / `max_exchanges` cap. Every line is written into **both** participants'
+  memory streams as the new `MemoryKind.CHAT` (speaker "I said…", listener "X said to
+  me…") and delivered to the listener's `heard` buffer. Who may talk is the engine's one
+  audibility seam (`Game.audience_for`), so a range/line-of-sight world constrains
+  conversation exactly as it constrains a `Say`. Built on perception (Phase C: co-located
+  agents already perceive each other's events into memory) and memory (Phase B).
+- `[port] S` ✅ **Done (#86) — Surface chat end to end.** `run_simulation.simulate`
+  detects co-located, *settled* residents each step and runs
+  `smallville_agents.maybe_converse` (cooldown-throttled), populating each frame's `chat`
+  field with the dialogue as `[speaker, line]` pairs — the shape the frontend's existing
+  (previously unused) chat slot already renders. **Gated on a real brain**: with the mock
+  brain no utterance is produced, so the default replay holds no conversations and stays
+  byte-identical. The exporter already writes the frame verbatim, so no exporter change
+  was needed.
 
 ---
 
