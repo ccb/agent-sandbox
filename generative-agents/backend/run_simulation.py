@@ -123,6 +123,8 @@ def simulate(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
+    personas: list[dict] | None = None,
+    build_world_fn=None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -150,20 +152,26 @@ def simulate(
     out-parameter (not part of the return) so the many ``frames = simulate(...)``
     callers and the determinism tests stay unchanged.
     """
-    game, chars = build_world()
+    # Default to the module's the_ville cast/builder so existing callers and the
+    # determinism tests are unchanged; a different world (e.g. UPenn) passes its
+    # own personas + builder.
+    personas = personas if personas is not None else PERSONAS
+    build_world_fn = build_world_fn if build_world_fn is not None else build_world
+
+    game, chars = build_world_fn()
     attach_agents(
         chars,
-        PERSONAS,
+        personas,
         ledger=ledger,
         embedding_client=embedding_client,
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
     )
-    emoji = {p["name"]: p["emoji"] for p in PERSONAS}
-    order = [p["name"] for p in PERSONAS]
+    emoji = {p["name"]: p["emoji"] for p in personas}
+    order = [p["name"] for p in personas]
 
     state = {}
-    for spec in PERSONAS:
+    for spec in personas:
         char = chars[spec["name"]]
         state[char.name] = {
             "tile": tuple(spec["start_tile"]),

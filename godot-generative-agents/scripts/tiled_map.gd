@@ -12,6 +12,11 @@ const SOURCE_ID := 0
 
 
 func _ready() -> void:
+	# Nearest filtering (no smoothing) is what pixel art wants; combined with the
+	# texture padding below and the project's pixel-snap, it keeps tile edges
+	# crisp and seam-free even when the camera zooms to a fractional scale.
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
 	var f := FileAccess.open(map_path, FileAccess.READ)
 	if f == null:
 		push_error("tiled_map: cannot open %s" % map_path)
@@ -49,6 +54,9 @@ func _build_tile_set(tex: Texture2D, tile_size: Vector2i, cols: int, count: int)
 	var src := TileSetAtlasSource.new()
 	src.texture = tex
 	src.texture_region_size = tile_size
+	# Pad each tile in the internal atlas by duplicating its edge pixels, so a
+	# neighbouring tile in the packed sheet can never bleed in at the seams.
+	src.use_texture_padding = true
 	# Register every tile in the sheet so any GID in the map resolves.
 	var rows := int(ceil(float(count) / cols))
 	for r in rows:

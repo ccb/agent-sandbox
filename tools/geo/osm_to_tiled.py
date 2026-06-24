@@ -169,28 +169,80 @@ def fetch_osm(bbox: dict, cache_file: str, refresh: bool) -> dict:
 # --------------------------------------------------------------------------- #
 
 
+def dominant_grid_angle(osm: dict, m_per_deg_lon: float, m_per_deg_lat: float) -> float:
+    """How far the street grid is rotated off the axes, in degrees (-45, 45].
+
+    A planned city's streets share two perpendicular families (here the
+    Philadelphia grid, ~8° off true E–W / N–S). To make those run straight
+    along Godot's X/Y axes instead of on a slant, we first need that angle.
+
+    Method: take a length-weighted *circular mean* of 4×(each road segment's
+    angle). Quadrupling folds the two perpendicular families (θ and θ+90°) onto
+    the same direction so they reinforce instead of cancelling; dividing the
+    mean back by 4 returns the grid's offset from the axes.
+    """
+    sx = sy = 0.0
+    for el in osm.get("elements", []):
+        if el.get("type") != "way" or "highway" not in el.get("tags", {}):
+            continue
+        geom = el.get("geometry", [])
+        for a, b in zip(geom, geom[1:]):
+            dx = (b["lon"] - a["lon"]) * m_per_deg_lon  # east
+            dy = (a["lat"] - b["lat"]) * m_per_deg_lat  # south (screen-down)
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                continue
+            ang = math.atan2(dy, dx)
+            sx += length * math.cos(4 * ang)
+            sy += length * math.sin(4 * ang)
+    if sx == 0.0 and sy == 0.0:
+        return 0.0
+    return math.degrees(math.atan2(sy, sx)) / 4.0
+
+
 class Projector:
     """Local equirectangular projection: good enough for a ~1 km campus frame.
 
-    Maps lon/lat to metres relative to the bbox, then to fractional tile
-    coordinates with row 0 at the north edge (Tiled's top row).
+    Maps lon/lat to metres relative to the bbox centre, optionally rotates the
+    whole plane by `rotate_deg` (so a tilted street grid lands axis-aligned),
+    then converts to fractional tile coordinates with row 0 at the top.
     """
 
-    def __init__(self, bbox: dict, metres_per_tile: float):
+    def __init__(self, bbox: dict, metres_per_tile: float, rotate_deg: float = 0.0):
         self.bbox = bbox
         self.mpt = metres_per_tile
-        lat0 = math.radians((bbox["south"] + bbox["north"]) / 2)
+        self.rotate_deg = rotate_deg
+        self.lat0 = (bbox["south"] + bbox["north"]) / 2
+        self.lon0 = (bbox["west"] + bbox["east"]) / 2
         self.m_per_deg_lat = 111_320.0
-        self.m_per_deg_lon = 111_320.0 * math.cos(lat0)
-        width_m = (bbox["east"] - bbox["west"]) * self.m_per_deg_lon
-        height_m = (bbox["north"] - bbox["south"]) * self.m_per_deg_lat
-        self.cols = max(1, math.ceil(width_m / metres_per_tile))
-        self.rows = max(1, math.ceil(height_m / metres_per_tile))
+        self.m_per_deg_lon = 111_320.0 * math.cos(math.radians(self.lat0))
+        phi = math.radians(rotate_deg)
+        self._cos, self._sin = math.cos(phi), math.sin(phi)
+        # Rotating tilts the bbox, so the axis-aligned grid that still contains
+        # all of it is the bounding box of the four rotated corners. (The empty
+        # corners this leaves just stay GID 0 / unpainted.)
+        xs, ys = [], []
+        for lat in (bbox["south"], bbox["north"]):
+            for lon in (bbox["west"], bbox["east"]):
+                x, y = self._rotate(*self._metres(lat, lon))
+                xs.append(x)
+                ys.append(y)
+        self.min_x, self.min_y = min(xs), min(ys)
+        self.cols = max(1, math.ceil((max(xs) - self.min_x) / metres_per_tile))
+        self.rows = max(1, math.ceil((max(ys) - self.min_y) / metres_per_tile))
+
+    def _metres(self, lat: float, lon: float) -> tuple[float, float]:
+        return (
+            (lon - self.lon0) * self.m_per_deg_lon,  # east
+            (self.lat0 - lat) * self.m_per_deg_lat,  # south (screen-down)
+        )
+
+    def _rotate(self, x: float, y: float) -> tuple[float, float]:
+        return (x * self._cos - y * self._sin, x * self._sin + y * self._cos)
 
     def to_tile(self, lat: float, lon: float) -> tuple[float, float]:
-        x_m = (lon - self.bbox["west"]) * self.m_per_deg_lon
-        y_m = (self.bbox["north"] - lat) * self.m_per_deg_lat  # north -> row 0
-        return x_m / self.mpt, y_m / self.mpt
+        x, y = self._rotate(*self._metres(lat, lon))
+        return (x - self.min_x) / self.mpt, (y - self.min_y) / self.mpt
 
 
 # --------------------------------------------------------------------------- #
@@ -202,8 +254,12 @@ def new_grid(cols: int, rows: int, fill: int = 0) -> list:
     return [[fill] * cols for _ in range(rows)]
 
 
-def fill_polygon(grid: list, gid: int, pts: list, cols: int, rows: int) -> None:
-    """Scanline polygon fill. `pts` is a list of (col, row) floats."""
+def polygon_cells(pts: list, cols: int, rows: int):
+    """Yield (col, row) cells whose centre lies inside the polygon (scanline).
+
+    Shared by `fill_polygon` (which paints them) and the Smallville matrix
+    emitter (`osm_to_ville.py`, which needs each building's footprint cells).
+    """
     if len(pts) < 3:
         return
     ys = [p[1] for p in pts]
@@ -224,7 +280,13 @@ def fill_polygon(grid: list, gid: int, pts: list, cols: int, rows: int) -> None:
             c_lo = max(0, int(math.ceil(xs[i] - 0.5)))
             c_hi = min(cols - 1, int(math.floor(xs[i + 1] - 0.5)))
             for c in range(c_lo, c_hi + 1):
-                grid[row][c] = gid
+                yield c, row
+
+
+def fill_polygon(grid: list, gid: int, pts: list, cols: int, rows: int) -> None:
+    """Scanline polygon fill. `pts` is a list of (col, row) floats."""
+    for c, row in polygon_cells(pts, cols, rows):
+        grid[row][c] = gid
 
 
 def stamp(
@@ -465,6 +527,7 @@ def write_tmj(path: str, proj: Projector, layers: dict, tileset: dict) -> None:
             },
             {"name": "bbox", "type": "string", "value": json.dumps(proj.bbox)},
             {"name": "metres_per_tile", "type": "float", "value": proj.mpt},
+            {"name": "rotation_deg", "type": "float", "value": proj.rotate_deg},
         ],
         "tilesets": [tileset],
         "layers": [
@@ -574,7 +637,23 @@ def _urban_tileset() -> dict:
     }
 
 
-def build_area(name: str, mpt: float, refresh: bool, theme: str) -> None:
+def resolve_rotation(rotate: str, osm: dict, bbox: dict) -> float:
+    """Turn the --rotate option into a concrete degrees-to-rotate value.
+
+    `auto` spins the map so its street grid lands axis-aligned (rotate by the
+    negative of the detected grid offset); `none` leaves north up; a number
+    rotates by exactly that many degrees.
+    """
+    if rotate == "none":
+        return 0.0
+    if rotate == "auto":
+        lat0 = (bbox["south"] + bbox["north"]) / 2
+        m_per_deg_lon = 111_320.0 * math.cos(math.radians(lat0))
+        return -dominant_grid_angle(osm, m_per_deg_lon, 111_320.0)
+    return float(rotate)
+
+
+def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) -> None:
     """Fetch, rasterize and emit the Tiled map for one named area in AREAS."""
     area = AREAS[name]
     stem, bbox = area["stem"], area["bbox"]
@@ -587,8 +666,11 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str) -> None:
         gid_of = {cat: PALETTE[cat][0] for cat in PALETTE}
 
     osm = fetch_osm(bbox, os.path.join(OUT_DIR, f"{stem}_osm.json"), refresh)
-    proj = Projector(bbox, mpt)
-    print(f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile")
+    rotate_deg = resolve_rotation(rotate, osm, bbox)
+    proj = Projector(bbox, mpt, rotate_deg)
+    print(
+        f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile, rotated {rotate_deg:+.2f}°"
+    )
 
     t0 = time.time()
     result = rasterise(osm, proj, gid_of)
@@ -641,12 +723,17 @@ def main() -> int:
         default=METRES_PER_TILE,
         help="metres per tile (default %(default)s)",
     )
+    ap.add_argument(
+        "--rotate",
+        default="auto",
+        help="'auto' (axis-align the street grid, default), 'none', or degrees",
+    )
     args = ap.parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
     names = list(AREAS) if args.area == "all" else [args.area]
     for name in names:
-        build_area(name, args.mpt, args.refresh, args.theme)
+        build_area(name, args.mpt, args.refresh, args.theme, args.rotate)
     return 0
 
 

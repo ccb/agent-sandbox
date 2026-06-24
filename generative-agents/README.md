@@ -112,6 +112,21 @@ the maze assets aren't present — run `./setup.sh` first.)
   each resident, then prints keyword-overlap vs semantic (embedding) retrieval
   side by side — the believability check for whether semantic recall surfaces
   better memories. Offline and needs no `setup.sh` assets (`build_world` only).
+- **A whole different world — the real UPenn campus:** the map is just the
+  `the_ville` matrix format, so any world in that shape drops in. `tools/geo`
+  generates one from OpenStreetMap (`osm_to_ville.py` → `the_upenn`), and
+  `backend/world_data_upenn.yaml` is a small Penn cast (College Hall, Van Pelt,
+  Meyerson, …). Run it headless — agents pathfind around the real building
+  footprints between named buildings:
+
+  ```bash
+  uv run python -m backend.run_upenn          # 3 Penn personas walk their day
+  ```
+
+  `build_world(personas, locations)` and `simulate(..., personas=, build_world_fn=)`
+  take an alternate world (defaults are unchanged, so `the_ville` is byte-identical).
+  Rendering that walk — in this Phaser replay or in the Godot mock — is the open
+  next step.
 
 ## Where the files live
 

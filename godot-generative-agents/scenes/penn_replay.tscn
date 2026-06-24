@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/penn_replay.gd" id="1_replay"]
+[ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
+[ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="3_player"]
+
+[node name="PennReplay" type="Node2D"]
+script = ExtResource("1_replay")
+player_sheet = ExtResource("3_player")
+
+; The campus, drawn with the Kenney CC0 urban tiles (same map the sim walked).
+[node name="Map" type="TileMapLayer" parent="."]
+script = ExtResource("2_tiled")
+map_path = "res://maps/upenn_core_urban.tmj"
+
+; Centred on the 2800x1984 px campus; zoom 0.5 frames the whole thing (16px tile
+; -> 8px on screen), so you can watch every agent cross campus at once.
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(1400, 992)
+zoom = Vector2(0.5, 0.5)
