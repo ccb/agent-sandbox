@@ -1,6 +1,6 @@
-"""Mock-LLM brains for the Smallville cast.
+"""LLM brains for the Smallville cast.
 
-The port uses no live LLM. Each persona is driven by a
+By default the port uses no live LLM: each persona is driven by a
 :class:`SmallvilleMockClient` -- a subclass of the engine's
 ``MockReActClient`` (provider ``"mock"``) that keeps the same client interface
 the agent layer calls (``chat`` / ``call_tool``) but swaps the Action-Castle
@@ -13,6 +13,11 @@ The "where am I now" signal is read straight from the observation the engine
 hands the agent (``describe_for`` puts the current location name on the first
 line), so the decision genuinely flows through the engine's observe -> decide
 seam -- it's just a stand-in for a model, exactly as ``MockReActClient`` is.
+
+A real model can take over those decisions (NEXT-STEPS Phase A): pass an
+``llm_client`` to :func:`attach_agents` and it becomes each agent's brain, while a
+``SmallvilleMockClient`` stays on ``agent.schedule`` to pace the day. With none, the
+mock is both brain and schedule driver and the replay is byte-identical.
 """
 
 import json
@@ -155,6 +160,7 @@ def attach_agents(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     planner_client=None,
+    llm_client=None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -190,24 +196,38 @@ def attach_agents(
     replays the authored schedule, so the replay stays byte-identical. The agent
     and its memory are built and seeded *before* the planner runs, so a generative
     planner reasons over the same t=0 memory the agent will. If the model returns
-    nothing usable, the agent falls back to the static schedule."""
+    nothing usable, the agent falls back to the static schedule.
+
+    Pass an ``llm_client`` (NEXT-STEPS Phase A) to make each agent's travel/perform
+    *decisions* through a real model: it becomes the agent's brain (``agent.decide``
+    -> ``llm_client``), while a deterministic ``SmallvilleMockClient`` stays on
+    ``agent.schedule`` to pace the day (``advance``/``steps``/``emoji``). With none,
+    that same mock client is *also* the brain -- ``agent.llm_client is
+    agent.schedule`` -- so decisions are deterministic and the replay is
+    byte-identical."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
     )
     for spec in personas:
         char = characters[spec["name"]]
-        # Build the agent first, with the persona's authored schedule as a
-        # starting point, so its memory exists and can be seeded before a planner
-        # reasons over it. The planner (below) then commits the schedule it wants.
-        client = SmallvilleMockClient(spec["schedule"], ledger=ledger)
-        agent = LLMAgent(
-            client, persona=char.persona, embedding_client=embedding_client
-        )
-        # The verbs the structured tool may offer; our client ignores the enum
-        # but a well-formed schema keeps the seam honest.
+        # The schedule driver: a deterministic SmallvilleMockClient that owns the
+        # day's pacing (advance()/steps/emoji and the current stop). The decision
+        # brain is a real LLM client when one is supplied (Phase A), else the
+        # schedule client itself -- so by default agent.llm_client IS agent.schedule
+        # (one object), keeping decisions deterministic and the replay byte-identical.
+        schedule = SmallvilleMockClient(spec["schedule"], ledger=ledger)
+        brain = llm_client if llm_client is not None else schedule
+        # Build the agent first so its memory exists and can be seeded before a
+        # planner reasons over it. The planner (below) commits the schedule it wants.
+        agent = LLMAgent(brain, persona=char.persona, embedding_client=embedding_client)
+        # The verbs the structured tool may offer; the mock ignores the enum but a
+        # well-formed schema keeps the seam honest for a real brain.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
+        # The step loop reads pacing (advance/steps/emoji/stop_index) from
+        # agent.schedule, whether or not the brain is a real model.
+        agent.schedule = schedule
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -249,7 +269,7 @@ def attach_agents(
         # plan's stops as the schedule the client drives.
         agent.planner = planner
         agent.plan = plan
-        agent.llm_client.replace_schedule(
+        agent.schedule.replace_schedule(
             [stop.to_schedule_entry() for stop in plan.stops]
         )
 
@@ -315,8 +335,10 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     if proposed is plan or proposed == plan:
         return False
     # Re-anchor: keep the stops the agent has executed or is performing (ground
-    # truth from the client), take only the planner's stops past the current one.
-    after = getattr(agent.llm_client, "stop_index", -1)
+    # truth from the schedule driver), take only the planner's stops past the
+    # current one. Pacing lives on agent.schedule -- the mock client that drives
+    # advance()/steps even when a real LLM is the decision brain (Phase A).
+    after = getattr(agent.schedule, "stop_index", -1)
     guarded = replace(
         proposed,
         stops=plan.stops[: after + 1] + proposed.stops[after + 1 :],
@@ -325,7 +347,7 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     if guarded.stops == plan.stops:
         return False  # only higher-level reasoning moved; schedule is unchanged
     agent.plan = guarded
-    agent.llm_client.replace_schedule(
+    agent.schedule.replace_schedule(
         [stop.to_schedule_entry() for stop in guarded.stops]
     )
     return True
