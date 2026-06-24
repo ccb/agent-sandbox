@@ -10,10 +10,10 @@
 script = ExtResource("1_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; The map is the 34th–36th x Spruce–Walnut core (5632x7040 px at 1 m/tile).
-; Centred on the map; zoom 0.176 fits the whole (tall) area to the 1000x1250
-; portrait window (see project.godot). Size the view with the camera zoom, never by
-; scaling the TileMapLayer (that leaves sub-pixel white seams between cells).
+; The map is the 34th–36th x Spruce–Walnut core (5632x7040 px at 1 m/tile) — a
+; PORTRAIT map in a 1920x1080 landscape window. zoom 0.341 cover-fits: the map
+; fills the window with NO grey margins, cropping the north/south ends. Size the
+; view with the camera zoom, never by scaling the TileMapLayer (white seams).
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(2810, 3510)
-zoom = Vector2(0.176, 0.176)
+position = Vector2(2810, 3300)
+zoom = Vector2(0.341, 0.341)
