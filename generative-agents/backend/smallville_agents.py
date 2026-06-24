@@ -161,6 +161,9 @@ def attach_agents(
     base_personas_dir: str | None = None,
     planner_client=None,
     llm_client=None,
+    clock=None,
+    num_steps: int | None = None,
+    out_planner_sources: dict | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -256,14 +259,25 @@ def attach_agents(
         # replace_schedule re-commits the same list. An LLM that returns nothing
         # usable (empty plan) falls back to the static schedule so the sim is safe.
         if planner_client is not None:
-            planner = LLMPlanner(planner_client, LOCATION_NAMES)
-            plan = planner.generate(persona=spec, memory=agent.memory, clock=None)
-            if not plan.stops:
+            planner = LLMPlanner(
+                planner_client, LOCATION_NAMES, clock=clock, num_steps=num_steps
+            )
+            plan = planner.generate(persona=spec, memory=agent.memory)
+            if plan.stops:
+                source = "llm"
+            else:
+                # The model produced nothing usable -> safe static fallback.
                 planner = MockPlanner(spec)
                 plan = planner.generate(persona=spec)
+                source = "static"
         else:
             planner = MockPlanner(spec)
-            plan = planner.generate(persona=spec, memory=agent.memory, clock=None)
+            plan = planner.generate(persona=spec, memory=agent.memory)
+            source = "mock"
+        # Record where each agent's plan came from so the caller can report how many
+        # were genuinely model-generated vs. fell back (run_simulation.main prints it).
+        if out_planner_sources is not None:
+            out_planner_sources[spec["name"]] = source
         # Keep the planner + current plan on the agent so the step loop can revise
         # the unstarted tail at a trigger (see maybe_revise_plan), and commit the
         # plan's stops as the schedule the client drives.

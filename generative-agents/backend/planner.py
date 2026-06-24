@@ -175,18 +175,35 @@ class LLMPlanner:
         "Plan in character, grounded in who they are and what they remember."
     )
 
-    def __init__(self, client, known_places=frozenset(), *, max_tokens: int = 700):
+    def __init__(
+        self,
+        client,
+        known_places=frozenset(),
+        *,
+        clock=None,
+        num_steps=None,
+        max_tokens: int = 700,
+    ):
         self.client = client
         self.known_places = set(known_places)
+        # When both are given (a :class:`~backend.sim_clock.SimClock` and the run
+        # length in steps), the plan is bounded to the hours the run actually
+        # covers -- so the model plans 8-11am for a 3-hour run instead of a generic
+        # full day, which is tighter and cheaper. With neither, it plans an
+        # open-ended day.
+        self.clock = clock
+        self.num_steps = num_steps
         self.max_tokens = max_tokens
 
     # -- the three generation levels -----------------------------------------
 
     def generate(self, persona, memory=None, clock=None) -> DailyPlan:
+        # ``clock`` is accepted for the Planner protocol; the run-bounded clock is
+        # configured on the instance (see __init__), so we read that.
         persona_text = self._persona_text(persona)
         mem = self._memory_block(memory, "what matters for my day today", turn=0)
         day = self._day_outline(persona_text, mem)
-        hours = self._hourly(persona_text, day, clock)
+        hours = self._hourly(persona_text, day)
         stops = self._minute(persona_text, hours)
         return DailyPlan(day=day, hours=hours, stops=stops)
 
@@ -217,7 +234,7 @@ class LLMPlanner:
 
     def _day_outline(self, persona_text: str, mem: str) -> list[DayBlock]:
         user = (
-            f"{persona_text}\n{self._memory_line(mem)}"
+            f"{persona_text}\n{self._window_line()}{self._memory_line(mem)}"
             "Sketch your day as a few broad blocks."
         )
         result = self._call(user, DAY_OUTLINE_TOOL)
@@ -228,17 +245,16 @@ class LLMPlanner:
                 blocks.append(DayBlock(label=str(label), summary=str(summary)))
         return blocks
 
-    def _hourly(self, persona_text: str, day: list[DayBlock], clock) -> list[HourBlock]:
+    def _hourly(self, persona_text: str, day: list[DayBlock]) -> list[HourBlock]:
         outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
         hours_hint = ""
-        if clock is not None:
-            hours_hint = (
-                "Plan these hours of the day: "
-                f"{[h for _, h in clock.hour_starts(clock.steps_per_hour * 24)][:24]}.\n"
-            )
+        if self.clock is not None and self.num_steps is not None:
+            hours = [h for _, h in self.clock.hour_starts(self.num_steps)]
+            if hours:
+                hours_hint = f"Plan only these hours of the day: {hours}.\n"
         user = (
-            f"{persona_text}\nYour day outline: {outline}.\n{hours_hint}"
-            "Give one line per hour."
+            f"{persona_text}\n{self._window_line()}Your day outline: {outline}.\n"
+            f"{hours_hint}Give one line per hour."
         )
         result = self._call(user, HOURLY_TOOL)
         hours = []
@@ -347,3 +363,14 @@ class LLMPlanner:
         if not self.known_places:
             return ""
         return f"Known places: {', '.join(sorted(self.known_places))}.\n"
+
+    def _window_line(self) -> str:
+        """Tell the model the clock window the run covers, so it plans only that.
+
+        Empty unless both a clock and a run length were given (e.g. tests omit
+        them) -- then the plan is open-ended, as before."""
+        if self.clock is None or self.num_steps is None:
+            return ""
+        start = self.clock.time_at(0).strftime("%H:%M")
+        end = self.clock.time_at(self.num_steps).strftime("%H:%M")
+        return f"This simulation runs from {start} to {end} today; plan only that window.\n"
