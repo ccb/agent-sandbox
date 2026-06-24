@@ -1,0 +1,91 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/wanderer.gd" id="1_wanderer"]
+[ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="2_player"]
+[ext_resource type="Texture2D" uid="uid://cf5c74b35lvyh" path="res://Cute_Fantasy_Free/Enemies/Skeleton.png" id="3_skeleton"]
+[ext_resource type="Texture2D" uid="uid://bgt3r07jmjjjo" path="res://Cute_Fantasy_Free/Animals/Pig/Pig.png" id="4_pig"]
+[ext_resource type="Texture2D" uid="uid://crmwonixf75pw" path="res://Cute_Fantasy_Free/Enemies/Slime_Green.png" id="5_slime"]
+[ext_resource type="Script" path="res://scripts/campus_map.gd" id="6_campus"]
+[ext_resource type="Texture2D" uid="uid://c3mc2eel2e3xc" path="res://Cute_Fantasy_Free/Tiles/Grass_Middle.png" id="7_grass"]
+[ext_resource type="Texture2D" uid="uid://3rgr524ahxpt" path="res://Cute_Fantasy_Free/Tiles/Path_Middle.png" id="8_path"]
+[ext_resource type="Texture2D" uid="uid://drbjfwdyknoo6" path="res://Cute_Fantasy_Free/Tiles/Water_Middle.png" id="9_water"]
+[ext_resource type="Texture2D" uid="uid://badtfimn65lqt" path="res://Cute_Fantasy_Free/Outdoor decoration/House_1_Wood_Base_Blue.png" id="10_house"]
+[ext_resource type="Texture2D" uid="uid://c8nvffwrqtc3h" path="res://Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png" id="11_tree"]
+
+[node name="Main" type="Node2D"]
+y_sort_enabled = true
+
+[node name="Campus" type="TileMapLayer" parent="."]
+scale = Vector2(3, 3)
+script = ExtResource("6_campus")
+grass_tile = ExtResource("7_grass")
+path_tile = ExtResource("8_path")
+water_tile = ExtResource("9_water")
+building_sheet = ExtResource("10_house")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(3888, 2424)
+zoom = Vector2(0.13, 0.13)
+
+[node name="TreeA" type="Sprite2D" parent="."]
+position = Vector2(180, 470)
+scale = Vector2(3, 3)
+texture = ExtResource("11_tree")
+
+[node name="TreeB" type="Sprite2D" parent="."]
+position = Vector2(920, 180)
+scale = Vector2(3, 3)
+texture = ExtResource("11_tree")
+
+[node name="TreeC" type="Sprite2D" parent="."]
+position = Vector2(980, 500)
+scale = Vector2(3, 3)
+texture = ExtResource("11_tree")
+
+[node name="Player" type="Sprite2D" parent="."]
+position = Vector2(300, 250)
+scale = Vector2(3, 3)
+texture = ExtResource("2_player")
+script = ExtResource("1_wanderer")
+sheet_hframes = 6
+sheet_vframes = 10
+walk_row = 0
+walk_len = 6
+anim_fps = 8.0
+move_speed = 60.0
+
+[node name="Skeleton" type="Sprite2D" parent="."]
+position = Vector2(820, 410)
+scale = Vector2(3, 3)
+texture = ExtResource("3_skeleton")
+script = ExtResource("1_wanderer")
+sheet_hframes = 6
+sheet_vframes = 10
+walk_row = 0
+walk_len = 6
+anim_fps = 7.0
+move_speed = 50.0
+
+[node name="Pig" type="Sprite2D" parent="."]
+position = Vector2(480, 520)
+scale = Vector2(3, 3)
+texture = ExtResource("4_pig")
+script = ExtResource("1_wanderer")
+sheet_hframes = 2
+sheet_vframes = 2
+walk_row = 0
+walk_len = 2
+anim_fps = 4.0
+move_speed = 40.0
+
+[node name="Slime" type="Sprite2D" parent="."]
+position = Vector2(650, 160)
+scale = Vector2(2, 2)
+texture = ExtResource("5_slime")
+script = ExtResource("1_wanderer")
+sheet_hframes = 8
+sheet_vframes = 3
+walk_row = 1
+walk_len = 8
+anim_fps = 10.0
+move_speed = 45.0
