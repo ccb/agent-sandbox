@@ -135,6 +135,7 @@ def simulate(
     planner_client=None,
     llm_client=None,
     out_planner_sources: dict | None = None,
+    out_plans: dict | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -184,6 +185,11 @@ def simulate(
     from (``"llm"`` / ``"static"`` fallback / ``"mock"``) -- an out-parameter so the
     determinism tests' ``simulate(...)`` calls stay unchanged. ``main`` uses it to
     report how many agents the model actually planned vs. fell back.
+
+    Pass an ``out_plans`` dict to collect each persona's generated plan
+    (``{name: DailyPlan.to_primitive()}``) so the run can persist it; the exporter
+    writes ``personas/<Name>/daily_plan.json`` and ``backend.compare_plans`` reads it
+    back without re-calling the model. Also an out-parameter, for the same reason.
     """
     game, chars = build_world()
     attach_agents(
@@ -198,6 +204,7 @@ def simulate(
         clock=clock,
         num_steps=num_steps,
         out_planner_sources=out_planner_sources,
+        out_plans=out_plans,
     )
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]
@@ -507,6 +514,8 @@ def main() -> None:
     # Where each agent's daily plan came from (llm / static fallback / mock), so we
     # can report whether the model actually planned every agent or some fell back.
     planner_sources: dict = {}
+    # Each agent's generated plan, persisted by the exporter as daily_plan.json.
+    plans: dict = {}
     # One clock for the run, shared by the loop's revision triggers (issue #83):
     # built from the same --start / --sec-per-step the exporter stamps frames
     # with, so plan time and replay time agree.
@@ -526,6 +535,7 @@ def main() -> None:
             llm_client=llm_client,
             planner_client=llm_client,
             out_planner_sources=planner_sources,
+            out_plans=plans,
         )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     if llm_client is not None:
@@ -552,6 +562,7 @@ def main() -> None:
         base_personas_dir=base_personas,
         sec_per_step=args.sec_per_step,
         memory_streams=memory_streams,
+        plans=plans,
     )
     print(f"Wrote simulation to {sim_dir}")
     print(

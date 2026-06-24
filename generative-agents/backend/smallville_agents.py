@@ -164,6 +164,7 @@ def attach_agents(
     clock=None,
     num_steps: int | None = None,
     out_planner_sources: dict | None = None,
+    out_plans: dict | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -278,6 +279,10 @@ def attach_agents(
         # were genuinely model-generated vs. fell back (run_simulation.main prints it).
         if out_planner_sources is not None:
             out_planner_sources[spec["name"]] = source
+        # Hand back the generated plan (as JSON-safe primitives) so the run can
+        # persist it -- the exporter writes personas/<Name>/daily_plan.json.
+        if out_plans is not None:
+            out_plans[spec["name"]] = plan.to_primitive()
         # Keep the planner + current plan on the agent so the step loop can revise
         # the unstarted tail at a trigger (see maybe_revise_plan), and commit the
         # plan's stops as the schedule the client drives.
