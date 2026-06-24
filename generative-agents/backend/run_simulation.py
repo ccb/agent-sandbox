@@ -47,6 +47,7 @@ from .build_world import PERSONAS, build_world
 from .sim_clock import SimClock
 from .smallville_agents import (
     attach_agents,
+    maybe_converse,
     maybe_revise_plan,
     memories_for_frame,
     memory_stream_for_persona,
@@ -182,6 +183,12 @@ def simulate(
     deterministic ``SmallvilleMockClient`` still paces the schedule
     (``advance``/``steps``/``emoji``). With none -- the offline default -- that mock
     client is also the brain, so decisions stay deterministic and byte-identical.
+    A real ``llm_client`` also enables **conversation** (NEXT-STEPS Phase E, issue
+    #86): co-located, settled residents run a turn-taking dialogue each step (via
+    :func:`~backend.smallville_agents.maybe_converse`), writing each line into both
+    agents' memory streams and onto their replay cards' ``chat`` field. With the
+    mock brain no utterance is produced, so no conversation happens and the replay
+    stays byte-identical.
 
     Pass a ``reflector_client`` (an engine ``LlmClient``) to give each agent an
     ``LLMReflector`` for periodic memory synthesis (issue #84): the loop runs a
@@ -236,7 +243,18 @@ def simulate(
             # the steps in between (like desc/pron), so the card is never blank.
             "reasoning": "(waking up)",
             "memories": [],
+            # Latest dialogue line, surfaced on the replay's agent card (issue
+            # #86). None until this agent has a conversation; then it persists
+            # (like reasoning/desc) until the next one.
+            "chat": None,
         }
+
+    # Conversation is gated on a real brain (issue #86): the deterministic mock
+    # brain never produces an utterance, so the default offline run holds no
+    # conversations and the replay stays byte-identical. `cooldowns` throttles how
+    # often the same pair re-converses across the run.
+    conversation_enabled = llm_client is not None
+    conversation_cooldowns: dict = {}
 
     frames: list[dict] = []
     for _step in range(num_steps):
@@ -343,13 +361,24 @@ def simulate(
                 "movement": [int(st["tile"][0]), int(st["tile"][1])],
                 "pronunciatio": st["pron"],
                 "description": st["desc"],
-                "chat": None,
+                # The agent's latest dialogue line (issue #86), or None. Updated
+                # below by maybe_converse for any pair that talks this step.
+                "chat": st["chat"],
                 # Reasoning + retrieved memories for this agent's card (the
                 # exporter writes the frame verbatim, so these flow straight into
                 # movement/<step>.json for the replay to render).
                 "reasoning": st["reasoning"],
                 "memories": st["memories"],
             }
+
+        # Conversation (issue #86): after everyone has moved, let co-located,
+        # settled residents talk. Each meeting writes dialogue into both agents'
+        # memory streams and updates their cards' chat line. Gated + a no-op for
+        # the mock brain, so the default replay is unchanged.
+        if conversation_enabled:
+            maybe_converse(
+                game, chars, state, frame, _step, conversation_cooldowns, order
+            )
         frames.append(frame)
 
     # Hand back each agent's complete memory stream, if the caller asked for it.
@@ -518,7 +547,7 @@ def main() -> None:
             )
     print(
         f"LLM brain: {provider} -- travel/perform decisions + daily planning "
-        "+ periodic reflection."
+        "+ periodic reflection + conversation."
         if llm_client is not None
         else "LLM brain: none -- deterministic mock decisions + static schedule."
     )

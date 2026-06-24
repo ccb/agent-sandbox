@@ -23,6 +23,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 import json
 from dataclasses import replace
 
+from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import (
     LLMAgent,
@@ -31,6 +32,12 @@ from text_adventure_games.npc import (
 )
 from text_adventure_games.reflection import LLMReflector
 from text_adventure_games.usage import UsageLedger, record_call
+
+# Conversation pacing (issue #86). A settled pair talks at most once per this many
+# steps, so co-located residents don't re-converse every tick of a long stay; and
+# a single meeting is capped at this many lines.
+CONVERSATION_COOLDOWN_STEPS = 90
+CONVERSATION_MAX_EXCHANGES = 6
 
 from . import seed
 from .build_world import LOCATION_NAMES
@@ -460,3 +467,56 @@ def remember_outcome(char, command: str, step: int) -> None:
         text = f'I did "{command}".'
         importance = 1.0
     agent.memory.add_observation(text, turn=step, importance=importance)
+
+
+def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
+    """Run conversations between co-located, settled residents this step (#86).
+
+    Called once per step *after* movement resolves. A pair is eligible when both
+    are *settled into an activity* (standing still, not walking) and co-located --
+    decided by the engine's ``audience_for`` seam via
+    :func:`conversation.find_conversation_pairs`. The same pair is throttled to one
+    conversation per :data:`CONVERSATION_COOLDOWN_STEPS`, so residents sharing a
+    cafe for an hour chat once, not every tick.
+
+    Each conversation runs the engine turn-taking loop
+    (:func:`conversation.converse`), which writes every line into *both* agents'
+    memory streams as ``MemoryKind.CHAT`` and surfaces the last line on both
+    participants' replay cards (``state``/``frame`` ``"chat"``).
+
+    **Gated by the caller**: only invoked when a real brain is driving. With the
+    deterministic mock brain, ``Agent.converse`` returns nothing anyway (its tool
+    answer carries no ``utterance``), so even an accidental call is a no-op -- the
+    mock replay stays byte-identical. Returns how many conversations happened.
+    """
+    settled = [
+        chars[name]
+        for name in order
+        if state[name]["performing"] and not state[name]["path"]
+    ]
+    happened = 0
+    for a, b in convo.find_conversation_pairs(game, settled):
+        key = frozenset((a.name, b.name))
+        if step - cooldowns.get(key, -(10**9)) < CONVERSATION_COOLDOWN_STEPS:
+            continue
+        # Attribute the meeting's LLM calls to the initiator/step (best effort:
+        # the shared client alternates speakers within one converse()).
+        ctx = getattr(a.agent.llm_client, "context", None)
+        if ctx is not None:
+            ctx.update({"actor": a.name, "turn": step, "attempt": 0})
+        conversation = convo.converse(
+            game, a, b, turn=step, max_exchanges=CONVERSATION_MAX_EXCHANGES
+        )
+        if not conversation.happened:
+            continue
+        cooldowns[key] = step
+        happened += 1
+        # The frontend renders chat as a list of [speaker, line] pairs (see
+        # main_script.html), so hand it the whole transcript. It persists (like
+        # desc/reasoning) on state until the agent's next conversation.
+        lines = [[speaker, text] for speaker, text in conversation.lines]
+        for nm in (a.name, b.name):
+            state[nm]["chat"] = lines
+            if nm in frame:
+                frame[nm]["chat"] = lines
+    return happened
