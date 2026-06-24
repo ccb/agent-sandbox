@@ -24,7 +24,12 @@ import json
 from dataclasses import replace
 
 from text_adventure_games.llm_client import MockReActClient
-from text_adventure_games.npc import LLMAgent, format_observation_with_memories
+from text_adventure_games.npc import (
+    LLMAgent,
+    format_observation_with_memories,
+    maybe_reflect,
+)
+from text_adventure_games.reflection import LLMReflector
 from text_adventure_games.usage import UsageLedger, record_call
 
 from . import seed
@@ -160,6 +165,7 @@ def attach_agents(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     planner_client=None,
+    reflector_client=None,
     llm_client=None,
     clock=None,
     num_steps: int | None = None,
@@ -208,7 +214,16 @@ def attach_agents(
     ``agent.schedule`` to pace the day (``advance``/``steps``/``emoji``). With none,
     that same mock client is *also* the brain -- ``agent.llm_client is
     agent.schedule`` -- so decisions are deterministic and the replay is
-    byte-identical."""
+    byte-identical.
+
+    Pass a ``reflector_client`` (an engine ``LlmClient``) to give each agent an
+    :class:`~text_adventure_games.reflection.LLMReflector` for periodic memory
+    synthesis (issue #84): the step loop runs a reflection pass once an agent's
+    accumulated memory importance crosses its threshold, turning recent memories
+    into higher-level thoughts written back into the stream. With none -- the
+    offline default -- no reflector is wired on, so reflection never fires and the
+    replay stays byte-identical. ``run_simulation`` supplies one only for a real
+    (non-mock) provider, the same gate as the brain and planner."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
@@ -225,6 +240,11 @@ def attach_agents(
         # Build the agent first so its memory exists and can be seeded before a
         # planner reasons over it. The planner (below) commits the schedule it wants.
         agent = LLMAgent(brain, persona=char.persona, embedding_client=embedding_client)
+        # Periodic reflection (issue #84): an LLMReflector when a real client is
+        # supplied, else None -- so the offline mock run never reflects and the
+        # replay stays byte-identical. The threshold rides on AgentConfig's default.
+        if reflector_client is not None:
+            agent.reflector = LLMReflector(reflector_client)
         # The verbs the structured tool may offer; the mock ignores the enum but a
         # well-formed schema keeps the seam honest for a real brain.
         agent.action_names = ["travel", "perform"]

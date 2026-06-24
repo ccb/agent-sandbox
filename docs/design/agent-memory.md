@@ -326,37 +326,49 @@ dumped into the LLM context.
 
 ---
 
-## 7. Reflection
+## 7. Reflection — implemented (#84)
 
 Raw observations help with continuity, but reflections help with generalization.
-The paper generates reflections when recent importance crosses a threshold. Use
-the same idea at a smaller text-adventure scale.
+The paper generates reflections when recent importance crosses a threshold. We use
+the same idea at a smaller text-adventure scale, in `text_adventure_games/reflection.py`.
 
-Suggested trigger:
-
-```python
-if memory.importance_since_reflection >= 30:
-    reflect(agent, game)
-```
-
-Reflection flow:
-
-1. Take the 20-50 most recent memory records.
-2. Ask for 2-3 salient questions the agent could answer from those memories.
-3. For each question, retrieve supporting memories.
-4. Ask for 1 short inference grounded in those memories.
-5. Store each inference as `MemoryKind.REFLECTION` with `source_event_ids` or
-   evidence memory IDs.
-6. Reset `importance_since_reflection`.
-
-For the first implementation, this can be optional and disabled by default:
+Trigger (`reflection.should_reflect`):
 
 ```python
-AgentMemory(enable_reflection=False)
+if should_reflect(agent.memory, threshold):   # threshold = AgentConfig.reflection_threshold (30)
+    reflect(agent.memory, agent.reflector, turn)
 ```
 
-Tests should cover the threshold logic with a fake reflection function before any
-real LLM prompts are added.
+Reflection flow (`reflection.reflect`), the paper's loop:
+
+1. Take the `recent_window` (default 50) most recent memory records.
+2. Ask the `Reflector` for the salient questions they raise (capped at 3).
+3. For each question, *retrieve* supporting memories — read-only (`touch=False`),
+   so reflecting never disturbs decision-time recency.
+4. Ask the `Reflector` for one short inference grounded in those memories.
+5. Store each inference as `MemoryKind.REFLECTION` via `add_reflection`, with the
+   supporting record ids as `source_event_ids`.
+6. Reset `importance_since_reflection` (after adding, so the reflections' own
+   importance doesn't immediately re-trigger).
+
+The cognition sits behind a `Reflector` protocol (mirroring `planning.py`'s
+`Planner`): a deterministic `MockReflector` for offline/CI runs and an
+`LLMReflector` (structured `call_tool` over the `LlmClient` seam) for live runs.
+
+Reflection is **off unless a reflector is wired onto the agent** — with none, the
+ReAct loop never reflects and behavior is byte-identical. It is wired into both
+loops through `npc.maybe_reflect`: the engine `react_behavior` (via the `reflector`
+arg on `make_react_behavior` / `make_hybrid_behavior`) and the Smallville step loop
+(`run_simulation.simulate`, gated on `attach_agents(reflector_client=...)`, real
+provider only). Tests (`tests/test_reflection.py`,
+`generative-agents/tests/test_reflection_wiring.py`) cover the threshold and flow
+with fake/scripted reflectors before any real model is involved.
+
+This is the *additive* synthesis the issue scopes (the stream keeps growing). The
+*subtractive* "dreaming" / compaction angle in #84's thread — consolidate aged,
+low-importance, rarely-retrieved memories and evict the raw ones to bound the
+stream — is a distinct, later capability that should reuse this summarization seam
+and the #76 retrieval score to pick candidates.
 
 ---
 
@@ -530,7 +542,7 @@ Live-game tests:
 | 3 | ✅ Done | Ingest visible `Game.events` into per-agent observations (own actions excluded — see §5). |
 | 4 | ✅ Done | Store action success/failure outcomes as memories (in `decide_and_route()`). |
 | 5 | ⬜ Future | Add optional LLM importance scoring behind a mockable interface. |
-| 6 | ⬜ Future | Add optional reflection threshold and reflection memory generation. |
+| 6 | ✅ Done | Periodic reflection: threshold + memory synthesis in `reflection.py` (`should_reflect` / `reflect`, `Mock`/`LLMReflector`), wired into both loops via `npc.maybe_reflect` (#84). |
 | 7 | ⬜ Future | Add simple plan memories (the `add_plan` writer exists; automatic generation does not). |
 | 8 | ⬜ Future | Serialize memory through `Character.to_primitive()` / `from_primitive()` (`AgentMemory` already round-trips; the `Character` hook is unwired). |
 
