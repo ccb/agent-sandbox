@@ -16,12 +16,14 @@ seam -- it's just a stand-in for a model, exactly as ``MockReActClient`` is.
 """
 
 import json
+from dataclasses import replace
 
 from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import LLMAgent, format_observation_with_memories
 from text_adventure_games.usage import UsageLedger, record_call
 
 from . import seed
+from .planner import MockPlanner
 
 
 class SmallvilleMockClient(MockReActClient):
@@ -72,6 +74,17 @@ class SmallvilleMockClient(MockReActClient):
             self.stop_index += 1
             return True
         return False
+
+    def replace_schedule(self, schedule: list[dict]) -> None:
+        """Swap in a revised schedule, keeping the current ``stop_index``.
+
+        A revised plan (``planning.replace_tail``) preserves the stops the agent
+        has already executed or is performing -- everything up to and including
+        ``stop_index`` -- so the index stays valid and only the upcoming tail
+        differs. The mock never calls this (its day is static); it exists for the
+        revision seam a real planner drives (``smallville_agents.maybe_revise_plan``).
+        """
+        self.schedule = schedule
 
     def _current_location(self, observation: str) -> str:
         """describe_for() puts the location name (UPPERCASE) on the first line."""
@@ -174,7 +187,16 @@ def attach_agents(
     )
     for spec in personas:
         char = characters[spec["name"]]
-        client = SmallvilleMockClient(spec["schedule"], ledger=ledger)
+        # The planner produces the day's schedule (issue #83). Today's MockPlanner
+        # simply replays the persona's authored stops, so the schedule it hands
+        # the client -- and the exported replay -- are byte-identical to passing
+        # spec["schedule"] directly. A real LLMPlanner (Phase A) will generate the
+        # plan from identity + memory instead, and simulate() can revise its
+        # unstarted tail mid-day; the client/loop downstream are unchanged.
+        planner = MockPlanner(spec)
+        plan = planner.generate(persona=spec, memory=None, clock=None)
+        schedule = [stop.to_schedule_entry() for stop in plan.stops]
+        client = SmallvilleMockClient(schedule, ledger=ledger)
         agent = LLMAgent(
             client, persona=char.persona, embedding_client=embedding_client
         )
@@ -182,6 +204,11 @@ def attach_agents(
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
+        # Keep the planner and current plan on the agent so the step loop can
+        # later revise the unstarted tail (Phase D build step 5). Inert today --
+        # MockPlanner.revise is a no-op -- so this changes no exported frame.
+        agent.planner = planner
+        agent.plan = plan
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -234,6 +261,51 @@ def observe_and_decide(game, char, step: int):
     agent.last_retrieved = relevant
     observation = format_observation_with_memories(base, relevant)
     return agent.decide(observation)
+
+
+def maybe_revise_plan(char, trigger, clock=None) -> bool:
+    """Offer the agent's planner a chance to re-plan the rest of its day.
+
+    The step loop calls this at a revision trigger (issue #83, design doc §8): an
+    action that failed the precondition gate, or the agent running behind its
+    schedule. It hands the trigger to ``planner.revise``; if that proposes a
+    *changed* plan, it commits the revised tail onto the running schedule and
+    stashes the new plan on the agent. Returns ``True`` iff the plan changed.
+
+    **The executed/current stop is never disturbed** (design invariant §8). The
+    loop, not the planner, is the authority on how far the agent has got: this
+    re-anchors the kept prefix to the client's real ``stop_index`` and grafts only
+    the planner's proposed stops *beyond* it, so a planner that mistakenly rewrote
+    a past stop cannot desync the schedule from the on-screen replay.
+
+    A no-op planner (today's :class:`~backend.planner.MockPlanner`) returns the
+    same plan unchanged, so this commits nothing and the exported replay stays
+    byte-identical. That is what lets the revision seam be wired into the loop now,
+    ahead of the real ``LLMPlanner`` that will actually rewrite the tail.
+    """
+    agent = char.agent
+    planner = getattr(agent, "planner", None)
+    plan = getattr(agent, "plan", None)
+    if planner is None or plan is None:
+        return False
+    proposed = planner.revise(plan, trigger, agent.memory, clock)
+    if proposed is plan or proposed == plan:
+        return False
+    # Re-anchor: keep the stops the agent has executed or is performing (ground
+    # truth from the client), take only the planner's stops past the current one.
+    after = getattr(agent.llm_client, "stop_index", -1)
+    guarded = replace(
+        proposed,
+        stops=plan.stops[: after + 1] + proposed.stops[after + 1 :],
+        revision=plan.revision + 1,
+    )
+    if guarded.stops == plan.stops:
+        return False  # only higher-level reasoning moved; schedule is unchanged
+    agent.plan = guarded
+    agent.llm_client.replace_schedule(
+        [stop.to_schedule_entry() for stop in guarded.stops]
+    )
+    return True
 
 
 def memories_for_frame(records) -> list[dict]:

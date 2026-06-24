@@ -127,6 +127,33 @@ class DailyPlan:
 
 
 # ---------------------------------------------------------------------------
+# Revision triggers (docs/design/daily-planning.md §8)
+# ---------------------------------------------------------------------------
+
+# The reasons a day's plan might be re-considered mid-run. The step loop tags a
+# revision with one of these so a planner can react differently to each (an
+# action that failed its preconditions vs. merely running behind the clock).
+ACTION_FAILED = "action_failed"  # a travel/perform command failed the gate
+PERCEPTION = "perception"  # a perceived memory contradicts the plan
+BEHIND_SCHEDULE = "behind_schedule"  # still en route when the hour's budget ran out
+
+
+@dataclass(frozen=True)
+class RevisionTrigger:
+    """Why, and when, the loop is offering a planner a chance to re-plan.
+
+    ``reason`` is one of the module constants above; ``step`` is the sim step it
+    fired on; ``detail`` is free text for context (e.g. the failed command or the
+    parser's failure message). A :class:`Planner` reads this to decide whether and
+    how to rewrite the plan's tail; a mock planner ignores it.
+    """
+
+    reason: str
+    step: int
+    detail: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Planner protocol (docs/design/daily-planning.md §9)
 # ---------------------------------------------------------------------------
 
