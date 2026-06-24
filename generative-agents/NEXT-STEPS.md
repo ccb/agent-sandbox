@@ -208,3 +208,51 @@ A (real LLM) ──► B (memory + retrieval) ──► C (perception) ──►
 
 This supersedes the README's "Not done yet" section as the working plan; that section can
 shrink to a one-line pointer here once we start executing.
+
+---
+
+## Looking further out — porting the replay frontend to Godot
+
+The web replay (Django 2.2 + Phaser 3) is just **one renderer over a file-based data
+contract**; ROADMAP **Phase 3** ("2D Godot bridge", the game-leaning track) swaps it for a
+Godot 4 renderer reading that same feed. None of this blocks Phases A–F — it rides on the
+export. This is forward-looking guidance, not issues yet; roughly in dependency order:
+
+> **First proof-of-concept already in the repo:** [`godot-generative-agents/`](../godot-generative-agents/README.md)
+> is a tiny Godot 4 project — a code-built `TileMapLayer` world (grass, paths, a pond) with
+> sprites that auto-wander — standing in for the "rebuild the view layer" bullet below. It's
+> a mock, not wired to the export yet, but it proves the Godot-native tilemap + sprite path.
+
+- `[engine/port] M` **Freeze & document the export as the renderer-agnostic contract.**
+  `backend/exporter.py` already emits everything a renderer needs — `reverie/meta.json`
+  (cast, step count, `sec_per_step`), `environment/0.json` (start tiles),
+  `movement/<step>.json` (`[x, y]`, `pronunciatio`, `description`, `chat`, `reasoning`,
+  retrieved `memories`), and `personas/<Name>/memory_stream.json`. Version + spec it so
+  Phaser and Godot read the **same** files. This is the one true prerequisite, and it
+  folds into the cross-cutting "world-state export API" bullet above and the
+  `JSONRenderer` (Stage 10) in
+  [`../docs/design/output-and-trace-rendering.md`](../docs/design/output-and-trace-rendering.md).
+- `[port] S` **Confirm replay needs no server.** Django only serves the `storage/<sim>/…`
+  dump over HTTP polling (`/update_environment`); Godot can read those files straight off
+  disk, so replay mode needs no web stack at all.
+- `[port] M` **Reuse the assets, not the renderer.** The Tiled map (`the_ville_jan7.json`,
+  140×100 @ 32px, 10 layers), tileset PNGs, and 25 character atlases import natively into
+  Godot 4 (Tiled → `TileMapLayer`, atlas → `SpriteFrames`/`AnimatedSprite2D`). Verify
+  asset licensing before bundling — see
+  [`../docs/design/godot-multi-agent-playground.md`](../docs/design/godot-multi-agent-playground.md).
+- `[port] L` **Rebuild the view layer in Godot 4.** `TileMapLayer` for the 10-layer map,
+  `Camera2D` zoom/pan, one `AnimatedSprite2D` per agent driven by `movement` frames, plus
+  `Control`-node equivalents of the agent card, the scrollable memory list, and the State
+  Details panel. This is the bulk of the port and replaces all of Phaser + the
+  HTML/CSS/JS UI (`frontend_overrides/templates/home/main_script.html`, `style.css`).
+- `[port] M` **Port the tile-to-tile motion.** Phaser tweens ~4px/frame between tile steps
+  and picks a walk facing from the move delta (`main_script.html`); Godot must reproduce
+  that interpolation + direction logic so agents read as walking, not teleporting.
+- `[engine] L` **(Live mode only) a Godot↔Python transport.** Replay is plain file reads;
+  a *live* sim (Phase F) needs streaming. ROADMAP points at the proven "Generative Action
+  Castle" Godot↔Python websocket protocol and the 2025 Multi-Agent Playground
+  (`GET /agent_act/next`, Godot 4.4 + FastAPI) as blueprints, with `JSONRenderer` as the
+  natural emit point. Closed issues **#9/#10** (export API + Godot prototype) are prior art.
+- `[port] S` **Carry conversation through when it lands.** Once Phase E populates `chat`
+  (hardcoded `null` today), the Godot UI needs speech bubbles / a dialogue panel — same
+  data field, new widget.

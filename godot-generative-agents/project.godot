@@ -1,0 +1,27 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Godot Generative Agents"
+config/description="A tiny Godot 4 sandbox: a few Cute Fantasy sprites that wander on their own. No player controls — the substrate for agent-driven characters later."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.6")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1152
+window/size/viewport_height=648
+
+[rendering]
+
+; Pixel-art sprites must not be smoothed when scaled up — use Nearest filtering.
+textures/canvas_textures/default_texture_filter=0
