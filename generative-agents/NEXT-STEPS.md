@@ -144,10 +144,22 @@ higher-level thoughts. This is the largest behavioral leap from today's demo.
   day unfolds. Replaces the single hardcoded `destination` + `activity` per persona in
   `backend/build_world.py`. This is the change that makes the town feel alive. Anchor:
   [`../docs/design/daily-planning.md`](../docs/design/daily-planning.md).
-- `[engine] L` **Periodic reflection.** Synthesize recent memories into higher-level
-  thoughts on a cadence (e.g. when accumulated importance crosses a threshold). Today
-  `npc.py` only reflects on command *failure* — ROADMAP Phase 1 calls out adding a real
-  reflect step and wiring it into the live loop.
+- `[engine] L` ✅ **Done (#84) — Periodic reflection.** A new engine
+  `text_adventure_games/reflection.py` synthesizes recent memories into higher-level
+  thoughts on a salience cadence: `should_reflect` fires once an agent's accumulated
+  memory importance crosses `AgentConfig.reflection_threshold`, then `reflect()` runs
+  the paper's flow (salient questions → retrieve supporting memories → one grounded
+  inference each → append as `MemoryKind.REFLECTION` records citing their evidence →
+  reset the accumulator). The cognition sits behind a `Reflector` protocol with a
+  deterministic `MockReflector` (offline/CI) and an `LLMReflector` (real synthesis over
+  the `LlmClient` seam), mirroring the `Planner` split. Wired into both loops via
+  `npc.maybe_reflect`: the engine ReAct loop (`react_behavior`) and the Smallville step
+  loop (`run_simulation.simulate`, gated on `attach_agents(reflector_client=...)`).
+  **Off by default** — with no reflector wired on, reflection never fires and the mock
+  replay stays byte-identical. This is the paper's *additive* synthesis; the
+  *subtractive* "dreaming"/compaction angle (#84's thread) is a distinct, later
+  capability sharing this summarization seam. Distinct from #4, which reflects only on
+  command *failure*.
 - `[port] M` **Time mapping.** Smallville is minute-level continuous time
   (`SEC_PER_STEP = 10`); our engine is discrete turns (`clock.py`). Define the mapping
   so plans expressed in clock time drive the right number of turns/tiles per step.
