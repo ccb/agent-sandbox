@@ -1,11 +1,17 @@
 # Daily Planning Design — day → hourly → minute
 
-**Status:** Design proposal. Nothing here is built yet. This is the design doc
-the issue (#83, NEXT-STEPS **Phase D**) asks for *before* implementation — the
-sketch to argue over, not a frozen spec. It supersedes the brief planning sketch
-in [`agent-memory.md` §8](agent-memory.md) for the generative-agents port, and
-expands it from "1–3 next intentions" to the paper's full day → hourly → minute
-decomposition with revision.
+**Status:** Build order §13 steps 1–6 implemented (issue #83). The engine plan
+data model + `Planner` protocol + pure helpers ship in
+`text_adventure_games/planning.py`; the Smallville `MockPlanner`/`LLMPlanner`, the
+`SimClock` time mapping, the revision seam (`maybe_revise_plan` + the
+`simulate()` trigger sites), and `backend/compare_plans.py` ship in
+`generative-agents/backend/`. The mock path keeps the replay byte-identical;
+`LLMPlanner` is written against the engine's `LlmClient` seam and tested with a
+fake client, so a real model is a `client_from_env()` swap once **Phase A** lands.
+Still open: periodic **reflection** (§13 step 7) and the **`PERCEPTION`** revision
+trigger (needs mid-activity perception). This supersedes the brief planning sketch
+in [`agent-memory.md` §8](agent-memory.md), expanding it from "1–3 next intentions"
+to the paper's full day → hourly → minute decomposition with revision.
 
 **Source paper:** Park et al., "Generative Agents: Interactive Simulacra of Human
 Behavior" (arXiv:2304.03442v2 / UIST 2023), §"Planning and Reacting".
