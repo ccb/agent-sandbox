@@ -21,9 +21,14 @@ const SHEET_VFRAMES := 10
 const WALK_ROW := 0
 const WALK_LEN := 6
 const ANIM_FPS := 8.0
-# Sprites + labels are sized in world units, but the camera frames the whole
-# campus (zoom ~0.5), so these are deliberately large to stay visible on screen.
-const SPRITE_SCALE := 5.0
+# A 32px character frame at this scale is ~4 tiles tall, so a person reads as
+# clearly smaller than a campus building (which span ~10-20 tiles) rather than
+# towering over it. The whole-campus camera (zoom ~0.5) still keeps it visible,
+# and the name label above each sprite makes agents easy to find regardless.
+const SPRITE_SCALE := 2.0
+# The character art is centred in its frame, so the sprite's head sits this far
+# above the node origin; the nameplate is parked just above that.
+const SPRITE_HALF_PX := 16.0 * SPRITE_SCALE
 # A distinct tint per persona so they're easy to tell apart at a glance.
 const TINTS := [
 	Color(1.0, 0.95, 0.95),  # Maya  - warm white
@@ -85,7 +90,9 @@ func _spawn_agent(name: String, index: int) -> void:
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 10)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.position = Vector2(-110, -86)
+	# Park the two-line nameplate just above the sprite's head (the ~90px covers
+	# the two text lines), so it tracks the sprite size instead of overlapping it.
+	label.position = Vector2(-110, -(SPRITE_HALF_PX + 90.0))
 	label.custom_minimum_size = Vector2(220, 0)
 	node.add_child(label)
 
