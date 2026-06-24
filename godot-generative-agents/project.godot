@@ -18,12 +18,8 @@ config/icon="res://icon.svg"
 
 [display]
 
-; Portrait window matched to the tall 34th–36th core map (5632x7040 px, aspect
-; ~0.8) so the whole campus fills the window instead of sitting in a strip with
-; wide grey margins. The window is resizable; the scene cameras' zoom is set to
-; fit this size. A 16:9 window would shrink the portrait map into the middle.
-window/size/viewport_width=1000
-window/size/viewport_height=1250
+window/size/viewport_width=1920
+window/size/viewport_height=1080
 
 [rendering]
 
