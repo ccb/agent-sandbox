@@ -12,6 +12,8 @@ Fully offline (``build_world`` only, no maze assets, no LLM). Run from
     uv run pytest tests/test_planner.py -v
 """
 
+import datetime
+
 from backend.build_world import PERSONAS, build_world
 from backend.planner import (
     DAY_OUTLINE_TOOL,
@@ -20,6 +22,7 @@ from backend.planner import (
     LLMPlanner,
     MockPlanner,
 )
+from backend.sim_clock import SimClock
 from backend.smallville_agents import attach_agents, maybe_revise_plan
 
 from text_adventure_games.planning import (
@@ -167,9 +170,11 @@ class _ScriptedClient:
     def __init__(self, by_tool: dict):
         self.by_tool = by_tool
         self.calls: list[str] = []
+        self.user_by_tool: dict[str, str] = {}  # last user prompt per tool
 
     def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
         self.calls.append(tool["name"])
+        self.user_by_tool[tool["name"]] = messages[-1]["content"] if messages else ""
         return self.by_tool.get(tool["name"])
 
     def chat(self, *args, **kwargs):
@@ -301,6 +306,56 @@ def test_attach_agents_uses_llm_planner_when_client_supplied():
     assert agent.llm_client.schedule == [
         s.to_schedule_entry() for s in agent.plan.stops
     ]
+
+
+def test_llm_planner_bounds_prompts_to_the_run_window():
+    # With a clock + run length, the day/hour prompts are bounded to the hours the
+    # run actually covers (8-11am for 1080 steps at 10s/step), not a generic day.
+    client = _ScriptedClient(_FULL_SCRIPT)
+    clock = SimClock(datetime.datetime(2023, 2, 13, 8, 0, 0), sec_per_step=10)
+    LLMPlanner(client, clock=clock, num_steps=1080).generate(persona={"persona": "x"})
+    assert "08:00 to 11:00" in client.user_by_tool[DAY_OUTLINE_TOOL["name"]]
+    assert "[8, 9, 10]" in client.user_by_tool[HOURLY_TOOL["name"]]
+
+
+def test_llm_planner_unbounded_without_a_clock():
+    client = _ScriptedClient(_FULL_SCRIPT)
+    LLMPlanner(client).generate(persona={"persona": "x"})
+    assert "runs from" not in client.user_by_tool[DAY_OUTLINE_TOOL["name"]]
+
+
+def test_attach_agents_reports_planner_sources():
+    # out_planner_sources records where each agent's plan came from, so a full run
+    # can report how many were model-generated vs. fell back.
+    _, chars = build_world()
+    sources = {}
+    attach_agents(
+        chars,
+        PERSONAS,
+        planner_client=_ScriptedClient(_FULL_SCRIPT),
+        out_planner_sources=sources,
+    )
+    assert set(sources) == {p["name"] for p in PERSONAS}
+    assert all(s == "llm" for s in sources.values())
+
+
+def test_attach_agents_reports_static_fallback_source():
+    _, chars = build_world()
+    sources = {}
+    attach_agents(
+        chars,
+        [PERSONAS[0]],
+        planner_client=_ScriptedClient({}),  # empty -> fallback
+        out_planner_sources=sources,
+    )
+    assert sources[PERSONAS[0]["name"]] == "static"
+
+
+def test_attach_agents_reports_mock_source_by_default():
+    _, chars = build_world()
+    sources = {}
+    attach_agents(chars, PERSONAS, out_planner_sources=sources)
+    assert all(s == "mock" for s in sources.values())
 
 
 def test_attach_agents_falls_back_to_mock_on_empty_llm_plan():
