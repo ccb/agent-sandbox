@@ -15,26 +15,42 @@ The shipped example is the **University of Pennsylvania campus**
 ## Run
 
 ```bash
-uv run python tools/geo/osm_to_tiled.py            # uses cached OSM data if present
-uv run python tools/geo/osm_to_tiled.py --refresh  # re-download from Overpass
-uv run python tools/geo/osm_to_tiled.py --mpt 2    # finer grid (2 m per tile)
+uv run python tools/geo/osm_to_tiled.py                 # full campus (default)
+uv run python tools/geo/osm_to_tiled.py --area core     # small prototyping subset
+uv run python tools/geo/osm_to_tiled.py --area all      # both
+uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
+uv run python tools/geo/osm_to_tiled.py --mpt 2         # finer grid (2 m per tile)
 ```
 
 No third-party dependencies — only the Python stdlib (`zlib` writes the PNGs).
+
+## Areas
+
+Defined in the `AREAS` dict at the top of the script. Each writes its own files
+and caches its own Overpass response, so they never clobber each other.
+
+| `--area` | Stem | Covers |
+|----------|------|--------|
+| `campus` *(default)* | `upenn` | the full UPenn campus (~1 km × 1.2 km) |
+| `core` | `upenn_core` | **34th–38th St between Spruce & Walnut** (~400 m × 650 m) — College Green, College Hall, Van Pelt, the Locust Walk core. A small frame for prototyping. |
+
+The `core` bbox was derived from the real street-centreline geometry in the campus
+OSM data (the Philadelphia grid is rotated ~8°, so the axis-aligned box is the
+tight rectangle that still contains all four bounding streets).
 
 ## Outputs (`tools/geo/out/`)
 
 | File | What it is |
 |------|------------|
-| `upenn.tmj` | the Tiled map — orthogonal, 6 layers, **embedded** tileset, **uncompressed** layer data (so Phaser can read it) |
-| `tileset.png` | the 6-tile palette image the `.tmj` references |
-| `upenn_preview.png` | a flattened render so you can eyeball the result without opening Tiled |
-| `upenn_osm.json` | cached raw Overpass response (delete or `--refresh` to refetch) |
+| `<stem>.tmj` | the Tiled map — orthogonal, 6 layers, **embedded** tileset, **uncompressed** layer data (so Phaser can read it) |
+| `tileset.png` | the 6-tile palette image every `.tmj` references (shared) |
+| `<stem>_preview.png` | a flattened render so you can eyeball the result without opening Tiled |
+| `<stem>_osm.json` | cached raw Overpass response (git-ignored; delete or `--refresh` to refetch) |
 
 ## How it works
 
 1. **Fetch** — one Overpass query pulls buildings, highways, footways, water,
-   and landuse/leisure for the campus bounding box (`BBOX` at the top of the
+   and landuse/leisure for the area's bounding box (see `AREAS` at the top of the
    script). `out geom;` gives each way's node coordinates inline.
 2. **Project** — `Projector` maps lon/lat → metres (local equirectangular, fine
    for a ~1 km frame) → fractional tile coordinates, north at row 0.
@@ -47,7 +63,7 @@ No third-party dependencies — only the Python stdlib (`zlib` writes the PNGs).
 
 ## Tuning
 
-- **`BBOX`** — change the frame, or point it at any other place on Earth.
+- **`AREAS`** — add a new frame (any place on Earth) or tweak an existing bbox.
 - **`METRES_PER_TILE`** (`--mpt`) — smaller = more detail and a bigger grid.
 - **`PALETTE`** — the six categories and their colours; swap in a real art
   tileset later by keeping the same GIDs (1–6) and replacing `tileset.png`.
