@@ -13,7 +13,13 @@ Fully offline (``build_world`` only, no maze assets, no LLM). Run from
 """
 
 from backend.build_world import PERSONAS, build_world
-from backend.planner import MockPlanner
+from backend.planner import (
+    DAY_OUTLINE_TOOL,
+    HOURLY_TOOL,
+    MINUTE_TOOL,
+    LLMPlanner,
+    MockPlanner,
+)
 from backend.smallville_agents import attach_agents, maybe_revise_plan
 
 from text_adventure_games.planning import (
@@ -149,6 +155,126 @@ def test_maybe_revise_plan_noop_planner_changes_nothing():
     changed = maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, 360))
     assert changed is False
     assert char.agent.llm_client.schedule == before
+
+
+class _ScriptedClient:
+    """A fake ``LlmClient`` returning canned tool arguments by tool name.
+
+    Lets the LLMPlanner's generate/revise logic be exercised deterministically and
+    offline -- the real model is the same ``call_tool`` seam (Phase A swaps it in).
+    """
+
+    def __init__(self, by_tool: dict):
+        self.by_tool = by_tool
+        self.calls: list[str] = []
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        self.calls.append(tool["name"])
+        return self.by_tool.get(tool["name"])
+
+    def chat(self, *args, **kwargs):
+        return None
+
+    def count_tokens(self, text):
+        return len(text.split())
+
+
+_FULL_SCRIPT = {
+    DAY_OUTLINE_TOOL["name"]: {
+        "blocks": [
+            {"label": "morning", "summary": "open and run the cafe"},
+            {"label": "afternoon", "summary": "errands"},
+        ]
+    },
+    HOURLY_TOOL["name"]: {
+        "hours": [
+            {"start_hour": 8, "summary": "tend the counter"},
+            {"start_hour": 9, "summary": "buy milk"},
+        ]
+    },
+    MINUTE_TOOL["name"]: {
+        "stops": [
+            {"place": "Hobbs Cafe", "activity": "tending", "emoji": "☕", "steps": 200},
+            {"place": "Johnson Park", "activity": "a break", "steps": 100},
+        ]
+    },
+}
+
+
+def test_llm_planner_generates_decomposed_plan():
+    planner = LLMPlanner(_ScriptedClient(_FULL_SCRIPT))
+    plan = planner.generate(persona={"persona": "I am Isabella."})
+    assert [b.label for b in plan.day] == ["morning", "afternoon"]
+    assert [h.start_hour for h in plan.hours] == [8, 9]
+    assert [s.place for s in plan.stops] == ["Hobbs Cafe", "Johnson Park"]
+    assert plan.stops[0].steps == 200
+
+
+def test_llm_planner_drops_unknown_places():
+    script = {
+        MINUTE_TOOL["name"]: {
+            "stops": [
+                {"place": "Hobbs Cafe", "activity": "coffee", "steps": 50},
+                {"place": "Atlantis", "activity": "lost", "steps": 50},  # unknown
+            ]
+        }
+    }
+    planner = LLMPlanner(_ScriptedClient(script), known_places={"Hobbs Cafe"})
+    plan = planner.generate(persona={"persona": "x"})
+    assert [s.place for s in plan.stops] == ["Hobbs Cafe"]
+
+
+def test_llm_planner_revise_rewrites_stops():
+    base = LLMPlanner(_ScriptedClient(_FULL_SCRIPT)).generate(persona={"persona": "x"})
+    revised_script = {
+        MINUTE_TOOL["name"]: {
+            "stops": [
+                {"place": "The Rose and Crown Pub", "activity": "lunch", "steps": 80}
+            ]
+        }
+    }
+    planner = LLMPlanner(_ScriptedClient(revised_script))
+    out = planner.revise(base, trigger=RevisionTrigger(BEHIND_SCHEDULE, 360))
+    assert [s.place for s in out.stops] == ["The Rose and Crown Pub"]
+    assert out.revision == base.revision + 1
+
+
+def test_llm_planner_degrades_when_tool_returns_nothing():
+    # A model/tool failure (call_tool -> None) yields empty levels, never raises;
+    # revise with nothing usable returns the plan unchanged (a no-op to the loop).
+    planner = LLMPlanner(_ScriptedClient({}))
+    plan = planner.generate(persona={"persona": "x"})
+    assert plan.day == [] and plan.hours == [] and plan.stops == []
+    same = planner.revise(plan, trigger=RevisionTrigger(BEHIND_SCHEDULE, 1))
+    assert same is plan
+
+
+def test_llm_planner_satisfies_protocol():
+    assert isinstance(LLMPlanner(_ScriptedClient({})), Planner)
+
+
+def test_attach_agents_uses_llm_planner_when_client_supplied():
+    # The gate: a supplied planner_client routes every agent through LLMPlanner,
+    # and the client drives the generated stops (known Smallville places).
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS, planner_client=_ScriptedClient(_FULL_SCRIPT))
+    agent = chars[PERSONAS[0]["name"]].agent
+    assert isinstance(agent.planner, LLMPlanner)
+    assert [s.place for s in agent.plan.stops] == ["Hobbs Cafe", "Johnson Park"]
+    assert agent.llm_client.schedule == [
+        s.to_schedule_entry() for s in agent.plan.stops
+    ]
+
+
+def test_attach_agents_falls_back_to_mock_on_empty_llm_plan():
+    # If the model yields no usable stops, the agent must not be left scheduleless:
+    # it falls back to the authored static schedule (MockPlanner).
+    game, chars = build_world()
+    spec = PERSONAS[0]
+    attach_agents(chars, [spec], planner_client=_ScriptedClient({}))  # empty plan
+    agent = chars[spec["name"]].agent
+    assert isinstance(agent.planner, MockPlanner)
+    assert agent.llm_client.schedule == spec["schedule"]
 
 
 def test_generate_returns_fresh_stop_list():

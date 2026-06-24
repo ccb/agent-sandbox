@@ -23,7 +23,8 @@ from text_adventure_games.npc import LLMAgent, format_observation_with_memories
 from text_adventure_games.usage import UsageLedger, record_call
 
 from . import seed
-from .planner import MockPlanner
+from .build_world import LOCATION_NAMES
+from .planner import LLMPlanner, MockPlanner
 
 
 class SmallvilleMockClient(MockReActClient):
@@ -153,6 +154,7 @@ def attach_agents(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
+    planner_client=None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -180,23 +182,25 @@ def attach_agents(
     tree becomes beliefs in the character's knowledge (see :mod:`seed`). Both are
     optional -- the assets are git-ignored and absent on a fresh checkout, so an
     unset (or missing) path simply skips that seeding and leaves the agent
-    byte-identical to before."""
+    byte-identical to before.
+
+    Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
+    real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
+    offline default -- each agent gets a :class:`~backend.planner.MockPlanner` that
+    replays the authored schedule, so the replay stays byte-identical. The agent
+    and its memory are built and seeded *before* the planner runs, so a generative
+    planner reasons over the same t=0 memory the agent will. If the model returns
+    nothing usable, the agent falls back to the static schedule."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
     )
     for spec in personas:
         char = characters[spec["name"]]
-        # The planner produces the day's schedule (issue #83). Today's MockPlanner
-        # simply replays the persona's authored stops, so the schedule it hands
-        # the client -- and the exported replay -- are byte-identical to passing
-        # spec["schedule"] directly. A real LLMPlanner (Phase A) will generate the
-        # plan from identity + memory instead, and simulate() can revise its
-        # unstarted tail mid-day; the client/loop downstream are unchanged.
-        planner = MockPlanner(spec)
-        plan = planner.generate(persona=spec, memory=None, clock=None)
-        schedule = [stop.to_schedule_entry() for stop in plan.stops]
-        client = SmallvilleMockClient(schedule, ledger=ledger)
+        # Build the agent first, with the persona's authored schedule as a
+        # starting point, so its memory exists and can be seeded before a planner
+        # reasons over it. The planner (below) then commits the schedule it wants.
+        client = SmallvilleMockClient(spec["schedule"], ledger=ledger)
         agent = LLMAgent(
             client, persona=char.persona, embedding_client=embedding_client
         )
@@ -204,11 +208,6 @@ def attach_agents(
         # but a well-formed schema keeps the seam honest.
         agent.action_names = ["travel", "perform"]
         char.set_agent(agent)
-        # Keep the planner and current plan on the agent so the step loop can
-        # later revise the unstarted tail (Phase D build step 5). Inert today --
-        # MockPlanner.revise is a no-op -- so this changes no exported frame.
-        agent.planner = planner
-        agent.plan = plan
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -224,11 +223,35 @@ def attach_agents(
             importance=5.0,
         )
         # Seed t=0 social structure (memory) and partial world knowledge
-        # (knowledge) when the upstream assets are available (issue #79).
+        # (knowledge) when the upstream assets are available (issue #79). Done
+        # before planning so a generative planner can reason over them.
         seed.seed_relationships(agent.memory, relationships.get(char.name, []))
         if base_personas_dir:
             tree = seed.load_spatial_memory(base_personas_dir, char.name)
             seed.seed_spatial_knowledge(char, tree)
+
+        # Choose the planner: a real LLMPlanner when a model client is supplied,
+        # else the deterministic MockPlanner that replays the authored schedule.
+        # The mock path is byte-identical -- generate() returns the same stops and
+        # replace_schedule re-commits the same list. An LLM that returns nothing
+        # usable (empty plan) falls back to the static schedule so the sim is safe.
+        if planner_client is not None:
+            planner = LLMPlanner(planner_client, LOCATION_NAMES)
+            plan = planner.generate(persona=spec, memory=agent.memory, clock=None)
+            if not plan.stops:
+                planner = MockPlanner(spec)
+                plan = planner.generate(persona=spec)
+        else:
+            planner = MockPlanner(spec)
+            plan = planner.generate(persona=spec, memory=agent.memory, clock=None)
+        # Keep the planner + current plan on the agent so the step loop can revise
+        # the unstarted tail at a trigger (see maybe_revise_plan), and commit the
+        # plan's stops as the schedule the client drives.
+        agent.planner = planner
+        agent.plan = plan
+        agent.llm_client.replace_schedule(
+            [stop.to_schedule_entry() for stop in plan.stops]
+        )
 
 
 def observe_and_decide(game, char, step: int):

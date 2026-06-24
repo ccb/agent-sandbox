@@ -11,19 +11,24 @@ Two implementations are planned, mirroring the brain split in
   reproduces a persona's hand-authored ``world_data.yaml`` schedule exactly, so a
   default ``run_simulation`` produces byte-identical ``movement/*.json``. The YAML
   schedules become the mock's *fixture* rather than the only source of truth.
-* ``LLMPlanner`` -- generates and revises real day -> hourly -> minute plans from
-  identity + memory (rides on Phase A; not built yet, see
-  ``docs/design/daily-planning.md`` §6-§9).
-
-Scaffolding note: :class:`MockPlanner` is **not wired into the step loop yet** --
-constructing one and calling :meth:`generate` is inert and changes no exported
-frame. Wiring it through ``attach_agents`` / ``simulate`` (build-order step 3) is
-the deliberate, determinism-critical follow-up.
+* :class:`LLMPlanner` -- generates and revises real day -> hourly -> minute plans
+  from identity + memory, over the engine's ``LlmClient`` seam (design doc §6-§9).
+  It is written against that protocol and tested with a deterministic fake client,
+  so the real model is just a ``client_from_env()`` swap once Phase A lands -- the
+  planner needs no further changes. The provider gate in ``run_simulation.main``
+  only selects it for a real (non-mock) provider, so the offline default keeps
+  using :class:`MockPlanner` and the replay stays byte-identical.
 """
 
 from __future__ import annotations
 
-from text_adventure_games.planning import DailyPlan, Stop
+from text_adventure_games.planning import (
+    DailyPlan,
+    DayBlock,
+    HourBlock,
+    Stop,
+    validate_stops,
+)
 
 
 class MockPlanner:
@@ -56,3 +61,245 @@ class MockPlanner:
     ) -> DailyPlan:
         """No-op: the static schedule never re-plans (keeps the replay identical)."""
         return plan
+
+
+# ---------------------------------------------------------------------------
+# LLMPlanner -- real generation over the engine's LlmClient seam (design §6-§9)
+# ---------------------------------------------------------------------------
+
+# Structured tools (normalized {name, description, parameters} dicts, the shape
+# llm_client.call_tool translates per provider). Forcing the model to return
+# validated JSON for each level beats scraping prose -- the same reason the LLM
+# parser uses SELECT_OPTION_TOOL.
+DAY_OUTLINE_TOOL = {
+    "name": "day_outline",
+    "description": "Sketch the day as 4-6 broad blocks. No exact times yet.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "blocks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "label": {
+                            "type": "string",
+                            "description": "morning / midday / afternoon / evening",
+                        },
+                        "summary": {"type": "string"},
+                    },
+                    "required": ["label", "summary"],
+                },
+            }
+        },
+        "required": ["blocks"],
+    },
+}
+
+HOURLY_TOOL = {
+    "name": "hourly_plan",
+    "description": "Expand the day outline into one line per in-game hour.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "hours": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "start_hour": {
+                            "type": "integer",
+                            "description": "hour of day, 0-23",
+                        },
+                        "summary": {"type": "string"},
+                    },
+                    "required": ["start_hour", "summary"],
+                },
+            }
+        },
+        "required": ["hours"],
+    },
+}
+
+MINUTE_TOOL = {
+    "name": "minute_plan",
+    "description": (
+        "Turn the plan into concrete stops: where to go, what to do there, and "
+        "for how many sim steps before moving on (omit steps on the last stop to "
+        "stay put). Use only known places."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "stops": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "place": {"type": "string"},
+                        "activity": {"type": "string"},
+                        "emoji": {"type": "string"},
+                        "steps": {"type": "integer"},
+                    },
+                    "required": ["place", "activity"],
+                },
+            }
+        },
+        "required": ["stops"],
+    },
+}
+
+
+class LLMPlanner:
+    """Generate and revise a day's plan with a real model (design doc §6-§9).
+
+    Drives the three-level decomposition through structured tool calls on an
+    engine ``LlmClient``: day outline -> hourly -> minute stops, each conditioned
+    on the level above. ``revise`` re-runs the minute level given the trigger; the
+    step loop (:func:`smallville_agents.maybe_revise_plan`) re-anchors the executed
+    prefix, so this planner only has to propose a sensible full-day stop list.
+
+    Robust by construction: a missing or malformed tool result degrades to an
+    empty level rather than raising, and every generated stop is checked against
+    ``known_places`` (``planning.validate_stops``) so a hallucinated location is
+    dropped before it reaches the schedule -- never the parser. With no
+    ``known_places`` given, validation is skipped (the caller passes the world's
+    location names; tests may omit them).
+    """
+
+    _SYSTEM = (
+        "You are planning one day for a resident of the town of Smallville. "
+        "Plan in character, grounded in who they are and what they remember."
+    )
+
+    def __init__(self, client, known_places=frozenset(), *, max_tokens: int = 700):
+        self.client = client
+        self.known_places = set(known_places)
+        self.max_tokens = max_tokens
+
+    # -- the three generation levels -----------------------------------------
+
+    def generate(self, persona, memory=None, clock=None) -> DailyPlan:
+        persona_text = self._persona_text(persona)
+        mem = self._memory_block(memory, "what matters for my day today", turn=0)
+        day = self._day_outline(persona_text, mem)
+        hours = self._hourly(persona_text, day, clock)
+        stops = self._minute(persona_text, hours)
+        return DailyPlan(day=day, hours=hours, stops=stops)
+
+    def revise(
+        self, plan: DailyPlan, trigger=None, memory=None, clock=None
+    ) -> DailyPlan:
+        reason = getattr(trigger, "reason", "") or ""
+        detail = getattr(trigger, "detail", "") or ""
+        step = getattr(trigger, "step", 0)
+        mem = self._memory_block(memory, detail or "what changed", turn=step)
+        current = "; ".join(f"{s.place}: {s.activity}" for s in plan.stops) or "(none)"
+        user = (
+            f"Your plan so far: {current}.\n"
+            f"Something changed -- {reason}: {detail}.\n"
+            f"{self._memory_line(mem)}"
+            f"{self._places_line()}"
+            "Give a revised full list of stops for the day, keeping the ones that "
+            "have already happened and changing the rest."
+        )
+        stops = self._minute_from_user(user)
+        if not stops:
+            return plan  # nothing usable -> signal "no change" to the loop
+        return DailyPlan(
+            day=plan.day, hours=plan.hours, stops=stops, revision=plan.revision + 1
+        )
+
+    # -- per-level prompts + parsing -----------------------------------------
+
+    def _day_outline(self, persona_text: str, mem: str) -> list[DayBlock]:
+        user = (
+            f"{persona_text}\n{self._memory_line(mem)}"
+            "Sketch your day as a few broad blocks."
+        )
+        result = self._call(user, DAY_OUTLINE_TOOL)
+        return [
+            DayBlock(label=str(b["label"]), summary=str(b["summary"]))
+            for b in result.get("blocks", [])
+            if b.get("label") and b.get("summary")
+        ]
+
+    def _hourly(self, persona_text: str, day: list[DayBlock], clock) -> list[HourBlock]:
+        outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
+        hours_hint = ""
+        if clock is not None:
+            hours_hint = (
+                "Plan these hours of the day: "
+                f"{[h for _, h in clock.hour_starts(clock.steps_per_hour * 24)][:24]}.\n"
+            )
+        user = (
+            f"{persona_text}\nYour day outline: {outline}.\n{hours_hint}"
+            "Give one line per hour."
+        )
+        result = self._call(user, HOURLY_TOOL)
+        return [
+            HourBlock(start_hour=int(h["start_hour"]), summary=str(h["summary"]))
+            for h in result.get("hours", [])
+            if h.get("summary") is not None and h.get("start_hour") is not None
+        ]
+
+    def _minute(self, persona_text: str, hours: list[HourBlock]) -> list[Stop]:
+        plan = (
+            "; ".join(f"{h.start_hour:02d}:00 {h.summary}" for h in hours) or "(none)"
+        )
+        user = (
+            f"{persona_text}\nYour hourly plan: {plan}.\n{self._places_line()}"
+            "Turn it into concrete stops."
+        )
+        return self._minute_from_user(user)
+
+    def _minute_from_user(self, user: str) -> list[Stop]:
+        result = self._call(user, MINUTE_TOOL)
+        stops = [
+            Stop(
+                place=str(s["place"]),
+                activity=str(s["activity"]),
+                emoji=s.get("emoji"),
+                steps=s.get("steps"),
+            )
+            for s in result.get("stops", [])
+            if s.get("place") and s.get("activity")
+        ]
+        if self.known_places:
+            stops, _dropped = validate_stops(stops, self.known_places)
+        return stops
+
+    # -- small seam helpers ---------------------------------------------------
+
+    def _call(self, user: str, tool: dict) -> dict:
+        messages = [
+            {"role": "system", "content": self._SYSTEM},
+            {"role": "user", "content": user},
+        ]
+        result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)
+        return result or {}
+
+    @staticmethod
+    def _persona_text(persona) -> str:
+        if isinstance(persona, dict):
+            return persona.get("persona") or persona.get("name") or "a town resident"
+        return str(persona)
+
+    @staticmethod
+    def _memory_block(memory, query: str, turn: int) -> str:
+        if memory is None:
+            return ""
+        try:
+            records = memory.retrieve(query=query, turn=turn)
+        except Exception:
+            return ""
+        return "\n".join(f"- {r.text}" for r in (records or []))
+
+    @staticmethod
+    def _memory_line(mem: str) -> str:
+        return f"You remember:\n{mem}\n" if mem else ""
+
+    def _places_line(self) -> str:
+        if not self.known_places:
+            return ""
+        return f"Known places: {', '.join(sorted(self.known_places))}.\n"
