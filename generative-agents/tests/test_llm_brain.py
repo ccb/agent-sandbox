@@ -12,6 +12,11 @@ Run from ``generative-agents``::
     uv run pytest tests/test_llm_brain.py -v
 """
 
+import sys
+
+import pytest
+
+from backend import smoke_llm
 from backend.build_world import PERSONAS, build_world
 from backend.smallville_agents import (
     SmallvilleMockClient,
@@ -81,3 +86,16 @@ def test_decision_routes_through_the_real_brain():
     assert command == "perform coding a mobile app"
     assert brain.calls  # the brain was actually consulted
     assert char.agent.last_reasoning == "test"
+
+
+@pytest.mark.parametrize("provider", ["", "mock"])
+def test_smoke_llm_refuses_without_a_real_provider(monkeypatch, provider):
+    # The smoke tool exists to hit a real model; with no provider (or the mock) it
+    # must bail out instead of silently exercising the deterministic stand-in.
+    monkeypatch.setattr(sys, "argv", ["smoke_llm"])
+    if provider:
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+    else:
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    with pytest.raises(SystemExit):
+        smoke_llm.main()
