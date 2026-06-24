@@ -32,13 +32,20 @@ from text_adventure_games.embedding_client import (
     create_embedding_client,
     embedding_client_from_env,
 )
+from text_adventure_games.planning import (
+    ACTION_FAILED,
+    BEHIND_SCHEDULE,
+    RevisionTrigger,
+)
 from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import PERSONAS, build_world
+from .sim_clock import SimClock
 from .smallville_agents import (
     attach_agents,
+    maybe_revise_plan,
     memories_for_frame,
     memory_stream_for_persona,
     observe_and_decide,
@@ -123,6 +130,7 @@ def simulate(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
+    clock: SimClock | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -149,6 +157,13 @@ def simulate(
     memory an agent formed, not just the few retrieved per step. It's an
     out-parameter (not part of the return) so the many ``frames = simulate(...)``
     callers and the determinism tests stay unchanged.
+
+    Pass a :class:`~backend.sim_clock.SimClock` to enable clock-based plan
+    revision (issue #83): at an hour boundary an agent still en route is "behind
+    schedule," a trigger its planner may react to. With no clock (the test
+    default) those triggers never fire. Either way the mock planner's ``revise``
+    is a no-op, so the exported frames are byte-identical -- the clock only gates
+    *whether the seam is offered*, not the deterministic decisions themselves.
     """
     game, chars = build_world()
     attach_agents(
@@ -192,6 +207,18 @@ def simulate(
         for name in order:
             char = chars[name]
             st = state[name]
+
+            # Behind-schedule trigger (design doc §8): a new in-game hour began
+            # and this agent is still walking, not yet at its planned stop. Offer
+            # its planner a chance to re-plan the tail. Clock-gated, so tests that
+            # pass no clock skip it; the mock's revise is a no-op regardless.
+            if (
+                clock is not None
+                and _step > 0
+                and st["path"]
+                and clock.hour_at(_step) != clock.hour_at(_step - 1)
+            ):
+                maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, _step), clock)
 
             # Has the current activity run its course? Un-latch and point the brain
             # at the next scheduled stop, so the agent becomes idle below and walks
@@ -250,6 +277,16 @@ def simulate(
                         st["perform_until"] = (
                             _step + duration if duration is not None else None
                         )
+                elif command:
+                    # The agent chose a command but it failed the precondition
+                    # gate. Offer its planner a chance to re-plan around the
+                    # blocked action (design doc §8). The mock never lands here --
+                    # its travel/perform are always legal -- so this stays
+                    # byte-identical; it's the seam a real planner needs.
+                    reason = getattr(game.parser, "last_fail_message", "") or command
+                    maybe_revise_plan(
+                        char, RevisionTrigger(ACTION_FAILED, _step, reason), clock
+                    )
 
             # Advance one tile along any active walk.
             if st["path"]:
@@ -407,6 +444,11 @@ def main() -> None:
     # exporter can give the State Details panel the complete history (not just
     # the per-step retrieved set the cards show).
     memory_streams: dict = {}
+    # One clock for the run, shared by the loop's revision triggers (issue #83):
+    # built from the same --start / --sec-per-step the exporter stamps frames
+    # with, so plan time and replay time agree. The mock planner doesn't revise,
+    # so this changes no frame -- it wires the seam for a real LLMPlanner.
+    clock = SimClock(args.start, args.sec_per_step)
     with run_log or nullcontext():
         if run_log is not None:
             run_log.attach(ledger)
@@ -418,6 +460,7 @@ def main() -> None:
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
             out_memories=memory_streams,
+            clock=clock,
         )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     _print_cost_summary(ledger)
