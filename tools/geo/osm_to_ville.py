@@ -226,7 +226,10 @@ def main() -> int:
     ap.add_argument("--area", choices=list(AREAS), default="core")
     ap.add_argument("--refresh", action="store_true", help="re-download from Overpass")
     ap.add_argument(
-        "--mpt", type=float, default=METRES_PER_TILE, help="metres per tile"
+        "--mpt",
+        type=float,
+        default=None,
+        help="metres per tile (default: the area's own, else %d)" % METRES_PER_TILE,
     )
     ap.add_argument(
         "--rotate", default="auto", help="'auto' (axis-align), 'none', or degrees"
@@ -244,7 +247,11 @@ def main() -> int:
 
     osm = fetch_osm(bbox, os.path.join(OUT_DIR, f"{stem}_osm.json"), args.refresh)
     rotate_deg = resolve_rotation(args.rotate, osm, bbox)
-    proj = Projector(bbox, args.mpt, rotate_deg)
+    # Match the tilemap's resolution: explicit --mpt wins, else the area's own
+    # (core pins 2 m/tile), else the module default — so the matrix lines up
+    # tile-for-tile with the picture osm_to_tiled.py draws.
+    mpt = args.mpt if args.mpt is not None else area.get("mpt", METRES_PER_TILE)
+    proj = Projector(bbox, mpt, rotate_deg)
     print(f"[grid]  {proj.cols} x {proj.rows} tiles, rotated {rotate_deg:+.2f}°")
 
     m = build_matrix(osm, proj)
