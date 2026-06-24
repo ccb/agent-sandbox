@@ -18,11 +18,28 @@ The shipped example is the **University of Pennsylvania campus**
 uv run python tools/geo/osm_to_tiled.py                 # full campus (default)
 uv run python tools/geo/osm_to_tiled.py --area core     # small prototyping subset
 uv run python tools/geo/osm_to_tiled.py --area all      # both
+uv run python tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 art (not flat colours)
 uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
 uv run python tools/geo/osm_to_tiled.py --mpt 2         # finer grid (2 m per tile)
 ```
 
 No third-party dependencies — only the Python stdlib (`zlib` writes the PNGs).
+
+## Themes (the tile art)
+
+`--theme` picks what the six categories are drawn with. The `.tmj` structure is
+identical either way (GIDs just point at a different tileset).
+
+| `--theme` | Tileset | Looks like | License |
+|-----------|---------|-----------|---------|
+| `placeholder` *(default)* | a generated 6-colour strip (`tileset.png`) | flat colour blocks | n/a |
+| `urban` | Kenney **RPG Urban Pack** packed sheet (`tilemap_packed.png`, referenced whole) | real streets, brick buildings, lawns | **CC0** |
+
+`urban` writes `<stem>_urban.tmj` and copies the Kenney sheet next to it, so the
+placeholder maps are left untouched. The six tiles chosen from the sheet live in
+`URBAN_TILES` at the top of the script (index = row × 27 + col). The pack is
+committed under [`assets/kenney/`](assets/kenney/README.md) — CC0 is what makes it
+safe to redistribute and bake from (unlike the non-commercial Cute Fantasy pack).
 
 ## Areas
 

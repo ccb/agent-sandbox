@@ -21,10 +21,13 @@ Zero third-party dependencies on purpose (only the Python stdlib, incl. zlib for
 PNG) so it runs anywhere `uv run python` does, no extra installs.
 
 Usage:
-    uv run python tools/geo/osm_to_tiled.py            # Penn campus, cached fetch
-    uv run python tools/geo/osm_to_tiled.py --refresh  # re-download from Overpass
+    uv run python tools/geo/osm_to_tiled.py                 # Penn campus, cached fetch
+    uv run python tools/geo/osm_to_tiled.py --area core     # small prototyping subset
+    uv run python tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 tiles
+    uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
 
 Data (c) OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright).
+Urban tiles (c) Kenney, CC0 (https://kenney.nl/assets/rpg-urban-pack).
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import struct
 import sys
 import time
@@ -92,6 +96,28 @@ PALETTE = {
     "building": (6, (192, 120, 78, 255)),  # building footprints
 }
 TILE_PX = 16  # pixels per tile in the tileset image
+
+# --------------------------------------------------------------------------- #
+# Themes — how the six categories map onto a tileset.
+#
+# "placeholder" (default): the six solid-colour tiles from write_tileset_png,
+#   GIDs 1-6. Tiny, self-contained, good for a quick look.
+# "urban": real CC0 art from Kenney's RPG Urban Pack. We reference the pack's
+#   packed tilesheet (27 tiles wide, no spacing) as-is and point each category
+#   at a chosen tile. Tile indices are into that sheet (index = row*27 + col);
+#   a Tiled GID is the index + firstgid(1). Picked by eye from the sheet.
+# --------------------------------------------------------------------------- #
+
+ASSETS_DIR = os.path.join(HERE, "assets")
+URBAN_SHEET = "tilemap_packed.png"  # Kenney RPG Urban Pack, CC0 (see assets/kenney)
+URBAN_TILES = {
+    "ground": 38,  # light-grey concrete (the base surface)
+    "grass": 6,  # green lawn / parks
+    "water": 61,  # water
+    "path": 87,  # tan paving — pedestrian ways (Locust Walk)
+    "road": 461,  # dark asphalt — vehicle roads
+    "building": 18,  # red brick — building footprints
+}
 
 # --------------------------------------------------------------------------- #
 # 1. FETCH
@@ -291,14 +317,19 @@ def categorise(tags: dict) -> tuple[str, str] | None:
     return None
 
 
-def rasterise(osm: dict, proj: Projector) -> dict:
-    """Return a dict of named tile layers (each a 2D grid of GIDs)."""
+def rasterise(osm: dict, proj: Projector, gid_of: dict) -> dict:
+    """Return a dict of named tile layers (each a 2D grid of GIDs).
+
+    `gid_of` maps each category (ground/grass/water/path/road/building) to the
+    Tiled GID that draws it — which tileset/theme that GID points at is the
+    caller's concern.
+    """
     cols, rows = proj.cols, proj.rows
 
     # Bottom-to-top draw order. The base ground layer is fully filled; the rest
     # start empty (GID 0) and only paint where a feature lands.
     layers = {
-        "ground": new_grid(cols, rows, PALETTE["ground"][0]),
+        "ground": new_grid(cols, rows, gid_of["ground"]),
         "landuse": new_grid(cols, rows),
         "water": new_grid(cols, rows),
         "paths": new_grid(cols, rows),
@@ -325,7 +356,7 @@ def rasterise(osm: dict, proj: Projector) -> dict:
         if cat is None:
             continue
         category, kind = cat
-        gid = PALETTE[category][0]
+        gid = gid_of[category]
         grid = layers[layer_of[category]]
         pts = [proj.to_tile(nd["lat"], nd["lon"]) for nd in el["geometry"]]
 
@@ -381,6 +412,14 @@ def _png(width: int, height: int, rgba_rows: list) -> bytes:
     )
 
 
+def _png_size(path: str) -> tuple[int, int]:
+    """Read a PNG's pixel dimensions from its IHDR header (no full decode)."""
+    with open(path, "rb") as fh:
+        head = fh.read(24)
+    assert head[:8] == b"\x89PNG\r\n\x1a\n", f"{path} is not a PNG"
+    return struct.unpack(">II", head[16:24])
+
+
 def write_tileset_png(path: str) -> tuple[int, int]:
     """One solid-colour TILE_PX square per palette entry, laid out in a row."""
     # palette values are (gid, colour); order the colours by gid for the strip
@@ -395,15 +434,13 @@ def write_tileset_png(path: str) -> tuple[int, int]:
     return w, h
 
 
-def write_tmj(
-    path: str, proj: Projector, layers: dict, tileset_png: str, ts_w: int, ts_h: int
-) -> None:
-    """Write a Tiled (.tmj) orthogonal map with an embedded tileset.
+def write_tmj(path: str, proj: Projector, layers: dict, tileset: dict) -> None:
+    """Write a Tiled (.tmj) orthogonal map with the given (embedded) tileset.
 
     Layer data is a flat uncompressed GID array (not base64/zlib) so Phaser's
-    `tilemapTiledJSON` loader can read it directly; the tileset is embedded
-    (no external .tsx). Geo-referencing is stored in custom map properties so
-    the map can be reproduced / round-tripped.
+    `tilemapTiledJSON` loader can read it directly; the tileset image is
+    referenced by basename (sits next to the .tmj). Geo-referencing is stored in
+    custom map properties so the map can be reproduced / round-tripped.
     """
     cols, rows = proj.cols, proj.rows
     order = ["ground", "landuse", "water", "paths", "roads", "buildings"]
@@ -429,21 +466,7 @@ def write_tmj(
             {"name": "bbox", "type": "string", "value": json.dumps(proj.bbox)},
             {"name": "metres_per_tile", "type": "float", "value": proj.mpt},
         ],
-        "tilesets": [
-            {
-                "firstgid": 1,
-                "name": "campus",
-                "tilewidth": TILE_PX,
-                "tileheight": TILE_PX,
-                "tilecount": len(PALETTE),
-                "columns": len(PALETTE),
-                "margin": 0,
-                "spacing": 0,
-                "image": os.path.basename(tileset_png),
-                "imagewidth": ts_w,
-                "imageheight": ts_h,
-            }
-        ],
+        "tilesets": [tileset],
         "layers": [
             {
                 "type": "tilelayer",
@@ -465,13 +488,22 @@ def write_tmj(
 
 
 def write_preview_png(
-    path: str, layers: dict, cols: int, rows: int, scale: int = 3
+    path: str,
+    layers: dict,
+    cols: int,
+    rows: int,
+    gid_to_rgba: dict,
+    base_gid: int,
+    scale: int = 3,
 ) -> None:
-    """Flatten all layers top-down into a single PNG so a human can eyeball it."""
-    gid_to_rgba = {gid: col for (gid, col) in PALETTE.values()}
+    """Flatten all layers top-down into a single PNG so a human can eyeball it.
+
+    The preview always uses the placeholder category colours (a cheap legend),
+    regardless of the real theme — it's a layout sanity-check, not the art.
+    """
     order = ["ground", "landuse", "water", "paths", "roads", "buildings"]
     # Composite into a single GID per cell (topmost non-empty wins).
-    flat = new_grid(cols, rows, PALETTE["ground"][0])
+    flat = new_grid(cols, rows, base_gid)
     for name in order:
         g = layers[name]
         for r in range(rows):
@@ -497,30 +529,90 @@ def write_preview_png(
 # --------------------------------------------------------------------------- #
 
 
-def build_area(name: str, mpt: float, refresh: bool) -> None:
+def _placeholder_tileset() -> dict:
+    """Build the 6-colour strip PNG and the Tiled tileset block that references it."""
+    tileset_path = os.path.join(OUT_DIR, "tileset.png")
+    w, h = write_tileset_png(tileset_path)
+    return {
+        "firstgid": 1,
+        "name": "campus",
+        "tilewidth": TILE_PX,
+        "tileheight": TILE_PX,
+        "tilecount": len(PALETTE),
+        "columns": len(PALETTE),
+        "margin": 0,
+        "spacing": 0,
+        "image": "tileset.png",
+        "imagewidth": w,
+        "imageheight": h,
+    }
+
+
+def _urban_tileset() -> dict:
+    """Copy Kenney's packed sheet next to the map and reference it whole."""
+    src = os.path.join(ASSETS_DIR, "kenney", URBAN_SHEET)
+    if not os.path.exists(src):
+        raise SystemExit(
+            f"urban theme needs {os.path.relpath(src)} — see assets/kenney/README"
+        )
+    dst = os.path.join(OUT_DIR, URBAN_SHEET)
+    shutil.copyfile(src, dst)
+    w, h = _png_size(dst)
+    cols = w // TILE_PX
+    return {
+        "firstgid": 1,
+        "name": "kenney_urban",
+        "tilewidth": TILE_PX,
+        "tileheight": TILE_PX,
+        "tilecount": cols * (h // TILE_PX),
+        "columns": cols,
+        "margin": 0,
+        "spacing": 0,
+        "image": URBAN_SHEET,
+        "imagewidth": w,
+        "imageheight": h,
+    }
+
+
+def build_area(name: str, mpt: float, refresh: bool, theme: str) -> None:
     """Fetch, rasterize and emit the Tiled map for one named area in AREAS."""
     area = AREAS[name]
     stem, bbox = area["stem"], area["bbox"]
-    print(f"\n=== {name}: {area['desc']} ===")
+    print(f"\n=== {name}: {area['desc']}  [{theme}] ===")
+
+    # Each category's GID depends on the theme (which tileset it points into).
+    if theme == "urban":
+        gid_of = {cat: idx + 1 for cat, idx in URBAN_TILES.items()}
+    else:
+        gid_of = {cat: PALETTE[cat][0] for cat in PALETTE}
 
     osm = fetch_osm(bbox, os.path.join(OUT_DIR, f"{stem}_osm.json"), refresh)
     proj = Projector(bbox, mpt)
     print(f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile")
 
     t0 = time.time()
-    result = rasterise(osm, proj)
+    result = rasterise(osm, proj, gid_of)
     print(f"[raster] done in {time.time() - t0:.1f}s")
     for cat, n in result["counts"].items():
         if n:
             print(f"         {cat:9s}: {n} features")
 
-    # The tileset (palette image) is identical for every area, so share one file.
-    tileset_path = os.path.join(OUT_DIR, "tileset.png")
-    tmj_path = os.path.join(OUT_DIR, f"{stem}.tmj")
-    preview_path = os.path.join(OUT_DIR, f"{stem}_preview.png")
-    ts_w, ts_h = write_tileset_png(tileset_path)
-    write_tmj(tmj_path, proj, result["layers"], tileset_path, ts_w, ts_h)
-    write_preview_png(preview_path, result["layers"], proj.cols, proj.rows)
+    tileset = _urban_tileset() if theme == "urban" else _placeholder_tileset()
+    out_stem = stem if theme == "placeholder" else f"{stem}_{theme}"
+    tmj_path = os.path.join(OUT_DIR, f"{out_stem}.tmj")
+    preview_path = os.path.join(OUT_DIR, f"{out_stem}_preview.png")
+
+    write_tmj(tmj_path, proj, result["layers"], tileset)
+    # Preview uses the placeholder colours as a legend, keyed by this theme's GIDs.
+    gid_to_rgba = {gid_of[cat]: PALETTE[cat][1] for cat in PALETTE}
+    write_preview_png(
+        preview_path,
+        result["layers"],
+        proj.cols,
+        proj.rows,
+        gid_to_rgba,
+        gid_of["ground"],
+    )
 
     print(f"[emit]  {os.path.relpath(tmj_path)}")
     print(f"[emit]  {os.path.relpath(preview_path)}")
@@ -536,6 +628,12 @@ def main() -> int:
         default="campus",
         help="which area to build (default %(default)s)",
     )
+    ap.add_argument(
+        "--theme",
+        choices=["placeholder", "urban"],
+        default="placeholder",
+        help="tile art: solid-colour placeholders or Kenney RPG Urban (CC0)",
+    )
     ap.add_argument("--refresh", action="store_true", help="re-download from Overpass")
     ap.add_argument(
         "--mpt",
@@ -548,7 +646,7 @@ def main() -> int:
     os.makedirs(OUT_DIR, exist_ok=True)
     names = list(AREAS) if args.area == "all" else [args.area]
     for name in names:
-        build_area(name, args.mpt, args.refresh)
+        build_area(name, args.mpt, args.refresh, args.theme)
     return 0
 
 
