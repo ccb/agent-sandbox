@@ -70,10 +70,23 @@ identical either way (GIDs just point at a different tileset).
 | `urban` | Kenney **RPG Urban Pack** packed sheet (`tilemap_packed.png`, referenced whole) | real streets, brick buildings, lawns | **CC0** |
 
 `urban` writes `<stem>_urban.tmj` and copies the Kenney sheet next to it, so the
-placeholder maps are left untouched. The six tiles chosen from the sheet live in
-`URBAN_TILES` at the top of the script (index = row × 27 + col). The pack is
+placeholder maps are left untouched. The six base tiles chosen from the sheet live
+in `URBAN_TILES` at the top of the script (index = row × 27 + col). The pack is
 committed under [`assets/kenney/`](assets/kenney/README.md) — CC0 is what makes it
 safe to redistribute and bake from (unlike the non-commercial Cute Fantasy pack).
+
+On top of those six flat fills, the `urban` theme adds **per-feature variety** so
+the campus doesn't read as one uniform block (all deterministic — same OSM in,
+same map out; the placeholder theme is unaffected):
+
+- **Roofs** — each building footprint gets a brick tile from `ROOF_TILES` (red and
+  orange brick, picked by the OSM way id), instead of every roof being the same red.
+- **Roads** — *major* roads (`MAJOR_ROADS`) get a dashed centreline stamped down
+  the middle (`DASH_H`/`DASH_V`); minor/service roads stay plain asphalt.
+- **Trees** — a seventh `trees` layer (`TREE_TILES`) drawn on top: any OSM
+  `natural=tree` nodes, plus a deterministic scatter that lines the footways (so
+  Locust Walk reads as a tree-lined spine) and dots the lawns, never on a built,
+  paved or watery cell. The generic renderer paints it with no changes.
 
 ## Areas
 
