@@ -136,7 +136,8 @@ higher-level thoughts. This is the largest behavioral leap from today's demo.
 - `[engine/port] XL` **Daily planning, decomposed day → hourly → minute.** Generate a
   plan from identity + memory, then refine it down to concrete actions, revising as the
   day unfolds. Replaces the single hardcoded `destination` + `activity` per persona in
-  `backend/build_world.py`. This is the change that makes the town feel alive.
+  `backend/build_world.py`. This is the change that makes the town feel alive. Anchor:
+  [`../docs/design/daily-planning.md`](../docs/design/daily-planning.md).
 - `[engine] L` **Periodic reflection.** Synthesize recent memories into higher-level
   thoughts on a cadence (e.g. when accumulated importance crosses a threshold). Today
   `npc.py` only reflects on command *failure* — ROADMAP Phase 1 calls out adding a real
