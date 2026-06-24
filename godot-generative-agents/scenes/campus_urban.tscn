@@ -4,11 +4,14 @@
 
 [node name="CampusUrban" type="Node2D"]
 
+; NOTE: do not scale this TileMapLayer — scaling a tilemap leaves sub-pixel gaps
+; between cells (the old white seams). Size the view with the camera zoom instead.
 [node name="Map" type="TileMapLayer" parent="."]
-scale = Vector2(3, 3)
 script = ExtResource("1_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
+; Centred on the 2800x1984 px map; zoom 0.5 renders each 16px tile at exactly 8px
+; (integer scale → crisp, seam-free) and frames the whole rotated core.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(3888, 2424)
-zoom = Vector2(0.13, 0.13)
+position = Vector2(1400, 992)
+zoom = Vector2(0.5, 0.5)

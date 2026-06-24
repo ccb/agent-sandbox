@@ -21,9 +21,43 @@ uv run python tools/geo/osm_to_tiled.py --area all      # both
 uv run python tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 art (not flat colours)
 uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
 uv run python tools/geo/osm_to_tiled.py --mpt 2         # finer grid (2 m per tile)
+uv run python tools/geo/osm_to_tiled.py --rotate none   # keep north up (skip grid alignment)
 ```
 
+By default the map is **rotated so the street grid lines up with the X/Y axes**
+(`--rotate auto`): planned cities sit on a grid that's a few degrees off true
+north (Penn's is ~8.6°), and a slanted grid looks wrong in a top-down game. The
+tool measures that offset from the road geometry and spins the whole map to
+cancel it; `--rotate none` keeps north up, `--rotate <deg>` rotates by a fixed
+amount. The applied angle is saved in the map's `rotation_deg` property.
+
 No third-party dependencies — only the Python stdlib (`zlib` writes the PNGs).
+
+## Agent world (Smallville matrix)
+
+`osm_to_tiled.py` makes a *picture*; `osm_to_ville.py` makes the *world data* the
+generative-agents backend can actually walk. It emits the same `the_ville` matrix
+format that `generative-agents/backend/world_map.py` already loads — collision +
+sector/arena CSVs + block tables — derived from the same OSM features:
+
+```bash
+uv run python tools/geo/osm_to_ville.py            # core area -> the_upenn matrix
+uv run python tools/geo/osm_to_ville.py --area campus
+```
+
+- **collision** = building footprints + water → walls; streets/paths/lawns walkable.
+- **sectors** = each *named* OSM building (College Hall, Van Pelt, …). The footprint
+  is a wall, so its walkable "apron" (the doorstep ring) is tagged too, so the
+  pathfinder can route to `UPenn:<building>:grounds`.
+- **arenas** = one per building (`grounds`); objects/spawns are empty (OSM has no
+  interiors).
+
+Output lands in the tracked `generative-agents/frontend_overrides/static_dirs/assets/the_upenn/`
+(setup.sh rsyncs it into `frontend/`). Then run the existing sim on the real campus:
+
+```bash
+cd generative-agents && uv run python -m backend.run_upenn   # 3 personas walk Penn
+```
 
 ## Themes (the tile art)
 
@@ -70,7 +104,8 @@ tight rectangle that still contains all four bounding streets).
    and landuse/leisure for the area's bounding box (see `AREAS` at the top of the
    script). `out geom;` gives each way's node coordinates inline.
 2. **Project** — `Projector` maps lon/lat → metres (local equirectangular, fine
-   for a ~1 km frame) → fractional tile coordinates, north at row 0.
+   for a ~1 km frame), optionally **rotates** the plane so the street grid is
+   axis-aligned (see `--rotate` above), then → fractional tile coordinates.
 3. **Rasterize** — closed areas (buildings, water, parks) are scanline-filled;
    ways (roads, footways, rivers) are drawn as Bresenham lines with a per-class
    width. Each category paints into one of six bottom-to-top layers: `ground`,
