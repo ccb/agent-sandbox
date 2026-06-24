@@ -79,6 +79,7 @@ DAY_OUTLINE_TOOL = {
         "properties": {
             "blocks": {
                 "type": "array",
+                "description": "Each item is a JSON object, not a string.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -104,6 +105,7 @@ HOURLY_TOOL = {
         "properties": {
             "hours": {
                 "type": "array",
+                "description": "Each item is a JSON object, not a string.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -133,6 +135,7 @@ MINUTE_TOOL = {
         "properties": {
             "stops": {
                 "type": "array",
+                "description": "Each item is a JSON object with the fields below, not a string.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -218,11 +221,12 @@ class LLMPlanner:
             "Sketch your day as a few broad blocks."
         )
         result = self._call(user, DAY_OUTLINE_TOOL)
-        return [
-            DayBlock(label=str(b["label"]), summary=str(b["summary"]))
-            for b in result.get("blocks", [])
-            if b.get("label") and b.get("summary")
-        ]
+        blocks = []
+        for b in self._records(result, "blocks"):
+            label, summary = b.get("label"), b.get("summary")
+            if label and summary:
+                blocks.append(DayBlock(label=str(label), summary=str(summary)))
+        return blocks
 
     def _hourly(self, persona_text: str, day: list[DayBlock], clock) -> list[HourBlock]:
         outline = "; ".join(f"{b.label}: {b.summary}" for b in day) or "(none)"
@@ -237,11 +241,13 @@ class LLMPlanner:
             "Give one line per hour."
         )
         result = self._call(user, HOURLY_TOOL)
-        return [
-            HourBlock(start_hour=int(h["start_hour"]), summary=str(h["summary"]))
-            for h in result.get("hours", [])
-            if h.get("summary") is not None and h.get("start_hour") is not None
-        ]
+        hours = []
+        for h in self._records(result, "hours"):
+            hour = self._coerce_int(h.get("start_hour"))
+            summary = h.get("summary")
+            if hour is not None and summary is not None:
+                hours.append(HourBlock(start_hour=hour, summary=str(summary)))
+        return hours
 
     def _minute(self, persona_text: str, hours: list[HourBlock]) -> list[Stop]:
         plan = (
@@ -255,21 +261,59 @@ class LLMPlanner:
 
     def _minute_from_user(self, user: str) -> list[Stop]:
         result = self._call(user, MINUTE_TOOL)
-        stops = [
-            Stop(
-                place=str(s["place"]),
-                activity=str(s["activity"]),
-                emoji=s.get("emoji"),
-                steps=s.get("steps"),
-            )
-            for s in result.get("stops", [])
-            if s.get("place") and s.get("activity")
-        ]
+        stops = []
+        for s in self._records(result, "stops"):
+            place, activity = s.get("place"), s.get("activity")
+            if place and activity:
+                stops.append(
+                    Stop(
+                        place=str(place),
+                        activity=str(activity),
+                        emoji=(
+                            s.get("emoji") if isinstance(s.get("emoji"), str) else None
+                        ),
+                        steps=self._coerce_steps(s.get("steps")),
+                    )
+                )
         if self.known_places:
             stops, _dropped = validate_stops(stops, self.known_places)
         return stops
 
-    # -- small seam helpers ---------------------------------------------------
+    # -- defensive parsing + small seam helpers -------------------------------
+
+    @staticmethod
+    def _records(result, key: str) -> list[dict]:
+        """The dict items under ``result[key]``, dropping anything malformed.
+
+        A live model can ignore the tool schema -- returning a bare value, a list
+        of *strings* instead of objects, or omitting the key entirely. We tolerate
+        all of that (the level just gets fewer, or zero, items) rather than raise,
+        which is what lets generation degrade to the static fallback instead of
+        crashing the run.
+        """
+        items = result.get(key) if isinstance(result, dict) else None
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
+
+    @staticmethod
+    def _coerce_int(value) -> int | None:
+        """An int from an int or a plain numeric string, else ``None`` (bools
+        are not ints here). Guards against a model emitting ``"8"`` or ``"8am"``."""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip().lstrip("+-").isdigit():
+            return int(value.strip())
+        return None
+
+    @staticmethod
+    def _coerce_steps(value) -> int | None:
+        """A positive step count (int or numeric string), else ``None`` (= stay
+        put). Keeps a stray string/zero from reaching the step loop's arithmetic."""
+        n = LLMPlanner._coerce_int(value)
+        return n if n is not None and n > 0 else None
 
     def _call(self, user: str, tool: dict) -> dict:
         messages = [
