@@ -3,9 +3,11 @@
 This folder runs Stanford's [Generative Agents](https://github.com/joonspk-research/generative_agents)
 **visualization** (the Smallville tile map and character sprites), but drives it
 with a backend built on this repo's `text_adventure_games` engine instead of the
-original `reverie` server. There is **no live LLM** yet: the cast is driven by the
-engine's mock LLM client, producing a **simplified ~1-hour simulation** of the full
-25-resident town going about its morning.
+original `reverie` server. By default the cast is driven by a **deterministic mock
+LLM client** (free, offline) producing a **simplified ~1-hour simulation** of the full
+25-resident town going about its morning; set `LLM_PROVIDER` (anthropic / openai) to
+drive the travel/perform decisions and daily planning with a **live model** instead
+(#78 / Phase A — see [Not done yet](#not-done-yet-future-work)).
 
 The sections below cover **running it, contributing, and where the files live**.
 The substance — what it is and how it works — is further down, under
@@ -221,8 +223,11 @@ and cast that this builds on.
 
 ## Not done yet (future work)
 
-- **Live LLM agents** — swap `SmallvilleMockClient` for a real client via the
-  engine's `client_from_env()`; the `Agent.decide` seam is identical.
+- **Live LLM agents** — ✅ wired (#78). Set `LLM_PROVIDER` (anthropic / openai) and
+  `run_simulation` drives each agent's travel/perform decision through a real model
+  (and generates the day with `LLMPlanner`); a `SmallvilleMockClient` still paces the
+  schedule. Unset or `mock` keeps the deterministic mock as both brain and driver, so
+  the offline replay is byte-identical. Not yet run against a live model end to end.
 - **Conversations** (`chat`) — residents follow a fixed wake → travel → perform
   routine and don't yet talk to each other. They *do* now carry a private
   **memory stream** (issue #75): each perceives co-located neighbors, remembers

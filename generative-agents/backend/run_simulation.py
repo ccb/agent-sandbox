@@ -32,7 +32,7 @@ from text_adventure_games.embedding_client import (
     create_embedding_client,
     embedding_client_from_env,
 )
-from text_adventure_games.llm_client import client_from_env
+from text_adventure_games.llm_client import LlmConfig, create_llm_client
 from text_adventure_games.planning import (
     ACTION_FAILED,
     BEHIND_SCHEDULE,
@@ -133,6 +133,7 @@ def simulate(
     out_memories: dict | None = None,
     clock: SimClock | None = None,
     planner_client=None,
+    llm_client=None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -171,6 +172,12 @@ def simulate(
     real model (:class:`~backend.planner.LLMPlanner`); with none -- the offline
     default -- each agent replays its authored schedule via ``MockPlanner`` and the
     replay is byte-identical. ``main`` supplies one only for a non-mock provider.
+
+    Pass an ``llm_client`` (NEXT-STEPS Phase A) to make the per-step travel/perform
+    *decisions* through a real model: it becomes each agent's brain, while a
+    deterministic ``SmallvilleMockClient`` still paces the schedule
+    (``advance``/``steps``/``emoji``). With none -- the offline default -- that mock
+    client is also the brain, so decisions stay deterministic and byte-identical.
     """
     game, chars = build_world()
     attach_agents(
@@ -181,6 +188,7 @@ def simulate(
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
         planner_client=planner_client,
+        llm_client=llm_client,
     )
     emoji = {p["name"]: p["emoji"] for p in PERSONAS}
     order = [p["name"] for p in PERSONAS]
@@ -237,7 +245,7 @@ def simulate(
                 and st["perform_until"] is not None
                 and _step >= st["perform_until"]
             ):
-                if char.agent.llm_client.advance():
+                if char.agent.schedule.advance():
                     st["performing"] = False
                 st["perform_until"] = None
 
@@ -276,12 +284,12 @@ def simulate(
                         st["performing"] = True
                         # Per-stop emoji (the schedule may vary it from the
                         # persona's default), falling back to the persona's.
-                        st["pron"] = char.agent.llm_client.emoji or emoji[name]
+                        st["pron"] = char.agent.schedule.emoji or emoji[name]
                         activity = char.get_property("activity") or "spending time"
                         st["desc"] = f"{activity} @ {char.location.tile_address}"
                         # Schedule the move on to the next stop. None steps means
                         # "stay" -- the agent settles here for the rest of the run.
-                        duration = char.agent.llm_client.steps
+                        duration = char.agent.schedule.steps
                         st["perform_until"] = (
                             _step + duration if duration is not None else None
                         )
@@ -441,39 +449,56 @@ def main() -> None:
     relationships_csv = os.path.join(args.ville_dir, "agent_history_init_n25.csv")
     base_personas = os.path.join(args.storage, args.base_sim, "personas")
 
-    # Shared usage ledger across all personas; optionally streamed to the run's
-    # JSONL artifact. The mock brain records $0, but the accounting is ready for
-    # when a real client lands (NEXT-STEPS Phase A).
+    # The LLM brain (NEXT-STEPS Phase A), gated by LLM_PROVIDER exactly like the
+    # engine's client_from_env: "anthropic"/"openai" build a real client; unset or
+    # "mock" -> None, so the deterministic SmallvilleMockClient stays the brain and
+    # the offline replay is byte-identical. The one client drives both the
+    # per-step travel/perform decisions and daily planning (LLMPlanner).
+    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    model = os.environ.get("LLM_MODEL")
+
+    # Shared usage ledger across all personas, streamed to the run's JSONL
+    # artifact. With the mock brain every line is $0; a real brain records into
+    # this same ledger (created with it below), so the cost summary stays accurate.
     ledger = UsageLedger()
     run_log = config.build_run_log(
-        provider="mock", model="mock", turn_mode="simultaneous"
+        provider=provider or "mock",
+        model=model or "mock",
+        turn_mode="simultaneous",
     )
+
+    llm_client = None
+    if provider and provider != "mock":
+        try:
+            llm_client = create_llm_client(
+                LlmConfig(
+                    provider=provider,
+                    api_key=os.environ.get("LLM_API_KEY"),
+                    model=model,
+                    base_url=os.environ.get("LLM_BASE_URL"),
+                    verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+                ),
+                ledger=ledger,
+            )
+        except (ImportError, ValueError) as e:
+            print(
+                f"Warning: could not create LLM client ({e}); "
+                "using the deterministic mock brain + static schedule."
+            )
+    print(
+        f"LLM brain: {provider} -- travel/perform decisions + daily planning."
+        if llm_client is not None
+        else "LLM brain: none -- deterministic mock decisions + static schedule."
+    )
+
     # Collect every agent's full memory stream alongside the frames, so the
     # exporter can give the State Details panel the complete history (not just
     # the per-step retrieved set the cards show).
     memory_streams: dict = {}
     # One clock for the run, shared by the loop's revision triggers (issue #83):
     # built from the same --start / --sec-per-step the exporter stamps frames
-    # with, so plan time and replay time agree. The mock planner doesn't revise,
-    # so this changes no frame -- it wires the seam for a real LLMPlanner.
+    # with, so plan time and replay time agree.
     clock = SimClock(args.start, args.sec_per_step)
-    # Daily planning brain (issue #83), gated by the same LLM_PROVIDER as the
-    # decision brain: a real (non-mock) provider generates each day with an
-    # LLMPlanner; unset or "mock" keeps the deterministic MockPlanner, so the
-    # offline replay stays byte-identical. Degrades to the mock on any construction
-    # error (missing key / extra), mirroring resolve_embedding_client.
-    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
-    planner_client = None
-    if provider and provider != "mock":
-        try:
-            planner_client = client_from_env(run_log)
-        except (ImportError, ValueError) as e:
-            print(f"Warning: could not create planner client ({e}); using MockPlanner.")
-    print(
-        f"Daily planning: generated by {provider} (LLMPlanner)."
-        if planner_client is not None
-        else "Daily planning: static schedule (MockPlanner)."
-    )
     with run_log or nullcontext():
         if run_log is not None:
             run_log.attach(ledger)
@@ -486,7 +511,8 @@ def main() -> None:
             base_personas_dir=base_personas,
             out_memories=memory_streams,
             clock=clock,
-            planner_client=planner_client,
+            llm_client=llm_client,
+            planner_client=llm_client,
         )
     print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
     _print_cost_summary(ledger)

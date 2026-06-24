@@ -7,7 +7,9 @@ data model + `Planner` protocol + pure helpers ship in
 `simulate()` trigger sites), and `backend/compare_plans.py` ship in
 `generative-agents/backend/`. The mock path keeps the replay byte-identical;
 `LLMPlanner` is written against the engine's `LlmClient` seam and tested with a
-fake client, so a real model is a `client_from_env()` swap once **Phase A** lands.
+fake client; **Phase A** (#78) has since landed, so a real `LLM_PROVIDER` now
+drives both the per-step decisions and `LLMPlanner` from one shared client (not yet
+run against a live model end to end).
 Still open: periodic **reflection** (§13 step 7) and the **`PERCEPTION`** revision
 trigger (needs mid-activity perception). This supersedes the brief planning sketch
 in [`agent-memory.md` §8](agent-memory.md), expanding it from "1–3 next intentions"
