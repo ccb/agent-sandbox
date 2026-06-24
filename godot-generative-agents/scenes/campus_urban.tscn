@@ -10,8 +10,9 @@
 script = ExtResource("1_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; Centred on the 2800x1984 px map; zoom 0.5 renders each 16px tile at exactly 8px
-; (integer scale → crisp, seam-free) and frames the whole rotated core.
+; Centred on the 5600x3952 px map (now drawn at 2 m/tile); zoom 0.4 focuses on the
+; central core. Texture padding keeps tiles crisp at this fractional scale; size
+; the view with the camera zoom, never by scaling the TileMapLayer (white seams).
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(1400, 992)
+position = Vector2(2650, 1880)
 zoom = Vector2(0.5, 0.5)

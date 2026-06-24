@@ -69,10 +69,15 @@ AREAS = {
         "stem": "upenn_core",
         "desc": "campus core: 34th–38th St, Spruce–Walnut",
         "bbox": dict(south=39.9502, west=-75.1994, north=39.9538, east=-75.19182),
+        # Drawn at a finer 2 m/tile (the campus default is 4) so individual
+        # features — multi-tile trees especially — have room to read as
+        # themselves rather than as single coloured cells. `--mpt` overrides.
+        "mpt": 2.0,
     },
 }
 
-# How many real-world metres one tile covers. Smaller = more detail + bigger map.
+# Default metres one tile covers when an area doesn't pin its own (see AREAS["core"]
+# above and the --mpt flag). Smaller = more detail + a bigger grid.
 METRES_PER_TILE = 4.0
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -140,9 +145,31 @@ ROOF_TILES = [72, 74, 75, 180, 182, 183]
 MAJOR_ROADS = {"motorway", "trunk", "primary", "secondary"}
 DASH_H, DASH_V = 433, 462
 
-# Single-tile trees (whole tree — canopy + trunk — in one 16px cell). Scattered
-# on lawns and planted along footways so Locust Walk reads as a tree-lined spine.
-TREE_TILES = [238, 265, 292]
+# Trees, as MULTI-TILE stamps. A single 16px cell is too small to read as a tree
+# at campus zoom (it just looks like a green cell), so each tree spans a small
+# block of cells whose tiles are the sprite's pieces. Each stamp is anchored at
+# its BASE cell (where the trunk stands); the canopy extends *upward* (negative
+# row offset). Entries are (col_offset, row_offset, 0-based sheet index); a Tiled
+# GID is index + 1. Indices verified by eye against tilemap_packed.png — the
+# Kenney sheet's trees live at rows 8–10, cols 16–21 (cols 22+ are characters).
+TREE_BIG = [(0, -1, 232), (0, 0, 259)]  # tall leafy tree: canopy over trunk, 1×2
+TREE_MED = [(0, -1, 233), (0, 0, 260)]  # smaller tree: canopy over trunk, 1×2
+TREE_GROVE = [  # a 3×3 clump for big lawns (College Green); reads as a stand of trees
+    (-1, -2, 235),
+    (0, -2, 236),
+    (1, -2, 237),  # canopy tops
+    (-1, -1, 262),
+    (0, -1, 263),
+    (1, -1, 264),  # canopy middle
+    (-1, 0, 289),
+    (0, 0, 290),
+    (1, 0, 291),  # canopy base + trunks
+]
+# Every tree-sprite index, for the preview legend (so previews show foliage green
+# instead of undefined-GID black).
+TREE_PREVIEW_IDS = {
+    idx for stamp in (TREE_BIG, TREE_MED, TREE_GROVE) for _, _, idx in stamp
+}
 
 # Bottom-to-top paint order. "trees" only exists in the urban theme (rasterise
 # adds that layer when variety is on); filtering by presence keeps placeholder
@@ -451,13 +478,41 @@ def roof_gid(el: dict, pts: list) -> int:
     return ROOF_TILES[key % len(ROOF_TILES)] + 1
 
 
-def tree_gid(c: int, r: int) -> int:
-    """Deterministic single-tile tree GID for cell (c,r).
+def _tree_hash(c: int, r: int) -> int:
+    """A stable, well-mixed non-negative hash of a cell — drives every tree choice.
 
-    A fixed integer hash of the cell — never random — so regenerating the map
-    reproduces exactly the same trees.
+    Never random, so regenerating the map reproduces exactly the same trees. The
+    avalanche mixing matters: a plain `c*A ^ r*B` leaves the low bit equal to
+    (c + r) & 1, which correlates with the cell-selection patterns below (they all
+    pick cells with even c+r) and would starve one tree size entirely.
     """
-    return TREE_TILES[(c * 73856093 ^ r * 19349663) % len(TREE_TILES)] + 1
+    mask = 0xFFFFFFFFFFFFFFFF
+    h = ((c * 73856093) ^ (r * 19349663)) & mask
+    h = ((h ^ (h >> 15)) * 0x2545F4914F6CDD1D) & mask
+    h ^= h >> 13
+    return h & 0x7FFFFFFF
+
+
+def place_tree(trees: list, occupied, base_c: int, base_r: int, stamp: list) -> bool:
+    """Stamp one multi-tile tree with its trunk at (base_c, base_r), canopy upward.
+
+    Succeeds only if *every* cell of the stamp is in-bounds, unoccupied (no
+    building / road / path / water under it) and not already part of another
+    tree — so trees never overlap each other or sit on paving. Writes the tree
+    and returns True on success; touches nothing and returns False otherwise.
+    """
+    rows, cols = len(trees), len(trees[0])
+    cells = []
+    for dc, dr, idx in stamp:
+        c, r = base_c + dc, base_r + dr
+        if not (0 <= c < cols and 0 <= r < rows):
+            return False
+        if occupied(c, r) or trees[r][c]:
+            return False
+        cells.append((c, r, idx + 1))
+    for c, r, gid in cells:
+        trees[r][c] = gid
+    return True
 
 
 def draw_dashes(grid: list, p0: tuple, p1: tuple, cols: int, rows: int) -> None:
@@ -469,15 +524,23 @@ def draw_dashes(grid: list, p0: tuple, p1: tuple, cols: int, rows: int) -> None:
             grid[r][c] = dash
 
 
-def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
-    """Fill the "trees" layer (urban theme only).
+def _pick_tree(c: int, r: int, allow_grove: bool = False) -> list:
+    """Deterministically choose which tree stamp goes at a cell (no randomness)."""
+    h = _tree_hash(c, r)
+    if allow_grove and h % 9 == 0:
+        return TREE_GROVE
+    return TREE_BIG if h % 2 == 0 else TREE_MED
 
-    Three deterministic sources, none of which ever lands a tree on a built,
-    paved or watery cell:
-      1. real trees mapped in OSM (natural=tree nodes), placed exactly;
-      2. footway-lining — every few path cells, a tree a couple of tiles to each
-         side, so Locust Walk and the campus walks become tree-lined;
-      3. a sparse scatter across lawns.
+
+def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
+    """Fill the "trees" layer with multi-tile trees (urban theme only).
+
+    Each tree is a stamp (canopy + trunk), placed so it never overlaps a built,
+    paved or watery cell — or another tree. Three deterministic sources:
+      1. real trees mapped in OSM (natural=tree nodes), placed where they are;
+      2. footway-lining — a tree set back beside the walks at intervals, so
+         Locust Walk and the campus paths become tree-lined avenues;
+      3. a sparse scatter across the lawns, with the occasional 3×3 grove.
     """
     cols, rows = proj.cols, proj.rows
     trees = layers["trees"]
@@ -496,36 +559,33 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
             continue
         cf, rf = proj.to_tile(el["lat"], el["lon"])
         c, r = int(cf), int(rf)
-        if 0 <= c < cols and 0 <= r < rows and not occupied(c, r):
-            trees[r][c] = tree_gid(c, r)
+        if 0 <= c < cols and 0 <= r < rows:
+            place_tree(trees, occupied, c, r, _pick_tree(c, r))
 
-    # 2. Line the footways: plant beside the walk, never on it.
-    spacing, offset = 3, 2
+    # 2. Line the footways: at intervals, set one tree back beside the walk. The
+    #    side-offset directions are tried in a per-cell order so trees fall on
+    #    whichever side has room, naturally lining both sides of a path.
+    spacing, offset = 4, 2
     for r in range(rows):
         for c in range(cols):
             if not layers["paths"][r][c] or (c + r) % spacing:
                 continue
-            for dc, dr in ((offset, 0), (-offset, 0), (0, offset), (0, -offset)):
-                cc, rr = c + dc, r + dr
-                if (
-                    0 <= cc < cols
-                    and 0 <= rr < rows
-                    and not occupied(cc, rr)
-                    and not trees[rr][cc]
-                ):
-                    trees[rr][cc] = tree_gid(cc, rr)
+            dirs = [(offset, 0), (-offset, 0), (0, offset), (0, -offset)]
+            if _tree_hash(c, r) & 1:
+                dirs.reverse()
+            for dc, dr in dirs:
+                bc, br = c + dc, r + dr
+                if place_tree(trees, occupied, bc, br, _pick_tree(bc, br)):
+                    break  # one tree per chosen path cell keeps the avenue tidy
 
-    # 3. Sparse, deterministic scatter across lawns.
-    grid_step = 5
+    # 3. Sparse, deterministic scatter across the lawns (with the rare grove). A
+    #    hash gate (not a fixed stride) gives an even, natural spread instead of
+    #    trees marching down diagonal lines; collisions thin it further.
+    density = 11  # ~1 in N lawn cells attempts a tree
     for r in range(rows):
         for c in range(cols):
-            if (
-                layers["landuse"][r][c]
-                and c % grid_step == r % grid_step
-                and not occupied(c, r)
-                and not trees[r][c]
-            ):
-                trees[r][c] = tree_gid(c, r)
+            if layers["landuse"][r][c] and _tree_hash(c, r) % density == 0:
+                place_tree(trees, occupied, c, r, _pick_tree(c, r, allow_grove=True))
 
 
 def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -> dict:
@@ -854,7 +914,7 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
             gid_to_rgba[idx + 1] = PALETTE["building"][1]
         gid_to_rgba[DASH_H + 1] = PALETTE["road"][1]
         gid_to_rgba[DASH_V + 1] = PALETTE["road"][1]
-        for idx in TREE_TILES:
+        for idx in TREE_PREVIEW_IDS:
             gid_to_rgba[idx + 1] = (60, 130, 60, 255)
     write_preview_png(
         preview_path,
@@ -889,8 +949,8 @@ def main() -> int:
     ap.add_argument(
         "--mpt",
         type=float,
-        default=METRES_PER_TILE,
-        help="metres per tile (default %(default)s)",
+        default=None,
+        help="metres per tile (default: the area's own, else %d)" % METRES_PER_TILE,
     )
     ap.add_argument(
         "--rotate",
@@ -902,7 +962,14 @@ def main() -> int:
     os.makedirs(OUT_DIR, exist_ok=True)
     names = list(AREAS) if args.area == "all" else [args.area]
     for name in names:
-        build_area(name, args.mpt, args.refresh, args.theme, args.rotate)
+        # Resolution: an explicit --mpt wins; otherwise the area's own (AREAS["core"]
+        # pins 2 m/tile), otherwise the module default.
+        mpt = (
+            args.mpt
+            if args.mpt is not None
+            else AREAS[name].get("mpt", METRES_PER_TILE)
+        )
+        build_area(name, mpt, args.refresh, args.theme, args.rotate)
     return 0
 
 

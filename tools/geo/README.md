@@ -83,10 +83,14 @@ same map out; the placeholder theme is unaffected):
   orange brick, picked by the OSM way id), instead of every roof being the same red.
 - **Roads** — *major* roads (`MAJOR_ROADS`) get a dashed centreline stamped down
   the middle (`DASH_H`/`DASH_V`); minor/service roads stay plain asphalt.
-- **Trees** — a seventh `trees` layer (`TREE_TILES`) drawn on top: any OSM
-  `natural=tree` nodes, plus a deterministic scatter that lines the footways (so
-  Locust Walk reads as a tree-lined spine) and dots the lawns, never on a built,
-  paved or watery cell. The generic renderer paints it with no changes.
+- **Trees** — a seventh `trees` layer drawn on top. Trees are **multi-tile
+  stamps** (`TREE_BIG`/`TREE_MED` are a canopy over a trunk; `TREE_GROVE` is a 3×3
+  clump for big lawns), not single cells — a lone 16px tile just reads as a green
+  square, whereas a canopy-plus-trunk reads as an actual tree. They're placed
+  deterministically from three sources: any OSM `natural=tree` nodes, a set-back
+  lining of the footways (so Locust Walk becomes a tree-lined avenue), and a
+  sparse scatter across the lawns — never overlapping a built, paved or watery
+  cell, or another tree. The generic renderer paints them with no changes.
 
 ## Areas
 
@@ -97,6 +101,12 @@ and caches its own Overpass response, so they never clobber each other.
 |----------|------|--------|
 | `campus` *(default)* | `upenn` | the full UPenn campus (~1 km × 1.2 km) |
 | `core` | `upenn_core` | **34th–38th St between Spruce & Walnut** (~400 m × 650 m) — College Green, College Hall, Van Pelt, the Locust Walk core. A small frame for prototyping. |
+
+Each area may pin its own resolution: `core` carries `"mpt": 2.0` (so it renders at a
+finer **2 m/tile** — ~350×247 tiles — giving features, multi-tile trees especially,
+room to read), while `campus` uses the 4 m/tile default. An explicit `--mpt` overrides
+either. Whatever resolution you build the map at, regenerate the matrix to match
+(`osm_to_ville.py` reads the same per-area `mpt`) or the agent replay will be misaligned.
 
 The `core` bbox was derived from the real street-centreline geometry in the campus
 OSM data (the Philadelphia grid is rotated ~8°, so the axis-aligned box is the
