@@ -14,9 +14,9 @@ script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
 ; The map is the 34th–36th x Spruce–Walnut core only (5632x7040 px at 1 m/tile),
-; so the whole frame IS the middle of campus. Centred on the map; zoom 0.155 fits
-; the full (tall) area in view. Raise the zoom to push in on the agents (Van Pelt,
-; College Hall, Meyerson, the Locust Walk spine) if you don't need the whole area.
+; so the whole frame IS the middle of campus. Centred on the map; zoom 0.176 fits
+; the full (tall) area to the 1000x1250 portrait window (see project.godot). If you
+; resize the window, nudge this zoom to match (≈ window_height / 7040).
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(2810, 3510)
-zoom = Vector2(0.15, 0.15)
+zoom = Vector2(0.176, 0.176)
