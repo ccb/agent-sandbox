@@ -44,11 +44,29 @@ import zlib
 # Configuration
 # --------------------------------------------------------------------------- #
 
-# Bounding box around the University of Pennsylvania campus (University City,
-# Philadelphia). Order: south, west, north, east. This frame captures Locust
-# Walk, College Green, the Quad, Van Pelt, the engineering quad and Franklin
-# Field. See the campus on OSM: https://www.openstreetmap.org/relation/2594845
-BBOX = dict(south=39.9475, west=-75.2025, north=39.9565, east=-75.1880)
+# Named areas to render. Each writes its own files (<stem>.tmj, <stem>_preview.png)
+# and caches its own Overpass response (out/<stem>_osm.json), so areas never
+# clobber each other. bbox order: south, west, north, east.
+AREAS = {
+    # The full UPenn campus (University City, Philadelphia): Locust Walk, College
+    # Green, the Quad, Van Pelt, the engineering quad, Franklin Field.
+    # OSM: https://www.openstreetmap.org/relation/2594845
+    "campus": {
+        "stem": "upenn",
+        "desc": "full UPenn campus",
+        "bbox": dict(south=39.9475, west=-75.2025, north=39.9565, east=-75.1880),
+    },
+    # A small prototyping subset: 34th–38th St between Spruce & Walnut — the heart
+    # of campus (College Green, College Hall, Van Pelt, the Locust Walk core).
+    # The bbox was derived from the real street-centreline geometry in the campus
+    # OSM data (the Philadelphia grid is rotated ~8°, so this axis-aligned box is
+    # the tight rectangle that still contains all four bounding streets).
+    "core": {
+        "stem": "upenn_core",
+        "desc": "campus core: 34th–38th St, Spruce–Walnut",
+        "bbox": dict(south=39.9502, west=-75.1994, north=39.9538, east=-75.19182),
+    },
+}
 
 # How many real-world metres one tile covers. Smaller = more detail + bigger map.
 METRES_PER_TILE = 4.0
@@ -58,7 +76,6 @@ USER_AGENT = "agent-sandbox-geo/0.1 (https://github.com/ccb/agent-sandbox issue#
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
-CACHE_FILE = os.path.join(OUT_DIR, "upenn_osm.json")
 
 # --------------------------------------------------------------------------- #
 # Tile palette. Each category is one solid-colour tile in the generated
@@ -99,11 +116,11 @@ def overpass_query(bbox: dict) -> str:
     """
 
 
-def fetch_osm(bbox: dict, refresh: bool) -> dict:
+def fetch_osm(bbox: dict, cache_file: str, refresh: bool) -> dict:
     """Return Overpass JSON for the bbox, using the on-disk cache when possible."""
-    if os.path.exists(CACHE_FILE) and not refresh:
-        print(f"[fetch] using cached {os.path.relpath(CACHE_FILE)}")
-        with open(CACHE_FILE) as fh:
+    if os.path.exists(cache_file) and not refresh:
+        print(f"[fetch] using cached {os.path.relpath(cache_file)}")
+        with open(cache_file) as fh:
             return json.load(fh)
 
     print("[fetch] querying Overpass API (real OpenStreetMap data)...")
@@ -115,9 +132,9 @@ def fetch_osm(bbox: dict, refresh: bool) -> dict:
         raw = resp.read().decode()
     parsed = json.loads(raw)
     os.makedirs(OUT_DIR, exist_ok=True)
-    with open(CACHE_FILE, "w") as fh:
+    with open(cache_file, "w") as fh:
         fh.write(raw)
-    print(f"[fetch] cached -> {os.path.relpath(CACHE_FILE)}")
+    print(f"[fetch] cached -> {os.path.relpath(cache_file)}")
     return parsed
 
 
@@ -480,8 +497,45 @@ def write_preview_png(
 # --------------------------------------------------------------------------- #
 
 
+def build_area(name: str, mpt: float, refresh: bool) -> None:
+    """Fetch, rasterize and emit the Tiled map for one named area in AREAS."""
+    area = AREAS[name]
+    stem, bbox = area["stem"], area["bbox"]
+    print(f"\n=== {name}: {area['desc']} ===")
+
+    osm = fetch_osm(bbox, os.path.join(OUT_DIR, f"{stem}_osm.json"), refresh)
+    proj = Projector(bbox, mpt)
+    print(f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile")
+
+    t0 = time.time()
+    result = rasterise(osm, proj)
+    print(f"[raster] done in {time.time() - t0:.1f}s")
+    for cat, n in result["counts"].items():
+        if n:
+            print(f"         {cat:9s}: {n} features")
+
+    # The tileset (palette image) is identical for every area, so share one file.
+    tileset_path = os.path.join(OUT_DIR, "tileset.png")
+    tmj_path = os.path.join(OUT_DIR, f"{stem}.tmj")
+    preview_path = os.path.join(OUT_DIR, f"{stem}_preview.png")
+    ts_w, ts_h = write_tileset_png(tileset_path)
+    write_tmj(tmj_path, proj, result["layers"], tileset_path, ts_w, ts_h)
+    write_preview_png(preview_path, result["layers"], proj.cols, proj.rows)
+
+    print(f"[emit]  {os.path.relpath(tmj_path)}")
+    print(f"[emit]  {os.path.relpath(preview_path)}")
+    sample = ", ".join(sorted(set(result["named"]))[:12])
+    print(f"[check] {len(set(result['named']))} named buildings, e.g.: {sample}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--area",
+        choices=[*AREAS, "all"],
+        default="campus",
+        help="which area to build (default %(default)s)",
+    )
     ap.add_argument("--refresh", action="store_true", help="re-download from Overpass")
     ap.add_argument(
         "--mpt",
@@ -492,29 +546,9 @@ def main() -> int:
     args = ap.parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    osm = fetch_osm(BBOX, args.refresh)
-    proj = Projector(BBOX, args.mpt)
-    print(f"[grid]  {proj.cols} x {proj.rows} tiles @ {args.mpt} m/tile")
-
-    t0 = time.time()
-    result = rasterise(osm, proj)
-    print(f"[raster] done in {time.time() - t0:.1f}s")
-    for cat, n in result["counts"].items():
-        if n:
-            print(f"         {cat:9s}: {n} features")
-
-    tileset_path = os.path.join(OUT_DIR, "tileset.png")
-    tmj_path = os.path.join(OUT_DIR, "upenn.tmj")
-    preview_path = os.path.join(OUT_DIR, "upenn_preview.png")
-    ts_w, ts_h = write_tileset_png(tileset_path)
-    write_tmj(tmj_path, proj, result["layers"], tileset_path, ts_w, ts_h)
-    write_preview_png(preview_path, result["layers"], proj.cols, proj.rows)
-
-    print(f"[emit]  {os.path.relpath(tmj_path)}")
-    print(f"[emit]  {os.path.relpath(tileset_path)}")
-    print(f"[emit]  {os.path.relpath(preview_path)}")
-    sample = ", ".join(sorted(set(result["named"]))[:12])
-    print(f"[check] {len(set(result['named']))} named buildings, e.g.: {sample}")
+    names = list(AREAS) if args.area == "all" else [args.area]
+    for name in names:
+        build_area(name, args.mpt, args.refresh)
     return 0
 
 
