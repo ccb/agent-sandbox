@@ -253,6 +253,43 @@ def test_llm_planner_satisfies_protocol():
     assert isinstance(LLMPlanner(_ScriptedClient({})), Planner)
 
 
+def test_llm_planner_tolerates_string_array_items():
+    # Reproduces the live failure (#78): the model returned tool arrays whose items
+    # were strings, not objects. Parsing must drop them and degrade, never raise.
+    script = {
+        DAY_OUTLINE_TOOL["name"]: {"blocks": ["morning: cafe", "afternoon"]},
+        HOURLY_TOOL["name"]: {
+            "hours": ["8: tend", {"start_hour": 9, "summary": "milk"}]
+        },
+        MINUTE_TOOL["name"]: {"stops": ["Hobbs Cafe: tending", "Johnson Park"]},
+    }
+    plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
+    assert plan.day == []  # both string blocks dropped
+    assert [h.start_hour for h in plan.hours] == [9]  # only the well-formed hour
+    assert plan.stops == []  # both string stops dropped, no crash
+
+
+def test_llm_planner_tolerates_non_list_tool_value():
+    script = {MINUTE_TOOL["name"]: {"stops": "Hobbs Cafe then the park"}}
+    plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
+    assert plan.stops == []
+
+
+def test_llm_planner_coerces_numeric_string_fields():
+    # A model may stringify numbers; coerce where sensible, drop garbage to None.
+    script = {
+        MINUTE_TOOL["name"]: {
+            "stops": [
+                {"place": "Hobbs Cafe", "activity": "tending", "steps": "200"},
+                {"place": "Johnson Park", "activity": "a walk", "steps": "soon"},
+            ]
+        }
+    }
+    plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
+    assert plan.stops[0].steps == 200  # "200" -> 200
+    assert plan.stops[1].steps is None  # unparseable -> stay put, not a crash
+
+
 def test_attach_agents_uses_llm_planner_when_client_supplied():
     # The gate: a supplied planner_client routes every agent through LLMPlanner,
     # and the client drives the generated stops (known Smallville places).
