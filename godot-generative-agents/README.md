@@ -61,20 +61,32 @@ reads that JSON (`FileAccess` + `JSON`, so **no Tiled importer is needed**), bui
 (roads = the dirt path tinted darker; buildings = a 16×16 crop of the house roof). A
 `Camera2D` zooms out to frame the whole campus.
 
+**`tiled_map.gd`** (the `Map` node in `scenes/campus_urban.tscn`). A *generic*
+renderer for any Tiled map whose tileset is one packed image: it reads the `.tmj`,
+loads the referenced sheet, registers every tile, and paints each layer by GID. We
+use it to show the same campus drawn with **real art** — `maps/upenn_core_urban.tmj`,
+baked with **Kenney's RPG Urban Pack (CC0)** by the geo tool (`--theme urban`):
+brick buildings, asphalt streets, tan paving for Locust Walk, green for the lawns.
+This is the no-plugin equivalent of importing that `.tmj` with the
+[YATI](https://github.com/Kiamo2/YATI) addon, and the same file also loads natively
+in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it references.)
+
 ### Regenerating / swapping the campus map
 
-`maps/upenn_core.tmj` is a **copy** of the geo tool's output (generated on the
-`geo/osm-to-tiled-poc` branch). To refresh it, or to render the full campus instead of
-the 34th–38th × Spruce–Walnut core subset:
+The `maps/*.tmj` files are **copies** of the geo tool's output. To refresh them, or
+to render the full campus instead of the 34th–38th × Spruce–Walnut core subset:
 
 ```bash
-# from the geo branch / worktree:
-uv run python tools/geo/osm_to_tiled.py --area core    # or --area campus
-cp tools/geo/out/upenn_core.tmj <this project>/maps/   # (upenn.tmj for the full campus)
+uv run python tools/geo/osm_to_tiled.py --area core                 # Cute Fantasy map (placeholder GIDs)
+uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
+cp tools/geo/out/upenn_core.tmj        godot-generative-agents/maps/
+cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/maps/
+cp tools/geo/out/tilemap_packed.png    godot-generative-agents/maps/
 ```
 
-`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene to
-save a `campus_snapshot.png` of the whole map (used to verify the render).
+`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene
+(optionally with `-- <scene.tscn> <out.png>`) to save a screenshot of a map, used to
+verify the render.
 
 ## Running it
 
@@ -82,8 +94,11 @@ Open the project folder in the Godot 4.6 editor and press **Play** (F5), or from
 terminal:
 
 ```bash
-# Windowed (watch them wander):
+# Windowed (Cute Fantasy campus + wanderers):
 /Applications/Godot.app/Contents/MacOS/Godot --path .
+
+# The same campus in real Kenney CC0 urban art:
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/campus_urban.tscn
 
 # Headless smoke test (imports + runs ~300 frames, then quits):
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --import
