@@ -13,10 +13,12 @@ player_sheet = ExtResource("3_player")
 script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; Centred on the 5600x3952 px campus (now drawn at 2 m/tile). zoom 0.4 focuses on
-; the central core — College Hall, College Green, Van Pelt, the Locust Walk spine,
-; where the agents walk — rendering each 16px tile at ~6px so the trees read as
-; trees. (Lower the zoom toward 0.22 to frame the whole core at once.)
+; The map is now 11200x7888 px (1 m/tile). Rather than frame the whole core, we
+; zoom into the MIDDLE — Van Pelt, Williams, Meyerson, College Hall, the Locust
+; Walk spine, where the three agents actually walk — so the trees read as trees
+; and the bounding streets fall off-frame. position is centred on the agents'
+; activity; raise zoom to push further in, lower it (toward ~0.35) to take in more
+; of the core (the agents range wider than one tight frame can hold at once).
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(2650, 1880)
-zoom = Vector2(0.5, 0.5)
+position = Vector2(3000, 1430)
+zoom = Vector2(0.8, 0.8)

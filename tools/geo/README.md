@@ -83,13 +83,16 @@ same map out; the placeholder theme is unaffected):
   orange brick, picked by the OSM way id), instead of every roof being the same red.
 - **Roads** — *major* roads (`MAJOR_ROADS`) get a dashed centreline stamped down
   the middle (`DASH_H`/`DASH_V`); minor/service roads stay plain asphalt.
-- **Trees** — a seventh `trees` layer drawn on top. Trees are **multi-tile
-  stamps** (`TREE_BIG`/`TREE_MED` are a canopy over a trunk; `TREE_GROVE` is a 3×3
-  clump for big lawns), not single cells — a lone 16px tile just reads as a green
-  square, whereas a canopy-plus-trunk reads as an actual tree. They're placed
+- **Trees** — a seventh `trees` layer drawn on top. Every tree is a **multi-tile
+  stand of foliage**, never a single cell (a lone 16px tile just reads as a green
+  square; at the fine 1 m grid even a 1×2 sapling is a speck). The Kenney sheet has
+  one coherent multi-tile tree — a 3×3 grove — but its nine tiles *tile* (a top /
+  interior / trunk-base row, a left / interior / right column), so `make_stand(w, h)`
+  stamps a canopy of any size from them. The 3×3 grove is the standard street tree;
+  bigger `TREE_STAND`/`TREE_WOOD` stands fill the open greens. They're placed
   deterministically from three sources: any OSM `natural=tree` nodes, a set-back
   lining of the footways (so Locust Walk becomes a tree-lined avenue), and a
-  sparse scatter across the lawns — never overlapping a built, paved or watery
+  mixed-size scatter across the lawns — never overlapping a built, paved or watery
   cell, or another tree. The generic renderer paints them with no changes.
 
 ## Areas
@@ -102,9 +105,10 @@ and caches its own Overpass response, so they never clobber each other.
 | `campus` *(default)* | `upenn` | the full UPenn campus (~1 km × 1.2 km) |
 | `core` | `upenn_core` | **34th–38th St between Spruce & Walnut** (~400 m × 650 m) — College Green, College Hall, Van Pelt, the Locust Walk core. A small frame for prototyping. |
 
-Each area may pin its own resolution: `core` carries `"mpt": 2.0` (so it renders at a
-finer **2 m/tile** — ~350×247 tiles — giving features, multi-tile trees especially,
-room to read), while `campus` uses the 4 m/tile default. An explicit `--mpt` overrides
+Each area may pin its own resolution: `core` carries `"mpt": 1.0` (so it renders at a
+fine **1 m/tile** — ~700×493 tiles — giving features, multi-tile tree stands
+especially, room to read, and letting the camera zoom right into the middle of
+campus), while `campus` uses the 4 m/tile default. An explicit `--mpt` overrides
 either. Whatever resolution you build the map at, regenerate the matrix to match
 (`osm_to_ville.py` reads the same per-area `mpt`) or the agent replay will be misaligned.
 
