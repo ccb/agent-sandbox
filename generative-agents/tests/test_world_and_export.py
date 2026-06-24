@@ -251,6 +251,48 @@ def test_simulate_out_memories_is_optional(world_map):
     assert collected and set(collected) == {p["name"] for p in PERSONAS}
 
 
+def test_exporter_writes_daily_plan(world_map, tmp_path):
+    # simulate(out_plans=...) collects each agent's generated plan and the exporter
+    # writes personas/<Name>/daily_plan.json, so the plan a run used is an
+    # inspectable artifact (compare_plans reads it back). With the mock planner the
+    # plan is the static schedule, but the file contract is what matters here.
+    import datetime
+
+    from text_adventure_games.planning import DailyPlan
+
+    plans: dict = {}
+    frames = simulate(world_map, num_steps=12, out_plans=plans)
+    assert set(plans) == {p["name"] for p in PERSONAS}
+
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="plan_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+        plans=plans,
+    )
+    plan_path = os.path.join(
+        sim_dir, "personas", "Isabella Rodriguez", "daily_plan.json"
+    )
+    assert os.path.exists(plan_path)
+    with open(plan_path) as f:
+        loaded = DailyPlan.from_primitive(json.load(f))
+    # Round-trips to the same plan the agent was given (the static schedule here).
+    assert [s.to_schedule_entry() for s in loaded.stops] == PERSONAS[0]["schedule"]
+
+
+def test_simulate_out_plans_is_optional(world_map):
+    # Collecting plans is additive: frames are byte-identical with or without it.
+    plain = simulate(world_map, num_steps=12)
+    collected: dict = {}
+    with_plans = simulate(world_map, num_steps=12, out_plans=collected)
+    assert plain == with_plans
+    assert set(collected) == {p["name"] for p in PERSONAS}
+
+
 def test_exporter_honors_start_time_and_sec_per_step(world_map, tmp_path):
     # A custom start time and step length (the new CLI knobs) must flow into
     # meta.json *and* the per-step movement timestamps -- not the hardcoded
