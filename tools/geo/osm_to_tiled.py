@@ -60,20 +60,20 @@ AREAS = {
         "desc": "full UPenn campus",
         "bbox": dict(south=39.9475, west=-75.2025, north=39.9565, east=-75.1880),
     },
-    # A small prototyping subset: 34th–38th St between Spruce & Walnut — the heart
-    # of campus (College Green, College Hall, Van Pelt, the Locust Walk core).
-    # The bbox was derived from the real street-centreline geometry in the campus
-    # OSM data (the Philadelphia grid is rotated ~8°, so this axis-aligned box is
-    # the tight rectangle that still contains all four bounding streets).
+    # A small prototyping subset: 34th–36th St between Spruce & Walnut — the heart
+    # of campus (College Green, College Hall, Van Pelt, the Locust Walk core). The
+    # bbox edges are the real street centrelines from the campus OSM data (36th St
+    # is at lon -75.19482, 34th at -75.19231), each pushed out ~0.0005° so the
+    # bounding street itself is contained; the Philadelphia grid is rotated ~8°, so
+    # this axis-aligned box is the tight rectangle that holds all four streets.
     "core": {
         "stem": "upenn_core",
-        "desc": "campus core: 34th–38th St, Spruce–Walnut",
-        "bbox": dict(south=39.9502, west=-75.1994, north=39.9538, east=-75.19182),
+        "desc": "campus core: 34th–36th St, Spruce–Walnut",
+        "bbox": dict(south=39.9502, west=-75.1953, north=39.9538, east=-75.19182),
         # Drawn at a fine 1 m/tile (the campus default is 4) so individual
         # features — multi-tile trees especially — have room to read as
-        # themselves rather than as single coloured cells, and so the camera can
-        # zoom right into the middle of campus without everything turning to mush.
-        # ~700×494 tiles. `--mpt` overrides.
+        # themselves rather than as single coloured cells. With the area limited to
+        # two blocks, the whole frame *is* the middle of campus. `--mpt` overrides.
         "mpt": 1.0,
     },
 }
