@@ -4,3 +4,6 @@
 
 # Keep the *.import / *.uid sidecars: Godot needs them to recognize assets,
 # and they are small text files. Only the .godot/ cache above is excluded.
+
+# Verification screenshot from scripts/snapshot.gd — regenerable, never committed.
+campus_snapshot.png

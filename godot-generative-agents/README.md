@@ -10,8 +10,10 @@ this is headed: the same auto-moving sprites are the substrate that LLM-driven a
 
 `scenes/main.tscn` is a small top-down world built entirely from the pack's art:
 
-- a **tiled ground** (`scripts/ground.gd` on a `TileMapLayer`) — grass everywhere,
-  two crossing dirt paths, and a small pond with a proper shoreline;
+- the **real University of Pennsylvania campus** (`scripts/campus_map.gd` on a
+  `TileMapLayer`) — the actual streets, footpaths (Locust Walk!), lawns and building
+  footprints from OpenStreetMap, overlaid with Cute Fantasy tiles. (`scripts/ground.gd`
+  is the original hand-made grass/paths/pond demo, kept for reference.)
 - a few **oak trees** for decoration, with `y_sort` enabled so characters pass in
   front of / behind them correctly;
 - four **wandering characters** (`scripts/wanderer.gd`), each moving on its own:
@@ -42,12 +44,37 @@ In `_ready()` it slices the sheet (`hframes`/`vframes`) and picks a first target
 or `SpriteFrames` resource — it's all a few lines of readable code, so it's easy to
 follow and easy to extend (e.g. replace `_pick_target()` with an agent's decision).
 
-**`ground.gd`** (on the `TileMapLayer`). It builds its `TileSet` in code from the
-pack's 16×16 tiles — grass and path are single fill tiles; the pond reuses the 3×3
-"water-in-grass" nine-slice (corners/edges/centre) from the `Water_Tile` sheet so its
+**`ground.gd`** (the original hand-made demo `TileSet`). It builds its `TileSet` in code
+from the pack's 16×16 tiles — grass and path are single fill tiles; the pond reuses the
+3×3 "water-in-grass" nine-slice (corners/edges/centre) from the `Water_Tile` sheet so its
 border blends into the grass. Then it just loops over `set_cell()` to lay down the
 grass, the crossing paths, and the pond. Building the set in code keeps everything in
 plain, readable GDScript with no binary tile data to hand-edit.
+
+**`campus_map.gd`** (the `Campus` `TileMapLayer` in `main.tscn`). Same idea as
+`ground.gd`, but instead of a hand-drawn layout it loads a **real map**:
+`maps/upenn_core.tmj`, a Tiled tilemap generated from OpenStreetMap data by the repo's
+geo tool (`tools/geo/osm_to_tiled.py`). A `.tmj` is just JSON — six tile layers whose
+cells carry a category code (ground / grass / water / path / road / building). The script
+reads that JSON (`FileAccess` + `JSON`, so **no Tiled importer is needed**), builds a
+`TileSet` from the pack's tiles, and paints each cell with the matching Cute Fantasy tile
+(roads = the dirt path tinted darker; buildings = a 16×16 crop of the house roof). A
+`Camera2D` zooms out to frame the whole campus.
+
+### Regenerating / swapping the campus map
+
+`maps/upenn_core.tmj` is a **copy** of the geo tool's output (generated on the
+`geo/osm-to-tiled-poc` branch). To refresh it, or to render the full campus instead of
+the 34th–38th × Spruce–Walnut core subset:
+
+```bash
+# from the geo branch / worktree:
+uv run python tools/geo/osm_to_tiled.py --area core    # or --area campus
+cp tools/geo/out/upenn_core.tmj <this project>/maps/   # (upenn.tmj for the full campus)
+```
+
+`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene to
+save a `campus_snapshot.png` of the whole map (used to verify the render).
 
 ## Running it
 
