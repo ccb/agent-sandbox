@@ -7,8 +7,6 @@ extends Area2D
 @export_file("*.tscn") var target_scene: String = ""
 ## Optional lead/objective text surfaced on the HUD when this portal is used.
 @export var lead_on_use: String = ""
-## When true the transition plays a white "lit up" wash before fading (cathedral entry).
-@export var flash_on_enter: bool = false
 var _used := false
 
 func _ready() -> void:
@@ -22,4 +20,4 @@ func _on_body_entered(body: Node) -> void:
 		call_deferred("_change")
 
 func _change() -> void:
-	SceneFade.go(target_scene, lead_on_use, flash_on_enter)
+	SceneFade.go(target_scene, lead_on_use)

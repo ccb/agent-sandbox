@@ -6,7 +6,7 @@
 [ext_resource type="Script" uid="uid://db0lqqotc32a" path="res://src/Portal.gd" id="4"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_xw602"]
-radius = 383.047
+radius = 201.20139
 
 [sub_resource type="RectangleShape2D" id="h_edge"]
 size = Vector2(6270, 60)
@@ -24,7 +24,7 @@ y_sort_enabled = true
 
 [node name="Church" type="CollisionShape2D" parent="Solids" unique_id=1341003367]
 top_level = true
-position = Vector2(3158, 3032)
+position = Vector2(2086, 4977)
 shape = SubResource("CircleShape2D_xw602")
 
 [node name="EdgeTop" type="CollisionShape2D" parent="Solids" unique_id=828669043]
@@ -44,36 +44,35 @@ position = Vector2(6270, 3135)
 shape = SubResource("v_edge")
 
 [node name="Ground" type="Sprite2D" parent="." unique_id=1647879393]
-texture_filter = 2
+texture_filter = 4
 scale = Vector2(5, 5)
 texture = ExtResource("1")
 centered = false
 
 [node name="Chapel" type="Sprite2D" parent="." unique_id=912121814]
 texture_filter = 2
-position = Vector2(3100, 3000)
-scale = Vector2(1.8, 1.8)
+position = Vector2(2071, 4960)
+scale = Vector2(0.95, 1.2)
 texture = ExtResource("2")
 
 [node name="Player" parent="." unique_id=976192019 instance=ExtResource("3")]
-position = Vector2(3328, 3666)
+position = Vector2(2618, 5334)
 
 [node name="ChapelDoor" type="Area2D" parent="." unique_id=142974700]
-position = Vector2(2998, 3360)
+position = Vector2(1916, 5143)
 script = ExtResource("4")
 target_scene = "res://scenes/CathedralNave.tscn"
-flash_on_enter = true
 
 [node name="DoorShape" type="CollisionShape2D" parent="ChapelDoor" unique_id=581355398]
 position = Vector2(213.5, 27.5)
 shape = SubResource("door")
 
-[node name="NeilHomeDoor" type="Area2D" parent="."]
+[node name="NeilHomeDoor" type="Area2D" parent="." unique_id=245755487]
 position = Vector2(2700, 3600)
 script = ExtResource("4")
 target_scene = "res://scenes/NeilHome.tscn"
 
-[node name="NeilDoorShape" type="CollisionShape2D" parent="NeilHomeDoor"]
+[node name="NeilDoorShape" type="CollisionShape2D" parent="NeilHomeDoor" unique_id=2001001359]
 shape = SubResource("door")
 
 [node name="HintLayer" type="CanvasLayer" parent="." unique_id=1083835837]
