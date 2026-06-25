@@ -195,3 +195,67 @@ def test_recipe_is_repeatable_with_fresh_ingredients():
     game.player.inventory.pop("bow")  # set the old one aside
     game.do_command("make bow")
     assert "bow" in player.inventory
+
+
+# --- known / recipe-book gating (issue #135) -------------------------------
+
+
+def _string_and_stick():
+    return [things.Item("string", "a string"), things.Item("stick", "a stick")]
+
+
+def test_default_recipes_stay_craftable_unchanged():
+    # `known` defaults True, so every existing recipe/game is unaffected.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=_string_and_stick())
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_unknown_recipe_is_not_craftable_even_with_ingredients():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("make bow")
+    assert "bow" not in player.inventory  # gated despite having the ingredients
+    assert _said(cap, "don't know how")  # not the ingredient gap
+
+
+def test_bare_verb_skips_unknown_recipes():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("craft")  # bare verb: first satisfiable *known* recipe
+    assert "bow" not in player.inventory
+    assert _said(cap, "nothing you can make")
+
+
+def test_learn_recipe_makes_it_craftable():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.learn_recipe("bow")
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_learn_recipe_is_case_insensitive_and_matches_aliases():
+    recipe = Recipe(
+        name="bow",
+        aliases=["longbow"],
+        inputs=["string", "stick"],
+        output=_bow,
+        known=False,
+    )
+    game, player, cap = _game(recipes=[recipe], inv=_string_and_stick())
+    game.learn_recipe("LONGBOW")  # learned by alias, in a different case
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_known_recipe_missing_ingredients_still_shows_the_gap():
+    # The "don't know how" gate is only for UNKNOWN recipes; a known recipe you
+    # simply lack ingredients for still gives the helpful gap message.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=[])  # no ingredients
+    game.do_command("make bow")
+    assert "bow" not in player.inventory
+    assert _said(cap, "You need")  # ingredient gap, not "don't know how"
