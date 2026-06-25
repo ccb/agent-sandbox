@@ -483,7 +483,13 @@ plus 11 new ones.
 - **Stage 7, full migration:** the existing suites still assert on the web dicts
   through the `WebParser` shim; only `test_reporting.py` uses `CaptureRenderer`.
   Migrating the rest is mechanical but deferred to keep this PR focused.
-- **Stage 10:** the `JSONRenderer` / export feed for the 2D renderer.
+- **Stage 10:** split into two complementary halves. The **world-state
+  *snapshot* API is built** (issue #90): `text_adventure_games/world_state.py` —
+  a typed, deterministic, read-only `WorldState` (via `Game.to_world_state()` /
+  `to_world_json()`) that a Godot renderer or exporter can poll for the full
+  room graph + characters + items + clock + recent events. Still pending: the
+  `JSONRenderer` per-message **change feed** over this Channel/Message seam (the
+  delta half), and the Flask/websocket route that serves either (#9 / #10).
 - **Verbose JSON dump:** `llm_client.py` / `LlmParser._narrate` still
   `print(json.dumps(...))` under their `verbose` flag for deep prompt debugging;
   the `AGENT_OBSERVATION` channel is added but hasn't replaced that path yet.
