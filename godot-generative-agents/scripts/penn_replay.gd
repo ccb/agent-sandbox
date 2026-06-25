@@ -9,6 +9,11 @@ extends Node2D
 ## logic here; this is purely the viewer (the sim already decided everything).
 
 @export_file("*.json") var replay_path: String = "res://maps/penn_replay.json"
+## On web exports the replay is NOT packed into the build; it's fetched over HTTP
+## from this URL (relative to the page the build is embedded in). That way a new
+## sim only needs the JSON file replaced — no Godot re-export. Ignored on desktop,
+## which reads `replay_path` from disk instead. See godot-generative-agents/web/.
+@export var web_replay_url: String = "replay/penn_replay.json"
 @export var player_sheet: Texture2D  # Cute_Fantasy_Free/Player/Player.png
 ## Real seconds spent replaying one sim step (smaller = faster playback).
 @export var step_seconds: float = 0.10
@@ -46,13 +51,50 @@ var _anim_t := 0.0
 
 
 func _ready() -> void:
+	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
+	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
+	if OS.has_feature("web"):
+		_load_replay_web()
+	else:
+		_load_replay_desktop()
+
+
+func _load_replay_desktop() -> void:
 	var f := FileAccess.open(replay_path, FileAccess.READ)
 	if f == null:
 		push_error("penn_replay: cannot open %s" % replay_path)
 		return
-	var data: Variant = JSON.parse_string(f.get_as_text())
+	_load_replay_from_text(f.get_as_text())
+
+
+func _load_replay_web() -> void:
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(_on_replay_request_completed)
+	# Godot's HTTPRequest needs an absolute URL (with a scheme) — unlike the
+	# browser's fetch(), it won't resolve a relative path itself. Resolve the
+	# configured URL against the page that hosts the build.
+	var url := web_replay_url
+	if not (url.begins_with("http://") or url.begins_with("https://")):
+		url = str(JavaScriptBridge.eval("new URL('%s', window.location.href).href" % web_replay_url, true))
+	var err := http.request(url)
+	if err != OK:
+		push_error("penn_replay: could not start HTTP request for %s (%d)" % [url, err])
+
+
+func _on_replay_request_completed(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	if code != 200:
+		push_error("penn_replay: fetching %s returned HTTP %d" % [web_replay_url, code])
+		return
+	_load_replay_from_text(body.get_string_from_utf8())
+
+
+func _load_replay_from_text(text: String) -> void:
+	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
-		push_error("penn_replay: %s is not valid replay JSON" % replay_path)
+		push_error("penn_replay: replay payload is not valid replay JSON")
 		return
 
 	var meta: Dictionary = data["meta"]
