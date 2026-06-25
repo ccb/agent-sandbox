@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="1_tiled"]
+[ext_resource type="Script" path="res://scripts/camera_controls.gd" id="2_cam"]
 
 [node name="CampusUrban" type="Node2D"]
 
@@ -19,3 +20,4 @@ map_path = "res://maps/upenn_core_urban.tmj"
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(1896, 2168)
 zoom = Vector2(0.249, 0.249)
+script = ExtResource("2_cam")
