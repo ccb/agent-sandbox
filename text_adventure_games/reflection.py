@@ -42,6 +42,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from . import prompt_templates
+
 # --- Reflection tuning (docs/design/agent-memory.md §7) ----------------------
 # Reflect once accumulated importance since the last reflection crosses this.
 # The paper's scale; AgentMemory.importance_since_reflection sums the 1-10
@@ -309,12 +311,6 @@ class LLMReflector:
     edits here.
     """
 
-    _SYSTEM = (
-        "You are reflecting on your own recent experiences to form higher-level "
-        "insights about yourself, the people around you, and your situation. "
-        "Ground every insight only in the memories you are given."
-    )
-
     def __init__(self, client, *, max_tokens: int = 400):
         self.client = client
         self.max_tokens = max_tokens
@@ -393,7 +389,7 @@ class LLMReflector:
 
     def _call(self, user: str, tool: dict) -> dict:
         messages = [
-            {"role": "system", "content": self._SYSTEM},
+            {"role": "system", "content": prompt_templates.render("reflect_system")},
             {"role": "user", "content": user},
         ]
         result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)

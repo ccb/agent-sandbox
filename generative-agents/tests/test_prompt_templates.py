@@ -87,6 +87,14 @@ def test_spatial_knowledge_apostrophe_is_raw():
     assert "&#39;" not in out and "&#x27;" not in out
 
 
+# -- plan_system (planner.LLMPlanner -- a real model prompt, issue #83) ----------
+def test_plan_system():
+    assert render("plan_system") == (
+        "You are planning one day for a resident of the town of Smallville. "
+        "Plan in character, grounded in who they are and what they remember."
+    )
+
+
 # -- loader behavior -------------------------------------------------------------
 def test_unknown_template_raises_with_available_list():
     with pytest.raises(FileNotFoundError) as excinfo:
