@@ -294,17 +294,24 @@ class Parser:
         elif "quit" in command:
             return ActionName.QUIT
         else:
-            # Longest registered action name that appears in the command -- on
-            # WORD BOUNDARIES, not as a bare substring. (Substring matching here
-            # routed "dragon" to GO, because "go" sits inside "dra-go-n"; same
-            # class as "give" inside "forgive".)
-            best_match = None
+            # Longest registered action name -- OR single-word alias -- that
+            # appears in the command, on WORD BOUNDARIES, not as a bare substring.
+            # (Substring matching here routed "dragon" to GO, because "go" sits
+            # inside "dra-go-n"; same class as "give" inside "forgive".) Single-
+            # word aliases are honored too, so a custom verb's short alias
+            # ("jump"/"fall") routes to it (multi-word aliases already won via
+            # _match_specific_action). We return the action's NAME even when an
+            # alias matched, so the lookup in parse_action still resolves.
+            best_name, best_len = None, -1
             for _, action in self.actions.items():
-                special_command = action.action_name()
-                if re.search(rf"\b{re.escape(special_command)}\b", command):
-                    if best_match is None or len(special_command) > len(best_match):
-                        best_match = special_command
-            return best_match
+                phrases = [action.action_name()] + list(
+                    getattr(action, "ACTION_ALIASES", []) or []
+                )
+                for phrase in phrases:
+                    if phrase and re.search(rf"\b{re.escape(phrase)}\b", command):
+                        if len(phrase) > best_len:
+                            best_name, best_len = action.action_name(), len(phrase)
+            return best_name
 
     def _match_specific_action(self, command):
         """The longest registered ACTION_NAME / ACTION_ALIAS that is MULTI-WORD

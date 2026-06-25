@@ -34,6 +34,7 @@ def _said(cap, sub):
 EXPECTED_ROOMS = {
     "Tower",
     "Tower Stairs",
+    "Outside the Tower",
     "Guardroom",
     "Gardens",
     "Drawbridge",
@@ -79,7 +80,9 @@ def test_key_connections():
         return loc[room].connections.get(direction) is loc[dest]
 
     assert goes("Tower", "out", "Tower Stairs")
-    assert goes("Tower", "down", "Gardens")
+    assert goes("Tower", "down", "Outside the Tower")
+    assert goes("Outside the Tower", "down", "Gardens")
+    assert goes("Outside the Tower", "in", "Tower")
     assert goes("Tower Stairs", "down", "Guardroom")
     assert goes("Guardroom", "west", "Drawbridge")
     assert goes("Gardens", "south", "Drawbridge")
@@ -137,9 +140,11 @@ def test_escape_scores_guardroom_boots_and_escape():
             "up",
             "enter",
             "cut hair",
+            "get hair",
             "make rope",
             "tie rope",
-            "down",  # window -> Gardens (escape, +5)
+            "climb down",  # -> Outside the Tower
+            "let go",  # drop -> Gardens (escape, +5)
         ]
     )
     assert game.player.location.name == "Gardens"
@@ -156,10 +161,12 @@ def test_window_rope_route_escape_via_crafting():
             "take dagger",
             "up",
             "enter",  # back up into the Tower
-            "cut hair",  # yields the hair
+            "cut hair",  # yields the hair (on the floor)
+            "get hair",  # pick it up off the floor
             "make rope",  # crafting recipe: hair -> rope
             "tie rope",
-            "down",  # the window route -> Gardens (escape +5)
+            "climb down",  # -> Outside the Tower (on the rope)
+            "let go",  # drop -> Gardens (escape +5)
         ]
     )
     assert game.player.location.name == "Gardens"  # climbed out the window
@@ -184,6 +191,7 @@ def test_braid_hair_reaches_the_same_rope_recipe():
             "up",
             "enter",
             "cut hair",
+            "get hair",
             "braid hair",
         ]
     )
@@ -247,7 +255,7 @@ def test_caught_with_the_dagger_can_still_escape_by_window():
     # the door is locked now, but the window still works
     game, cap = _play(
         ["out", "down", "open footlocker", "take dagger", "west"]
-        + ["cut hair", "make rope", "tie rope", "down"]
+        + ["cut hair", "get hair", "make rope", "tie rope", "climb down", "let go"]
     )
     assert game.player.location.name == "Gardens"
 
@@ -270,9 +278,11 @@ ESCAPE_TO_GARDENS = [
     "up",
     "enter",  # back into the Tower
     "cut hair",
+    "get hair",  # the shorn hair lands on the floor -- pick it up
     "make rope",
     "tie rope",
-    "down",  # climb out the window -> Gardens
+    "climb down",  # out the window onto the rope -> Outside the Tower
+    "let go",  # drop into the gardens
 ]
 
 # ...then on to the river with an apple in hand.
@@ -562,3 +572,41 @@ def test_brush_hair_is_flavor_with_the_hairbrush():
 def test_brush_hair_needs_the_hairbrush():
     game, cap = _play(["brush hair"])  # in the Tower, no hairbrush yet
     assert _said(cap, "need a hairbrush")
+
+
+def test_cut_hair_drops_it_on_the_floor_and_climb_has_narration():
+    # Hair lands in the room (faithful), not the inventory; you GET it to craft.
+    game, cap = _play(
+        ["out", "down", "open footlocker", "take dagger", "up", "enter", "cut hair"]
+    )
+    tower = game.locations["Tower"]
+    assert "hair" in tower.items and "hair" not in game.player.inventory
+    # Climbing out the window has the rope/rosebush descent flavor.
+    game2, cap2 = _play(ESCAPE_TO_GARDENS)
+    assert game2.player.location.name == "Gardens"
+    assert _said(cap2, "down the rope") and _said(cap2, "rosebush")
+
+
+def test_climb_down_puts_you_on_the_rope_not_yet_escaped():
+    game, _ = _play(ESCAPE_TO_GARDENS[:-1])  # everything up to "climb down"
+    assert game.player.location.name == "Outside the Tower"
+    assert not game.player.get_property("escaped")  # you haven't let go yet
+
+
+def test_can_climb_back_in_from_the_rope():
+    game, _ = _play(ESCAPE_TO_GARDENS[:-1] + ["climb in"])
+    assert game.player.location.name == "Tower"
+
+
+def test_jump_from_the_rope_drops_into_the_gardens():
+    game, cap = _play(ESCAPE_TO_GARDENS[:-1] + ["jump"])  # "jump" alias of let go
+    assert game.player.location.name == "Gardens"
+    assert game.player.get_property("escaped")
+    assert _said(cap, "rosebush")
+
+
+def test_no_climbing_back_up_from_the_gardens():
+    # The rope dangles out of reach once you're on the ground -- one-way drop.
+    game, _ = _play(ESCAPE_TO_GARDENS + ["up"])
+    assert game.player.location.name == "Gardens"
+    assert "up" not in game.locations["Gardens"].connections
