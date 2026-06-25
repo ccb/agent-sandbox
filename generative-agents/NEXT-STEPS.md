@@ -65,10 +65,16 @@ What we already have going for us (don't rebuild these):
 Goal: a real LLM makes the travel/perform decisions before we add any cognition, so
 later phases build on a live model rather than the mock. Low risk, high momentum.
 
-- `[port] S` **Swap `SmallvilleMockClient` for a real client.** Use the engine's
-  `client_from_env()` (anthropic / openai / mock) in `backend/smallville_agents.py`'s
-  `attach_agents()`. The `Agent.decide` seam is identical, so this is mostly plumbing +
-  a config flag. **Keep the mock as the default** for offline/CI runs.
+- `[port] S` ✅ **Done (#78) — Swap `SmallvilleMockClient` for a real client.**
+  `run_simulation` now builds a real client from `LLM_PROVIDER` (anthropic / openai;
+  unset or `mock` keeps the deterministic mock) and threads it through
+  `simulate` → `attach_agents`, where it becomes each agent's decision brain. A
+  `SmallvilleMockClient` stays on `agent.schedule` to pace the day
+  (`advance`/`steps`/`emoji`), so when no provider is set the mock is *both* brain and
+  driver and the replay is **byte-identical**. The same client also drives daily
+  planning (`LLMPlanner`, Phase D). The real path is wired and unit-tested with a
+  scripted fake client (`tests/test_llm_brain.py`); it has not yet been exercised
+  against a live model end to end.
 - `[engine] M` **LLM cost & token observability.** A 25-agent full day is thousands of
   model calls; we need per-agent / per-step token and dollar accounting before scaling
   up. Anchor:
@@ -136,7 +142,8 @@ higher-level thoughts. This is the largest behavioral leap from today's demo.
 - `[engine/port] XL` **Daily planning, decomposed day → hourly → minute.** Generate a
   plan from identity + memory, then refine it down to concrete actions, revising as the
   day unfolds. Replaces the single hardcoded `destination` + `activity` per persona in
-  `backend/build_world.py`. This is the change that makes the town feel alive.
+  `backend/build_world.py`. This is the change that makes the town feel alive. Anchor:
+  [`../docs/design/daily-planning.md`](../docs/design/daily-planning.md).
 - `[engine] L` **Periodic reflection.** Synthesize recent memories into higher-level
   thoughts on a cadence (e.g. when accumulated importance crosses a threshold). Today
   `npc.py` only reflects on command *failure* — ROADMAP Phase 1 calls out adding a real

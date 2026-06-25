@@ -59,6 +59,11 @@ def _load_world_data() -> tuple[list[dict], list[dict]]:
 # null for the hub), and optionally hub: true for the town center.
 _ALL_PERSONAS, _LOCATIONS = _load_world_data()
 
+# The valid place names a plan may target. A generated planner (issue #83,
+# :class:`backend.planner.LLMPlanner`) validates its stops against this so a
+# hallucinated location is dropped before it reaches the parser.
+LOCATION_NAMES = frozenset(loc["name"] for loc in _LOCATIONS)
+
 
 def _normalize_personas(personas: list[dict]) -> list[dict]:
     """Give every persona a uniform ``schedule`` list (mutates in place).
