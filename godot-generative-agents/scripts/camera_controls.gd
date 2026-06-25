@@ -8,6 +8,8 @@ extends Camera2D
 ## back:
 ##
 ##   Zoom : mouse wheel, trackpad pinch, or the +/- keys  (zooms toward the cursor)
+##          — zooming OUT stops at the default view, so the whole block is the
+##          most you can ever see; you only zoom IN from there.
 ##   Pan  : drag with the left or middle mouse button, a two-finger trackpad
 ##          swipe, or the arrow keys / WASD
 ##   Reset: press R (or Home) to glide back to the default view
@@ -17,10 +19,9 @@ extends Camera2D
 
 # Each wheel notch / key press multiplies the zoom by this (1.1 = 10% per step).
 @export var zoom_step: float = 1.1
-# How far you may zoom. `zoom` is magnification: bigger = closer in. The scene
-# defaults (~0.18–0.25) frame the whole block, so allow a little further out and
-# a lot further in.
-@export var min_zoom: float = 0.08
+# How far you may zoom IN. `zoom` is magnification: bigger = closer in. Zooming
+# OUT is floored at the scene's default view (the contain-fit framing captured as
+# _home_zoom in _ready), so the whole block is the furthest out you can go.
 @export var max_zoom: float = 4.0
 # Keyboard pan speed, in screen-pixels per second (kept constant at any zoom).
 @export var key_pan_speed: float = 1200.0
@@ -95,8 +96,7 @@ func _process(delta: float) -> void:
 func _zoom_at_mouse(factor: float) -> void:
 	# Zoom while keeping the world point under the cursor pinned in place.
 	var world_before := get_global_mouse_position()
-	var new_zoom := (zoom * factor).clamp(
-			Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
+	var new_zoom := _clamp_zoom(zoom * factor)
 	if new_zoom == zoom:
 		return
 	var ratio := zoom.x / new_zoom.x
@@ -106,8 +106,13 @@ func _zoom_at_mouse(factor: float) -> void:
 
 func _zoom_keep_centre(factor: float) -> void:
 	# Zoom about the screen centre (the camera position doesn't move).
-	zoom = (zoom * factor).clamp(
-			Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
+	zoom = _clamp_zoom(zoom * factor)
+
+
+func _clamp_zoom(z: Vector2) -> Vector2:
+	# Floor at the default view (_home_zoom) so you can't zoom out past the whole
+	# block; ceiling at max_zoom for the closest zoom-in.
+	return z.clamp(_home_zoom, Vector2(max_zoom, max_zoom))
 
 
 func _reset_view() -> void:
