@@ -66,6 +66,45 @@ _DECISION_INSTRUCTION = (
 )
 
 
+# Dialogue seam (issue #86). A conversation asks the agent for one line at a
+# time; `done` lets it bow out gracefully after a closing line. The free-text
+# fallback uses a single labeled line so a chat()-only client still works.
+_DIALOGUE_INSTRUCTION = (
+    "You are in a conversation. Reply with the single line you say next, in "
+    "character. Keep it to a sentence or two. If the conversation has reached a "
+    "natural end, say a brief goodbye."
+)
+
+
+def build_speak_tool() -> dict:
+    """Normalized ``speak`` tool: one line of dialogue plus a wrap-up flag.
+
+    ``utterance`` is what the agent says next; an empty string means "say nothing
+    and end the conversation." ``done`` lets the agent signal this is its closing
+    line so the loop stops after delivering it (a goodbye still gets heard)."""
+    return {
+        "name": "speak",
+        "description": "Say the next line in the conversation, or end it.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "utterance": {
+                    "type": "string",
+                    "description": (
+                        "what you say next, in character; '' to say nothing and "
+                        "end the conversation"
+                    ),
+                },
+                "done": {
+                    "type": "boolean",
+                    "description": "true if this is your final line (wrapping up)",
+                },
+            },
+            "required": ["utterance"],
+        },
+    }
+
+
 def _parse_duration(text: str, max_duration: int = _MAX_DURATION) -> int | None:
     """Pull an in-game-minute count out of a "Duration:" line's value.
 
@@ -211,10 +250,26 @@ class Agent:
         # unconstrained (the enum is omitted). Only LLMAgent's structured path
         # reads it; ScriptedAgent ignores it.
         self.action_names: list[str] = []
+        # Dialogue seam (issue #86): set True by converse() when the agent's last
+        # line was a wrap-up, so the conversation loop can stop after it. Reset at
+        # the start of each converse() call.
+        self.last_dialogue_done: bool = False
 
     def decide(self, observation: str) -> str | None:
         """Return a single command string for *observation* (or ``None``)."""
         raise NotImplementedError("Agent subclasses must implement decide().")
+
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        """Return the next line this agent says to *partner_name* (issue #86).
+
+        ``observation`` carries who the agent is talking with and the dialogue so
+        far. Return the utterance, or ``None`` to say nothing and end the
+        conversation. The base implementation is silent (``None``) so an agent
+        with no dialogue backend -- or a non-conversational mock brain -- simply
+        never starts or sustains a conversation, leaving existing behavior
+        unchanged. Subclasses that can talk override this.
+        """
+        return None
 
 
 class LLMAgent(Agent):
@@ -308,6 +363,64 @@ class LLMAgent(Agent):
         self.last_duration = duration
         return command
 
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        """Ask the model for the next line of dialogue (issue #86).
+
+        Prefers the structured ``speak`` tool (``utterance`` + ``done``) and falls
+        back to a single free-text line, mirroring how :meth:`decide` prefers
+        ``choose_action`` then free text. Returns the utterance, or ``None`` to
+        end the conversation; sets :attr:`last_dialogue_done` when the model
+        flags this as its closing line. A client that can't fill the tool *and*
+        returns nothing from chat (e.g. the non-conversational schedule mock)
+        yields ``None``, so no conversation happens -- which is what keeps the
+        default offline run silent and byte-identical."""
+        self.last_dialogue_done = False
+        spoken = self._converse_structured(observation)
+        if spoken is not None:
+            return spoken
+        return self._converse_freetext(observation)
+
+    def _converse_structured(self, observation: str) -> str | None:
+        """Tool-calling path: fill the ``speak`` schema. Returns ``None`` (so
+        converse() falls back to free text) when tool calling is unavailable or
+        the result carries no usable ``utterance`` -- the latter is also how a
+        mock brain answering with a non-dialogue schema stays silent."""
+        if not hasattr(self.llm_client, "call_tool"):
+            return None
+        messages = [
+            {"role": "system", "content": self._structured_system_message()},
+            {"role": "user", "content": observation},
+        ]
+        result = self.llm_client.call_tool(
+            messages,
+            build_speak_tool(),
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
+        if not isinstance(result, dict) or "utterance" not in result:
+            return None
+        self.last_dialogue_done = bool(result.get("done"))
+        return (result.get("utterance") or "").strip() or None
+
+    def _converse_freetext(self, observation: str) -> str | None:
+        """Free-text fallback: take the model's reply as the spoken line."""
+        if not hasattr(self.llm_client, "chat"):
+            return None
+        messages = [
+            {"role": Role.SYSTEM, "content": self._dialogue_system_message()},
+            {"role": Role.USER, "content": observation},
+        ]
+        response = self.llm_client.chat(
+            messages, max_tokens=self.max_tokens, temperature=self.temperature
+        )
+        return (response or "").strip() or None
+
+    def _dialogue_system_message(self) -> str:
+        # Free-text dialogue path: persona/goals plus the one-line instruction.
+        lines = self._base_system_lines()
+        lines.append(_DIALOGUE_INSTRUCTION)
+        return "\n".join(lines)
+
     def _format_goals(self) -> str | None:
         """Render incomplete goals grouped by tier, in SHORT/MEDIUM/LONG order.
         Empty tiers are skipped so the prompt never shows a bare header with
@@ -372,6 +485,11 @@ class ScriptedAgent(Agent):
 
     Because it implements the same seam as :class:`LLMAgent`, the surrounding
     loop, tests, and games can't tell which backend is driving a character.
+
+    An optional ``converse_rule`` ``(observation, partner_name) -> str | None``
+    supplies dialogue lines (issue #86); with none, the agent stays silent
+    (inheriting :meth:`Agent.converse`'s ``None``), so a scripted NPC never talks
+    unless told how.
     """
 
     def __init__(
@@ -382,6 +500,7 @@ class ScriptedAgent(Agent):
         embedding_client=None,
         reflector=None,
         reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
+        converse_rule=None,
     ):
         super().__init__(
             persona=persona,
@@ -391,9 +510,16 @@ class ScriptedAgent(Agent):
             reflection_threshold=reflection_threshold,
         )
         self.rule = rule
+        self.converse_rule = converse_rule
 
     def decide(self, observation: str) -> str | None:
         return self.rule(observation)
+
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        self.last_dialogue_done = False
+        if self.converse_rule is None:
+            return None
+        return self.converse_rule(observation, partner_name)
 
 
 # ----------------------------------------------------------------------

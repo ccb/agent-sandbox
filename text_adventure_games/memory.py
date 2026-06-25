@@ -114,6 +114,7 @@ class MemoryKind(str, Enum):
     OBSERVATION = "observation"  # something the agent perceived or did
     REFLECTION = "reflection"  # a higher-level inference drawn from memories
     PLAN = "plan"  # an intention the agent formed
+    CHAT = "chat"  # something said in a conversation (issue #86)
 
 
 @dataclass
@@ -324,6 +325,25 @@ class AgentMemory:
     ) -> MemoryRecord:
         """Record an intention the agent formed."""
         return self._add(MemoryKind.PLAN, text, turn, importance, None, None, tags)
+
+    def add_chat(
+        self,
+        text: str,
+        turn: int,
+        partner: str | None = None,
+        importance: float = 4.0,
+        tags=None,
+    ) -> MemoryRecord:
+        """Record a line said in a conversation (issue #86).
+
+        Written into *both* conversants' streams by ``conversation.converse`` --
+        the speaker remembers what it said, the listener what it heard -- so a
+        meeting durably shapes both agents' memories (the channel relationships
+        and information actually propagate through). ``partner`` is the other
+        party (stored as ``actor``); dialogue is moderately memorable, so the
+        default importance sits a little above a mundane observation.
+        """
+        return self._add(MemoryKind.CHAT, text, turn, importance, partner, None, tags)
 
     # --- perception: fold visible world events into memory ------------------
 
