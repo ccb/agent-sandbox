@@ -105,7 +105,7 @@ def map_to_chain(runlog: list[dict], spec: ChainSpec) -> Overlay:
     for n in spec.nodes:
         if not n.template:
             continue
-        rendered = node_prompt(n.template, n.example_vars, spec.templates).get(
+        rendered = node_prompt(n.template, n.example_vars, spec.templates_for(n)).get(
             "rendered"
         )
         if rendered:

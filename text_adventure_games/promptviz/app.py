@@ -156,7 +156,9 @@ def create_app(chains: list[ChainSpec], runlog_path: str | None = None) -> Flask
             "description": " ".join((node.description or "").split()),
         }
         if node.template:
-            detail.update(node_prompt(node.template, node.example_vars, spec.templates))
+            detail.update(
+                node_prompt(node.template, node.example_vars, spec.templates_for(node))
+            )
         elif node.kind in ("start", "gate"):
             detail["note"] = "Control point -- no prompt (no LLM call here)."
         else:

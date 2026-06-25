@@ -81,6 +81,23 @@ def test_validate_allows_templateless_decision():
     assert spec.validate() is spec
 
 
+def test_node_templates_override():
+    # A node may render from a different package than the chain default, so one
+    # chain (e.g. Smallville) can mix gen-agents + engine templates.
+    spec = ChainSpec(
+        "x",
+        "",
+        "pkg.default",
+        [
+            Node("a", "A", "decision", template="t"),
+            Node("b", "B", "decision", template="t", templates="pkg.other"),
+        ],
+        [],
+    )
+    assert spec.templates_for(spec.node("a")) == "pkg.default"
+    assert spec.templates_for(spec.node("b")) == "pkg.other"
+
+
 # --------------------------------------------------------------------------- #
 # templates.py
 # --------------------------------------------------------------------------- #
