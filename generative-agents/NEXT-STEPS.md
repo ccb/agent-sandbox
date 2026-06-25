@@ -186,14 +186,18 @@ Goal: when agents meet, they talk, and the conversation changes what they each r
   audibility seam (`Game.audience_for`), so a range/line-of-sight world constrains
   conversation exactly as it constrains a `Say`. Built on perception (Phase C: co-located
   agents already perceive each other's events into memory) and memory (Phase B).
-- `[port] S` ✅ **Done (#86) — Surface chat end to end.** `run_simulation.simulate`
-  detects co-located, *settled* residents each step and runs
+- `[port] S` ✅ **Done (#86, verified #87) — Surface chat end to end.**
+  `run_simulation.simulate` detects co-located, *settled* residents each step and runs
   `smallville_agents.maybe_converse` (cooldown-throttled), populating each frame's `chat`
   field with the dialogue as `[speaker, line]` pairs — the shape the frontend's existing
-  (previously unused) chat slot already renders. **Gated on a real brain**: with the mock
-  brain no utterance is produced, so the default replay holds no conversations and stays
-  byte-identical. The exporter already writes the frame verbatim, so no exporter change
-  was needed.
+  (previously unused) `chat__<name>` slot ("Current Conversation" on the agent card)
+  renders. **Gated on a real brain**: with the mock brain no utterance is produced, so the
+  default replay holds no conversations and stays byte-identical. The exporter already
+  writes the frame verbatim, so no exporter change was needed. #87 confirmed the full path
+  and locked the export-boundary contract with a regression test
+  (`test_exporter_surfaces_populated_chat`): a populated transcript survives into
+  `movement/<step>.json` for both participants (the prior export test only covered the null
+  case).
 
 ---
 
