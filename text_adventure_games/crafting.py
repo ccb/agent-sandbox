@@ -31,8 +31,11 @@ items' ``quantity``: a stackable named item (Item.make_stackable, #134) can
 supply ``count > 1`` from a single stack ("2 sticks"), and tag matches sum
 across distinct items.
 
-TODO(#135): "known" recipes -- gate recipes on discovery (a recipe book / NPC),
-    instead of every registered recipe always being craftable.
+KNOWN RECIPES (#135). By default a recipe is ``known`` (craftable from the
+start), so existing games are unchanged. Set ``known=False`` to gate it on
+discovery: the Craft action ignores it -- naming it reports "you don't know how
+to make that", never the ingredient gap -- until the game calls
+``Game.learn_recipe(name)`` (wired to a recipe book, an NPC, etc.).
 """
 
 from __future__ import annotations
@@ -81,6 +84,10 @@ class Recipe:
     aliases: list = field(default_factory=list)
     location: str | None = None  # optional: must be crafted in this room
     result_text: str | None = None
+    # Craftable from the start? Default True = always known (existing games
+    # unchanged). Set False to gate the recipe on discovery (issue #135); the
+    # game then calls Game.learn_recipe(name) from a recipe book, an NPC, etc.
+    known: bool = True
 
     def __post_init__(self):
         self.inputs = [_as_ingredient(i) for i in self.inputs]
