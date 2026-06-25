@@ -1,20 +1,23 @@
 extends TileMapLayer
-## Generic renderer for a Tiled (.tmj) map whose tileset is a single packed
-## image (no spacing) — e.g. the OSM campus maps baked with Kenney's CC0 RPG
-## Urban tiles (`osm_to_tiled.py --theme urban`). Reads the JSON, loads the
-## referenced sheet, registers every tile, and paints each layer by GID. This is
-## the no-plugin equivalent of importing the same .tmj via the YATI addon, and it
-## works for any single-image-tileset Tiled map, not just ours.
+## Generic renderer for a Tiled (.tmj) map whose tilesets are packed images (no
+## spacing) — e.g. the OSM campus maps baked with Kenney's CC0 RPG Urban tiles
+## (`osm_to_tiled.py --theme urban`), optionally alongside extra tilesets such as
+## the generated lawn-edge strokes. Reads the JSON, loads every referenced sheet
+## as its own atlas source, and paints each layer by GID. This is the no-plugin
+## equivalent of importing the same .tmj via the YATI addon, and it works for any
+## packed-image Tiled map, not just ours.
 
 @export_file("*.tmj") var map_path: String = "res://maps/upenn_core_urban.tmj"
 
-const SOURCE_ID := 0
+# One entry per .tmj tileset: where its GID range starts, its column count, and the
+# atlas source id we registered it under. Used to map any GID back to its sheet.
+var _sheets: Array = []
 
 
 func _ready() -> void:
 	# Nearest filtering (no smoothing) is what pixel art wants; combined with the
-	# texture padding below and the project's pixel-snap, it keeps tile edges
-	# crisp and seam-free even when the camera zooms to a fractional scale.
+	# texture padding below and the project's pixel-snap, it keeps tile edges crisp
+	# and seam-free even when the camera zooms to a fractional scale.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 	var f := FileAccess.open(map_path, FileAccess.READ)
@@ -26,54 +29,63 @@ func _ready() -> void:
 		push_error("tiled_map: %s is not valid Tiled JSON" % map_path)
 		return
 
-	var ts: Dictionary = tmj["tilesets"][0]
-	var cols := int(ts["columns"])
-	var first := int(ts["firstgid"])
 	var tile_size := Vector2i(int(tmj["tilewidth"]), int(tmj["tileheight"]))
+	tile_set = _build_tile_set(tmj, tile_size)
+	if tile_set == null:
+		return
+	_paint(tmj)
 
-	# The tileset image sits next to the .tmj. Prefer the imported texture
-	# (export-safe); fall back to reading the file directly if it isn't a project
-	# resource.
-	var img_path := map_path.get_base_dir().path_join(str(ts["image"]))
+
+func _build_tile_set(tmj: Dictionary, tile_size: Vector2i) -> TileSet:
+	# Register every .tmj tileset as its own atlas source (source id = its index),
+	# recording each one's GID range so _paint can resolve a GID to (source, cell).
+	var t := TileSet.new()
+	t.tile_size = tile_size
+	for i in tmj["tilesets"].size():
+		var ts: Dictionary = tmj["tilesets"][i]
+		var tex := _load_texture(str(ts["image"]))
+		if tex == null:
+			push_error("tiled_map: cannot load tileset image %s" % ts["image"])
+			return null
+		var cols := int(ts["columns"])
+		var count := int(ts["tilecount"])
+		var src := TileSetAtlasSource.new()
+		src.texture = tex
+		src.texture_region_size = tile_size
+		# Pad each tile by duplicating its edge pixels, so a neighbouring tile in the
+		# packed sheet can never bleed in at the seams.
+		src.use_texture_padding = true
+		var rows := int(ceil(float(count) / cols))
+		for r in rows:
+			for c in cols:
+				src.create_tile(Vector2i(c, r))
+		t.add_source(src, i)
+		_sheets.append({"first": int(ts["firstgid"]), "cols": cols, "source": i})
+	# Highest firstgid first, so the lookup picks the tileset a GID actually lands in.
+	_sheets.sort_custom(func(a, b): return a["first"] > b["first"])
+	return t
+
+
+func _load_texture(image_name: String) -> Texture2D:
+	# The sheet sits next to the .tmj. Prefer the imported texture (export-safe);
+	# fall back to reading the file directly if it isn't a project resource.
+	var img_path := map_path.get_base_dir().path_join(image_name)
 	var tex: Texture2D = load(img_path) if ResourceLoader.exists(img_path) else null
 	if tex == null:
 		var img := Image.load_from_file(img_path)
 		if img != null:
 			tex = ImageTexture.create_from_image(img)
-	if tex == null:
-		push_error("tiled_map: cannot load tileset image %s" % img_path)
-		return
-
-	tile_set = _build_tile_set(tex, tile_size, cols, int(ts["tilecount"]))
-	_paint(tmj, cols, first)
+	return tex
 
 
-func _build_tile_set(tex: Texture2D, tile_size: Vector2i, cols: int, count: int) -> TileSet:
-	var t := TileSet.new()
-	t.tile_size = tile_size
-	var src := TileSetAtlasSource.new()
-	src.texture = tex
-	src.texture_region_size = tile_size
-	# Pad each tile in the internal atlas by duplicating its edge pixels, so a
-	# neighbouring tile in the packed sheet can never bleed in at the seams.
-	src.use_texture_padding = true
-	# Register every tile in the sheet so any GID in the map resolves.
-	var rows := int(ceil(float(count) / cols))
-	for r in rows:
-		for c in cols:
-			src.create_tile(Vector2i(c, r))
-	t.add_source(src, SOURCE_ID)
-	return t
-
-
-func _paint(tmj: Dictionary, cols: int, first: int) -> void:
+func _paint(tmj: Dictionary) -> void:
 	# Paint each .tmj tile layer into its OWN stacked TileMapLayer rather than
 	# flattening them all onto this one node. A TileMapLayer holds a single tile per
 	# cell, so flattening let an upper layer overwrite the cell beneath it — and
-	# because the tree tiles are transparent around the foliage, a flattened tree
-	# erased the ground it stood on and showed the window's grey clear colour
-	# instead (the "grey box behind each tree"). Stacked layers composite, so a
-	# tree's transparent pixels now reveal the ground tile below.
+	# because the tree (and lawn-edge) tiles are transparent around their art, a
+	# flattened overlay erased what it stood on and showed the window's grey clear
+	# colour instead. Stacked layers composite, so an overlay's transparent pixels
+	# reveal the layer below.
 	#
 	# This node stays the bottom (ground) layer so camera_controls.gd — which finds
 	# the map by the sibling that `is TileMapLayer` and reads its used_rect — keeps
@@ -94,8 +106,15 @@ func _paint(tmj: Dictionary, cols: int, first: int) -> void:
 			var gid := int(data[i])
 			if gid == 0:
 				continue
-			var ti := gid - first  # tile index within the sheet
-			target.set_cell(Vector2i(i % w, i / w), SOURCE_ID, Vector2i(ti % cols, ti / cols))
+			# Resolve the GID against whichever tileset's range it falls in.
+			for sheet in _sheets:
+				if gid >= int(sheet["first"]):
+					var ti: int = gid - int(sheet["first"])
+					var c: int = int(sheet["cols"])
+					target.set_cell(
+						Vector2i(i % w, i / w), int(sheet["source"]), Vector2i(ti % c, ti / c)
+					)
+					break
 			painted += 1
 		print("tiled_map: layer %-9s painted %d cells" % [layer.get("name", "?"), painted])
 
