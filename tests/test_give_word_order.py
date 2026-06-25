@@ -74,3 +74,67 @@ def test_give_with_no_matching_custom_action_uses_builtin_give():
 def test_plain_give_still_routes_to_builtin_give():
     # A bare give with neither token of a custom action present.
     assert _routed("give wizard something") == "Give"
+
+
+# --- subtle behaviors the pair-matching enables (locked in per review #171) -
+
+
+class GiveGemToWizardKing(actions.Action):
+    ACTION_NAME = "give gem to wizard king"
+    ACTION_ALIASES = []
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        pass
+
+
+def test_longest_item_recipient_pair_wins():
+    # Two custom give-actions share the gem/wizard tokens; the more specific
+    # (longer item+recipient) one wins the reversed phrasing.
+    room = things.Location("Room", "A room.")
+    player = things.Character("player", "an adventurer", "I explore.")
+    gem = things.Item("gem", "a gem", "A gem.")
+    player.add_to_inventory(gem)
+    game = games.Game(
+        room, player, custom_actions=[GiveGemToWizard, GiveGemToWizardKing]
+    )
+    assert (
+        type(game.parser.peek_action("give wizard king the gem")).__name__
+        == "GiveGemToWizardKing"
+    )
+    assert (
+        type(game.parser.peek_action("give wizard the gem")).__name__
+        == "GiveGemToWizard"
+    )
+
+
+class OfferRingToQueen(actions.Action):
+    # Canonical name is NOT a give-pattern; a give-pattern ALIAS drives the match.
+    ACTION_NAME = "present ring to queen"
+    ACTION_ALIASES = ["give ring to queen"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        pass
+
+
+def test_alias_give_pattern_drives_reversed_match():
+    room = things.Location("Room", "A room.")
+    player = things.Character("player", "an adventurer", "I explore.")
+    ring = things.Item("ring", "a ring", "A ring.")
+    player.add_to_inventory(ring)
+    game = games.Game(room, player, custom_actions=[OfferRingToQueen])
+    assert (
+        type(game.parser.peek_action("give queen the ring")).__name__
+        == "OfferRingToQueen"
+    )
