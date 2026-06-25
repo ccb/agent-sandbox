@@ -1247,13 +1247,16 @@ def build_game() -> ActionCastle4:
     )
     cot.add_item(boots)
     guardroom.add_item(cot)
-    gardens.add_item(
-        _fixture(
-            "rosebushes",
-            "thorny rosebushes",
-            "Thorny and covered with roses of every color.",
-        )
+    rosebushes = _fixture(
+        "rosebushes",
+        "thorny rosebushes",
+        "Thorny and covered with roses of every color.",
     )
+    # The roses aren't used for anything (rulebook), but the bush is covered in
+    # them -- so PICK ROSE should pluck one (pure flavor + the SMELL ROSE gag),
+    # not report the bush "bare". HAS_ROSE enables the built-in Pick_Rose action.
+    rosebushes.set_property(Property.HAS_ROSE, True)
+    gardens.add_item(rosebushes)
     gardens.add_item(
         _fixture("fruit trees", "apple trees", "Branches heavy with ripe red apples.")
     )
