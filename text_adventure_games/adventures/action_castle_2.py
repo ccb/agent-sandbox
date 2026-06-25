@@ -514,10 +514,11 @@ class ChooseRing(_ChooseReward):
 # --- castle endgame ---------------------------------------------------------
 
 
-# --- gift interactions, now as first-class custom actions ------------------
-# (Previously these were triggers reacting to the built-in Give/Drop, because
-# the keyword parser hijacked "give"/"drop". Under SpecificFirstParser they are
-# ordinary custom actions: local, gateable, single-narration.)
+# --- the wishing-well penny (a custom action) ------------------------------
+# The gift interactions (axe/blanket/slippers/sword) are NOT here -- they are
+# triggers in build_game, so they fire for any give word order (issue #113).
+# DropPennyInWell stays a custom action: a single-narration verb with no
+# recipient, so the word-order problem doesn't apply.
 
 
 class DropPennyInWell(actions.Action):
@@ -1150,11 +1151,12 @@ def build_game() -> ActionCastle2:
     king.set_property("shoe_size", "imperial_foot")  # the velvet slippers fit him
     throne_room.add_character(king)
 
-    # --- Reaction triggers: only genuinely emergent / on-arrival checks ------
-    # The gift & wish interactions that used to live here as triggers are now
-    # plain custom actions (DropPennyInWell, GiveAxeToSmith, ...), routed by
-    # SpecificFirstParser. Triggers are kept only for conditions that aren't
-    # tied to a single verb.
+    # --- Reaction triggers --------------------------------------------------
+    # Gift interactions (axe/blanket/slippers/sword) are triggers reacting to
+    # the built-in Give moving the item into the recipient's hands, so they
+    # fire for any word order -- "give axe to smith" or "give smith the axe"
+    # (issue #113). The rest are genuinely emergent / on-arrival checks (the
+    # dragon, scoring, etc.).
     game_triggers = []
 
     # SMITH sharpens the axe (issue #113). The built-in Give moves the axe into
