@@ -92,6 +92,13 @@ class Recipe:
     def __post_init__(self):
         self.inputs = [_as_ingredient(i) for i in self.inputs]
         self.tools = [_as_ingredient(t) for t in self.tools]
+        # A gated recipe must be referenceable by name/alias, or no
+        # learn_recipe() call could ever unlock it (issue #135). Fail fast.
+        if not self.known and not self.names():
+            raise ValueError(
+                "a recipe with known=False needs a name or alias so it can be "
+                "learned via Game.learn_recipe()"
+            )
 
     def names(self) -> list[str]:
         """The names this recipe answers to for 'make <name>' lookups."""
