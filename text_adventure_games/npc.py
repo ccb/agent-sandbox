@@ -38,6 +38,7 @@ import re
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .memory import AgentMemory, render_memories
+from .reflection import DEFAULT_REFLECTION_THRESHOLD, reflect, should_reflect
 from .things.characters import Goal, GoalType
 
 # Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
@@ -178,6 +179,8 @@ class Agent:
         persona: str = "",
         goals: list[Goal] | None = None,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
     ):
         self.persona = persona
         self.goals: list[Goal] = list(goals) if goals else []
@@ -188,6 +191,13 @@ class Agent:
         # embedding_client (issue #76) upgrades retrieval relevance from keyword
         # overlap to semantic similarity; None keeps the deterministic default.
         self.memory = AgentMemory(owner="", embedding_client=embedding_client)
+        # Optional periodic-reflection backend (issue #84). With none (the
+        # default), the ReAct loop never synthesizes reflections and behavior is
+        # byte-identical to before; pass a Reflector (see ``reflection.py``) to
+        # have the agent turn recent memories into higher-level thoughts once
+        # accumulated importance crosses ``reflection_threshold``.
+        self.reflector = reflector
+        self.reflection_threshold = reflection_threshold
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
@@ -238,9 +248,15 @@ class LLMAgent(Agent):
         temperature: float = 0.7,
         max_duration: int = _MAX_DURATION,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
     ):
         super().__init__(
-            persona=persona, goals=goals, embedding_client=embedding_client
+            persona=persona,
+            goals=goals,
+            embedding_client=embedding_client,
+            reflector=reflector,
+            reflection_threshold=reflection_threshold,
         )
         self.llm_client = llm_client
         self.max_tokens = max_tokens
@@ -364,9 +380,15 @@ class ScriptedAgent(Agent):
         persona: str = "",
         goals: list[Goal] | None = None,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
     ):
         super().__init__(
-            persona=persona, goals=goals, embedding_client=embedding_client
+            persona=persona,
+            goals=goals,
+            embedding_client=embedding_client,
+            reflector=reflector,
+            reflection_threshold=reflection_threshold,
         )
         self.rule = rule
 
@@ -566,7 +588,42 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     observation = format_observation_with_memories(base, relevant)
     # The full observation is traced too, but only shows at verbose verbosity.
     game.parser.agent_observation(character.name, observation)
-    return decide_and_route(character, game, agent, observation, max_retries)
+    acted = decide_and_route(character, game, agent, observation, max_retries)
+    # Periodic memory synthesis (issue #84): after acting, if enough importance
+    # has accrued, turn recent memories into higher-level thoughts. A no-op unless
+    # a reflector is wired onto the agent, so games without one are unchanged.
+    maybe_reflect(agent, game)
+    return acted
+
+
+def maybe_reflect(agent: Agent, game) -> list:
+    """Run a periodic reflection pass if one is due (issue #84).
+
+    Distinct from the failure-Reflect in :func:`decide_and_route`: that reacts to
+    one rejected command; this is the paper's *periodic memory synthesis* --
+    fired on a salience cadence (:func:`~text_adventure_games.reflection.
+    should_reflect`) and reasoning over the whole recent stream.
+
+    A no-op (returns ``[]``) unless the agent has a ``reflector`` and accumulated
+    importance has crossed its ``reflection_threshold``. Each thought it produces
+    is appended to the agent's own memory (by
+    :func:`~text_adventure_games.reflection.reflect`) and traced on the private
+    AGENT_REFLECTION channel, the same channel the failure-Reflect uses -- so a
+    reflection never leaks into ``command_history`` or another agent's prompt.
+    """
+    reflector = getattr(agent, "reflector", None)
+    memory = getattr(agent, "memory", None)
+    if reflector is None or memory is None:
+        return []
+    threshold = getattr(agent, "reflection_threshold", DEFAULT_REFLECTION_THRESHOLD)
+    if not should_reflect(memory, threshold):
+        return []
+    created = reflect(memory, reflector, getattr(game, "turn", 0))
+    trace = getattr(game.parser, "agent_reflection", None)
+    if trace is not None:
+        for record in created:
+            trace(memory.owner, record.text)
+    return created
 
 
 def route_first_workable(character, game, agent: Agent, commands) -> bool:
@@ -654,7 +711,11 @@ def _resolve_duration(agent: Agent, game) -> int | None:
 
 
 def make_react_behavior(
-    llm_client, max_retries: int | None = None, config=None, embedding_client=None
+    llm_client,
+    max_retries: int | None = None,
+    config=None,
+    embedding_client=None,
+    reflector=None,
 ):
     """Return a behavior that drives a character with an :class:`LLMAgent`.
 
@@ -673,6 +734,11 @@ def make_react_behavior(
             Defaults to ``AgentConfig()`` (the engine's historical values).
         embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
             memory relevance. ``None`` keeps keyword-overlap relevance.
+        reflector: Optional ``Reflector`` (issue #84) for periodic memory
+            synthesis. ``None`` (the default) keeps reflection off, so behavior is
+            byte-identical to before; pass one to have the agent form higher-level
+            thoughts once accumulated importance crosses
+            ``config.reflection_threshold``.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -691,6 +757,8 @@ def make_react_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflector=reflector,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):
@@ -711,6 +779,7 @@ def make_hybrid_behavior(
     max_retries: int | None = None,
     config=None,
     embedding_client=None,
+    reflector=None,
 ):
     """Return a behavior that tries the LLM agent, then falls back to scripted.
 
@@ -728,6 +797,8 @@ def make_hybrid_behavior(
             the agent's temperature, max_tokens, max_retries, and max_duration.
         embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
             memory relevance. ``None`` keeps keyword-overlap relevance.
+        reflector: Optional ``Reflector`` (issue #84) for periodic memory
+            synthesis. ``None`` (the default) keeps reflection off.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -742,6 +813,8 @@ def make_hybrid_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflector=reflector,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):
