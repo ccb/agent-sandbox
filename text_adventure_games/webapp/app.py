@@ -1,7 +1,15 @@
 import os
 import uuid
 
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from text_adventure_games.webapp.web_parser import WebParser
 from text_adventure_games.adventures import action_castle
 
@@ -88,6 +96,15 @@ def index():
         game_over_description=game_over_description,
         command_history=command_history,
     )
+
+
+@app.route("/world_state")
+def world_state():
+    """Serve the current world as a typed JSON snapshot (issue #90), so an
+    out-of-process renderer (e.g. Godot) can poll the full state over HTTP -- the
+    #9/#10 bridge endpoint. The per-message change feed is ``JSONRenderer``."""
+    game = get_or_create_session()["game"]
+    return jsonify(game.to_world_state().to_jsonable())
 
 
 @app.route("/reset")
