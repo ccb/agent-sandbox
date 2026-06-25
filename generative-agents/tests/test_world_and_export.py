@@ -190,6 +190,59 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
     assert env0["Isabella Rodriguez"]["x"] == 72
 
 
+def test_exporter_surfaces_populated_chat(tmp_path):
+    """Issue #87: a populated chat field must survive the exporter into the
+    movement JSON the frontend's ``chat__<name>`` slot renders -- the "surface
+    chat end to end" contract. The other tests only cover the null/mock case
+    (chat stays None); this guards the positive case so a future exporter
+    refactor can't silently drop a conversation from the replay.
+
+    The frame shape mirrors what ``run_simulation``/``maybe_converse`` produce:
+    chat is None until a pair talks, then the ``[speaker, line]`` transcript
+    persists on both participants' cards.
+    """
+    import datetime
+
+    transcript = [
+        ["Isabella Rodriguez", "Morning, Maria!"],
+        ["Maria Lopez", "Morning! The usual?"],
+    ]
+
+    def cell(chat):
+        return {
+            "movement": [72, 14],
+            "pronunciatio": "💬",
+            "description": "at the cafe @ the Ville:Hobbs Cafe:cafe",
+            "chat": chat,
+        }
+
+    frames = [
+        {"Isabella Rodriguez": cell(None), "Maria Lopez": cell(None)},
+        {"Isabella Rodriguez": cell(transcript), "Maria Lopez": cell(transcript)},
+    ]
+    start_tiles = {"Isabella Rodriguez": (72, 14), "Maria Lopez": (73, 14)}
+
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="chat_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+    )
+
+    with open(os.path.join(sim_dir, "movement", "0.json")) as f:
+        before = json.load(f)
+    with open(os.path.join(sim_dir, "movement", "1.json")) as f:
+        after = json.load(f)
+
+    # Before the conversation the slot is null (renders "None at the moment");
+    # after, the whole transcript is present verbatim for BOTH participants.
+    assert before["persona"]["Isabella Rodriguez"]["chat"] is None
+    for name in ("Isabella Rodriguez", "Maria Lopez"):
+        assert after["persona"][name]["chat"] == transcript
+
+
 def test_exporter_writes_full_memory_stream(world_map, tmp_path):
     # The State Details panel needs each agent's FULL memory stream (not just the
     # per-step retrieved set the cards show). simulate(out_memories=...) collects
