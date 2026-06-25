@@ -167,3 +167,15 @@ def test_item_quantity_is_exported():
         i for loc in world_state(game).locations for i in loc.items if i.name == "coin"
     )
     assert coin_state.quantity == 5
+
+
+def test_webapp_world_state_route_serves_the_snapshot():
+    # The /world_state HTTP endpoint puts the snapshot on the wire so an
+    # out-of-process renderer (Godot) can poll it (issues #9 / #10).
+    from text_adventure_games.webapp.app import app
+
+    resp = app.test_client().get("/world_state")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["schema_version"] == SCHEMA_VERSION
+    assert "player" in data and "locations" in data
