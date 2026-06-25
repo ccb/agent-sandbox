@@ -59,13 +59,9 @@ _MAX_DURATION = 24 * 60
 
 
 # Dialogue seam (issue #86). A conversation asks the agent for one line at a
-# time; `done` lets it bow out gracefully after a closing line. The free-text
-# fallback uses a single labeled line so a chat()-only client still works.
-_DIALOGUE_INSTRUCTION = (
-    "You are in a conversation. Reply with the single line you say next, in "
-    "character. Keep it to a sentence or two. If the conversation has reached a "
-    "natural end, say a brief goodbye."
-)
+# time; `done` lets it bow out gracefully after a closing line. The dialogue
+# system message (persona/goals + the one-line instruction) is rendered from the
+# npc_dialogue template; see LLMAgent._dialogue_system_message.
 
 
 def build_speak_tool() -> dict:
@@ -408,10 +404,13 @@ class LLMAgent(Agent):
         return (response or "").strip() or None
 
     def _dialogue_system_message(self) -> str:
-        # Free-text dialogue path: persona/goals plus the one-line instruction.
-        lines = self._base_system_lines()
-        lines.append(_DIALOGUE_INSTRUCTION)
-        return "\n".join(lines)
+        # Free-text dialogue path: persona/goals plus the one-line instruction,
+        # rendered from the npc_dialogue template (issue #145).
+        return prompt_templates.render(
+            "npc_dialogue",
+            persona=self.persona,
+            goals_block=self._format_goals() or "",
+        )
 
     def _format_goals(self) -> str | None:
         """Render incomplete goals grouped by tier, in SHORT/MEDIUM/LONG order.

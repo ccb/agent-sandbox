@@ -97,6 +97,52 @@ def test_npc_decision_instruction_is_not_html_escaped():
 
 
 # ----------------------------------------------------------------------
+# npc_dialogue: the NPC conversation system message (issue #86)
+# ----------------------------------------------------------------------
+
+_DIALOGUE = (
+    "You are in a conversation. Reply with the single line you say next, in "
+    "character. Keep it to a sentence or two. If the conversation has reached a "
+    "natural end, say a brief goodbye."
+)
+
+
+def test_npc_dialogue_persona_and_goals():
+    out = prompt_templates.render(
+        "npc_dialogue",
+        persona="I am the troll. I guard the drawbridge.",
+        goals_block="Short-term:\n  - keep the player off the bridge",
+    )
+    assert out == (
+        "You are an NPC in a text adventure game.\n"
+        "Persona: I am the troll. I guard the drawbridge.\n"
+        "Goals:\n"
+        "Short-term:\n"
+        "  - keep the player off the bridge\n"
+        f"{_DIALOGUE}"
+    )
+
+
+def test_npc_dialogue_bare():
+    # No persona/goals: just the opening line and the dialogue instruction.
+    out = prompt_templates.render("npc_dialogue", persona="", goals_block="")
+    assert out == f"You are an NPC in a text adventure game.\n{_DIALOGUE}"
+
+
+# ----------------------------------------------------------------------
+# reflect_system: the periodic-reflection system message (issue #84)
+# ----------------------------------------------------------------------
+
+
+def test_reflect_system():
+    assert prompt_templates.render("reflect_system") == (
+        "You are reflecting on your own recent experiences to form higher-level "
+        "insights about yourself, the people around you, and your situation. "
+        "Ground every insight only in the memories you are given."
+    )
+
+
+# ----------------------------------------------------------------------
 # Parser narration / matching templates
 # ----------------------------------------------------------------------
 

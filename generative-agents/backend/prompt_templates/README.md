@@ -11,11 +11,16 @@ is a normal code change. (Part of
 [#145](https://github.com/ccb/agent-sandbox/issues/145); mirrors the engine's own
 `text_adventure_games/prompt_templates/`.)
 
-There is no live model prompt here — the port drives every persona with a
-deterministic mock (`smallville_agents.SmallvilleMockClient`) that ignores the
-prompt. What these templates hold is the agent's generated **memory and belief
-text**: the day's plan, the first-person record of each action, and the places it
-knows up front.
+Most of these are **not** live model prompts — by default the port drives every
+persona with a deterministic mock (`smallville_agents.SmallvilleMockClient`) that
+ignores the prompt, so what `plan_memory` / `reflection` / `spatial_knowledge`
+hold is the agent's generated **memory and belief text**: the day's plan, the
+first-person record of each action, and the places it knows up front.
+
+The exception is **`plan_system`**: a real model system prompt for the optional
+LLM daily planner (`planner.LLMPlanner`, issue #83), which only runs when a live
+client is wired in. It is templated here for the same reason — one reviewable
+artifact, no hosted prompt service.
 
 ## How they are rendered
 
@@ -41,9 +46,10 @@ rename, remove, or re-wire a template.**
 
 | Template | Rendered by | Used for |
 | --- | --- | --- |
-| `plan_memory.prompty` | `smallville_agents.py` — `attach_agents()` | The day's PLAN memory seeded onto each persona at t=0: `Plan: go to <destination> and <activity>.` |
+| `plan_memory.prompty` | `smallville_agents.py` — `attach_agents()` | The day's PLAN memory seeded onto each persona at t=0: `Plan: go to <destination> and <activity>.`, plus `Today's stops: <itinerary>.` when the whole-day itinerary is given (#83). |
 | `reflection.prompty` | `smallville_agents.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I did "<command>".` |
 | `spatial_knowledge.prompty` | `seed.py` — `seed_spatial_knowledge()` | One place a persona knows up front (a Belief): `You know <place> — its <areas>.` / `You know <place>.` |
+| `plan_system.prompty` | `planner.py` — `LLMPlanner._call()` (day / hourly / minute / revise) | **Real model prompt.** System message for the optional LLM daily planner (#83): plan one Smallville day in character. The per-level user message is assembled in code. |
 
 ## A note on escaping
 
