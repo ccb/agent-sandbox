@@ -38,6 +38,7 @@ from text_adventure_games.planning import (
     BEHIND_SCHEDULE,
     RevisionTrigger,
 )
+from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
@@ -133,6 +134,7 @@ def simulate(
     out_memories: dict | None = None,
     clock: SimClock | None = None,
     planner_client=None,
+    reflector_client=None,
     llm_client=None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
@@ -181,6 +183,13 @@ def simulate(
     (``advance``/``steps``/``emoji``). With none -- the offline default -- that mock
     client is also the brain, so decisions stay deterministic and byte-identical.
 
+    Pass a ``reflector_client`` (an engine ``LlmClient``) to give each agent an
+    ``LLMReflector`` for periodic memory synthesis (issue #84): the loop runs a
+    reflection pass once an agent's accumulated importance crosses its threshold.
+    With none -- the offline default -- no reflector is wired on, so reflection
+    never fires and the replay is byte-identical. ``main`` supplies one only for a
+    non-mock provider.
+
     Pass an ``out_planner_sources`` dict to collect, per persona, where its plan came
     from (``"llm"`` / ``"static"`` fallback / ``"mock"``) -- an out-parameter so the
     determinism tests' ``simulate(...)`` calls stay unchanged. ``main`` uses it to
@@ -200,6 +209,7 @@ def simulate(
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
         planner_client=planner_client,
+        reflector_client=reflector_client,
         llm_client=llm_client,
         clock=clock,
         num_steps=num_steps,
@@ -288,6 +298,11 @@ def simulate(
                 )
                 if command and game.parser.parse_command(command, actor=char):
                     remember_outcome(char, command, _step)
+                    # Periodic memory synthesis (issue #84): now that this step's
+                    # outcome is in memory, reflect if enough importance has
+                    # accrued. A no-op unless a reflector was wired on (real
+                    # provider only), so the mock replay stays byte-identical.
+                    maybe_reflect(char.agent, game)
                     if command.startswith("travel"):
                         dest = char.location
                         address = getattr(dest, "tile_address", None)
@@ -502,7 +517,8 @@ def main() -> None:
                 "using the deterministic mock brain + static schedule."
             )
     print(
-        f"LLM brain: {provider} -- travel/perform decisions + daily planning."
+        f"LLM brain: {provider} -- travel/perform decisions + daily planning "
+        "+ periodic reflection."
         if llm_client is not None
         else "LLM brain: none -- deterministic mock decisions + static schedule."
     )
@@ -534,6 +550,7 @@ def main() -> None:
             clock=clock,
             llm_client=llm_client,
             planner_client=llm_client,
+            reflector_client=llm_client,
             out_planner_sources=planner_sources,
             out_plans=plans,
         )
