@@ -412,3 +412,36 @@ def test_lamp_rests_on_a_surface_and_is_takeable():
     assert "lamp" in game.player.inventory and "lamp" not in ledge.contents
     game.do_command("put lamp on ledge")
     assert "lamp" in ledge.contents and "lamp" not in game.player.inventory
+
+
+# --- issue #113: give word-order variants must still fire custom give-effects -
+# "give <recipient> the <item>" (recipient-first) used to route to the built-in
+# Give, which moves the item but skips the game's special effect. These lock in
+# that the recipient-first phrasing produces the same outcome as the canonical
+# "give <item> to <recipient>".
+
+
+def test_champion_walkthrough_wins_with_reversed_give_to_king():
+    cmds = list(ac2.WALKTHROUGH_CHAMPION)
+    cmds[cmds.index("give sword to king")] = "give king the sword"
+    game, _ = _play(cmds)
+    assert game.is_won()
+    assert game.player.get_property("is_champion")
+
+
+def test_marriage_walkthrough_wins_with_reversed_give_to_rosemary():
+    cmds = list(ac2.WALKTHROUGH_MARRIAGE)
+    cmds[cmds.index("give blanket to rosemary")] = "give rosemary the blanket"
+    game, _ = _play(cmds)
+    assert game.is_won()
+    assert game.player.get_property("is_married")
+
+
+def test_reversed_give_slippers_to_hermit_still_rewards():
+    # The built-in Give moves the slippers regardless of word order; the custom
+    # effect (the king ends up shod) is what the recipient-first phrasing dropped.
+    game, _ = _play(
+        ["take slippers", "out", "east", "south", "south", "give hermit the slippers"]
+    )
+    assert "slippers" in game.characters["hermit"].inventory
+    assert game.characters["king"].get_property("wears_slippers")

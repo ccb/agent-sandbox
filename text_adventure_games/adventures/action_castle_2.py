@@ -557,110 +557,11 @@ class DropPennyInWell(actions.Action):
 # hands it back, independent of how the give was worded (issue #113).
 
 
-class GiveBlanketToRosemary(actions.Action):
-    ACTION_NAME = "give blanket to rosemary"
-    ACTION_DESCRIPTION = "Give the warm blanket to Rosemary"
-    ACTION_ALIASES = ["give blanket to sage", "offer rosemary the blanket"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.rosemary = self.parser.get_character("rosemary")
-
-    def check_preconditions(self) -> bool:
-        if (
-            self.rosemary is None
-            or self.rosemary.location is not self.character.location
-        ):
-            self.parser.fail("She isn't here.")
-            return False
-        if not _is_holding(self.character, "blanket"):
-            self.parser.fail("You have no blanket to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        blanket = _take_held(self.character, "blanket")
-        self.rosemary.add_to_inventory(blanket)
-        self.rosemary.wear(blanket)  # she drapes it over her shoulders
-        # Now warm enough to come along: she follows the player, and a later
-        # "ask rosemary to follow" is accepted too (clear the cold-feet refusal).
-        self.rosemary.following = self.game.player
-        self.rosemary.set_property("refuses_follow", False)
-        self.rosemary.set_property("emotional_state", "happy")
-        self.game.award(
-            "blanket",
-            10,
-            "Rosemary kisses you on the cheek and drapes the blanket over her shoulders. She'll follow you now.",
-        )
-
-
-class GiveSlippersToHermit(actions.Action):
-    ACTION_NAME = "give slippers to hermit"
-    ACTION_DESCRIPTION = "Give the velvet slippers to the hermit"
-    ACTION_ALIASES = ["give slippers to old man"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.hermit = self.parser.get_character("hermit")
-
-    def check_preconditions(self) -> bool:
-        if self.hermit is None or self.hermit.location is not self.character.location:
-            self.parser.fail("There's no one here to give them to.")
-            return False
-        if not _is_holding(self.character, "slippers"):
-            self.parser.fail("You have no slippers to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.hermit.add_to_inventory(_take_held(self.character, "slippers"))
-        king = self.game.characters.get("king")
-        if king is not None:
-            king.set_property("wears_slippers", True)
-        self.game.award(
-            "slippers",
-            10,
-            'The hermit accepts your gift: "Only a fool desires wealth and power. '
-            'The wise person has everything they need." He taps his head and winks.',
-        )
-
-
-class GiveSwordToKing(actions.Action):
-    ACTION_NAME = "give sword to king"
-    ACTION_DESCRIPTION = "Present the gleaming sword to the king"
-    ACTION_ALIASES = ["offer the sword to the king"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.king = self.parser.get_character("king")
-
-    def check_preconditions(self) -> bool:
-        if self.king is None or self.king.location is not self.character.location:
-            self.parser.fail("The king isn't here.")
-            return False
-        if not _is_holding(self.character, "sword"):
-            self.parser.fail("You have no sword to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.king.add_to_inventory(_take_held(self.character, "sword"))
-        self.king.set_property("offered_championship", True)
-        self.parser.ok(
-            "\"This kingdom needs a clever mind as much as a keen blade. And as I'm "
-            'in need of a new champion, I offer you the position! Do you accept?"'
-        )
-        # A bare "yes" / "no" now answers the king (#110).
-        self.game.pose_prompt(
-            Prompt(
-                text="The king offers you the championship. Do you accept?",
-                options={"yes": "say yes", "no": "say no"},
-                speaker="king",
-            )
-        )
+# NOTE: the blanket, slippers, and sword gifts are handled by TRIGGERS (see
+# build_game), exactly like the axe above -- the built-in Give moves the item to
+# the recipient for ANY phrasing ("give sword to king", "give king the sword",
+# "hand the king my sword"), and a trigger reacts to the recipient holding the
+# item, so the special effect fires regardless of word order (issue #113).
 
 
 class SayYes(actions.Action):
@@ -994,7 +895,7 @@ def build_game() -> ActionCastle2:
     workshop.add_item(slippers)
 
     # Wearable: the player can bundle up, and Rosemary drapes it over her
-    # shoulders when gifted (GiveBlanketToRosemary wears it on her).
+    # shoulders when gifted (the rosemary_warms_to_blanket trigger wears it on her).
     # The rowboat is a container holding the blanket (rulebook page 35: EXAMINE
     # BOAT -> "It contains a blanket"). The blanket is takeable from the shore --
     # the engine's Get reaches into an open container sitting in the room, and
@@ -1166,8 +1067,8 @@ def build_game() -> ActionCastle2:
     rosemary.set_property("emotional_state", "happy")
     # Following (engine #112): she declines until she has the blanket ("too
     # chilly"), and even once following she won't leave the town for the castle
-    # or the hermit's cave (ACII pages 35/37). GiveBlanketToRosemary sets
-    # `following` and clears the refusal.
+    # or the hermit's cave (ACII pages 35/37). The rosemary_warms_to_blanket
+    # trigger sets `following` and clears the refusal.
     rosemary.set_property("refuses_follow", True)
     rosemary.set_property(
         "follow_refusal_message", "Rosemary says it's too chilly to go outside."
@@ -1283,6 +1184,84 @@ def build_game() -> ActionCastle2:
         )
     )
 
+    # ROSEMARY warms to the blanket (issue #113). The built-in Give moves the
+    # blanket into her hands for any phrasing; this trigger then has her wear it
+    # and agree to follow -- so "give blanket to rosemary" and "give rosemary the
+    # blanket" both work. Wearing it removes it from her inventory, so the
+    # trigger fires once.
+    def rosemary_takes_blanket(g):
+        blanket = rosemary.inventory.get("blanket")
+        if blanket is None:
+            return
+        rosemary.wear(blanket)  # she drapes it over her shoulders
+        rosemary.following = g.player
+        rosemary.set_property("refuses_follow", False)
+        rosemary.set_property("emotional_state", "happy")
+        g.award(
+            "blanket",
+            10,
+            "Rosemary kisses you on the cheek and drapes the blanket over her "
+            "shoulders. She'll follow you now.",
+        )
+
+    game_triggers.append(
+        (
+            "rosemary_warms_to_blanket",
+            lambda g: "blanket" in rosemary.inventory,
+            rosemary_takes_blanket,
+            True,
+        )
+    )
+
+    # The HERMIT accepts the slippers and the king ends up shod (issue #113). He
+    # keeps them, so a "slippers_received" flag guards against re-firing.
+    def hermit_accepts_slippers(g):
+        hermit.set_property("slippers_received", True)
+        king.set_property("wears_slippers", True)
+        g.award(
+            "slippers",
+            10,
+            'The hermit accepts your gift: "Only a fool desires wealth and power. '
+            'The wise person has everything they need." He taps his head and winks.',
+        )
+
+    game_triggers.append(
+        (
+            "hermit_accepts_slippers",
+            lambda g: "slippers" in hermit.inventory
+            and not hermit.get_property("slippers_received"),
+            hermit_accepts_slippers,
+            True,
+        )
+    )
+
+    # The KING offers the championship when handed the sword (issue #113). He
+    # keeps the sword, so the "offered_championship" flag guards re-firing; a
+    # bare "yes"/"no" answers him (#110).
+    def king_offers_championship(g):
+        king.set_property("offered_championship", True)
+        g.parser.ok(
+            "\"This kingdom needs a clever mind as much as a keen blade. And as I'm "
+            'in need of a new champion, I offer you the position! Do you accept?"'
+        )
+        g.pose_prompt(
+            Prompt(
+                text="The king offers you the championship. Do you accept?",
+                options={"yes": "say yes", "no": "say no"},
+                speaker="king",
+            )
+        )
+
+    game_triggers.append(
+        (
+            "king_offers_championship",
+            lambda g: "sword" in king.inventory
+            and not king.get_property("offered_championship"),
+            king_offers_championship,
+            True,
+        )
+    )
+
     # Stealing from the hoard wakes the dragon -- and it kills the thief
     # (rulebook). Keyed on holding a loot item you did NOT earn: CHOOSE sets
     # reward_taken first, so the legitimate reward never trips this; a bare
@@ -1386,9 +1365,6 @@ def build_game() -> ActionCastle2:
         ChooseSword,
         ChooseRing,
         DropPennyInWell,
-        GiveBlanketToRosemary,
-        GiveSlippersToHermit,
-        GiveSwordToKing,
         SayYes,
         SayNo,
         RowBoat,
@@ -1491,7 +1467,7 @@ WALKTHROUGH_CHAMPION = [
     "up",
     "up",  # Underground -> Dungeon -> Stairs -> Courtyard (escort to Throne Room)
     "give sword to king",
-    "say yes",  # become champion  (custom GiveSwordToKing + SayYes)
+    "say yes",  # become champion  (king_offers_championship trigger + SayYes)
 ]
 
 WALKTHROUGH_MARRIAGE = [
