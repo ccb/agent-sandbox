@@ -139,6 +139,18 @@ Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path 
 sim chose, with a name + activity label above each sprite. (`sim/` carries a
 `.gdignore` so Godot leaves the Python alone.)
 
+### Watching it in a browser
+
+The same replay also runs **in a web browser** via a WebAssembly export, wrapped in
+a small React + Vite + TypeScript shell — no native Godot install needed just to
+view it, and the foundation for a future agent-info companion app. See
+[`web/README.md`](web/README.md) for the stack, architecture, and how to run /
+contribute. Quick start:
+
+```bash
+cd web && pnpm install && pnpm gen:replay && pnpm export:godot && pnpm dev
+```
+
 ## Where this fits — the full-port proposals
 
 This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
