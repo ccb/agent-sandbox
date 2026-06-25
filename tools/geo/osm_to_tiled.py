@@ -125,6 +125,7 @@ TILE_PX = 16  # pixels per tile in the tileset image
 
 ASSETS_DIR = os.path.join(HERE, "assets")
 URBAN_SHEET = "tilemap_packed.png"  # Kenney RPG Urban Pack, CC0 (see assets/kenney)
+EDGES_SHEET = "lawn_edges.png"  # generated lawn-edge strokes (see write_edges_png)
 # Each terrain on the Kenney sheet is an autotile block (centre fill + edge/corner
 # variants). We tile a whole layer with ONE tile, so we MUST use the clean CENTRE
 # of each block — the edge/corner variants carry a transition mark (a tan patch, a
@@ -712,18 +713,24 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
                 _plant(trees, occupied, c, r, _tree_choice(c, r))
 
 
-def concrete_lawn_edge(layers: dict, ground_gid: int) -> None:
-    """Draw a thin grey concrete kerb just OUTSIDE every visible lawn — the
-    concrete edging a real grass field has on its perimeter.
+# Lawn-edge strokes are 16 tiles keyed by an N/E/S/W bitmask of which sides of a
+# grass cell face non-grass; each tile is transparent except a thin grey line on
+# those sides (see write_edges_png). One bit per side:
+EDGE_N, EDGE_E, EDGE_S, EDGE_W = 1, 2, 4, 8
 
-    A cell gets the kerb if it is not itself visible grass but borders a cell that
-    is. "Visible grass" means a grass cell that isn't already covered by a path,
-    road, building or water tile drawn above it — so the kerb hugs the green you
-    actually see (e.g. between a lawn and Locust Walk) instead of hiding under the
-    walk where the lawn footprint underlaps it. The kerb goes in its own layer that
-    draws above paths/roads, so it reads as a border even against the tan paving;
-    where a lawn simply meets bare concrete ground the kerb is grey-on-grey (no
-    visible change, which is correct — the ground already *is* the concrete edge).
+
+def concrete_lawn_edge(layers: dict, edges_firstgid: int) -> None:
+    """Outline every visible lawn with a thin grey stroke along just the cell edges
+    that face non-grass — a slim concrete trim, not a whole border cell.
+
+    For each visible-grass cell we set the edge-stroke tile whose N/E/S/W bits mark
+    the sides bordering something other than visible grass. "Visible grass" is a
+    grass cell not covered by a path/road/building/water tile above it, so the trim
+    hugs the green you actually see (e.g. along Locust Walk) rather than hiding under
+    the walk where the lawn footprint underlaps it. The stroke tiles are transparent
+    apart from the line and sit in a layer above the paving, so the line shows
+    against grass and tan alike; where a lawn meets bare concrete ground it is
+    grey-on-grey (no visible change — correct, the ground already *is* the edge).
     """
     landuse = layers["landuse"]
     paths, roads = layers["paths"], layers["roads"]
@@ -742,17 +749,27 @@ def concrete_lawn_edge(layers: dict, ground_gid: int) -> None:
     for r in range(rows):
         for c in range(cols):
             if not visible_grass(c, r):
-                continue  # the kerb sits on the lawn's own outer ring of cells
-            if any(
-                not visible_grass(c + dc, r + dr)
-                for dr in (-1, 0, 1)
-                for dc in (-1, 0, 1)
-                if dc or dr
-            ):
-                edges[r][c] = ground_gid
+                continue
+            mask = 0
+            if not visible_grass(c, r - 1):
+                mask |= EDGE_N
+            if not visible_grass(c + 1, r):
+                mask |= EDGE_E
+            if not visible_grass(c, r + 1):
+                mask |= EDGE_S
+            if not visible_grass(c - 1, r):
+                mask |= EDGE_W
+            if mask:  # an interior cell (all neighbours grass) gets no trim
+                edges[r][c] = edges_firstgid + mask
 
 
-def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -> dict:
+def rasterise(
+    osm: dict,
+    proj: Projector,
+    gid_of: dict,
+    variety: bool = False,
+    edges_firstgid: int = 0,
+) -> dict:
     """Return a dict of named tile layers (each a 2D grid of GIDs).
 
     `gid_of` maps each category (ground/grass/water/path/road/building) to the
@@ -823,7 +840,7 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -
             named.append(tags["name"])
 
     if variety:
-        concrete_lawn_edge(layers, gid_of["ground"])  # grey kerb around the lawns
+        concrete_lawn_edge(layers, edges_firstgid)  # thin grey trim around lawns
         stamp_trees(layers, osm, proj)
 
     return {"layers": layers, "counts": counts, "named": named}
@@ -881,8 +898,8 @@ def write_tileset_png(path: str) -> tuple[int, int]:
     return w, h
 
 
-def write_tmj(path: str, proj: Projector, layers: dict, tileset: dict) -> None:
-    """Write a Tiled (.tmj) orthogonal map with the given (embedded) tileset.
+def write_tmj(path: str, proj: Projector, layers: dict, tilesets: list) -> None:
+    """Write a Tiled (.tmj) orthogonal map with the given (embedded) tileset(s).
 
     Layer data is a flat uncompressed GID array (not base64/zlib) so Phaser's
     `tilemapTiledJSON` loader can read it directly; the tileset image is
@@ -914,7 +931,7 @@ def write_tmj(path: str, proj: Projector, layers: dict, tileset: dict) -> None:
             {"name": "metres_per_tile", "type": "float", "value": proj.mpt},
             {"name": "rotation_deg", "type": "float", "value": proj.rotate_deg},
         ],
-        "tilesets": [tileset],
+        "tilesets": tilesets,
         "layers": [
             {
                 "type": "tilelayer",
@@ -1022,6 +1039,59 @@ def _urban_tileset() -> dict:
     }
 
 
+# The lawn-edge stroke: a thin concrete-grey line, drawn EDGE_STROKE_PX wide along
+# whichever sides of a tile its N/E/S/W mask lights up.
+EDGE_STROKE = (118, 120, 134, 255)
+EDGE_STROKE_PX = 2
+
+
+def write_edges_png(path: str) -> tuple[int, int]:
+    """Write the lawn-edge stroke sheet: 16 tiles in a row, indexed by an N/E/S/W
+    bitmask (tile m has a line on the sides whose bit is set in m; tile 0 is blank
+    and never placed). Each tile is transparent apart from the grey line, so it
+    overlays the grass/paving below and only the thin edge shows."""
+    n, t = 16, EDGE_STROKE_PX
+    w, h = TILE_PX * n, TILE_PX
+    clear = (0, 0, 0, 0)
+    png_rows = []
+    for y in range(TILE_PX):
+        row = bytearray()
+        for mask in range(n):
+            for x in range(TILE_PX):
+                on = (
+                    (mask & EDGE_N and y < t)
+                    or (mask & EDGE_S and y >= TILE_PX - t)
+                    or (mask & EDGE_W and x < t)
+                    or (mask & EDGE_E and x >= TILE_PX - t)
+                )
+                row.extend(EDGE_STROKE if on else clear)
+        png_rows.append(bytes(row))
+    with open(path, "wb") as fh:
+        fh.write(_png(w, h, png_rows))
+    return w, h
+
+
+def _edges_tileset(firstgid: int) -> dict:
+    """Generate the lawn-edge stroke sheet next to the map and reference it as a
+    second tileset starting at `firstgid` (just past the Kenney sheet's GIDs)."""
+    path = os.path.join(OUT_DIR, EDGES_SHEET)
+    w, h = write_edges_png(path)
+    n = w // TILE_PX
+    return {
+        "firstgid": firstgid,
+        "name": "lawn_edges",
+        "tilewidth": TILE_PX,
+        "tileheight": TILE_PX,
+        "tilecount": n,
+        "columns": n,
+        "margin": 0,
+        "spacing": 0,
+        "image": EDGES_SHEET,
+        "imagewidth": w,
+        "imageheight": h,
+    }
+
+
 def resolve_rotation(rotate: str, osm: dict, bbox: dict) -> float:
     """Turn the --rotate option into a concrete degrees-to-rotate value.
 
@@ -1059,19 +1129,30 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
         f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile, rotated {rotate_deg:+.2f}°"
     )
 
+    # Build the tileset(s) first: the urban theme adds a second tileset for the
+    # generated lawn-edge strokes, and rasterise needs to know where its GIDs begin.
+    if theme == "urban":
+        urban = _urban_tileset()
+        edges_first = urban["firstgid"] + urban["tilecount"]
+        tilesets = [urban, _edges_tileset(edges_first)]
+    else:
+        tilesets = [_placeholder_tileset()]
+        edges_first = 0
+
     t0 = time.time()
-    result = rasterise(osm, proj, gid_of, variety=(theme == "urban"))
+    result = rasterise(
+        osm, proj, gid_of, variety=(theme == "urban"), edges_firstgid=edges_first
+    )
     print(f"[raster] done in {time.time() - t0:.1f}s")
     for cat, n in result["counts"].items():
         if n:
             print(f"         {cat:9s}: {n} features")
 
-    tileset = _urban_tileset() if theme == "urban" else _placeholder_tileset()
     out_stem = stem if theme == "placeholder" else f"{stem}_{theme}"
     tmj_path = os.path.join(OUT_DIR, f"{out_stem}.tmj")
     preview_path = os.path.join(OUT_DIR, f"{out_stem}_preview.png")
 
-    write_tmj(tmj_path, proj, result["layers"], tileset)
+    write_tmj(tmj_path, proj, result["layers"], tilesets)
     # Preview uses the placeholder colours as a legend, keyed by this theme's GIDs.
     gid_to_rgba = {gid_of[cat]: PALETTE[cat][1] for cat in PALETTE}
     if theme == "urban":
@@ -1084,6 +1165,8 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
         gid_to_rgba[DASH_V + 1] = PALETTE["road"][1]
         for idx in TREE_PREVIEW_IDS:
             gid_to_rgba[idx + 1] = (60, 130, 60, 255)
+        for m in range(1, 16):  # lawn-edge strokes read as concrete in the preview
+            gid_to_rgba[edges_first + m] = PALETTE["ground"][1]
     write_preview_png(
         preview_path,
         result["layers"],
