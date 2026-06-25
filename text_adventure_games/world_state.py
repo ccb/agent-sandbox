@@ -145,10 +145,12 @@ def _name(thing):
 
 
 def _jsonable(value):
-    """Coerce a property value to something ``json.dumps`` can emit."""
+    """Coerce a value to something ``json.dumps`` can emit."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    return getattr(value, "value", None) or str(value)
+    if hasattr(value, "value"):  # a plain Enum -> its underlying value
+        return value.value
+    return str(value)
 
 
 def _properties(thing, exclude=()):
@@ -250,7 +252,15 @@ def _event_state(event) -> EventState:
         actor=_name(event.actor),
         action=str(getattr(event.action, "value", event.action)),
         summary=getattr(event, "summary", ""),
-        payload=dict(getattr(event, "payload", {}) or {}),
+        # Sorted + value-coerced like every other dict in the export, so the
+        # convenience to_world_json() stays deterministic and JSON-safe even
+        # for a payload built with unordered keys or non-string values.
+        payload=dict(
+            sorted(
+                (str(k), _jsonable(v))
+                for k, v in (getattr(event, "payload", {}) or {}).items()
+            )
+        ),
     )
 
 

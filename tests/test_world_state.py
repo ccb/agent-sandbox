@@ -142,3 +142,28 @@ def test_game_to_world_state_and_json_methods():
     game, *_ = _two_room_game()
     assert game.to_world_state().player == "player"
     assert json.loads(game.to_world_json())["player"] == "player"
+
+
+def test_event_payload_is_sorted_and_json_safe():
+    from text_adventure_games.events import GameEvent
+
+    game, field, *_ = _two_room_game()
+    rock = things.Item("rock", "a rock", "A rock.")  # a non-serializable value
+    game.events.append(
+        GameEvent(turn=0, actor="player", action="move", payload={"z": 1, "a": rock})
+    )
+    ev = world_state(game).events[-1]
+    assert list(ev.payload.keys()) == ["a", "z"]  # keys sorted for determinism
+    assert isinstance(ev.payload["a"], str)  # the Item coerced to a string
+    game.to_world_json()  # JSON-safe: must not raise
+
+
+def test_item_quantity_is_exported():
+    game, field, *_ = _two_room_game()
+    coin = things.Item("coin", "a coin", "A coin.")
+    coin.quantity = 5
+    field.add_item(coin)
+    coin_state = next(
+        i for loc in world_state(game).locations for i in loc.items if i.name == "coin"
+    )
+    assert coin_state.quantity == 5
