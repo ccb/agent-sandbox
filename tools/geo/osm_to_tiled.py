@@ -191,7 +191,16 @@ TREE_PREVIEW_IDS = {232, 259, 313, 340, 238, 319}
 # Bottom-to-top paint order. "trees" only exists in the urban theme (rasterise
 # adds that layer when variety is on); filtering by presence keeps placeholder
 # maps at their original six layers, byte-for-byte identical.
-LAYER_ORDER = ["ground", "landuse", "water", "paths", "roads", "buildings", "trees"]
+LAYER_ORDER = [
+    "ground",
+    "landuse",
+    "water",
+    "paths",
+    "roads",
+    "edges",  # grey concrete kerb around lawns; drawn above paving so it shows
+    "buildings",
+    "trees",
+]
 
 # --------------------------------------------------------------------------- #
 # 1. FETCH
@@ -663,6 +672,7 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
             or layers["water"][r][c]
             or layers["roads"][r][c]
             or layers["paths"][r][c]
+            or layers["edges"][r][c]  # keep trees off the concrete kerb
         )
 
     # 1. Real OSM trees (nodes carry lat/lon directly, no geometry).
@@ -702,6 +712,46 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
                 _plant(trees, occupied, c, r, _tree_choice(c, r))
 
 
+def concrete_lawn_edge(layers: dict, ground_gid: int) -> None:
+    """Draw a thin grey concrete kerb just OUTSIDE every visible lawn — the
+    concrete edging a real grass field has on its perimeter.
+
+    A cell gets the kerb if it is not itself visible grass but borders a cell that
+    is. "Visible grass" means a grass cell that isn't already covered by a path,
+    road, building or water tile drawn above it — so the kerb hugs the green you
+    actually see (e.g. between a lawn and Locust Walk) instead of hiding under the
+    walk where the lawn footprint underlaps it. The kerb goes in its own layer that
+    draws above paths/roads, so it reads as a border even against the tan paving;
+    where a lawn simply meets bare concrete ground the kerb is grey-on-grey (no
+    visible change, which is correct — the ground already *is* the concrete edge).
+    """
+    landuse = layers["landuse"]
+    paths, roads = layers["paths"], layers["roads"]
+    buildings, water = layers["buildings"], layers["water"]
+    edges = layers["edges"]
+    rows, cols = len(landuse), len(landuse[0])
+
+    def visible_grass(c: int, r: int) -> bool:
+        return (
+            0 <= c < cols
+            and 0 <= r < rows
+            and bool(landuse[r][c])
+            and not (paths[r][c] or roads[r][c] or buildings[r][c] or water[r][c])
+        )
+
+    for r in range(rows):
+        for c in range(cols):
+            if not visible_grass(c, r):
+                continue  # the kerb sits on the lawn's own outer ring of cells
+            if any(
+                not visible_grass(c + dc, r + dr)
+                for dr in (-1, 0, 1)
+                for dc in (-1, 0, 1)
+                if dc or dr
+            ):
+                edges[r][c] = ground_gid
+
+
 def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -> dict:
     """Return a dict of named tile layers (each a 2D grid of GIDs).
 
@@ -721,8 +771,9 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -
         "roads": new_grid(cols, rows),
         "buildings": new_grid(cols, rows),
     }
-    if variety:  # urban-theme foliage, painted on top of everything else
-        layers["trees"] = new_grid(cols, rows)
+    if variety:  # urban-theme extras (placeholder theme stays byte-identical)
+        layers["edges"] = new_grid(cols, rows)  # concrete kerb around the lawns
+        layers["trees"] = new_grid(cols, rows)  # foliage, on top of everything
     # Which physical layer each category paints into.
     layer_of = {
         "grass": "landuse",
@@ -772,6 +823,7 @@ def rasterise(osm: dict, proj: Projector, gid_of: dict, variety: bool = False) -
             named.append(tags["name"])
 
     if variety:
+        concrete_lawn_edge(layers, gid_of["ground"])  # grey kerb around the lawns
         stamp_trees(layers, osm, proj)
 
     return {"layers": layers, "counts": counts, "named": named}
