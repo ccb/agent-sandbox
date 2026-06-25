@@ -65,6 +65,12 @@ class AgentConfig:
     # Upper bound (in in-game minutes) on an action duration an agent may claim,
     # guarding against absurd model output. Was npc._MAX_DURATION (one full day).
     max_duration: int = 24 * 60
+    # Periodic memory reflection (issue #84): once the importance accrued since
+    # the last reflection crosses this threshold, the agent synthesizes its
+    # recent memories into higher-level REFLECTION records. ``None`` (or <= 0)
+    # disables reflection, so the default leaves behavior unchanged; 30 is a
+    # sensible opt-in value (Park et al.'s "poignancy" cadence).
+    reflection_threshold: float | None = None
 
 
 @dataclass

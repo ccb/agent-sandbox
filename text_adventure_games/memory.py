@@ -51,6 +51,9 @@ DEFAULT_DECAY = 0.95
 # rendered block (a memory should never crowd out the live observation).
 DEFAULT_MAX_RECORDS = 6
 DEFAULT_TOKEN_BUDGET = 800
+# How many of the most recent records feed a periodic reflection (issue #84).
+# Mid-range of Park et al.'s 20-50; recency-based, not relevance-scored.
+RECENT_FOR_REFLECTION = 30
 
 # A tiny stop-word list so keyword-overlap relevance keys on content words, not
 # glue words. Intentionally small and readable rather than exhaustive.
@@ -324,6 +327,21 @@ class AgentMemory:
     ) -> MemoryRecord:
         """Record an intention the agent formed."""
         return self._add(MemoryKind.PLAN, text, turn, importance, None, None, tags)
+
+    def recent(self, n: int) -> list[MemoryRecord]:
+        """The ``n`` most recently added records, oldest-first.
+
+        Records are append-only, so the tail is the newest. Used as the over-set
+        a periodic reflection generalizes from (issue #84)."""
+        return self.records[-n:] if n > 0 else []
+
+    def reset_reflection_accumulator(self) -> None:
+        """Zero the importance-since-last-reflection counter (issue #84).
+
+        Called after a reflection fires. ``_add`` re-increments the counter for
+        each REFLECTION it writes, so this must run *after* the write-back to
+        land a clean zero and avoid re-triggering next turn."""
+        self.importance_since_reflection = 0.0
 
     # --- perception: fold visible world events into memory ------------------
 

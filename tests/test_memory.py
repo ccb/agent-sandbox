@@ -22,7 +22,7 @@ Run with pytest::
 import pytest
 
 from text_adventure_games import games, things
-from text_adventure_games.llm_client import MockLlmClient
+from text_adventure_games.llm_client import MockLlmClient, MockReActClient
 from text_adventure_games.embedding_client import MockEmbeddingClient
 from text_adventure_games.memory import (
     AgentMemory,
@@ -34,7 +34,12 @@ from text_adventure_games.memory import (
     relevance_score,
     render_memories,
 )
-from text_adventure_games.npc import LLMAgent, react_behavior
+from text_adventure_games.npc import (
+    LLMAgent,
+    ScriptedAgent,
+    maybe_reflect,
+    react_behavior,
+)
 from text_adventure_games.webapp.web_parser import WebParser
 
 # Substrings the mock ReAct brain (llm_client.py) keys on. A rendered memory
@@ -494,3 +499,204 @@ def test_memory_never_leaks_into_command_history(react_world):
     history = " ".join(e["content"] for e in game.parser.command_history)
     assert secret not in history
     assert "Relevant memories:" not in history
+
+
+# --- periodic reflection / memory synthesis (issue #84) --------------------
+# maybe_reflect synthesizes recent memories into higher-level REFLECTION
+# records when accumulated importance crosses a configured threshold, then
+# resets the accumulator. Disabled by default (threshold None) so existing
+# games stay byte-identical.
+
+
+def _reflective_troll(mock, threshold=5.0):
+    agent = LLMAgent(mock, persona="I am a troll.", reflection_threshold=threshold)
+    agent.memory.owner = "troll"
+    return agent
+
+
+def _reflections(agent):
+    return [r for r in agent.memory.records if r.kind == MemoryKind.REFLECTION]
+
+
+def test_reflection_fires_when_importance_crosses_threshold(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(
+        ["- The player is friendly.\n- I should not attack the player."]
+    )
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("The player gave me a fish.", turn=0, importance=8)
+    agent.memory.add_observation("The player smiled at me.", turn=1, importance=4)
+
+    maybe_reflect(troll, game, agent)
+
+    refl = _reflections(agent)
+    assert [r.text for r in refl] == [
+        "The player is friendly.",
+        "I should not attack the player.",
+    ]
+
+
+def test_reflection_resets_accumulator(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- An insight."])
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("Something important happened.", turn=0, importance=6)
+    agent.memory.add_observation("And another thing.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    # Reset even though add_reflection itself re-increments the accumulator.
+    assert agent.memory.importance_since_reflection == 0.0
+
+
+def test_reflection_does_not_fire_below_threshold(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- should never be used"])
+    agent = _reflective_troll(mock, threshold=50.0)
+    agent.memory.add_observation("A minor event.", turn=0, importance=3)
+    agent.memory.add_observation("Another minor event.", turn=0, importance=3)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert mock.calls == []  # no LLM round-trip
+    assert agent.memory.importance_since_reflection == 6.0  # untouched
+
+
+def test_reflection_disabled_by_default(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- nope"])
+    agent = LLMAgent(mock, persona="I am a troll.")  # no reflection_threshold
+    agent.memory.owner = "troll"
+    agent.memory.add_observation("Huge event.", turn=0, importance=99)
+    agent.memory.add_observation("Another huge event.", turn=0, importance=99)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert mock.calls == []
+
+
+def test_reflection_threshold_zero_or_negative_disables(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- nope"])
+    agent = _reflective_troll(mock, threshold=0.0)
+    agent.memory.add_observation("Event one.", turn=0, importance=9)
+    agent.memory.add_observation("Event two.", turn=0, importance=9)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert mock.calls == []
+
+
+def test_scripted_agent_never_reflects(react_world):
+    game, _, troll, _ = react_world
+    agent = ScriptedAgent(lambda obs: "look")
+    agent.reflection_threshold = 1.0  # set, but no llm_client -> no-op
+    agent.memory.owner = "troll"
+    agent.memory.add_observation("Event one.", turn=0, importance=9)
+    agent.memory.add_observation("Event two.", turn=0, importance=9)
+
+    maybe_reflect(troll, game, agent)  # must not raise
+
+    assert _reflections(agent) == []
+
+
+def test_reflection_skips_when_too_few_memories(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- nope"])
+    agent = _reflective_troll(mock, threshold=1.0)
+    agent.memory.add_observation("The only memory.", turn=0, importance=9)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert mock.calls == []  # nothing to generalize from a single memory
+
+
+def test_reflection_records_cite_evidence_ids(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- An insight drawn from events."])
+    agent = _reflective_troll(mock, threshold=5.0)
+    r0 = agent.memory.add_observation("First.", turn=0, importance=6)
+    r1 = agent.memory.add_observation("Second.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    refl = _reflections(agent)[0]
+    assert set(refl.source_event_ids) == {r0.id, r1.id}
+
+
+def test_reflection_empty_reply_writes_nothing_but_resets(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient([None])  # simulates an API failure / empty reply
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("A.", turn=0, importance=6)
+    agent.memory.add_observation("B.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    # Reset on empty too, so a silent model can't re-fire every turn.
+    assert agent.memory.importance_since_reflection == 0.0
+
+
+def test_reflection_parses_at_most_three_insights(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- one\n* two\n3. three\n\n   \n- four (dropped, over cap)"])
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("A.", turn=0, importance=6)
+    agent.memory.add_observation("B.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    assert [r.text for r in _reflections(agent)] == ["one", "two", "three"]
+
+
+def test_reflection_records_stay_off_command_history(react_world):
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["- A private thought about the player."])
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("A.", turn=0, importance=6)
+    agent.memory.add_observation("B.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    history = " ".join(e["content"] for e in game.parser.command_history)
+    assert "private thought" not in history
+
+
+def test_reflection_fires_through_react_behavior(react_world):
+    # End-to-end: the hook lives at the end of react_behavior. The mock scripts
+    # the decision first, then the reflection synthesis (the two chat calls in
+    # order). The fresh REFLECTION record is eligible to enter a later prompt.
+    game, _, troll, _ = react_world
+    mock = MockLlmClient(["go north", "- The player keeps feeding me."])
+    agent = _reflective_troll(mock, threshold=5.0)
+    agent.memory.add_observation("The player gave me a fish.", turn=0, importance=8)
+    agent.memory.add_observation("The player gave me bread.", turn=0, importance=8)
+
+    react_behavior(troll, game, agent)
+
+    assert any("player keeps feeding me" in r.text for r in _reflections(agent))
+    assert agent.memory.importance_since_reflection == 0.0
+
+
+def test_live_mock_provider_does_not_synthesize(react_world):
+    # The live ``mock`` provider (MockReActClient) only answers NPC-decision
+    # prompts; a reflection prompt omits that preamble, so it returns None and
+    # no reflection is written -- keeping existing mock-driven integration tests
+    # byte-identical. The accumulator still resets.
+    game, _, troll, _ = react_world
+    agent = LLMAgent(
+        MockReActClient(), persona="I am the troll.", reflection_threshold=5.0
+    )
+    agent.memory.owner = "troll"
+    agent.memory.add_observation("The player gave me a fish.", turn=0, importance=8)
+    agent.memory.add_observation("The player smiled at me.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert agent.memory.importance_since_reflection == 0.0

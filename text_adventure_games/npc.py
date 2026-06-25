@@ -37,7 +37,7 @@ import re
 
 from .config import AgentConfig
 from .enums import ReActLabel, Role
-from .memory import AgentMemory, render_memories
+from .memory import RECENT_FOR_REFLECTION, AgentMemory, render_memories
 from .things.characters import Goal, GoalType
 
 # Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
@@ -62,6 +62,18 @@ _DECISION_INSTRUCTION = (
     f"{ReActLabel.REASONING} <one short sentence explaining your choice>\n"
     f"{ReActLabel.ACTION} <the command, e.g. 'attack player', 'go north', 'take sword'>\n"
     f"{ReActLabel.DURATION} <estimated in-game minutes this action takes, e.g. 5>"
+)
+
+# Periodic reflection (issue #84). Deliberately omits the "You are an NPC in a
+# text adventure game" preamble of _DECISION_INSTRUCTION so the offline
+# MockReActClient (the live ``mock`` provider) returns None for a reflection
+# prompt -- reflection is a real-LLM feature, and tests drive it with a direct
+# MockLlmClient. (See _mock_brain_choose's system-message gate in llm_client.py.)
+_REFLECTION_INSTRUCTION = (
+    "Reflect on your recent experiences listed below. Write 1 to 3 short, "
+    "higher-level insights or generalizations you can draw from them. Put each "
+    "insight on its own line, prefixed with '- '. Ground every insight in the "
+    "memories; do not invent facts."
 )
 
 
@@ -238,6 +250,7 @@ class LLMAgent(Agent):
         temperature: float = 0.7,
         max_duration: int = _MAX_DURATION,
         embedding_client=None,
+        reflection_threshold: float | None = None,
     ):
         super().__init__(
             persona=persona, goals=goals, embedding_client=embedding_client
@@ -246,6 +259,8 @@ class LLMAgent(Agent):
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.max_duration = max_duration
+        # Periodic-reflection cadence (issue #84); None/<=0 disables it.
+        self.reflection_threshold = reflection_threshold
 
     def decide(self, observation: str) -> str | None:
         self.last_reasoning = None
@@ -566,7 +581,82 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     observation = format_observation_with_memories(base, relevant)
     # The full observation is traced too, but only shows at verbose verbosity.
     game.parser.agent_observation(character.name, observation)
-    return decide_and_route(character, game, agent, observation, max_retries)
+    acted = decide_and_route(character, game, agent, observation, max_retries)
+    # Reflect once per turn, AFTER acting, so this turn's outcome memories count
+    # toward the cadence. Kept out of decide_and_route (it loops over retries and
+    # is shared with the simultaneous resolve path).
+    maybe_reflect(character, game, agent)
+    return acted
+
+
+def synthesize_reflections(agent, records) -> list[str]:
+    """Ask *agent*'s LLM to distill *records* into up to three higher-level
+    insights, returned as parsed strings (possibly empty) (issue #84).
+
+    A no-op returning ``[]`` if the agent has no chat-capable client or the
+    model returns nothing. Memories are rendered through the same safe
+    ``render_memories`` path the observation uses, so reflected text can never
+    spoof a mock-brain decision rule or leak a private trigger substring.
+    """
+    client = getattr(agent, "llm_client", None)
+    if client is None or not hasattr(client, "chat"):
+        return []
+    lines = ["You are reflecting on your own recent experiences."]
+    if getattr(agent, "persona", ""):
+        lines.append(f"Persona: {agent.persona}")
+    goals = agent._format_goals() if hasattr(agent, "_format_goals") else None
+    if goals:
+        lines.append("Goals:")
+        lines.append(goals)
+    lines.append(_REFLECTION_INSTRUCTION)
+    messages = [
+        {"role": Role.SYSTEM, "content": "\n".join(lines)},
+        {"role": Role.USER, "content": render_memories(records)},
+    ]
+    reply = client.chat(
+        messages,
+        max_tokens=getattr(agent, "max_tokens", 128),
+        temperature=getattr(agent, "temperature", 0.7),
+    )
+    if not reply:
+        return []
+    insights = []
+    for line in reply.splitlines():
+        text = re.sub(r"^\d+[.)]\s*", "", line.strip().lstrip("-*").strip())
+        if text:
+            insights.append(text)
+    return insights[:3]
+
+
+def maybe_reflect(character, game, agent) -> None:
+    """Periodically distill recent memories into REFLECTION records (issue #84).
+
+    Fires only when the agent has a positive ``reflection_threshold``, the
+    importance accrued since the last reflection has crossed it, the agent has
+    an LLM client, and there are at least two memories to generalize from. On
+    firing it writes each synthesized insight via ``add_reflection`` (citing the
+    over-set's ids) and resets the accumulator -- AFTER the writes, since each
+    ``add_reflection`` re-increments it. The accumulator is reset even when the
+    model returns no insight, so a silent model can't re-fire every turn.
+    """
+    threshold = getattr(agent, "reflection_threshold", None)
+    if not threshold or threshold <= 0:
+        return
+    memory = getattr(agent, "memory", None)
+    if memory is None or memory.importance_since_reflection < threshold:
+        return
+    if getattr(agent, "llm_client", None) is None:
+        return
+    records = memory.recent(RECENT_FOR_REFLECTION)
+    if len(records) < 2:
+        return  # nothing to generalize from a single memory
+    evidence_ids = [r.id for r in records]
+    turn = getattr(game, "turn", 0)
+    for insight in synthesize_reflections(agent, records):
+        memory.add_reflection(
+            insight, turn=turn, evidence_ids=evidence_ids, tags={"reflection"}
+        )
+    memory.reset_reflection_accumulator()
 
 
 def route_first_workable(character, game, agent: Agent, commands) -> bool:
@@ -691,6 +781,7 @@ def make_react_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):
@@ -742,6 +833,7 @@ def make_hybrid_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):

@@ -358,6 +358,24 @@ AgentMemory(enable_reflection=False)
 Tests should cover the threshold logic with a fake reflection function before any
 real LLM prompts are added.
 
+> **As built (issue #84).** `npc.maybe_reflect(character, game, agent)` runs once
+> per turn at the end of `react_behavior` (after `decide_and_route`, so the turn's
+> own outcome memories count) and fires when
+> `memory.importance_since_reflection >= agent.reflection_threshold`. The cadence
+> is configured by `AgentConfig.reflection_threshold` (default `None` = disabled,
+> so existing games stay byte-identical; `30` is the suggested opt-in). The flow
+> is simplified to a **single synthesis pass** over the
+> `RECENT_FOR_REFLECTION` (30) most recent records (steps 1 + 5 + 6 above), via
+> `npc.synthesize_reflections()` — it renders the slice through the safe
+> `render_memories` path and asks for 1–3 grounded insights, each stored as a
+> `REFLECTION` citing the slice's ids. The per-question retrieve/infer loop
+> (steps 2–4) is deliberately deferred. The synthesis prompt omits the NPC-decision
+> preamble, so the offline `MockReActClient` returns `None` for it — reflection is
+> a real-LLM feature, and the unit tests drive it with a directly-injected
+> `MockLlmClient`. The accumulator resets even when the model returns nothing, so
+> a silent model can't re-fire every turn. **Limitation:** only the sequential
+> `react_behavior` path reflects; the simultaneous turn mode (`turns.py`) does not.
+
 ---
 
 ## 8. Planning
@@ -530,7 +548,7 @@ Live-game tests:
 | 3 | ✅ Done | Ingest visible `Game.events` into per-agent observations (own actions excluded — see §5). |
 | 4 | ✅ Done | Store action success/failure outcomes as memories (in `decide_and_route()`). |
 | 5 | ⬜ Future | Add optional LLM importance scoring behind a mockable interface. |
-| 6 | ⬜ Future | Add optional reflection threshold and reflection memory generation. |
+| 6 | ✅ Done | Periodic reflection: `npc.maybe_reflect()` synthesizes recent memories into `REFLECTION` records once `importance_since_reflection` crosses `AgentConfig.reflection_threshold` (disabled by default), then resets the accumulator (issue #84). |
 | 7 | ⬜ Future | Add simple plan memories (the `add_plan` writer exists; automatic generation does not). |
 | 8 | ⬜ Future | Serialize memory through `Character.to_primitive()` / `from_primitive()` (`AgentMemory` already round-trips; the `Character` hook is unwired). |
 
@@ -540,7 +558,8 @@ observation). The same PR also wires this engine memory into the
 generative-agents (Smallville) sim — residents perceive co-located neighbors,
 remember their own actions, and retrieve memories into each observation, while
 the deterministic mock replay is unchanged (`generative-agents/tests/
-test_memory_wiring.py`) — which **closes #75**. Stages 5–8 remain future work.
+test_memory_wiring.py`) — which **closes #75**. Stage 6 (periodic reflection)
+lands separately (issue #84); stages 5, 7, and 8 remain future work.
 
 ---
 
