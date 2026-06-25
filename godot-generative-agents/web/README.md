@@ -16,32 +16,34 @@ There are two kinds of change, and neither rebuilds the React app:
 
 | What changed | What you run | Why no React rebuild |
 | --- | --- | --- |
-| **New sim / replay** | `npm run gen:replay` | The viewer **fetches** `penn_replay.json` at runtime (it's not packed into the build). Replace the file, refresh. |
-| **Godot scripts / scenes / art** | `npm run export:godot` | Vite serves `public/` statically, so the re-exported WASM is picked up on the next refresh. |
+| **New sim / replay** | `pnpm gen:replay` | The viewer **fetches** `penn_replay.json` at runtime (it's not packed into the build). Replace the file, refresh. |
+| **Godot scripts / scenes / art** | `pnpm export:godot` | Vite serves `public/` statically, so the re-exported WASM is picked up on the next refresh. |
 
 The React/Vite dev server can keep running through both.
 
 ## Prerequisites
 
-- **Node** 18+ (for npm / Vite).
+- **Node** 18+ and **pnpm** (this project uses pnpm; the version is pinned via the
+  `packageManager` field in `package.json`). Install pnpm with `brew install pnpm`
+  or `corepack enable`.
 - **Godot 4.6.x** with the matching **Web export templates** installed. The first
-  `npm run export:godot` will fail with a clear message until you do this:
+  `pnpm export:godot` will fail with a clear message until you do this:
   *Godot editor → Editor → Manage Export Templates → Download and Install*
   (download the version that matches your editor, e.g. `4.6.3.stable`).
-- **uv** (already used by this repo) for `npm run gen:replay`, which runs the
+- **uv** (already used by this repo) for `pnpm gen:replay`, which runs the
   Python sim.
 
 If your Godot isn't at the macOS default (`/Applications/Godot.app/Contents/MacOS/Godot`),
-set `GODOT_BIN`, e.g. `GODOT_BIN=/path/to/Godot npm run export:godot`.
+set `GODOT_BIN`, e.g. `GODOT_BIN=/path/to/Godot pnpm export:godot`.
 
 ## Run it
 
 ```bash
 cd godot-generative-agents/web
-npm install
-npm run gen:replay     # writes public/replay/penn_replay.json (committed copy is also fine)
-npm run export:godot   # writes public/godot/ (the WASM build)
-npm run dev            # open the printed http://localhost:… URL
+pnpm install
+pnpm gen:replay     # writes public/replay/penn_replay.json (committed copy is also fine)
+pnpm export:godot   # writes public/godot/ (the WASM build)
+pnpm dev            # open the printed http://localhost:… URL
 ```
 
 You should see the campus load and Maya, Professor Ellis and Diego walk it with

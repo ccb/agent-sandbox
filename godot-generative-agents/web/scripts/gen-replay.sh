@@ -3,7 +3,7 @@
 # the viewer fetches this JSON at runtime, a new sim needs NO Godot re-export —
 # just re-run this and refresh the browser.
 #
-# Any args are forwarded to the sim, e.g.:  npm run gen:replay -- --steps 600
+# Any args are forwarded to the sim, e.g.:  pnpm gen:replay --steps 600
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
