@@ -117,6 +117,11 @@ class Game:
         # Runtime-only (recipes hold a factory callable), like triggers.
         self.recipes = []
 
+        # Recipes the player has discovered (issue #135). A recipe declared
+        # known=False is craftable only once its name/alias is learned via
+        # learn_recipe(); recipes with the default known=True ignore this set.
+        self.learned_recipes = set()
+
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
         # for an otherwise-unrecognized command. Transient conversational state,
@@ -253,6 +258,13 @@ class Game:
         parser's crafting verbs consult ``self.recipes``."""
         self.recipes.append(recipe)
         return recipe
+
+    def learn_recipe(self, name):
+        """Mark a crafting recipe known by *name* (issue #135), making a recipe
+        declared ``known=False`` craftable. Wire this to a recipe book, an NPC,
+        examine text, etc. Case-insensitive; matches a recipe's name or any of
+        its aliases (see ``Recipe.names``)."""
+        self.learned_recipes.add(str(name).lower())
 
     def pose_prompt(self, prompt):
         """Pose a question to the player (issue #110). While it is pending, the
@@ -675,6 +687,19 @@ class Game:
             "actions": sorted([a for a in self.parser.actions]),
         }
         return data
+
+    def to_world_state(self):
+        """A typed, deterministic, read-only snapshot of the whole world -- the
+        structured feed a JSON exporter or the future Godot renderer polls
+        (issue #90). See :mod:`text_adventure_games.world_state`. Pure: this
+        never mutates the game."""
+        from .world_state import world_state
+
+        return world_state(self)
+
+    def to_world_json(self) -> str:
+        """:meth:`to_world_state` rendered as a JSON string."""
+        return json.dumps(self.to_world_state().to_jsonable())
 
     @classmethod
     def default_actions(self):

@@ -608,7 +608,19 @@ class Craft(base.Action):
         return target.strip()
 
     def _recipes(self):
-        return list(getattr(self.game, "recipes", []) or [])
+        """The recipes the crafter may currently use: those known from the start,
+        plus any learned via ``Game.learn_recipe()`` (issue #135). Gating here
+        covers all three resolution paths, and an unknown recipe falls through to
+        the "you don't know how to make that" message, not the ingredient gap."""
+        return [
+            r for r in (getattr(self.game, "recipes", []) or []) if self._is_known(r)
+        ]
+
+    def _is_known(self, recipe) -> bool:
+        if getattr(recipe, "known", True):
+            return True
+        learned = getattr(self.game, "learned_recipes", None) or set()
+        return any(name in learned for name in recipe.names())
 
     def _held(self):
         """name -> item across the crafter's hands and open carried containers."""

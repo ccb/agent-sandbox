@@ -75,6 +75,7 @@ def write_simulation(
     base_personas_dir: str,
     sec_per_step: int = SEC_PER_STEP,
     memory_streams: dict | None = None,
+    plans: dict | None = None,
 ) -> str:
     """Materialize a replayable sim folder under ``storage_root/sim_code``.
 
@@ -87,7 +88,13 @@ def write_simulation(
     ``simulate(out_memories=...)``) is each agent's *full* memory stream; we write
     it to ``personas/<Name>/memory_stream.json`` so the State Details panel can
     show every memory an agent formed, not just the per-step retrieved set the
-    cards render. Returns the sim folder path.
+    cards render.
+
+    ``plans`` (``{persona_name: DailyPlan.to_primitive()}``, from
+    ``simulate(out_plans=...)``) is each agent's generated daily plan; we write it
+    to ``personas/<Name>/daily_plan.json`` so the plan a run used is an inspectable
+    artifact (``backend.compare_plans`` reads it back, no model calls). Returns the
+    sim folder path.
     """
     sim_dir = os.path.join(storage_root, sim_code)
     movement_dir = os.path.join(sim_dir, "movement")
@@ -150,6 +157,14 @@ def write_simulation(
                 os.path.join(persona_dir, "memory_stream.json"),
                 {"persona_name": name, "memories": ordered},
             )
+
+    # Each agent's generated daily plan (day outline / hourly / stops), so the
+    # plan a run used can be inspected without re-calling the model.
+    if plans:
+        for name, plan in plans.items():
+            persona_dir = os.path.join(personas_dir, name)
+            os.makedirs(persona_dir, exist_ok=True)
+            _dump(os.path.join(persona_dir, "daily_plan.json"), plan)
 
     return sim_dir
 

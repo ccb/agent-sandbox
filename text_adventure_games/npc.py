@@ -38,6 +38,7 @@ import re
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .memory import AgentMemory, render_memories
+from .reflection import DEFAULT_REFLECTION_THRESHOLD, reflect, should_reflect
 from .things.characters import Goal, GoalType
 
 # Lowercase label tokens used by _parse_decision. Built from ReActLabel so the
@@ -63,6 +64,45 @@ _DECISION_INSTRUCTION = (
     f"{ReActLabel.ACTION} <the command, e.g. 'attack player', 'go north', 'take sword'>\n"
     f"{ReActLabel.DURATION} <estimated in-game minutes this action takes, e.g. 5>"
 )
+
+
+# Dialogue seam (issue #86). A conversation asks the agent for one line at a
+# time; `done` lets it bow out gracefully after a closing line. The free-text
+# fallback uses a single labeled line so a chat()-only client still works.
+_DIALOGUE_INSTRUCTION = (
+    "You are in a conversation. Reply with the single line you say next, in "
+    "character. Keep it to a sentence or two. If the conversation has reached a "
+    "natural end, say a brief goodbye."
+)
+
+
+def build_speak_tool() -> dict:
+    """Normalized ``speak`` tool: one line of dialogue plus a wrap-up flag.
+
+    ``utterance`` is what the agent says next; an empty string means "say nothing
+    and end the conversation." ``done`` lets the agent signal this is its closing
+    line so the loop stops after delivering it (a goodbye still gets heard)."""
+    return {
+        "name": "speak",
+        "description": "Say the next line in the conversation, or end it.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "utterance": {
+                    "type": "string",
+                    "description": (
+                        "what you say next, in character; '' to say nothing and "
+                        "end the conversation"
+                    ),
+                },
+                "done": {
+                    "type": "boolean",
+                    "description": "true if this is your final line (wrapping up)",
+                },
+            },
+            "required": ["utterance"],
+        },
+    }
 
 
 def _parse_duration(text: str, max_duration: int = _MAX_DURATION) -> int | None:
@@ -178,6 +218,8 @@ class Agent:
         persona: str = "",
         goals: list[Goal] | None = None,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
     ):
         self.persona = persona
         self.goals: list[Goal] = list(goals) if goals else []
@@ -188,6 +230,13 @@ class Agent:
         # embedding_client (issue #76) upgrades retrieval relevance from keyword
         # overlap to semantic similarity; None keeps the deterministic default.
         self.memory = AgentMemory(owner="", embedding_client=embedding_client)
+        # Optional periodic-reflection backend (issue #84). With none (the
+        # default), the ReAct loop never synthesizes reflections and behavior is
+        # byte-identical to before; pass a Reflector (see ``reflection.py``) to
+        # have the agent turn recent memories into higher-level thoughts once
+        # accumulated importance crosses ``reflection_threshold``.
+        self.reflector = reflector
+        self.reflection_threshold = reflection_threshold
         # Why the agent chose its last command. Subclasses may set this in
         # decide(); the ReAct loop logs it next to the chosen action.
         self.last_reasoning: str | None = None
@@ -201,10 +250,26 @@ class Agent:
         # unconstrained (the enum is omitted). Only LLMAgent's structured path
         # reads it; ScriptedAgent ignores it.
         self.action_names: list[str] = []
+        # Dialogue seam (issue #86): set True by converse() when the agent's last
+        # line was a wrap-up, so the conversation loop can stop after it. Reset at
+        # the start of each converse() call.
+        self.last_dialogue_done: bool = False
 
     def decide(self, observation: str) -> str | None:
         """Return a single command string for *observation* (or ``None``)."""
         raise NotImplementedError("Agent subclasses must implement decide().")
+
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        """Return the next line this agent says to *partner_name* (issue #86).
+
+        ``observation`` carries who the agent is talking with and the dialogue so
+        far. Return the utterance, or ``None`` to say nothing and end the
+        conversation. The base implementation is silent (``None``) so an agent
+        with no dialogue backend -- or a non-conversational mock brain -- simply
+        never starts or sustains a conversation, leaving existing behavior
+        unchanged. Subclasses that can talk override this.
+        """
+        return None
 
 
 class LLMAgent(Agent):
@@ -238,9 +303,15 @@ class LLMAgent(Agent):
         temperature: float = 0.7,
         max_duration: int = _MAX_DURATION,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
     ):
         super().__init__(
-            persona=persona, goals=goals, embedding_client=embedding_client
+            persona=persona,
+            goals=goals,
+            embedding_client=embedding_client,
+            reflector=reflector,
+            reflection_threshold=reflection_threshold,
         )
         self.llm_client = llm_client
         self.max_tokens = max_tokens
@@ -291,6 +362,64 @@ class LLMAgent(Agent):
         self.last_reasoning = reasoning
         self.last_duration = duration
         return command
+
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        """Ask the model for the next line of dialogue (issue #86).
+
+        Prefers the structured ``speak`` tool (``utterance`` + ``done``) and falls
+        back to a single free-text line, mirroring how :meth:`decide` prefers
+        ``choose_action`` then free text. Returns the utterance, or ``None`` to
+        end the conversation; sets :attr:`last_dialogue_done` when the model
+        flags this as its closing line. A client that can't fill the tool *and*
+        returns nothing from chat (e.g. the non-conversational schedule mock)
+        yields ``None``, so no conversation happens -- which is what keeps the
+        default offline run silent and byte-identical."""
+        self.last_dialogue_done = False
+        spoken = self._converse_structured(observation)
+        if spoken is not None:
+            return spoken
+        return self._converse_freetext(observation)
+
+    def _converse_structured(self, observation: str) -> str | None:
+        """Tool-calling path: fill the ``speak`` schema. Returns ``None`` (so
+        converse() falls back to free text) when tool calling is unavailable or
+        the result carries no usable ``utterance`` -- the latter is also how a
+        mock brain answering with a non-dialogue schema stays silent."""
+        if not hasattr(self.llm_client, "call_tool"):
+            return None
+        messages = [
+            {"role": "system", "content": self._structured_system_message()},
+            {"role": "user", "content": observation},
+        ]
+        result = self.llm_client.call_tool(
+            messages,
+            build_speak_tool(),
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
+        if not isinstance(result, dict) or "utterance" not in result:
+            return None
+        self.last_dialogue_done = bool(result.get("done"))
+        return (result.get("utterance") or "").strip() or None
+
+    def _converse_freetext(self, observation: str) -> str | None:
+        """Free-text fallback: take the model's reply as the spoken line."""
+        if not hasattr(self.llm_client, "chat"):
+            return None
+        messages = [
+            {"role": Role.SYSTEM, "content": self._dialogue_system_message()},
+            {"role": Role.USER, "content": observation},
+        ]
+        response = self.llm_client.chat(
+            messages, max_tokens=self.max_tokens, temperature=self.temperature
+        )
+        return (response or "").strip() or None
+
+    def _dialogue_system_message(self) -> str:
+        # Free-text dialogue path: persona/goals plus the one-line instruction.
+        lines = self._base_system_lines()
+        lines.append(_DIALOGUE_INSTRUCTION)
+        return "\n".join(lines)
 
     def _format_goals(self) -> str | None:
         """Render incomplete goals grouped by tier, in SHORT/MEDIUM/LONG order.
@@ -356,6 +485,11 @@ class ScriptedAgent(Agent):
 
     Because it implements the same seam as :class:`LLMAgent`, the surrounding
     loop, tests, and games can't tell which backend is driving a character.
+
+    An optional ``converse_rule`` ``(observation, partner_name) -> str | None``
+    supplies dialogue lines (issue #86); with none, the agent stays silent
+    (inheriting :meth:`Agent.converse`'s ``None``), so a scripted NPC never talks
+    unless told how.
     """
 
     def __init__(
@@ -364,14 +498,28 @@ class ScriptedAgent(Agent):
         persona: str = "",
         goals: list[Goal] | None = None,
         embedding_client=None,
+        reflector=None,
+        reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
+        converse_rule=None,
     ):
         super().__init__(
-            persona=persona, goals=goals, embedding_client=embedding_client
+            persona=persona,
+            goals=goals,
+            embedding_client=embedding_client,
+            reflector=reflector,
+            reflection_threshold=reflection_threshold,
         )
         self.rule = rule
+        self.converse_rule = converse_rule
 
     def decide(self, observation: str) -> str | None:
         return self.rule(observation)
+
+    def converse(self, observation: str, partner_name: str) -> str | None:
+        self.last_dialogue_done = False
+        if self.converse_rule is None:
+            return None
+        return self.converse_rule(observation, partner_name)
 
 
 # ----------------------------------------------------------------------
@@ -566,7 +714,42 @@ def react_behavior(character, game, agent: Agent, max_retries: int = 1) -> bool:
     observation = format_observation_with_memories(base, relevant)
     # The full observation is traced too, but only shows at verbose verbosity.
     game.parser.agent_observation(character.name, observation)
-    return decide_and_route(character, game, agent, observation, max_retries)
+    acted = decide_and_route(character, game, agent, observation, max_retries)
+    # Periodic memory synthesis (issue #84): after acting, if enough importance
+    # has accrued, turn recent memories into higher-level thoughts. A no-op unless
+    # a reflector is wired onto the agent, so games without one are unchanged.
+    maybe_reflect(agent, game)
+    return acted
+
+
+def maybe_reflect(agent: Agent, game) -> list:
+    """Run a periodic reflection pass if one is due (issue #84).
+
+    Distinct from the failure-Reflect in :func:`decide_and_route`: that reacts to
+    one rejected command; this is the paper's *periodic memory synthesis* --
+    fired on a salience cadence (:func:`~text_adventure_games.reflection.
+    should_reflect`) and reasoning over the whole recent stream.
+
+    A no-op (returns ``[]``) unless the agent has a ``reflector`` and accumulated
+    importance has crossed its ``reflection_threshold``. Each thought it produces
+    is appended to the agent's own memory (by
+    :func:`~text_adventure_games.reflection.reflect`) and traced on the private
+    AGENT_REFLECTION channel, the same channel the failure-Reflect uses -- so a
+    reflection never leaks into ``command_history`` or another agent's prompt.
+    """
+    reflector = getattr(agent, "reflector", None)
+    memory = getattr(agent, "memory", None)
+    if reflector is None or memory is None:
+        return []
+    threshold = getattr(agent, "reflection_threshold", DEFAULT_REFLECTION_THRESHOLD)
+    if not should_reflect(memory, threshold):
+        return []
+    created = reflect(memory, reflector, getattr(game, "turn", 0))
+    trace = getattr(game.parser, "agent_reflection", None)
+    if trace is not None:
+        for record in created:
+            trace(memory.owner, record.text)
+    return created
 
 
 def route_first_workable(character, game, agent: Agent, commands) -> bool:
@@ -654,7 +837,11 @@ def _resolve_duration(agent: Agent, game) -> int | None:
 
 
 def make_react_behavior(
-    llm_client, max_retries: int | None = None, config=None, embedding_client=None
+    llm_client,
+    max_retries: int | None = None,
+    config=None,
+    embedding_client=None,
+    reflector=None,
 ):
     """Return a behavior that drives a character with an :class:`LLMAgent`.
 
@@ -673,6 +860,11 @@ def make_react_behavior(
             Defaults to ``AgentConfig()`` (the engine's historical values).
         embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
             memory relevance. ``None`` keeps keyword-overlap relevance.
+        reflector: Optional ``Reflector`` (issue #84) for periodic memory
+            synthesis. ``None`` (the default) keeps reflection off, so behavior is
+            byte-identical to before; pass one to have the agent form higher-level
+            thoughts once accumulated importance crosses
+            ``config.reflection_threshold``.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -691,6 +883,8 @@ def make_react_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflector=reflector,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):
@@ -711,6 +905,7 @@ def make_hybrid_behavior(
     max_retries: int | None = None,
     config=None,
     embedding_client=None,
+    reflector=None,
 ):
     """Return a behavior that tries the LLM agent, then falls back to scripted.
 
@@ -728,6 +923,8 @@ def make_hybrid_behavior(
             the agent's temperature, max_tokens, max_retries, and max_duration.
         embedding_client: Optional ``EmbeddingClient`` (issue #76) for semantic
             memory relevance. ``None`` keeps keyword-overlap relevance.
+        reflector: Optional ``Reflector`` (issue #84) for periodic memory
+            synthesis. ``None`` (the default) keeps reflection off.
 
     Returns:
         A callable ``(character, game) -> None`` for ``Character.set_behavior``.
@@ -742,6 +939,8 @@ def make_hybrid_behavior(
         temperature=config.temperature,
         max_duration=config.max_duration,
         embedding_client=embedding_client,
+        reflector=reflector,
+        reflection_threshold=config.reflection_threshold,
     )
 
     def behavior(character, game):

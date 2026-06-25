@@ -6,6 +6,8 @@ tools (present, not consumed); tag matching with count>1; location gating; and
 that a game without recipes is unaffected.
 """
 
+import pytest
+
 from text_adventure_games import games, things, Recipe, Ingredient
 from text_adventure_games.enums import ActionName
 from text_adventure_games.reporting import CaptureRenderer, Channel
@@ -195,3 +197,102 @@ def test_recipe_is_repeatable_with_fresh_ingredients():
     game.player.inventory.pop("bow")  # set the old one aside
     game.do_command("make bow")
     assert "bow" in player.inventory
+
+
+# --- known / recipe-book gating (issue #135) -------------------------------
+
+
+def _string_and_stick():
+    return [things.Item("string", "a string"), things.Item("stick", "a stick")]
+
+
+def test_default_recipes_stay_craftable_unchanged():
+    # `known` defaults True, so every existing recipe/game is unaffected.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=_string_and_stick())
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_unknown_recipe_is_not_craftable_even_with_ingredients():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("make bow")
+    assert "bow" not in player.inventory  # gated despite having the ingredients
+    assert _said(cap, "don't know how")  # not the ingredient gap
+
+
+def test_bare_verb_skips_unknown_recipes():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("craft")  # bare verb: first satisfiable *known* recipe
+    assert "bow" not in player.inventory
+    assert _said(cap, "nothing you can make")
+
+
+def test_learn_recipe_makes_it_craftable():
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.learn_recipe("bow")
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_learn_recipe_is_case_insensitive_and_matches_aliases():
+    recipe = Recipe(
+        name="bow",
+        aliases=["longbow"],
+        inputs=["string", "stick"],
+        output=_bow,
+        known=False,
+    )
+    game, player, cap = _game(recipes=[recipe], inv=_string_and_stick())
+    game.learn_recipe("LONGBOW")  # learned by alias, in a different case
+    game.do_command("make bow")
+    assert "bow" in player.inventory
+
+
+def test_known_recipe_missing_ingredients_still_shows_the_gap():
+    # The "don't know how" gate is only for UNKNOWN recipes; a known recipe you
+    # simply lack ingredients for still gives the helpful gap message.
+    game, player, cap = _game(recipes=[_bow_recipe()], inv=[])  # no ingredients
+    game.do_command("make bow")
+    assert "bow" not in player.inventory
+    assert _said(cap, "You need")  # ingredient gap, not "don't know how"
+
+
+def test_by_ingredients_resolution_is_also_gated():
+    # The gate is a single chokepoint, so resolution path #2 (by ingredients) is
+    # gated too -- not just by-name and bare-verb.
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("combine string and stick")
+    assert "bow" not in player.inventory
+    assert _said(cap, "don't know how")
+
+
+def test_learning_one_recipe_does_not_unlock_another():
+    raft = Recipe(
+        name="raft",
+        inputs=["log"],
+        output=lambda g: things.Item("raft", "a raft"),
+        known=False,
+    )
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False), raft], inv=_string_and_stick()
+    )
+    game.learn_recipe("raft")  # learn the OTHER recipe
+    game.do_command("make bow")
+    assert "bow" not in player.inventory  # the bow stays gated
+    assert _said(cap, "don't know how")
+
+
+def test_gated_recipe_without_a_name_is_rejected():
+    # A known=False recipe needs a name/alias to be learnable, so omitting one is
+    # a construction error -- fail fast for the author rather than silently
+    # producing a permanently un-craftable recipe.
+    with pytest.raises(ValueError):
+        Recipe(inputs=["string", "stick"], output=_bow, known=False)

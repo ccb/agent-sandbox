@@ -297,6 +297,75 @@ class CaptureRenderer(Renderer):
         return msgs
 
 
+def _json_safe(value):
+    """Coerce a value to something ``json.dumps`` can emit (an Enum to its
+    ``.value``, any other object to ``str``). Mirrors ``world_state._jsonable``
+    so the change feed and the snapshot are uniformly JSON-safe."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if hasattr(value, "value"):
+        return value.value
+    return str(value)
+
+
+class JSONRenderer(Renderer):
+    """Emit each :class:`Message` as a JSON-able record -- the structured change
+    feed a 2D renderer (e.g. Godot) subscribes to (issue #90).
+
+    This is the *delta* complement of the world-state snapshot
+    (:func:`text_adventure_games.world_state.world_state`): the snapshot says
+    "the world is X", this feed says "X just happened". Each record is
+    ``{"channel", "text", "actor", "turn", "phase", "meta"}`` with the channel as
+    its string value, so ``json.dumps`` emits it directly.
+
+    Defaults to :data:`VERBOSE`, so the feed carries every channel (including the
+    agent trace). Records buffer in :attr:`records` for polling -- :meth:`drain`
+    returns and clears them -- or pass a ``sink`` callable to receive each record
+    live (e.g. push it down a websocket).
+
+    Message records carry ``{channel, text, actor, turn, phase, meta}``; a turn
+    boundary is a leaner ``{channel: "turn_header", turn, time}`` event.
+    Consumers switch on ``channel``.
+    """
+
+    def __init__(self, level: str = VERBOSE, sink=None):
+        self.level = level
+        self.sink = sink
+        self.records: list[dict] = []
+
+    @staticmethod
+    def record(message: Message) -> dict:
+        """The JSON-able dict form of *message*."""
+        return {
+            "channel": message.channel.value,
+            "text": message.text,
+            "actor": message.actor,
+            "turn": message.turn,
+            "phase": message.phase,
+            "meta": {str(k): _json_safe(v) for k, v in (message.meta or {}).items()},
+        }
+
+    def _push(self, record: dict) -> None:
+        if self.sink is not None:
+            self.sink(record)
+        else:
+            self.records.append(record)
+
+    def emit(self, message: Message) -> None:
+        if self._visible(message):
+            self._push(self.record(message))
+
+    def turn_header(self, turn: int, time: str | None = None) -> None:
+        # A turn boundary is itself a feed event (so a renderer can group or
+        # animate by turn), distinguished by its "turn_header" channel.
+        self._push({"channel": "turn_header", "turn": turn, "time": time})
+
+    def drain(self) -> list[dict]:
+        recs = list(self.records)
+        self.records = []
+        return recs
+
+
 def _level_from_env(default: str = NORMAL) -> str:
     level = os.environ.get("OUTPUT_LEVEL", "").strip().lower()
     return level if level in (QUIET, NORMAL, VERBOSE) else default
