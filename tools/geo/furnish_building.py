@@ -52,8 +52,8 @@ FIRST_GID = 519
 SHEETS = [
     # name, image file (next to the .tmj), columns, rows
     ("interior_franuka", "interior_franuka.png", 32, 32),  # main furniture sheet
-    ("interior_school", "interior_school.png", 16, 16),    # desks / blackboards
-    ("interior_bath", "interior_bath.png", 16, 16),        # toilets / sinks
+    ("interior_school", "interior_school.png", 16, 16),  # desks / blackboards
+    ("interior_bath", "interior_bath.png", 16, 16),  # toilets / sinks
 ]
 
 # Resolve each sheet's firstgid + column count in declaration order.
@@ -79,27 +79,29 @@ def gid(sheet: str, col: int, row: int) -> int:
 F, S, B = "interior_franuka", "interior_school", "interior_bath"
 
 # Shell (single tiles, on the floor layer)
-FLOOR = gid(F, 6, 3)        # light wood floorboard
-WALL = gid(F, 24, 0)        # brick wall top
-WINDOW = gid(F, 29, 7)      # window (drawn over a wall on the furniture layer)
+FLOOR = gid(F, 6, 3)  # light wood floorboard
+WALL = gid(F, 24, 0)  # brick wall top
+WINDOW = gid(F, 29, 7)  # window (drawn over a wall on the furniture layer)
+
 
 # Furniture blocks (col,row) grids, top-left anchored, on the furniture layer
 def block(sheet, c0, r0, w, h):
     return [[(sheet, c0 + c, r0 + r) for c in range(w)] for r in range(h)]
 
-DESK = block(S, 2, 0, 1, 2)               # student desk + chair (1x2)
-TEACHER_DESK = block(S, 4, 2, 2, 2)       # long desk w/ papers + red book (2x2)
-BLACKBOARD = block(S, 13, 2, 3, 2)        # decorated blackboard (3x2)
+
+DESK = block(S, 2, 0, 1, 2)  # student desk + chair (1x2)
+TEACHER_DESK = block(S, 4, 2, 2, 2)  # long desk w/ papers + red book (2x2)
+BLACKBOARD = block(S, 13, 2, 3, 2)  # decorated blackboard (3x2)
 BLACKBOARD_BLANK = block(S, 13, 4, 3, 2)  # plain blackboard (3x2)
-BOOKSHELF = block(F, 7, 13, 1, 2)         # tall bookshelf with books (1x2)
-PLANT = block(F, 21, 13, 1, 1)            # potted palm
-OFFICE_CHAIR = block(F, 13, 19, 1, 1)     # wooden chair
-SOFA = block(F, 0, 21, 3, 2)              # long padded bench / sofa (3x2)
-SIDE_TABLE = block(F, 17, 13, 1, 1)       # small table / bench
-RUG = block(F, 3, 29, 3, 3)               # blue 3x3 rug (corners+edges+centre)
-TOILET = block(B, 6, 1, 1, 2)             # toilet (1x2)
-SINK = block(B, 11, 1, 1, 2)             # vanity sink (1x2)
-BATHMAT = block(B, 3, 2, 1, 1)            # round bath mat
+BOOKSHELF = block(F, 7, 13, 1, 2)  # tall bookshelf with books (1x2)
+PLANT = block(F, 21, 13, 1, 1)  # potted palm
+OFFICE_CHAIR = block(F, 13, 19, 1, 1)  # wooden chair
+SOFA = block(F, 0, 21, 3, 2)  # long padded bench / sofa (3x2)
+SIDE_TABLE = block(F, 17, 13, 1, 1)  # small table / bench
+RUG = block(F, 3, 29, 3, 3)  # blue 3x3 rug (corners+edges+centre)
+TOILET = block(B, 6, 1, 1, 2)  # toilet (1x2)
+SINK = block(B, 11, 1, 1, 2)  # vanity sink (1x2)
+BATHMAT = block(B, 3, 2, 1, 1)  # round bath mat
 
 
 # --------------------------------------------------------------------------- #
@@ -109,24 +111,45 @@ BATHMAT = block(B, 3, 2, 1, 1)            # round bath mat
 # wall onto the adjacent open floor. Anything not in a room stays open floor.
 # --------------------------------------------------------------------------- #
 ROOMS = [
-    dict(name="Classroom A", kind="classroom", rect=(9, 224, 20, 239),
-         door=("bottom", 2), board=BLACKBOARD),
-    dict(name="Classroom B", kind="classroom", rect=(48, 228, 64, 238),
-         door=("bottom", 2), board=BLACKBOARD_BLANK),
-    dict(name="Office", kind="office", rect=(10, 243, 24, 253),
-         door=("top", 2)),
-    dict(name="Restroom", kind="restroom", rect=(27, 245, 38, 253),
-         door=("top", 2)),
-    dict(name="Classroom C", kind="classroom", rect=(52, 243, 64, 253),
-         door=("top", 2), board=BLACKBOARD),
+    dict(
+        name="Classroom A",
+        kind="classroom",
+        rect=(9, 224, 20, 239),
+        door=("bottom", 2),
+        board=BLACKBOARD,
+    ),
+    dict(
+        name="Classroom B",
+        kind="classroom",
+        rect=(48, 228, 64, 238),
+        door=("bottom", 2),
+        board=BLACKBOARD_BLANK,
+    ),
+    dict(name="Office", kind="office", rect=(10, 243, 24, 253), door=("top", 2)),
+    dict(name="Restroom", kind="restroom", rect=(27, 245, 38, 253), door=("top", 2)),
+    dict(
+        name="Classroom C",
+        kind="classroom",
+        rect=(52, 243, 64, 253),
+        door=("top", 2),
+        board=BLACKBOARD,
+    ),
 ]
 # The irregular central space (between the wings and above the south wall) is
 # left open as a lobby/atrium and dressed with seating clusters + plants. Anchors
 # are open-floor tiles; anything that would land on a wall/door is skipped.
-SEATING_CLUSTERS = [(33, 235), (43, 246)]   # (centre x, centre y) of a rug
-RECEPTION = (40, 251)                        # info desk just inside the entrance
-ATRIUM_PLANTS = [(25, 233), (44, 233), (30, 240), (49, 241),
-                 (26, 251), (50, 251), (39, 240), (39, 248)]
+SEATING_CLUSTERS = [(33, 235), (43, 246)]  # (centre x, centre y) of a rug
+RECEPTION = (40, 251)  # info desk just inside the entrance
+ATRIUM_PLANTS = [
+    (25, 233),
+    (44, 233),
+    (30, 240),
+    (49, 241),
+    (26, 251),
+    (50, 251),
+    (39, 240),
+    (39, 248),
+]
 # Main entrance: a gap in the south perimeter wall, near the lobby.
 SOUTH_DOOR_X = (40, 41)
 
@@ -151,8 +174,18 @@ def load_matrix_sector(matrix_dir, sector_name, W, H):
     if sid is None:
         raise SystemExit(f"sector {sector_name!r} not found in {blocks}")
 
-    sector = open(os.path.join(matrix_dir, "maze", "sector_maze.csv")).read().strip().split(", ")
-    collision = open(os.path.join(matrix_dir, "maze", "collision_maze.csv")).read().strip().split(", ")
+    sector = (
+        open(os.path.join(matrix_dir, "maze", "sector_maze.csv"))
+        .read()
+        .strip()
+        .split(", ")
+    )
+    collision = (
+        open(os.path.join(matrix_dir, "maze", "collision_maze.csv"))
+        .read()
+        .strip()
+        .split(", ")
+    )
     if len(sector) != W * H:
         raise SystemExit(f"matrix has {len(sector)} cells but map is {W}x{H}={W*H}")
 
@@ -203,21 +236,21 @@ def furnish_room(furn, floor, W, roof, room):
         # Teacher desk just below the board.
         stamp(furn, floor, W, roof, bx, iy0 + 2, TEACHER_DESK)
         # Student desks: rows of 1x2 desks facing the board, with aisles.
-        for dy in range(iy0 + 5, iy1, 3):       # desk(2) + aisle(1)
-            for dx in range(ix0 + 1, ix1, 2):    # desk(1) + aisle(1)
+        for dy in range(iy0 + 5, iy1, 3):  # desk(2) + aisle(1)
+            for dx in range(ix0 + 1, ix1, 2):  # desk(1) + aisle(1)
                 stamp(furn, floor, W, roof, dx, dy, DESK)
 
     elif kind == "office":
         stamp(furn, floor, W, roof, ix0, iy0 + 1, TEACHER_DESK)
         stamp(furn, floor, W, roof, ix0, iy0 + 3, OFFICE_CHAIR)
-        for k in range(ix0 + 3, ix1, 2):         # bookshelves along the top wall
+        for k in range(ix0 + 3, ix1, 2):  # bookshelves along the top wall
             stamp(furn, floor, W, roof, k, iy0, BOOKSHELF)
         stamp(furn, floor, W, roof, ix1, iy1, PLANT)
 
     elif kind == "restroom":
-        for ty in range(iy0, iy1, 3):            # toilets down the left wall
+        for ty in range(iy0, iy1, 3):  # toilets down the left wall
             stamp(furn, floor, W, roof, ix0, ty, TOILET)
-        for sy in range(iy0, iy1, 3):            # sinks down the right wall
+        for sy in range(iy0, iy1, 3):  # sinks down the right wall
             stamp(furn, floor, W, roof, ix1, sy, SINK)
         stamp(furn, floor, W, roof, (ix0 + ix1) // 2, (iy0 + iy1) // 2, BATHMAT)
 
@@ -227,12 +260,12 @@ def furnish_atrium(furn, floor, W, roof):
     (rug + flanking sofas + side tables) and scattered plants."""
     rx, ry = RECEPTION
     stamp(furn, floor, W, roof, rx, ry, TEACHER_DESK)
-    for (cx, cy) in SEATING_CLUSTERS:
-        stamp(furn, floor, W, roof, cx - 1, cy - 1, RUG)        # 3x3 rug
-        stamp(furn, floor, W, roof, cx - 4, cy - 1, SOFA)       # sofa left of rug
-        stamp(furn, floor, W, roof, cx + 2, cy - 1, SOFA)       # sofa right of rug
+    for cx, cy in SEATING_CLUSTERS:
+        stamp(furn, floor, W, roof, cx - 1, cy - 1, RUG)  # 3x3 rug
+        stamp(furn, floor, W, roof, cx - 4, cy - 1, SOFA)  # sofa left of rug
+        stamp(furn, floor, W, roof, cx + 2, cy - 1, SOFA)  # sofa right of rug
         stamp(furn, floor, W, roof, cx - 1, cy - 3, SIDE_TABLE)
-    for (px, py) in ATRIUM_PLANTS:
+    for px, py in ATRIUM_PLANTS:
         stamp(furn, floor, W, roof, px, py, PLANT)
 
 
@@ -242,7 +275,7 @@ def furnish_atrium(furn, floor, W, roof):
 # --------------------------------------------------------------------------- #
 def paint_shell(floor, W, roof):
     # 1. Floor every footprint cell (lobby gets a slightly different board).
-    for (x, y) in roof:
+    for x, y in roof:
         floor[y * W + x] = FLOOR
 
     # 2. Room divider walls + interior floor.
@@ -256,8 +289,11 @@ def paint_shell(floor, W, roof):
                 floor[y * W + x] = WALL if on_border else FLOOR
 
     # 3. Footprint perimeter is always a wall (a roof cell touching the outside).
-    for (x, y) in roof:
-        if any((x + dx, y + dy) not in roof for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+    for x, y in roof:
+        if any(
+            (x + dx, y + dy) not in roof
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+        ):
             floor[y * W + x] = WALL
 
     # 4. Carve doorways onto adjacent open floor.
@@ -292,20 +328,26 @@ def add_windows(furn, floor, W, roof):
     """Set windows into EXTERIOR walls (a wall cell whose outside neighbour is
     off-footprint), spaced out and away from corners/doors. Windows draw on the
     furniture layer ON TOP of the wall (their surround is transparent)."""
+
     def outside(x, y):
         return (x, y) not in roof
 
-    for (x, y) in roof:
+    for x, y in roof:
         i = y * W + x
         if floor[i] != WALL:
             continue
-        n, s, e, w = outside(x, y - 1), outside(x, y + 1), outside(x + 1, y), outside(x - 1, y)
+        n, s, e, w = (
+            outside(x, y - 1),
+            outside(x, y + 1),
+            outside(x + 1, y),
+            outside(x - 1, y),
+        )
         corner = (n or s) and (e or w)
         if corner:
             continue
-        if (n or s) and x % 4 == 0 and x not in SOUTH_DOOR_X:   # horizontal wall
+        if (n or s) and x % 4 == 0 and x not in SOUTH_DOOR_X:  # horizontal wall
             furn[i] = WINDOW
-        elif (e or w) and y % 4 == 0:                            # vertical wall
+        elif (e or w) and y % 4 == 0:  # vertical wall
             furn[i] = WINDOW
 
 
@@ -313,20 +355,31 @@ def add_windows(furn, floor, W, roof):
 # .tmj surgery
 # --------------------------------------------------------------------------- #
 def strip_previous(tmj):
-    tmj["tilesets"] = [t for t in tmj["tilesets"]
-                       if not str(t.get("name", "")).startswith("interior_")]
-    tmj["layers"] = [L for L in tmj["layers"]
-                     if not str(L.get("name", "")).startswith("williams_")]
+    tmj["tilesets"] = [
+        t for t in tmj["tilesets"] if not str(t.get("name", "")).startswith("interior_")
+    ]
+    tmj["layers"] = [
+        L for L in tmj["layers"] if not str(L.get("name", "")).startswith("williams_")
+    ]
 
 
 def append_tilesets(tmj):
     for name, img, cols, rows in SHEETS:
-        tmj["tilesets"].append({
-            "firstgid": _FIRST[name], "name": name, "image": img,
-            "imagewidth": cols * 16, "imageheight": rows * 16,
-            "tilewidth": 16, "tileheight": 16, "columns": cols,
-            "tilecount": cols * rows, "margin": 0, "spacing": 0,
-        })
+        tmj["tilesets"].append(
+            {
+                "firstgid": _FIRST[name],
+                "name": name,
+                "image": img,
+                "imagewidth": cols * 16,
+                "imageheight": rows * 16,
+                "tilewidth": 16,
+                "tileheight": 16,
+                "columns": cols,
+                "tilecount": cols * rows,
+                "margin": 0,
+                "spacing": 0,
+            }
+        )
     tmj["tilesets"].sort(key=lambda t: t["firstgid"])
 
 
@@ -334,7 +387,7 @@ def clear_roof_on(tmj, layer_name, roof, W):
     for L in tmj["layers"]:
         if L.get("name") == layer_name and L.get("type") == "tilelayer":
             data = L["data"]
-            for (x, y) in roof:
+            for x, y in roof:
                 data[y * W + x] = 0
             return
 
@@ -343,9 +396,18 @@ def insert_interior_layers(tmj, W, H, floor, furn):
     next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
 
     def mk(name, data, lid):
-        return {"type": "tilelayer", "name": name, "id": lid,
-                "x": 0, "y": 0, "width": W, "height": H,
-                "opacity": 1, "visible": True, "data": data}
+        return {
+            "type": "tilelayer",
+            "name": name,
+            "id": lid,
+            "x": 0,
+            "y": 0,
+            "width": W,
+            "height": H,
+            "opacity": 1,
+            "visible": True,
+            "data": data,
+        }
 
     floor_layer = mk("williams_floor", floor, next_id)
     furn_layer = mk("williams_furniture", furn, next_id + 1)
@@ -362,23 +424,38 @@ def insert_interior_layers(tmj, W, H, floor, furn):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tmj", default=os.path.join(
-        repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"))
-    ap.add_argument("--matrix", default=os.path.join(
-        repo, "godot-generative-agents", "sim", "the_upenn", "matrix"))
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
     ap.add_argument("--sector", default="Williams Hall")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="report footprint + cell counts, do not write")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report footprint + cell counts, do not write",
+    )
     args = ap.parse_args()
 
     tmj = json.load(open(args.tmj))
     W, H = tmj["width"], tmj["height"]
     sid, roof, _apron = load_matrix_sector(args.matrix, args.sector, W, H)
-    xs = [x for x, _ in roof]; ys = [y for _, y in roof]
-    print(f"{args.sector}: sector #{sid}  roof={len(roof)} cells  "
-          f"bbox x{min(xs)}-{max(xs)} y{min(ys)}-{max(ys)}")
+    xs = [x for x, _ in roof]
+    ys = [y for _, y in roof]
+    print(
+        f"{args.sector}: sector #{sid}  roof={len(roof)} cells  "
+        f"bbox x{min(xs)}-{max(xs)} y{min(ys)}-{max(ys)}"
+    )
 
     floor = [0] * (W * H)
     furn = [0] * (W * H)
@@ -390,7 +467,9 @@ def main():
 
     painted_floor = sum(1 for v in floor if v)
     painted_furn = sum(1 for v in furn if v)
-    print(f"  floor layer: {painted_floor} cells   furniture layer: {painted_furn} cells")
+    print(
+        f"  floor layer: {painted_floor} cells   furniture layer: {painted_furn} cells"
+    )
     # sanity: nothing painted outside the footprint
     out = sum(1 for i, v in enumerate(floor) if v and (i % W, i // W) not in roof)
     print(f"  floor cells outside footprint: {out} (should be 0)")
