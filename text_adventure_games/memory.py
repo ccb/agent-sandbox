@@ -52,6 +52,14 @@ DEFAULT_DECAY = 0.95
 DEFAULT_MAX_RECORDS = 6
 DEFAULT_TOKEN_BUDGET = 800
 
+# --- Perception tuning (issue #80) -------------------------------------------
+# A "presence" memory ("I see X nearby") is mundane background -- it should
+# rarely outweigh an action outcome in retrieval, so it gets the lowest
+# importance. PRESENCE_CAP bounds how many presence records one perceive() call
+# may add, so a crowded plaza can't flood the stream in a single turn.
+PRESENCE_IMPORTANCE = 1.0
+PRESENCE_CAP = 12
+
 # A tiny stop-word list so keyword-overlap relevance keys on content words, not
 # glue words. Intentionally small and readable rather than exhaustive.
 _STOP_WORDS = frozenset(
@@ -252,6 +260,12 @@ class AgentMemory:
         self.embedding_client = embedding_client
         # How far into Game.events we've already perceived (issue #75 stage 3).
         self.last_seen_event_index = 0
+        # Which agents/objects were in view last turn (issue #80), keyed
+        # "char:<name>@<room>" / "item:<name>@<room>". We log a presence memory
+        # only when something *new* enters view, so standing next to the same
+        # neighbor every turn doesn't re-log it. Cleared keys drop out when a
+        # thing leaves view, so re-entering a room re-notices it.
+        self._perceived: set[str] = set()
         # Importance accrued since the last reflection; reflection (a later
         # stage) fires when this crosses a threshold, then resets it.
         self.importance_since_reflection = 0.0
@@ -345,26 +359,70 @@ class AgentMemory:
         """
         return self._add(MemoryKind.CHAT, text, turn, importance, partner, None, tags)
 
-    # --- perception: fold visible world events into memory ------------------
+    # --- perception: fold the visible world into memory ---------------------
+
+    def perceive(self, game, character) -> list[MemoryRecord]:
+        """Perceive the nearby world this turn and store it (issue #80).
+
+        The single perception entry point, shared by every turn mode (the
+        sequential ReAct loop, the simultaneous gather phase, and the Smallville
+        port). It folds two things into memory, both scoped to what *character*
+        can see -- the locations returned by ``game.perceivable_locations``:
+
+        1. **Events** -- new entries in ``game.events`` whose actor is in view or
+           whose payload names this agent (see :meth:`_ingest_events`).
+        2. **Presence** -- the other agents and objects standing in view, but
+           only those *newly* in view since last turn, so a stable neighbor
+           isn't re-logged every turn (see :meth:`_perceive_presence`).
+
+        Presence is a vision-radius feature: with ``vision_r == 0`` (the default)
+        a character sees only its own room and we record **no** presence, so the
+        memory stream is byte-identical to before #80. Widen ``vision_r`` and the
+        agent starts noticing who and what is around it.
+
+        Reads the game/character by duck typing only (plus the optional
+        ``game.perceivable_locations`` seam) -- no engine import, no mutation.
+        """
+        locations = self._perceivable_locations(game, character)
+        added = self._ingest_events(game, character, locations)
+        if getattr(character, "vision_r", 0) > 0:
+            added.extend(self._perceive_presence(character, locations, game))
+        return added
+
+    @staticmethod
+    def _perceivable_locations(game, character) -> list:
+        """The rooms *character* can see into, via the engine's visibility seam.
+
+        Falls back to just the current room when the game predates the seam, so
+        this module keeps working against any duck-typed game object."""
+        if hasattr(game, "perceivable_locations"):
+            return game.perceivable_locations(character)
+        return [character.location]
 
     def ingest_events(self, game, character) -> list[MemoryRecord]:
-        """Perceive new ``game.events`` since last turn, storing visible ones.
+        """Perceive new ``game.events`` in the *current room* and store them.
+
+        The radius-0 case of :meth:`perceive`, kept as a named method for the
+        callers and tests that only want event perception. Equivalent to
+        ``perceive`` for a character with ``vision_r == 0`` and no presence.
+        """
+        return self._ingest_events(game, character, [character.location])
+
+    def _ingest_events(self, game, character, locations) -> list[MemoryRecord]:
+        """Walk new ``game.events`` and store the ones visible from *locations*.
 
         Walks the event log from :attr:`last_seen_event_index` forward, keeps the
-        events this character could plausibly perceive (see :meth:`_perceivable`),
-        turns each into one short sentence, and stores it as an observation. The
-        index then advances past everything examined, so a second call with no
-        new events is a no-op (perception is idempotent within a turn).
-
-        Reads ``game.events`` / ``game.turn`` / ``game.characters`` and
-        ``character.location`` by duck typing only -- no engine import, no
-        mutation of the game.
+        events this character could perceive (see :meth:`_perceivable_in`), turns
+        each into one short sentence, and stores it as an observation. The index
+        then advances past everything examined, so a second call with no new
+        events is a no-op (perception is idempotent within a turn). The single
+        index advance lives here, so no caller can double-count.
         """
         new_events = game.events[self.last_seen_event_index :]
         added: list[MemoryRecord] = []
         for offset, event in enumerate(new_events):
             index = self.last_seen_event_index + offset
-            if not self._perceivable(event, game, character):
+            if not self._perceivable_in(event, game, character, locations):
                 continue
             added.append(
                 self.add_observation(
@@ -378,19 +436,21 @@ class AgentMemory:
         self.last_seen_event_index = len(game.events)
         return added
 
-    def _perceivable(self, event, game, character) -> bool:
-        """Conservative visibility rule (docs/design/agent-memory.md §5.A).
+    def _perceivable_in(self, event, game, character, locations) -> bool:
+        """Visibility rule (docs/design/agent-memory.md §5.A), scoped to a set of
+        rooms. The agent perceives an event when:
 
-        The agent perceives an event when:
-
-        * an actor in its *current* location did it (co-located action), or
+        * its actor is currently in one of the *locations* it can see, or
         * the event's payload names the agent (it was about them).
+
+        With ``locations == [character.location]`` (the radius-0 default) this is
+        byte-identical to the original co-located rule; a wider vision radius
+        simply passes more rooms in.
 
         The agent's *own* actions are deliberately skipped here -- they're
         recorded more richly as success/failure outcomes by the ReAct loop
         (stage 4), so ingesting them too would just duplicate and double-count
-        importance. This stays intentionally simple; when a formal ``View``
-        object lands it should replace this ad hoc check.
+        importance.
         """
         actor = event.actor
         if actor == self.owner:  # own action -> recorded as an outcome instead
@@ -399,12 +459,55 @@ class AgentMemory:
             return True
         if isinstance(actor, str):
             other = game.characters.get(actor)
-            if (
-                other is not None
-                and getattr(other, "location", None) is character.location
-            ):
+            if other is not None and getattr(other, "location", None) in locations:
                 return True
         return False
+
+    def _perceive_presence(self, character, locations, game) -> list[MemoryRecord]:
+        """Notice the agents and objects standing in view, storing the new ones.
+
+        Builds the set of things currently in view (keyed by kind, name, and
+        room, so the same name in two rooms is two distinct sightings), then
+        stores a low-importance observation for each key not seen last turn.
+        ``self._perceived`` is then replaced with the current set, so a thing
+        that leaves view drops out and is re-noticed if it returns. Capped at
+        :data:`PRESENCE_CAP` records per call so a crowd can't flood the stream.
+        """
+        turn = getattr(game, "turn", 0)
+        current: dict[str, str] = {}  # key -> sentence
+        for loc in locations:
+            room = getattr(loc, "name", "")
+            for name in getattr(loc, "characters", {}):
+                if name == self.owner:
+                    continue  # the agent doesn't "see itself" nearby
+                current[f"char:{name}@{room}"] = f"I see {name} nearby."
+            for name in getattr(loc, "items", {}):
+                current[f"item:{name}@{room}"] = f"I see {name} nearby."
+
+        fresh = [key for key in current if key not in self._perceived]
+        added: list[MemoryRecord] = []
+        for key in fresh[:PRESENCE_CAP]:
+            added.append(
+                self.add_observation(
+                    current[key],
+                    turn=turn,
+                    importance=PRESENCE_IMPORTANCE,
+                    tags={"presence"},
+                )
+            )
+        if len(fresh) > PRESENCE_CAP:
+            added.append(
+                self.add_observation(
+                    "There are several others nearby.",
+                    turn=turn,
+                    importance=PRESENCE_IMPORTANCE,
+                    tags={"presence"},
+                )
+            )
+        # Replace (don't union): things no longer in view drop out, so leaving
+        # and re-entering a room re-notices it, and the set stays bounded.
+        self._perceived = set(current)
+        return added
 
     @staticmethod
     def _event_to_sentence(event) -> str:
@@ -524,6 +627,7 @@ class AgentMemory:
         return {
             "owner": self.owner,
             "last_seen_event_index": self.last_seen_event_index,
+            "perceived": sorted(self._perceived),
             "importance_since_reflection": self.importance_since_reflection,
             "next_id": self._next_id,
             "records": [r.to_primitive() for r in self.records],
@@ -537,6 +641,9 @@ class AgentMemory:
             MemoryRecord.from_primitive(r) for r in data.get("records", [])
         ]
         instance.last_seen_event_index = data.get("last_seen_event_index", 0)
+        # .get default keeps pre-#80 save files loadable (no presence state ->
+        # an empty set means the first perceive after load re-notices the room).
+        instance._perceived = set(data.get("perceived", []))
         instance.importance_since_reflection = data.get(
             "importance_since_reflection", 0.0
         )
