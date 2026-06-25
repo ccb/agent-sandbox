@@ -60,7 +60,7 @@ def main() -> int:
         world_map,
         args.steps,
         personas=personas,
-        build_world_fn=lambda: build_world(personas, locations),
+        build_world_fn=lambda wm: build_world(wm, personas, locations),
     )
 
     # Compact, Godot-friendly replay: meta + one entry per step per persona.
