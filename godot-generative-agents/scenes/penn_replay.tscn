@@ -14,10 +14,10 @@ script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
 ; The map is the 34th–36th x Spruce–Walnut core (5632x7040 px at 1 m/tile) — a
-; PORTRAIT map in a 1920x1080 landscape window. zoom 0.341 cover-fits: the map
-; fills the window edge-to-edge with NO grey margins, at the cost of cropping the
-; north/south ends (Walnut & Spruce edges). Centred on College Green / the Locust
-; Walk crossing so the heart of campus and the agents stay in the visible band.
+; PORTRAIT map in a 1920x1080 landscape window. zoom 0.153 contain-fits: the FULL
+; map is visible (the height fills the window: 7040 * 0.153 ~= 1077 px), at the
+; cost of grey margins on the left/right (a portrait map can't fill a landscape
+; window without cropping). Centred on the true map centre so it's symmetric.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(2810, 3300)
-zoom = Vector2(0.341, 0.341)
+position = Vector2(2816, 3520)
+zoom = Vector2(0.153, 0.153)
