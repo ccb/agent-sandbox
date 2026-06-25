@@ -84,7 +84,9 @@ def test_real_http_round_trip():
     _, port = server.server_address
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/world_state") as resp:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/world_state", timeout=5
+        ) as resp:
             data = json.loads(resp.read())
         assert data["schema_version"] == "1.0"
 
@@ -94,9 +96,47 @@ def test_real_http_round_trip():
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             result = json.loads(resp.read())
         assert any(e["channel"] == "narration" for e in result["events"])
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_non_string_command_is_400_and_does_not_run():
+    game = _tiny()
+    body = json.dumps({"command": ["go", "north"]}).encode()
+    status, payload = handle_request(game, "POST", "/command", body)
+    assert status == 400
+    assert "error" in payload
+    assert game.turn == 0  # not coerced into a real command
+
+
+def test_blocked_command_returns_200_with_a_blocked_event():
+    # A command the ENGINE rejects (failed precondition) is still a successful
+    # request: 200, with the rejection surfaced as a BLOCKED event. (A 4xx means
+    # a bad *request*, not a rejected *command* -- the renderer must tell them
+    # apart.)
+    status, payload = handle_request(
+        _tiny(), "POST", "/command", json.dumps({"command": "go south"}).encode()
+    )
+    assert status == 200
+    assert any(e["channel"] == "blocked" for e in payload["events"])
+    assert payload["game_over"] is False
+
+
+def test_engine_exception_returns_500_and_restores_renderer():
+    game = _tiny()
+    original = game.parser.renderer
+
+    def boom(_command):
+        raise RuntimeError("kaboom")
+
+    game.do_command = boom
+    status, payload = handle_request(
+        game, "POST", "/command", json.dumps({"command": "x"}).encode()
+    )
+    assert status == 500
+    assert "error" in payload
+    assert game.parser.renderer is original  # restored despite the engine error

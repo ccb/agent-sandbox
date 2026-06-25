@@ -24,6 +24,7 @@ without binding a socket.
 from __future__ import annotations
 
 import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .reporting import JSONRenderer
@@ -49,9 +50,10 @@ def handle_request(game, method: str, path: str, body):
             return 400, {"error": "invalid JSON body"}
         if not isinstance(data, dict):
             return 400, {"error": "body must be a JSON object"}
-        command = str(data.get("command", "")).strip()
-        if not command:
-            return 400, {"error": "missing 'command'"}
+        command = data.get("command")
+        if not isinstance(command, str) or not command.strip():
+            return 400, {"error": "'command' must be a non-empty string"}
+        command = command.strip()
 
         # Capture this command's output as a change feed, restoring whatever
         # renderer was in place so the server never disturbs the game's config.
@@ -60,6 +62,8 @@ def handle_request(game, method: str, path: str, body):
         game.parser.set_renderer(feed)
         try:
             game.do_command(command)
+        except Exception as exc:  # an engine bug shouldn't drop the connection
+            return 500, {"error": f"engine error: {exc}"}
         finally:
             game.parser.set_renderer(previous)
         return 200, {
@@ -83,15 +87,26 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:
-        status, payload = handle_request(self.server.game, "GET", self.path, None)
+    def _dispatch(self, method: str, body) -> None:
+        # Serialize all game access -- the server is threaded and do_command
+        # mutates shared state and swaps the renderer -- and turn any unexpected
+        # error into a clean 500 instead of a dropped connection.
+        try:
+            with self.server.lock:
+                status, payload = handle_request(
+                    self.server.game, method, self.path, body
+                )
+        except Exception as exc:
+            status, payload = 500, {"error": f"server error: {exc}"}
         self._send(status, payload)
+
+    def do_GET(self) -> None:
+        self._dispatch("GET", None)
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b""
-        status, payload = handle_request(self.server.game, "POST", self.path, body)
-        self._send(status, payload)
+        self._dispatch("POST", body)
 
     def log_message(self, *args) -> None:  # keep pytest / CI output quiet
         pass
@@ -104,6 +119,7 @@ def make_server(game, host: str = "127.0.0.1", port: int = 8080):
     ``server.server_address``. Call ``server.serve_forever()`` to run it."""
     server = ThreadingHTTPServer((host, port), _Handler)
     server.game = game
+    server.lock = threading.Lock()  # serialize game access across request threads
     return server
 
 
