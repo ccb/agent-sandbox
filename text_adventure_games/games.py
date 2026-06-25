@@ -676,6 +676,19 @@ class Game:
         }
         return data
 
+    def to_world_state(self):
+        """A typed, deterministic, read-only snapshot of the whole world -- the
+        structured feed a JSON exporter or the future Godot renderer polls
+        (issue #90). See :mod:`text_adventure_games.world_state`. Pure: this
+        never mutates the game."""
+        from .world_state import world_state
+
+        return world_state(self)
+
+    def to_world_json(self) -> str:
+        """:meth:`to_world_state` rendered as a JSON string."""
+        return json.dumps(self.to_world_state().to_jsonable())
+
     @classmethod
     def default_actions(self):
         """

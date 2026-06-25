@@ -20,6 +20,7 @@ from .config import (
 )
 from .prompts import Prompt
 from .crafting import Recipe, Ingredient
+from .world_state import WorldState, world_state
 
 __all__ = [
     "ActionName",
@@ -39,4 +40,6 @@ __all__ = [
     "Prompt",
     "Recipe",
     "Ingredient",
+    "WorldState",
+    "world_state",
 ]
