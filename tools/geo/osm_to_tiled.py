@@ -125,11 +125,17 @@ TILE_PX = 16  # pixels per tile in the tileset image
 
 ASSETS_DIR = os.path.join(HERE, "assets")
 URBAN_SHEET = "tilemap_packed.png"  # Kenney RPG Urban Pack, CC0 (see assets/kenney)
+# Each terrain on the Kenney sheet is an autotile block (centre fill + edge/corner
+# variants). We tile a whole layer with ONE tile, so we MUST use the clean CENTRE
+# of each block — the edge/corner variants carry a transition mark (a tan patch, a
+# lavender corner) that, repeated every cell, shows up as a grid of specks. (e.g.
+# the old grass idx 6 had a tan blob in its bottom-left corner; path idx 87 a
+# lavender one.)
 URBAN_TILES = {
     "ground": 38,  # light-grey concrete (the base surface)
-    "grass": 6,  # green lawn / parks
+    "grass": 28,  # green lawn / parks (block centre — no edge mark)
     "water": 61,  # water
-    "path": 87,  # tan paving — pedestrian ways (Locust Walk)
+    "path": 109,  # tan paving — pedestrian ways (Locust Walk); block centre
     "road": 461,  # dark asphalt — vehicle roads
     "building": 18,  # red brick — building footprints
 }
