@@ -67,10 +67,27 @@ func _build_tile_set(tex: Texture2D, tile_size: Vector2i, cols: int, count: int)
 
 
 func _paint(tmj: Dictionary, cols: int, first: int) -> void:
+	# Paint each .tmj tile layer into its OWN stacked TileMapLayer rather than
+	# flattening them all onto this one node. A TileMapLayer holds a single tile per
+	# cell, so flattening let an upper layer overwrite the cell beneath it — and
+	# because the tree tiles are transparent around the foliage, a flattened tree
+	# erased the ground it stood on and showed the window's grey clear colour
+	# instead (the "grey box behind each tree"). Stacked layers composite, so a
+	# tree's transparent pixels now reveal the ground tile below.
+	#
+	# This node stays the bottom (ground) layer so camera_controls.gd — which finds
+	# the map by the sibling that `is TileMapLayer` and reads its used_rect — keeps
+	# working unchanged; every layer above ground becomes a child of this node.
 	var w := int(tmj["width"])
+	var root_used := false
 	for layer in tmj.get("layers", []):
 		if layer.get("type", "") != "tilelayer":
 			continue
+		var target: TileMapLayer = self
+		if root_used:
+			target = _add_layer(str(layer.get("name", "layer")))
+		else:
+			root_used = true
 		var data: Array = layer.get("data", [])
 		var painted := 0
 		for i in data.size():
@@ -78,6 +95,18 @@ func _paint(tmj: Dictionary, cols: int, first: int) -> void:
 			if gid == 0:
 				continue
 			var ti := gid - first  # tile index within the sheet
-			set_cell(Vector2i(i % w, i / w), SOURCE_ID, Vector2i(ti % cols, ti / cols))
+			target.set_cell(Vector2i(i % w, i / w), SOURCE_ID, Vector2i(ti % cols, ti / cols))
 			painted += 1
 		print("tiled_map: layer %-9s painted %d cells" % [layer.get("name", "?"), painted])
+
+
+func _add_layer(layer_name: String) -> TileMapLayer:
+	# A stacked child layer sharing this node's tileset and pixel-art settings.
+	# Children inherit our transform (so they sit in the same world space) and draw
+	# on top in creation order, which preserves the .tmj's bottom-to-top paint order.
+	var child := TileMapLayer.new()
+	child.name = layer_name
+	child.tile_set = tile_set
+	child.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(child)
+	return child
