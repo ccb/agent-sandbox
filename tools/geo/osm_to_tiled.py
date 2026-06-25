@@ -155,60 +155,32 @@ ROOF_TILES = [72, 74, 75, 180, 182, 183]
 MAJOR_ROADS = {"motorway", "trunk", "primary", "secondary"}
 DASH_H, DASH_V = 433, 462
 
-# Trees, as small MULTI-TILE stamps. A single 16px cell is too small to read as a
-# tree (it just looks like a green cell), so every tree is a little multi-tile
-# clump of foliage — but a *small, discrete* one. We deliberately do NOT stamp big
-# 5×4 / 7×5 "stands" any more: those just tiled the same nine canopy slices into a
-# flat rectangular mass that read as one continuous green-grey blob, not as trees.
+# Trees, as small self-contained sprites. Earlier we tiled the Kenney "grove" tiles
+# (cols 19–21) into 2×2/3×3 clumps, but those tiles are designed to TILE — their
+# foliage runs right to the tile edges so neighbouring tiles connect seamlessly — so
+# a clump's OUTER edge looked chopped wherever it met plain grass (a flat-topped or
+# flat-sided canopy against the empty cell beside it).
 #
-# The Kenney sheet stacks two coherent multi-tile trees in the same columns: a
-# green tree at rows 8–10 and its autumn (orange) twin directly below at rows 11–13
-# (cols 19–21; indices verified against tilemap_packed.png — cols 22+ are
-# characters). Each is a tileable 3×3 patch: a top / interior / trunk-base row and a
-# left-edge / interior / right-edge column, so `make_stand(w, h, palette)` can stamp
-# a clump of any small size from one palette — corners at the corners, edges along
-# the edges, the interior tile repeated to fill — anchored at the base-centre cell
-# (the trunk row) with the crown rising above it. Entries are
-# (col_offset, row_offset, 0-based sheet index); a Tiled GID is idx + 1.
+# Instead we use the sheet's standalone trees, whose canopy rounds off INSIDE the
+# tile (transparent margins on the outer edges), so a tree never looks cut off
+# against the cell beside it. The nicest is a tall tree — a rounded crown tile over
+# a body-and-trunk tile (1 wide, 2 tall). The sheet has a green one at col 16,
+# rows 8–9, and its autumn (orange) twin three rows below at rows 11–12; plus little
+# one-tile trees (rounded on all four sides) for tight spots and variety. Stamp
+# entries are (col_offset, row_offset, 0-based sheet index), anchored at the base
+# cell (0, 0) with the crown rising above it; a Tiled GID is idx + 1.
 
-# Canopy tiles by role (0-based sheet indices): (top, mid, trunk-base), and within
-# each row (left edge, interior, right edge). The autumn palette is the green one
-# shifted down three rows on the sheet.
-_GREEN = ((235, 236, 237), (262, 263, 264), (289, 290, 291))
-_AUTUMN = ((316, 317, 318), (343, 344, 345), (370, 371, 372))
-
-
-def make_stand(w: int, h: int, palette: tuple = _GREEN) -> list:
-    """A w×h leafy tree composed from one palette's edge/interior canopy tiles.
-
-    The top/base rows cap the clump, the middle row fills the height, and within
-    each row the left/right tiles edge it while the centre tile fills the width.
-    Anchored at the base-centre cell, so the trunks sit at the anchor row and the
-    crown rises above it. `make_stand(3, 3)` is the standard tree; 2×2 is a compact
-    one for tighter spots.
-    """
-    top, mid, base = palette
-    cx = w // 2
-    cells = []
-    for ry in range(h):
-        row = top if ry == 0 else base if ry == h - 1 else mid
-        for rx in range(w):
-            idx = row[0] if rx == 0 else row[2] if rx == w - 1 else row[1]
-            cells.append((rx - cx, ry - (h - 1), idx))
-    return cells
-
-
-# The discrete trees we plant: a standard 3×3 and a compact 2×2, each in green and
-# autumn. Placed with space between them (see stamp_trees) so each reads as its own
-# tree rather than merging into a mass.
-TREE_GREEN = make_stand(3, 3, _GREEN)
-TREE_GREEN_SMALL = make_stand(2, 2, _GREEN)
-TREE_AUTUMN = make_stand(3, 3, _AUTUMN)
-TREE_AUTUMN_SMALL = make_stand(2, 2, _AUTUMN)
+# (rounded crown, body+trunk) for the tall tree, green and its autumn twin.
+TREE_GREEN = [(0, -1, 232), (0, 0, 259)]
+TREE_AUTUMN = [(0, -1, 313), (0, 0, 340)]
+# One-tile trees, rounded on every side, for tight spots where the tall tree won't
+# fit and for a little size variety.
+TREE_GREEN_SMALL = [(0, 0, 238)]
+TREE_AUTUMN_SMALL = [(0, 0, 319)]
 
 # Every tree-sprite index, for the preview legend (so previews show foliage colour
 # instead of undefined-GID black).
-TREE_PREVIEW_IDS = {idx for pal in (_GREEN, _AUTUMN) for row in pal for idx in row}
+TREE_PREVIEW_IDS = {232, 259, 313, 340, 238, 319}
 
 # Bottom-to-top paint order. "trees" only exists in the urban theme (rasterise
 # adds that layer when variety is on); filtering by presence keeps placeholder
@@ -656,9 +628,9 @@ def _plant(trees: list, occupied, base_c: int, base_r: int, stamps: list) -> boo
 
 
 def _tree_choice(c: int, r: int) -> list:
-    """A discrete tree for cell (c, r): the standard 3×3 clump, falling back to the
-    compact 2×2 where the full one won't fit. ~1 in 4 wears autumn colour, giving
-    the campus some variety without looking like autumn everywhere."""
+    """A discrete tree for cell (c, r): the tall tree, falling back to the one-tile
+    tree where the 2-tall one won't fit. ~1 in 4 wears autumn colour, giving the
+    campus some variety without looking like autumn everywhere."""
     if _tree_hash(c, r) % 4 == 0:
         return [TREE_AUTUMN, TREE_AUTUMN_SMALL]
     return [TREE_GREEN, TREE_GREEN_SMALL]
@@ -674,7 +646,7 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
       2. footway-lining — a tree set back beside the walks at intervals, so Locust
          Walk and the campus paths become tree-lined avenues;
       3. a sparse scatter across the lawns.
-    Where even the compact 2×2 won't fit we plant nothing rather than drop a speck.
+    Where even the one-tile tree won't fit we plant nothing rather than drop a speck.
     """
     cols, rows = proj.cols, proj.rows
     trees = layers["trees"]
@@ -701,7 +673,7 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
     #    of distinct trees; the offset clears the (wider) path before reaching for
     #    grass, and the side directions are tried in a per-cell order so trees fall
     #    on whichever side has room, naturally lining both sides of a path.
-    spacing, offset = 8, 4
+    spacing, offset = 6, 3
     for r in range(rows):
         for c in range(cols):
             if not layers["paths"][r][c] or (c + r) % spacing:
@@ -717,7 +689,7 @@ def stamp_trees(layers: dict, osm: dict, proj: Projector) -> None:
     # 3. A sparse scatter across the lawns. A hash gate (not a fixed stride) gives
     #    an even, natural spread instead of trees marching down diagonal lines; the
     #    footprints + collisions thin it further.
-    density = 22  # ~1 in N lawn cells attempts a tree
+    density = 24  # ~1 in N lawn cells attempts a tree
     for r in range(rows):
         for c in range(cols):
             if layers["landuse"][r][c] and _tree_hash(c, r) % density == 0:
