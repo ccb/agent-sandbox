@@ -11,7 +11,9 @@ extends Camera2D
 ##          — zooming OUT stops at the default view, so the whole block is the
 ##          most you can ever see; you only zoom IN from there.
 ##   Pan  : drag with the left or middle mouse button, a two-finger trackpad
-##          swipe, or the arrow keys / WASD
+##          swipe, or the arrow keys / WASD — but only once you've zoomed IN. At
+##          the default (furthest-out) view the whole block already fits, so the
+##          map stays locked to its starting position and panning does nothing.
 ##   Reset: press R (or Home) to glide back to the default view
 ##
 ## Attach it to any Camera2D — it adapts to that camera's own default, so every
@@ -55,15 +57,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			event.button_index == MOUSE_BUTTON_LEFT
 			or event.button_index == MOUSE_BUTTON_MIDDLE):
 		_dragging = event.pressed
-	elif event is InputEventMouseMotion and _dragging:
-		# Move the world with the cursor: shift the camera opposite the drag,
-		# converting screen pixels to world units through the current zoom.
+	elif event is InputEventMouseMotion and _dragging and _is_zoomed_in():
+		# Move the world with the cursor (only when zoomed in — at the default
+		# view the map is locked). Shift the camera opposite the drag, converting
+		# screen pixels to world units through the current zoom.
 		global_position -= event.relative / zoom
 
 	# Trackpad gestures (macOS): pinch to zoom, two-finger swipe to pan.
 	elif event is InputEventMagnifyGesture:
 		_zoom_at_mouse(event.factor)
-	elif event is InputEventPanGesture:
+	elif event is InputEventPanGesture and _is_zoomed_in():
 		global_position += event.delta * gesture_pan_speed / zoom
 
 	# Keyboard: +/- zoom (about the centre), R / Home reset.
@@ -89,30 +92,43 @@ func _process(delta: float) -> void:
 		dir.y -= 1.0
 	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
 		dir.y += 1.0
-	if dir != Vector2.ZERO:
+	if dir != Vector2.ZERO and _is_zoomed_in():
 		global_position += dir.normalized() * key_pan_speed * delta / zoom.x
 
 
 func _zoom_at_mouse(factor: float) -> void:
-	# Zoom while keeping the world point under the cursor pinned in place.
 	var world_before := get_global_mouse_position()
 	var new_zoom := _clamp_zoom(zoom * factor)
 	if new_zoom == zoom:
 		return
 	var ratio := zoom.x / new_zoom.x
 	zoom = new_zoom
-	global_position = world_before - (world_before - global_position) * ratio
+	if _is_zoomed_in():
+		# Keep the world point under the cursor pinned in place as we zoom in.
+		global_position = world_before - (world_before - global_position) * ratio
+	else:
+		# Zoomed all the way back out to the default — lock to the home position.
+		global_position = _home_position
 
 
 func _zoom_keep_centre(factor: float) -> void:
 	# Zoom about the screen centre (the camera position doesn't move).
 	zoom = _clamp_zoom(zoom * factor)
+	if not _is_zoomed_in():
+		# Back at the default view — lock to the home position.
+		global_position = _home_position
 
 
 func _clamp_zoom(z: Vector2) -> Vector2:
 	# Floor at the default view (_home_zoom) so you can't zoom out past the whole
 	# block; ceiling at max_zoom for the closest zoom-in.
 	return z.clamp(_home_zoom, Vector2(max_zoom, max_zoom))
+
+
+func _is_zoomed_in() -> bool:
+	# Panning is only allowed when zoomed in past the default (furthest-out) view;
+	# at the default the map stays locked to its home position.
+	return zoom.x > _home_zoom.x + 0.0001
 
 
 func _reset_view() -> void:
