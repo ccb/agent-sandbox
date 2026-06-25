@@ -62,18 +62,26 @@ AREAS = {
     },
     # A small prototyping subset: 34th–36th St between Spruce & Walnut — the heart
     # of campus (College Green, College Hall, Van Pelt, the Locust Walk core). The
-    # bbox edges are the real street centrelines from the campus OSM data (36th St
-    # is at lon -75.19482, 34th at -75.19231), each pushed out ~0.0005° so the
-    # bounding street itself is contained; the Philadelphia grid is rotated ~8°, so
-    # this axis-aligned box is the tight rectangle that holds all four streets.
+    # bbox below is a generous *fetch* window (pushed ~0.0005° past every street so
+    # Overpass returns the full bounding streets plus a margin); `crop_to_streets`
+    # then trims the OUTPUT grid back to exactly the rectangle those four street
+    # centrelines bound, so nothing past the streets is drawn. (The Philadelphia
+    # grid is rotated ~8°, so a lat/lon box can't hug the tilted streets by itself
+    # — but the crop can, because after the rotation the streets are axis-aligned.)
     "core": {
         "stem": "upenn_core",
         "desc": "campus core: 34th–36th St, Spruce–Walnut",
         "bbox": dict(south=39.9502, west=-75.1953, north=39.9538, east=-75.19182),
+        "crop_to_streets": dict(
+            north="Walnut Street",
+            south="Spruce Street",
+            east="South 34th Street",
+            west="South 36th Street",
+        ),
         # Drawn at a fine 1 m/tile (the campus default is 4) so individual
         # features — multi-tile trees especially — have room to read as
         # themselves rather than as single coloured cells. With the area limited to
-        # two blocks, the whole frame *is* the middle of campus. `--mpt` overrides.
+        # one block, the whole frame *is* the middle of campus. `--mpt` overrides.
         "mpt": 1.0,
     },
 }
@@ -323,6 +331,90 @@ class Projector:
     def to_tile(self, lat: float, lon: float) -> tuple[float, float]:
         x, y = self._rotate(*self._metres(lat, lon))
         return (x - self.min_x) / self.mpt, (y - self.min_y) / self.mpt
+
+
+def _fit_centreline(points: list) -> tuple:
+    """Least-squares centreline of a set of (x, y) points.
+
+    Returns a point on the line and a unit direction — the principal axis of the
+    points' covariance, which works for a street running in any direction
+    (including the near-vertical ones a `y = m·x + b` fit would choke on).
+    """
+    n = len(points)
+    cx = sum(p[0] for p in points) / n
+    cy = sum(p[1] for p in points) / n
+    sxx = sxy = syy = 0.0
+    for x, y in points:
+        dx, dy = x - cx, y - cy
+        sxx += dx * dx
+        sxy += dx * dy
+        syy += dy * dy
+    theta = 0.5 * math.atan2(2 * sxy, sxx - syy)
+    return (cx, cy), (math.cos(theta), math.sin(theta))
+
+
+def _line_intersection(a: tuple, b: tuple) -> tuple:
+    """Where two lines — each a (point, direction) — cross, in the same space."""
+    (px, py), (dx, dy) = a
+    (qx, qy), (ex, ey) = b
+    denom = dx * ey - dy * ex
+    if abs(denom) < 1e-9:
+        raise ValueError("street centrelines are parallel; no corner")
+    t = ((qx - px) * ey - (qy - py) * ex) / denom
+    return (px + t * dx, py + t * dy)
+
+
+def crop_to_streets(proj: Projector, osm: dict, streets: dict) -> None:
+    """Shrink `proj`'s grid to the block bounded by four named streets.
+
+    `streets` maps north/south/east/west -> an OSM street name (e.g. "Walnut
+    Street"). We fit each street's centreline in the projector's rotated-metre
+    space — where the grid is axis-aligned, so the four streets form an upright
+    rectangle — intersect them to get the block's corners, and reset the
+    projector's origin + size to that rectangle.
+
+    Both generators paint through `proj.to_tile` and clip to `proj.cols`/`.rows`,
+    so once the projector is cropped, everything past the streets lands outside the
+    grid and is simply dropped — the picture (osm_to_tiled) and the agent maze
+    (osm_to_ville) stay aligned tile-for-tile, just tighter. The area's fetch bbox
+    is deliberately a touch larger than the streets so each centreline has points
+    on both sides to fit a line to.
+    """
+    want = set(streets.values())
+    points: dict[str, list] = {name: [] for name in want}
+    b = proj.bbox
+    pad = 0.0008  # degrees; keep only street nodes within the fetch window + a hair
+    for el in osm.get("elements", []):
+        tags = el.get("tags", {})
+        name = tags.get("name")
+        if el.get("type") != "way" or "highway" not in tags or name not in want:
+            continue
+        for nd in el.get("geometry", []):
+            if (
+                b["south"] - pad <= nd["lat"] <= b["north"] + pad
+                and b["west"] - pad <= nd["lon"] <= b["east"] + pad
+            ):
+                points[name].append(proj._rotate(*proj._metres(nd["lat"], nd["lon"])))
+
+    lines = {}
+    for name in want:
+        if len(points[name]) < 2:
+            raise SystemExit(
+                f"crop_to_streets: street {name!r} not found in the OSM data"
+            )
+        lines[name] = _fit_centreline(points[name])
+
+    # Four corners = each N/S street crossed with each E/W street.
+    corners = [
+        _line_intersection(lines[streets[ew]], lines[streets[ns]])
+        for ew in ("north", "south")
+        for ns in ("east", "west")
+    ]
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    proj.min_x, proj.min_y = min(xs), min(ys)
+    proj.cols = max(1, math.ceil((max(xs) - min(xs)) / proj.mpt))
+    proj.rows = max(1, math.ceil((max(ys) - min(ys)) / proj.mpt))
 
 
 # --------------------------------------------------------------------------- #
@@ -924,6 +1016,8 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
     osm = fetch_osm(bbox, os.path.join(OUT_DIR, f"{stem}_osm.json"), refresh)
     rotate_deg = resolve_rotation(rotate, osm, bbox)
     proj = Projector(bbox, mpt, rotate_deg)
+    if area.get("crop_to_streets"):
+        crop_to_streets(proj, osm, area["crop_to_streets"])
     print(
         f"[grid]  {proj.cols} x {proj.rows} tiles @ {mpt} m/tile, rotated {rotate_deg:+.2f}°"
     )

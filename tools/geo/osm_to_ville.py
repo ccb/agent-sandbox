@@ -59,6 +59,7 @@ from osm_to_tiled import (
     TILE_PX,
     Projector,
     categorise,
+    crop_to_streets,
     fetch_osm,
     polygon_cells,
     resolve_rotation,
@@ -252,6 +253,10 @@ def main() -> int:
     # tile-for-tile with the picture osm_to_tiled.py draws.
     mpt = args.mpt if args.mpt is not None else area.get("mpt", METRES_PER_TILE)
     proj = Projector(bbox, mpt, rotate_deg)
+    # Crop the maze to the same block the tilemap is cropped to, so the agent grid
+    # stays aligned tile-for-tile with the picture.
+    if area.get("crop_to_streets"):
+        crop_to_streets(proj, osm, area["crop_to_streets"])
     print(f"[grid]  {proj.cols} x {proj.rows} tiles, rotated {rotate_deg:+.2f}°")
 
     m = build_matrix(osm, proj)

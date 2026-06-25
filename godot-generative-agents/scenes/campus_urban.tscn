@@ -10,12 +10,12 @@
 script = ExtResource("1_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; The map is the 34th–36th x Spruce–Walnut core (5632x7040 px at 1 m/tile) — a
-; PORTRAIT map in a 1920x1080 landscape window. zoom 0.153 contain-fits: the FULL
-; map is visible (the height fills the window: 7040 * 0.153 ~= 1077 px), at the
-; cost of grey margins on the left/right (a portrait map can't fill a landscape
-; window without cropping). Size the view with the camera zoom, never by scaling
-; the TileMapLayer (white seams).
+; The map is the 34th–36th x Spruce–Walnut block (3792x4336 px at 1 m/tile),
+; cropped to the four street edges — a PORTRAIT map in a 1920x1080 landscape
+; window. zoom 0.249 contain-fits: the FULL block is visible (the height fills the
+; window: 4336 * 0.249 ~= 1080 px), at the cost of grey margins on the left/right
+; (a portrait map can't fill a landscape window without cropping). Size the view
+; with the camera zoom, never by scaling the TileMapLayer (white seams).
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(2816, 3520)
-zoom = Vector2(0.153, 0.153)
+position = Vector2(1896, 2168)
+zoom = Vector2(0.249, 0.249)

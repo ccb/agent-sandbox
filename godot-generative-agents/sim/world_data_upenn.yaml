@@ -6,20 +6,23 @@
 # building. The mock brain drives each persona through its schedule, so this runs
 # offline, deterministically, and free -- the same as the_ville cast.
 #
-# Buildings used (all real, all in the 34th-36th x Spruce-Walnut core):
+# Buildings used (all real, all inside the 34th-36th x Spruce-Walnut block):
 #   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
-#   Irvine Auditorium, Lauder College House (the one residence inside the box).
+#   Irvine Auditorium. This block is Penn's academic core (College Green) and has
+#   no residence in frame, so each persona's `home` is the in-block building they
+#   start and spend their day in, and every `start_tile` is the walkable doorstep
+#   the geo tool reported for that building (tools/geo/out/upenn_core_ville_addresses.json).
 
 personas:
 - name: Maya Chen
-  home: Lauder College House
+  home: Van Pelt Library
   persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
     diligent, and a little caffeine-dependent. I spend most of my day studying in
     Van Pelt Library between classes.
   emoji: 📚
   start_tile:
-  - 295
-  - 1
+  - 13
+  - 15
   schedule:
   - place: Van Pelt Library
     activity: studying for an organic chemistry exam
@@ -42,8 +45,8 @@ personas:
     College Hall. I am thoughtful, a bit formal, and devoted to my students.
   emoji: 🧑‍🏫
   start_tile:
-  - 126
-  - 265
+  - 77
+  - 158
   schedule:
   - place: Williams Hall
     activity: giving a morning lecture
@@ -61,14 +64,14 @@ personas:
     activity: holding office hours
     emoji: 🧑‍🏫
 - name: Diego Torres
-  home: Lauder College House
+  home: Meyerson Hall
   persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
     creative, focused, and always sketching. I spend long hours in the Meyerson
     Hall studio.
   emoji: ✏️
   start_tile:
-  - 226
-  - 184
+  - 177
+  - 61
   schedule:
   - place: Meyerson Hall
     activity: working on a studio model
@@ -91,9 +94,6 @@ locations:
   description: The streets and walks of Penn's campus, tying every corner together.
   address: null
   hub: true
-- name: Lauder College House
-  description: A residential college house at 34th & Walnut, home to Maya and Diego.
-  address: UPenn:Lauder College House:grounds
 - name: College Hall
   description: Penn's oldest building and administrative heart, on College Green.
   address: UPenn:College Hall:grounds
