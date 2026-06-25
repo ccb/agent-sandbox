@@ -1,3 +1,21 @@
+## 2026-06-24
+**Focus:** shipped the next two cognitive-loop phases for the Smallville port — periodic reflection (#84, Phase D) and the agent-to-agent dialogue seam (#86, Phase E).
+
+**Done today:**
+- #84 periodic reflection: new engine `reflection.py` (`should_reflect` importance threshold + `reflect()` flow → salient questions, supporting retrieval, grounded inference, write-back as `MemoryKind.REFLECTION`), with a `Reflector` protocol + Mock/LLM impls mirroring the planner split; wired into the ReAct loop and the sim via `maybe_reflect`. PR #169.
+- #86 dialogue seam: new `conversation.py` turn-taking loop + `Agent.converse` seam + `MemoryKind.CHAT`, writing each line into **both** participants' memory streams; co-located/settled residents converse in the sim and the line shows on the replay's chat card (reused the existing `audience_for` + unused frontend slot). PR #170.
+- Both are off/gated unless a real brain is driving, so the mock replay stays byte-identical; full offline coverage added (732 engine + 98 port tests green, black-clean).
+- Tested live with `LLM_PROVIDER=anthropic`
+
+**Blockers / questions:**
+- Stacked PRs against the feature stack, not `main`: none of #78/#83/#84/#86 are merged yet, so merge order matters — #84 (#169) should land first, then retarget #86 (#170) to `main`. Want to confirm the team's intended base/merge strategy.
+- Briefly branched #86 off `main` before realizing `main` predates Phase A (#78), which the port wiring needs; rebased onto the #84 tip.
+- Neither feature has touched a live model yet — verified only with mock/scripted brains, so real reflection/dialogue quality and 25-agent token cost are unvalidated.
+
+**Next:**
+- Get #169/#170 reviewed; retarget #86 to `main` once #84 merges.
+- Phase C proper — vision-radius perception + letting actions target other agents (still open in NEXT-STEPS; conversation currently leans on co-located event perception).
+
 ## 2026-06-22
 **Focus:** tightened the slice-by-slice Parsely porting workflow after merging the conversion guide.
 
