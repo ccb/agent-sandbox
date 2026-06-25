@@ -18,8 +18,19 @@ config/icon="res://icon.svg"
 
 [display]
 
+; Design resolution. The camera in each scene is tuned to contain-fit the block
+; into this 1920x1080 frame; the stretch settings below then scale that whole
+; frame up to fill the actual screen, so the composition is identical at any size.
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+
+; Open borderless-fullscreen, covering the whole display (Cmd+Q / Cmd+W to quit).
+window/size/mode=3
+
+; Scale the 1920x1080 canvas to the screen as one unit (keep = uniform scale, so
+; the block never distorts; any leftover from a non-16:9 display is letterboxed).
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
 
 [rendering]
 
