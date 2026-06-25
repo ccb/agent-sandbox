@@ -38,6 +38,11 @@ class Node:
     # Variables passed to ``render(template, **example_vars)`` for the static
     # preview. ``None`` means "fall back to the template's own ``sample``".
     example_vars: dict | None = None
+    # Optional per-node override of the chain's ``templates`` package. Lets one
+    # chain mix templates from more than one package -- e.g. the Smallville chain
+    # shows gen-agents memory templates (``backend.prompt_templates``) alongside
+    # the engine cognition it reuses (``text_adventure_games.prompt_templates``).
+    templates: str | None = None
 
 
 @dataclass
@@ -71,6 +76,11 @@ class ChainSpec:
             if n.id == node_id:
                 return n
         return None
+
+    def templates_for(self, node: Node) -> str:
+        """The templates package to render ``node`` with: its own override if it
+        sets one, else the chain's default ``templates``."""
+        return node.templates or self.templates
 
     def validate(self) -> ChainSpec:
         """Check the spec is internally consistent; raise ``ValueError`` if not.
@@ -140,6 +150,7 @@ def load_spec(path: str | Path) -> ChainSpec:
                 description=raw.get("description", ""),
                 template=raw.get("template"),
                 example_vars=raw.get("example_vars"),
+                templates=raw.get("templates"),
             )
         )
 
