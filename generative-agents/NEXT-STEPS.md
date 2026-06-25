@@ -36,8 +36,8 @@ reflect** (plus **converse** on agent-to-agent contact). Here is each piece toda
 | Cognitive step | Today | Target |
 | --- | --- | --- |
 | **LLM** | None — `SmallvilleMockClient` is deterministic (`backend/smallville_agents.py`) | Real model via `client_from_env()`; mock kept for tests |
-| **Perceive** | Absent — agents never observe each other or events | Vision-radius perception writes nearby agents/objects/events to memory |
-| **Retrieve** | Absent — no memory exists | Recency × relevance × importance retrieval feeds each decision |
+| **Perceive** | ✅ Done (#80/#82) — `AgentMemory.perceive` writes nearby agents/objects/events to memory each turn, scoped by tile distance on the map | Vision-radius perception writes nearby agents/objects/events to memory |
+| **Retrieve** | ✅ Done (#75/#76) — recency × relevance × importance retrieval (keyword or embeddings) feeds every decision | Recency × relevance × importance retrieval feeds each decision |
 | **Plan** | Hardcoded — one destination + one activity per persona (`build_world.py`) | Generated daily plan, decomposed day → hourly → minute |
 | **Execute** | Two verbs (`travel`, `perform`) through the precondition gate | Same gate, richer action set targeting objects and other agents |
 | **Reflect** | Skeleton only — `npc.py` reflects on command *failure*, not periodically | Periodic synthesis of recent memories into higher-level thoughts |
@@ -92,10 +92,10 @@ Goal: agents accumulate an episodic memory stream and retrieve from it when deci
 **This is the deepest dependency** — perception, reflection, planning, and conversation
 all read and write memory, so nothing downstream is meaningful without it.
 
-- `[engine] L` **Append-only memory stream on `Agent`.** Timestamped events / thoughts /
-  chats, each with an importance score. `npc.py:5` explicitly notes "memory is Phase 2";
-  this fills that gap. Anchor:
-  [`../docs/design/agent-memory.md`](../docs/design/agent-memory.md).
+- `[engine] L` ✅ **Done (#75) — Append-only memory stream on `Agent`.**
+  `text_adventure_games/memory.py` adds `AgentMemory`: an append-only stream of timestamped
+  `MemoryRecord`s (observation / reflection / plan) with importance scores, private per
+  agent. Anchor: [`../docs/design/agent-memory.md`](../docs/design/agent-memory.md).
 - `[engine] L` ✅ **Done (#76) — Retrieval scoring = recency × relevance × importance.**
   A pluggable `EmbeddingClient` (model2vec default, offline) scores the relevance term;
   `recency_decay` is already a persona knob. Wired into the sim by **#102**:
@@ -104,9 +104,10 @@ all read and write memory, so nothing downstream is meaningful without it.
   mock brain ignores the block, so the replay is byte-identical until Phase A's real
   brain). ROADMAP flags a clean reference implementation of exactly this scoring in the
   "Generative Action Castle" prototype (ask Chris) — study it rather than reinventing.
-- `[engine] M` **Inject retrieved memories into the observation.** The string
-  `Agent.decide(observation)` sees should include the top-scored memories, so the model
-  reasons over its past, not just the current tile.
+- `[engine] M` ✅ **Done (#75) — Inject retrieved memories into the observation.**
+  `format_observation_with_memories` folds the top-scored memories into the string
+  `Agent.decide(observation)` sees, below the live observation, so the agent reasons over
+  its past without perturbing the parse.
 - `[port] M` ✅ **Done (#79) — Seed personas at t=0.** `attach_agents` now folds
   `agent_history_init_n25.csv` relationships into each agent's memory stream and surfaces
   each persona's *partial* known-places tree (`spatial_memory.json`) as beliefs in the
@@ -122,15 +123,19 @@ all read and write memory, so nothing downstream is meaningful without it.
 Goal: agents become aware of each other and the world around them — the input side of
 memory, and the precondition for conversation.
 
-- `[engine] L` **Vision-radius perception.** Each turn, an agent perceives nearby
-  agents, objects, and events within its radius and writes them to memory. Hook the
-  engine's existing `Game.events` into this rather than inventing a parallel channel.
-  (ROADMAP Phase 2: "structured observations".)
-- `[engine] M` **Let actions target other agents.** Today actions default to targeting
-  the player; agents need to act on each other for any social behavior to work.
-- `[port] M` **Map Smallville proximity onto perception.** Translate the tile world
-  (`vision_r = 8`, `backend/world_map.py`) into the engine's "who/what is nearby" query
-  so co-location on the map means co-presence in the sim.
+- `[engine] L` ✅ **Done (#80) — Vision-radius perception.** `AgentMemory.perceive` folds
+  the nearby world into memory each turn, scoped by the overridable `Game.perceivable_locations`
+  seam (the sight counterpart to `audience_for`) and a per-character `vision_r`. It reuses
+  `Game.events` for the event channel — no parallel channel — and adds newly-in-view
+  agents/objects as deduped, low-importance "presence" observations. Opt-in: `vision_r = 0`
+  keeps existing games byte-identical.
+- `[engine] M` ✅ **Done (#81) — Let actions target other agents.** Actions resolve against
+  other characters, not just the player, so agents can act on each other — the precondition
+  for social behavior.
+- `[port] M` ✅ **Done (#82) — Map Smallville proximity onto perception.** A `TiledGame`
+  (`backend/tiled_game.py`) overrides `perceivable_locations` with map tile distance
+  (`WorldMap.tile_gap`, the `vision_r = 8` from `backend/world_map.py`), and residents carry
+  `vision_r = 8`, so co-location on the tile map becomes co-presence in the sim.
 
 ---
 
@@ -181,14 +186,18 @@ Goal: when agents meet, they talk, and the conversation changes what they each r
   audibility seam (`Game.audience_for`), so a range/line-of-sight world constrains
   conversation exactly as it constrains a `Say`. Built on perception (Phase C: co-located
   agents already perceive each other's events into memory) and memory (Phase B).
-- `[port] S` ✅ **Done (#86) — Surface chat end to end.** `run_simulation.simulate`
-  detects co-located, *settled* residents each step and runs
+- `[port] S` ✅ **Done (#86, verified #87) — Surface chat end to end.**
+  `run_simulation.simulate` detects co-located, *settled* residents each step and runs
   `smallville_agents.maybe_converse` (cooldown-throttled), populating each frame's `chat`
   field with the dialogue as `[speaker, line]` pairs — the shape the frontend's existing
-  (previously unused) chat slot already renders. **Gated on a real brain**: with the mock
-  brain no utterance is produced, so the default replay holds no conversations and stays
-  byte-identical. The exporter already writes the frame verbatim, so no exporter change
-  was needed.
+  (previously unused) `chat__<name>` slot ("Current Conversation" on the agent card)
+  renders. **Gated on a real brain**: with the mock brain no utterance is produced, so the
+  default replay holds no conversations and stays byte-identical. The exporter already
+  writes the frame verbatim, so no exporter change was needed. #87 confirmed the full path
+  and locked the export-boundary contract with a regression test
+  (`test_exporter_surfaces_populated_chat`): a populated transcript survives into
+  `movement/<step>.json` for both participants (the prior export test only covered the null
+  case).
 
 ---
 

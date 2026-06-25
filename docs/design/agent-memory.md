@@ -195,6 +195,30 @@ that instead of ad hoc visibility logic.
 > — by §B below, so ingesting the matching `Game.event` too would only duplicate
 > the record and double-count its importance.
 
+> **Vision radius (issue #80).** The anticipated `View.build(game, viewer)` lands
+> here as two method-based seams rather than a dataclass (the simpler, lower-surface
+> realization — `View.build` can later seed off the first):
+>
+> - **`Game.perceivable_locations(character)`** — the spatial *visibility* seam, the
+>   sight counterpart to `audience_for` (hearing). It returns the rooms a character
+>   can see into: by default a BFS over room `connections` out to the character's
+>   `vision_r` hops (0 ⇒ just the current room; blocks don't stop sight). A world
+>   with its own geometry overrides this — Smallville maps its tile `vision_r=8`
+>   here — and the memory layer is unchanged.
+> - **`AgentMemory.perceive(game, character)`** — the single perception entry point,
+>   called by every turn mode (sequential `react_behavior`, the simultaneous
+>   `gather_intents`, and the Smallville `observe_and_decide`). It folds events
+>   (radius-aware, via the seam above; `vision_r=0` is byte-identical to
+>   `ingest_events`) **and** the agents/objects in view. Presence is **opt-in**:
+>   only `vision_r > 0` records "I see X nearby" sightings, and only for things
+>   *newly* in view (tracked in `AgentMemory._perceived`, keyed by kind/name/room,
+>   capped per turn) so a stable neighbor isn't re-logged each turn. `describe_for`
+>   stays room-only, so a wider radius widens *memory*, not the live room
+>   description.
+>
+> Still open for the Smallville port: override `perceivable_locations` with
+> `world_map.py` tile distance and read `vision_r` from each persona.
+
 ### B. Agent's own action outcome
 
 After `_route()` succeeds, store a memory such as:

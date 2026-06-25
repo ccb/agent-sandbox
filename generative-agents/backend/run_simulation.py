@@ -211,11 +211,12 @@ def simulate(
     """
     # Default to the module's the_ville cast/builder so existing callers and the
     # determinism tests are unchanged; a different world (e.g. UPenn) passes its
-    # own personas + builder.
+    # own personas + builder. The builder receives the world_map so perception
+    # (issue #82) stays tile-distance based.
     personas = personas if personas is not None else PERSONAS
     build_world_fn = build_world_fn if build_world_fn is not None else build_world
 
-    game, chars = build_world_fn()
+    game, chars = build_world_fn(world_map)
     attach_agents(
         chars,
         personas,
@@ -263,6 +264,12 @@ def simulate(
     # often the same pair re-converses across the run.
     conversation_enabled = llm_client is not None
     conversation_cooldowns: dict = {}
+
+    # Heartbeat plumbing (real-brain runs only). A live run makes many blocking
+    # API calls per turn with no other output during quiet stretches, which reads
+    # as a hang; we emit a one-line pulse per step so progress stays visible.
+    heartbeat = default_renderer()
+    prev_calls = 0
 
     frames: list[dict] = []
     for _step in range(num_steps):
@@ -383,11 +390,33 @@ def simulate(
         # settled residents talk. Each meeting writes dialogue into both agents'
         # memory streams and updates their cards' chat line. Gated + a no-op for
         # the mock brain, so the default replay is unchanged.
+        chats_this_step = 0
         if conversation_enabled:
-            maybe_converse(
+            chats_this_step = maybe_converse(
                 game, chars, state, frame, _step, conversation_cooldowns, order
             )
         frames.append(frame)
+
+        # Per-turn heartbeat: stdout only, so it never touches the exported
+        # frames -- the mock replay stays byte-identical. Gated on a real client
+        # because that is the only run slow enough to look stalled.
+        if llm_client is not None:
+            total_calls = ledger.summary()["calls"] if ledger else 0
+            delta = total_calls - prev_calls
+            prev_calls = total_calls
+            when = (
+                clock.time_at(_step).strftime("%H:%M:%S")
+                if clock is not None
+                else f"step {_step}"
+            )
+            chat_note = f" · {chats_this_step} chat(s)" if chats_this_step else ""
+            heartbeat.emit(
+                Message(
+                    Channel.SYSTEM,
+                    f"Turn {_step + 1}/{num_steps} · {when} · "
+                    f"+{delta} LLM calls ({total_calls} total){chat_note}",
+                )
+            )
 
     # Hand back each agent's complete memory stream, if the caller asked for it.
     if out_memories is not None:

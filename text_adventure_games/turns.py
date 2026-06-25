@@ -33,7 +33,12 @@ phase map, no fallbacks, and no contention it reduces to PR #30's behavior.
 
 from dataclasses import dataclass, field
 
-from .npc import build_npc_context, route_first_workable, route_with_retry
+from .npc import (
+    build_npc_context,
+    format_observation_with_memories,
+    route_first_workable,
+    route_with_retry,
+)
 
 
 @dataclass
@@ -124,7 +129,16 @@ def gather_intents(game) -> list:
             # reaches the next decision prompt (issue #23 tiered goals).
             agent.goals = character.goals
             agent.action_names = list(game.parser.actions)
-            observation = build_npc_context(character, game)
+            # Perceive the nearby world and fold relevant memories into the
+            # prompt, the same Observe step react_behavior runs (issues #75/#80).
+            # Bind the memory owner first: gather never reaches decide_and_route,
+            # which is where the sequential path binds it lazily.
+            if not agent.memory.owner:
+                agent.memory.owner = character.name
+            agent.memory.perceive(game, character)
+            base = build_npc_context(character, game)
+            relevant = agent.memory.retrieve(query=base, turn=getattr(game, "turn", 0))
+            observation = format_observation_with_memories(base, relevant)
             commands = _as_command_list(agent.decide(observation))
             if not commands:
                 continue
