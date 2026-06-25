@@ -6,6 +6,8 @@ tools (present, not consumed); tag matching with count>1; location gating; and
 that a game without recipes is unaffected.
 """
 
+import pytest
+
 from text_adventure_games import games, things, Recipe, Ingredient
 from text_adventure_games.enums import ActionName
 from text_adventure_games.reporting import CaptureRenderer, Channel
@@ -259,3 +261,38 @@ def test_known_recipe_missing_ingredients_still_shows_the_gap():
     game.do_command("make bow")
     assert "bow" not in player.inventory
     assert _said(cap, "You need")  # ingredient gap, not "don't know how"
+
+
+def test_by_ingredients_resolution_is_also_gated():
+    # The gate is a single chokepoint, so resolution path #2 (by ingredients) is
+    # gated too -- not just by-name and bare-verb.
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False)], inv=_string_and_stick()
+    )
+    game.do_command("combine string and stick")
+    assert "bow" not in player.inventory
+    assert _said(cap, "don't know how")
+
+
+def test_learning_one_recipe_does_not_unlock_another():
+    raft = Recipe(
+        name="raft",
+        inputs=["log"],
+        output=lambda g: things.Item("raft", "a raft"),
+        known=False,
+    )
+    game, player, cap = _game(
+        recipes=[_bow_recipe(known=False), raft], inv=_string_and_stick()
+    )
+    game.learn_recipe("raft")  # learn the OTHER recipe
+    game.do_command("make bow")
+    assert "bow" not in player.inventory  # the bow stays gated
+    assert _said(cap, "don't know how")
+
+
+def test_gated_recipe_without_a_name_is_rejected():
+    # A known=False recipe needs a name/alias to be learnable, so omitting one is
+    # a construction error -- fail fast for the author rather than silently
+    # producing a permanently un-craftable recipe.
+    with pytest.raises(ValueError):
+        Recipe(inputs=["string", "stick"], output=_bow, known=False)
