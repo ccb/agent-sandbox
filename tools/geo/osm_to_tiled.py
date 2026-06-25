@@ -194,6 +194,7 @@ TREE_PREVIEW_IDS = {232, 259, 313, 340, 238, 319}
 # maps at their original six layers, byte-for-byte identical.
 LAYER_ORDER = [
     "ground",
+    "ground_edges",  # dark trim completing the stone slabs' top/right outline
     "landuse",
     "water",
     "paths",
@@ -760,7 +761,72 @@ def concrete_lawn_edge(layers: dict, edges_firstgid: int) -> None:
             if not visible_grass(c - 1, r):
                 mask |= EDGE_W
             if mask:  # an interior cell (all neighbours grass) gets no trim
-                edges[r][c] = edges_firstgid + mask
+                edges[r][c] = edges_firstgid + LAWN_STYLE * 16 + mask
+
+
+def stone_ground_edge(layers: dict, edges_firstgid: int) -> None:
+    """Complete the stone slabs' outline along the top/right edges the Kenney bevel
+    leaves bare.
+
+    The bare-ground (stone) tile carries its shadow on its bottom and left only, so
+    a patch of stone is already outlined there — each cell's shadow, plus the next
+    cell's, also draws every interior line — but has nothing on its top/right, where
+    against a different surface the stone just bleeds into it. For every visible
+    stone cell we add a thin dark line (matching that baked shadow) on its top and/or
+    right edge when the neighbour there is a non-stone *hard* surface (a path, road,
+    building or water). Grass neighbours are skipped: the lawn trim already draws
+    that boundary and a stone line beside it would read as a doubled border. The map
+    edge is skipped too — there's no adjoining material to divide from.
+    """
+    landuse = layers["landuse"]
+    paths, roads = layers["paths"], layers["roads"]
+    buildings, water = layers["buildings"], layers["water"]
+    ground_edges = layers["ground_edges"]
+    rows, cols = len(landuse), len(landuse[0])
+
+    def visible_stone(c: int, r: int) -> bool:
+        # Bare ground: the base stone shows because nothing is painted over it here.
+        return (
+            0 <= c < cols
+            and 0 <= r < rows
+            and not (
+                landuse[r][c]
+                or paths[r][c]
+                or roads[r][c]
+                or buildings[r][c]
+                or water[r][c]
+            )
+        )
+
+    def is_grass(c: int, r: int) -> bool:
+        return (
+            0 <= c < cols
+            and 0 <= r < rows
+            and bool(landuse[r][c])
+            and not (paths[r][c] or roads[r][c] or buildings[r][c] or water[r][c])
+        )
+
+    def needs_edge(c: int, r: int) -> bool:
+        # An in-bounds neighbour that is a hard, non-stone surface (so: not stone,
+        # not grass, not off the map) — the stone's bevel left this side undrawn.
+        return (
+            0 <= c < cols
+            and 0 <= r < rows
+            and not visible_stone(c, r)
+            and not is_grass(c, r)
+        )
+
+    for r in range(rows):
+        for c in range(cols):
+            if not visible_stone(c, r):
+                continue
+            mask = 0
+            if needs_edge(c, r - 1):  # top edge exposed to a hard surface
+                mask |= EDGE_N
+            if needs_edge(c + 1, r):  # right edge exposed to a hard surface
+                mask |= EDGE_E
+            if mask:
+                ground_edges[r][c] = edges_firstgid + GROUND_STYLE * 16 + mask
 
 
 def rasterise(
@@ -790,6 +856,7 @@ def rasterise(
     }
     if variety:  # urban-theme extras (placeholder theme stays byte-identical)
         layers["edges"] = new_grid(cols, rows)  # concrete kerb around the lawns
+        layers["ground_edges"] = new_grid(cols, rows)  # stone slabs' top/right trim
         layers["trees"] = new_grid(cols, rows)  # foliage, on top of everything
     # Which physical layer each category paints into.
     layer_of = {
@@ -841,6 +908,7 @@ def rasterise(
 
     if variety:
         concrete_lawn_edge(layers, edges_firstgid)  # thin grey trim around lawns
+        stone_ground_edge(layers, edges_firstgid)  # dark trim on stone top/right
         stamp_trees(layers, osm, proj)
 
     return {"layers": layers, "counts": counts, "named": named}
@@ -1039,51 +1107,63 @@ def _urban_tileset() -> dict:
     }
 
 
-# The lawn-edge stroke: a thin concrete-grey line, drawn EDGE_STROKE_PX wide along
-# whichever sides of a tile its N/E/S/W mask lights up.
+# Edge strokes come in two styles, one per ROW of the generated sheet:
+#   row 0 (LAWN_STYLE)  — a thin concrete-grey kerb around the lawns (EDGE_STROKE).
+#   row 1 (GROUND_STYLE) — a dark line matching the stone slab's own baked shadow,
+#                          used to complete that slab's top/right outline.
+# Within a row, the 16 tiles are indexed by an N/E/S/W bitmask; a GID for style s,
+# mask m is firstgid + s*16 + m. Each line is EDGE_*_PX pixels wide.
 EDGE_STROKE = (118, 120, 134, 255)
 EDGE_STROKE_PX = 2
+# The bare-ground (stone) tile carries its shadow on the bottom+left edges only, so
+# this matches that exact shadow colour (sampled from the Kenney tile) and width,
+# letting the completed top/right outline read as part of the same slab.
+GROUND_STROKE = (105, 113, 123, 255)
+GROUND_STROKE_PX = 1
+EDGE_STYLES = [(EDGE_STROKE, EDGE_STROKE_PX), (GROUND_STROKE, GROUND_STROKE_PX)]
+LAWN_STYLE, GROUND_STYLE = 0, 1
 
 
 def write_edges_png(path: str) -> tuple[int, int]:
-    """Write the lawn-edge stroke sheet: 16 tiles in a row, indexed by an N/E/S/W
-    bitmask (tile m has a line on the sides whose bit is set in m; tile 0 is blank
-    and never placed). Each tile is transparent apart from the grey line, so it
-    overlays the grass/paving below and only the thin edge shows."""
-    n, t = 16, EDGE_STROKE_PX
-    w, h = TILE_PX * n, TILE_PX
+    """Write the edge-stroke sheet: one ROW of 16 tiles per style in EDGE_STYLES,
+    each tile indexed by an N/E/S/W bitmask (tile m has a line on the sides whose
+    bit is set in m; tile 0 is blank and never placed). Every tile is transparent
+    apart from the line, so it overlays the terrain below and only the edge shows."""
+    n = 16
     clear = (0, 0, 0, 0)
+    w, h = TILE_PX * n, TILE_PX * len(EDGE_STYLES)
     png_rows = []
-    for y in range(TILE_PX):
-        row = bytearray()
-        for mask in range(n):
-            for x in range(TILE_PX):
-                on = (
-                    (mask & EDGE_N and y < t)
-                    or (mask & EDGE_S and y >= TILE_PX - t)
-                    or (mask & EDGE_W and x < t)
-                    or (mask & EDGE_E and x >= TILE_PX - t)
-                )
-                row.extend(EDGE_STROKE if on else clear)
-        png_rows.append(bytes(row))
+    for colour, t in EDGE_STYLES:
+        for y in range(TILE_PX):
+            row = bytearray()
+            for mask in range(n):
+                for x in range(TILE_PX):
+                    on = (
+                        (mask & EDGE_N and y < t)
+                        or (mask & EDGE_S and y >= TILE_PX - t)
+                        or (mask & EDGE_W and x < t)
+                        or (mask & EDGE_E and x >= TILE_PX - t)
+                    )
+                    row.extend(colour if on else clear)
+            png_rows.append(bytes(row))
     with open(path, "wb") as fh:
         fh.write(_png(w, h, png_rows))
     return w, h
 
 
 def _edges_tileset(firstgid: int) -> dict:
-    """Generate the lawn-edge stroke sheet next to the map and reference it as a
-    second tileset starting at `firstgid` (just past the Kenney sheet's GIDs)."""
+    """Generate the edge-stroke sheet next to the map and reference it as a further
+    tileset starting at `firstgid` (just past the Kenney sheet's GIDs)."""
     path = os.path.join(OUT_DIR, EDGES_SHEET)
     w, h = write_edges_png(path)
-    n = w // TILE_PX
+    cols, rows = w // TILE_PX, h // TILE_PX
     return {
         "firstgid": firstgid,
         "name": "lawn_edges",
         "tilewidth": TILE_PX,
         "tileheight": TILE_PX,
-        "tilecount": n,
-        "columns": n,
+        "tilecount": cols * rows,
+        "columns": cols,
         "margin": 0,
         "spacing": 0,
         "image": EDGES_SHEET,
@@ -1165,7 +1245,7 @@ def build_area(name: str, mpt: float, refresh: bool, theme: str, rotate: str) ->
         gid_to_rgba[DASH_V + 1] = PALETTE["road"][1]
         for idx in TREE_PREVIEW_IDS:
             gid_to_rgba[idx + 1] = (60, 130, 60, 255)
-        for m in range(1, 16):  # lawn-edge strokes read as concrete in the preview
+        for m in range(1, 32):  # both edge-stroke styles read as concrete in preview
             gid_to_rgba[edges_first + m] = PALETTE["ground"][1]
     write_preview_png(
         preview_path,
