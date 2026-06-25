@@ -297,6 +297,17 @@ class CaptureRenderer(Renderer):
         return msgs
 
 
+def _json_safe(value):
+    """Coerce a value to something ``json.dumps`` can emit (an Enum to its
+    ``.value``, any other object to ``str``). Mirrors ``world_state._jsonable``
+    so the change feed and the snapshot are uniformly JSON-safe."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if hasattr(value, "value"):
+        return value.value
+    return str(value)
+
+
 class JSONRenderer(Renderer):
     """Emit each :class:`Message` as a JSON-able record -- the structured change
     feed a 2D renderer (e.g. Godot) subscribes to (issue #90).
@@ -311,6 +322,10 @@ class JSONRenderer(Renderer):
     agent trace). Records buffer in :attr:`records` for polling -- :meth:`drain`
     returns and clears them -- or pass a ``sink`` callable to receive each record
     live (e.g. push it down a websocket).
+
+    Message records carry ``{channel, text, actor, turn, phase, meta}``; a turn
+    boundary is a leaner ``{channel: "turn_header", turn, time}`` event.
+    Consumers switch on ``channel``.
     """
 
     def __init__(self, level: str = VERBOSE, sink=None):
@@ -327,7 +342,7 @@ class JSONRenderer(Renderer):
             "actor": message.actor,
             "turn": message.turn,
             "phase": message.phase,
-            "meta": dict(message.meta or {}),
+            "meta": {str(k): _json_safe(v) for k, v in (message.meta or {}).items()},
         }
 
     def _push(self, record: dict) -> None:
