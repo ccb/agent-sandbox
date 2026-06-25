@@ -700,3 +700,23 @@ def test_live_mock_provider_does_not_synthesize(react_world):
 
     assert _reflections(agent) == []
     assert agent.memory.importance_since_reflection == 0.0
+
+
+def test_legacy_callable_client_is_a_noop_without_burning_cadence(react_world):
+    # A client wired as a bare ``(prompt) -> str`` callable has no ``chat``
+    # method, so reflection can't run. maybe_reflect must treat it like no
+    # client -- a no-op that LEAVES the accumulator intact, so reflection can
+    # still fire once a chat-capable client is in play (rather than silently
+    # resetting the cadence to zero each turn).
+    game, _, troll, _ = react_world
+    agent = LLMAgent(
+        lambda prompt: "look", persona="I am a troll.", reflection_threshold=5.0
+    )
+    agent.memory.owner = "troll"
+    agent.memory.add_observation("A.", turn=0, importance=6)
+    agent.memory.add_observation("B.", turn=0, importance=6)
+
+    maybe_reflect(troll, game, agent)
+
+    assert _reflections(agent) == []
+    assert agent.memory.importance_since_reflection == 12.0

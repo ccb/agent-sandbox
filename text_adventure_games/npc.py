@@ -594,9 +594,10 @@ def synthesize_reflections(agent, records) -> list[str]:
     insights, returned as parsed strings (possibly empty) (issue #84).
 
     A no-op returning ``[]`` if the agent has no chat-capable client or the
-    model returns nothing. Memories are rendered through the same safe
-    ``render_memories`` path the observation uses, so reflected text can never
-    spoof a mock-brain decision rule or leak a private trigger substring.
+    model returns nothing. The synthesis prompt omits the NPC-decision preamble,
+    so the live ``mock`` provider (``MockReActClient``) never authors a
+    reflection. A stored reflection is then a normal memory -- when retrieved it
+    flows through the same ``render_memories`` observation path as any other.
     """
     client = getattr(agent, "llm_client", None)
     if client is None or not hasattr(client, "chat"):
@@ -645,7 +646,11 @@ def maybe_reflect(character, game, agent) -> None:
     memory = getattr(agent, "memory", None)
     if memory is None or memory.importance_since_reflection < threshold:
         return
-    if getattr(agent, "llm_client", None) is None:
+    client = getattr(agent, "llm_client", None)
+    if client is None or not hasattr(client, "chat"):
+        # No chat-capable client (e.g. a ScriptedAgent or a legacy callable
+        # client): a clean no-op that LEAVES the accumulator intact, so the
+        # cadence isn't silently burned before a real client can reflect.
         return
     records = memory.recent(RECENT_FOR_REFLECTION)
     if len(records) < 2:
