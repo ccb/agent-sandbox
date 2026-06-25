@@ -5,7 +5,7 @@
 #
 # Requires Godot 4.6.x with the matching **Web export templates** installed
 # (Godot editor -> Editor -> Manage Export Templates -> Download and Install).
-# Override the binary with: GODOT_BIN=/path/to/Godot npm run export:godot
+# Override the binary with: GODOT_BIN=/path/to/Godot pnpm export:godot
 set -euo pipefail
 
 GODOT_BIN="${GODOT_BIN:-/Applications/Godot.app/Contents/MacOS/Godot}"
@@ -41,4 +41,4 @@ echo "==> Exporting Web build to $OUT_DIR/index.html …"
 "$GODOT_BIN" --headless --path "$GODOT_PROJECT" --export-release "Web" "$OUT_DIR/index.html"
 
 echo "==> Done. Web build written to $OUT_DIR"
-echo "    Start the viewer with:  npm run dev"
+echo "    Start the viewer with:  pnpm dev"

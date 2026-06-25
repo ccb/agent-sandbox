@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "description": "Browser shell that embeds the Godot Penn-campus replay (and, later, an agent-info companion app).",
   "scripts": {
     "dev": "vite",
