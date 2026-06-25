@@ -4,6 +4,11 @@ A practical guide to porting a Parsely-style gamebook (Action Castle, Spooky
 Manor, etc.) into a runnable Python game on this engine. It's written for someone
 authoring by hand *or* with an LLM (Claude) — the same principles apply.
 
+> **Already know the engine?** Skip straight to **[§15 — Worked examples](#15-worked-examples-ac2-ac3-ac4--real-prompts-corrections-decisions)**:
+> the actual prompts, corrections, and design decisions from porting AC2, AC3, and
+> AC4. Sections 3–7 are engine reference — skim or use them as a lookup; §2, §12,
+> and §15 are the parts about *how the work actually goes*.
+
 The single most important idea up front:
 
 > **Implement most of the commands, and generalize the reusable ones into the
@@ -44,7 +49,7 @@ Three finished ports are your canonical references — read them alongside this 
 12. [Authoring with Claude — it's a loop, not a prompt](#12-authoring-with-claude)
 13. [Common pitfalls](#13-common-pitfalls)
 14. [File map](#14-file-map)
-15. [Worked example: porting Action Castle 4](#15-worked-example-porting-action-castle-4)
+15. [Worked examples: AC2, AC3, AC4 — real prompts, corrections, decisions](#15-worked-examples-ac2-ac3-ac4--real-prompts-corrections-decisions)
 
 ---
 
@@ -654,13 +659,150 @@ mechanic in this guide is exercised there.
 
 ---
 
-## 15. Worked example: porting Action Castle 4
+## 15. Worked examples: AC2, AC3, AC4 — real prompts, corrections, decisions
 
-This walks the real process of porting **Action Castle IV — "Escape from Action
-Castle"** (the princess escapes her tower and rides off into a road-trip). The
-point isn't the finished code — it's to show **where a human steers**, because the
-rulebook is ambiguous and the LLM will confidently get things wrong. Every
-"Intervention" below is a decision a person made, not the model.
+This is the part to read if you already know the engine. Three ports, in the order
+they were built, shown as what they actually were: a sequence of **prompts I typed**,
+**corrections I made** against the rulebook and playtests, and **design decisions**
+that were mine to make. The finished code is in the repo; what follows is the
+*process* that produced it — because that's the part a prompt can't hand you.
+
+The through-line across all three: **a port is an experiment that hardens the
+engine.** Each game surfaced a missing capability, I generalized it into the engine
+(with tests), and the next game started further ahead. Watch for that.
+
+---
+
+### Action Castle 2 — the first port (the one that taught the engine)
+
+**Shape:** ~16 rooms, a town with shops, a following NPC (Rosemary), a dragon with a
+riddle, two winning endings (king's champion / marriage).
+
+AC2 wasn't really about shipping AC2 — it was the spike that proved the approach and
+exposed what the engine was missing. I converted it *in scratch, uncommitted*, on
+purpose, to see what would break.
+
+**The prompts.** The kickoff was deliberately end-to-end, not incremental:
+
+> *"Convert Parsely's Action Castle II onto `text_adventure_games`: all the rooms and
+> exits, the custom verbs, Rosemary as a follower, scoring. Make both endings win via
+> an automated walkthrough."*
+
+That one prompt produced a playable-ish draft fast — and a pile of bugs, which was the
+point. The follow-ups were each a specific breakage I'd hit:
+
+> *"`give axe to smith` isn't doing anything — it just says I gave the axe."*
+> *"I wielded the sword and now I'm getting arrested in the courtyard even though I'm holding it."*
+> *"`tell dragon wits` does nothing — the dragon's waiting for an answer but won't take it."*
+
+**The corrections — a faithfulness pass against the PDF.** Before trusting the port, I
+ran `/pdf-to-markdown` on the rulebook and *diffed the markdown against the game*. That
+single step caught a cluster of confident-but-wrong details the LLM had invented or
+misread:
+
+- **Max score is 100, not 97.** The model undercounted — it missed the +5 "finish
+  without saving," and it had invented a "Middle of the Pond" room that inflated the
+  location count. (Lesson: the LLM will *add* content that reads plausibly. Check the
+  score table sums to the rulebook total along the intended path.)
+- **The workshop is NORTH of the square, not `in`.** A misread exit.
+- **`WEAR SLIPPERS` → "The slippers don't fit."** They're wearable but *sized* — only
+  the king and hermit carry the matching `shoe_size`. The LLM had made them freely
+  wearable.
+- **The blanket lives *in the boat*** (a container), takeable from shore — not loose in
+  a room.
+
+> *"Run `/pdf-to-markdown` on the AC2 rulebook and diff it against the port — I want to
+> know everywhere the game disagrees with the book."*
+
+is now a step I do for every port, not an afterthought.
+
+**The decisions (these became engine features).** AC2's bugs each forced a design call:
+
+- **Specific-first parsing.** `GIVE X TO Y` and `SAY YES` were being hijacked by the
+  built-in `give`/`say` before the custom action was even considered. The fix wasn't a
+  one-off — I made the parser rank a registered action's **multi-word name/alias
+  specific-first** (§5). This is the single most important engine change the ports
+  produced, and it's why "missing action" bugs mostly vanished.
+- **"Held" = inventory ∪ worn ∪ wielded.** The arrest soft-lock was a quest check
+  reading bare `inventory` while `WIELD` had moved the sword into `wielded`. Generalized
+  into an `_is_holding` helper every port now uses (§6).
+- **Cascade-on-move follow**, not a per-NPC turn behavior: following is a consequence of
+  the *leader's* move, so the engine drags followers the instant a `Go` resolves
+  (recursive, cycle-safe). Rosemary migrated onto it; the boat carries her along.
+- **Give-via-trigger, not a custom verb.** Instead of `GiveAxeToSmith`, I let the
+  built-in `Give` run and attached a trigger reacting to "the smith now holds the
+  unsharpened axe." Result: `give smith the axe` (any word order) works, because the
+  parser never has to be guessed at.
+- **The dragon's riddle → posed prompts (#110).** `tell dragon wits` failing was the
+  cue that the engine had no way for the *game* to ask a question. That became
+  `pose_prompt` (§7), so a bare `wits` / free-text answer resolves without the player
+  guessing a magic verb.
+
+---
+
+### Action Castle 3 — the big interlock
+
+**Shape:** a party-based dungeon crawl — recruit four companions, a bow-crafting chain,
+a spider/web puzzle, a goblin queen, a demon/cultist endgame, score-branched epilogues.
+Much denser than AC2.
+
+**The prompts.** AC3 started with analysis, not code, and explicitly asked for planning:
+
+> *"Read and analyze this game: `Action_Castle_3.pdf`. Use **ultrathink** to plan how
+> you could convert it the same way you did for AC2."*
+
+Then it was built in **phases, one PR each**, with me reading and steering between them
+— the actual prompts were mostly *"sure"*, *"keep going"*, and the occasional redirect.
+The one substantive design prompt was for crafting:
+
+> *"Use ultrathink to design a crafting system where multiple items/ingredients combine
+> into something new — e.g. a bow. The crafting step might require an instrument
+> (a tool that's needed but not consumed)."*
+
+**The decisions — most of AC3 was recognizing things were already-solved.** The
+recurring move was *not* writing new code:
+
+- **Recruiting a companion is just `follow` + a refusal flag.** A would-be party member
+  sets `refuses_follow` with a reason; **clearing the refusal IS the rescue** (give the
+  captive water + free him; drive off the spider + heal the poison — +10 each). `INVITE`
+  just reports why someone won't come yet. No bespoke "party system" — it fell out of
+  the existing follow mechanism (§7).
+- **GET reaches into a carried open container.** The party starts with a backpack and
+  pulls gear out of it; that needed `Get`/`Examine` to look one level into a container
+  the player is *holding*, not just holders sitting in the room.
+- **Crafting shipped engine-first, then AC3 used it.** The ultrathink design landed as a
+  declarative `Recipe` + `Ingredient` (inputs are consumed, **tools are required but
+  not**), one generic `Craft` action driving `make`/`cook`/`combine`/`braid`, gated on
+  the game *having* recipes so non-crafting games are unaffected. Then AC3's stew
+  (water + cave mushroom at the pot) and bow were just data.
+- **One death predicate, reused.** The "carrying a crying baby into danger = THE END"
+  check is one predicate wired to several rooms — same pattern the demon "dawdle in
+  front of it and you're devoured" death reuses.
+- **`is_won` gated on `game_over`.** AC3 ends by returning home for the last points;
+  since `is_game_over()` returns `is_won()`, an ungated win-condition would end the game
+  *before* the walkthrough could collect them (§10). This bit me and is now a documented
+  gotcha.
+
+**The corrections.**
+
+- **"A recipe needs 2 sticks" didn't work — and the real blocker wasn't crafting.**
+  Inventories are name-keyed, so you can't hold two items both named "stick." That
+  surfaced the need for opt-in **item stacks** (`make_stackable`, #148) — a separate
+  feature from crafting. (Good example of a bug whose fix lives somewhere other than
+  where it shows up.)
+- **The rescued captive stays named `cleric` the whole game**, even though the rulebook
+  calls him "the man" until freed. One canonical dict key is far cleaner than renaming a
+  character mid-game; his *description* carries the tortured-man flavor, and the rescue
+  verbs target him by location, so `free man` still works. A small fidelity-vs-sanity
+  call that's worth making consciously.
+
+---
+
+### Action Castle 4 — "Escape from Action Castle"
+
+The princess escapes her tower and rides off into a road-trip. By AC4 the workflow was
+routine; what's instructive here is the **interventions** — the specific points where I
+overrode the model. The point isn't the finished code; it's to show where a human steers.
 
 ### The shape
 
