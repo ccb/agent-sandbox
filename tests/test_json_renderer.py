@@ -52,6 +52,21 @@ def test_verbosity_filters_channels():
     assert len(r.records) == 1
 
 
+def test_meta_values_are_coerced_json_safe():
+    # meta is a free-form dict; the feed must coerce non-JSON values (like the
+    # snapshot half does) so json.dumps(records) can never raise.
+    r = JSONRenderer()
+    r.emit(
+        Message(
+            Channel.BLOCKED, "nope", meta={"reason": Channel.NARRATION, "x": object()}
+        )
+    )
+    rec = r.records[0]
+    assert rec["meta"]["reason"] == "narration"  # Enum -> .value
+    assert isinstance(rec["meta"]["x"], str)  # arbitrary object -> str
+    json.dumps(r.records)  # must not raise
+
+
 def test_turn_header_is_recorded_as_an_event():
     r = JSONRenderer()
     r.turn_header(3, time="9:00 AM")
