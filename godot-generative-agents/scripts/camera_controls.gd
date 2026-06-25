@@ -11,13 +11,14 @@ extends Camera2D
 ##          — zooming OUT stops at the default view, so the whole block is the
 ##          most you can ever see; you only zoom IN from there.
 ##   Pan  : drag with the left or middle mouse button, a two-finger trackpad
-##          swipe, or the arrow keys / WASD — but only once you've zoomed IN. At
-##          the default (furthest-out) view the whole block already fits, so the
-##          map stays locked to its starting position and panning does nothing.
+##          swipe, or the arrow keys / WASD. The view is always kept INSIDE the
+##          map, so you can never scroll past an edge — there's never grey at the
+##          top or bottom. When an axis already fits the screen (e.g. at the
+##          default view) it's centre-locked, so the map can't drift off.
 ##   Reset: press R (or Home) to glide back to the default view
 ##
-## Attach it to any Camera2D — it adapts to that camera's own default, so every
-## scene keeps its own framing.
+## Attach it to any Camera2D — it reads its own default and the sibling
+## TileMapLayer's size, so every scene keeps its own framing and bounds.
 
 # Each wheel notch / key press multiplies the zoom by this (1.1 = 10% per step).
 @export var zoom_step: float = 1.1
@@ -37,6 +38,11 @@ var _home_position: Vector2
 var _home_zoom: Vector2
 # True while a mouse-button drag-pan is in progress.
 var _dragging := false
+# True while the Reset glide is running (we leave the tween alone, no clamping).
+var _resetting := false
+# The map's world bounds, computed once on first use (see _map_bounds).
+var _bounds := Rect2()
+var _have_bounds := false
 
 
 func _ready() -> void:
@@ -57,17 +63,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			event.button_index == MOUSE_BUTTON_LEFT
 			or event.button_index == MOUSE_BUTTON_MIDDLE):
 		_dragging = event.pressed
-	elif event is InputEventMouseMotion and _dragging and _is_zoomed_in():
-		# Move the world with the cursor (only when zoomed in — at the default
-		# view the map is locked). Shift the camera opposite the drag, converting
-		# screen pixels to world units through the current zoom.
+	elif event is InputEventMouseMotion and _dragging:
+		# Move the world with the cursor: shift the camera opposite the drag,
+		# converting screen pixels to world units through the current zoom.
 		global_position -= event.relative / zoom
+		_clamp_position()
 
 	# Trackpad gestures (macOS): pinch to zoom, two-finger swipe to pan.
 	elif event is InputEventMagnifyGesture:
 		_zoom_at_mouse(event.factor)
-	elif event is InputEventPanGesture and _is_zoomed_in():
+	elif event is InputEventPanGesture:
 		global_position += event.delta * gesture_pan_speed / zoom
+		_clamp_position()
 
 	# Keyboard: +/- zoom (about the centre), R / Home reset.
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -81,6 +88,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if _resetting:
+		return
 	# Arrow keys / WASD pan, at a constant on-screen speed (divide by zoom so a
 	# key-press moves the same number of screen pixels however far you're zoomed).
 	var dir := Vector2.ZERO
@@ -92,31 +101,27 @@ func _process(delta: float) -> void:
 		dir.y -= 1.0
 	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
 		dir.y += 1.0
-	if dir != Vector2.ZERO and _is_zoomed_in():
+	if dir != Vector2.ZERO:
 		global_position += dir.normalized() * key_pan_speed * delta / zoom.x
+		_clamp_position()
 
 
 func _zoom_at_mouse(factor: float) -> void:
+	# Zoom while keeping the world point under the cursor pinned in place.
 	var world_before := get_global_mouse_position()
 	var new_zoom := _clamp_zoom(zoom * factor)
 	if new_zoom == zoom:
 		return
 	var ratio := zoom.x / new_zoom.x
 	zoom = new_zoom
-	if _is_zoomed_in():
-		# Keep the world point under the cursor pinned in place as we zoom in.
-		global_position = world_before - (world_before - global_position) * ratio
-	else:
-		# Zoomed all the way back out to the default — lock to the home position.
-		global_position = _home_position
+	global_position = world_before - (world_before - global_position) * ratio
+	_clamp_position()
 
 
 func _zoom_keep_centre(factor: float) -> void:
 	# Zoom about the screen centre (the camera position doesn't move).
 	zoom = _clamp_zoom(zoom * factor)
-	if not _is_zoomed_in():
-		# Back at the default view — lock to the home position.
-		global_position = _home_position
+	_clamp_position()
 
 
 func _clamp_zoom(z: Vector2) -> Vector2:
@@ -125,14 +130,65 @@ func _clamp_zoom(z: Vector2) -> Vector2:
 	return z.clamp(_home_zoom, Vector2(max_zoom, max_zoom))
 
 
-func _is_zoomed_in() -> bool:
-	# Panning is only allowed when zoomed in past the default (furthest-out) view;
-	# at the default the map stays locked to its home position.
-	return zoom.x > _home_zoom.x + 0.0001
+func _clamp_position() -> void:
+	# Keep the visible rectangle inside the map so no edge shows grey, working one
+	# axis at a time. `lo`/`hi` are the closest the camera centre may sit to each
+	# map edge while the view stays inside.
+	var b := _map_bounds()
+	var half := get_viewport().get_visible_rect().size * 0.5 / zoom
+	var lo := b.position + half
+	var hi := b.end - half
+	var p := global_position
+	for axis in 2:
+		if lo[axis] > hi[axis]:
+			# The map is smaller than the view on this axis — e.g. the default
+			# view, where the whole block already fits the height. Lock to the
+			# home position so it can't drift and uncover grey.
+			p[axis] = _home_position[axis]
+		else:
+			# Keep the view inside the map, but never refuse the home position, so
+			# a scene whose default deliberately shows a margin still opens on its
+			# intended frame (we only stop it from revealing *more* than that).
+			var a_lo: float = minf(lo[axis], _home_position[axis])
+			var a_hi: float = maxf(hi[axis], _home_position[axis])
+			p[axis] = clampf(p[axis], a_lo, a_hi)
+	global_position = p
+
+
+func _map_bounds() -> Rect2:
+	# The map's footprint in world coordinates, found once from the sibling
+	# TileMapLayer (used tiles x tile size, through its transform — which carries
+	# any layer scale). Falls back to the contain-fit home view if none is found.
+	if _have_bounds:
+		return _bounds
+	var layer := _find_tilemap()
+	if layer != null and layer.tile_set != null:
+		var used := layer.get_used_rect()
+		var ts := Vector2(layer.tile_set.tile_size)
+		var xf := layer.global_transform
+		var p0: Vector2 = xf * (Vector2(used.position) * ts)
+		var p1: Vector2 = xf * (Vector2(used.end) * ts)
+		_bounds = Rect2(p0, p1 - p0).abs()
+	else:
+		var vp := get_viewport().get_visible_rect().size / _home_zoom
+		_bounds = Rect2(_home_position - vp * 0.5, vp)
+	_have_bounds = true
+	return _bounds
+
+
+func _find_tilemap() -> TileMapLayer:
+	var parent := get_parent()
+	if parent != null:
+		for child in parent.get_children():
+			if child is TileMapLayer:
+				return child
+	return null
 
 
 func _reset_view() -> void:
+	_resetting = true
 	var tw := create_tween().set_parallel(true)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "global_position", _home_position, reset_time)
 	tw.tween_property(self, "zoom", _home_zoom, reset_time)
+	tw.finished.connect(func() -> void: _resetting = false)
