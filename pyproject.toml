@@ -67,10 +67,10 @@ llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
 # backend (pulls torch). The hosted OpenAI backend reuses the `openai` extra.
 embeddings = ["model2vec"]
 embeddings-st = ["sentence-transformers"]
-# PDF -> playable codegen pipeline (text_adventure_games/codegen). pymupdf
-# parses the Parsely PDF; anthropic is the live extractor backend. Install
-# with `uv sync --extra codegen`; the rest of the engine doesn't need either.
-codegen = ["pymupdf>=1.27", "anthropic>=0.20"]
+# PDF ingest/view for hand-porting Parsely games (text_adventure_games/codegen).
+# pymupdf parses the Parsely PDF into color-tagged spans; install with
+# `uv sync --extra codegen`. The rest of the engine doesn't need it.
+codegen = ["pymupdf>=1.27"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
