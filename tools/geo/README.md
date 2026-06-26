@@ -148,6 +148,25 @@ tight rectangle that still contains all four bounding streets).
 - **`PALETTE`** — the six categories and their colours; swap in a real art
   tileset later by keeping the same GIDs (1–6) and replacing `tileset.png`.
 
+## Furnishing interiors (`furnish_building.py`)
+
+`furnish_building.py` opens the roof of a building on the baked urban `.tmj` and
+paints a furnished floor plan (see its module docstring for the run order). What
+tile is what now lives in **`furniture_catalog.json`** — a labeled manifest of
+the three interior sheets wired into the map (`franuka`, `school`, `bath`), each
+entry carrying `(sheet, col, row)`, a footprint `w×h`, a `category`
+(floor/wall/window/door/furniture) and a `room` tag.
+
+- The script loads the catalog and exposes `block_named("single_bed")` /
+  `tile_named("wall_brick")`, so **an LLM furnishing a room references objects by
+  name** instead of raw atlas coordinates.
+- Verify a coordinate before trusting it:
+  `uv run --with pillow python tools/geo/preview_catalog.py` renders a labeled
+  contact sheet to `out/furniture_catalog_preview.png`; entries with
+  `"verified": false` get a `?` badge (the verified ones come from the original
+  working palette). Pillow is dev-only — neither the game nor the furnish step
+  imports it.
+
 ## Notes / limitations
 
 - Map data © OpenStreetMap contributors, **ODbL** — attribution required if
