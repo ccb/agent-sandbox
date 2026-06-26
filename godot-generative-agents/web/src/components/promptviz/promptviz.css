@@ -246,7 +246,10 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 1rem 1.25rem 2rem;
+  /* No top padding: the sticky `th` pins to the scroll container's padding box,
+     so any top padding leaves a gap that rows scroll up into and show *above*
+     the headers. Keeping it 0 makes the header row sit flush at the top. */
+  padding: 0 1.25rem 2rem;
 }
 .pcv-table {
   width: 100%;
