@@ -118,6 +118,31 @@
   visibility: hidden;
 }
 
+/* The prompt-chain page is another opaque overlay (like the agents page); it's
+   only in the DOM when active (App.tsx), so it just needs a layer above the
+   canvas. While it's up, hide the canvas (keep it laid out) and the agents page. */
+.view-prompts {
+  z-index: 2;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+/* Shown while the lazy-loaded prompt-chain chunk downloads. */
+.pcv-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8b949e;
+  font-size: 13px;
+}
+.app[data-view="prompts"] .view-game {
+  visibility: hidden;
+}
+.app[data-view="prompts"] .view-agents {
+  display: none;
+}
+
 .agents-placeholder {
   display: flex;
   align-items: center;
