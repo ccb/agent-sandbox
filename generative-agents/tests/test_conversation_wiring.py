@@ -108,6 +108,28 @@ def test_maybe_converse_respects_cooldown():
     assert maybe_converse(game, chars, state, frame, later, cooldowns, order) == 1
 
 
+def test_maybe_converse_cooldown_is_configurable():
+    # The cooldown is a CognitionConfig knob (run_simulation threads it in): with
+    # cooldown_steps=0 the same pair may talk on consecutive steps.
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS, llm_client=_ChattyBrain())
+    order = [p["name"] for p in PERSONAS]
+    state = {name: {"performing": False, "path": [1], "chat": None} for name in order}
+    _settle_together(chars, order[0], order[1], state)
+    frame = {order[0]: {"chat": None}, order[1]: {"chat": None}}
+    cooldowns = {}
+
+    assert (
+        maybe_converse(game, chars, state, frame, 0, cooldowns, order, cooldown_steps=0)
+        == 1
+    )
+    # No cooldown -> a second conversation one step later is allowed.
+    assert (
+        maybe_converse(game, chars, state, frame, 1, cooldowns, order, cooldown_steps=0)
+        == 1
+    )
+
+
 def test_maybe_converse_skips_walking_agents():
     game, chars = build_world()
     attach_agents(chars, PERSONAS, llm_client=_ChattyBrain())

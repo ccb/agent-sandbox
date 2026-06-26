@@ -42,9 +42,9 @@ from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from . import exporter
-from .build_world import PERSONAS, build_world
+from .build_world import ALL_PERSONAS, PERSONAS, build_world
 from .sim_clock import SimClock
-from .sim_config import SimulationConfig
+from .sim_config import CognitionConfig, SimulationConfig
 from .smallville_agents import (
     attach_agents,
     maybe_converse,
@@ -135,6 +135,7 @@ def simulate(
     embedding_client=None,
     *,
     retrieval=None,
+    cognition=None,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
@@ -164,6 +165,11 @@ def simulate(
     the memory-retrieval scoring; ``None`` uses the engine defaults. As above, the
     mock brain ignores the retrieved block, so the frames stay byte-identical --
     only *which* memories surface changes.
+
+    Pass an optional ``cognition`` (:class:`sim_config.CognitionConfig`) to set the
+    perception radius (``vision_r``) and conversation pacing; ``None`` uses today's
+    defaults. ``vision_r`` only changes co-presence under a TiledGame, and
+    conversation is a no-op under the mock brain, so the mock replay is unchanged.
 
     Pass ``relationships_csv`` / ``base_personas_dir`` (the upstream bootstrap
     assets) to seed each persona at t=0 -- relationships into memory, partial
@@ -225,6 +231,9 @@ def simulate(
     # (issue #82) stays tile-distance based.
     personas = personas if personas is not None else PERSONAS
     build_world_fn = build_world_fn if build_world_fn is not None else build_world
+    # Cognition defaults (perception radius, conversation pacing) come from the
+    # config; None means "today's behavior", i.e. CognitionConfig()'s defaults.
+    cog = cognition if cognition is not None else CognitionConfig()
 
     game, chars = build_world_fn(world_map)
     attach_agents(
@@ -234,6 +243,7 @@ def simulate(
         embedding_client=embedding_client,
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
+        vision_r=cog.vision_r,
         planner_client=planner_client,
         reflector_client=reflector_client,
         llm_client=llm_client,
@@ -403,7 +413,15 @@ def simulate(
         chats_this_step = 0
         if conversation_enabled:
             chats_this_step = maybe_converse(
-                game, chars, state, frame, _step, conversation_cooldowns, order
+                game,
+                chars,
+                state,
+                frame,
+                _step,
+                conversation_cooldowns,
+                order,
+                cooldown_steps=cog.conversation_cooldown_steps,
+                max_exchanges=cog.conversation_max_exchanges,
             )
         frames.append(frame)
 
@@ -589,6 +607,9 @@ def main() -> None:
     start_dt = (
         args.start if args.start is not None else _parse_start(sim.simulation.start)
     )
+    # How many residents actually run (config only -- no CLI flag). Slice the full
+    # roster so the cast and the world are built from the *same* personas.
+    active_personas = ALL_PERSONAS[: sim.simulation.num_agents]
 
     # The t=0 seed assets (issue #79): the relationships CSV sits beside the maze
     # under --ville-dir, and each persona's partial known-places tree lives in its
@@ -662,9 +683,12 @@ def main() -> None:
             ledger=ledger,
             embedding_client=embedding_client,
             retrieval=sim.retrieval,
+            cognition=sim.cognition,
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
             out_memories=memory_streams,
+            personas=active_personas,
+            build_world_fn=lambda wm: build_world(wm, active_personas),
             clock=clock,
             llm_client=llm_client,
             planner_client=llm_client,
@@ -672,7 +696,7 @@ def main() -> None:
             out_planner_sources=planner_sources,
             out_plans=plans,
         )
-    print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
+    print(f"Simulated {len(frames)} steps for {len(active_personas)} agents.")
     if llm_client is not None:
         via_llm = sorted(n for n, s in planner_sources.items() if s == "llm")
         fell_back = sorted(n for n, s in planner_sources.items() if s == "static")
@@ -687,7 +711,7 @@ def main() -> None:
     if run_log is not None:
         print(f"Wrote usage log to {run_log.path}")
 
-    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in active_personas}
     sim_dir = exporter.write_simulation(
         storage_root=args.storage,
         sim_code=sim_code,
