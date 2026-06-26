@@ -35,7 +35,7 @@
   color: #6b7280;
 }
 
-/* Right-side header group: the view selector plus the Docs link. */
+/* Right-side header group (the nav menu). */
 .header-actions {
   display: flex;
   align-items: center;
@@ -43,14 +43,15 @@
   flex: none;
 }
 
-/* The Game / Agent-cards selector. */
-.view-tabs {
-  display: flex;
-  gap: 6px;
-  flex: none;
+/* Collapsed navigation: a pill trigger that opens a dropdown of views. */
+.nav-menu {
+  position: relative;
 }
 
-.view-tab {
+.nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font: inherit;
   font-size: 13px;
   color: #3a4150;
@@ -61,19 +62,60 @@
   cursor: pointer;
 }
 
-.view-tab:hover {
+.nav-trigger:hover {
   background: #e3e6ea;
 }
 
-.view-tab.is-active {
-  color: #fff;
-  background: #2d6cdf;
-  border-color: #2d6cdf;
+.nav-caret {
+  font-size: 10px;
+  color: #6b7280;
 }
 
-/* Reuses the .view-tab pill styling but is an <a>, so kill the underline. */
-.docs-link {
+/* The popup menu, anchored under the trigger. The header owns a stacking layer
+   (z-index above the canvas), so this paints over the active view below. */
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 184px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.nav-item {
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
   text-decoration: none;
+  color: #3a4150;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: #eceef1;
+}
+
+.nav-item.is-active {
+  color: #fff;
+  background: #2d6cdf;
+}
+
+/* The Docs link leaves the app, so set it off below a divider. */
+.nav-item--link {
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid #eceef1;
+  color: #2d6cdf;
 }
 
 /* The stage holds both pages, stacked. Each page absolutely fills it; the active
