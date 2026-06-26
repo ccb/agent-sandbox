@@ -129,10 +129,10 @@
   background: #2d6cdf;
 }
 
-/* Fixed-width icon slot so labels line up regardless of glyph width. */
+/* Fixed-size monochrome SVG icon (stroke inherits the item's text color). */
 .nav-icon {
-  width: 1.15em;
-  text-align: center;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 
