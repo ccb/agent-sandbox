@@ -190,6 +190,59 @@ def test_exporter_writes_replayable_layout(world_map, tmp_path):
     assert env0["Isabella Rodriguez"]["x"] == 72
 
 
+def test_exporter_surfaces_populated_chat(tmp_path):
+    """Issue #87: a populated chat field must survive the exporter into the
+    movement JSON the frontend's ``chat__<name>`` slot renders -- the "surface
+    chat end to end" contract. The other tests only cover the null/mock case
+    (chat stays None); this guards the positive case so a future exporter
+    refactor can't silently drop a conversation from the replay.
+
+    The frame shape mirrors what ``run_simulation``/``maybe_converse`` produce:
+    chat is None until a pair talks, then the ``[speaker, line]`` transcript
+    persists on both participants' cards.
+    """
+    import datetime
+
+    transcript = [
+        ["Isabella Rodriguez", "Morning, Maria!"],
+        ["Maria Lopez", "Morning! The usual?"],
+    ]
+
+    def cell(chat):
+        return {
+            "movement": [72, 14],
+            "pronunciatio": "💬",
+            "description": "at the cafe @ the Ville:Hobbs Cafe:cafe",
+            "chat": chat,
+        }
+
+    frames = [
+        {"Isabella Rodriguez": cell(None), "Maria Lopez": cell(None)},
+        {"Isabella Rodriguez": cell(transcript), "Maria Lopez": cell(transcript)},
+    ]
+    start_tiles = {"Isabella Rodriguez": (72, 14), "Maria Lopez": (73, 14)}
+
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="chat_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+    )
+
+    with open(os.path.join(sim_dir, "movement", "0.json")) as f:
+        before = json.load(f)
+    with open(os.path.join(sim_dir, "movement", "1.json")) as f:
+        after = json.load(f)
+
+    # Before the conversation the slot is null (renders "None at the moment");
+    # after, the whole transcript is present verbatim for BOTH participants.
+    assert before["persona"]["Isabella Rodriguez"]["chat"] is None
+    for name in ("Isabella Rodriguez", "Maria Lopez"):
+        assert after["persona"][name]["chat"] == transcript
+
+
 def test_exporter_writes_full_memory_stream(world_map, tmp_path):
     # The State Details panel needs each agent's FULL memory stream (not just the
     # per-step retrieved set the cards show). simulate(out_memories=...) collects
@@ -249,6 +302,48 @@ def test_simulate_out_memories_is_optional(world_map):
     with_mem = simulate(world_map, num_steps=12, out_memories=collected)
     assert plain == with_mem
     assert collected and set(collected) == {p["name"] for p in PERSONAS}
+
+
+def test_exporter_writes_daily_plan(world_map, tmp_path):
+    # simulate(out_plans=...) collects each agent's generated plan and the exporter
+    # writes personas/<Name>/daily_plan.json, so the plan a run used is an
+    # inspectable artifact (compare_plans reads it back). With the mock planner the
+    # plan is the static schedule, but the file contract is what matters here.
+    import datetime
+
+    from text_adventure_games.planning import DailyPlan
+
+    plans: dict = {}
+    frames = simulate(world_map, num_steps=12, out_plans=plans)
+    assert set(plans) == {p["name"] for p in PERSONAS}
+
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    sim_dir = exporter.write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="plan_sim",
+        frames=frames,
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles=start_tiles,
+        base_personas_dir=str(tmp_path / "does_not_exist"),
+        plans=plans,
+    )
+    plan_path = os.path.join(
+        sim_dir, "personas", "Isabella Rodriguez", "daily_plan.json"
+    )
+    assert os.path.exists(plan_path)
+    with open(plan_path) as f:
+        loaded = DailyPlan.from_primitive(json.load(f))
+    # Round-trips to the same plan the agent was given (the static schedule here).
+    assert [s.to_schedule_entry() for s in loaded.stops] == PERSONAS[0]["schedule"]
+
+
+def test_simulate_out_plans_is_optional(world_map):
+    # Collecting plans is additive: frames are byte-identical with or without it.
+    plain = simulate(world_map, num_steps=12)
+    collected: dict = {}
+    with_plans = simulate(world_map, num_steps=12, out_plans=collected)
+    assert plain == with_plans
+    assert set(collected) == {p["name"] for p in PERSONAS}
 
 
 def test_exporter_honors_start_time_and_sec_per_step(world_map, tmp_path):

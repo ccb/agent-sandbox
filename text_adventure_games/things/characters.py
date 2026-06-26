@@ -18,6 +18,13 @@ MAX_ACTIONS_PER_TURN = 100
 # buffer stays bounded; older lines fall off FIFO.
 HEARD_MAX = 5
 
+# Default vision radius (issue #80): how far a character perceives, measured in
+# room hops over the location graph. 0 means "only the current room" -- the same
+# scope perception had before #80, so existing games stay byte-identical until a
+# game opts in by setting a larger radius. Smallville maps its tile ``vision_r=8``
+# onto this seam by overriding ``Game.perceivable_locations``.
+DEFAULT_VISION_R = 0
+
 
 class GoalType(str, Enum):
     """
@@ -55,6 +62,9 @@ class Character(Thing):
       currently equipped. The three dicts are mutually exclusive -- an item
       lives in exactly one of them at a time. Moving an item between slots
       is done with ``wear``/``take_off``/``wield``/``unwield``.
+    * A ``vision_r`` (issue #80): how far this character perceives, in room
+      hops. 0 (the default) means just the current room. Read by
+      ``Game.perceivable_locations`` when folding the nearby world into memory.
     """
 
     def __init__(
@@ -103,6 +113,9 @@ class Character(Thing):
         # default, so existing games/characters are unchanged. Distinct from
         # memory (#37): knowledge is the current world-model; memory is the log.
         self.knowledge = Knowledge(owner=name)
+        # How far this character perceives, in room hops (issue #80). 0 keeps
+        # perception to the current room, byte-identical to before #80.
+        self.vision_r = DEFAULT_VISION_R
 
     def to_primitive(self):
         """
@@ -142,6 +155,7 @@ class Character(Thing):
             for g in self.goals
         ]
         thing_data["knowledge"] = self.knowledge.to_primitive()
+        thing_data["vision_r"] = self.vision_r
         return thing_data
 
     @classmethod
@@ -172,6 +186,8 @@ class Character(Thing):
         instance.knowledge = Knowledge.from_primitive(
             data.get("knowledge", {"owner": data["name"], "beliefs": []})
         )
+        # .get default keeps save files written before issue #80 loadable.
+        instance.vision_r = data.get("vision_r", DEFAULT_VISION_R)
         return instance
 
     def add_to_inventory(self, item):

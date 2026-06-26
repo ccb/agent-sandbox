@@ -277,8 +277,14 @@ class Parser:
             return ActionName.EAT
         elif "drink" in command:
             return ActionName.DRINK
-        elif "give" in command:
-            return ActionName.GIVE
+        elif "give" in command or command.startswith("hand "):
+            # A custom give-action ("give gem to wizard") whose item AND
+            # recipient both appear -- in ANY word order -- wins over the
+            # built-in Give, so "give wizard the gem" / "hand wizard the gem"
+            # still reach it (issue #171). Also routes the "hand" alias here,
+            # which the bare-"give" keyword check used to miss. Falls back to the
+            # built-in Give when no custom give-action matches.
+            return self._match_give_action(command) or ActionName.GIVE
         elif "attack" in command or "hit " in command or "hits " in command:
             return ActionName.ATTACK
         elif "inventory" in command or command == "i":
@@ -288,17 +294,24 @@ class Parser:
         elif "quit" in command:
             return ActionName.QUIT
         else:
-            # Longest registered action name that appears in the command -- on
-            # WORD BOUNDARIES, not as a bare substring. (Substring matching here
-            # routed "dragon" to GO, because "go" sits inside "dra-go-n"; same
-            # class as "give" inside "forgive".)
-            best_match = None
+            # Longest registered action name -- OR single-word alias -- that
+            # appears in the command, on WORD BOUNDARIES, not as a bare substring.
+            # (Substring matching here routed "dragon" to GO, because "go" sits
+            # inside "dra-go-n"; same class as "give" inside "forgive".) Single-
+            # word aliases are honored too, so a custom verb's short alias
+            # ("jump"/"fall") routes to it (multi-word aliases already won via
+            # _match_specific_action). We return the action's NAME even when an
+            # alias matched, so the lookup in parse_action still resolves.
+            best_name, best_len = None, -1
             for _, action in self.actions.items():
-                special_command = action.action_name()
-                if re.search(rf"\b{re.escape(special_command)}\b", command):
-                    if best_match is None or len(special_command) > len(best_match):
-                        best_match = special_command
-            return best_match
+                phrases = [action.action_name()] + list(
+                    getattr(action, "ACTION_ALIASES", []) or []
+                )
+                for phrase in phrases:
+                    if phrase and re.search(rf"\b{re.escape(phrase)}\b", command):
+                        if len(phrase) > best_len:
+                            best_name, best_len = action.action_name(), len(phrase)
+            return best_name
 
     def _match_specific_action(self, command):
         """The longest registered ACTION_NAME / ACTION_ALIAS that is MULTI-WORD
@@ -318,6 +331,41 @@ class Parser:
                     if best is None or len(phrase) > len(best):
                         best, best_name = phrase, action.action_name()
         return best_name
+
+    def _match_give_action(self, command):
+        """A registered custom give-action whose item AND recipient both appear
+        in *command*, in any word order (issue #171), or ``None``.
+
+        A custom give-action names itself -- or aliases itself -- ``give {item}
+        to {recipient}``. Matching on the (item, recipient) PAIR rather than the
+        literal phrase is what lets reversed/alternate phrasings ("give smith
+        the axe", "hand the smith my axe") route to the custom action instead of
+        being swallowed by the built-in Give. Canonical "give {item} to
+        {recipient}" already wins earlier via :meth:`_match_specific_action`, so
+        this only fires for the variants. The most specific (longest combined
+        item+recipient) match wins, and an unmatched give falls back to the
+        built-in Give."""
+        best_name, best_score = None, -1
+        for _, action in self.actions.items():
+            phrases = [action.action_name()] + list(
+                getattr(action, "ACTION_ALIASES", []) or []
+            )
+            for phrase in phrases:
+                match = re.fullmatch(r"give (.+?) to (.+)", phrase.lower())
+                if match is None:
+                    continue
+                item, recipient = match.group(1), match.group(2)
+                if self._word_in(item, command) and self._word_in(recipient, command):
+                    score = len(item) + len(recipient)
+                    if score > best_score:
+                        best_name, best_score = action.action_name(), score
+        return best_name
+
+    @staticmethod
+    def _word_in(phrase, command):
+        """True if *phrase* occurs in *command* on word boundaries (so "king"
+        matches "the king" but not "kingdom"). Both are already lowercased."""
+        return re.search(rf"\b{re.escape(phrase)}\b", command) is not None
 
     def parse_action(self, command: str, actor=None) -> actions.Action:
         """

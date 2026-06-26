@@ -1,3 +1,39 @@
+## 2026-06-25
+**Focus:** working on issue #87 (surfacing chat end to end), testing a real LLM run, and working on game planning
+
+**Done today:**
+- Closed out **Phase E #87 (surface chat end to end)**: confirmed the path was already wired (frontend slot + render since #72, population since #86, verbatim export) and locked the export boundary with a new regression test, `test_exporter_surfaces_populated_chat`. Opened **PR #180** stacked on `feat/issue-86-dialogue-seam`; 99/99 port tests pass, black-clean.
+- Added a **per-turn heartbeat** to the sim loop (`run_simulation.py`, commit `6972cd3`) so long real-LLM runs report progress (turn, in-game time, +LLM calls, chats) instead of looking hung — stdout-only and gated on a real client, so mock replays stay byte-identical.
+- Ran a full **1080-step real-LLM run** ($0.48) and verified the GA cognitive loop end-to-end: 5/5 daily plans, 27 reflections, 24 chat-frames across 2 pairings.
+
+**Blockers / questions:**
+- **Deep PR stack**: #180 sits on #86 → #84 → #83 → #78. Each parent must merge (and the child retarget to `main`) before #180 can land — nothing merges in isolation.
+- **Shallow planner depth**: agents latch onto a terminal activity and stop circulating; all movement is front-loaded (everyone settled by ~08:20 of a run that nominally goes to 10:59). Emergent all-day spatial behavior isn't there yet.
+- Real-LLM runs are slow and serial (many blocking API calls per turn) — the heartbeat makes this visible but doesn't speed it up; iteration on cognition is gated on run time.
+
+**Next:**
+- File the deferred **planner-depth** issue: recursive hierarchical decomposition (outline → hourly → 5–15 min chunks) plus a non-latching execution loop so agents move through town all day.
+- Shepherd the stack toward `main` — get #86 reviewed/merged, then retarget and land #180.
+- Do a fresh real-LLM run once planner depth improves and re-check the replay for genuine all-day movement.
+
+## 2026-06-24
+**Focus:** shipped the next two cognitive-loop phases for the Smallville port — periodic reflection (#84, Phase D) and the agent-to-agent dialogue seam (#86, Phase E).
+
+**Done today:**
+- #84 periodic reflection: new engine `reflection.py` (`should_reflect` importance threshold + `reflect()` flow → salient questions, supporting retrieval, grounded inference, write-back as `MemoryKind.REFLECTION`), with a `Reflector` protocol + Mock/LLM impls mirroring the planner split; wired into the ReAct loop and the sim via `maybe_reflect`. PR #169.
+- #86 dialogue seam: new `conversation.py` turn-taking loop + `Agent.converse` seam + `MemoryKind.CHAT`, writing each line into **both** participants' memory streams; co-located/settled residents converse in the sim and the line shows on the replay's chat card (reused the existing `audience_for` + unused frontend slot). PR #170.
+- Both are off/gated unless a real brain is driving, so the mock replay stays byte-identical; full offline coverage added (732 engine + 98 port tests green, black-clean).
+- Tested live with `LLM_PROVIDER=anthropic`
+
+**Blockers / questions:**
+- Stacked PRs against the feature stack, not `main`: none of #78/#83/#84/#86 are merged yet, so merge order matters — #84 (#169) should land first, then retarget #86 (#170) to `main`. Want to confirm the team's intended base/merge strategy.
+- Briefly branched #86 off `main` before realizing `main` predates Phase A (#78), which the port wiring needs; rebased onto the #84 tip.
+- Neither feature has touched a live model yet — verified only with mock/scripted brains, so real reflection/dialogue quality and 25-agent token cost are unvalidated.
+
+**Next:**
+- Get #169/#170 reviewed; retarget #86 to `main` once #84 merges.
+- Phase C proper — vision-radius perception + letting actions target other agents (still open in NEXT-STEPS; conversation currently leans on co-located event perception).
+
 ## 2026-06-22
 **Focus:** tightened the slice-by-slice Parsely porting workflow after merging the conversion guide.
 

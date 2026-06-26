@@ -28,6 +28,7 @@ from text_adventure_games.llm_client import (
     LlmClient,
     limit_context_length,
 )
+from text_adventure_games.prompt_templates import render
 from text_adventure_games.reporting import Channel
 from text_adventure_games.things import Character, Item, Location
 
@@ -160,33 +161,13 @@ class LlmParser(parsing.Parser):
     # ------------------------------------------------------------------
 
     def _ok_system_instructions(self) -> str:
-        instructions = (
-            "You are the narrator for a text adventure game. You create short, "
-            "evocative descriptions of the game. The player can be described in "
-            "the 2nd person, and you should use present tense. If a command "
-            "doesn't work, tell the player why. If the command is 'look' then "
-            "describe the game location and its characters and items."
-        )
-        if self.narration_style:
-            instructions += f"\n{self.narration_style}."
-        return instructions
+        return render("narrate_ok", narration_style=self.narration_style)
 
     def _fail_system_instructions(self) -> str:
-        return (
-            "You are the narrator for a text adventure game. The player attempted a "
-            "command that failed in the game. Try to help the player understand "
-            "why the command failed."
-        )
+        return render("narrate_fail")
 
     def _npc_system_instructions(self) -> str:
-        instructions = (
-            "You are the narrator for a text adventure game. Describe what an NPC "
-            "is doing in the game world. Use the 2nd person for the player and "
-            "3rd person for NPCs. Keep it short and evocative."
-        )
-        if self.narration_style:
-            instructions += f"\n{self.narration_style}."
-        return instructions
+        return render("narrate_npc", narration_style=self.narration_style)
 
     # ------------------------------------------------------------------
     # Output methods (narration-enhanced)
@@ -221,10 +202,7 @@ class LlmParser(parsing.Parser):
         if intent is not None:
             return intent
         # LLM fallback
-        instructions = (
-            "You are the parser for a text adventure game. For a user input, say which "
-            "of the commands it most closely matches. The commands are:"
-        )
+        instructions = render("match_intent")
         return self._pick_option(instructions, self.command_descriptions, command)
 
     # ------------------------------------------------------------------
@@ -267,15 +245,9 @@ class LlmParser(parsing.Parser):
                 description = f"The player: {character.description}"
             character_descriptions[description] = character
 
-        instructions = (
-            "You are the parser for a text adventure game. For an input command try to "
-            f"match the character in the command (if no character is mentioned in the "
-            f"command, then default to '{self.game.player.name}')."
+        instructions = render(
+            "match_character", player_name=self.game.player.name, hint=hint
         )
-        if hint:
-            instructions += f"\nHint: the character you are looking for is the {hint}. "
-        instructions += "\n\nThe possible characters are:"
-
         return self._pick_option(instructions, character_descriptions, command)
 
     def match_item(
@@ -294,13 +266,7 @@ class LlmParser(parsing.Parser):
         """Use LLM to match an item from the command."""
         if self.verbose:
             print("Matching an item with LLM.")
-        instructions = (
-            "You are the parser for a text adventure game. For an input command "
-            "try to match the item in the command."
-        )
-        if hint:
-            instructions += f"\nHint: {hint}."
-        instructions += "\n\nThe possible items are:"
+        instructions = render("match_item", hint=hint)
 
         item_descriptions = {}
         for name, item in item_dict.items():
@@ -326,11 +292,7 @@ class LlmParser(parsing.Parser):
         """Use LLM to match a direction from the command."""
         if self.verbose:
             print("Matching a direction with LLM.")
-        instructions = (
-            "You are the parser for a text adventure game. For an input command try to "
-            "match the direction in the command. Give the closest matching one, or say "
-            "None if none match. The possible directions are:"
-        )
+        instructions = render("match_direction")
         directions = {}
         if location:
             for direction, to_loc in location.connections.items():

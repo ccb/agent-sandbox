@@ -1,0 +1,126 @@
+# Prompt-chain spec for the text_adventure_games engine (Action Castle).
+#
+# This is a hand-authored teaching diagram of the LLM call sites a turn flows
+# through -- it is NOT auto-derived from code, so each node names its real call
+# site so the two stay honest. The visualizer reads the referenced .prompty
+# templates from `templates:` below and renders them offline (no LLM call).
+#
+# The spine is one NPC's ReAct turn (npc.py): observe -> decide -> route through
+# the precondition gate -> on failure, reflect and retry. Routing a command
+# (for the NPC here, or for the player) goes through the keyword-first,
+# LLM-fallback parser (llm_parser.py): match the intent, resolve any named
+# entity, then narrate the outcome.
+name: action_castle
+description: >-
+  One NPC's ReAct turn (decide -> precondition gate -> reflect & retry) and the
+  LLM-fallback parser path a command takes (intent -> entity -> narrate). Each
+  box is a real prompt; click it to read the template.
+templates: text_adventure_games.prompt_templates
+
+nodes:
+  - id: turn_start
+    label: Turn start
+    kind: start
+    description: >-
+      react_behavior() builds the NPC's observation from world state and recent
+      events. No LLM call -- this is the ReAct "Observe" step.
+
+  - id: decide
+    label: Decide (ReAct)
+    kind: decision
+    template: npc_decision
+    description: >-
+      LLMAgent.decide() -- one LLM call. The npc_decision system message renders
+      the persona and goals; the model replies with Reasoning / Action / Duration.
+
+  - id: match_intent
+    label: Match intent
+    kind: parse
+    template: match_intent
+    description: >-
+      LlmParser.determine_intent() LLM fallback -- fires only when keyword
+      matching can't map the Action line to a known command.
+
+  - id: match_character
+    label: Match character
+    kind: parse
+    template: match_character
+    description: >-
+      LlmParser._llm_get_character() -- resolves a character named in the command
+      when keyword matching misses.
+
+  - id: match_item
+    label: Match item
+    kind: parse
+    template: match_item
+    description: >-
+      LlmParser._llm_match_item() -- resolves an item named in the command when
+      keyword matching misses.
+
+  - id: match_direction
+    label: Match direction
+    kind: parse
+    template: match_direction
+    description: >-
+      LlmParser._llm_get_direction() -- resolves a movement direction named in
+      the command when keyword matching misses.
+
+  - id: precondition_gate
+    label: Precondition gate
+    kind: gate
+    description: >-
+      parser.parse_command() runs the action's check_preconditions(). No LLM
+      call. Pass -> the outcome is narrated; fail -> reflect and retry.
+
+  - id: narrate_npc
+    label: Narrate NPC action
+    kind: narrate
+    template: narrate_npc
+    description: >-
+      LlmParser.npc_ok() -- narrates a successful NPC action to the player
+      (the NPC branch of the gate's "pass" exit).
+
+  - id: narrate_ok
+    label: Narrate success
+    kind: narrate
+    template: narrate_ok
+    description: >-
+      LlmParser.ok() -- narrates a successful command (the player's equivalent of
+      narrate_npc).
+
+  - id: narrate_fail
+    label: Narrate failure
+    kind: narrate
+    template: narrate_fail
+    description: >-
+      LlmParser.fail() -- explains why a command failed. Reached when a failure is
+      surfaced to the player rather than fed back to an NPC for a retry.
+
+edges:
+  - { from: turn_start, to: decide, label: observe }
+
+  # The chosen command is routed. Canonical verbs match by keyword (no LLM);
+  # anything else falls back to the LLM intent matcher.
+  - { from: decide, to: precondition_gate, label: keyword hit (no LLM parse) }
+  - { from: decide, to: match_intent, label: keyword miss }
+
+  # A matched action may still need its arguments resolved.
+  - { from: match_intent, to: match_character, label: needs a character }
+  - { from: match_intent, to: match_item, label: needs an item }
+  - { from: match_intent, to: match_direction, label: needs a direction }
+  - { from: match_intent, to: precondition_gate, label: no entity needed }
+  - { from: match_character, to: precondition_gate, label: resolved }
+  - { from: match_item, to: precondition_gate, label: resolved }
+  - { from: match_direction, to: precondition_gate, label: resolved }
+
+  # Gate outcomes: narrate (NPC action, or the player's success/failure) ...
+  - { from: precondition_gate, to: narrate_npc, label: pass (NPC action) }
+  - { from: precondition_gate, to: narrate_ok, label: pass (player command) }
+  - { from: precondition_gate, to: narrate_fail, label: fail (surfaced) }
+  # ... or, for an NPC, feed the failure back and retry the decision.
+  - {
+      from: precondition_gate,
+      to: decide,
+      label: fail -> reflect & retry,
+      condition: precondition_failure,
+    }
