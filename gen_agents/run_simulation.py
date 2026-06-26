@@ -70,9 +70,10 @@ DEFAULT_STORAGE = os.path.join(_FRONTEND, "storage")
 # to show). setup.sh copies it into frontend/storage/.
 DEFAULT_BASE_SIM = "base_the_ville_n25"
 
-# The run-time defaults (steps, start, sec-per-step, sim-code, base-sim) now live
-# on SimulationRuntimeConfig (sim_config.py); the CLI flags default to None and
-# fall back to that config. DEFAULT_STEPS is kept only for the --steps help text.
+# The run-time defaults (steps, start, sec-per-step) live on SimulationRuntimeConfig
+# and the Smallville run-directory defaults (sim-code, base-sim) on SmallvilleConfig
+# (both in sim_config.py); the CLI flags default to None and fall back to that config.
+# DEFAULT_STEPS is kept only for the --steps help text.
 #
 # 3 hours of in-game time at 10 seconds per step (8-11am): long enough for each
 # agent to work through its daily schedule of stops, so memory keeps growing
@@ -602,14 +603,17 @@ def main() -> None:
         if args.sec_per_step is not None
         else sim.simulation.sec_per_step
     )
-    sim_code = args.sim_code if args.sim_code is not None else sim.simulation.sim_code
-    base_sim = args.base_sim if args.base_sim is not None else sim.simulation.base_sim
     start_dt = (
         args.start if args.start is not None else _parse_start(sim.simulation.start)
     )
+    # The run-directory knobs are Smallville-specific (the_ville export layout), so
+    # they live on the `smallville` sub-section rather than the shared `simulation`
+    # one. An explicit CLI flag still wins over the configured value.
+    sim_code = args.sim_code if args.sim_code is not None else sim.smallville.sim_code
+    base_sim = args.base_sim if args.base_sim is not None else sim.smallville.base_sim
     # How many residents actually run (config only -- no CLI flag). Slice the full
     # roster so the cast and the world are built from the *same* personas.
-    active_personas = ALL_PERSONAS[: sim.simulation.num_agents]
+    active_personas = ALL_PERSONAS[: sim.smallville.num_agents]
 
     # The t=0 seed assets (issue #79): the relationships CSV sits beside the maze
     # under --ville-dir, and each persona's partial known-places tree lives in its
