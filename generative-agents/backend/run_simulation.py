@@ -133,6 +133,8 @@ def simulate(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
+    personas: list[dict] | None = None,
+    build_world_fn=None,
     clock: SimClock | None = None,
     planner_client=None,
     reflector_client=None,
@@ -207,10 +209,17 @@ def simulate(
     writes ``personas/<Name>/daily_plan.json`` and ``backend.compare_plans`` reads it
     back without re-calling the model. Also an out-parameter, for the same reason.
     """
-    game, chars = build_world(world_map)
+    # Default to the module's the_ville cast/builder so existing callers and the
+    # determinism tests are unchanged; a different world (e.g. UPenn) passes its
+    # own personas + builder. The builder receives the world_map so perception
+    # (issue #82) stays tile-distance based.
+    personas = personas if personas is not None else PERSONAS
+    build_world_fn = build_world_fn if build_world_fn is not None else build_world
+
+    game, chars = build_world_fn(world_map)
     attach_agents(
         chars,
-        PERSONAS,
+        personas,
         ledger=ledger,
         embedding_client=embedding_client,
         relationships_csv=relationships_csv,
@@ -223,11 +232,11 @@ def simulate(
         out_planner_sources=out_planner_sources,
         out_plans=out_plans,
     )
-    emoji = {p["name"]: p["emoji"] for p in PERSONAS}
-    order = [p["name"] for p in PERSONAS]
+    emoji = {p["name"]: p["emoji"] for p in personas}
+    order = [p["name"] for p in personas]
 
     state = {}
-    for spec in PERSONAS:
+    for spec in personas:
         char = chars[spec["name"]]
         state[char.name] = {
             "tile": tuple(spec["start_tile"]),

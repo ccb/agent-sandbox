@@ -61,20 +61,35 @@ reads that JSON (`FileAccess` + `JSON`, so **no Tiled importer is needed**), bui
 (roads = the dirt path tinted darker; buildings = a 16×16 crop of the house roof). A
 `Camera2D` zooms out to frame the whole campus.
 
+**`tiled_map.gd`** (the `Map` node in `scenes/campus_urban.tscn`). A *generic*
+renderer for any Tiled map whose tileset is one packed image: it reads the `.tmj`,
+loads the referenced sheet, registers every tile, and paints each layer by GID. We
+use it to show the same campus drawn with **real art** — `maps/upenn_core_urban.tmj`,
+baked with **Kenney's RPG Urban Pack (CC0)** by the geo tool (`--theme urban`):
+brick buildings, asphalt streets, tan paving for Locust Walk, green for the lawns.
+The geo tool rotates the map so Penn's streets run **straight along the X/Y axes**
+(the real grid is ~8.6° off north) instead of on a slant, and the renderer uses
+nearest filtering + tile padding so there are **no seams** between tiles. This is
+the no-plugin equivalent of importing that `.tmj` with the
+[YATI](https://github.com/Kiamo2/YATI) addon, and the same file also loads natively
+in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it references.)
+
 ### Regenerating / swapping the campus map
 
-`maps/upenn_core.tmj` is a **copy** of the geo tool's output (generated on the
-`geo/osm-to-tiled-poc` branch). To refresh it, or to render the full campus instead of
-the 34th–38th × Spruce–Walnut core subset:
+The `maps/*.tmj` files are **copies** of the geo tool's output. To refresh them, or
+to render the full campus instead of the 34th–38th × Spruce–Walnut core subset:
 
 ```bash
-# from the geo branch / worktree:
-uv run python tools/geo/osm_to_tiled.py --area core    # or --area campus
-cp tools/geo/out/upenn_core.tmj <this project>/maps/   # (upenn.tmj for the full campus)
+uv run python tools/geo/osm_to_tiled.py --area core                 # Cute Fantasy map (placeholder GIDs)
+uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
+cp tools/geo/out/upenn_core.tmj        godot-generative-agents/maps/
+cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/maps/
+cp tools/geo/out/tilemap_packed.png    godot-generative-agents/maps/
 ```
 
-`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene to
-save a `campus_snapshot.png` of the whole map (used to verify the render).
+`scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene
+(optionally with `-- <scene.tscn> <out.png>`) to save a screenshot of a map, used to
+verify the render.
 
 ## Running it
 
@@ -82,8 +97,14 @@ Open the project folder in the Godot 4.6 editor and press **Play** (F5), or from
 terminal:
 
 ```bash
-# Windowed (watch them wander):
+# Windowed (Cute Fantasy campus + wanderers):
 /Applications/Godot.app/Contents/MacOS/Godot --path .
+
+# The same campus in real Kenney CC0 urban art:
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/campus_urban.tscn
+
+# Watch the agent simulation replay on the campus:
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
 
 # Headless smoke test (imports + runs ~300 frames, then quits):
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --import
@@ -93,6 +114,30 @@ terminal:
 The first run regenerates the `.godot/` import cache (git-ignored); the committed
 `*.import` / `*.uid` sidecars let Godot recognize the assets without re-importing
 everything.
+
+## Watching the Penn agent simulation
+
+`scenes/penn_replay.tscn` plays a **generative-agents simulation on the real
+campus**: a few Penn personas (a student, a professor, an architecture grad)
+walking between real buildings on their daily schedules. Godot is just the
+*viewer* — the simulation runs offline in Python and writes a replay file the
+scene reads (the same split as the upstream Phaser replay):
+
+```bash
+# 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env):
+uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
+
+# 2. Watch it:
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
+```
+
+The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast) and
+`the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
+The agent *engine* (deciding, pathfinding) is reused from `generative-agents/backend`,
+so this is the same simulation that runs there — just rendered here instead of in
+Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path the
+sim chose, with a name + activity label above each sprite. (`sim/` carries a
+`.gdignore` so Godot leaves the Python alone.)
 
 ## Where this fits — the full-port proposals
 

@@ -1,0 +1,117 @@
+# A small University of Pennsylvania cast for the generative-agents sim, walking
+# the REAL campus. The map is derived from OpenStreetMap by
+# tools/geo/osm_to_ville.py (the_upenn matrix); each location's `address` is one
+# of that matrix's "UPenn:<building>:grounds" sector addresses, and every
+# `start_tile` is a walkable doorstep tile the geo tool reported for that
+# building. The mock brain drives each persona through its schedule, so this runs
+# offline, deterministically, and free -- the same as the_ville cast.
+#
+# Buildings used (all real, all in the 34th-38th x Spruce-Walnut core):
+#   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
+#   Irvine Auditorium, Stouffer College House, Locust House.
+
+personas:
+- name: Maya Chen
+  home: Stouffer College House
+  persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
+    diligent, and a little caffeine-dependent. I spend most of my day studying in
+    Van Pelt Library between classes.
+  emoji: 📚
+  start_tile:
+  - 25
+  - 109
+  schedule:
+  - place: Van Pelt Library
+    activity: studying for an organic chemistry exam
+    emoji: 📚
+    steps: 60
+  - place: Houston Hall
+    activity: grabbing lunch at the student union
+    emoji: 🍜
+    steps: 40
+  - place: College Hall
+    activity: heading to an afternoon seminar
+    emoji: 🎓
+    steps: 50
+  - place: Van Pelt Library
+    activity: reviewing her notes before tomorrow
+    emoji: 📖
+- name: Professor Ellis
+  home: College Hall
+  persona: I am Professor Ellis, 52. I teach history at Penn and keep an office in
+    College Hall. I am thoughtful, a bit formal, and devoted to my students.
+  emoji: 🧑‍🏫
+  start_tile:
+  - 118
+  - 67
+  schedule:
+  - place: Williams Hall
+    activity: giving a morning lecture
+    emoji: 🗣️
+    steps: 70
+  - place: Houston Hall
+    activity: having lunch with a colleague
+    emoji: 🍽️
+    steps: 40
+  - place: Van Pelt Library
+    activity: pulling sources for a paper
+    emoji: 📜
+    steps: 50
+  - place: College Hall
+    activity: holding office hours
+    emoji: 🧑‍🏫
+- name: Diego Torres
+  home: Locust House
+  persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
+    creative, focused, and always sketching. I spend long hours in the Meyerson
+    Hall studio.
+  emoji: ✏️
+  start_tile:
+  - 58
+  - 51
+  schedule:
+  - place: Meyerson Hall
+    activity: working on a studio model
+    emoji: ✏️
+    steps: 65
+  - place: Van Pelt Library
+    activity: researching precedents for a project
+    emoji: 🏛️
+    steps: 45
+  - place: Irvine Auditorium
+    activity: attending a guest lecture
+    emoji: 🎤
+    steps: 50
+  - place: Meyerson Hall
+    activity: refining the model late into the day
+    emoji: ✏️
+
+locations:
+- name: Penn campus
+  description: The streets and walks of Penn's campus, tying every corner together.
+  address: null
+  hub: true
+- name: Stouffer College House
+  description: A residential college house on the south side of campus where Maya lives.
+  address: UPenn:Stouffer College House:grounds
+- name: Locust House
+  description: A residence right on Locust Walk, the pedestrian spine of campus.
+  address: UPenn:Locust House:grounds
+- name: College Hall
+  description: Penn's oldest building and administrative heart, on College Green.
+  address: UPenn:College Hall:grounds
+- name: Van Pelt Library
+  description: The main university library, where students study at all hours.
+  address: UPenn:Van Pelt Library:grounds
+- name: Houston Hall
+  description: The student union -- the nation's first -- with dining and lounges.
+  address: UPenn:Houston Hall:grounds
+- name: Williams Hall
+  description: A classroom and language-department building just off College Green.
+  address: UPenn:Williams Hall:grounds
+- name: Meyerson Hall
+  description: Home of the Weitzman School of Design, full of architecture studios.
+  address: UPenn:Meyerson Hall:grounds
+- name: Irvine Auditorium
+  description: The landmark auditorium that hosts lectures and performances.
+  address: UPenn:Irvine Auditorium:grounds
