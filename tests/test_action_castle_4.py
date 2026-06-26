@@ -650,3 +650,18 @@ def test_cannot_walk_north_into_the_deep_woods():
     # FOLLOW DEER is the way in.
     game.do_command("follow deer")
     assert game.player.location.name == "Deep Woods"
+
+
+def test_tying_the_rope_removes_it_from_inventory():
+    # The rope is tied to the door + fed out the window -- it leaves your hands.
+    game, _ = _play(ESCAPE_TO_GARDENS[: ESCAPE_TO_GARDENS.index("tie rope") + 1])
+    assert game.locations["Tower"].get_property("rope_tied")
+    assert "rope" not in game.player.inventory
+
+
+def test_talk_to_prince_about_art_gives_the_quest_line():
+    # "art" is aliased to the same response as "quest" (he packed art supplies).
+    game, cap = _play(
+        ESCAPE_TO_GARDENS + ["south", "south", "talk to prince about art"]
+    )
+    assert _said(cap, "rescue the princess from yon tower")

@@ -209,6 +209,9 @@ class TieRope(actions.Action):
 
     def apply_effects(self):
         self.player.location.set_property("rope_tied", True)
+        # The rope is now tied to the door and fed out the window -- it leaves
+        # your hands.
+        _take_held(self.player, "rope")
         self.parser.ok(
             "You tie the rope to the door's iron ring and feed the rest out the "
             "window. Now you can CLIMB DOWN."
@@ -1381,8 +1384,10 @@ def build_game() -> ActionCastle4:
         "I am a prince on a quest; first, I must paint.",
     )
     prince.talk_text = '"Good day, m\'lady! What a delightful view! So fortunate I packed my art supplies before my quest."'
+    _prince_quest_line = '"I\'ve traveled many leagues to rescue the princess from yon tower. But first, I must paint!"'
     prince.talk_topics = {
-        "quest": '"I\'ve traveled many leagues to rescue the princess from yon tower. But first, I must paint!"',
+        "quest": _prince_quest_line,
+        "art": _prince_quest_line,  # "talk to prince about art" -> the quest line
         "tower": '"Yon tower is where the princess sleeps for all eternity, cursed by an evil witch\'s spell... or something."',
         "princess": '"I hear she is beautiful -- rose lips, flaxen hair, and delicate feet like an elf maid."',
     }
