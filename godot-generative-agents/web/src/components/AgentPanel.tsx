@@ -7,10 +7,15 @@ import "./AgentPanel.css";
 
 export function AgentPanel({ replay }: { replay: Replay }) {
   const { personas, sec_per_step, steps } = replay.meta;
-  const [selected, setSelected] = useState(personas[0].name);
+  // Which agent's card you're looking at. Arrows step through the personas
+  // (wrapping at the ends), like Smallville's agent navigator — switching only
+  // changes WHO you see; the replay keeps playing underneath.
+  const [index, setIndex] = useState(0);
   const step = useReplayStep(steps);
 
-  const persona = personas.find((p) => p.name === selected) ?? personas[0];
+  const count = personas.length;
+  const persona = personas[index] ?? personas[0];
+  const go = (delta: number) => setIndex((i) => (i + delta + count) % count);
   const frame = replay.frames[Math.min(step, replay.frames.length - 1)]?.[persona.name];
 
   // The full memory stream accrued so far (everything formed by the current
@@ -21,27 +26,42 @@ export function AgentPanel({ replay }: { replay: Replay }) {
 
   return (
     <aside className="agent-panel">
-      <div className="agent-tabs" role="tablist">
-        {personas.map((p) => (
-          <button
-            key={p.name}
-            type="button"
-            role="tab"
-            aria-selected={p.name === persona.name}
-            className={`agent-tab${p.name === persona.name ? " is-active" : ""}`}
-            onClick={() => setSelected(p.name)}
-          >
-            <span className="agent-tab-emoji" aria-hidden="true">
-              {p.emoji}
-            </span>
-            {p.name}
-          </button>
-        ))}
+      <div className="agent-nav">
+        <button
+          type="button"
+          className="agent-nav-btn"
+          onClick={() => go(-1)}
+          disabled={count < 2}
+          aria-label="Previous agent"
+          title="Previous agent"
+        >
+          ‹
+        </button>
+        <span className="agent-indicator">
+          <span className="agent-indicator-emoji" aria-hidden="true">
+            {persona.emoji}
+          </span>
+          {persona.name}
+          <span className="agent-indicator-count">
+            {index + 1} / {count}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="agent-nav-btn"
+          onClick={() => go(1)}
+          disabled={count < 2}
+          aria-label="Next agent"
+          title="Next agent"
+        >
+          ›
+        </button>
       </div>
 
       <AgentCard
         name={persona.name}
         emoji={persona.emoji}
+        index={index}
         frame={frame}
         secPerStep={sec_per_step}
       />

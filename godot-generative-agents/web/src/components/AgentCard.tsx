@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { AgentFrame } from "../types/replay";
 import { MemoryRows } from "./MemoryList";
+import { SpritePreview } from "./SpritePreview";
 
 // The activity string is "<activity> @ UPenn:Building:grounds"; split it into the
 // action (before @) and location (after @), like the Smallville card does.
@@ -24,11 +25,14 @@ const dash = <span className="muted">—</span>;
 export function AgentCard({
   name,
   emoji,
+  index,
   frame,
   secPerStep,
 }: {
   name: string;
   emoji: string;
+  /** Persona index — selects the sprite tint so the portrait matches the map. */
+  index: number;
   frame: AgentFrame | undefined;
   secPerStep: number;
 }) {
@@ -41,10 +45,15 @@ export function AgentCard({
   return (
     <div className="agent-card">
       <div className="agent-card-head">
-        <div className="agent-portrait" aria-hidden="true">
-          {emoji}
-        </div>
-        <h2 className="agent-name">{name}</h2>
+        {/* The agent's actual on-map sprite (tinted to match the canvas), like
+            Smallville's per-character portrait. */}
+        <SpritePreview index={index} className="agent-portrait" />
+        <h2 className="agent-name">
+          {name}
+          <span className="agent-name-emoji" aria-hidden="true">
+            {emoji}
+          </span>
+        </h2>
       </div>
 
       <Field label="Current Action">{action || dash}</Field>
