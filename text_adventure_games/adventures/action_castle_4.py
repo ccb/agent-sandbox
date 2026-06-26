@@ -512,7 +512,8 @@ class FollowDeer(actions.Action):
         if self.player.location is None or self.player.location.name != "Old Woods":
             self.parser.fail("There's no deer to follow here.")
             return False
-        if self.player.riding is None:
+        riding = self.player.riding
+        if riding is None or riding.name != "horse":
             self.parser.fail("You'd never catch her on foot -- you'll need the horse.")
             return False
         return True
