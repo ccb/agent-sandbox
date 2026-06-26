@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { GodotCanvas } from "./components/GodotCanvas";
 import { AgentPanel } from "./components/AgentPanel";
 import { useReplay } from "./useReplay";
@@ -35,9 +35,20 @@ function viewFromHash(): View {
   return "agents";
 }
 
+// The navigable views, in menu order. The trigger button shows the current
+// one's label; the dropdown lists them all (plus the Docs link).
+const NAV_ITEMS: { view: View; label: string }[] = [
+  { view: "agents", label: "Agent cards" },
+  { view: "game", label: "Game view" },
+  { view: "prompts", label: "Prompt chains" },
+  { view: "reader", label: "Prompts" },
+];
+
 export default function App() {
   const { status, replay, error } = useReplay();
   const [view, setView] = useState<View>(viewFromHash);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onHash = () => setView(viewFromHash());
@@ -45,10 +56,31 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // While the nav menu is open, close it on an outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   const select = (v: View) => {
     window.location.hash = v;
     setView(v);
   };
+
+  const currentLabel = NAV_ITEMS.find((i) => i.view === view)?.label ?? "Menu";
 
   return (
     <div className="app" data-view={view}>
@@ -58,50 +90,50 @@ export default function App() {
           <p className="app-sub">Godot replay, running in the browser</p>
         </div>
         <div className="header-actions">
-          <nav className="view-tabs" role="tablist" aria-label="View">
+          {/* Collapsed nav: the trigger shows the current view and opens a
+              dropdown to switch. Keeps the header uncluttered as views grow. */}
+          <div className="nav-menu" ref={menuRef}>
             <button
               type="button"
-              role="tab"
-              aria-selected={view === "game"}
-              className={`view-tab${view === "game" ? " is-active" : ""}`}
-              onClick={() => select("game")}
+              className="nav-trigger"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
             >
-              Game view
+              <span>{currentLabel}</span>
+              <span className="nav-caret" aria-hidden="true">
+                ▾
+              </span>
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === "agents"}
-              className={`view-tab${view === "agents" ? " is-active" : ""}`}
-              onClick={() => select("agents")}
-            >
-              Agent cards
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === "prompts"}
-              className={`view-tab${view === "prompts" ? " is-active" : ""}`}
-              onClick={() => select("prompts")}
-            >
-              Prompt chains
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === "reader"}
-              className={`view-tab${view === "reader" ? " is-active" : ""}`}
-              onClick={() => select("reader")}
-            >
-              Prompts
-            </button>
-          </nav>
-          {/* Plain link, not a tab: it leaves the SPA for the static MkDocs site
-              served at /docs/ on this same origin (build it with `pnpm gen:docs`).
-              BASE_URL keeps it correct if the app's base path ever changes. */}
-          <a className="view-tab docs-link" href={`${import.meta.env.BASE_URL}docs/`}>
-            Docs
-          </a>
+            {menuOpen && (
+              <div className="nav-dropdown" role="menu" aria-label="Navigate">
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.view}
+                    type="button"
+                    role="menuitem"
+                    className={`nav-item${view === item.view ? " is-active" : ""}`}
+                    onClick={() => {
+                      select(item.view);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                {/* A link, not a view: it leaves the SPA for the static MkDocs
+                    site at /docs/ (build it with `pnpm gen:docs`). BASE_URL keeps
+                    it correct if the app's base path ever changes. */}
+                <a
+                  className="nav-item nav-item--link"
+                  role="menuitem"
+                  href={`${import.meta.env.BASE_URL}docs/`}
+                >
+                  Docs ↗
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
