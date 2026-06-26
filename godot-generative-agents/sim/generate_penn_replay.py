@@ -91,10 +91,15 @@ def main() -> int:
                     "y": int(f[name]["movement"][1]),
                     "act": f[name]["description"],
                     "e": f[name]["pronunciatio"],
-                    # Agent-card cognition (issue #163). The mock leaves these a
-                    # stub/None; a real-LLM run fills them in.
+                    # Agent-card cognition (issue #163). The mock leaves reasoning
+                    # a stub and chat None; a real-LLM run fills them in. `memories`
+                    # is the small set retrieval surfaced for *this* decision (the
+                    # card's "Memories retrieved" shorthand) -- a subset of the full
+                    # `memory_streams` below; it populates even under the mock since
+                    # retrieval still runs (the mock only ignores it when deciding).
                     "reasoning": f[name].get("reasoning"),
                     "chat": f[name].get("chat"),
+                    "memories": f[name].get("memories"),
                 }
                 for name in order
             }
