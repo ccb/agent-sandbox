@@ -1,17 +1,29 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { GodotCanvas } from "./components/GodotCanvas";
 import { AgentPanel } from "./components/AgentPanel";
 import { useReplay } from "./useReplay";
 import "./App.css";
 
-type View = "game" | "agents";
+// Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
+// the Prompt-chains tab needs. Splitting it keeps that weight out of the initial
+// bundle until someone opens the tab.
+const PromptChainView = lazy(() =>
+  import("./components/promptviz/PromptChainView").then((m) => ({
+    default: m.PromptChainView,
+  }))
+);
 
-// Two "pages", selected by the URL hash (#game / #agents) so each is a real,
+type View = "game" | "agents" | "prompts";
+
+// Pages selected by the URL hash (#game / #agents / #prompts) so each is a real,
 // shareable location and the back button works — no router dependency needed.
 // The agent cards are the landing page (the cognitive layer is the point of this
-// companion); the canvas is one explicit hop away at #game.
+// companion); the canvas and the prompt-chain view are one explicit hop away.
 function viewFromHash(): View {
-  return window.location.hash.replace("#", "") === "game" ? "game" : "agents";
+  const hash = window.location.hash.replace("#", "");
+  if (hash === "game") return "game";
+  if (hash === "prompts") return "prompts";
+  return "agents";
 }
 
 export default function App() {
@@ -56,6 +68,15 @@ export default function App() {
             >
               Agent cards
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "prompts"}
+              className={`view-tab${view === "prompts" ? " is-active" : ""}`}
+              onClick={() => select("prompts")}
+            >
+              Prompt chains
+            </button>
           </nav>
           {/* Plain link, not a tab: it leaves the SPA for the static MkDocs site
               served at /docs/ on this same origin (build it with `pnpm gen:docs`).
@@ -85,6 +106,17 @@ export default function App() {
             </div>
           )}
         </section>
+
+        {/* Mounted only when active: Cytoscape needs a sized container at init,
+            and (unlike the Godot canvas) this view has no reason to stay alive
+            in the background. */}
+        {view === "prompts" && (
+          <section className="view view-prompts">
+            <Suspense fallback={<div className="pcv-loading">Loading…</div>}>
+              <PromptChainView />
+            </Suspense>
+          </section>
+        )}
       </main>
     </div>
   );
