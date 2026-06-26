@@ -610,3 +610,12 @@ def test_no_climbing_back_up_from_the_gardens():
     game, _ = _play(ESCAPE_TO_GARDENS + ["up"])
     assert game.player.location.name == "Gardens"
     assert "up" not in game.locations["Gardens"].connections
+
+
+def test_pick_rose_is_flavor_not_a_bare_bush():
+    # The bush is covered in roses (rulebook: "not used for anything") -- picking
+    # one is harmless flavor + the SMELL ROSE gag, not a "bare bush" refusal.
+    game, cap = _play(ESCAPE_TO_GARDENS + ["pick rose", "smell rose"])
+    assert _said(cap, "picked the lone rose")
+    assert "rose" in game.player.inventory
+    assert not _said(cap, "bare")
