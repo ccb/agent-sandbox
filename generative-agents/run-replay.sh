@@ -64,7 +64,7 @@ if [ "$REBUILD" -eq 1 ] || [ ! -f "$SIM_MOVEMENT" ]; then
   fi
   # ${arr[@]+"${arr[@]}"} expands to nothing when the array is empty instead of
   # tripping `set -u` ("unbound variable") on macOS's bash 3.2.
-  uv run python -m backend.run_simulation ${STEPS_ARGS[@]+"${STEPS_ARGS[@]}"}
+  uv run python -m gen_agents.run_simulation ${STEPS_ARGS[@]+"${STEPS_ARGS[@]}"}
 else
   echo ">> Simulation '$SIM_CODE' already generated -- skipping (use --rebuild to force)."
 fi

@@ -4,7 +4,7 @@ The real Smallville map ships as ~38MB of upstream assets that live in the
 git-ignored ``frontend/`` (populated by ``./setup.sh``). So the spatial/export
 tests can't depend on it: on a fresh checkout there's nothing to read. This
 module writes a hand-built maze with the *same on-disk layout* that
-:class:`backend.world_map.WorldMap` reads, so the tests exercise the real
+:class:`gen_agents.world_map.WorldMap` reads, so the tests exercise the real
 address-resolution, path-finding, and export code with no external clone::
 
     <root>/the_ville/matrix/
@@ -39,7 +39,7 @@ _OPEN = "0"  # "0" means empty/walkable in every maze layer
 _WALL = "9999"  # any non-"0" id reads as a wall to WorldMap
 
 # The day-destinations the 25 personas travel to. Each is one engine location
-# (see backend.build_world) -> (sector, arena, sector_id, arena_id, rectangle).
+# (see gen_agents.build_world) -> (sector, arena, sector_id, arena_id, rectangle).
 # The rectangle is an inclusive (x0, y0, x1, y1) tile box of open arena tiles.
 _ARENAS = [
     ("Hobbs Cafe", "cafe", "1001", "2001", (70, 26, 74, 29)),

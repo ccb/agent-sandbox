@@ -1,12 +1,15 @@
-# Shared `gen_agents` package + simulation config (tracking note)
+# Shared `gen_agents` package + simulation config
 
-**Status:** tracking note only — *no code change in this PR.* The work is
-**blocked on [PR #166](https://github.com/ccb/agent-sandbox/pull/166)** ("Penn
-agent world") landing first, so it doesn't balloon that PR's diff or disturb its
-"the_ville stays byte-identical / 50 GA tests pass" guarantee. This doc exists so
-the plan isn't lost; delete it (or move it under `implemented/`) when the move ships.
+**Status:** **Shipped.** `generative-agents/backend/` was extracted to the
+top-level, pip-installed `gen_agents` package, and [PR #100](https://github.com/ccb/agent-sandbox/pull/100)
+(`SimulationConfig`) was folded in (now `gen_agents/sim_config.py`); #100 is closed
+in favor of this. Both frontends (Phaser replay + Godot replay) import the sim by
+the one canonical `gen_agents` path; the `sys.path.insert` hack in the Godot
+generator is gone. The plan below is kept as the historical record. (Originally a
+tracking note blocked on [#166](https://github.com/ccb/agent-sandbox/pull/166),
+which landed first.)
 
-Once #166 lands, this PR delivers **two** things:
+This PR delivered **two** things:
 
 1. **Extract** `generative-agents/backend` into a shared top-level `gen_agents`
    package so both frontends import it by one canonical path.

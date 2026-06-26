@@ -2,7 +2,7 @@
 
 The engine plan data model + helpers are covered in the engine suite
 (``tests/test_planning.py``). These cover the *port-side* planner: that
-:class:`backend.planner.MockPlanner` reproduces a persona's authored
+:class:`gen_agents.planner.MockPlanner` reproduces a persona's authored
 ``world_data.yaml`` schedule exactly -- the property that lets it replace the
 schedule source later without moving a single exported frame.
 
@@ -14,16 +14,16 @@ Fully offline (``build_world`` only, no maze assets, no LLM). Run from
 
 import datetime
 
-from backend.build_world import PERSONAS, build_world
-from backend.planner import (
+from gen_agents.build_world import PERSONAS, build_world
+from gen_agents.planner import (
     DAY_OUTLINE_TOOL,
     HOURLY_TOOL,
     MINUTE_TOOL,
     LLMPlanner,
     MockPlanner,
 )
-from backend.sim_clock import SimClock
-from backend.smallville_agents import attach_agents, maybe_revise_plan
+from gen_agents.sim_clock import SimClock
+from gen_agents.smallville_agents import attach_agents, maybe_revise_plan
 
 from text_adventure_games.planning import (
     BEHIND_SCHEDULE,

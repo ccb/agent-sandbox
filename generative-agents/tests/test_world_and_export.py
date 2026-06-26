@@ -19,16 +19,16 @@ import os
 
 import pytest
 
-from backend import exporter
-from backend.build_world import (
+from gen_agents import exporter
+from gen_agents.build_world import (
     _ALL_PERSONAS,
     MAX_ACTIVE_PERSONAS,
     PERSONAS,
     build_world,
 )
-from backend.run_simulation import _print_cost_summary, simulate
-from backend.smallville_agents import attach_agents
-from backend.world_map import WorldMap
+from gen_agents.run_simulation import _print_cost_summary, simulate
+from gen_agents.smallville_agents import attach_agents
+from gen_agents.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
 from text_adventure_games.reporting import CaptureRenderer, Channel
 from text_adventure_games.usage import UsageLedger
