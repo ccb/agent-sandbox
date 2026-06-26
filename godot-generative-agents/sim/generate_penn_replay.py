@@ -54,14 +54,25 @@ def main() -> int:
         f"{len(personas)} personas. Simulating {args.steps} steps..."
     )
 
+    # `simulate` fills this with each persona's *full* memory stream (the same
+    # UI-ready dicts the Smallville exporter writes). The agent-info companion
+    # panel renders it as a per-agent "memory history" that grows over the
+    # replay; the per-frame `reasoning`/`chat` below feed that agent's card.
+    # Under the mock brain reasoning is a stub and chat is null, but travel/
+    # perform reflections and perception observations still accrue, so the
+    # history is populated either way -- it just gets richer with a real model.
+    memory_streams: dict = {}
     frames = simulate(
         world_map,
         args.steps,
         personas=personas,
         build_world_fn=lambda wm: build_world(wm, personas, locations),
+        out_memories=memory_streams,
     )
 
-    # Compact, Godot-friendly replay: meta + one entry per step per persona.
+    # Godot-friendly replay: meta + one entry per step per persona. The Godot
+    # canvas reads only x/y/act/e; reasoning/chat/memory_streams are extra fields
+    # for the React companion panel (Godot ignores keys it doesn't use).
     order = [p["name"] for p in personas]
     replay = {
         "meta": {
@@ -80,11 +91,18 @@ def main() -> int:
                     "y": int(f[name]["movement"][1]),
                     "act": f[name]["description"],
                     "e": f[name]["pronunciatio"],
+                    # Agent-card cognition (issue #163). The mock leaves these a
+                    # stub/None; a real-LLM run fills them in.
+                    "reasoning": f[name].get("reasoning"),
+                    "chat": f[name].get("chat"),
                 }
                 for name in order
             }
             for f in frames
         ],
+        # Per-persona full memory stream: [{kind, importance, text, created_turn}].
+        # The panel filters to created_turn <= current step to show history so far.
+        "memory_streams": memory_streams,
     }
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

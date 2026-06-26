@@ -22,10 +22,18 @@
   color: #8a93a3;
 }
 
-/* The stage fills the rest of the viewport; the Godot canvas absolutely fills it.
-   `min-height: 0` lets this flex child actually shrink so the canvas can size to
-   the available space. Later, side panels can sit alongside the canvas here. */
+/* The stage fills the rest of the viewport and lays the canvas and the agent
+   panel out side by side. `min-height: 0` lets these flex children actually
+   shrink so the canvas can size to the available space. */
 .app-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* The canvas takes the remaining width; it's the positioned ancestor the
+   absolutely-filled .godot-canvas-wrap anchors to. */
+.stage-canvas {
   position: relative;
   flex: 1;
   min-height: 0;
