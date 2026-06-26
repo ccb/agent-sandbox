@@ -1,7 +1,7 @@
 ---
 name: plan_system
 description: >
-  System message for the LLM daily planner (generative-agents/backend/planner.py,
+  System message for the LLM daily planner (gen_agents/planner.py,
   LLMPlanner, issue #83). Shared across the three-level decomposition -- day
   outline -> hourly -> minute stops -- and the revise pass. Unlike the other
   gen-agents templates (which hold memory content), this IS a real model prompt:

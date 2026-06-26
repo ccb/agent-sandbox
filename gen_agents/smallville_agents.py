@@ -179,6 +179,7 @@ def attach_agents(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
+    vision_r: int = SMALLVILLE_VISION_R,
     planner_client=None,
     reflector_client=None,
     llm_client=None,
@@ -216,8 +217,8 @@ def attach_agents(
     byte-identical to before.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
-    real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
-    offline default -- each agent gets a :class:`~backend.planner.MockPlanner` that
+    real model (:class:`~gen_agents.planner.LLMPlanner`, issue #83). With none -- the
+    offline default -- each agent gets a :class:`~gen_agents.planner.MockPlanner` that
     replays the authored schedule, so the replay stays byte-identical. The agent
     and its memory are built and seeded *before* the planner runs, so a generative
     planner reasons over the same t=0 memory the agent will. If the model returns
@@ -270,7 +271,7 @@ def attach_agents(
         # How far this resident perceives, in tiles (issue #82). The TiledGame's
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
-        char.vision_r = spec.get("vision_r", SMALLVILLE_VISION_R)
+        char.vision_r = spec.get("vision_r", vision_r)
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -336,7 +337,7 @@ def attach_agents(
         )
 
 
-def observe_and_decide(game, char, step: int):
+def observe_and_decide(game, char, step: int, retrieval=None):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
     The Smallville step loop (``run_simulation.simulate``) calls the engine's
@@ -356,6 +357,10 @@ def observe_and_decide(game, char, step: int):
        the environment text, so it never changes what the mock brain reads off
        the first line -- the decision stays deterministic).
 
+    Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
+    retrieval scoring (weights / decay / how many memories surface); ``None``
+    uses :meth:`AgentMemory.retrieve`'s defaults -- identical to today.
+
     Returns the chosen command string, or ``None``.
     """
     agent = char.agent
@@ -363,7 +368,19 @@ def observe_and_decide(game, char, step: int):
         agent.memory.owner = char.name
     agent.memory.perceive(game, char)
     base = game.describe_for(char)
-    relevant = agent.memory.retrieve(query=base, turn=step)
+    if retrieval is None:
+        relevant = agent.memory.retrieve(query=base, turn=step)
+    else:
+        relevant = agent.memory.retrieve(
+            query=base,
+            turn=step,
+            max_records=retrieval.max_records,
+            token_budget=retrieval.token_budget,
+            decay=retrieval.recency_decay,
+            alpha_recency=retrieval.alpha_recency,
+            alpha_importance=retrieval.alpha_importance,
+            alpha_relevance=retrieval.alpha_relevance,
+        )
     # Stash the retrieved block on the agent so the step loop can surface it in
     # the replay's per-agent card (run_simulation -> exporter). This is a plain
     # attribute on our own LLMAgent instance -- the engine class is untouched.
@@ -387,7 +404,7 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     the planner's proposed stops *beyond* it, so a planner that mistakenly rewrote
     a past stop cannot desync the schedule from the on-screen replay.
 
-    A no-op planner (today's :class:`~backend.planner.MockPlanner`) returns the
+    A no-op planner (today's :class:`~gen_agents.planner.MockPlanner`) returns the
     same plan unchanged, so this commits nothing and the exported replay stays
     byte-identical. That is what lets the revision seam be wired into the loop now,
     ahead of the real ``LLMPlanner`` that will actually rewrite the tail.
@@ -489,7 +506,18 @@ def remember_outcome(char, command: str, step: int) -> None:
     agent.memory.add_observation(text, turn=step, importance=importance)
 
 
-def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
+def maybe_converse(
+    game,
+    chars,
+    state,
+    frame,
+    step,
+    cooldowns,
+    order,
+    *,
+    cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
+    max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+) -> int:
     """Run conversations between co-located, settled residents this step (#86).
 
     Called once per step *after* movement resolves. A pair is eligible when both
@@ -517,7 +545,7 @@ def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
     happened = 0
     for a, b in convo.find_conversation_pairs(game, settled):
         key = frozenset((a.name, b.name))
-        if step - cooldowns.get(key, -(10**9)) < CONVERSATION_COOLDOWN_STEPS:
+        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
         # Attribute the meeting's LLM calls to the initiator/step (best effort:
         # the shared client alternates speakers within one converse()).
@@ -525,7 +553,7 @@ def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
         if ctx is not None:
             ctx.update({"actor": a.name, "turn": step, "attempt": 0})
         conversation = convo.converse(
-            game, a, b, turn=step, max_exchanges=CONVERSATION_MAX_EXCHANGES
+            game, a, b, turn=step, max_exchanges=max_exchanges
         )
         if not conversation.happened:
             continue

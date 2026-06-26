@@ -16,7 +16,7 @@ uv run python -m text_adventure_games.promptviz.app --runlog run.jsonl
 # a different chain / app (e.g. generative-agents, run from that dir)
 cd generative-agents
 uv run --project .. python -m text_adventure_games.promptviz.app \
-  --spec backend/promptviz_chains/smallville.yaml
+  --spec gen_agents/promptviz_chains/smallville.yaml
 ```
 
 `--host`/`--port` (or the `HOST`/`PORT` env vars) change the address.

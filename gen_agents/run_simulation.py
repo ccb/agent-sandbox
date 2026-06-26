@@ -12,13 +12,13 @@ decision seam (``Agent.decide`` -> mock client) only at decision points:
 * Every step, advance one tile along any active path, then record the
   character's tile + emoji + action label into that step's movement frame.
 
-Run it (from the ``generative-agents`` directory; ``uv run`` finds the repo's
-project env that has the engine installed)::
+Run it from the repo root (``gen_agents`` is an installed package; ``uv run``
+finds the project env that has it)::
 
-    uv run python -m backend.run_simulation            # 3 hours (1080 steps)
-    uv run python -m backend.run_simulation --steps 120
-    uv run python -m backend.run_simulation --start "2023-02-13 18:00:00"
-    uv run python -m backend.run_simulation --sec-per-step 60   # 1 min/step
+    uv run python -m gen_agents.run_simulation            # 3 hours (1080 steps)
+    uv run python -m gen_agents.run_simulation --steps 120
+    uv run python -m gen_agents.run_simulation --start "2023-02-13 18:00:00"
+    uv run python -m gen_agents.run_simulation --sec-per-step 60   # 1 min/step
 """
 
 import argparse
@@ -26,7 +26,6 @@ import datetime
 import os
 from contextlib import nullcontext
 
-from text_adventure_games.config import GameConfig
 from text_adventure_games.embedding_client import (
     EmbeddingConfig,
     create_embedding_client,
@@ -43,8 +42,9 @@ from text_adventure_games.reporting import Channel, Message, default_renderer
 from text_adventure_games.usage import UsageLedger
 
 from . import exporter
-from .build_world import PERSONAS, build_world
+from .build_world import ALL_PERSONAS, PERSONAS, build_world
 from .sim_clock import SimClock
+from .sim_config import CognitionConfig, SimulationConfig
 from .smallville_agents import (
     attach_agents,
     maybe_converse,
@@ -56,8 +56,11 @@ from .smallville_agents import (
 )
 from .world_map import WorldMap
 
-_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-_GA_DIR = os.path.dirname(_BACKEND_DIR)
+# gen_agents/ is a top-level package at the repo root, but the Smallville replay
+# assets it reads (the maze + storage) still live under the generative-agents/
+# frontend that consumes them, so reach back into that sibling directory.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+_GA_DIR = os.path.join(os.path.dirname(_PACKAGE_DIR), "generative-agents")
 _FRONTEND = os.path.join(_GA_DIR, "frontend")
 
 DEFAULT_VILLE_DIR = os.path.join(_FRONTEND, "static_dirs", "assets", "the_ville")
@@ -66,15 +69,16 @@ DEFAULT_STORAGE = os.path.join(_FRONTEND, "storage")
 # each generated sim so the frontend's click-a-persona state panel has something
 # to show). setup.sh copies it into frontend/storage/.
 DEFAULT_BASE_SIM = "base_the_ville_n25"
-DEFAULT_SIM_CODE = "mock_the_ville_n25"
 
+# The run-time defaults (steps, start, sec-per-step, sim-code, base-sim) now live
+# on SimulationRuntimeConfig (sim_config.py); the CLI flags default to None and
+# fall back to that config. DEFAULT_STEPS is kept only for the --steps help text.
+#
 # 3 hours of in-game time at 10 seconds per step (8-11am): long enough for each
 # agent to work through its daily schedule of stops, so memory keeps growing
-# across the run instead of freezing after the first activity.
+# across the run instead of freezing after the first activity. The 8am start
+# (the town waking up) lives on SimulationRuntimeConfig.start.
 DEFAULT_STEPS = 1080
-# Start at 8am: the town is waking, the cafe opens, students head out -- a lively
-# hour. (The base sim starts at midnight, when everyone is asleep.)
-DEFAULT_START_DT = datetime.datetime(2023, 2, 13, 8, 0, 0)
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
 
@@ -103,7 +107,7 @@ def resolve_embedding_client(provider: str | None):
 
     Either way the deterministic mock brain decides from location alone, so the
     exported replay stays byte-identical; an embedding client only reorders the
-    (mock-ignored) retrieved-memory block. Run ``backend.compare_retrieval`` to
+    (mock-ignored) retrieved-memory block. Run ``gen_agents.compare_retrieval`` to
     actually watch semantic vs keyword retrieval diverge.
     """
     if not provider:
@@ -130,6 +134,8 @@ def simulate(
     ledger: UsageLedger | None = None,
     embedding_client=None,
     *,
+    retrieval=None,
+    cognition=None,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
@@ -155,6 +161,16 @@ def simulate(
     relevance. The mock brain decides from location alone, so the frames are
     byte-identical with or without it; only the retrieved-memory block changes.
 
+    Pass an optional ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune
+    the memory-retrieval scoring; ``None`` uses the engine defaults. As above, the
+    mock brain ignores the retrieved block, so the frames stay byte-identical --
+    only *which* memories surface changes.
+
+    Pass an optional ``cognition`` (:class:`sim_config.CognitionConfig`) to set the
+    perception radius (``vision_r``) and conversation pacing; ``None`` uses today's
+    defaults. ``vision_r`` only changes co-presence under a TiledGame, and
+    conversation is a no-op under the mock brain, so the mock replay is unchanged.
+
     Pass ``relationships_csv`` / ``base_personas_dir`` (the upstream bootstrap
     assets) to seed each persona at t=0 -- relationships into memory, partial
     known-places into knowledge (issue #79, via :func:`attach_agents`). Both are
@@ -168,7 +184,7 @@ def simulate(
     out-parameter (not part of the return) so the many ``frames = simulate(...)``
     callers and the determinism tests stay unchanged.
 
-    Pass a :class:`~backend.sim_clock.SimClock` to enable clock-based plan
+    Pass a :class:`~gen_agents.sim_clock.SimClock` to enable clock-based plan
     revision (issue #83): at an hour boundary an agent still en route is "behind
     schedule," a trigger its planner may react to. With no clock (the test
     default) those triggers never fire. Either way the mock planner's ``revise``
@@ -176,7 +192,7 @@ def simulate(
     *whether the seam is offered*, not the deterministic decisions themselves.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
-    real model (:class:`~backend.planner.LLMPlanner`); with none -- the offline
+    real model (:class:`~gen_agents.planner.LLMPlanner`); with none -- the offline
     default -- each agent replays its authored schedule via ``MockPlanner`` and the
     replay is byte-identical. ``main`` supplies one only for a non-mock provider.
 
@@ -187,7 +203,7 @@ def simulate(
     client is also the brain, so decisions stay deterministic and byte-identical.
     A real ``llm_client`` also enables **conversation** (NEXT-STEPS Phase E, issue
     #86): co-located, settled residents run a turn-taking dialogue each step (via
-    :func:`~backend.smallville_agents.maybe_converse`), writing each line into both
+    :func:`~gen_agents.smallville_agents.maybe_converse`), writing each line into both
     agents' memory streams and onto their replay cards' ``chat`` field. With the
     mock brain no utterance is produced, so no conversation happens and the replay
     stays byte-identical.
@@ -206,7 +222,7 @@ def simulate(
 
     Pass an ``out_plans`` dict to collect each persona's generated plan
     (``{name: DailyPlan.to_primitive()}``) so the run can persist it; the exporter
-    writes ``personas/<Name>/daily_plan.json`` and ``backend.compare_plans`` reads it
+    writes ``personas/<Name>/daily_plan.json`` and ``gen_agents.compare_plans`` reads it
     back without re-calling the model. Also an out-parameter, for the same reason.
     """
     # Default to the module's the_ville cast/builder so existing callers and the
@@ -215,6 +231,9 @@ def simulate(
     # (issue #82) stays tile-distance based.
     personas = personas if personas is not None else PERSONAS
     build_world_fn = build_world_fn if build_world_fn is not None else build_world
+    # Cognition defaults (perception radius, conversation pacing) come from the
+    # config; None means "today's behavior", i.e. CognitionConfig()'s defaults.
+    cog = cognition if cognition is not None else CognitionConfig()
 
     game, chars = build_world_fn(world_map)
     attach_agents(
@@ -224,6 +243,7 @@ def simulate(
         embedding_client=embedding_client,
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
+        vision_r=cog.vision_r,
         planner_client=planner_client,
         reflector_client=reflector_client,
         llm_client=llm_client,
@@ -318,7 +338,7 @@ def simulate(
                 # the outcome, the same shape react_behavior gives engine NPCs.
                 # The usage context above is set first so the decide() call
                 # inside observe_and_decide is attributed to this persona/step.
-                command = observe_and_decide(game, char, _step)
+                command = observe_and_decide(game, char, _step, retrieval=retrieval)
                 # Capture the thinking behind this decision for the replay card:
                 # the reasoning the agent produced and the memories it retrieved
                 # (stashed on the agent by observe_and_decide). They persist on
@@ -393,7 +413,15 @@ def simulate(
         chats_this_step = 0
         if conversation_enabled:
             chats_this_step = maybe_converse(
-                game, chars, state, frame, _step, conversation_cooldowns, order
+                game,
+                chars,
+                state,
+                frame,
+                _step,
+                conversation_cooldowns,
+                order,
+                cooldown_steps=cog.conversation_cooldown_steps,
+                max_exchanges=cog.conversation_max_exchanges,
             )
         frames.append(frame)
 
@@ -449,35 +477,42 @@ def _print_cost_summary(ledger: UsageLedger, renderer=None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a Smallville replay.")
+    # The run-time flags default to None so a value set in --config (or its
+    # SimulationConfig defaults) is only overridden when the flag is given
+    # explicitly. The documented default below is SimulationRuntimeConfig's.
     parser.add_argument(
         "--steps",
         type=int,
-        default=DEFAULT_STEPS,
-        help="number of steps to simulate (default: %(default)s = 3 hours at 10s/step)",
+        default=None,
+        help=f"number of steps to simulate (default: {DEFAULT_STEPS} = 3 hours at "
+        "10s/step, unless set in --config)",
     )
     parser.add_argument(
         "--start",
         type=_parse_start,
-        default=DEFAULT_START_DT,
+        default=None,
         metavar="ISO_DATETIME",
-        help="in-game start time, ISO format (default: 2023-02-13 08:00:00)",
+        help="in-game start time, ISO format (default: 2023-02-13 08:00:00, "
+        "unless set in --config)",
     )
     parser.add_argument(
         "--sec-per-step",
         type=int,
-        default=exporter.SEC_PER_STEP,
-        help="seconds of in-game time per step (default: %(default)s)",
+        default=None,
+        help=f"seconds of in-game time per step (default: {exporter.SEC_PER_STEP}, "
+        "unless set in --config)",
     )
-    parser.add_argument("--sim-code", default=DEFAULT_SIM_CODE)
+    parser.add_argument("--sim-code", default=None)
     parser.add_argument("--ville-dir", default=DEFAULT_VILLE_DIR)
     parser.add_argument("--storage", default=DEFAULT_STORAGE)
-    parser.add_argument("--base-sim", default=DEFAULT_BASE_SIM)
+    parser.add_argument("--base-sim", default=None)
     parser.add_argument(
         "--config",
         metavar="FILE",
         default=None,
-        help="GameConfig YAML/JSON file; its 'observability' section sets the "
-        "usage log (falls back to GameConfig.from_env() when omitted)",
+        help="SimulationConfig YAML/JSON file: run-time (simulation), memory "
+        "(retrieval), embedding, and engine (game: ...) sections. Falls back to "
+        "SimulationConfig.from_env() when omitted; explicit CLI flags still win.",
     )
     parser.add_argument(
         "--llm-log",
@@ -503,7 +538,7 @@ def main() -> None:
         "keyword-overlap relevance, the offline default (EMBEDDING_PROVIDER is "
         "honored when this flag is absent). The mock brain ignores retrieved "
         "memories, so the replay is byte-identical either way -- run "
-        "`python -m backend.compare_retrieval` to compare retrieval directly.",
+        "`python -m gen_agents.compare_retrieval` to compare retrieval directly.",
     )
     args = parser.parse_args()
 
@@ -516,12 +551,42 @@ def main() -> None:
     world_map = WorldMap(args.ville_dir)
     print(f"Loaded the_ville ({world_map.width}x{world_map.height}).")
 
+    # Load the global SimulationConfig: from --config (a YAML/JSON file) or, when
+    # omitted, from the environment. It composes the engine's GameConfig (the
+    # `game:` section -> LLM, observability, ...) and adds the sim's run-time and
+    # memory-retrieval knobs. Explicit CLI flags below still take precedence.
+    sim = (
+        SimulationConfig.from_file(args.config)
+        if args.config
+        else SimulationConfig.from_env()
+    )
+    # Explicit usage-log flags override the config's observability section.
+    if args.llm_log:
+        sim.game.observability.log_path = args.llm_log
+    if args.llm_log_prompts:
+        sim.game.observability.log_prompts = True
+
     # Semantic memory relevance (issue #102): the --embeddings flag (else
     # EMBEDDING_PROVIDER) selects a backend, degrading to keyword overlap when
-    # none is set or installable. The mock brain ignores the retrieved block, so
-    # this never changes the exported replay -- it's the seam a real LLM brain
-    # would reason over (NEXT-STEPS Phase A); compare_retrieval.py shows the diff.
+    # none is set or installable. When neither flag nor env is given, a config-file
+    # `embedding:` section is the last-resort source. The mock brain ignores the
+    # retrieved block, so this never changes the exported replay -- it's the seam a
+    # real LLM brain would reason over (NEXT-STEPS Phase A); compare_retrieval.py
+    # shows the diff.
     embedding_client = resolve_embedding_client(args.embeddings)
+    if (
+        embedding_client is None
+        and args.embeddings is None
+        and not os.environ.get("EMBEDDING_PROVIDER")
+        and sim.embedding is not None
+    ):
+        try:
+            embedding_client = create_embedding_client(sim.embedding)
+        except (ImportError, ValueError) as e:
+            print(
+                f"Warning: could not create embedding client from config ({e}); "
+                "falling back to keyword-overlap relevance."
+            )
     relevance_mode = (
         f"semantic ({type(embedding_client).__name__})"
         if embedding_client is not None
@@ -529,22 +594,29 @@ def main() -> None:
     )
     print(f"Memory retrieval relevance: {relevance_mode}.")
 
-    # Observability follows the global GameConfig: load it from --config (or the
-    # environment), then let the explicit CLI flags override its observability
-    # section. The config builds the per-run JSONL artifact, so the sim honors a
-    # log_path set anywhere a GameConfig can come from (file, env, or flag).
-    config = GameConfig.from_file(args.config) if args.config else GameConfig.from_env()
-    if args.llm_log:
-        config.observability.log_path = args.llm_log
-    if args.llm_log_prompts:
-        config.observability.log_prompts = True
+    # Resolve the run-time knobs: an explicit CLI flag wins, else the config's
+    # value (from --config, or SimulationConfig's defaults).
+    steps = args.steps if args.steps is not None else sim.simulation.steps
+    sec_per_step = (
+        args.sec_per_step
+        if args.sec_per_step is not None
+        else sim.simulation.sec_per_step
+    )
+    sim_code = args.sim_code if args.sim_code is not None else sim.simulation.sim_code
+    base_sim = args.base_sim if args.base_sim is not None else sim.simulation.base_sim
+    start_dt = (
+        args.start if args.start is not None else _parse_start(sim.simulation.start)
+    )
+    # How many residents actually run (config only -- no CLI flag). Slice the full
+    # roster so the cast and the world are built from the *same* personas.
+    active_personas = ALL_PERSONAS[: sim.simulation.num_agents]
 
     # The t=0 seed assets (issue #79): the relationships CSV sits beside the maze
     # under --ville-dir, and each persona's partial known-places tree lives in its
     # bootstrap_memory under the base sim. Both feed attach_agents via simulate;
     # base_personas is reused below for the exporter's persona-memory copy.
     relationships_csv = os.path.join(args.ville_dir, "agent_history_init_n25.csv")
-    base_personas = os.path.join(args.storage, args.base_sim, "personas")
+    base_personas = os.path.join(args.storage, base_sim, "personas")
 
     # The LLM brain (NEXT-STEPS Phase A), gated by LLM_PROVIDER exactly like the
     # engine's client_from_env: "anthropic"/"openai" build a real client; unset or
@@ -558,7 +630,7 @@ def main() -> None:
     # artifact. With the mock brain every line is $0; a real brain records into
     # this same ledger (created with it below), so the cost summary stays accurate.
     ledger = UsageLedger()
-    run_log = config.build_run_log(
+    run_log = sim.game.build_run_log(
         provider=provider or "mock",
         model=model or "mock",
         turn_mode="simultaneous",
@@ -607,12 +679,16 @@ def main() -> None:
             run_log.attach(ledger)
         frames = simulate(
             world_map,
-            args.steps,
+            steps,
             ledger=ledger,
             embedding_client=embedding_client,
+            retrieval=sim.retrieval,
+            cognition=sim.cognition,
             relationships_csv=relationships_csv,
             base_personas_dir=base_personas,
             out_memories=memory_streams,
+            personas=active_personas,
+            build_world_fn=lambda wm: build_world(wm, active_personas),
             clock=clock,
             llm_client=llm_client,
             planner_client=llm_client,
@@ -620,7 +696,7 @@ def main() -> None:
             out_planner_sources=planner_sources,
             out_plans=plans,
         )
-    print(f"Simulated {len(frames)} steps for {len(PERSONAS)} agents.")
+    print(f"Simulated {len(frames)} steps for {len(active_personas)} agents.")
     if llm_client is not None:
         via_llm = sorted(n for n, s in planner_sources.items() if s == "llm")
         fell_back = sorted(n for n, s in planner_sources.items() if s == "static")
@@ -635,22 +711,22 @@ def main() -> None:
     if run_log is not None:
         print(f"Wrote usage log to {run_log.path}")
 
-    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in PERSONAS}
+    start_tiles = {p["name"]: tuple(p["start_tile"]) for p in active_personas}
     sim_dir = exporter.write_simulation(
         storage_root=args.storage,
-        sim_code=args.sim_code,
+        sim_code=sim_code,
         frames=frames,
-        start_dt=args.start,
+        start_dt=start_dt,
         start_tiles=start_tiles,
         base_personas_dir=base_personas,
-        sec_per_step=args.sec_per_step,
+        sec_per_step=sec_per_step,
         memory_streams=memory_streams,
         plans=plans,
     )
     print(f"Wrote simulation to {sim_dir}")
     print(
         "Start the frontend, then open:\n"
-        f"  http://localhost:8000/replay/{args.sim_code}/0/"
+        f"  http://localhost:8000/replay/{sim_code}/0/"
     )
 
 

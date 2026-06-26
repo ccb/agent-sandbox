@@ -3,7 +3,7 @@
 The engine dialogue seam is covered in ``tests/test_conversation.py`` (one level
 up). These cover the *port-side* wiring:
 
-* :func:`~backend.smallville_agents.maybe_converse` makes co-located, settled
+* :func:`~gen_agents.smallville_agents.maybe_converse` makes co-located, settled
   residents talk, writes the dialogue into both memory streams, surfaces it on
   both replay cards as a list of ``[speaker, line]`` pairs, and throttles a pair
   with a cooldown; and
@@ -18,14 +18,14 @@ Run from ``generative-agents``::
 
 import pytest
 
-from backend.build_world import PERSONAS, build_world
-from backend.run_simulation import simulate
-from backend.smallville_agents import (
+from gen_agents.build_world import PERSONAS, build_world
+from gen_agents.run_simulation import simulate
+from gen_agents.smallville_agents import (
     CONVERSATION_COOLDOWN_STEPS,
     attach_agents,
     maybe_converse,
 )
-from backend.world_map import WorldMap
+from gen_agents.world_map import WorldMap
 
 from synthetic_ville import build_synthetic_ville
 
@@ -106,6 +106,28 @@ def test_maybe_converse_respects_cooldown():
     # After the cooldown elapses -> they may talk again.
     later = CONVERSATION_COOLDOWN_STEPS + 1
     assert maybe_converse(game, chars, state, frame, later, cooldowns, order) == 1
+
+
+def test_maybe_converse_cooldown_is_configurable():
+    # The cooldown is a CognitionConfig knob (run_simulation threads it in): with
+    # cooldown_steps=0 the same pair may talk on consecutive steps.
+    game, chars = build_world()
+    attach_agents(chars, PERSONAS, llm_client=_ChattyBrain())
+    order = [p["name"] for p in PERSONAS]
+    state = {name: {"performing": False, "path": [1], "chat": None} for name in order}
+    _settle_together(chars, order[0], order[1], state)
+    frame = {order[0]: {"chat": None}, order[1]: {"chat": None}}
+    cooldowns = {}
+
+    assert (
+        maybe_converse(game, chars, state, frame, 0, cooldowns, order, cooldown_steps=0)
+        == 1
+    )
+    # No cooldown -> a second conversation one step later is allowed.
+    assert (
+        maybe_converse(game, chars, state, frame, 1, cooldowns, order, cooldown_steps=0)
+        == 1
+    )
 
 
 def test_maybe_converse_skips_walking_agents():

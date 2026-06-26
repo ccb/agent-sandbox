@@ -27,7 +27,7 @@ artifact, no hosted prompt service.
 `__init__.py` exposes one function:
 
 ```python
-from backend.prompt_templates import render
+from gen_agents.prompt_templates import render
 
 text = render("reflection", verb="travel", location="Hobbs Cafe")
 belief = render("spatial_knowledge", place="Johnson Park", areas="")

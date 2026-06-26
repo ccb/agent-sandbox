@@ -8,7 +8,7 @@ campus map.
 The Penn *world* lives next to this script (`world_data_upenn.yaml` + the
 `the_upenn/` matrix), so it's self-contained here. The agent *engine* (build the
 world, attach mock brains, step the loop, pathfind) is imported from the shared
-`generative-agents/backend` so improvements there flow through automatically.
+`gen_agents` package so improvements there flow through automatically.
 
 Run from the repo root (so `uv run` finds the engine env)::
 
@@ -21,19 +21,16 @@ Writes: godot-generative-agents/maps/penn_replay.json
 import argparse
 import json
 import os
-import sys
+
+# Reuse the tested agent engine (not a fork). It's the installed top-level
+# `gen_agents` package now, so a plain import works -- no sys.path juggling.
+from gen_agents.build_world import build_world, load_world_data
+from gen_agents.run_simulation import simulate
+from gen_agents.world_map import WorldMap
 
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 _GODOT_DIR = os.path.dirname(_SIM_DIR)
 _REPO = os.path.dirname(_GODOT_DIR)
-_GA_DIR = os.path.join(_REPO, "generative-agents")
-
-# Reuse the tested agent engine in generative-agents/backend (not a fork).
-sys.path.insert(0, _GA_DIR)
-
-from backend.build_world import build_world, load_world_data  # noqa: E402
-from backend.run_simulation import simulate  # noqa: E402
-from backend.world_map import WorldMap  # noqa: E402
 
 WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
