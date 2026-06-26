@@ -345,6 +345,36 @@ class EatApple(actions.Action):
         )
 
 
+class PickWatermelon(actions.Action):
+    """Try to pick a watermelon from the vines -- a gag: it's too heavy to carry
+    (rulebook)."""
+
+    ACTION_NAME = "pick watermelon"
+    ACTION_DESCRIPTION = "Try to pick a watermelon from the vines"
+    ACTION_ALIASES = [
+        "pick a watermelon",
+        "pluck watermelon",
+        "pick watermelons",
+        "take watermelon",
+        "get watermelon",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Gardens":
+            self.parser.fail("There are no watermelon vines here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "It's too heavy. Why would you want to carry a watermelon, anyway?"
+        )
+
+
 class _TameHorse(actions.Action):
     """Shared base: make the skittish mare rideable, at Down by the River."""
 
@@ -1260,6 +1290,13 @@ def build_game() -> ActionCastle4:
     gardens.add_item(
         _fixture("fruit trees", "apple trees", "Branches heavy with ripe red apples.")
     )
+    gardens.add_item(
+        _fixture(
+            "watermelon vines",
+            "watermelon vines",
+            "Fat, ripe watermelons swelling on the vine near the tower's base.",
+        )
+    )
 
     # The white mare: a vehicle, but skittish until tamed (apple or brushing).
     mare = _fixture(
@@ -1381,6 +1418,7 @@ def build_game() -> ActionCastle4:
         KillSelf,
         PickApple,
         EatApple,
+        PickWatermelon,
         GiveAppleToHorse,
         BrushHorse,
         BrushHair,
