@@ -35,13 +35,27 @@ function viewFromHash(): View {
   return "agents";
 }
 
-// The navigable views, in menu order. The trigger button shows the current
-// one's label; the dropdown lists them all (plus the Docs link).
-const NAV_ITEMS: { view: View; label: string }[] = [
-  { view: "agents", label: "Agent cards" },
-  { view: "game", label: "Game view" },
-  { view: "prompts", label: "Prompt chains" },
-  { view: "reader", label: "Prompts" },
+// The navigable views, grouped into labeled sections for the dropdown menu.
+interface NavItem {
+  view: View;
+  label: string;
+  icon: string;
+}
+const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: "Game",
+    items: [
+      { view: "agents", label: "Agent cards", icon: "👤" },
+      { view: "game", label: "Game view", icon: "🎮" },
+    ],
+  },
+  {
+    heading: "Prompts",
+    items: [
+      { view: "prompts", label: "Prompt chains", icon: "⛓" },
+      { view: "reader", label: "Prompt reader", icon: "📖" },
+    ],
+  },
 ];
 
 export default function App() {
@@ -80,7 +94,8 @@ export default function App() {
     setView(v);
   };
 
-  const currentLabel = NAV_ITEMS.find((i) => i.view === view)?.label ?? "Menu";
+  const currentLabel =
+    NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.view === view)?.label ?? "Menu";
 
   return (
     <div className="app" data-view={view}>
@@ -98,28 +113,49 @@ export default function App() {
               className="nav-trigger"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
+              aria-label={`Navigate (current: ${currentLabel})`}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              <span>{currentLabel}</span>
-              <span className="nav-caret" aria-hidden="true">
-                ▾
-              </span>
+              <svg
+                className="nav-burger"
+                width="18"
+                height="18"
+                viewBox="0 0 18 18"
+                aria-hidden="true"
+              >
+                <rect x="1" y="3.5" width="16" height="2" rx="1" />
+                <rect x="1" y="8" width="16" height="2" rx="1" />
+                <rect x="1" y="12.5" width="16" height="2" rx="1" />
+              </svg>
             </button>
             {menuOpen && (
               <div className="nav-dropdown" role="menu" aria-label="Navigate">
-                {NAV_ITEMS.map((item) => (
-                  <button
-                    key={item.view}
-                    type="button"
-                    role="menuitem"
-                    className={`nav-item${view === item.view ? " is-active" : ""}`}
-                    onClick={() => {
-                      select(item.view);
-                      setMenuOpen(false);
-                    }}
+                {NAV_SECTIONS.map((section) => (
+                  <div
+                    className="nav-group"
+                    key={section.heading}
+                    role="group"
+                    aria-label={section.heading}
                   >
-                    {item.label}
-                  </button>
+                    <div className="nav-group-heading">{section.heading}</div>
+                    {section.items.map((item) => (
+                      <button
+                        key={item.view}
+                        type="button"
+                        role="menuitem"
+                        className={`nav-item${view === item.view ? " is-active" : ""}`}
+                        onClick={() => {
+                          select(item.view);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <span className="nav-icon" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 ))}
                 {/* A link, not a view: it leaves the SPA for the static MkDocs
                     site at /docs/ (build it with `pnpm gen:docs`). BASE_URL keeps
@@ -129,6 +165,9 @@ export default function App() {
                   role="menuitem"
                   href={`${import.meta.env.BASE_URL}docs/`}
                 >
+                  <span className="nav-icon" aria-hidden="true">
+                    📄
+                  </span>
                   Docs ↗
                 </a>
               </div>

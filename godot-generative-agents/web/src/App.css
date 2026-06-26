@@ -48,17 +48,16 @@
   position: relative;
 }
 
+/* Icon-only trigger (a 3-bar "hamburger"). */
 .nav-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font: inherit;
-  font-size: 13px;
+  justify-content: center;
   color: #3a4150;
   background: #eceef1;
   border: 1px solid #dcdfe4;
-  border-radius: 999px;
-  padding: 5px 14px;
+  border-radius: 8px;
+  padding: 6px 8px;
   cursor: pointer;
 }
 
@@ -66,9 +65,9 @@
   background: #e3e6ea;
 }
 
-.nav-caret {
-  font-size: 10px;
-  color: #6b7280;
+.nav-burger {
+  display: block;
+  fill: currentColor;
 }
 
 /* The popup menu, anchored under the trigger. The header owns a stacking layer
@@ -88,7 +87,27 @@
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
 }
 
+/* A labeled group of menu items (e.g. "Game", "Prompts"). */
+.nav-group + .nav-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #eceef1;
+}
+
+.nav-group-heading {
+  padding: 4px 10px 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
 .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -108,6 +127,13 @@
 .nav-item.is-active {
   color: #fff;
   background: #2d6cdf;
+}
+
+/* Fixed-width icon slot so labels line up regardless of glyph width. */
+.nav-icon {
+  width: 1.15em;
+  text-align: center;
+  flex: none;
 }
 
 /* The Docs link leaves the app, so set it off below a divider. */
