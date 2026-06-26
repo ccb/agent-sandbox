@@ -5,38 +5,94 @@
 }
 
 .app-header {
-  padding: 10px 16px;
-  border-bottom: 1px solid #222a35;
-  background: #11151c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #dcdfe4;
+  background: #fff;
 }
 
 .app-header h1 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  color: #1f2330;
 }
 
 .app-sub {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #8a93a3;
+  color: #6b7280;
 }
 
-/* The stage fills the rest of the viewport and lays the canvas and the agent
-   panel out side by side. `min-height: 0` lets these flex children actually
-   shrink so the canvas can size to the available space. */
-.app-stage {
-  flex: 1;
-  min-height: 0;
+/* The Game / Agent-cards selector. */
+.view-tabs {
   display: flex;
+  gap: 6px;
+  flex: none;
 }
 
-/* The canvas takes the remaining width; it's the positioned ancestor the
-   absolutely-filled .godot-canvas-wrap anchors to. */
-.stage-canvas {
+.view-tab {
+  font: inherit;
+  font-size: 13px;
+  color: #3a4150;
+  background: #eceef1;
+  border: 1px solid #dcdfe4;
+  border-radius: 999px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+
+.view-tab:hover {
+  background: #e3e6ea;
+}
+
+.view-tab.is-active {
+  color: #fff;
+  background: #2d6cdf;
+  border-color: #2d6cdf;
+}
+
+/* The stage holds both pages, stacked. Each page absolutely fills it; the active
+   one is shown. `min-height: 0` lets the canvas size to the available space. */
+.app-stage {
   position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+}
+
+/* The canvas page stays rendered underneath at all times (so Godot never resizes
+   to zero); the agents page is an opaque overlay on top when active. */
+.view-game {
+  z-index: 1;
+}
+
+.view-agents {
+  z-index: 2;
+  overflow-y: auto;
+  background: #eceef1;
+}
+
+.app[data-view="game"] .view-agents {
+  display: none;
+}
+
+.agents-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
 }
 
 .godot-canvas-wrap {
@@ -60,7 +116,7 @@
   transform: translate(-50%, -50%);
   font-size: 13px;
   line-height: 1.5;
-  color: #aab3c0;
+  color: #cfd6e0;
   text-align: center;
   max-width: 80%;
   pointer-events: none;
