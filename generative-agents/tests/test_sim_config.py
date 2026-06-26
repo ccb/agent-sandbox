@@ -14,14 +14,14 @@ env that has the engine installed)::
 
 import pytest
 
-from backend.build_world import PERSONAS
-from backend.run_simulation import simulate
-from backend.sim_config import (
+from gen_agents.build_world import PERSONAS
+from gen_agents.run_simulation import simulate
+from gen_agents.sim_config import (
     RetrievalConfig,
     SimulationConfig,
     SimulationRuntimeConfig,
 )
-from backend.world_map import WorldMap
+from gen_agents.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
 from text_adventure_games import memory
 from text_adventure_games.config import GameConfig

@@ -14,8 +14,8 @@ Stanford repo [`joonspk-research/generative_agents`](https://github.com/joonspk-
 `external/generative_agents/` into the git-ignored `frontend/`. We want to eventually stand
 up **our own** world + characters. The good news: the backend is **fully data-driven** — a
 custom world is an asset/data authoring job, **not** an engine code change (see
-[`build_world.py`](../../generative-agents/backend/build_world.py) /
-[`world_map.py`](../../generative-agents/backend/world_map.py)).
+[`build_world.py`](../../gen_agents/build_world.py) /
+[`world_map.py`](../../gen_agents/world_map.py)).
 
 ## What "a world" actually is — the author-your-own checklist
 
@@ -24,7 +24,7 @@ keeping the *semantic* maze CSVs aligned with the *visual* tilemap, and sourcing
 license-clean assets.
 
 ### 1. MAP — semantic grid (what the backend reads)
-Read by [`world_map.py`](../../generative-agents/backend/world_map.py). Lives under
+Read by [`world_map.py`](../../gen_agents/world_map.py). Lives under
 `assets/the_ville/matrix/` (git-ignored / fetched by `setup.sh`):
 
 | File | Format / contract |
@@ -59,18 +59,18 @@ Lives under `assets/characters/`:
 - `profile/*.png` portraits for the agent card.
 
 ### 4. PERSONAS — the cast + locations
-- **Committed** here: [`backend/world_data.yaml`](../../generative-agents/backend/world_data.yaml)
+- **Committed** here: [`gen_agents/world_data.yaml`](../../gen_agents/world_data.yaml)
   — personas (`name`, `home`, first-person `persona` text, `destination`, `activity`,
   `emoji`, `start_tile: [x,y]`) + locations (`name`, `description`, 4-level `address`, `hub`).
   This is the one cast/world file that lives in **our** repo.
 - **Git-ignored / fetched** (from the upstream `base_the_ville_n25`): per-persona
   `bootstrap_memory/scratch.json` (identity + cognition knobs) and `spatial_memory.json`
   (partial known-places tree), plus `agent_history_init_n25.csv` (seed relationships). These
-  are folded in by [`backend/seed.py`](../../generative-agents/backend/seed.py) and tolerate
+  are folded in by [`gen_agents/seed.py`](../../gen_agents/seed.py) and tolerate
   being absent.
 
 ### Committed vs. fetched (at a glance)
-- **In our repo:** `world_data.yaml`, `frontend_overrides/` (UI), `backend/` code.
+- **In our repo:** `world_data.yaml`, `frontend_overrides/` (UI), `gen_agents/` code.
 - **Fetched by `setup.sh` / git-ignored:** the whole `frontend/` tree — all `the_ville`
   matrix CSVs, tilemap + tilesets, character sprites, and the base-sim bootstrap memories.
 
@@ -134,10 +134,10 @@ with the visual map**, and **sprite/tileset licensing must be clean**.
 - Upstream asset source: https://github.com/joonspk-research/generative_agents
 - 2025 Godot reference + asset/licensing survey: [`godot-multi-agent-playground.md`](godot-multi-agent-playground.md)
 - Port survey (world, cast, cognitive loop): [`generative-agents-port.md`](generative-agents-port.md)
-- Backend world model: [`backend/world_map.py`](../../generative-agents/backend/world_map.py),
-  [`backend/build_world.py`](../../generative-agents/backend/build_world.py),
-  [`backend/seed.py`](../../generative-agents/backend/seed.py),
-  [`backend/world_data.yaml`](../../generative-agents/backend/world_data.yaml)
+- Backend world model: [`gen_agents/world_map.py`](../../gen_agents/world_map.py),
+  [`gen_agents/build_world.py`](../../gen_agents/build_world.py),
+  [`gen_agents/seed.py`](../../gen_agents/seed.py),
+  [`gen_agents/world_data.yaml`](../../gen_agents/world_data.yaml)
 - Asset pipeline: [`generative-agents/setup.sh`](../../generative-agents/setup.sh),
   [`generative-agents/README.md`](../../generative-agents/README.md)
 - Working mock world (this PR): [`godot-generative-agents/`](../../godot-generative-agents/README.md)

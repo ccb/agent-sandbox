@@ -18,9 +18,9 @@ import os
 
 import pytest
 
-from backend import seed
-from backend.build_world import PERSONAS, build_world
-from backend.smallville_agents import attach_agents, observe_and_decide
+from gen_agents import seed
+from gen_agents.build_world import PERSONAS, build_world
+from gen_agents.smallville_agents import attach_agents, observe_and_decide
 from text_adventure_games.memory import AgentMemory, MemoryKind
 from text_adventure_games.things.characters import Character
 
@@ -280,7 +280,7 @@ def test_missing_assets_skip_silently():
 
 
 def _real_asset_paths():
-    from backend.run_simulation import (
+    from gen_agents.run_simulation import (
         DEFAULT_BASE_SIM,
         DEFAULT_STORAGE,
         DEFAULT_VILLE_DIR,

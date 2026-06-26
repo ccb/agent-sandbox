@@ -73,7 +73,7 @@ def load_world_data(path) -> tuple[list[dict], list[dict]]:
 _ALL_PERSONAS, _LOCATIONS = _load_world_data()
 
 # The valid place names a plan may target. A generated planner (issue #83,
-# :class:`backend.planner.LLMPlanner`) validates its stops against this so a
+# :class:`gen_agents.planner.LLMPlanner`) validates its stops against this so a
 # hallucinated location is dropped before it reaches the parser.
 LOCATION_NAMES = frozenset(loc["name"] for loc in _LOCATIONS)
 
@@ -136,7 +136,7 @@ def build_world(
     :class:`Character`. Agents are *not* attached here (see
     :mod:`smallville_agents`); the caller wires those onto each character.
 
-    Pass a :class:`~backend.world_map.WorldMap` to make "who/what is nearby"
+    Pass a :class:`~gen_agents.world_map.WorldMap` to make "who/what is nearby"
     tile-distance based (issue #82): the game is a :class:`TiledGame`, so an
     agent with ``vision_r > 0`` perceives residents/objects in arenas within that
     many tiles. With no ``world_map`` (the default) perception falls back to the

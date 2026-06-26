@@ -12,13 +12,13 @@ decision seam (``Agent.decide`` -> mock client) only at decision points:
 * Every step, advance one tile along any active path, then record the
   character's tile + emoji + action label into that step's movement frame.
 
-Run it (from the ``generative-agents`` directory; ``uv run`` finds the repo's
-project env that has the engine installed)::
+Run it from the repo root (``gen_agents`` is an installed package; ``uv run``
+finds the project env that has it)::
 
-    uv run python -m backend.run_simulation            # 3 hours (1080 steps)
-    uv run python -m backend.run_simulation --steps 120
-    uv run python -m backend.run_simulation --start "2023-02-13 18:00:00"
-    uv run python -m backend.run_simulation --sec-per-step 60   # 1 min/step
+    uv run python -m gen_agents.run_simulation            # 3 hours (1080 steps)
+    uv run python -m gen_agents.run_simulation --steps 120
+    uv run python -m gen_agents.run_simulation --start "2023-02-13 18:00:00"
+    uv run python -m gen_agents.run_simulation --sec-per-step 60   # 1 min/step
 """
 
 import argparse
@@ -56,8 +56,11 @@ from .smallville_agents import (
 )
 from .world_map import WorldMap
 
-_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-_GA_DIR = os.path.dirname(_BACKEND_DIR)
+# gen_agents/ is a top-level package at the repo root, but the Smallville replay
+# assets it reads (the maze + storage) still live under the generative-agents/
+# frontend that consumes them, so reach back into that sibling directory.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+_GA_DIR = os.path.join(os.path.dirname(_PACKAGE_DIR), "generative-agents")
 _FRONTEND = os.path.join(_GA_DIR, "frontend")
 
 DEFAULT_VILLE_DIR = os.path.join(_FRONTEND, "static_dirs", "assets", "the_ville")
@@ -104,7 +107,7 @@ def resolve_embedding_client(provider: str | None):
 
     Either way the deterministic mock brain decides from location alone, so the
     exported replay stays byte-identical; an embedding client only reorders the
-    (mock-ignored) retrieved-memory block. Run ``backend.compare_retrieval`` to
+    (mock-ignored) retrieved-memory block. Run ``gen_agents.compare_retrieval`` to
     actually watch semantic vs keyword retrieval diverge.
     """
     if not provider:
@@ -175,7 +178,7 @@ def simulate(
     out-parameter (not part of the return) so the many ``frames = simulate(...)``
     callers and the determinism tests stay unchanged.
 
-    Pass a :class:`~backend.sim_clock.SimClock` to enable clock-based plan
+    Pass a :class:`~gen_agents.sim_clock.SimClock` to enable clock-based plan
     revision (issue #83): at an hour boundary an agent still en route is "behind
     schedule," a trigger its planner may react to. With no clock (the test
     default) those triggers never fire. Either way the mock planner's ``revise``
@@ -183,7 +186,7 @@ def simulate(
     *whether the seam is offered*, not the deterministic decisions themselves.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
-    real model (:class:`~backend.planner.LLMPlanner`); with none -- the offline
+    real model (:class:`~gen_agents.planner.LLMPlanner`); with none -- the offline
     default -- each agent replays its authored schedule via ``MockPlanner`` and the
     replay is byte-identical. ``main`` supplies one only for a non-mock provider.
 
@@ -194,7 +197,7 @@ def simulate(
     client is also the brain, so decisions stay deterministic and byte-identical.
     A real ``llm_client`` also enables **conversation** (NEXT-STEPS Phase E, issue
     #86): co-located, settled residents run a turn-taking dialogue each step (via
-    :func:`~backend.smallville_agents.maybe_converse`), writing each line into both
+    :func:`~gen_agents.smallville_agents.maybe_converse`), writing each line into both
     agents' memory streams and onto their replay cards' ``chat`` field. With the
     mock brain no utterance is produced, so no conversation happens and the replay
     stays byte-identical.
@@ -213,7 +216,7 @@ def simulate(
 
     Pass an ``out_plans`` dict to collect each persona's generated plan
     (``{name: DailyPlan.to_primitive()}``) so the run can persist it; the exporter
-    writes ``personas/<Name>/daily_plan.json`` and ``backend.compare_plans`` reads it
+    writes ``personas/<Name>/daily_plan.json`` and ``gen_agents.compare_plans`` reads it
     back without re-calling the model. Also an out-parameter, for the same reason.
     """
     # Default to the module's the_ville cast/builder so existing callers and the
@@ -517,7 +520,7 @@ def main() -> None:
         "keyword-overlap relevance, the offline default (EMBEDDING_PROVIDER is "
         "honored when this flag is absent). The mock brain ignores retrieved "
         "memories, so the replay is byte-identical either way -- run "
-        "`python -m backend.compare_retrieval` to compare retrieval directly.",
+        "`python -m gen_agents.compare_retrieval` to compare retrieval directly.",
     )
     args = parser.parse_args()
 
