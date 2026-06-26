@@ -24,8 +24,12 @@
     "door_wood":        { "sheet": "franuka", "col": 6, "row": 6, "w": 1, "h": 2, "category": "door", "label": "wooden door, square top (round knob)", "verified": false },
     "door_wood_arched": { "sheet": "franuka", "col": 6, "row": 9, "w": 1, "h": 2, "category": "door", "label": "wooden door, arched top", "verified": false },
 
-    "sofa":        { "sheet": "franuka", "col": 0,  "row": 21, "w": 3, "h": 2, "category": "furniture", "room": "living", "label": "long padded sofa", "verified": true },
-    "armchair":    { "sheet": "franuka", "col": 13, "row": 19, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "single armchair (magenta)", "verified": true },
+    "sofa":          { "sheet": "franuka", "col": 0,  "row": 21, "w": 3, "h": 2, "category": "furniture", "room": "living", "label": "long padded sofa", "verified": true },
+    "sofa_orange":   { "sheet": "franuka", "col": 16, "row": 29, "w": 3, "h": 2, "category": "furniture", "room": "living", "label": "long padded sofa (orange)", "verified": false },
+    "armchair":        { "sheet": "franuka", "col": 13, "row": 19, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "single armchair (magenta)", "verified": true },
+    "armchair_orange": { "sheet": "franuka", "col": 13, "row": 20, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "single armchair (orange)", "verified": false },
+    "armchair_green":  { "sheet": "franuka", "col": 13, "row": 21, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "single armchair (green)", "verified": false },
+    "armchair_red":    { "sheet": "franuka", "col": 13, "row": 22, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "single armchair (red)", "verified": false },
     "side_table":  { "sheet": "franuka", "col": 17, "row": 13, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "small side table", "verified": true },
     "bookshelf":   { "sheet": "franuka", "col": 7,  "row": 13, "w": 1, "h": 2, "category": "furniture", "room": "living", "label": "tall bookshelf with books", "verified": true },
     "plant":       { "sheet": "franuka", "col": 21, "row": 13, "w": 1, "h": 1, "category": "furniture", "room": "living", "label": "potted plant", "verified": true },
@@ -36,10 +40,22 @@
     "rug_red":     { "sheet": "franuka", "col": 0,  "row": 29, "w": 3, "h": 3, "category": "furniture", "room": "living", "label": "red patterned rug", "verified": false },
     "rug_orange":  { "sheet": "franuka", "col": 6,  "row": 29, "w": 3, "h": 3, "category": "furniture", "room": "living", "label": "orange patterned rug", "verified": false },
     "rug_green":   { "sheet": "franuka", "col": 9,  "row": 29, "w": 3, "h": 3, "category": "furniture", "room": "living", "label": "green patterned rug", "verified": false },
+    "rug_magenta": { "sheet": "franuka", "col": 12, "row": 29, "w": 3, "h": 3, "category": "furniture", "room": "living", "label": "magenta patterned rug", "verified": false },
+    "rug_cyan":    { "sheet": "franuka", "col": 15, "row": 29, "w": 3, "h": 3, "category": "furniture", "room": "living", "label": "cyan patterned rug", "verified": false },
+
+    "candelabra":  { "sheet": "franuka", "col": 27, "row": 20, "w": 1, "h": 3, "category": "furniture", "room": "lighting", "label": "standing candelabra", "verified": false },
 
     "bed_single":  { "sheet": "franuka", "col": 16, "row": 12, "w": 1, "h": 2, "category": "furniture", "room": "bedroom", "label": "single bed", "verified": false },
+    "bed_orange":  { "sheet": "franuka", "col": 12, "row": 16, "w": 2, "h": 3, "category": "furniture", "room": "bedroom", "label": "double bed (orange blanket)", "verified": false },
+    "bed_blue":    { "sheet": "franuka", "col": 14, "row": 16, "w": 2, "h": 3, "category": "furniture", "room": "bedroom", "label": "double bed (blue blanket)", "verified": false },
+    "bed_cream":   { "sheet": "franuka", "col": 16, "row": 16, "w": 2, "h": 3, "category": "furniture", "room": "bedroom", "label": "double bed (cream blanket)", "verified": false },
+    "bed_red":     { "sheet": "franuka", "col": 18, "row": 16, "w": 2, "h": 3, "category": "furniture", "room": "bedroom", "label": "double bed (red blanket)", "verified": false },
     "wardrobe":       { "sheet": "franuka", "col": 23, "row": 29, "w": 1, "h": 2, "category": "furniture", "room": "bedroom", "label": "tall wardrobe", "verified": false },
+    "dresser":        { "sheet": "franuka", "col": 22, "row": 29, "w": 1, "h": 2, "category": "furniture", "room": "bedroom", "label": "chest of drawers (cream wood)", "verified": false },
     "bookshelf_cream":{ "sheet": "franuka", "col": 28, "row": 29, "w": 1, "h": 2, "category": "furniture", "room": "living", "label": "bookshelf with books (cream wood)", "verified": false },
+
+    "counter":       { "sheet": "franuka", "col": 0, "row": 23, "w": 1, "h": 2, "category": "furniture", "room": "kitchen", "label": "kitchen counter with cabinet (dark wood)", "verified": false },
+    "counter_cream": { "sheet": "franuka", "col": 0, "row": 25, "w": 1, "h": 2, "category": "furniture", "room": "kitchen", "label": "kitchen counter with cabinet (cream wood)", "verified": false },
 
     "toilet":      { "sheet": "bath", "col": 6,  "row": 1, "w": 1, "h": 2, "category": "furniture", "room": "bath", "label": "toilet", "verified": true },
     "sink":        { "sheet": "bath", "col": 11, "row": 1, "w": 1, "h": 2, "category": "furniture", "room": "bath", "label": "vanity sink", "verified": true },
