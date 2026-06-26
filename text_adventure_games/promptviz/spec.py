@@ -40,7 +40,7 @@ class Node:
     example_vars: dict | None = None
     # Optional per-node override of the chain's ``templates`` package. Lets one
     # chain mix templates from more than one package -- e.g. the Smallville chain
-    # shows gen-agents memory templates (``gen_agents.prompt_templates``) alongside
+    # shows gen-agents memory templates (``backend.prompt_templates``) alongside
     # the engine cognition it reuses (``text_adventure_games.prompt_templates``).
     templates: str | None = None
 

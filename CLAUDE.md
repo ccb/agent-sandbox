@@ -85,7 +85,21 @@ a free deterministic stand-in) and, for the real providers, the matching
 ### Web app: `text_adventure_games/webapp/`
 
 Flask app with a `WebParser` that buffers messages for the HTTP response. Imports
-the game from `notebooks/hw1_solution/action_castle.py`.
+the game from `notebooks/hw1_solution/action_castle.py`. This is the human-facing
+HTML UI — distinct from the headless JSON API below.
+
+### Backend HTTP API: `backend/api.py` (issue #179)
+
+The project's **one canonical backend seam**: a FastAPI app (`server` extra) that
+serves any engine `Game` over HTTP so every out-of-process frontend (Godot,
+Phaser, the web companion) polls the *same* endpoints instead of baking its own
+data path. `GET /health`, `GET /world_state` (the typed `WorldState` snapshot,
+#90), `POST /command` (advances one turn → change-feed `events` + new snapshot);
+the OpenAPI contract is at `/docs`. `create_app(game)` is game-agnostic;
+`run(game, host, port)` serves it (`uv sync --extra server`, then
+`uv run python -m backend.api` for a demo world). Security (#186): loopback +
+unauthenticated by default, a 64 KiB body cap, and `run()` refuses a non-loopback
+bind without `SIM_API_TOKEN` (then requires `Authorization: Bearer`).
 
 ## Known issues / good first fixes
 

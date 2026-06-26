@@ -56,7 +56,7 @@ Homepage = "https://interactive-fiction-class.org/"
 
 # Install extras with e.g. `pip install -e ".[llm]"`.
 [project.optional-dependencies]
-dev = ["black", "nbformat", "pytest"]
+dev = ["black", "nbformat", "pytest", "httpx"] # httpx backs FastAPI's TestClient (tests/test_api.py)
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
 llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
@@ -71,6 +71,11 @@ embeddings-st = ["sentence-transformers"]
 # pymupdf parses the Parsely PDF into color-tagged spans; install with
 # `uv sync --extra codegen`. The rest of the engine doesn't need it.
 codegen = ["pymupdf>=1.27"]
+# The headless HTTP API (issue #179) lives in `backend.api`: a FastAPI app any
+# out-of-process frontend (Godot, Phaser, the web companion) polls for the typed
+# world-state snapshot + change feed. Opt-in so the engine core stays lean; install
+# with `uv sync --extra server`. pydantic rides along with fastapi.
+server = ["fastapi", "uvicorn"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
@@ -89,11 +94,11 @@ docs = [
 version = { attr = "text_adventure_games.__version__" }
 
 # Equivalent of the old find_packages(): ship text_adventure_games and the shared
-# generative-agents simulation (gen_agents, extracted from generative-agents/backend
-# so both the Phaser and Godot frontends import it by one canonical path), but not
-# notebooks/, tests/, or docs/ (they aren't importable packages).
+# simulation backend (`backend`, extracted from generative-agents/backend in #167 and
+# renamed in #179 so it reads as the project's one canonical backend behind every
+# frontend), but not notebooks/, tests/, or docs/ (they aren't importable packages).
 [tool.setuptools.packages.find]
-include = ["text_adventure_games*", "gen_agents*"]
+include = ["text_adventure_games*", "backend*"]
 
 # The prompt templates (issue #145) are data files, not Python, so list them
 # explicitly or a built wheel would omit them and prompts.render() would fail to
@@ -111,8 +116,8 @@ include = ["text_adventure_games*", "gen_agents*"]
     "webapp/static/*.js",
     "webapp/static/vendor/*.js",
 ]
-# The gen_agents sim loads its world cast (``world_data*.yaml``, via
+# The backend sim loads its world cast (``world_data*.yaml``, via
 # ``Path(__file__).with_name``) and its memory/belief templates (``*.prompty``,
 # via prompt_templates.render) as data files, so a built wheel must ship them too.
-"gen_agents" = ["*.yaml"]
-"gen_agents.prompt_templates" = ["*.prompty"]
+"backend" = ["*.yaml"]
+"backend.prompt_templates" = ["*.prompty"]

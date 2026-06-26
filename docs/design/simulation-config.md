@@ -1,7 +1,7 @@
 # SimulationConfig Design
 
 **Status:** **Implemented** for the landed sections (Phase A + B) in
-`gen_agents/sim_config.py`. `SimulationConfig` is the
+`backend/sim_config.py`. `SimulationConfig` is the
 generative-agents counterpart to the engine's [`GameConfig`](../configuration.md):
 it **composes** a `GameConfig` and adds the sim's run-time and memory-retrieval
 knobs. Sections for later phases — perception (Phase C), planning (Phase D), and
@@ -27,7 +27,7 @@ so a game author sets them in one place instead of editing library source. The
 generative-agents port needs the *same idea* for its own knobs, which used to be
 scattered:
 
-- **Run-time knobs** were CLI-only flags on `gen_agents/run_simulation.py` (`--start`,
+- **Run-time knobs** were CLI-only flags on `backend/run_simulation.py` (`--start`,
   `--steps`, `--sec-per-step`, `--sim-code`, `--base-sim`; #74). A scenario couldn't
   ship them in a file.
 - **Memory-retrieval knobs** were *not configurable at all*: the recency / relevance
@@ -49,7 +49,7 @@ for every project on the engine; `SimulationConfig` *embeds* one and *adds* the
 sim's sections:
 
 ```
-SimulationConfig                      # gen_agents/sim_config.py
+SimulationConfig                      # backend/sim_config.py
 ├── game: GameConfig                  # the engine config, reused as-is (game: section)
 │   └── llm / agent / engine / clock / render / observability
 ├── simulation: SimulationRuntimeConfig   # start, steps, sec_per_step, sim_code, num_agents, …
@@ -151,7 +151,7 @@ keyword-overlap relevance — the free, offline path.
 to keyword overlap if a chosen backend can't be created (e.g. the extra isn't
 installed), so the default run stays free, offline, and CI-safe. The deterministic
 mock brain ignores the retrieved block, so the exported replay is **byte-identical**
-regardless of the relevance mode — `gen_agents/compare_retrieval.py` shows the diff.
+regardless of the relevance mode — `backend/compare_retrieval.py` shows the diff.
 
 ### 3.5 Inherited from `GameConfig` (the `game:` section) — **not re-declared**
 
@@ -216,16 +216,16 @@ embedding:                  # optional; omit for keyword-overlap relevance
 
 ```bash
 # From the generative-agents directory:
-uv run python -m gen_agents.run_simulation --config simulation.yaml
+uv run python -m backend.run_simulation --config simulation.yaml
 # An explicit flag overrides the file:
-uv run python -m gen_agents.run_simulation --config simulation.yaml --steps 24
+uv run python -m backend.run_simulation --config simulation.yaml --steps 24
 ```
 
 In Python / tests:
 
 ```python
-from gen_agents.sim_config import SimulationConfig, RetrievalConfig
-from gen_agents.run_simulation import simulate
+from backend.sim_config import SimulationConfig, RetrievalConfig
+from backend.run_simulation import simulate
 
 sim = SimulationConfig(retrieval=RetrievalConfig(max_records=4, alpha_relevance=2.0))
 frames = simulate(world_map, sim.simulation.steps,
@@ -252,8 +252,8 @@ when a second consumer appears.
 
 - Engine config this mirrors: [`docs/configuration.md`](../configuration.md),
   `text_adventure_games/config.py`.
-- Implementation: `gen_agents/sim_config.py`,
-  `gen_agents/run_simulation.py`.
+- Implementation: `backend/sim_config.py`,
+  `backend/run_simulation.py`.
 - Roadmap & phases: [`generative-agents/NEXT-STEPS.md`](../../generative-agents/NEXT-STEPS.md).
 - Memory + retrieval: [`agent-memory.md`](agent-memory.md), `text_adventure_games/memory.py`
   (issues #75, #76).

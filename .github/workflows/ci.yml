@@ -48,7 +48,9 @@ jobs:
       # requires-python >=3.11 range). The suites are fully offline (the mock LLM
       # provider drives the ReAct loop), so engine + dev tools are all we need — no
       # API keys and no openai/anthropic install.
-      - run: uv sync --extra dev --locked --python ${{ matrix.python-version }}
+      # --extra server pulls FastAPI/uvicorn so tests/test_api.py (the headless
+      # backend API, #179) is exercised rather than skipped via importorskip.
+      - run: uv sync --extra dev --extra server --locked --python ${{ matrix.python-version }}
       # The turn-based NPC behavior suite now lives at tests/test_npc_behaviors.py
       # (moved in #51), so pytest collects it — no separate run step needed.
       - name: pytest suite
@@ -56,7 +58,7 @@ jobs:
       # The Generative Agents (Smallville) port keeps its own offline suite under
       # generative-agents/tests/. It's a separate pytest root (not collected by the
       # tests/ run above) so it needs its own step; it imports the sim as the
-      # installed top-level `gen_agents` package (no path hack). A synthetic maze
+      # installed top-level `backend` package (no path hack). A synthetic maze
       # fixture stands in for the 38MB upstream assets, so this needs no ./setup.sh
       # and no external clone — same offline contract as the engine suite above.
       - name: pytest generative-agents suite

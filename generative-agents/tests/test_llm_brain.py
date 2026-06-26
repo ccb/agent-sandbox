@@ -16,9 +16,9 @@ import sys
 
 import pytest
 
-from gen_agents import smoke_llm
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.smallville_agents import (
+from backend import smoke_llm
+from backend.build_world import PERSONAS, build_world
+from backend.smallville_agents import (
     SmallvilleMockClient,
     attach_agents,
     observe_and_decide,

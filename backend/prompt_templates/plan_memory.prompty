@@ -2,7 +2,7 @@
 name: plan_memory
 description: >
   The day's PLAN memory seeded onto each Smallville persona at t=0
-  (gen_agents/smallville_agents.py, attach_agents). It is the agent's own private
+  (backend/smallville_agents.py, attach_agents). It is the agent's own private
   intention -- "go to <destination> and <activity>", plus the day's full
   itinerary -- distinct from its persona, so retrieval has the agent's whole plan
   to surface from turn 0 and the PLAN memory kind is exercised. The deterministic

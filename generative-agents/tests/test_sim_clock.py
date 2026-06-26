@@ -1,6 +1,6 @@
 """Tests for the sim step <-> clock-time mapping (issue #83, Phase D §10).
 
-Covers ``gen_agents.sim_clock.SimClock``: the wall-clock instant at a step (and that
+Covers ``backend.sim_clock.SimClock``: the wall-clock instant at a step (and that
 it matches the exporter's own formula, the "one conversion" guarantee), the
 hour-of-day lookup, duration->steps conversion, the per-hour step budget, and the
 hour spine used by day->hourly decomposition.
@@ -14,8 +14,8 @@ import datetime
 
 import pytest
 
-from gen_agents import exporter
-from gen_agents.sim_clock import SimClock
+from backend import exporter
+from backend.sim_clock import SimClock
 
 START = datetime.datetime(2023, 2, 13, 8, 0, 0)  # 8:00 AM, the sim default
 

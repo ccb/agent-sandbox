@@ -15,7 +15,7 @@ Run from ``generative-agents``::
 
 import pytest
 
-from gen_agents.prompt_templates import render
+from backend.prompt_templates import render
 
 
 # -- plan_memory (smallville_agents.attach_agents) -------------------------------

@@ -2,7 +2,7 @@
 
 Issue #80 gave the engine an overridable visibility seam,
 ``Game.perceivable_locations``. Here we test the Smallville override
-(:class:`gen_agents.tiled_game.TiledGame`) that answers "what's nearby" with **tile
+(:class:`backend.tiled_game.TiledGame`) that answers "what's nearby" with **tile
 distance** on the map instead of room hops, so co-location on the map becomes
 co-presence in the sim:
 
@@ -20,9 +20,9 @@ path is exercised by widening the radius. Run from ``generative-agents``::
 
 import pytest
 
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.world_map import WorldMap
-from gen_agents.smallville_agents import attach_agents
+from backend.build_world import PERSONAS, build_world
+from backend.world_map import WorldMap
+from backend.smallville_agents import attach_agents
 from synthetic_ville import build_synthetic_ville
 
 # Arena addresses in the synthetic ville (world:sector:arena). Footprints:

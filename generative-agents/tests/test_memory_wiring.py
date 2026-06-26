@@ -5,7 +5,7 @@ the engine suite (``tests/test_memory.py``). These tests cover the *port-side*
 wiring: the custom step loop (``run_simulation.simulate``) drives the engine's
 decision seam directly rather than through ``react_behavior``, so the
 perceive -> retrieve -> remember loop is reproduced by the helpers in
-``gen_agents.smallville_agents``. They mirror sections E (event visibility) and F
+``backend.smallville_agents``. They mirror sections E (event visibility) and F
 (loop integration) of ``tests/test_memory.py``, adapted to the Smallville cast.
 
 Everything here is fully offline (mock client, ``build_world`` or the synthetic
@@ -16,14 +16,14 @@ maze fixture) and deterministic. Run from ``generative-agents``::
 
 import pytest
 
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.run_simulation import simulate
-from gen_agents.smallville_agents import (
+from backend.build_world import PERSONAS, build_world
+from backend.run_simulation import simulate
+from backend.smallville_agents import (
     attach_agents,
     observe_and_decide,
     remember_outcome,
 )
-from gen_agents.world_map import WorldMap
+from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
 from text_adventure_games.embedding_client import MockEmbeddingClient
 from text_adventure_games.memory import MemoryKind
