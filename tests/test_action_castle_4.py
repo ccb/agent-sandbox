@@ -89,7 +89,10 @@ def test_key_connections():
     assert goes("Drawbridge", "south", "Down by the River")
     assert goes("Drawbridge", "west", "Old Woods")
     assert goes("Old Woods", "enter", "Old Shack")
+    # The Old Woods -> Deep Woods link exists (keeps Deep Woods reachable/indexed)
+    # but is always blocked -- you must FOLLOW DEER to get in (see below).
     assert goes("Old Woods", "north", "Deep Woods")
+    assert loc["Old Woods"].is_blocked("north")
     assert goes("Deep Woods", "north", "Clearing")
     assert goes("Clearing", "west", "Dirt Road")
     assert goes("Clearing", "southwest", "Ranch")
@@ -630,6 +633,23 @@ def test_pick_watermelon_is_a_too_heavy_gag():
     assert _said(cap, "watermelons swelling on the vine")  # the fixture examines
     assert _said(cap, "too heavy")
     assert "watermelon" not in game.player.inventory
+
+
+def test_cannot_walk_north_into_the_deep_woods():
+    # The only way in is FOLLOW DEER -- a bare "north" must not blunder you into
+    # the lethal poacher confrontation.
+    setup = TO_RIVER_WITH_APPLE + [
+        "give apple to horse",
+        "ride horse",
+        "north",
+        "west",  # -> Old Woods, mounted
+    ]
+    game, cap = _play(setup + ["north"])
+    assert game.player.location.name == "Old Woods"  # didn't move; no such exit
+    assert not game.is_game_over()
+    # FOLLOW DEER is the way in.
+    game.do_command("follow deer")
+    assert game.player.location.name == "Deep Woods"
 
 
 def test_tying_the_rope_removes_it_from_inventory():
