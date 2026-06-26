@@ -8,8 +8,10 @@ type View = "game" | "agents";
 
 // Two "pages", selected by the URL hash (#game / #agents) so each is a real,
 // shareable location and the back button works — no router dependency needed.
+// The agent cards are the landing page (the cognitive layer is the point of this
+// companion); the canvas is one explicit hop away at #game.
 function viewFromHash(): View {
-  return window.location.hash.replace("#", "") === "agents" ? "agents" : "game";
+  return window.location.hash.replace("#", "") === "game" ? "game" : "agents";
 }
 
 export default function App() {
