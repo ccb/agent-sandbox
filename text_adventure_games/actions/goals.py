@@ -13,6 +13,9 @@ class AdoptGoal(base.Action):
 
     ACTION_NAME = "adopt goal"
     ACTION_DESCRIPTION = "Take on a new short-term goal"
+    # Goals are an agent/simulation concern, not something a human player types;
+    # keep them off the player-facing HELP list.
+    PLAYER_VISIBLE = False
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -55,6 +58,7 @@ class DropGoal(base.Action):
 
     ACTION_NAME = "drop goal"
     ACTION_DESCRIPTION = "Abandon a current goal"
+    PLAYER_VISIBLE = False
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)

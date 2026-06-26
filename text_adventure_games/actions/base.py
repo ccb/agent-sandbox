@@ -24,6 +24,11 @@ class Action:
     ACTION_DESCRIPTION: str = None
     ACTION_ALIASES: list[str] = None
 
+    # Whether this verb is something the player issues, and so should appear in
+    # the HELP listing. Defaults to True. NPC-only flavor actions (a troll's
+    # "growl", a ghost's "haunt") set this False so HELP stays a player's menu.
+    PLAYER_VISIBLE: bool = True
+
     # In-game minutes this action consumes (issue #24). None means "no declared
     # cost" — the NPC turn loop treats that as a full per-turn budget, so an
     # undeclared action takes one action per turn, exactly as before durations
@@ -377,6 +382,52 @@ class Wait(Action):
         self.parser.ok("Time passes.")
 
 
+class Help(Action):
+    """List the actions the player can take right now.
+
+    The parser keys every registered action by ``action_name()`` (see
+    ``Game.default_actions`` / ``Parser.add_action``), so this reads that live
+    dict and reports each verb with its description and aliases -- game-defined
+    actions included, for free. A few engine-internal verbs that aren't typed by
+    a player (the comma-sequence wrapper) are hidden."""
+
+    ACTION_NAME = ActionName.HELP
+    ACTION_DESCRIPTION = "List the commands you can use"
+    ACTION_ALIASES = ["h", "commands", "?"]
+
+    # action_name() keys for verbs that exist for the engine's own plumbing
+    # rather than as something a player would type, so they're left off the list.
+    _HIDDEN = {ActionName.SEQUENCE}
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        entries = []
+        for name, action in self.parser.actions.items():
+            if name in self._HIDDEN or not action.PLAYER_VISIBLE:
+                continue
+            description = action.ACTION_DESCRIPTION or ""
+            aliases = getattr(action, "ACTION_ALIASES", None) or []
+            entries.append((name, description, aliases))
+        entries.sort()
+        # Align descriptions against the command NAMES only (capped) -- never
+        # against the alias lists, whose length used to blow the column width out
+        # and wrap every line. Any aliases trail at the end of their own line, so
+        # a verb with many of them no longer pads every other command.
+        width = min(max((len(name) for name, _, _ in entries), default=0), 20)
+        lines = ["You can try these commands:"]
+        for name, description, aliases in entries:
+            line = f"  {name.ljust(width)}  {description}".rstrip()
+            if aliases:
+                line += f"  ({', '.join(aliases)})"
+            lines.append(line)
+        self.parser.ok("\n".join(lines))
+
+
 class Describe(Action):
     ACTION_NAME = ActionName.DESCRIBE
     ACTION_DESCRIPTION = "Describe the current location"
@@ -390,4 +441,24 @@ class Describe(Action):
         return True
 
     def apply_effects(self):
+        cmd = (self.command or "").strip().lower()
+        rest = cmd
+        for lead in ("look at ", "look ", "l "):
+            if cmd.startswith(lead):
+                rest = cmd[len(lead) :].strip()
+                break
+        # "look <direction>" surveys an exit instead of re-describing the room.
+        if rest and rest != cmd and rest not in ("around", "round", "here"):
+            looker = self.actor if self.actor is not None else self.game.player
+            loc = looker.location
+            direction = self.parser.get_direction(rest, loc)
+            if direction:
+                if loc.is_blocked(direction):
+                    return self.parser.ok(loc.get_block_description(direction))
+                dest = loc.connections.get(direction)
+                if dest is None:
+                    return self.parser.ok("You see nothing special that way.")
+                travel = loc.travel_descriptions.get(direction) or ""
+                line = f"To the {direction}, you see {dest.name}."
+                return self.parser.ok(f"{line} {travel}".strip())
         self.parser.ok(self.game.describe())

@@ -215,8 +215,15 @@ class Item(Thing):
         is an OPEN holder, else an empty dict. This is the single place the
         engine asks "what's inside/on this that I can see or take?" -- shared by
         scope resolution, Get, and Examine, so containers and surfaces are
-        handled uniformly."""
-        return self.contents if (self.is_holder() and self.is_open()) else {}
+        handled uniformly. Hidden items (concealed until a SEARCH reveals them)
+        are excluded."""
+        if not (self.is_holder() and self.is_open()):
+            return {}
+        return {
+            name: it
+            for name, it in self.contents.items()
+            if not it.get_property("is_hidden")
+        }
 
     def preposition(self) -> str:
         """ "on" for a surface, "in" for a container -- for listings/messages."""

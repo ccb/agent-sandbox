@@ -34,6 +34,21 @@
 - Get #169/#170 reviewed; retarget #86 to `main` once #84 merges.
 - Phase C proper — vision-radius perception + letting actions target other agents (still open in NEXT-STEPS; conversation currently leans on co-located event perception).
 
+## 2026-06-23
+**Focus:** generated play-through Jupyter notebooks for every ported game.
+
+**Done today:**
+- Wrote `generated/_make_notebooks.py`: one notebook per game (load module → describe opening → play winning walkthrough → free-play `do(...)` helper).
+- Built notebooks for the 9 Parsely ports plus Action Castle II–IV; verified each executes headless and hits its expected score (AC2 71/100, AC3/AC4 100/100).
+- Repointed the generator after the `test_gen` → `generated` move; confirmed the hand-written AC1 notebook still runs; committed `1a754a7`.
+- Researching how best to build the game (Godot or Parser)
+
+**Blockers / questions:**
+- N/A
+
+**Next:**
+- Push `feat/issue-29-pdf-generation` / open a PR when ready.
+
 ## 2026-06-22
 **Focus:** tightened the slice-by-slice Parsely porting workflow after merging the conversion guide.
 
@@ -188,6 +203,7 @@
 
 **Next:**
 - working on issue #29
+
 ## 2026-06-05
 **Focus:** working on issue #23 and looking into algebraic data types
 
@@ -201,6 +217,7 @@
 
 **Next:**
 - rebasing onto other PRs and focusing on less string-matching implementations
+
 ## 2026-06-04
 **Focus:** researching and watching lectures on AI
 
@@ -214,6 +231,7 @@
 
 **Next:**
 - reading more papers while working on issues
+
 ## 2026-06-03
 **Focus:** rebasing issue #4 onto main and looking into implementation of #9
 
@@ -226,6 +244,7 @@
 
 **Next:**
 - Finish issue #9
+
 ## 2026-06-02
 **Focus:** read the ReAct paper and work on PR #4
 
@@ -241,6 +260,7 @@
 **Next:**
 - Open PR for #4, get review
 - Look at hooking the agent loop into the live game (currently `npc.py` is not wired into `action_castle.py`)
+
 ## 2026-06-01
 **Focus:** figuring out the interface between Python and Godot
 
