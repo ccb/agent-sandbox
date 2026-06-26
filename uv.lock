@@ -3067,7 +3067,6 @@ anthropic = [
     { name = "anthropic" },
 ]
 codegen = [
-    { name = "anthropic" },
     { name = "pymupdf" },
 ]
 dev = [
@@ -3100,7 +3099,6 @@ openai = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.20" },
-    { name = "anthropic", marker = "extra == 'codegen'", specifier = ">=0.20" },
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.20" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "black", marker = "extra == 'docs'" },

@@ -1,29 +1,23 @@
-"""Codegen pipeline: PDF -> GameSpec JSON -> Python build_game() module.
+"""PDF ingest + structured-view helpers for hand-porting Parsely games.
 
 Top-level layout::
 
     codegen.pdf_ingest      PyMuPDF page parser (color- and underline-aware).
-    codegen.extract         LLM-driven GameSpec extractor (mock fallback).
-    codegen.spec            GameSpec dataclasses, JSON I/O, validation.
-    codegen.emit            GameSpec -> Python source string.
-    codegen.templates       Per-template emitters for actions and blocks.
-    codegen.prompts         LLM prompt strings used by extract.
-    codegen.cli             ``python -m text_adventure_games.codegen`` entry.
+    codegen.pdf_structure   Group ingested spans into per-location blocks.
+    codegen.source_view     render_source: a scoped PDF slice as compact markdown.
+    codegen.source          ``python -m text_adventure_games.codegen.source`` CLI.
+
+This is the *ingest* half of what used to be a full PDF -> GameSpec -> Python
+pipeline. The spec-extraction and module-emission half has been removed: in
+practice a good prompt with Claude Code working directly against the PDF
+produces a better port than the template-driven emitter did. What remains is
+the genuinely useful part -- a structured, color-tagged view of a Parsely PDF
+to read slice by slice while hand-porting. See ``docs/converting-parsely-games.md``.
 
 The package is intentionally optional: the base engine does not import it, and
-PyMuPDF stays an optional dependency. Generated game modules import only from
-``text_adventure_games`` (no runtime dependency on codegen).
+PyMuPDF stays an optional dependency.
 """
 
-from .spec import (
-    GameSpec,
-    load_spec,
-    dump_spec,
-    validate,
-    lint,
-    legal_command_hints,
-)
-from .emit import emit_module, emit_module_to_file, emit_walkthrough_module
 from .pdf_structure import format_location
 from .source_view import render_source
 
@@ -41,15 +35,6 @@ except ImportError:  # PyMuPDF not installed
     pass
 
 __all__ = [
-    "GameSpec",
-    "load_spec",
-    "dump_spec",
-    "validate",
-    "lint",
-    "legal_command_hints",
-    "emit_module",
-    "emit_module_to_file",
-    "emit_walkthrough_module",
     "format_location",
     "render_source",
     "ingest_pdf",
