@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AgentFrame } from "../types/replay";
+import { MemoryRows } from "./MemoryList";
 
 // The activity string is "<activity> @ UPenn:Building:grounds"; split it into the
 // action (before @) and location (after @), like the Smallville card does.
@@ -24,13 +25,18 @@ export function AgentCard({
   name,
   emoji,
   frame,
+  secPerStep,
 }: {
   name: string;
   emoji: string;
   frame: AgentFrame | undefined;
+  secPerStep: number;
 }) {
   const { action, location } = frame ? splitAct(frame.act) : { action: "", location: "" };
   const chat = frame?.chat ?? null;
+  // The small set retrieval surfaced for this decision — the shorthand the card
+  // shows, distinct from the full stream in "Full memory history" below it.
+  const retrieved = frame?.memories ?? [];
 
   return (
     <div className="agent-card">
@@ -55,6 +61,17 @@ export function AgentCard({
           <span className="muted">None at the moment</span>
         )}
       </Field>
+
+      {/* The cognition shorthand: just the memories retrieval surfaced for the
+          current action (a subset of the full history shown below the card). */}
+      <div className="agent-field">
+        <span className="agent-field-label">Memories retrieved</span>
+        {retrieved.length ? (
+          <MemoryRows records={retrieved} secPerStep={secPerStep} showTime={false} />
+        ) : (
+          <span className="agent-field-value muted">None retrieved</span>
+        )}
+      </div>
     </div>
   );
 }

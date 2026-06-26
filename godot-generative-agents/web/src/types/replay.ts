@@ -44,6 +44,15 @@ export interface AgentFrame {
    * real model).
    */
   chat?: [string, string][] | null;
+  /**
+   * The memories retrieval surfaced for *this* decision — the card's compact
+   * "Memories retrieved" shorthand (issue #163). A subset of the agent's full
+   * `memory_streams`; it only changes at the agent's decision points and carries
+   * forward unchanged in between. Populated even under the mock brain (retrieval
+   * runs regardless; the mock just ignores the block when deciding). Optional so
+   * an older replay JSON still type-checks.
+   */
+  memories?: MemoryRecord[] | null;
 }
 
 /** A step: persona name -> that persona's state. */

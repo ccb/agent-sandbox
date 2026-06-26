@@ -78,10 +78,23 @@
   z-index: 2;
   overflow-y: auto;
   background: #eceef1;
+  /* This page is its own (only) scroll container. `contain` stops a scroll that
+     reaches the end from chaining to the body and rubber-banding, which used to
+     reveal the black canvas behind it as a flickering bar at the bottom. */
+  overscroll-behavior: contain;
 }
 
 .app[data-view="game"] .view-agents {
   display: none;
+}
+
+/* On the agents page the canvas is hidden, but we use `visibility` (not
+   `display: none`) so it keeps its CSS size — the Godot engine runs
+   `canvasResizePolicy: 2` and would shrink its framebuffer to zero if the canvas
+   collapsed, so it must stay laid out at full size while not painting. Not
+   painting also means there's no black canvas to show through on overscroll. */
+.app[data-view="agents"] .view-game {
+  visibility: hidden;
 }
 
 .agents-placeholder {
