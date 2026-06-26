@@ -71,37 +71,66 @@ def gid(sheet: str, col: int, row: int) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Tile palette — the single "what tile is what" table. Tweak (col,row) here if a
-# piece looks wrong; coordinates are atlas cells read off the Franuka sheets
-# (see the annotated grids). Multi-tile objects are 2D blocks of (col,row) with
-# None for "leave empty".
+# Tile palette — sourced from furniture_catalog.json, the single "what tile is
+# what" table (see that file's _README and preview_catalog.py to verify a tile).
+# An LLM furnishing a building edits the catalog and references objects by name
+# via block_named()/tile_named(); the constants below are just the named lookups
+# the room-filling code already uses, so behaviour is unchanged.
 # --------------------------------------------------------------------------- #
 F, S, B = "interior_franuka", "interior_school", "interior_bath"
-
-# Shell (single tiles, on the floor layer)
-FLOOR = gid(F, 6, 3)  # light wood floorboard
-WALL = gid(F, 24, 0)  # brick wall top
-WINDOW = gid(F, 29, 7)  # window (drawn over a wall on the furniture layer)
+_SHEET_ALIAS = {"franuka": F, "school": S, "bath": B}
 
 
-# Furniture blocks (col,row) grids, top-left anchored, on the furniture layer
 def block(sheet, c0, r0, w, h):
+    """A furniture block: a (col,row) grid of tiles, top-left anchored. None in a
+    cell means "leave empty". This is the shape stamp() places on the layer."""
     return [[(sheet, c0 + c, r0 + r) for c in range(w)] for r in range(h)]
 
 
-DESK = block(S, 2, 0, 1, 2)  # student desk + chair (1x2)
-TEACHER_DESK = block(S, 4, 2, 2, 2)  # long desk w/ papers + red book (2x2)
-BLACKBOARD = block(S, 13, 2, 3, 2)  # decorated blackboard (3x2)
-BLACKBOARD_BLANK = block(S, 13, 4, 3, 2)  # plain blackboard (3x2)
-BOOKSHELF = block(F, 7, 13, 1, 2)  # tall bookshelf with books (1x2)
-PLANT = block(F, 21, 13, 1, 1)  # potted palm
-OFFICE_CHAIR = block(F, 13, 19, 1, 1)  # wooden chair
-SOFA = block(F, 0, 21, 3, 2)  # long padded bench / sofa (3x2)
-SIDE_TABLE = block(F, 17, 13, 1, 1)  # small table / bench
-RUG = block(F, 3, 29, 3, 3)  # blue 3x3 rug (corners+edges+centre)
-TOILET = block(B, 6, 1, 1, 2)  # toilet (1x2)
-SINK = block(B, 11, 1, 1, 2)  # vanity sink (1x2)
-BATHMAT = block(B, 3, 2, 1, 1)  # round bath mat
+def _load_catalog():
+    path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "furniture_catalog.json"
+    )
+    with open(path) as fh:
+        return json.load(fh)["objects"]
+
+
+CATALOG = _load_catalog()
+
+
+def block_named(name):
+    """Furniture block for a catalog object name, ready for stamp(). This is the
+    seam an LLM uses: pick any name from furniture_catalog.json and place it."""
+    o = CATALOG[name]
+    return block(_SHEET_ALIAS[o["sheet"]], o["col"], o["row"], o["w"], o["h"])
+
+
+def tile_named(name):
+    """Single GID for a catalog object — for the shell tiles (floor/wall/window)
+    that are painted one cell at a time rather than stamped as a block."""
+    o = CATALOG[name]
+    return gid(_SHEET_ALIAS[o["sheet"]], o["col"], o["row"])
+
+
+# Shell (single tiles, on the floor layer)
+FLOOR = tile_named("floor_wood_light")
+WALL = tile_named("wall_brick")
+WINDOW = tile_named("window")  # drawn over a wall on the furniture layer
+
+# Named furniture the room-filling code below places.
+DESK = block_named("student_desk")  # student desk + chair (1x2)
+TEACHER_DESK = block_named("teacher_desk")  # long desk w/ papers + red book (2x2)
+BLACKBOARD = block_named("blackboard")  # decorated blackboard (3x2)
+BLACKBOARD_BLANK = block_named("blackboard_blank")  # plain blackboard (3x2)
+BOOKSHELF = block_named("bookshelf")  # tall bookshelf with books (1x2)
+PLANT = block_named("plant")  # potted plant
+OFFICE_CHAIR = block_named("armchair")  # single armchair
+SOFA = block_named("sofa")  # long padded bench / sofa (3x2)
+SIDE_TABLE = block_named("side_table")  # small table / bench
+RUG = block_named("rug_blue")  # blue 3x3 rug (corners+edges+centre)
+TOILET = block_named("toilet")  # toilet (1x2)
+SINK = block_named("sink")  # vanity sink (1x2)
+BATHMAT = block_named("bathmat")  # round bath mat
 
 
 # --------------------------------------------------------------------------- #
