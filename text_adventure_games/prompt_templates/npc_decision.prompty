@@ -1,0 +1,56 @@
+---
+name: npc_decision
+description: >
+  System message for an LLM-driven NPC's ReAct decision (text_adventure_games/npc.py,
+  LLMAgent). Renders the persona and goals, and -- on the free-text path -- the
+  labeled Reasoning/Action/Duration instruction. The structured tool-calling path
+  renders the same persona/goals block but omits the instruction, because there
+  the tool schema is the output contract. The character's name is deliberately
+  left out: identity rides on the first-person persona, and the observation
+  already names the scene and everyone in it, so the model speaks as "I" without
+  being told its own name.
+inputs:
+  persona:
+    type: string
+    description: First-person persona string. The Persona line is dropped when empty.
+  goals_block:
+    type: string
+    description: >
+      Pre-formatted goals grouped by tier (see LLMAgent._format_goals). The
+      Goals section is dropped when empty.
+  include_instruction:
+    type: bool
+    description: >
+      True on the free-text path (append the ReAct instruction); False on the
+      structured tool-calling path (omit it).
+  reasoning_label:
+    type: string
+    description: The reasoning line label, e.g. "Reasoning:" (from ReActLabel).
+  action_label:
+    type: string
+    description: The action line label, e.g. "Action:" (from ReActLabel).
+  duration_label:
+    type: string
+    description: The duration line label, e.g. "Duration:" (from ReActLabel).
+sample:
+  persona: I am the troll. I guard the drawbridge.
+  goals_block: "Short-term:\n  - keep the player off the bridge"
+  include_instruction: true
+  reasoning_label: "Reasoning:"
+  action_label: "Action:"
+  duration_label: "Duration:"
+---
+You are an NPC in a text adventure game.
+{%- if persona %}
+Persona: {{ persona }}
+{%- endif %}
+{%- if goals_block %}
+Goals:
+{{ goals_block }}
+{%- endif %}
+{%- if include_instruction %}
+Based on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:
+{{ reasoning_label }} <one short sentence explaining your choice>
+{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>
+{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>
+{%- endif %}

@@ -4,6 +4,65 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-06-25
+
+**Focus:** push the UPenn campus replay to a watchable state (camera, terrain, Williams Hall interior); land the prompt-management + visualizer stack; plan the backend unification
+
+**Done today:**
+- **PR #166** (UPenn campus agent world) — a full day of Godot rendering polish on `feat/campus-kenney-tiles`:
+  - **Camera:** borderless-fullscreen launch that scales the 1920×1080 frame to the screen; **pan + zoom controls** with the default view unchanged; capped zoom-out at the default view, locked the map at the default view (pan only when zoomed in), and kept the camera inside the map so there's never a grey margin top/bottom.
+  - **Terrain / tiles:** cropped the core map to the block bounded by its four streets; used each terrain block's **centre tile** so cells stop showing corner specks; switched trees to **rounded standalone sprites** so canopies aren't cut off and stood them on the ground (not a grey box), with discrete green + autumn trees; added a thin concrete **kerb** around the lawns (a thin stroke, not a full concrete cell) and outlined the stone slabs' bare top/right edges.
+  - **Williams Hall interior** (`0972a18`): new `tools/geo/furnish_building.py` opens a sector's roof (roof = sector ∩ collision) and appends two interior tilesets (Franuka pack, committed) + `williams_floor` / `williams_furniture` layers to `upenn_core_urban.tmj` as a **top-down cutaway** — idempotent, reusable via `--sector`, visual-only (a navigable interior is the follow-up); no renderer change. Black-formatted `furnish_building.py`.
+  - Fixed `generate_penn_replay` to pass `world_map` through its `build_world_fn`.
+- **PR #150** (prompt management + visualizer): templatized the **gen-agents dialogue, reflection-synthesis, and daily-plan** prompts, and added a **per-node templates override** plus the rewritten **Smallville live-LLM cognition chain** to `promptviz` — incorporating Frankie's just-merged #168 / #169 / #170. Rebased onto post-#168 `main`, CI green. With the gen-agents half folded in (#161, see 6/23), **#150 now covers all of #145**.
+- Opened **issue #179**: unify the backend — one canonical package + one HTTP API behind every frontend (the Flask webapp, the Smallville replay, and the Godot port each reach the engine differently today). Folded **PR #100** (`SimulationConfig`) into the extraction plan on tracking **PR #167** rather than landing it standalone.
+
+**Phase C/D/E closed for me by teammate merges:**
+- **PR #106** (my vision-perception branch) merged → closes **#80** (vision-radius perception) and **#82** (Smallville proximity mapping).
+- Frankie's **#168 / #169 / #170** merged → close **#83** (daily planning), **#84** (periodic reflection), **#86** (dialogue seam); **#78** (real LLM brain) also landed.
+- **PR #180** (#87 surface chat) and **PR #175** (#90 world-state export API) merged → both GA issues closed. MaEnqi also shipped **#177** (headless HTTP server) — the backbone for #179.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land **#166** (campus replay) and **#150** (prompts + visualizer); then run the **#167 / #179** backend extraction + unification now that the HTTP server (#177) and export API (#90) are in.
+- Navigable Williams Hall interior; world-authoring research (**#147**); **#85** (time mapping) is the last open Phase D item.
+
+## 2026-06-24
+
+**Focus:** render the real UPenn campus in Godot from OSM map data; wire it to a parameterized replay backend
+
+**Done today:**
+- Opened + merged **PR #165** (`geo/osm-to-tiled-poc`): an **OSM → Tiled converter** plus a Penn campus tilemap — a POC for new **issue #164** (import real-world GeoJSON/OSM map data into Godot tiles). Added a **`core` area preset** (34th–38th × Spruce–Walnut) for prototyping.
+- Merged **PR #162** (godot-generative-agents) and combined it with the OSM work into **PR #166** (`feat/campus-kenney-tiles`): the **UPenn campus agent world** — real OSM map → matrix (the_ville format) + a parameterized backend + a **Godot replay** where agents walk the real campus over the OSM-derived tilemap. Overlaid the campus first with **Cute Fantasy** tiles, then with real **Kenney CC0 urban** tiles; added a `run_replay.sh` launcher.
+- Visual-variety pass on the urban campus: varied roofs, marked roads, added a tree layer, then **real multi-tile trees** and **composed tree stands**; iterated the core resolution down to **1 m/tile**, limited the core to **34th–36th St (Spruce–Walnut)** recentred, shrank replay sprites so people read smaller than buildings, and tuned the camera (portrait → 1920×1080 cover-fit → full-campus overview).
+- Opened tracking **PR #167**: extract the gen-agents backend into its own package and fold in **`SimulationConfig`** (#100), sequenced **after #166** (added the tracking/blocked note).
+- Opened **issue #163**: keep the memory / retrieval / reasoning + persona inspector (the web companion) when the visuals move to Godot.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Polish the campus replay (camera, interiors); land **#166**, then do the **#167** backend extraction.
+
+## 2026-06-23
+
+**Focus:** start the Godot replay frontend; ship a prompt-chain visualizer; extend prompt management to the generative-agents prompts
+
+**Done today:**
+- **PR #109** (5-agent replay UI) and **PR #144** (Claude Code plugins) both merged.
+- Opened **PR #162** (`feat/godot-generative-agents`): first cut of a **Godot** frontend for the agent sim — imports Cute Fantasy sprites that auto-wander, over a tiled ground (grass, paths, pond) with trees rendered using **y-sort**. The start of the Godot renderer the #146 guidance laid out; retargeted the port-proposal docs off the closed **#146** onto this PR and tied them to the mock world.
+- Opened **PR #161** (`feat/ga-prompt-management`): port the **generative-agents** LLM prompts onto in-repo **`.prompty`** templates — the Smallville half of **#145** (the library half is PR #150). Later **folded into #150** and closed #161, so one PR now carries all of #145.
+- Added the **`promptviz`** tool (`e066c21`): an **offline web DAG of LLM call sites** (Flask + Cytoscape/dagre, no model call) to see the prompt chain across the engine + sim; made it always load the bundled chains so a `--spec` shows alongside them. Lives on PR #150.
+- **#106** follow-up: a `perceivable_locations` perf note + a replay-only embedding-determinism check.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Build out the Godot replay with the real campus map (OSM); keep **#150** moving.
+
 ## 2026-06-22
 
 **Focus:** finish the replay-UI polish; team tooling; propose *and* start a prompt-management system; forward-looking Godot / world-authoring research

@@ -157,7 +157,7 @@ installed:
 | `RichTerminalRenderer` | terminal, notebooks | **Default.** Uses [`rich`](https://rich.readthedocs.io): turn rules plus a leading glyph and bracketed per-channel label on every line (`» [narration]`, `▸ troll [action]`, `◦ troll [observation]`, …), with the actor on agent-trace lines, each colored as a tertiary cue. Auto-detects a non-TTY / `NO_COLOR` and degrades to plain text. |
 | `PlainRenderer` | tests, logs, CI, no-`rich` fallback | No color or markup; one stable line per message. Guarantees the engine runs even if `rich` isn't installed, and keeps test output deterministic. |
 | `WebRenderer` | Flask web app | Emits today's `{"type": ..., "text": ...}` dicts via a `channel → CSS class` map. The template and `style.css` are essentially unchanged. |
-| `JSONRenderer` *(future)* | Godot / external renderer | One JSON record per message — the structured change feed the 2D renderer subscribes to. Realizes the export-API idea in [multi-character-play.md](multi-character-play.md) §5/§7. |
+| `JSONRenderer` *(#90)* | Godot / external renderer | One JSON record per message — the structured change feed the 2D renderer subscribes to. Realizes the export-API idea in [multi-character-play.md](multi-character-play.md) §5/§7. |
 
 `rich` is chosen for the terminal because it gives colored, panel/rule-structured,
 TTY-aware output out of the box, so the trace formatting stays declarative instead
@@ -357,7 +357,7 @@ Sequenced so single-character games keep working at every step. Aligns with the
 | 7 | Tests switch to a `CaptureRenderer`; assert on channels not strings | the offline suites |
 | 8 *(after #28)* | `AGENT_OBSERVATION` renders tiered goals; optional goal-change `SYSTEM` messages | tiered-goal play |
 | 9 *(after #30)* | `phase` on `Message` + group-by-`(turn, actor)`; turn header shows mode | simultaneous turns |
-| 10 *(future)* | `JSONRenderer` / export feed for the Godot renderer | the 2D renderer |
+| 10 ✅ Built (#90) | world-state snapshot (`world_state.py`) + `JSONRenderer` change feed + `GET /world_state` | the 2D renderer |
 
 Each stage is independently shippable; stop after any of them and the game still
 runs. Stages 8–9 depend on PRs still in flight and land **after they merge** — see §11.
@@ -483,7 +483,16 @@ plus 11 new ones.
 - **Stage 7, full migration:** the existing suites still assert on the web dicts
   through the `WebParser` shim; only `test_reporting.py` uses `CaptureRenderer`.
   Migrating the rest is mechanical but deferred to keep this PR focused.
-- **Stage 10:** the `JSONRenderer` / export feed for the 2D renderer.
+- **Stage 10: built (issue #90).** Both complementary halves now exist:
+  - the **world-state *snapshot*** — `text_adventure_games/world_state.py`, a
+    typed, deterministic, read-only `WorldState` (via `Game.to_world_state()` /
+    `to_world_json()`) covering the full room graph + characters + items + clock
+    + recent events; and
+  - the **per-message *change feed*** — `JSONRenderer`, a `Renderer` that emits
+    one JSON record per `Message` (buffered for polling, or streamed to a `sink`
+    callback for a websocket).
+  - Served over HTTP by the webapp's **`GET /world_state`** route. Remaining for
+    #9/#10: a websocket that pushes the change feed, and the Godot client itself.
 - **Verbose JSON dump:** `llm_client.py` / `LlmParser._narrate` still
   `print(json.dumps(...))` under their `verbose` flag for deep prompt debugging;
   the `AGENT_OBSERVATION` channel is added but hasn't replaced that path yet.

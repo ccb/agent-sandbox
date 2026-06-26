@@ -197,3 +197,16 @@ docs/superpowers/
 /external/
 
 parsely_pdfs/*.pdf
+
+# --- godot-generative-agents web viewer ---
+# Build/install artifacts — all regenerated locally (npm run export:godot /
+# npm install / npm run build), never committed.
+godot-generative-agents/web/public/godot/
+godot-generative-agents/web/node_modules/
+godot-generative-agents/web/dist/
+godot-generative-agents/web/*.tsbuildinfo
+# Re-include the app's JSON (package.json, tsconfig*.json and the committed replay)
+# — all otherwise swallowed by the blanket `*.json` above. The excluded dirs above
+# stay excluded (git can't re-include inside an ignored parent), so build output and
+# deps are still skipped. (pnpm-lock.yaml / pnpm-workspace.yaml are YAML, tracked.)
+!godot-generative-agents/web/**/*.json

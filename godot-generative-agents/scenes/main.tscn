@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/wanderer.gd" id="1_wanderer"]
 [ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="2_player"]
@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://drbjfwdyknoo6" path="res://Cute_Fantasy_Free/Tiles/Water_Middle.png" id="9_water"]
 [ext_resource type="Texture2D" uid="uid://badtfimn65lqt" path="res://Cute_Fantasy_Free/Outdoor decoration/House_1_Wood_Base_Blue.png" id="10_house"]
 [ext_resource type="Texture2D" uid="uid://c8nvffwrqtc3h" path="res://Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png" id="11_tree"]
+[ext_resource type="Script" path="res://scripts/camera_controls.gd" id="12_cam"]
 
 [node name="Main" type="Node2D"]
 y_sort_enabled = true
@@ -23,9 +24,12 @@ path_tile = ExtResource("8_path")
 water_tile = ExtResource("9_water")
 building_sheet = ExtResource("10_house")
 
+; Centred on the rotated campus map (175x124 tiles x 16px x the layer's 3x scale
+; = 8400x5952 px); zoom frames the whole thing in the 1920x1080 window.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(3888, 2424)
-zoom = Vector2(0.13, 0.13)
+position = Vector2(4200, 2976)
+zoom = Vector2(0.18, 0.18)
+script = ExtResource("12_cam")
 
 [node name="TreeA" type="Sprite2D" parent="."]
 position = Vector2(180, 470)

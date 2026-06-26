@@ -170,7 +170,9 @@ class CutHair(actions.Action):
         for store in (self.player.inventory, self.player.worn, self.player.wielded):
             if "dagger" in store:
                 store["dagger"].set_property("dull", True)
-        self.player.add_to_inventory(
+        # The hair falls to the floor (faithful to the rulebook) -- GET HAIR to
+        # pick it up, then MAKE ROPE / BRAID HAIR braids it.
+        self.player.location.add_item(
             _item("hair", "10 lbs of silky hair", "A coiled heap of your shorn hair.")
         )
         self.parser.ok(
@@ -211,6 +213,38 @@ class TieRope(actions.Action):
             "You tie the rope to the door's iron ring and feed the rest out the "
             "window. Now you can CLIMB DOWN."
         )
+
+
+class LetGo(actions.Action):
+    """Drop from the rope into the gardens (the commit). Only meaningful while
+    Outside the Tower; delegates to GO DOWN so the fall reuses the travel text,
+    room description, and escape scoring."""
+
+    ACTION_NAME = "let go"
+    ACTION_DESCRIPTION = "Let go of the rope and drop into the gardens"
+    ACTION_ALIASES = [
+        "jump",
+        "fall",
+        "jump down",
+        "let go of the rope",
+        "let go of the window",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if (
+            self.player.location is None
+            or self.player.location.name != "Outside the Tower"
+        ):
+            self.parser.fail("There's nothing to let go of here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        actions.Go(self.game, "down", actor=self.player)()
 
 
 # The slippers and boots are ordinary WEARABLE items in the "feet" slot, so the
@@ -308,6 +342,36 @@ class EatApple(actions.Action):
         _take_held(self.player, "apple")
         self.parser.ok(
             "*CRUNCH* You can't help but feel there's some symbolism at play here."
+        )
+
+
+class PickWatermelon(actions.Action):
+    """Try to pick a watermelon from the vines -- a gag: it's too heavy to carry
+    (rulebook)."""
+
+    ACTION_NAME = "pick watermelon"
+    ACTION_DESCRIPTION = "Try to pick a watermelon from the vines"
+    ACTION_ALIASES = [
+        "pick a watermelon",
+        "pluck watermelon",
+        "pick watermelons",
+        "take watermelon",
+        "get watermelon",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Gardens":
+            self.parser.fail("There are no watermelon vines here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "It's too heavy. Why would you want to carry a watermelon, anyway?"
         )
 
 
@@ -892,6 +956,12 @@ def build_game() -> ActionCastle4:
         "Tower Stairs",
         "You're on the tower steps. A wooden door leads to your chambers.",
     )
+    outside_tower = L(
+        "Outside the Tower",
+        "You're partway down the tower's outer wall, clinging to the hair-rope. The "
+        "window is just above you; a large rosebush waits far below. You can CLIMB IN "
+        "to go back, or LET GO (or JUMP) to drop into the gardens.",
+    )
     guardroom = L(
         "Guardroom",
         "The castle guardroom. A doorway leads west out of the castle; stairs lead up "
@@ -957,7 +1027,25 @@ def build_game() -> ActionCastle4:
     # --- Connections (geography resolved from each room's exit block) ------
     # Castle
     _one_way(tower, "out", tower_stairs)  # the door (locks after a failed escape)
-    _one_way(tower, "down", gardens)  # climbing out the window on the hair rope
+    # The window escape is two steps: CLIMB DOWN onto the rope (-> Outside the
+    # Tower), then LET GO / JUMP / DOWN to drop into the Gardens. You can CLIMB IN
+    # to go back up -- but once you've dropped, the rope's out of reach from the
+    # ground, so Outside -> Gardens is one-way.
+    _one_way(tower, "down", outside_tower)  # climb out the window onto the rope
+    tower.travel_descriptions["down"] = (
+        "You climb out the window and inch down the rope until you're hanging at its "
+        "end -- a large rosebush waits directly below."
+    )
+    _one_way(outside_tower, "in", tower)  # climb back in through the window
+    outside_tower.travel_descriptions["in"] = (
+        "You haul yourself back up and climb in through the window."
+    )
+    _one_way(outside_tower, "down", gardens)  # let go / jump -> drop into the gardens
+    outside_tower.travel_descriptions["down"] = (
+        "You let go, crashing into the thorny rosebush. It breaks your fall and your "
+        "voluminous gown takes the brunt -- torn to ribbons, but you've only a few "
+        "scratches."
+    )
     _one_way(tower_stairs, "enter", tower)
     tower_stairs.add_connection("down", guardroom)  # auto: guardroom up -> stairs
     # WEST out of the castle is one-way -- "returning to the castle is out of the
@@ -1189,15 +1277,25 @@ def build_game() -> ActionCastle4:
     )
     cot.add_item(boots)
     guardroom.add_item(cot)
-    gardens.add_item(
-        _fixture(
-            "rosebushes",
-            "thorny rosebushes",
-            "Thorny and covered with roses of every color.",
-        )
+    rosebushes = _fixture(
+        "rosebushes",
+        "thorny rosebushes",
+        "Thorny and covered with roses of every color.",
     )
+    # The roses aren't used for anything (rulebook), but the bush is covered in
+    # them -- so PICK ROSE should pluck one (pure flavor + the SMELL ROSE gag),
+    # not report the bush "bare". HAS_ROSE enables the built-in Pick_Rose action.
+    rosebushes.set_property(Property.HAS_ROSE, True)
+    gardens.add_item(rosebushes)
     gardens.add_item(
         _fixture("fruit trees", "apple trees", "Branches heavy with ripe red apples.")
+    )
+    gardens.add_item(
+        _fixture(
+            "watermelon vines",
+            "watermelon vines",
+            "Fat, ripe watermelons swelling on the vine near the tower's base.",
+        )
     )
 
     # The white mare: a vehicle, but skittish until tamed (apple or brushing).
@@ -1316,9 +1414,11 @@ def build_game() -> ActionCastle4:
     custom_actions = [
         CutHair,
         TieRope,
+        LetGo,
         KillSelf,
         PickApple,
         EatApple,
+        PickWatermelon,
         GiveAppleToHorse,
         BrushHorse,
         BrushHair,
@@ -1544,10 +1644,12 @@ WALKTHROUGH_WIN = [
     "wear boots",  # (+5 boots)
     "up",  # -> Tower Stairs
     "enter",  # -> Tower
-    "cut hair",  # the dagger shears off your hair
+    "cut hair",  # the dagger shears off your hair (it falls to the floor)
+    "get hair",  # pick the shorn hair up off the floor
     "make rope",  # crafting: hair -> rope
     "tie rope",  # tie it to the door's iron ring
-    "down",  # climb out the window -> Gardens   (+5 escape)
+    "climb down",  # out the window onto the rope -> Outside the Tower
+    "let go",  # drop into the Gardens             (+5 escape)
     # Tame the skittish mare with an apple from the gardens.
     "pick apple",
     "south",  # -> Drawbridge (the guard ignores you now -- you're already out)

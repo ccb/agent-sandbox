@@ -1,4 +1,5 @@
 from .things import Location, Character
+from .things.characters import DEFAULT_VISION_R
 from .clock import GameClock
 from .config import GameConfig
 from . import parsing, actions, blocks
@@ -116,6 +117,11 @@ class Game:
         # crafting are unchanged and the parser's crafting verbs stay inert.
         # Runtime-only (recipes hold a factory callable), like triggers.
         self.recipes = []
+
+        # Recipes the player has discovered (issue #135). A recipe declared
+        # known=False is craftable only once its name/alias is learned via
+        # learn_recipe(); recipes with the default known=True ignore this set.
+        self.learned_recipes = set()
 
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
@@ -253,6 +259,13 @@ class Game:
         parser's crafting verbs consult ``self.recipes``."""
         self.recipes.append(recipe)
         return recipe
+
+    def learn_recipe(self, name):
+        """Mark a crafting recipe known by *name* (issue #135), making a recipe
+        declared ``known=False`` craftable. Wire this to a recipe book, an NPC,
+        examine text, etc. Case-insensitive; matches a recipe's name or any of
+        its aliases (see ``Recipe.names``)."""
+        self.learned_recipes.add(str(name).lower())
 
     def pose_prompt(self, prompt):
         """Pose a question to the player (issue #110). While it is pending, the
@@ -639,6 +652,44 @@ class Game:
             return []
         return [c for c in loc.characters.values() if c is not speaker]
 
+    def perceivable_locations(self, character) -> list[Location]:
+        """Return the locations *character* can see into this turn (issue #80).
+
+        This is the single **visibility** seam, the sight counterpart to
+        :meth:`audience_for` (hearing). **Override it** to model a continuous or
+        range-based world -- tile distance, line of sight, walls. The default
+        policy is graph-based: a breadth-first walk over room ``connections`` out
+        to the character's ``vision_r`` hops. ``vision_r == 0`` (the default)
+        returns just the current room, so perception stays exactly as it was
+        before #80 until a game opts in by widening a character's radius.
+
+        Sight is deliberately *not* movement: the walk crosses ``blocks`` (a
+        locked gate stops you walking through, not seeing through). A world that
+        wants walls to block sight can override this to honor blocks.
+        """
+        loc = character.location
+        if loc is None:
+            return []
+        radius = getattr(character, "vision_r", DEFAULT_VISION_R)
+        # Breadth-first over the location graph, tracking each room's hop
+        # distance so we stop expanding once we pass the radius. `seen` keys on
+        # Location identity (a room reached by two paths is visited once).
+        seen = {id(loc): loc}
+        result = [loc]
+        frontier = [loc]
+        for _ in range(radius):
+            nxt = []
+            for room in frontier:
+                for neighbor in room.connections.values():
+                    if id(neighbor) not in seen:
+                        seen[id(neighbor)] = neighbor
+                        result.append(neighbor)
+                        nxt.append(neighbor)
+            frontier = nxt
+            if not frontier:
+                break  # radius exceeds the map; nothing more to reach
+        return result
+
     def set_parser(self, parser):
         """
         Use a different parser for this game.
@@ -675,6 +726,19 @@ class Game:
             "actions": sorted([a for a in self.parser.actions]),
         }
         return data
+
+    def to_world_state(self):
+        """A typed, deterministic, read-only snapshot of the whole world -- the
+        structured feed a JSON exporter or the future Godot renderer polls
+        (issue #90). See :mod:`text_adventure_games.world_state`. Pure: this
+        never mutates the game."""
+        from .world_state import world_state
+
+        return world_state(self)
+
+    def to_world_json(self) -> str:
+        """:meth:`to_world_state` rendered as a JSON string."""
+        return json.dumps(self.to_world_state().to_jsonable())
 
     @classmethod
     def default_actions(self):

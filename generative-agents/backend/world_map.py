@@ -86,9 +86,41 @@ class WorldMap:
                     self.address_tiles.setdefault(address, set()).add((x, y))
             self.collision.append(row)
 
+        # Precompute one axis-aligned bounding box per address -- (min_x, min_y,
+        # max_x, max_y) -- so tile_gap() is O(1) per pair instead of comparing
+        # every tile to every tile (issue #82). Computed once here; the tile sets
+        # never change after load.
+        self.address_bbox: dict[str, tuple[int, int, int, int]] = {}
+        for address, tiles in self.address_tiles.items():
+            xs = [x for x, _ in tiles]
+            ys = [y for _, y in tiles]
+            self.address_bbox[address] = (min(xs), min(ys), max(xs), max(ys))
+
     def tiles_for(self, address: str) -> set[tuple[int, int]]:
         """Return the set of ``(x, y)`` tiles belonging to ``address``."""
         return self.address_tiles.get(address, set())
+
+    def tile_gap(self, addr_a: str, addr_b: str) -> int:
+        """Chebyshev gap, in tiles, between two addresses' footprints (issue #82).
+
+        0 if they are the same address or their tiles touch/overlap; otherwise
+        the number of tiles between them, counting diagonals as one step (so a
+        ``vision_r`` of N covers an (2N+1)x(2N+1) square, matching upstream
+        Smallville's tile vision). Returns a large sentinel when either address
+        has no tiles (e.g. a home that's only ever a label), so it never reads as
+        "nearby". Uses the precomputed bounding boxes, exact for the roughly
+        rectangular arenas and slightly generous for irregular footprints."""
+        if addr_a == addr_b:
+            return 0
+        a = self.address_bbox.get(addr_a)
+        b = self.address_bbox.get(addr_b)
+        if a is None or b is None:
+            return self.width + self.height  # unknown footprint -> never nearby
+        ax0, ay0, ax1, ay1 = a
+        bx0, by0, bx1, by1 = b
+        dx = max(ax0 - bx1, bx0 - ax1, 0)
+        dy = max(ay0 - by1, by0 - ay1, 0)
+        return max(dx, dy)
 
     def is_blocked(self, tile: tuple[int, int]) -> bool:
         x, y = tile
