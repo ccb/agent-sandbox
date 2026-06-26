@@ -1,0 +1,11 @@
+---
+name: reflect_system
+description: >
+  System message for LLM-driven periodic reflection (text_adventure_games/
+  reflection.py, LLMReflector). Shared by both reflection steps -- asking for the
+  salient high-level questions a window of memories raises, and inferring one
+  grounded insight per question. The per-call user message (the numbered memory
+  window + the step instruction) is assembled in code, like other observation
+  scaffolding (issue #145).
+---
+You are reflecting on your own recent experiences to form higher-level insights about yourself, the people around you, and your situation. Ground every insight only in the memories you are given.

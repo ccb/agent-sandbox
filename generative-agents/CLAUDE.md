@@ -36,3 +36,16 @@ The **backend/engine** runs in the repo's `uv` project env (one level up):
 `uv run python -m backend.run_simulation`. The **Django frontend** needs its own
 Python 3.9 venv (`frontend-venv/`, Django 2.2) — `run-replay.sh` provisions both. Don't
 try to run the frontend from the engine env.
+
+## Prompt templates (`backend/prompt_templates/`)
+
+The agent's generated **memory/belief text** — the day's plan, the first-person
+record of each action, and the places a persona knows up front — lives as
+`.prompty` files (Jinja + Prompty) under `backend/prompt_templates/`, not as
+inline f-strings (issue #145; mirrors the engine's `text_adventure_games/
+prompt_templates/`). There is no live model prompt here — the mock brain ignores
+it — so these templates only hold text that gets *stored* into memory/knowledge.
+Render with `from backend.prompt_templates import render` →
+`render("reflection", verb="travel", location="Hobbs Cafe")`. Rendered output is
+byte-identical to the old f-strings; `tests/test_prompt_templates.py` pins it.
+See the package `README.md` for the template-to-call-site table.
