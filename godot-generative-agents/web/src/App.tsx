@@ -13,16 +13,25 @@ const PromptChainView = lazy(() =>
   }))
 );
 
-type View = "game" | "agents" | "prompts";
+// The Prompts reader is its own lazy chunk — it's just a table + modal, so it
+// doesn't pull in Cytoscape the way the chains view does.
+const PromptReaderView = lazy(() =>
+  import("./components/promptviz/PromptReaderView").then((m) => ({
+    default: m.PromptReaderView,
+  }))
+);
 
-// Pages selected by the URL hash (#game / #agents / #prompts) so each is a real,
-// shareable location and the back button works — no router dependency needed.
+type View = "game" | "agents" | "prompts" | "reader";
+
+// Pages selected by the URL hash (#game / #agents / #prompts / #reader) so each
+// is a real, shareable location and the back button works — no router needed.
 // The agent cards are the landing page (the cognitive layer is the point of this
-// companion); the canvas and the prompt-chain view are one explicit hop away.
+// companion); the other views are one explicit hop away.
 function viewFromHash(): View {
   const hash = window.location.hash.replace("#", "");
   if (hash === "game") return "game";
   if (hash === "prompts") return "prompts";
+  if (hash === "reader") return "reader";
   return "agents";
 }
 
@@ -77,6 +86,15 @@ export default function App() {
             >
               Prompt chains
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "reader"}
+              className={`view-tab${view === "reader" ? " is-active" : ""}`}
+              onClick={() => select("reader")}
+            >
+              Prompts
+            </button>
           </nav>
           {/* Plain link, not a tab: it leaves the SPA for the static MkDocs site
               served at /docs/ on this same origin (build it with `pnpm gen:docs`).
@@ -114,6 +132,14 @@ export default function App() {
           <section className="view view-prompts">
             <Suspense fallback={<div className="pcv-loading">Loading…</div>}>
               <PromptChainView />
+            </Suspense>
+          </section>
+        )}
+
+        {view === "reader" && (
+          <section className="view view-reader">
+            <Suspense fallback={<div className="pcv-loading">Loading…</div>}>
+              <PromptReaderView />
             </Suspense>
           </section>
         )}
