@@ -105,29 +105,31 @@
   overscroll-behavior: contain;
 }
 
-.app[data-view="game"] .view-agents {
-  display: none;
-}
-
-/* On the agents page the canvas is hidden, but we use `visibility` (not
-   `display: none`) so it keeps its CSS size — the Godot engine runs
-   `canvasResizePolicy: 2` and would shrink its framebuffer to zero if the canvas
-   collapsed, so it must stay laid out at full size while not painting. Not
-   painting also means there's no black canvas to show through on overscroll. */
-.app[data-view="agents"] .view-game {
+/* Off the game view the canvas is hidden with `visibility` (not `display: none`)
+   so it keeps its CSS size — the Godot engine runs `canvasResizePolicy: 2` and
+   would shrink its framebuffer to zero if the canvas collapsed, so it must stay
+   laid out at full size while not painting. Not painting also means there's no
+   black canvas to show through on overscroll. */
+.app:not([data-view="game"]) .view-game {
   visibility: hidden;
 }
 
-/* The prompt-chain page is another opaque overlay (like the agents page); it's
-   only in the DOM when active (App.tsx), so it just needs a layer above the
-   canvas. While it's up, hide the canvas (keep it laid out) and the agents page. */
-.view-prompts {
+/* The agent-cards page is always mounted (so the canvas underneath keeps its
+   size); show it only on its own view. */
+.app:not([data-view="agents"]) .view-agents {
+  display: none;
+}
+
+/* The prompt views (chains graph, reader) are opaque dark overlays, mounted only
+   when active (App.tsx), so they just need a layer above the canvas. */
+.view-prompts,
+.view-reader {
   z-index: 2;
   overflow: hidden;
   background: #0d1117;
 }
 
-/* Shown while the lazy-loaded prompt-chain chunk downloads. */
+/* Shown while a lazy-loaded prompt chunk downloads. */
 .pcv-loading {
   display: flex;
   align-items: center;
@@ -135,12 +137,6 @@
   height: 100%;
   color: #8b949e;
   font-size: 13px;
-}
-.app[data-view="prompts"] .view-game {
-  visibility: hidden;
-}
-.app[data-view="prompts"] .view-agents {
-  display: none;
 }
 
 .agents-placeholder {
