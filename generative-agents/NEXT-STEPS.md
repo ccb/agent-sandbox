@@ -226,6 +226,16 @@ Not a phase — do these alongside the relevant phase.
   of world state serves both this exporter and the future Godot renderer (ROADMAP
   Phase 2/3). Anchor:
   [`../docs/design/output-and-trace-rendering.md`](../docs/design/output-and-trace-rendering.md).
+- `[engine/port] M` ✅ **Done — Global `SimulationConfig`.** A single config object for
+  the sim (`backend/sim_config.py`), the generative-agents counterpart to the engine's
+  `GameConfig`: it **composes** a `GameConfig` (the `game:` section) and adds the
+  run-time knobs (start, steps, sec-per-step) and memory-retrieval knobs (recency ×
+  relevance × importance weights, decay, limits), loadable from a YAML/JSON file
+  (`--config`), the environment, or Python. Making the retrieval weights tunable needed
+  a small, backward-compatible engine change (optional `alpha_*` params on
+  `AgentMemory.retrieve`). Perception/planning/per-persona-cognition sections are
+  deferred to their phases (C/D). Anchor:
+  [`../docs/design/simulation-config.md`](../docs/design/simulation-config.md).
 
 ---
 
