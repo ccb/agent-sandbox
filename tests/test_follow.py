@@ -66,6 +66,26 @@ def test_follow_filter_lets_a_follower_refuse_a_destination():
     )
 
 
+def test_follow_refusal_announced_once_while_stuck():
+    # The "won't go any farther" line should fire once when a follower first
+    # refuses, not again on every later step the leader takes while it waits.
+    game, a, b, player, dog, cap = _world()
+    c = things.Location("C", "Room C.")
+    b.add_connection("north", c)  # A -north- B -north- C
+    dog.following = player
+    dog.follow_filter = lambda dest: dest.name == "A"  # the dog only stays in A
+
+    _go(game, player, "north")  # A->B: dog refuses (announced once)
+    _go(game, player, "north")  # B->C: dog still stuck -- must NOT re-announce
+
+    refusals = [
+        t
+        for t in cap.texts(Channel.NPC_NARRATION)
+        if "won't go any farther" in t.lower()
+    ]
+    assert len(refusals) == 1
+
+
 def test_follower_rejoins_when_leader_returns():
     game, a, b, player, dog, cap = _world()
     dog.following = player

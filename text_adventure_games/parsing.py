@@ -254,6 +254,18 @@ class Parser:
         elif command == "look" or command == "l":
             # when the user issues a "look" command, re-describe what they see
             return ActionName.DESCRIBE
+        elif command.startswith("look ") or command.startswith("l "):
+            # "look around/here" re-describes the room; "look <direction>"
+            # surveys that exit (handled by Describe); "look [at] <thing>"
+            # examines it. Without this, "look north" matched nothing.
+            rest = command.split(" ", 1)[1].strip()
+            if rest.startswith("at "):
+                rest = rest[3:].strip()
+            if rest in ("around", "round", "here", ""):
+                return ActionName.DESCRIBE
+            if self.get_direction(rest, character.location):
+                return ActionName.DESCRIBE
+            return ActionName.EXAMINE
         elif "examine " in command or command.startswith("x "):
             return ActionName.EXAMINE
         elif command.startswith("take off") or command.startswith("remove "):
@@ -268,6 +280,8 @@ class Parser:
             return ActionName.LIGHT
         elif "drop " in command:
             return ActionName.DROP
+        elif command.startswith("break") or command.startswith("smash"):
+            return ActionName.BREAK
         elif (
             "eat " in command
             or "eats " in command
@@ -291,6 +305,8 @@ class Parser:
             return ActionName.INVENTORY
         elif command == "wait" or command == "z":
             return ActionName.WAIT
+        elif command in ("help", "h", "commands", "?") or command.startswith("help"):
+            return ActionName.HELP
         elif "quit" in command:
             return ActionName.QUIT
         else:
@@ -602,7 +618,11 @@ class Parser:
             character = self.game.player
         items_in_scope = {}
         for item_name in character.location.items:
-            items_in_scope[item_name] = character.location.items[item_name]
+            item = character.location.items[item_name]
+            # Hidden items stay out of scope until a SEARCH reveals them.
+            if item.get_property("is_hidden"):
+                continue
+            items_in_scope[item_name] = item
         for item_name in character.inventory:
             items_in_scope[item_name] = character.inventory[item_name]
         # Items inside an OPEN holder that is itself in scope are reachable too

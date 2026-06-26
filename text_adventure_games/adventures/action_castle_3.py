@@ -28,9 +28,11 @@ warranted (like AC2 before it):
     -> banish the demon (THROW JAVELIN) -> kill the cultist (PUSH CULTIST).
   * GO NORTH home ends the adventure with a score-branched epilogue.
 
-Optional flavor not yet ported (all non-blocking): topic dialogue (ASK ELF/
-CLERIC ABOUT ...), the wizard's telescope/prophecy and the Ecology-of-the-Ooze
-journal hint, and the FIGHT BANDITS death (CAST SLEEP is the intended path).
+Flavor verbs the rulebook calls out, all now ported: topic dialogue (ASK ELF
+ABOUT SPRING -- the elf vouches for the spring water; talk_topics), the wizard's
+telescope/prophecy (USE TELESCOPE) and the Ecology-of-the-Ooze journal hint
+(READ JOURNAL), and the two fatal wrong answers -- FIGHT BANDITS (CAST SLEEP is
+the intended path) and ATTACK WIZARD.
 
 Run interactively:   python action_castle_3.py
 """
@@ -52,10 +54,9 @@ def _one_way(frm, direction, to):
 
 
 def _die(game, text):
-    """End the game with a death/THE END message."""
-    game.parser.ok(text)
-    game.game_over = True
-    game.game_over_description = text
+    """End the game with a death/THE END message. Thin wrapper over the
+    engine's ``Game.end_in_death`` so existing call sites keep their local name."""
+    game.end_in_death(text)
 
 
 def _relocate(game, character, dest_name):
@@ -128,19 +129,9 @@ class ActionCastle3(games.Game):
 
     def __init__(self, start_at, player, characters=None, custom_actions=None):
         super().__init__(start_at, player, characters, custom_actions)
-        self.score = 0
         # Scoring is event-based (rulebook page 28), not per-location; total 100.
+        # score / _scored_keys / award() come from the base Game.
         self.max_score = 100
-        self._scored_keys = set()
-
-    def award(self, key, points, msg=None):
-        """Add *points* once per *key* (idempotent), optionally announcing *msg*."""
-        if key in self._scored_keys:
-            return
-        self._scored_keys.add(key)
-        self.score += points
-        if msg:
-            self.parser.ok(msg)
 
     def is_won(self) -> bool:
         # The "TO BE CONTINUED!" ending: you returned home (the game is over and
@@ -359,32 +350,33 @@ def _heal_cleric_if_ready(game, cleric):
             )
 
 
-class GiveWater(actions.Action):
-    """Give the tortured cleric a drink (rulebook: he croaks 'Water...')."""
+# The gift / use-on-character interactions below are two-object actions -- hold
+# X, recipient present, then transfer + side effects -- so they're built with
+# the engine's ``use_item_on`` factory (actions/use.py) rather than a bespoke
+# Action subclass. Effects reuse the existing held-item helpers, so items move
+# exactly as before; party-gated gifts add a ``requires=`` that the recipient be
+# following you (mirroring the old ``_in_party`` check).
 
-    ACTION_NAME = "give water"
-    ACTION_DESCRIPTION = "Give water to the tortured man"
-    ACTION_ALIASES = ["give water to man", "give water to cleric", "give the man water"]
 
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.cleric = _present(game, "cleric")
+def _give_water(action):
+    _take_held(action.character, "water")  # he drinks it (from the waterskin)
+    action.target.set_property("given_water", True)
+    action.parser.ok("The man drinks greedily. Some color returns to his face.")
+    _heal_cleric_if_ready(action.game, action.target)
 
-    def check_preconditions(self) -> bool:
-        if self.cleric is None:
-            self.parser.fail("There's no one here who needs water.")
-            return False
-        if not _is_holding(self.player, "water"):
-            self.parser.fail("You have no water to give -- your waterskin is empty.")
-            return False
-        return True
 
-    def apply_effects(self):
-        _take_held(self.player, "water")  # he drinks it (from the waterskin)
-        self.cleric.set_property("given_water", True)
-        self.parser.ok("The man drinks greedily. Some color returns to his face.")
-        _heal_cleric_if_ready(self.game, self.cleric)
+GiveWater = actions.use_item_on(
+    "give water",
+    item="water",
+    target="cleric",
+    verb="give",
+    preposition="to",
+    description="Give water to the tortured man",
+    aliases=["give water to man", "give water to cleric", "give the man water"],
+    effect=_give_water,
+    item_missing="You have no water to give -- your waterskin is empty.",
+    target_missing="There's no one here who needs water.",
+)
 
 
 class FreeCaptive(actions.Action):
@@ -544,38 +536,42 @@ class Search(actions.Action):
             self.parser.ok("You search around but find nothing of interest.")
 
 
-class GivePendantToCleric(actions.Action):
-    """Hand the holy symbol to the cleric -- with it he can turn the undead."""
+def _following_or(message):
+    """A ``use_item_on`` ``requires`` gate: the matched recipient must be
+    following the player (the old ``_in_party`` check), else fail with
+    *message*. ``requires`` runs only after the target was matched in the room,
+    so ``action.target`` is never None here."""
+    return lambda action: (
+        None if action.target.following is action.game.player else message
+    )
 
-    ACTION_NAME = "give pendant to cleric"
-    ACTION_DESCRIPTION = "Give the holy symbol to the cleric"
-    ACTION_ALIASES = [
+
+def _give_pendant_to_cleric(action):
+    action.target.add_to_inventory(_take_held(action.character, "pendant"))
+    action.target.set_property("has_pendant", True)
+    action.parser.ok(
+        '"Thank you! With this I can destroy any undead that plagues the living," '
+        "says the cleric."
+    )
+
+
+GivePendantToCleric = actions.use_item_on(
+    "give pendant to cleric",
+    item="pendant",
+    target="cleric",
+    verb="give",
+    preposition="to",
+    description="Give the holy symbol to the cleric",
+    aliases=[
         "give the pendant to the cleric",
         "give cleric pendant",
         "give pendant",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.cleric = _in_party(game, "cleric")
-
-    def check_preconditions(self) -> bool:
-        if self.cleric is None:
-            self.parser.fail("The cleric isn't here with you.")
-            return False
-        if not _is_holding(self.player, "pendant"):
-            self.parser.fail("You have no pendant to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.cleric.add_to_inventory(_take_held(self.player, "pendant"))
-        self.cleric.set_property("has_pendant", True)
-        self.parser.ok(
-            '"Thank you! With this I can destroy any undead that plagues the living," '
-            "says the cleric."
-        )
+    ],
+    requires=_following_or("The cleric isn't here with you."),
+    effect=_give_pendant_to_cleric,
+    item_missing="You have no pendant to give.",
+    target_missing="The cleric isn't here with you.",
+)
 
 
 class TurnUndead(actions.Action):
@@ -661,42 +657,36 @@ class TakeBook(actions.Action):
             self.parser.ok("You take the spell book.")
 
 
-class GiveSpellbookToWizard(actions.Action):
-    """Return the wizard's lost spell book -- and with it, his magic (CAST SLEEP)."""
+def _give_spellbook_to_wizard(action):
+    action.target.add_to_inventory(_take_held(action.character, "spell book"))
+    action.target.set_property("has_spellbook", True)
 
-    ACTION_NAME = "give spell book to wizard"
-    ACTION_DESCRIPTION = "Return the spell book to the wizard"
-    ACTION_ALIASES = [
+
+GiveSpellbookToWizard = actions.use_item_on(
+    "give spell book to wizard",
+    item="spell book",
+    target="wizard",
+    verb="give",
+    preposition="to",
+    description="Return the spell book to the wizard",
+    aliases=[
         "give spellbook to wizard",
         "give book to wizard",
         "give the spell book to the wizard",
         "show spell book to wizard",
         "show the wizard the spell book",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.wizard = _in_party(game, "wizard")
-
-    def check_preconditions(self) -> bool:
-        if self.wizard is None:
-            self.parser.fail("The wizard isn't here with you.")
-            return False
-        if not _is_holding(self.player, "spell book"):
-            self.parser.fail("You have no spell book to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.wizard.add_to_inventory(_take_held(self.player, "spell book"))
-        self.wizard.set_property("has_spellbook", True)
-        self.game.award(
-            "spellbook",
-            5,
-            '"My spell book! I must have dropped it when I fled the crypt," says the '
-            "wizard, leafing through it eagerly.",
-        )
+    ],
+    requires=_following_or("The wizard isn't here with you."),
+    effect=_give_spellbook_to_wizard,
+    award=(
+        "spellbook",
+        5,
+        '"My spell book! I must have dropped it when I fled the crypt," says the '
+        "wizard, leafing through it eagerly.",
+    ),
+    item_missing="You have no spell book to give.",
+    target_missing="The wizard isn't here with you.",
+)
 
 
 class CastSleep(actions.Action):
@@ -737,35 +727,29 @@ class CastSleep(actions.Action):
         )
 
 
-class GiveBowToElf(actions.Action):
-    """Return the elf's bow -- armed, she can shoot the spider (a later step)."""
+def _give_bow_to_elf(action):
+    action.target.add_to_inventory(_take_held(action.character, "bow"))
+    action.target.set_property("has_bow", True)
 
-    ACTION_NAME = "give bow to elf"
-    ACTION_DESCRIPTION = "Return the bow to the elf"
-    ACTION_ALIASES = ["give the bow to the elf", "give elf bow", "give bow"]
 
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.elf = _in_party(game, "elf")
-
-    def check_preconditions(self) -> bool:
-        if self.elf is None:
-            self.parser.fail("The elf isn't here with you.")
-            return False
-        if not _is_holding(self.player, "bow"):
-            self.parser.fail("You have no bow to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.elf.add_to_inventory(_take_held(self.player, "bow"))
-        self.elf.set_property("has_bow", True)
-        self.game.award(
-            "bow",
-            5,
-            'The elf takes up her bow. "Now I can fight at your side!"',
-        )
+GiveBowToElf = actions.use_item_on(
+    "give bow to elf",
+    item="bow",
+    target="elf",
+    verb="give",
+    preposition="to",
+    description="Return the bow to the elf",
+    aliases=["give the bow to the elf", "give elf bow", "give bow"],
+    requires=_following_or("The elf isn't here with you."),
+    effect=_give_bow_to_elf,
+    award=(
+        "bow",
+        5,
+        'The elf takes up her bow. "Now I can fight at your side!"',
+    ),
+    item_missing="You have no bow to give.",
+    target_missing="The elf isn't here with you.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -971,42 +955,38 @@ class DropBaby(actions.Action):
         )
 
 
-class FeedBaby(actions.Action):
-    """Feed the baby mushroom stew -- it eats, quiets, and falls asleep. It won't
-    take anything else."""
+# FEED BABY is "use stew on baby" where the baby is a carried item (the engine
+# matches inventory items as targets too). ``requires`` re-imposes the original
+# "must be holding the baby" gate, since a dropped baby would otherwise match.
+def _feed_baby(action):
+    _take_held(action.character, "stew")
+    _held_item(action.character, "baby goblin").set_property("crying", False)
+    action.parser.ok(
+        "The baby greedily eats the mushroom stew, then yawns and falls fast "
+        "asleep in your arms."
+    )
 
-    ACTION_NAME = "feed baby"
-    ACTION_DESCRIPTION = "Feed the goblin baby"
-    ACTION_ALIASES = [
+
+FeedBaby = actions.use_item_on(
+    "feed baby",
+    item="stew",
+    target="baby goblin",
+    verb="feed",
+    description="Feed the goblin baby",
+    aliases=[
         "feed the baby",
         "feed baby goblin",
         "feed baby stew",
         "give stew to baby",
         "give baby stew",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-
-    def check_preconditions(self) -> bool:
-        if not _is_holding(self.player, "baby goblin"):
-            self.parser.fail("You have no baby to feed.")
-            return False
-        if not _is_holding(self.player, "stew"):
-            self.parser.fail(
-                "The baby turns up its nose -- it only wants mushroom stew."
-            )
-            return False
-        return True
-
-    def apply_effects(self):
-        _take_held(self.player, "stew")
-        _held_item(self.player, "baby goblin").set_property("crying", False)
-        self.parser.ok(
-            "The baby greedily eats the mushroom stew, then yawns and falls fast "
-            "asleep in your arms."
-        )
+    ],
+    requires=lambda a: (
+        None if _is_holding(a.character, "baby goblin") else "You have no baby to feed."
+    ),
+    effect=_feed_baby,
+    item_missing="The baby turns up its nose -- it only wants mushroom stew.",
+    target_missing="You have no baby to feed.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1049,85 +1029,70 @@ class ShowBaby(actions.Action):
         )
 
 
-class GiveBaby(actions.Action):
-    """Give the goblin queen the baby -- she'll let you leave (rulebook)."""
+def _give_baby(action):
+    action.target.add_to_inventory(_take_held(action.character, "baby goblin"))
+    action.target.set_property("baby_given", True)
 
-    ACTION_NAME = "give baby"
-    ACTION_DESCRIPTION = "Give the baby to the goblin queen"
-    ACTION_ALIASES = [
+
+GiveBaby = actions.use_item_on(
+    "give baby",
+    item="baby goblin",
+    target="goblin queen",
+    verb="give",
+    preposition="to",
+    description="Give the baby to the goblin queen",
+    aliases=[
         "give baby to queen",
         "give the baby to the queen",
         "give baby goblin",
         "give the queen the baby",
-    ]
+    ],
+    effect=_give_baby,
+    award=(
+        "baby_to_queen",
+        5,
+        "The goblin queen showers the baby with kisses and coos lovingly at it.",
+    ),
+    item_missing="You have no baby to give.",
+    target_missing="The goblin queen isn't here.",
+)
 
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.queen = _present(game, "goblin queen")
 
-    def check_preconditions(self) -> bool:
-        if self.queen is None:
-            self.parser.fail("The goblin queen isn't here.")
-            return False
-        if not _is_holding(self.player, "baby goblin"):
-            self.parser.fail("You have no baby to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.queen.add_to_inventory(_take_held(self.player, "baby goblin"))
-        self.queen.set_property("baby_given", True)
-        self.game.award(
-            "baby_to_queen",
-            5,
-            "The goblin queen showers the baby with kisses and coos lovingly at it.",
+def _give_crown(action):
+    action.target.add_to_inventory(_take_held(action.character, "crown"))
+    action.target.set_property("crown_given", True)
+    action.character.accept_item(
+        _item(
+            "bronze javelin",
+            "a tarnished bronze javelin",
+            "A hammered bronze javelin shaped like a lightning bolt.",
         )
+    )
 
 
-class GiveCrown(actions.Action):
-    """Pay the queen's tribute with the gold crown -- she trades a tarnished
-    artifact (the bronze javelin) for it."""
-
-    ACTION_NAME = "give crown"
-    ACTION_DESCRIPTION = "Give the gold crown to the goblin queen"
-    ACTION_ALIASES = [
+GiveCrown = actions.use_item_on(
+    "give crown",
+    item="crown",
+    target="goblin queen",
+    verb="give",
+    preposition="to",
+    description="Give the gold crown to the goblin queen",
+    aliases=[
         "give crown to queen",
         "give the crown to the queen",
         "give the queen the crown",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.queen = _present(game, "goblin queen")
-
-    def check_preconditions(self) -> bool:
-        if self.queen is None:
-            self.parser.fail("The goblin queen isn't here.")
-            return False
-        if not _is_holding(self.player, "crown"):
-            self.parser.fail("You have no crown to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.queen.add_to_inventory(_take_held(self.player, "crown"))
-        self.queen.set_property("crown_given", True)
-        self.player.accept_item(
-            _item(
-                "bronze javelin",
-                "a tarnished bronze javelin",
-                "A hammered bronze javelin shaped like a lightning bolt.",
-            )
-        )
-        self.game.award(
-            "crown_to_queen",
-            5,
-            "The goblin queen claps with delight and crowns herself, then rummages "
-            "through her hoard and throws a tarnished bronze javelin at your feet. "
-            "You pick it up.",
-        )
+    ],
+    effect=_give_crown,
+    award=(
+        "crown_to_queen",
+        5,
+        "The goblin queen claps with delight and crowns herself, then rummages "
+        "through her hoard and throws a tarnished bronze javelin at your feet. "
+        "You pick it up.",
+    ),
+    item_missing="You have no crown to give.",
+    target_missing="The goblin queen isn't here.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1169,45 +1134,42 @@ class LookUp(actions.Action):
             self.parser.ok("You look up. Nothing out of the ordinary.")
 
 
-class UseWand(actions.Action):
-    """Freeze the gray ooze solid with the wizard's icy wand."""
+# USE WAND ON OOZE -- a two-object interaction now that the ooze is a real
+# fixture (added in build_game). Freezing sets the ooze's own ``is_frozen`` and
+# mirrors it onto the location's ``ooze_frozen`` flag, which the lockbox trap
+# reads. The ooze lives only in the Dark Corridor, so being elsewhere yields the
+# original "nothing here to use the wand on" via target_missing.
+def _freeze_ooze(action):
+    action.target.set_property("is_frozen", True)
+    action.character.location.set_property("ooze_frozen", True)
 
-    ACTION_NAME = "use wand"
-    ACTION_DESCRIPTION = "Use the icy wand on the ooze"
-    ACTION_ALIASES = [
+
+UseWand = actions.use_item_on(
+    "use wand",
+    item="wand",
+    target="ooze",
+    description="Use the icy wand on the ooze",
+    aliases=[
         "use wand on ooze",
         "use the wand",
         "use wand on the ooze",
         "use the wand on the ooze",
         "freeze ooze",
         "zap ooze",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-
-    def check_preconditions(self) -> bool:
-        loc = self.player.location
-        if loc is None or loc.name != "Dark Corridor":
-            self.parser.fail("There's nothing here to use the wand on.")
-            return False
-        if not _is_holding(self.player, "wand"):
-            self.parser.fail("You have no wand.")
-            return False
-        if loc.get_property("ooze_frozen"):
-            self.parser.fail("The ooze is already frozen.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.player.location.set_property("ooze_frozen", True)
-        self.game.award(
-            "ooze",
-            10,
-            "A ray of frost from the wand strikes the ceiling. The gray blob "
-            "freezes solid, falls to the floor and shatters.",
-        )
+    ],
+    requires=lambda a: (
+        "The ooze is already frozen." if a.target.get_property("is_frozen") else None
+    ),
+    effect=_freeze_ooze,
+    award=(
+        "ooze",
+        10,
+        "A ray of frost from the wand strikes the ceiling. The gray blob "
+        "freezes solid, falls to the floor and shatters.",
+    ),
+    item_missing="You have no wand.",
+    target_missing="There's nothing here to use the wand on.",
+)
 
 
 class TakeLockbox(actions.Action):
@@ -1400,49 +1362,45 @@ class OpenIronMaiden(actions.Action):
         )
 
 
-class ThrowJavelin(actions.Action):
-    """Hurl the bronze javelin at the demon -- it transforms into a bolt of pure
-    energy and banishes it."""
+# THROW JAVELIN AT DEMON -- the demon is a real Character (summoned into the
+# Chaos Chapel), so this targets it directly. The effect still clears the
+# chapel's ``demon_present`` flag, which PushCultist and the demon-devours
+# trigger read.
+def _banish_demon(action):
+    _take_held(action.character, "bronze javelin")  # it becomes a bolt of energy
+    chapel = action.game.locations["Chaos Chapel"]
+    chapel.set_property("demon_present", False)
+    if action.target.location is chapel:
+        chapel.remove_character(action.target)
+    action.character.set_property("banished_demon", True)
 
-    ACTION_NAME = "throw javelin"
-    ACTION_DESCRIPTION = "Throw the bronze javelin at the demon"
-    ACTION_ALIASES = [
+
+ThrowJavelin = actions.use_item_on(
+    "throw javelin",
+    item="bronze javelin",
+    target="demon",
+    verb="throw",
+    preposition="at",
+    description="Throw the bronze javelin at the demon",
+    aliases=[
         "throw javelin at demon",
         "throw the javelin",
         "throw javelin at the demon",
         "throw the javelin at the demon",
         "hurl javelin",
-    ]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.player = self.game.player
-        self.chapel = self.game.locations["Chaos Chapel"]
-
-    def check_preconditions(self) -> bool:
-        if not self.chapel.get_property("demon_present"):
-            self.parser.fail("There's nothing here to throw it at.")
-            return False
-        if not _is_holding(self.player, "bronze javelin"):
-            self.parser.fail("You have no javelin to throw.")
-            return False
-        return True
-
-    def apply_effects(self):
-        _take_held(self.player, "bronze javelin")  # it becomes a bolt of energy
-        self.chapel.set_property("demon_present", False)
-        demon = self.game.characters.get("demon")
-        if demon is not None and demon.location is self.chapel:
-            self.chapel.remove_character(demon)
-        self.player.set_property("banished_demon", True)
-        self.game.award(
-            "banish_demon",
-            10,
-            "The javelin transforms into a bolt of pure energy and pierces the "
-            "demon's heart. Thunder cracks, white light dazzles you -- and the demon "
-            "is gone! The cultist sneers, \"You fool! You've only delayed the "
-            'inevitable!" and begins to chant; the room darkens.',
-        )
+    ],
+    effect=_banish_demon,
+    award=(
+        "banish_demon",
+        10,
+        "The javelin transforms into a bolt of pure energy and pierces the "
+        "demon's heart. Thunder cracks, white light dazzles you -- and the demon "
+        "is gone! The cultist sneers, \"You fool! You've only delayed the "
+        'inevitable!" and begins to chant; the room darkens.',
+    ),
+    item_missing="You have no javelin to throw.",
+    target_missing="There's nothing here to throw it at.",
+)
 
 
 class PushCultist(actions.Action):
@@ -1484,6 +1442,120 @@ class PushCultist(actions.Action):
             10,
             "You rush the chanting cultist and shove him into the spiked pit. His "
             "scream is cut short. The darkness lifts.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Flavor verbs the rulebook calls out: the two fatal fights (FIGHT BANDITS /
+# ATTACK WIZARD -- both wrong answers, fatal) and the wizard's telescope.
+# ---------------------------------------------------------------------------
+
+
+class FightBandits(actions.Action):
+    """Wading into the bandit camp swinging is suicide -- they're too many. The
+    intended path is CAST SLEEP (rulebook). Fatal while they're awake."""
+
+    ACTION_NAME = "fight bandits"
+    ACTION_DESCRIPTION = "Attack the bandits (a very bad idea)"
+    ACTION_ALIASES = [
+        "attack bandits",
+        "fight the bandits",
+        "attack the bandits",
+        "kill bandits",
+        "kill the bandits",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.bandits = _present(game, "bandits")
+
+    def check_preconditions(self) -> bool:
+        if self.bandits is None:
+            self.parser.fail("There are no bandits here to fight.")
+            return False
+        return True
+
+    def apply_effects(self):
+        if self.bandits.get_property("asleep"):
+            self.parser.ok(
+                "The bandits are fast asleep. There's no honor in butchering them "
+                "-- and no need."
+            )
+            return
+        _die(
+            self.game,
+            "You charge the bandits with your dagger drawn. There are far too many "
+            "of them; they swarm you, and the last thing you see is the glint of a "
+            "dozen blades. THE END.",
+        )
+
+
+class AttackWizard(actions.Action):
+    """Turning on the wizard is a fatal mistake -- he is, after all, a wizard."""
+
+    ACTION_NAME = "attack wizard"
+    ACTION_DESCRIPTION = "Attack the wizard (a very bad idea)"
+    ACTION_ALIASES = [
+        "fight wizard",
+        "attack the wizard",
+        "fight the wizard",
+        "kill wizard",
+        "kill the wizard",
+        "stab wizard",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.wizard = _present(game, "wizard")
+
+    def check_preconditions(self) -> bool:
+        if self.wizard is None:
+            self.parser.fail("There's no wizard here to attack.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _die(
+            self.game,
+            "You raise your blade against the wizard. He barely looks up -- a word "
+            "of power, a flash of light, and you are reduced to a smoking pair of "
+            "boots. Never attack a wizard. THE END.",
+        )
+
+
+class UseTelescope(actions.Action):
+    """Peer through the wizard's telescope -- a glimpse of the ill-omened stars
+    the cultist's prophecy turns on (rulebook flavor)."""
+
+    ACTION_NAME = "use telescope"
+    ACTION_DESCRIPTION = "Peer through the wizard's telescope"
+    ACTION_ALIASES = [
+        "look through telescope",
+        "look through the telescope",
+        "peer through telescope",
+        "peer through the telescope",
+        "use the telescope",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or loc.name != "Wizard's Tower":
+            self.parser.fail("There's no telescope here.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You squint through the brass telescope. The night sky wheels with "
+            "cold, unfamiliar constellations, slowly grinding into alignment. "
+            '"When the stars are right," the wizard murmurs at your shoulder, "the '
+            'Dark One stirs beneath the castle. Pray we are not too late."'
         )
 
 
@@ -1792,6 +1864,22 @@ def build_game() -> ActionCastle3:
             "A dizzying array of occult tomes. One you can read is a journal: Ecology of the Ooze.",
         )
     )
+    # READ JOURNAL -- the wizard's field notes, a hint that the gray ooze hangs
+    # from the ceiling and dislikes cold (USE WAND freezes it). Read by the
+    # built-in READ verb (it prints an item's ``read_text``).
+    journal = _fixture(
+        "journal",
+        'a journal titled "Ecology of the Ooze"',
+        'A naturalist\'s journal, "Ecology of the Ooze."',
+    )
+    journal.set_property(
+        "read_text",
+        'From "Ecology of the Ooze": "The gray ooze is a patient ambusher, '
+        "clinging unseen to cave ceilings and dropping on prey below to dissolve "
+        "it alive. Look up in its haunts. Sluggish and nearly mindless, it has but "
+        'one dread: cold, which freezes its protoplasm solid in an instant."',
+    )
+    wizard_tower.add_item(journal)
     wizard_tower.add_item(
         _item(
             "wand",
@@ -1836,6 +1924,18 @@ def build_game() -> ActionCastle3:
         )
     )
     dark_corridor.add_item(lockbox)
+    # The gray ooze is a real fixture on the ceiling -- so USE WAND ON OOZE
+    # targets an actual Thing (see UseWand). ``is_frozen`` on the ooze is the
+    # Thing-level state; the ``ooze_frozen`` location flag is kept in sync by
+    # UseWand because the lethal lockbox trap (TakeLockbox / PickLock) reads it.
+    ooze = _fixture(
+        "ooze",
+        "a gray ooze clinging to the ceiling",
+        "An undulating mass of translucent gray protoplasm clinging to the "
+        "ceiling, almost invisible in the flickering lantern light.",
+    )
+    ooze.set_property("is_frozen", False)
+    dark_corridor.add_item(ooze)
     dark_corridor.set_property("ooze_frozen", False)
     torture_chamber.add_item(
         _fixture(
@@ -1891,6 +1991,15 @@ def build_game() -> ActionCastle3:
     )
     elf.talk_text = '"A group of bandits ambushed me in the ruins. I dropped my bow during my escape."'
     elf.join_text = 'The elf clasps your wrist. "Together, nothing can stop us!"'
+    # ASK ELF ABOUT SPRING / WATER -- she vouches for the spring (rulebook hint).
+    elf.talk_topics = {
+        "spring": '"That spring by the cavern mouth? Sweet and clean -- the water is '
+        'safe to drink. Fill your skin there," says the elf.',
+        "water": '"The spring water is safe to drink -- I refilled there myself," '
+        "says the elf.",
+        "bandits": '"They ambushed me in the ruins and took my bow. Foul company," '
+        "the elf mutters.",
+    }
 
     wizard = things.Character(
         "wizard",
@@ -2033,6 +2142,9 @@ def build_game() -> ActionCastle3:
         OpenIronMaiden,
         ThrowJavelin,
         PushCultist,
+        FightBandits,
+        AttackWizard,
+        UseTelescope,
     ]
     game = ActionCastle3(crossroads, player, characters, custom_actions)
     player.add_to_inventory(backpack)
