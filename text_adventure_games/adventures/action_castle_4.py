@@ -515,7 +515,8 @@ class FollowDeer(actions.Action):
         if self.player.location is None or self.player.location.name != "Old Woods":
             self.parser.fail("There's no deer to follow here.")
             return False
-        if self.player.riding is None:
+        riding = self.player.riding
+        if riding is None or riding.name != "horse":
             self.parser.fail("You'd never catch her on foot -- you'll need the horse.")
             return False
         return True
@@ -1065,7 +1066,11 @@ def build_game() -> ActionCastle4:
     # Woods
     _one_way(old_woods, "enter", old_shack)
     _one_way(old_shack, "out", old_woods)
-    _one_way(old_woods, "north", deep_woods)  # follow the deer (mounted)
+    # The Old Woods -> Deep Woods link stays connected (so Deep Woods + the rooms
+    # beyond it are reachable/indexed), but a bare "north" is always blocked (see
+    # FollowDeerBlock below): the only way in is FOLLOW DEER, which leads you down
+    # a hidden path (the FollowDeer action relocates directly, bypassing the block).
+    _one_way(old_woods, "north", deep_woods)
     _one_way(deep_woods, "south", old_woods)
     _one_way(deep_woods, "north", clearing)  # opens once the poacher is dealt with
     # Clearing / ranch / road (diagonals -> one-way both sides)
@@ -1140,6 +1145,23 @@ def build_game() -> ActionCastle4:
             )
 
     old_woods.add_block("enter", DismountBlock(old_woods))
+
+    # A bare "north" never walks you into the Deep Woods -- the doe leads you down
+    # a hidden path, so FOLLOW DEER (which relocates directly, bypassing this
+    # block) is the only way in. Keeps you from blundering into the lethal poacher
+    # confrontation unprepared.
+    class FollowDeerBlock(blocks.Block):
+        def __init__(self):
+            super().__init__(
+                "A hidden path",
+                "The doe bounds off down a hidden path. You'll have to FOLLOW DEER "
+                "(you'll need the horse) to chase her into the Deep Woods.",
+            )
+
+        def is_blocked(self) -> bool:
+            return True
+
+    old_woods.add_block("north", FollowDeerBlock())
 
     # The Deep Woods north exit (-> Clearing) is barred until the poacher is
     # dealt with (you can't ride past while he stalks the deer).
@@ -1669,7 +1691,7 @@ WALKTHROUGH_WIN = [
     "take crossbow",
     "out",  # -> Old Woods
     "get on horse",
-    "north",  # -> Deep Woods (the deer flees here; the poacher stalks it)
+    "follow deer",  # -> Deep Woods (the only way in; the poacher stalks the deer)
     "shoot poacher",  # (+5 shoot) -- drops a coin purse + cloak
     "take coin purse",  # (+5 purse)
     "north",  # -> Clearing
