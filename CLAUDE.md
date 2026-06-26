@@ -74,6 +74,11 @@ a free deterministic stand-in) and, for the real providers, the matching
   `MockReActClient` (provider `"mock"`) — a deterministic offline stand-in that drives
   the full ReAct loop for free — and `client_from_env()` for env-var gating.
 - `llm_parser.py`: keyword-first, LLM-fallback parser. Preconditions stay hard-gated.
+- `prompt_templates/`: the engine's LLM prompts as in-repo `.prompty` files (Jinja +
+  Prompty), rendered with `prompt_templates.render(name, **vars)` instead of inline
+  f-strings (issue #145). `prompt_templates/README.md` maps each template to the code
+  that renders it. (Not to be confused with `prompts.py`, the in-game `Prompt` choice
+  mechanism, #110.)
 - Offline tests: `tests/test_agent_layer.py` (unit), `tests/test_react_live_game.py`
   (ReAct vs the real Action Castle game).
 
@@ -95,4 +100,9 @@ the game from `notebooks/hw1_solution/action_castle.py`.
   and `apply_effects()`, use the precondition helpers (`at()`, `has_property()`,
   `is_in_inventory()`, `was_matched()`).
 - Parser results go through `self.parser.ok(message)` / `self.parser.fail(message)`.
+- New/changed LLM prompt: edit or add a `.prompty` file in
+  `text_adventure_games/prompt_templates/` (don't hand-build prompt strings inline),
+  render it via `prompt_templates.render(name, **vars)`, then **update the usage table
+  in `prompt_templates/README.md`** and pin its exact output in
+  `tests/test_prompt_templates.py`.
 - Feature branches → PR → `main`.

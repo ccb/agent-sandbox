@@ -30,6 +30,8 @@ from text_adventure_games.planning import (
     validate_stops,
 )
 
+from .prompt_templates import render
+
 
 class MockPlanner:
     """Deterministic planner that replays a persona's static schedule.
@@ -169,11 +171,6 @@ class LLMPlanner:
     ``known_places`` given, validation is skipped (the caller passes the world's
     location names; tests may omit them).
     """
-
-    _SYSTEM = (
-        "You are planning one day for a resident of the town of Smallville. "
-        "Plan in character, grounded in who they are and what they remember."
-    )
 
     def __init__(
         self,
@@ -333,7 +330,7 @@ class LLMPlanner:
 
     def _call(self, user: str, tool: dict) -> dict:
         messages = [
-            {"role": "system", "content": self._SYSTEM},
+            {"role": "system", "content": render("plan_system")},
             {"role": "user", "content": user},
         ]
         result = self.client.call_tool(messages, tool, max_tokens=self.max_tokens)

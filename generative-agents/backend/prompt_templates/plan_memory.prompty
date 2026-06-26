@@ -1,0 +1,29 @@
+---
+name: plan_memory
+description: >
+  The day's PLAN memory seeded onto each Smallville persona at t=0
+  (backend/smallville_agents.py, attach_agents). It is the agent's own private
+  intention -- "go to <destination> and <activity>", plus the day's full
+  itinerary -- distinct from its persona, so retrieval has the agent's whole plan
+  to surface from turn 0 and the PLAN memory kind is exercised. The deterministic
+  mock brain never reads it (it decides from location alone); real retrieval would
+  surface it.
+inputs:
+  destination:
+    type: string
+    description: The first place the persona plans to go, e.g. "Hobbs Cafe".
+  activity:
+    type: string
+    description: What the persona plans to do there, e.g. "tending the cafe counter".
+  itinerary:
+    type: string
+    description: >
+      The whole day's stops, pre-joined as "<activity> at <place>, then ..."
+      (see attach_agents). Optional; the "Today's stops" sentence is dropped when
+      it's empty.
+sample:
+  destination: Hobbs Cafe
+  activity: tending the cafe counter
+  itinerary: tending the cafe counter at Hobbs Cafe, then reading at the library
+---
+Plan: go to {{ destination }} and {{ activity }}.{% if itinerary %} Today's stops: {{ itinerary }}.{% endif %}
