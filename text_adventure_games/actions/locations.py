@@ -119,7 +119,7 @@ class Go(base.Action):
             )
         else:
             description = "{character_name} moved to {place}".format(
-                character_name=self.character.name, place=to_loc.name
+                character_name=self.character.name.capitalize(), place=to_loc.name
             )
         if self.location.travel_descriptions[self.direction]:
             description += " " + self.location.travel_descriptions[self.direction]

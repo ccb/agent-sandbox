@@ -93,7 +93,7 @@ def test_riding_changes_the_arrival_verb():
     game.parser.parse_command("ride horse")
     game.parser.parse_command("west")
     assert _said(cap, "rides the horse to Woods")
-    assert not _said(cap, "you moved to Woods")
+    assert not _said(cap, "moved to Woods")
 
 
 def test_ride_verb_is_customizable_per_vehicle():
@@ -110,4 +110,4 @@ def test_on_foot_arrival_is_unchanged():
     # No vehicle gate on the reverse trip; walk east on foot.
     player.location = woods
     game.parser.parse_command("east")
-    assert _said(cap, "you moved to Field")
+    assert _said(cap, "You moved to Field")
