@@ -14,9 +14,11 @@ env that has the engine installed)::
 
 import pytest
 
+from gen_agents import build_world, smallville_agents
 from gen_agents.build_world import PERSONAS
 from gen_agents.run_simulation import simulate
 from gen_agents.sim_config import (
+    CognitionConfig,
     RetrievalConfig,
     SimulationConfig,
     SimulationRuntimeConfig,
@@ -65,8 +67,12 @@ def test_defaults_match_today():
     assert config.simulation.sec_per_step == 10
     assert config.simulation.sim_code == "mock_the_ville_n25"
     assert config.simulation.base_sim == "base_the_ville_n25"
-    assert config.simulation.num_agents == 25
+    assert config.simulation.num_agents == 5
     assert config.simulation.seed is None
+    # Cognition defaults mirror smallville_agents' module constants.
+    assert config.cognition.vision_r == 8
+    assert config.cognition.conversation_cooldown_steps == 90
+    assert config.cognition.conversation_max_exchanges == 6
     # No embedding -> keyword-overlap relevance, the offline default.
     assert config.embedding is None
     # The embedded engine config is a plain default GameConfig.
@@ -86,6 +92,20 @@ def test_retrieval_defaults_equal_memory_constants():
     assert r.token_budget == memory.DEFAULT_TOKEN_BUDGET
 
 
+def test_cognition_and_cast_defaults_match_module_constants():
+    # CognitionConfig and num_agents defaults must track the gen_agents module
+    # constants they mirror, so an unconfigured sim behaves exactly as before.
+    cog = CognitionConfig()
+    assert cog.vision_r == smallville_agents.SMALLVILLE_VISION_R
+    assert (
+        cog.conversation_cooldown_steps == smallville_agents.CONVERSATION_COOLDOWN_STEPS
+    )
+    assert (
+        cog.conversation_max_exchanges == smallville_agents.CONVERSATION_MAX_EXCHANGES
+    )
+    assert SimulationRuntimeConfig().num_agents == build_world.MAX_ACTIVE_PERSONAS
+
+
 # --------------------------------------------------------------------------
 # Round-trip: to_dict <-> from_dict
 # --------------------------------------------------------------------------
@@ -99,7 +119,7 @@ def test_to_dict_from_dict_round_trip():
     )
     config.game.engine.turn_mode = "simultaneous"
     data = config.to_dict()
-    assert set(data) == {"game", "simulation", "retrieval", "embedding"}
+    assert set(data) == {"game", "simulation", "retrieval", "cognition", "embedding"}
     # provider is stored as a plain string, not an enum, so the dict is JSON-able.
     assert data["embedding"]["provider"] == "mock"
     assert SimulationConfig.from_dict(data) == config
@@ -283,3 +303,30 @@ def test_sim_config_retrieval_keeps_replay_byte_identical(world_map):
         ]
 
     assert decisions(tuned) == decisions(default)
+
+
+def test_num_agents_slices_the_active_cast(world_map):
+    # num_agents controls how many residents run: the runner slices ALL_PERSONAS and
+    # builds the world from the *same* cast (build_world_fn), so the frames carry
+    # exactly that many personas. This is the mechanism run_simulation.main() uses.
+    cast = build_world.ALL_PERSONAS[:3]
+    frames = simulate(
+        world_map,
+        num_steps=4,
+        personas=cast,
+        build_world_fn=lambda wm: build_world.build_world(wm, cast),
+    )
+    expected = {p["name"] for p in cast}
+    assert len(expected) == 3
+    assert all(set(frame.keys()) == expected for frame in frames)
+
+
+def test_cognition_vision_r_reaches_characters(world_map):
+    # A CognitionConfig.vision_r threads through simulate -> attach_agents and lands
+    # on each resident (unless a persona overrides it in world_data.yaml). Proven via
+    # attach_agents directly so it doesn't depend on the mock replay.
+    game, chars = build_world.build_world(world_map)
+    smallville_agents.attach_agents(chars, PERSONAS, vision_r=3)
+    defaulted = [p for p in PERSONAS if "vision_r" not in p]
+    assert defaulted, "expected at least one persona without a vision_r override"
+    assert all(chars[p["name"]].vision_r == 3 for p in defaulted)

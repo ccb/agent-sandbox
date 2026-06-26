@@ -52,8 +52,9 @@ sim's sections:
 SimulationConfig                      # gen_agents/sim_config.py
 ├── game: GameConfig                  # the engine config, reused as-is (game: section)
 │   └── llm / agent / engine / clock / render / observability
-├── simulation: SimulationRuntimeConfig   # start, steps, sec_per_step, sim_code, …
+├── simulation: SimulationRuntimeConfig   # start, steps, sec_per_step, sim_code, num_agents, …
 ├── retrieval: RetrievalConfig            # recency × relevance × importance scoring
+├── cognition: CognitionConfig            # perception radius + conversation pacing
 └── embedding: EmbeddingConfig | None     # relevance backend; None = keyword overlap
 ```
 
@@ -82,7 +83,7 @@ explicit CLI flag still wins (see §4).
 | `sec_per_step` | int | `10` | In-game seconds advanced per step. `--sec-per-step`. | implemented |
 | `sim_code` | str | `mock_the_ville_n25` | Names the exported run directory. `--sim-code`. | implemented |
 | `base_sim` | str | `base_the_ville_n25` | Persona-memory source copied into the run. `--base-sim`. | implemented |
-| `num_agents` | int | `25` | Residents to instantiate (the `n25` cast). | implemented |
+| `num_agents` | int | `5` | How many residents actually run. The full `n25` roster always loads; the runner slices the first N (matches `build_world.MAX_ACTIVE_PERSONAS`). Raise up to 25 to run more of the town. | implemented |
 | `seed` | int \| None | `None` | Global RNG seed for reproducible runs. Carried for forward use; **not yet consumed** (pairs with future record/replay — [llm-cost-observability.md](llm-cost-observability.md) piece 4). | implemented (inert) |
 
 `ville_dir` / `storage` are intentionally **not** in the config — they're
@@ -113,7 +114,24 @@ scaffold are **not** added: `max_records` *is* the top-k, and the relevance meth
 isn't a string knob — it's chosen by the presence or absence of an embedding client
 (below).
 
-### 3.3 `embedding` — relevance backend (`EmbeddingConfig | None`) — **implemented (reused)**
+### 3.3 `cognition` — perception + conversation (`CognitionConfig`) — **implemented**
+
+Per-resident cognition defaults that used to be bare module constants in
+`smallville_agents.py`, gathered into the config now that perception (#80/#82) and
+conversation (#86) have landed. Defaults equal those constants, so `CognitionConfig()`
+reproduces today's behavior. A persona may still set its own `vision_r` per-entry in
+`world_data.yaml`; this section is the global default.
+
+| Field | Type | Default | Meaning | Status |
+|---|---|---|---|---|
+| `vision_r` | int | `8` | Perception radius in tiles: under a `TiledGame`, residents within this many tiles perceive each other and nearby objects (`SMALLVILLE_VISION_R`). | implemented |
+| `conversation_cooldown_steps` | int | `90` | Minimum steps between a given pair's conversations (`CONVERSATION_COOLDOWN_STEPS`). | implemented |
+| `conversation_max_exchanges` | int | `6` | Max back-and-forth lines per conversation (`CONVERSATION_MAX_EXCHANGES`). | implemented |
+
+These only bite with a real brain — perception widens co-presence, and conversation is
+a no-op under the deterministic mock — so the default mock replay stays byte-identical.
+
+### 3.4 `embedding` — relevance backend (`EmbeddingConfig | None`) — **implemented (reused)**
 
 The embedding backend that scores the *relevance* term. This **reuses the engine's
 existing** [`EmbeddingConfig`](../../text_adventure_games/embedding_client.py)
@@ -135,7 +153,7 @@ installed), so the default run stays free, offline, and CI-safe. The determinist
 mock brain ignores the retrieved block, so the exported replay is **byte-identical**
 regardless of the relevance mode — `gen_agents/compare_retrieval.py` shows the diff.
 
-### 3.4 Inherited from `GameConfig` (the `game:` section) — **not re-declared**
+### 3.5 Inherited from `GameConfig` (the `game:` section) — **not re-declared**
 
 These already exist and are documented in [`configuration.md`](../configuration.md);
 `SimulationConfig` reuses them through its embedded `game` field. Listed only for
@@ -150,17 +168,16 @@ completeness.
 | `render` | terminal output (`level`, `width`, `no_color`) |
 | `observability` | LLM cost/usage logging (`log_path`, `log_prompts`) |
 
-### 3.5 Deferred sections (land with their phase)
+### 3.6 Deferred sections (land with their phase)
 
 Not in the implemented dataclass — adding fields nothing reads would be dead config.
 Kept here as a forward-looking registry.
 
 | Future section | Knobs | Lands with |
 |---|---|---|
-| `memory` | reflection threshold (`importance_since_reflection`), stream eviction | when periodic reflection lands (NEXT-STEPS Phase D) |
-| `perception` | `vision_r`, `att_bandwidth`, `retention` (upstream `scratch.json`, default `8`) | Phase C (vision-radius perception) |
-| `planning` | daily-plan granularity, replan triggers | Phase D (planning) |
-| `persona` | per-agent cognition overrides (`recency_w`, `relevance_w`, `importance_w`, `recency_decay=0.995`, `vision_r`, …) merged from each `scratch.json` | when per-persona cognition is wired (Phase C/D) |
+| `memory` | memory-stream eviction / retention | when stream management lands. *(The reflection-importance threshold already lives on `GameConfig.agent.reflection_threshold` — see §3.5.)* |
+| `planning` | daily-plan granularity, replan triggers | only generated by a live planner today (#83); a tuning section lands if/when the mock path needs it |
+| `persona` | per-agent cognition *overrides* (`recency_w`, `relevance_w`, `importance_w`, `recency_decay=0.995`, per-agent `vision_r`, …) merged from each `scratch.json` | when per-persona cognition is wired (NEXT-STEPS Phase C/D) |
 
 ---
 

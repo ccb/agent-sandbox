@@ -12,6 +12,8 @@ than forking it:
 * ``retrieval`` -- the memory-retrieval scoring knobs (recency x relevance x importance
   weights, decay, how many memories to surface). These map onto
   :meth:`text_adventure_games.memory.AgentMemory.retrieve`'s parameters.
+* ``cognition`` -- per-resident cognition defaults that used to be bare module
+  constants: perception radius (vision, #80/#82) and conversation pacing (#86).
 * ``embedding`` -- which embedding backend scores the *relevance* term, reusing the
   engine's :class:`~text_adventure_games.embedding_client.EmbeddingConfig`. ``None``
   (the default) means keyword-overlap relevance, the free offline path.
@@ -21,9 +23,11 @@ As with ``GameConfig``, **every field defaults to today's behavior**, so an empt
 from a YAML/JSON file (``from_file``), or read the environment (``from_env``), then hand
 its pieces to ``run_simulation``. See ``docs/design/simulation-config.md``.
 
-Sections the design doc reserves for later phases (perception, planning, per-persona
-cognition overrides) are intentionally **absent**: those phases (NEXT-STEPS C/D) are not
-implemented, so a config field for them would be dead config. They land with their phase.
+Knobs for unbuilt phases stay **absent** rather than shipping as dead config: daily
+planning (#83) and reflection (#84) are driven by the engine's ``GameConfig`` (e.g.
+``agent.reflection_threshold``) and a live LLM client, and per-persona cognition
+*overrides* land with their phase. A field appears here only once the sim actually
+reads it.
 """
 
 from __future__ import annotations
@@ -57,7 +61,11 @@ class SimulationRuntimeConfig:
     sec_per_step: int = 10  # seconds of in-game time advanced per step
     sim_code: str = "mock_the_ville_n25"  # names the exported run directory
     base_sim: str = "base_the_ville_n25"  # persona-memory source copied into the run
-    num_agents: int = 25  # residents to instantiate (the n25 cast)
+    # How many residents actually run. The full n25 roster always loads from
+    # world_data.yaml; this slices the first N to keep the demo's per-agent panels
+    # readable. Default matches build_world.MAX_ACTIVE_PERSONAS (today's behavior);
+    # raise it (up to 25) to run more of the town. The runner consumes this.
+    num_agents: int = 5
     seed: int | None = (
         None  # global RNG seed; carried for reproducibility, not yet used
     )
@@ -83,6 +91,28 @@ class RetrievalConfig:
 
 
 @dataclass
+class CognitionConfig:
+    """Per-resident cognition knobs for the features that landed after Phase A/B.
+
+    These gather sim-level cognition defaults that used to be bare module constants
+    in ``smallville_agents.py``: how far a resident perceives (vision, issue #80/#82)
+    and how the conversation pass is paced (#86). Defaults equal those constants, so
+    ``CognitionConfig()`` reproduces today's behavior. A persona may still override
+    its own ``vision_r`` per-entry in ``world_data.yaml``; this is the global default.
+    """
+
+    vision_r: int = (
+        8  # perception radius in tiles (smallville_agents.SMALLVILLE_VISION_R)
+    )
+    conversation_cooldown_steps: int = (
+        90  # min steps between a given pair's conversations (CONVERSATION_COOLDOWN_STEPS)
+    )
+    conversation_max_exchanges: int = (
+        6  # max back-and-forth lines per conversation (CONVERSATION_MAX_EXCHANGES)
+    )
+
+
+@dataclass
 class SimulationConfig:
     """The one config object the Smallville sim hands to its runner.
 
@@ -94,6 +124,7 @@ class SimulationConfig:
     game: GameConfig = field(default_factory=GameConfig)
     simulation: SimulationRuntimeConfig = field(default_factory=SimulationRuntimeConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
+    cognition: CognitionConfig = field(default_factory=CognitionConfig)
     embedding: EmbeddingConfig | None = None  # None -> keyword-overlap relevance
 
     @classmethod
@@ -133,11 +164,17 @@ class SimulationConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "SimulationConfig":
         """Build a config from a plain dict (the shape :meth:`from_file` parses)."""
-        unknown = set(data) - {"game", "simulation", "retrieval", "embedding"}
+        unknown = set(data) - {
+            "game",
+            "simulation",
+            "retrieval",
+            "cognition",
+            "embedding",
+        }
         if unknown:
             raise ValueError(
                 f"Unknown config section(s): {sorted(unknown)}. "
-                "Valid sections: game, simulation, retrieval, embedding."
+                "Valid sections: game, simulation, retrieval, cognition, embedding."
             )
         # The `game` section is a full GameConfig mapping -- delegate so its own
         # per-section validation (unknown engine/observability keys, etc.) applies.
@@ -168,6 +205,7 @@ class SimulationConfig:
                 SimulationRuntimeConfig, data.get("simulation", {}), "simulation"
             ),
             retrieval=_build(RetrievalConfig, data.get("retrieval", {}), "retrieval"),
+            cognition=_build(CognitionConfig, data.get("cognition", {}), "cognition"),
             embedding=embedding,
         )
 
@@ -200,6 +238,7 @@ class SimulationConfig:
             "game": self.game.to_dict(),
             "simulation": _asdict(self.simulation),
             "retrieval": _asdict(self.retrieval),
+            "cognition": _asdict(self.cognition),
         }
         if self.embedding is not None:
             emb = _asdict(self.embedding)

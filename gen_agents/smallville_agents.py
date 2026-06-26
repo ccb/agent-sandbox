@@ -179,6 +179,7 @@ def attach_agents(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
+    vision_r: int = SMALLVILLE_VISION_R,
     planner_client=None,
     reflector_client=None,
     llm_client=None,
@@ -270,7 +271,7 @@ def attach_agents(
         # How far this resident perceives, in tiles (issue #82). The TiledGame's
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
-        char.vision_r = spec.get("vision_r", SMALLVILLE_VISION_R)
+        char.vision_r = spec.get("vision_r", vision_r)
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -505,7 +506,18 @@ def remember_outcome(char, command: str, step: int) -> None:
     agent.memory.add_observation(text, turn=step, importance=importance)
 
 
-def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
+def maybe_converse(
+    game,
+    chars,
+    state,
+    frame,
+    step,
+    cooldowns,
+    order,
+    *,
+    cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
+    max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+) -> int:
     """Run conversations between co-located, settled residents this step (#86).
 
     Called once per step *after* movement resolves. A pair is eligible when both
@@ -533,7 +545,7 @@ def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
     happened = 0
     for a, b in convo.find_conversation_pairs(game, settled):
         key = frozenset((a.name, b.name))
-        if step - cooldowns.get(key, -(10**9)) < CONVERSATION_COOLDOWN_STEPS:
+        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
         # Attribute the meeting's LLM calls to the initiator/step (best effort:
         # the shared client alternates speakers within one converse()).
@@ -541,7 +553,7 @@ def maybe_converse(game, chars, state, frame, step, cooldowns, order) -> int:
         if ctx is not None:
             ctx.update({"actor": a.name, "turn": step, "attempt": 0})
         conversation = convo.converse(
-            game, a, b, turn=step, max_exchanges=CONVERSATION_MAX_EXCHANGES
+            game, a, b, turn=step, max_exchanges=max_exchanges
         )
         if not conversation.happened:
             continue
