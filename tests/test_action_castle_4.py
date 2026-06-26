@@ -619,3 +619,14 @@ def test_pick_rose_is_flavor_not_a_bare_bush():
     assert _said(cap, "picked the lone rose")
     assert "rose" in game.player.inventory
     assert not _said(cap, "bare")
+
+
+def test_pick_watermelon_is_a_too_heavy_gag():
+    # Parallel to roses/apples, but the rulebook makes watermelon a gag: too
+    # heavy to carry, so it's never added to the inventory.
+    game, cap = _play(
+        ESCAPE_TO_GARDENS + ["examine watermelon vines", "pick watermelon"]
+    )
+    assert _said(cap, "watermelons swelling on the vine")  # the fixture examines
+    assert _said(cap, "too heavy")
+    assert "watermelon" not in game.player.inventory
