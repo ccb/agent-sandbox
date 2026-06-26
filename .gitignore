@@ -208,8 +208,9 @@ parsely_pdfs/*.pdf
 
 # --- godot-generative-agents web viewer ---
 # Build/install artifacts — all regenerated locally (npm run export:godot /
-# npm install / npm run build), never committed.
+# npm install / npm run build / npm run gen:docs), never committed.
 godot-generative-agents/web/public/godot/
+godot-generative-agents/web/public/docs/
 godot-generative-agents/web/node_modules/
 godot-generative-agents/web/dist/
 godot-generative-agents/web/*.tsbuildinfo

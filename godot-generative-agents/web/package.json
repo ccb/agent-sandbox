@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "export:godot": "bash scripts/export-godot.sh",
-    "gen:replay": "bash scripts/gen-replay.sh"
+    "gen:replay": "bash scripts/gen-replay.sh",
+    "gen:docs": "bash scripts/gen-docs.sh"
   },
   "dependencies": {
     "react": "^18.3.1",
