@@ -121,11 +121,18 @@ cd godot-generative-agents/web
 pnpm install
 pnpm gen:replay     # writes public/replay/penn_replay.json (a copy is committed too)
 pnpm export:godot   # writes public/godot/ (the WASM build)
+pnpm gen:docs       # optional: builds the MkDocs site into public/docs/ (the "Docs" link)
 pnpm dev            # open the printed http://localhost:… URL
 ```
 
 You should see the campus load and Maya, Professor Ellis and Diego walk it with
 name + activity labels — the same scene as the desktop `penn_replay.tscn`.
+
+The header's **Docs** link opens the project's MkDocs site at `/docs/` on this
+same origin. It's served as plain static files out of `public/docs/`, so run
+`pnpm gen:docs` once to populate it (until then the link 404s). The docs are
+built `highlightjs: false` so they carry no cross-origin scripts and load fine
+under this app's COOP/COEP policy.
 
 ### The dev loop — why you rarely rebuild
 
@@ -136,6 +143,7 @@ stay running through both — just refresh the browser):
 | --- | --- | --- |
 | **New sim / replay** | `pnpm gen:replay` | The viewer **fetches** the replay JSON at runtime (it's not in the build). Swap the file, refresh. |
 | **Godot scripts / scenes / art** | `pnpm export:godot` | Vite serves `public/` statically, so the re-exported WASM is picked up on the next refresh. |
+| **Docs (mkdocs/)** | `pnpm gen:docs` | Same deal — `public/docs/` is served statically, so the rebuilt site shows up at `/docs/` on the next refresh. |
 
 ### Scripts
 
@@ -146,6 +154,7 @@ stay running through both — just refresh the browser):
 | `pnpm preview` | Serve the production `dist/` build locally. |
 | `pnpm export:godot` | Headless Godot Web export → `public/godot/`. |
 | `pnpm gen:replay [-- <args>]` | Run the sim and copy the replay into `public/replay/`. Args pass through, e.g. `pnpm gen:replay --steps 600`. |
+| `pnpm gen:docs` | Build the MkDocs site (`mkdocs build --strict`) into `public/docs/`, served at `/docs/`. |
 
 ---
 
