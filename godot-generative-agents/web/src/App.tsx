@@ -1,7 +1,11 @@
 import { GodotCanvas } from "./components/GodotCanvas";
+import { AgentPanel } from "./components/AgentPanel";
+import { useReplay } from "./useReplay";
 import "./App.css";
 
 export default function App() {
+  const { status, replay, error } = useReplay();
+
   return (
     <div className="app">
       <header className="app-header">
@@ -9,16 +13,21 @@ export default function App() {
         <p className="app-sub">Godot replay, running in the browser</p>
       </header>
       <main className="app-stage">
-        {/*
-          The Godot WebAssembly canvas. This is the whole app for now.
+        {/* The Godot WebAssembly canvas. penn_replay.gd pushes the current step
+            out via JavaScriptBridge so the panel beside it stays in sync. */}
+        <div className="stage-canvas">
+          <GodotCanvas />
+        </div>
 
-          Companion-app next step: add agent-info side panels here. They can read
-          the SAME public/replay/penn_replay.json this canvas plays (typed in
-          src/types/replay.ts) to show each persona's current action/location —
-          no need to scrape state out of Godot. Tighter sync (e.g. clicking a
-          panel highlights that agent) can later use Godot's JavaScriptBridge.
-        */}
-        <GodotCanvas />
+        {status === "ready" && replay.meta.personas.length > 0 ? (
+          <AgentPanel replay={replay} />
+        ) : (
+          <aside className="agent-panel agent-panel--placeholder">
+            {status === "loading" && "Loading agents…"}
+            {status === "error" && `Couldn't load replay: ${error}`}
+            {status === "ready" && "No agents in this replay."}
+          </aside>
+        )}
       </main>
     </div>
   );

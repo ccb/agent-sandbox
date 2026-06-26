@@ -1,0 +1,299 @@
+/* The agent-info companion panel: a persona selector, the agent card, and a
+   scrollable memory history. Ported from the Smallville replay's agent card +
+   memory list (generative-agents/.../home.html, main_script.html, style.css) and
+   re-themed for this shell's dark UI. */
+
+.agent-panel {
+  width: 360px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #11151c;
+  border-left: 1px solid #222a35;
+  padding: 12px 14px 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.agent-panel--placeholder {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #8a93a3;
+  font-size: 13px;
+  padding: 24px;
+}
+
+/* ---------- Persona selector ------------------------------------------------ */
+.agent-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+}
+
+.agent-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: #c4ccd8;
+  background: #1a212b;
+  border: 1px solid #2a3340;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.agent-tab:hover {
+  background: #222b37;
+}
+
+.agent-tab.is-active {
+  color: #fff;
+  background: #2d6cdf;
+  border-color: #3d7cf0;
+}
+
+.agent-tab-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ---------- Agent card ------------------------------------------------------ */
+.agent-card {
+  flex: none;
+  background: #161b22;
+  border: 1px solid #222a35;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.agent-portrait {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  line-height: 1;
+  border-radius: 10px;
+  background: #0e1116;
+  border: 1px solid #222a35;
+}
+
+.agent-name {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  color: #f0f3f8;
+}
+
+.agent-field {
+  margin-bottom: 12px;
+}
+
+.agent-field:last-child {
+  margin-bottom: 0;
+}
+
+.agent-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7b8494;
+  margin-bottom: 3px;
+}
+
+.agent-field-value {
+  display: block;
+  font-size: 14px;
+  color: #dde3ec;
+  overflow-wrap: anywhere;
+}
+
+.agent-field-value .muted {
+  color: #6b7383;
+}
+
+.chat-line {
+  margin-bottom: 2px;
+}
+
+.chat-speaker {
+  font-weight: 600;
+  color: #aeb7c5;
+}
+
+/* ---------- Memory history -------------------------------------------------- */
+/* This field grows to fill the panel and its list scrolls inside it, so the card
+   above stays put while history accrues below. */
+.agent-memory {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mem-empty {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7383;
+}
+
+.mem-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mem-group-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7b8494;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px 2px;
+}
+
+.mem-group-head:not(:first-child) {
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid #222a35;
+}
+
+.mem-item {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #dde3ec;
+  padding: 6px 9px 6px 8px;
+  border-left: 3px solid transparent;
+  border-radius: 0 4px 4px 0;
+}
+
+.mem-item + .mem-item {
+  border-top: 1px solid #1b222c;
+}
+
+.mem-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.mem-kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #aeb7c5;
+  background: #232c38;
+}
+
+.mem-imp {
+  margin-left: auto;
+  font-size: 11px;
+  color: #6b7383;
+}
+
+.mem-text {
+  display: block;
+}
+
+/* Per-kind accents (left bar + pill), dark-theme variants of the Smallville set. */
+.mem-observation {
+  border-left-color: #4f7fd6;
+}
+.mem-observation .mem-kind {
+  color: #cfe0ff;
+  background: rgba(45, 90, 180, 0.32);
+}
+
+.mem-plan {
+  border-left-color: #d99a4e;
+}
+.mem-plan .mem-kind {
+  color: #ffe2bd;
+  background: rgba(150, 100, 0, 0.32);
+}
+
+.mem-reflection {
+  border-left-color: #a877e0;
+}
+.mem-reflection .mem-kind {
+  color: #e9d6ff;
+  background: rgba(120, 60, 170, 0.32);
+}
+
+.mem-chat {
+  border-left-color: #4fb38e;
+}
+.mem-chat .mem-kind {
+  color: #cdeede;
+  background: rgba(40, 130, 100, 0.32);
+}
+
+/* When a new memory arrives as the replay plays, its row flashes briefly so you
+   can see what the agent just took in. The class is set only on the row whose
+   memory formed this step, so the animation runs once. */
+@keyframes mem-flash-in {
+  0% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+  8% {
+    background-color: rgba(255, 214, 102, 0.55);
+  }
+  32% {
+    background-color: rgba(255, 214, 102, 0.12);
+  }
+  56% {
+    background-color: rgba(255, 214, 102, 0.55);
+  }
+  80% {
+    background-color: rgba(255, 214, 102, 0.12);
+  }
+  100% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+}
+
+.mem-item.is-new {
+  animation: mem-flash-in 4s ease-in-out 1;
+}
+
+@keyframes mem-flash-soft {
+  0% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+  15% {
+    background-color: rgba(255, 214, 102, 0.5);
+  }
+  100% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mem-item.is-new {
+    animation: mem-flash-soft 2.5s ease-out 1;
+  }
+}
