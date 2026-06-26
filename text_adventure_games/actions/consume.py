@@ -142,18 +142,37 @@ class Light(base.Action):
             command, self.parser.get_items_in_scope(self.character), hint="flamable"
         )
 
+    @staticmethod
+    def _is_held(character, item) -> bool:
+        """True if *character* is carrying *item* -- in hand, worn, wielded, or
+        inside an open container they carry (a lantern stowed in a backpack).
+        Mirrors Darkness._carries_light, so you can LIGHT a lantern without
+        fishing it out of the pack first."""
+        for slot in (character.inventory, character.worn, character.wielded):
+            if item.name in slot:
+                return True
+        for holder in character.inventory.values():
+            if item.name in holder.accessible_contents():
+                return True
+        return False
+
     def check_preconditions(self) -> bool:
         """
         Preconditions:
         * There must be a matched item
-        * The item must be in character's inventory
+        * The item must be held (in hand, worn, wielded, or a carried container)
         * The item must be lightable
         """
         if not self.was_matched(
             self.item, error_message="I don't know what you want to light"
         ):
             return False
-        if not self.is_in_inventory(self.character, self.item):
+        if not self._is_held(self.character, self.item):
+            self.parser.fail(
+                "{name} does not have {item_name}".format(
+                    name=self.character.name.capitalize(), item_name=self.item.name
+                )
+            )
             return False
         if not self.item.get_property(Property.FLAMMABLE):
             description = "That's not something that can be lit."

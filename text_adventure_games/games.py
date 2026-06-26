@@ -79,6 +79,13 @@ class Game:
         self.game_over = False
         self.game_over_description = None
 
+        # Scoring (cross-cutting). Inert by default: a game that never calls
+        # award() and leaves max_score at 0 behaves exactly as before. Games
+        # with a point table set max_score and call award() at each milestone.
+        self.score = 0
+        self.max_score = 0
+        self._scored_keys = set()
+
         # Add player to game and put them on starting point
         self.characters = {}
         self.add_character(player)
@@ -340,9 +347,22 @@ class Game:
             _visited.add(other.name)
             follow_filter = getattr(other, "follow_filter", None)
             if follow_filter is not None and not follow_filter(dest):
-                self.parser.npc_ok(f"{other.name.capitalize()} won't go any farther.")
+                # Announce the refusal once per "stuck" episode, not again on
+                # every subsequent step the leader takes while it waits behind.
+                if not getattr(other, "_follow_refusal_announced", False):
+                    self.parser.npc_ok(
+                        f"{other.name.capitalize()} won't go any farther."
+                    )
+                    other._follow_refusal_announced = True
+                continue
+            if other.location is dest:
+                # The leader stepped back into the room where the follower was
+                # waiting -- it's already at their side, so don't re-announce.
+                other._follow_refusal_announced = False
+                self.drag_followers(other, _visited)
                 continue
             self.relocate(other, dest)
+            other._follow_refusal_announced = False
             self.parser.npc_ok(f"{other.name.capitalize()} follows {leader_ref}.")
             self.drag_followers(other, _visited)
 
@@ -430,6 +450,49 @@ class Game:
             if self.is_game_over():
                 break
 
+    def award(self, key, points, msg=None):
+        """Add *points* to the score once per *key* (idempotent), optionally
+        announcing *msg*.
+
+        The first call for a key scores; repeats are no-ops, so re-entering a
+        scored room or re-triggering a milestone can't double-count. This is the
+        scoring primitive every Parsely point table needs (Action Castle II/III
+        both used to define their own identical copy). Games without scoring
+        simply never call it.
+        """
+        if key in self._scored_keys:
+            return
+        self._scored_keys.add(key)
+        self.score += points
+        if msg:
+            self.parser.ok(msg)
+
+    def end_in_death(self, message):
+        """End the game with a death message -- the prescribed-death path the
+        Parsely books lean on (disturb the ooze, enter the moat unarmed, read
+        the lethal inscription). Narrates *message*, then sets the game-over
+        state so the loop stops on the next check.
+        """
+        self.parser.ok(message)
+        self.game_over = True
+        self.game_over_description = message
+
+    def announce_ending(self, message, show_score=False):
+        """Announce an ending epilogue exactly once, optionally appending the
+        score line.
+
+        Win/death *conditions* stay game-specific (``is_won`` / ``end_in_death``);
+        this only factors the "say the epilogue once, with the score" bookkeeping
+        that the multi-ending games repeat. Safe to call from a polled ``is_won``
+        -- the once-guard means later polls don't re-print it.
+        """
+        if getattr(self, "_ending_announced", False):
+            return
+        self._ending_announced = True
+        if show_score and self.max_score:
+            message = f"{message}  (Score: {self.score}/{self.max_score})"
+        self.parser.ok(message)
+
     def is_won(self) -> bool:
         """
         A conditional check intended for subclasses to use for defining the
@@ -509,10 +572,15 @@ class Game:
         Describe what items are in the current location.
         """
         description = ""
-        if len(self.player.location.items) > 0:
+        # Hidden items (concealed until a SEARCH reveals them) aren't listed.
+        visible = [
+            it
+            for it in self.player.location.items.values()
+            if not it.get_property("is_hidden")
+        ]
+        if len(visible) > 0:
             description = "You see:"
-            for item_name in self.player.location.items:
-                item = self.player.location.items[item_name]
+            for item in visible:
                 qty = getattr(item, "quantity", 1)
                 count = f" (x{qty})" if qty > 1 else ""
                 description += f"\n * {item.name}{count} - {item.description}"
@@ -520,10 +588,22 @@ class Game:
                     special_commands = item.get_command_hints()
                     for cmd in special_commands:
                         description += "\n\t" + cmd
-                # A surface's contents are always in view ("on the table...").
-                if item.get_property("is_surface"):
+                # A surface's contents are always in view ("on the table..."). A
+                # container can opt in via ``contents_visible`` -- an open rowboat
+                # you can see into, so its blanket is listed (and matches what GET
+                # can already reach). The treasure hoard deliberately does NOT set
+                # it, keeping its loot hidden until EXAMINE.
+                shows_contents = item.get_property("is_surface") or (
+                    item.get_property("is_container")
+                    and item.is_open()
+                    and item.get_property("contents_visible")
+                )
+                if shows_contents:
+                    prep = item.preposition()
                     for inner in item.contents.values():
-                        description += f"\n   - on it: {inner.description}"
+                        if inner.get_property("is_hidden"):
+                            continue
+                        description += f"\n   - {prep} it: {inner.description}"
         return description
 
     def describe_characters(self) -> str:

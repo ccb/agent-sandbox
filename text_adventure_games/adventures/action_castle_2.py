@@ -58,10 +58,10 @@ def _relocate(game, character, dest_name):
 
 
 def _die(game, text):
-    """End the game with a death/THE END message (the conditional-death path)."""
-    game.parser.ok(text)
-    game.game_over = True
-    game.game_over_description = text
+    """End the game with a death/THE END message (the conditional-death path).
+    Thin wrapper over the engine's ``Game.end_in_death`` so existing call sites
+    keep their short local name."""
+    game.end_in_death(text)
 
 
 def _all_held(character):
@@ -120,14 +120,13 @@ class ActionCastle2(games.Game):
 
     def __init__(self, start_at, player, characters=None, custom_actions=None):
         super().__init__(start_at, player, characters, custom_actions)
-        self.score = 0
         # Scoring per the ACII rulebook (page 18): 16 locations x2 = 32, + wish 3
         # + blanket 10 + slippers 10 + catfish 10 + riddle 10 + (champion OR
         # propose) 20 + finishing-without-saving 5 = 100. Champion and propose are
         # mutually exclusive endings, so the full-score path is the champion run.
+        # score / _scored_keys / award() come from the base Game.
         self.max_score = 100
         self.visited = set()
-        self._scored_keys = set()
         # +2 for each newly-visited location (ACII scoring), via the trigger system.
         self.add_trigger(
             "score_locations",
@@ -138,15 +137,6 @@ class ActionCastle2(games.Game):
         )
         # Score the starting room (the trigger only sees rooms entered after t0).
         self._note_visit(self.player.location.name)
-
-    def award(self, key, points, msg=None):
-        """Add *points* once per *key* (idempotent), optionally announcing *msg*."""
-        if key in self._scored_keys:
-            return
-        self._scored_keys.add(key)
-        self.score += points
-        if msg:
-            self.parser.ok(msg)
 
     def _note_visit(self, name):
         if name not in self.visited:
@@ -159,9 +149,9 @@ class ActionCastle2(games.Game):
     def is_won(self) -> bool:
         p = self.player
         won = bool(p.get_property("is_champion") or p.get_property("is_married"))
-        # is_won() is polled repeatedly by is_game_over(); announce only once.
-        if won and not getattr(self, "_won_announced", False):
-            self._won_announced = True
+        # is_won() is polled repeatedly by is_game_over(); announce_ending only
+        # prints once and appends the score line.
+        if won:
             # +5 for finishing without saving (rulebook page 18). This game has
             # no save mechanic, so reaching a winning end always earns it.
             self.award("finish", 5)
@@ -169,7 +159,7 @@ class ActionCastle2(games.Game):
                 msg = "You are the new champion of ACTION CASTLE! THE END."
             else:
                 msg = "The two of you return to town and live happily ever after. THE END."
-            self.parser.ok(f"{msg}  (Score: {self.score}/{self.max_score})")
+            self.announce_ending(msg, show_score=True)
         return won
 
 
@@ -557,110 +547,99 @@ class DropPennyInWell(actions.Action):
 # hands it back, independent of how the give was worded (issue #113).
 
 
-class GiveBlanketToRosemary(actions.Action):
-    ACTION_NAME = "give blanket to rosemary"
-    ACTION_DESCRIPTION = "Give the warm blanket to Rosemary"
-    ACTION_ALIASES = ["give blanket to sage", "offer rosemary the blanket"]
+# These three gifts are two-object interactions -- hold X, recipient present,
+# then transfer + side effects -- so they're built with the engine's
+# ``use_item_on`` factory (actions/use.py) instead of a hand-written Action
+# subclass. The effect closures reuse ``_take_held`` so the item moves exactly
+# as before; ``award=`` carries the scoring + narration unchanged.
 
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.rosemary = self.parser.get_character("rosemary")
 
-    def check_preconditions(self) -> bool:
-        if (
-            self.rosemary is None
-            or self.rosemary.location is not self.character.location
-        ):
-            self.parser.fail("She isn't here.")
-            return False
-        if not _is_holding(self.character, "blanket"):
-            self.parser.fail("You have no blanket to give.")
-            return False
-        return True
+def _give_blanket_to_rosemary(action):
+    blanket = _take_held(action.character, "blanket")
+    action.target.add_to_inventory(blanket)
+    action.target.wear(blanket)  # she drapes it over her shoulders
+    # Now warm enough to come along: she follows the player, and a later
+    # "ask rosemary to follow" is accepted too (clear the cold-feet refusal).
+    action.target.following = action.game.player
+    action.target.set_property("refuses_follow", False)
+    action.target.set_property("emotional_state", "happy")
 
-    def apply_effects(self):
-        blanket = _take_held(self.character, "blanket")
-        self.rosemary.add_to_inventory(blanket)
-        self.rosemary.wear(blanket)  # she drapes it over her shoulders
-        # Now warm enough to come along: she follows the player, and a later
-        # "ask rosemary to follow" is accepted too (clear the cold-feet refusal).
-        self.rosemary.following = self.game.player
-        self.rosemary.set_property("refuses_follow", False)
-        self.rosemary.set_property("emotional_state", "happy")
-        self.game.award(
-            "blanket",
-            10,
-            "Rosemary kisses you on the cheek and drapes the blanket over her shoulders. She'll follow you now.",
+
+GiveBlanketToRosemary = actions.use_item_on(
+    "give blanket to rosemary",
+    item="blanket",
+    target="rosemary",
+    verb="give",
+    preposition="to",
+    description="Give the warm blanket to Rosemary",
+    aliases=["give blanket to sage", "offer rosemary the blanket"],
+    effect=_give_blanket_to_rosemary,
+    award=(
+        "blanket",
+        10,
+        "Rosemary kisses you on the cheek and drapes the blanket over her shoulders. She'll follow you now.",
+    ),
+    item_missing="You have no blanket to give.",
+    target_missing="She isn't here.",
+)
+
+
+def _give_slippers_to_hermit(action):
+    action.target.add_to_inventory(_take_held(action.character, "slippers"))
+    king = action.game.characters.get("king")
+    if king is not None:
+        king.set_property("wears_slippers", True)
+
+
+GiveSlippersToHermit = actions.use_item_on(
+    "give slippers to hermit",
+    item="slippers",
+    target="hermit",
+    verb="give",
+    preposition="to",
+    description="Give the velvet slippers to the hermit",
+    aliases=["give slippers to old man"],
+    effect=_give_slippers_to_hermit,
+    award=(
+        "slippers",
+        10,
+        'The hermit accepts your gift: "Only a fool desires wealth and power. '
+        'The wise person has everything they need." He taps his head and winks.',
+    ),
+    item_missing="You have no slippers to give.",
+    target_missing="There's no one here to give them to.",
+)
+
+
+def _give_sword_to_king(action):
+    action.target.add_to_inventory(_take_held(action.character, "sword"))
+    action.target.set_property("offered_championship", True)
+    action.parser.ok(
+        "\"This kingdom needs a clever mind as much as a keen blade. And as I'm "
+        'in need of a new champion, I offer you the position! Do you accept?"'
+    )
+    # A bare "yes" / "no" now answers the king (#110).
+    action.game.pose_prompt(
+        Prompt(
+            text="The king offers you the championship. Do you accept?",
+            options={"yes": "say yes", "no": "say no"},
+            speaker="king",
         )
+    )
 
 
-class GiveSlippersToHermit(actions.Action):
-    ACTION_NAME = "give slippers to hermit"
-    ACTION_DESCRIPTION = "Give the velvet slippers to the hermit"
-    ACTION_ALIASES = ["give slippers to old man"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.hermit = self.parser.get_character("hermit")
-
-    def check_preconditions(self) -> bool:
-        if self.hermit is None or self.hermit.location is not self.character.location:
-            self.parser.fail("There's no one here to give them to.")
-            return False
-        if not _is_holding(self.character, "slippers"):
-            self.parser.fail("You have no slippers to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.hermit.add_to_inventory(_take_held(self.character, "slippers"))
-        king = self.game.characters.get("king")
-        if king is not None:
-            king.set_property("wears_slippers", True)
-        self.game.award(
-            "slippers",
-            10,
-            'The hermit accepts your gift: "Only a fool desires wealth and power. '
-            'The wise person has everything they need." He taps his head and winks.',
-        )
-
-
-class GiveSwordToKing(actions.Action):
-    ACTION_NAME = "give sword to king"
-    ACTION_DESCRIPTION = "Present the gleaming sword to the king"
-    ACTION_ALIASES = ["offer the sword to the king"]
-
-    def __init__(self, game, command, actor=None):
-        super().__init__(game, actor=actor)
-        self.character = self.game.player
-        self.king = self.parser.get_character("king")
-
-    def check_preconditions(self) -> bool:
-        if self.king is None or self.king.location is not self.character.location:
-            self.parser.fail("The king isn't here.")
-            return False
-        if not _is_holding(self.character, "sword"):
-            self.parser.fail("You have no sword to give.")
-            return False
-        return True
-
-    def apply_effects(self):
-        self.king.add_to_inventory(_take_held(self.character, "sword"))
-        self.king.set_property("offered_championship", True)
-        self.parser.ok(
-            "\"This kingdom needs a clever mind as much as a keen blade. And as I'm "
-            'in need of a new champion, I offer you the position! Do you accept?"'
-        )
-        # A bare "yes" / "no" now answers the king (#110).
-        self.game.pose_prompt(
-            Prompt(
-                text="The king offers you the championship. Do you accept?",
-                options={"yes": "say yes", "no": "say no"},
-                speaker="king",
-            )
-        )
+GiveSwordToKing = actions.use_item_on(
+    "give sword to king",
+    item="sword",
+    target="king",
+    verb="give",
+    preposition="to",
+    description="Present the gleaming sword to the king",
+    aliases=["offer the sword to the king"],
+    effect=_give_sword_to_king,
+    item_missing="You have no sword to give.",
+    target_missing="The king isn't here.",
+)
 
 
 class SayYes(actions.Action):
@@ -818,11 +797,27 @@ class EnterCave(actions.Action):
 class Propose(actions.Action):
     ACTION_NAME = "propose"
     ACTION_DESCRIPTION = "Propose marriage to your beloved"
-    ACTION_ALIASES = []
+    # "give ring to rosemary" IS the proposal -- route it here (multi-word, so
+    # it wins specific-first over the built-in Give, which would otherwise hand
+    # the ring away and strand the marriage ending). Outside the Middle of the
+    # Pond it fails the location gate below WITHOUT transferring the ring.
+    ACTION_ALIASES = [
+        "give ring to rosemary",
+        "give the ring to rosemary",
+        "give ring to sage",
+        "give rosemary the ring",
+        "give rosemary ring",
+        "offer ring to rosemary",
+        "offer the ring to rosemary",
+        "hand rosemary the ring",
+    ]
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
-        self.character = self.parser.get_character(command)
+        # The proposer is the actor (the player for a typed command). Don't scan
+        # the command for a name -- "give ring to rosemary" names Rosemary, who
+        # is the beloved, not the one doing the proposing.
+        self.character = self.actor if self.actor is not None else self.game.player
         self.beloved = self.parser.get_character("rosemary")
 
     def check_preconditions(self) -> bool:
@@ -1004,6 +999,9 @@ def build_game() -> ActionCastle2:
     )
     boat.set_property("gettable", False)
     boat.make_container()  # unlimited capacity, always open
+    # You can see into the open rowboat from shore, so the blanket it holds is
+    # listed in the room (and GET reaches it) rather than hidden until EXAMINE.
+    boat.set_property("contents_visible", True)
     boat.add_command_hint("enter boat")
     boat.add_command_hint("row boat")
 
@@ -1064,12 +1062,15 @@ def build_game() -> ActionCastle2:
         "If you put your nose to it, you might make something of yourself.",
         smithy,
     )
-    scenery(
+    sign = scenery(
         "sign",
         "a weather-beaten sign",
         'It reads, "Please don\'t pick the roses."',
         pond_road,
+        ["read sign"],
     )
+    # READ SIGN surfaces its writing (the generic Read verb reads read_text).
+    sign.set_property("read_text", 'It reads, "Please don\'t pick the roses."')
     scenery(
         "moat",
         "the castle moat",
@@ -1081,6 +1082,14 @@ def build_game() -> ActionCastle2:
         "stone",
         "a loose stone in the wall",
         "Peering closely, you notice a loose stone.",
+        moat,
+        ["move stone"],
+    )
+    # EXAMINE WALL(S) points at the loose stone too (matches "examine walls").
+    scenery(
+        "wall",
+        "the castle's stone wall",
+        "Peering closely, you notice a loose stone in the wall.",
         moat,
         ["move stone"],
     )
@@ -1456,6 +1465,24 @@ def build_game() -> ActionCastle2:
             return True
 
     hermit_cave.add_block("in", CaveBlock())
+
+    # The king's guards bar the throne room's west door -- GO WEST gets a flavor
+    # refusal rather than the bare "no exit" error. A permanently-blocked
+    # one-way exit (the connection exists so Go reaches the block, which never
+    # opens), mirroring the CaveBlock pattern above.
+    class ThroneGuardBlock(blocks.Block):
+        def __init__(self):
+            super().__init__(
+                "The guards bar the way",
+                "The king's guards step into your path. \"No one leaves the "
+                "king's presence unbidden.\"",
+            )
+
+        def is_blocked(self) -> bool:
+            return True
+
+    _one_way(throne_room, "west", courtyard)
+    throne_room.add_block("west", ThroneGuardBlock())
     # NOTE: build_game is parser-agnostic. It returns the game with the engine's
     # default parser; the caller chooses a parser via game.set_parser(...).
     return game
