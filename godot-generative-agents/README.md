@@ -133,7 +133,7 @@ uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
 
 The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast) and
 `the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
-The agent *engine* (deciding, pathfinding) is reused from the `gen_agents` package,
+The agent *engine* (deciding, pathfinding) is reused from the `backend` package,
 so this is the same simulation that runs there — just rendered here instead of in
 Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path the
 sim chose, with a name + activity label above each sprite. (`sim/` carries a

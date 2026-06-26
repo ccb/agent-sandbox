@@ -6,9 +6,9 @@ runs a handful of real travel/perform decisions through the precondition gate --
 just enough to shake out prompt / parsing / latency issues with a live model
 before committing to a full run. It is a manual tool, not part of CI.
 
-    LLM_PROVIDER=anthropic uv run python -m gen_agents.smoke_llm
+    LLM_PROVIDER=anthropic uv run python -m backend.smoke_llm
     LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini \
-        uv run python -m gen_agents.smoke_llm --agents 2 --steps 6
+        uv run python -m backend.smoke_llm --agents 2 --steps 6
 
 With no provider configured it exits with a clear message rather than doing
 anything, so it is safe to run by accident.

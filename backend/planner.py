@@ -183,7 +183,7 @@ class LLMPlanner:
     ):
         self.client = client
         self.known_places = set(known_places)
-        # When both are given (a :class:`~gen_agents.sim_clock.SimClock` and the run
+        # When both are given (a :class:`~backend.sim_clock.SimClock` and the run
         # length in steps), the plan is bounded to the hours the run actually
         # covers -- so the model plans 8-11am for a 3-hour run instead of a generic
         # full day, which is tighter and cheaper. With neither, it plans an

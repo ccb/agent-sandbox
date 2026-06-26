@@ -192,7 +192,7 @@ def reflect(
 
 
 # ---------------------------------------------------------------------------
-# MockReflector -- deterministic, offline (cf. gen_agents.planner.MockPlanner)
+# MockReflector -- deterministic, offline (cf. backend.planner.MockPlanner)
 # ---------------------------------------------------------------------------
 
 

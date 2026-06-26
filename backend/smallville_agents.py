@@ -217,8 +217,8 @@ def attach_agents(
     byte-identical to before.
 
     Pass a ``planner_client`` (an engine ``LlmClient``) to plan each day with a
-    real model (:class:`~gen_agents.planner.LLMPlanner`, issue #83). With none -- the
-    offline default -- each agent gets a :class:`~gen_agents.planner.MockPlanner` that
+    real model (:class:`~backend.planner.LLMPlanner`, issue #83). With none -- the
+    offline default -- each agent gets a :class:`~backend.planner.MockPlanner` that
     replays the authored schedule, so the replay stays byte-identical. The agent
     and its memory are built and seeded *before* the planner runs, so a generative
     planner reasons over the same t=0 memory the agent will. If the model returns
@@ -404,7 +404,7 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     the planner's proposed stops *beyond* it, so a planner that mistakenly rewrote
     a past stop cannot desync the schedule from the on-screen replay.
 
-    A no-op planner (today's :class:`~gen_agents.planner.MockPlanner`) returns the
+    A no-op planner (today's :class:`~backend.planner.MockPlanner`) returns the
     same plan unchanged, so this commits nothing and the exported replay stays
     byte-identical. That is what lets the revision seam be wired into the loop now,
     ahead of the real ``LLMPlanner`` that will actually rewrite the tail.

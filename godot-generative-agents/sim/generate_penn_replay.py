@@ -8,7 +8,7 @@ campus map.
 The Penn *world* lives next to this script (`world_data_upenn.yaml` + the
 `the_upenn/` matrix), so it's self-contained here. The agent *engine* (build the
 world, attach mock brains, step the loop, pathfind) is imported from the shared
-`gen_agents` package so improvements there flow through automatically.
+`backend` package so improvements there flow through automatically.
 
 Run from the repo root (so `uv run` finds the engine env)::
 
@@ -23,10 +23,10 @@ import json
 import os
 
 # Reuse the tested agent engine (not a fork). It's the installed top-level
-# `gen_agents` package now, so a plain import works -- no sys.path juggling.
-from gen_agents.build_world import build_world, load_world_data
-from gen_agents.run_simulation import simulate
-from gen_agents.world_map import WorldMap
+# `backend` package now, so a plain import works -- no sys.path juggling.
+from backend.build_world import build_world, load_world_data
+from backend.run_simulation import simulate
+from backend.world_map import WorldMap
 
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 _GODOT_DIR = os.path.dirname(_SIM_DIR)

@@ -182,7 +182,7 @@ with run_log or nullcontext():           # no-op when logging is off
 ```
 
 `GameConfig.from_env()` reads `LLM_LOG` (the `log_path`) and `LLM_LOG_PROMPTS`. The
-Smallville backend (`gen_agents/run_simulation.py`) wires this up:
+Smallville backend (`backend/run_simulation.py`) wires this up:
 pass `--config my.yaml` (or set the env vars), and `--llm-log` / `--llm-log-prompts`
 override the config's `observability` section.
 

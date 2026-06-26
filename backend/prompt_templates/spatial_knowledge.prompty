@@ -2,7 +2,7 @@
 name: spatial_knowledge
 description: >
   One place a persona knows up front, rendered as a Belief in its Knowledge
-  (gen_agents/seed.py, seed_spatial_knowledge) and shown in the observation's
+  (backend/seed.py, seed_spatial_knowledge) and shown in the observation's
   "What you know:" section. Names the place and, when it has known areas, lists
   them; objects within an area are intentionally left out to keep the section
   readable.
