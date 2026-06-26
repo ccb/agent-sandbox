@@ -36,26 +36,34 @@ export default function App() {
           <h1>Penn Campus — Generative Agents</h1>
           <p className="app-sub">Godot replay, running in the browser</p>
         </div>
-        <nav className="view-tabs" role="tablist" aria-label="View">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "game"}
-            className={`view-tab${view === "game" ? " is-active" : ""}`}
-            onClick={() => select("game")}
-          >
-            Game view
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "agents"}
-            className={`view-tab${view === "agents" ? " is-active" : ""}`}
-            onClick={() => select("agents")}
-          >
-            Agent cards
-          </button>
-        </nav>
+        <div className="header-actions">
+          <nav className="view-tabs" role="tablist" aria-label="View">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "game"}
+              className={`view-tab${view === "game" ? " is-active" : ""}`}
+              onClick={() => select("game")}
+            >
+              Game view
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === "agents"}
+              className={`view-tab${view === "agents" ? " is-active" : ""}`}
+              onClick={() => select("agents")}
+            >
+              Agent cards
+            </button>
+          </nav>
+          {/* Plain link, not a tab: it leaves the SPA for the static MkDocs site
+              served at /docs/ on this same origin (build it with `pnpm gen:docs`).
+              BASE_URL keeps it correct if the app's base path ever changes. */}
+          <a className="view-tab docs-link" href={`${import.meta.env.BASE_URL}docs/`}>
+            Docs
+          </a>
+        </div>
       </header>
 
       <main className="app-stage">
