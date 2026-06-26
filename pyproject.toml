@@ -88,11 +88,12 @@ docs = [
 [tool.setuptools.dynamic]
 version = { attr = "text_adventure_games.__version__" }
 
-# Equivalent of the old find_packages(): ship text_adventure_games and its
-# subpackages, but not notebooks/, tests/, or docs/ (they aren't importable
-# packages and shouldn't be installed).
+# Equivalent of the old find_packages(): ship text_adventure_games and the shared
+# generative-agents simulation (gen_agents, extracted from generative-agents/backend
+# so both the Phaser and Godot frontends import it by one canonical path), but not
+# notebooks/, tests/, or docs/ (they aren't importable packages).
 [tool.setuptools.packages.find]
-include = ["text_adventure_games*"]
+include = ["text_adventure_games*", "gen_agents*"]
 
 # The prompt templates (issue #145) are data files, not Python, so list them
 # explicitly or a built wheel would omit them and prompts.render() would fail to
@@ -110,3 +111,8 @@ include = ["text_adventure_games*"]
     "webapp/static/*.js",
     "webapp/static/vendor/*.js",
 ]
+# The gen_agents sim loads its world cast (``world_data*.yaml``, via
+# ``Path(__file__).with_name``) and its memory/belief templates (``*.prompty``,
+# via prompt_templates.render) as data files, so a built wheel must ship them too.
+"gen_agents" = ["*.yaml"]
+"gen_agents.prompt_templates" = ["*.prompty"]

@@ -15,10 +15,10 @@ campus* (pathfinding around building walls between named buildings) and prints a
 per-agent route summary. Rendering that walk -- in the Phaser replay or in Godot
 -- is the separate next step.
 
-Run it from the ``generative-agents`` directory::
+Run it from the repo root (``gen_agents`` is an installed package)::
 
-    uv run python -m backend.run_upenn
-    uv run python -m backend.run_upenn --steps 600
+    uv run python -m gen_agents.run_upenn
+    uv run python -m gen_agents.run_upenn --steps 600
 """
 
 import argparse
@@ -28,10 +28,12 @@ from .build_world import build_world, load_world_data
 from .run_simulation import simulate
 from .world_map import WorldMap
 
-_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-_GA_DIR = os.path.dirname(_BACKEND_DIR)
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+# gen_agents/ is a top-level package at the repo root; the Penn matrix it reads
+# still lives under the generative-agents/ asset tree, so reach into that sibling.
+_GA_DIR = os.path.join(os.path.dirname(_PACKAGE_DIR), "generative-agents")
 
-WORLD_DATA = os.path.join(_BACKEND_DIR, "world_data_upenn.yaml")
+WORLD_DATA = os.path.join(_PACKAGE_DIR, "world_data_upenn.yaml")
 # The tracked asset tree (setup.sh rsyncs it into the git-ignored frontend/);
 # WorldMap only needs the matrix/ folder, so we can read it straight from here.
 UPENN_DIR = os.path.join(

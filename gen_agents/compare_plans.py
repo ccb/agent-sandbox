@@ -2,23 +2,23 @@
 
 Daily planning, like memory retrieval before it (``compare_retrieval.py``), doesn't
 change the *replay* until a real model is in the loop: the offline default uses
-:class:`~backend.planner.MockPlanner`, which replays the authored ``world_data.yaml``
+:class:`~gen_agents.planner.MockPlanner`, which replays the authored ``world_data.yaml``
 schedule, so the exported frames stay byte-identical. The payoff -- a day that
 *emerges* from identity + memory rather than being hand-typed -- only appears once a
-real ``LlmClient`` drives :class:`~backend.planner.LLMPlanner`.
+real ``LlmClient`` drives :class:`~gen_agents.planner.LLMPlanner`.
 
 This tool makes that difference visible. By default it reads the plan the **last
 run already generated and saved** (``personas/<Name>/daily_plan.json``) -- fast,
 free, and faithful to what the run actually used:
 
-    uv run python -m backend.run_simulation --steps 120   # with LLM_PROVIDER set
-    uv run python -m backend.compare_plans --resident "Klaus Mueller"
+    uv run python -m gen_agents.run_simulation --steps 120   # with LLM_PROVIDER set
+    uv run python -m gen_agents.compare_plans --resident "Klaus Mueller"
 
 Pass ``--generate`` to instead make a *fresh* plan with the live model right now
 (3 model calls: day -> hourly -> minute; nondeterministic, costs tokens) -- useful
 when you haven't run the sim, or want to see generation in isolation:
 
-    LLM_PROVIDER=anthropic uv run python -m backend.compare_plans \
+    LLM_PROVIDER=anthropic uv run python -m gen_agents.compare_plans \
         --resident "Klaus Mueller" --generate
 
 It is a manual research tool, not part of the replay pipeline or CI.
@@ -102,7 +102,7 @@ def _from_saved(spec: dict, args) -> None:
     if not os.path.isfile(path):
         print(
             f"\nNo saved plan at {path}.\n"
-            "Run `python -m backend.run_simulation` (with LLM_PROVIDER set) to "
+            "Run `python -m gen_agents.run_simulation` (with LLM_PROVIDER set) to "
             "generate and save one, or pass --generate to make a fresh plan now."
         )
         return

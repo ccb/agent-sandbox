@@ -63,14 +63,14 @@ cd generative-agents
 #    (The full upstream frontend is ~1GB of example sims we don't need.)
 ./setup.sh
 
-# 2. Generate a 1-hour simulation. `uv run` finds the repo's project env (one
-#    level up) and provisions it with the engine on first use.
-uv run python -m backend.run_simulation                 # 360 steps (1 hour)
-#    fewer steps:  uv run python -m backend.run_simulation --steps 120
-#    other clock:  uv run python -m backend.run_simulation \
+# 2. Generate a 3-hour simulation. `uv run` finds the repo's project env and
+#    provisions it with the engine (and the gen_agents package) on first use.
+uv run python -m gen_agents.run_simulation                 # 1080 steps (3 hours)
+#    fewer steps:  uv run python -m gen_agents.run_simulation --steps 120
+#    other clock:  uv run python -m gen_agents.run_simulation \
 #                      --start "2023-02-13 18:00:00" --sec-per-step 60
 #    embeddings:   uv sync --extra embeddings    # one-time; then:
-#                  uv run python -m backend.run_simulation --embeddings local
+#                  uv run python -m gen_agents.run_simulation --embeddings local
 #    (--help lists all flags: --steps, --start, --sec-per-step, --embeddings, ...)
 
 # 3. Run the Django frontend in its OWN Python 3.9 venv. uv fetches a managed
@@ -119,8 +119,8 @@ of real decisions through the precondition gate — enough to catch prompt / par
 / key / latency problems before a full run:
 
 ```bash
-uv run python -m backend.smoke_llm                  # 2 agents, 6 decision rounds
-uv run python -m backend.smoke_llm --agents 3 --steps 10
+uv run python -m gen_agents.smoke_llm                  # 2 agents, 6 decision rounds
+uv run python -m gen_agents.smoke_llm --agents 3 --steps 10
 ```
 
 It prints each generated plan, then each decision with whether it passed the gate
@@ -132,7 +132,7 @@ unset or `mock` it exits with a message instead of running.
 run `./setup.sh` first). Start small to keep cost down:
 
 ```bash
-uv run python -m backend.run_simulation --steps 120
+uv run python -m gen_agents.run_simulation --steps 120
 ```
 
 `run_simulation` prints which brain it's using (`LLM brain: anthropic …` vs
@@ -147,7 +147,7 @@ Each run also **saves every agent's generated plan** to
 schedule beside the plan the last run used — fast and free, no model calls:
 
 ```bash
-uv run python -m backend.compare_plans --resident "Klaus Mueller"
+uv run python -m gen_agents.compare_plans --resident "Klaus Mueller"
 ```
 
 Add `--generate` to make a *fresh* plan with the live model instead (3 calls,
@@ -156,26 +156,26 @@ nondeterministic) when you haven't run the sim or want generation in isolation.
 ## Extending it
 
 - **Different routines / more activities:** edit `PERSONAS` in
-  `backend/build_world.py` (destination, activity, emoji, start tile). The mock
-  brain in `backend/smallville_agents.py` reads each agent's current location and
+  `gen_agents/build_world.py` (destination, activity, emoji, start tile). The mock
+  brain in `gen_agents/smallville_agents.py` reads each agent's current location and
   chooses travel-vs-perform; a multi-stop schedule is a natural next step.
 - **Add or change residents:** each persona is one dict in `PERSONAS` and each
   place one dict in `_LOCATIONS` — both data-driven. A new resident just needs a
   sprite named to match (`First_Last.png` under `static_dirs/assets/characters/`).
 - **Compare memory retrieval (issue #102):** `uv run python -m
-  backend.compare_retrieval --embeddings local` accrues a real memory stream for
+  gen_agents.compare_retrieval --embeddings local` accrues a real memory stream for
   each resident, then prints keyword-overlap vs semantic (embedding) retrieval
   side by side — the believability check for whether semantic recall surfaces
   better memories. Offline and needs no `setup.sh` assets (`build_world` only).
 - **A whole different world — the real UPenn campus:** the map is just the
   `the_ville` matrix format, so any world in that shape drops in. `tools/geo`
   generates one from OpenStreetMap (`osm_to_ville.py` → `the_upenn`), and
-  `backend/world_data_upenn.yaml` is a small Penn cast (College Hall, Van Pelt,
+  `gen_agents/world_data_upenn.yaml` is a small Penn cast (College Hall, Van Pelt,
   Meyerson, …). Run it headless — agents pathfind around the real building
   footprints between named buildings:
 
   ```bash
-  uv run python -m backend.run_upenn          # 3 Penn personas walk their day
+  uv run python -m gen_agents.run_upenn          # 3 Penn personas walk their day
   ```
 
   `build_world(personas, locations)` and `simulate(..., personas=, build_world_fn=)`
@@ -185,21 +185,23 @@ nondeterministic) when you haven't run the sim or want generation in isolation.
 
 ## Where the files live
 
-Committed to the repo (this folder):
+Committed to the repo. The **sim engine** lives in a top-level `gen_agents/`
+package (extracted from this folder so the Godot frontend can import it by the same
+canonical path); this folder keeps the **Smallville replay frontend** and its glue:
 
 ```
-generative-agents/
+gen_agents/                   # the shared sim engine (top-level package, pip-installed)
+  build_world.py              # Smallville world + cast in the engine
+  actions.py                  # custom Travel / Act actions
+  smallville_agents.py        # mock-LLM brains (SmallvilleMockClient)
+  world_map.py                # maze loader: address -> tiles, walk paths
+  path_finder.py              # vendored BFS pathfinder (Apache-2.0, upstream)
+  exporter.py                 # write the frontend's movement/environment/meta files
+  run_simulation.py           # the driver + CLI entry point
+generative-agents/            # this folder: the Smallville (Phaser/Django) replay frontend
   run-replay.sh               # one command: generate-if-needed + serve the replay
   setup.sh                    # copy frontend + assets from the clone, then apply overrides
   requirements-frontend.txt   # Django 2.2 etc. (frontend venv only)
-  backend/
-    build_world.py            # Smallville world + cast in the engine
-    actions.py                # custom Travel / Act actions
-    smallville_agents.py      # mock-LLM brains (SmallvilleMockClient)
-    world_map.py              # maze loader: address -> tiles, walk paths
-    path_finder.py            # vendored BFS pathfinder (Apache-2.0, upstream)
-    exporter.py               # write the frontend's movement/environment/meta files
-    run_simulation.py         # the driver + CLI entry point
   tests/                      # offline tests
   frontend_overrides/         # committed replay-UI files setup.sh copies into frontend/
 ```
@@ -236,7 +238,7 @@ So the port is split cleanly in two:
 ```
    our engine + mock LLM            files on disk              upstream Django
   ┌───────────────────────┐      ┌────────────────┐         ┌─────────────────┐
-  │ backend/              │ ───► │ frontend/      │  ◄────► │ browser (Phaser)│
+  │ gen_agents/           │ ───► │ frontend/      │  ◄────► │ browser (Phaser)│
   │  build world,         │write │  storage/<sim>/│  serve  │  replays the    │
   │  decide w/ mock LLM,   │      │   movement/*.json│        │  movement files │
   │  walk tiles, export   │      │   environment/  │         │                 │
@@ -244,7 +246,7 @@ So the port is split cleanly in two:
                                   └────────────────┘
 ```
 
-The backend (`backend/`) does three things:
+The sim engine (`gen_agents/`) does three things:
 
 1. **Builds the world in the engine** (`build_world.py`): Smallville's places
    become `Location`s, the 25 personas become `Character`s with first-person
@@ -300,9 +302,9 @@ and cast that this builds on.
   routine and don't yet talk to each other. They *do* now carry a private
   **memory stream** (issue #75): each perceives co-located neighbors, remembers
   its own actions, and has the retrieved memories folded into every observation
-  (`backend/smallville_agents.py`). Memory relevance can now be scored
+  (`gen_agents/smallville_agents.py`). Memory relevance can now be scored
   *semantically* with embeddings (issue #102, `--embeddings`) instead of keyword
-  overlap; `backend/compare_retrieval.py` measures the difference directly. The
+  overlap; `gen_agents/compare_retrieval.py` measures the difference directly. The
   deterministic mock brain still decides from location alone, so the replay is
   unchanged either way — but a live LLM would reason over those retrieved
   memories. Reflection and plan *generation* (design Stages 5–7) remain future work.
@@ -349,4 +351,4 @@ agent-info panels, not a workaround.
 
 The map art, sprites, and the Django visualizer are from the Generative Agents
 project (Park et al., UIST '23), Apache-2.0. This port only adds the engine-backed
-backend under `backend/`.
+sim under `gen_agents/`.

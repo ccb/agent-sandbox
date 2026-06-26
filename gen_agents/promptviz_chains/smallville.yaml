@@ -1,13 +1,12 @@
 # Prompt-chain spec for the generative-agents (Smallville) app.
 #
-# Run the visualizer from the generative-agents/ directory so `backend` imports:
+# Run the visualizer from the repo root (gen_agents is an installed package):
 #
-#   cd generative-agents
 #   python -m text_adventure_games.promptviz.app \
-#     --spec backend/promptviz_chains/smallville.yaml
+#     --spec gen_agents/promptviz_chains/smallville.yaml
 #
 # This chain spans BOTH template packages: the gen-agents memory/belief templates
-# (`backend.prompt_templates`, the default below) AND the engine cognition a
+# (`gen_agents.prompt_templates`, the default below) AND the engine cognition a
 # Smallville persona reuses once a live LLM is wired in (`text_adventure_games.
 # prompt_templates`, set per-node via `templates:`). Nodes whose box is green hold
 # agent-generated *memory* text (the mock writes them and never calls a model);
@@ -21,7 +20,7 @@ description: >-
   decide, maybe converse, remember, and periodically reflect. Click a node to read
   its prompt. With the default mock brain the blue prompts aren't sent (the mock
   decides from location alone), but the green memory text is still written.
-templates: backend.prompt_templates
+templates: gen_agents.prompt_templates
 _engine: &engine text_adventure_games.prompt_templates
 
 nodes:

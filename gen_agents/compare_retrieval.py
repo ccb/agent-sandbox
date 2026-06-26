@@ -21,11 +21,11 @@ no maze assets (``build_world`` alone, no ``setup.sh``) and runs fully offline.
 
     # Meaningful comparison with a real local model (model2vec):
     uv sync --extra embeddings
-    uv run python -m backend.compare_retrieval --embeddings local
+    uv run python -m gen_agents.compare_retrieval --embeddings local
 
     # Other knobs:
-    uv run python -m backend.compare_retrieval --steps 20 --top-k 4 --examples 5
-    uv run python -m backend.compare_retrieval --resident "Isabella Rodriguez" \
+    uv run python -m gen_agents.compare_retrieval --steps 20 --top-k 4 --examples 5
+    uv run python -m gen_agents.compare_retrieval --resident "Isabella Rodriguez" \
         --query "who likes coffee and conversation?"
 
 Note on the mock backend: ``MockEmbeddingClient`` is a hashed bag-of-words, so it

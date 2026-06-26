@@ -54,10 +54,10 @@ jobs:
       - name: pytest suite
         run: uv run --no-sync pytest tests/ -q
       # The Generative Agents (Smallville) port keeps its own offline suite under
-      # generative-agents/tests/. It's a separate pytest root (its conftest.py
-      # puts the port's `backend` package on the path) so it needs its own run
-      # step. A synthetic maze fixture stands in for the 38MB upstream assets, so
-      # this needs no ./setup.sh and no external clone — same offline contract as
-      # the engine suite above.
+      # generative-agents/tests/. It's a separate pytest root (not collected by the
+      # tests/ run above) so it needs its own step; it imports the sim as the
+      # installed top-level `gen_agents` package (no path hack). A synthetic maze
+      # fixture stands in for the 38MB upstream assets, so this needs no ./setup.sh
+      # and no external clone — same offline contract as the engine suite above.
       - name: pytest generative-agents suite
         run: uv run --no-sync pytest generative-agents/tests/ -q
