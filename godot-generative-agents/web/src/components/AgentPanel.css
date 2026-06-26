@@ -1,28 +1,16 @@
-/* The agent-info companion panel: a persona selector, the agent card, and a
-   scrollable memory history. Ported from the Smallville replay's agent card +
-   memory list (generative-agents/.../home.html, main_script.html, style.css) and
-   re-themed for this shell's dark UI. */
+/* The agent-card page. The card, the persona selector, and the memory list are a
+   close port of the original generative-agents (Smallville) replay UI — same
+   light palette, type scale, per-kind memory colours, and "new memory" flash
+   (generative-agents/.../home.html, main_script.html, style.css). */
 
+/* A single centred column on the light page, like Smallville's agent column. */
 .agent-panel {
-  width: 360px;
-  flex: none;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  background: #11151c;
-  border-left: 1px solid #222a35;
-  padding: 12px 14px 16px;
-  gap: 12px;
-  overflow: hidden;
-}
-
-.agent-panel--placeholder {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: #8a93a3;
-  font-size: 13px;
-  padding: 24px;
+  gap: 14px;
 }
 
 /* ---------- Persona selector ------------------------------------------------ */
@@ -30,7 +18,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex: none;
 }
 
 .agent-tab {
@@ -38,69 +25,68 @@
   align-items: center;
   gap: 6px;
   font: inherit;
-  font-size: 12px;
-  color: #c4ccd8;
-  background: #1a212b;
-  border: 1px solid #2a3340;
+  font-size: 13px;
+  color: #2b2f3a;
+  background: #fff;
+  border: 1px solid #dcdfe4;
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   cursor: pointer;
 }
 
 .agent-tab:hover {
-  background: #222b37;
+  background: #f3f4f7;
 }
 
 .agent-tab.is-active {
   color: #fff;
   background: #2d6cdf;
-  border-color: #3d7cf0;
+  border-color: #2d6cdf;
 }
 
 .agent-tab-emoji {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
 }
 
 /* ---------- Agent card ------------------------------------------------------ */
 .agent-card {
-  flex: none;
-  background: #161b22;
-  border: 1px solid #222a35;
+  background: #fff;
   border-radius: 12px;
-  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 1.5em;
 }
 
 .agent-card-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 1em;
+  margin-bottom: 1.25em;
 }
 
 .agent-portrait {
-  width: 48px;
-  height: 48px;
+  width: 4.5em;
+  height: 4.5em;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 2.4em;
   line-height: 1;
+  image-rendering: pixelated;
   border-radius: 10px;
-  background: #0e1116;
-  border: 1px solid #222a35;
+  background: #f0f0f0;
 }
 
 .agent-name {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.6em;
   line-height: 1.2;
-  color: #f0f3f8;
+  color: #1f2330;
 }
 
 .agent-field {
-  margin-bottom: 12px;
+  margin-bottom: 1em;
 }
 
 .agent-field:last-child {
@@ -109,23 +95,23 @@
 
 .agent-field-label {
   display: block;
-  font-size: 11px;
+  font-size: 0.78em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #7b8494;
-  margin-bottom: 3px;
+  color: #8a90a0;
+  margin-bottom: 0.2em;
 }
 
 .agent-field-value {
   display: block;
-  font-size: 14px;
-  color: #dde3ec;
+  font-size: 1.15em;
+  color: #2b2f3a;
   overflow-wrap: anywhere;
 }
 
 .agent-field-value .muted {
-  color: #6b7383;
+  color: #9aa0b0;
 }
 
 .chat-line {
@@ -134,142 +120,139 @@
 
 .chat-speaker {
   font-weight: 600;
-  color: #aeb7c5;
+  color: #5b6478;
 }
 
 /* ---------- Memory history -------------------------------------------------- */
-/* This field grows to fill the panel and its list scrolls inside it, so the card
-   above stays put while history accrues below. */
+/* A compact, scrollable list so a long history never grows the card unbounded
+   (the original capped it at 11em; a bit taller here as it's the page's focus). */
 .agent-memory {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  margin-bottom: 0;
 }
 
 .mem-empty {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #6b7383;
+  margin: 0.2em 0 0;
+  font-size: 0.95em;
+  color: #9aa0b0;
 }
 
 .mem-list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 0.25em 0 0;
   padding: 0;
-  flex: 1;
-  min-height: 0;
+  max-height: 22em;
   overflow-y: auto;
 }
 
+/* Memories formed at the same in-game time cluster under one time header. */
 .mem-group-head {
-  font-size: 11px;
+  font-size: 0.72em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #7b8494;
+  color: #8a90a0;
   font-variant-numeric: tabular-nums;
-  padding: 3px 8px 2px;
+  padding: 0.2em 0.55em 0.15em;
 }
 
 .mem-group-head:not(:first-child) {
-  margin-top: 4px;
-  padding-top: 7px;
-  border-top: 1px solid #222a35;
+  margin-top: 0.25em;
+  padding-top: 0.5em;
+  border-top: 1px solid #e3e6ee;
 }
 
+/* Each memory is a row: a meta line (kind pill + quiet importance) above the
+   text, with a faint per-kind left accent so kinds read at a glance. */
 .mem-item {
-  font-size: 13px;
+  font-size: 0.92em;
   line-height: 1.35;
-  color: #dde3ec;
-  padding: 6px 9px 6px 8px;
+  color: #2b2f3a;
+  padding: 0.45em 0.65em 0.45em 0.55em;
   border-left: 3px solid transparent;
-  border-radius: 0 4px 4px 0;
 }
 
 .mem-item + .mem-item {
-  border-top: 1px solid #1b222c;
+  border-top: 1px solid #f2f3f7;
 }
 
 .mem-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 3px;
+  gap: 0.4em;
+  margin-bottom: 0.25em;
 }
 
 .mem-kind {
-  font-size: 10px;
+  font-size: 0.7em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-radius: 4px;
-  padding: 1px 6px;
-  color: #aeb7c5;
-  background: #232c38;
+  padding: 0.1em 0.45em;
+  color: #5b6478;
+  background: #eef0f5;
 }
 
 .mem-imp {
   margin-left: auto;
-  font-size: 11px;
-  color: #6b7383;
+  font-size: 0.78em;
+  color: #9aa0b0;
 }
 
 .mem-text {
   display: block;
 }
 
-/* Per-kind accents (left bar + pill), dark-theme variants of the Smallville set. */
+/* Per-kind accents (left bar + pill), matching the Smallville palette. */
 .mem-observation {
-  border-left-color: #4f7fd6;
+  border-left-color: #9cc0f5;
 }
 .mem-observation .mem-kind {
-  color: #cfe0ff;
-  background: rgba(45, 90, 180, 0.32);
+  color: #1a56b8;
+  background: #e6f0fe;
 }
 
 .mem-plan {
-  border-left-color: #d99a4e;
+  border-left-color: #f0c071;
 }
 .mem-plan .mem-kind {
-  color: #ffe2bd;
-  background: rgba(150, 100, 0, 0.32);
+  color: #b06a00;
+  background: #fdf0db;
 }
 
 .mem-reflection {
-  border-left-color: #a877e0;
+  border-left-color: #c79cf0;
 }
 .mem-reflection .mem-kind {
-  color: #e9d6ff;
-  background: rgba(120, 60, 170, 0.32);
+  color: #6b29b8;
+  background: #f1e6fd;
 }
 
 .mem-chat {
-  border-left-color: #4fb38e;
+  border-left-color: #8fd3bd;
 }
 .mem-chat .mem-kind {
-  color: #cdeede;
-  background: rgba(40, 130, 100, 0.32);
+  color: #1a7a5a;
+  background: #e3f6ee;
 }
 
-/* When a new memory arrives as the replay plays, its row flashes briefly so you
-   can see what the agent just took in. The class is set only on the row whose
-   memory formed this step, so the animation runs once. */
+/* When a new memory arrives as the replay plays, its row flashes for a few
+   seconds (amber two-pulse), so you can see what the agent just took in. */
 @keyframes mem-flash-in {
   0% {
     background-color: rgba(255, 214, 102, 0);
   }
   8% {
-    background-color: rgba(255, 214, 102, 0.55);
+    background-color: rgba(255, 214, 102, 0.9);
   }
   32% {
-    background-color: rgba(255, 214, 102, 0.12);
+    background-color: rgba(255, 214, 102, 0.15);
   }
   56% {
-    background-color: rgba(255, 214, 102, 0.55);
+    background-color: rgba(255, 214, 102, 0.9);
   }
   80% {
-    background-color: rgba(255, 214, 102, 0.12);
+    background-color: rgba(255, 214, 102, 0.15);
   }
   100% {
     background-color: rgba(255, 214, 102, 0);
@@ -285,7 +268,7 @@
     background-color: rgba(255, 214, 102, 0);
   }
   15% {
-    background-color: rgba(255, 214, 102, 0.5);
+    background-color: rgba(255, 214, 102, 0.8);
   }
   100% {
     background-color: rgba(255, 214, 102, 0);
