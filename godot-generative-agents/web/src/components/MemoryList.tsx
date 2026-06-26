@@ -16,40 +16,46 @@ function kindClass(kind: string): string {
   return "mem-" + kind.replace(/[^a-z]/gi, "").toLowerCase();
 }
 
-export function MemoryList({
+/**
+ * A colour-coded list of memory records — the shared renderer for both the
+ * card's compact "Memories retrieved" shorthand and the expanded "Full memory
+ * history". Records are rendered in the order given (callers sort first).
+ *
+ * - `showTime` adds mm:ss group headers (on for the time-ordered full history;
+ *   off for the card's small ranked retrieved set, which isn't time-ordered).
+ * - a row whose memory formed exactly at `flashTurn` gets the "new memory"
+ *   flash (pass -1 to disable — the retrieved shorthand doesn't flash).
+ *
+ * Rows are keyed by a stable identity (not array index) so prepending a new
+ * memory only mounts that one row — existing rows are reused and don't re-flash.
+ */
+export function MemoryRows({
   records,
-  currentStep,
   secPerStep,
+  showTime = true,
+  flashTurn = -1,
 }: {
   records: MemoryRecord[];
-  currentStep: number;
   secPerStep: number;
+  showTime?: boolean;
+  flashTurn?: number;
 }) {
-  // The history accrued so far: only memories formed by the current step.
-  const shown = records.filter((m) => m.created_turn <= currentStep);
-  if (!shown.length) {
-    return <p className="mem-empty">No memories yet.</p>;
-  }
-
-  // Newest first, so a freshly-formed memory appears (and flashes) at the top.
-  // Keyed by a stable identity (not array index) so prepending a new memory only
-  // mounts that one row — existing rows are reused and don't re-flash or scroll-jump.
   const items: ReactElement[] = [];
   let lastClock: string | null = null;
-  for (const m of shown.slice().reverse()) {
+  for (const m of records) {
     const memKey = `${m.created_turn}|${m.kind}|${m.text}`;
-    const clock = stepClock(m.created_turn, secPerStep);
-    if (clock !== lastClock) {
-      items.push(
-        <li key={`h-${memKey}`} className="mem-group-head">
-          {clock}
-        </li>,
-      );
-      lastClock = clock;
+    if (showTime) {
+      const clock = stepClock(m.created_turn, secPerStep);
+      if (clock !== lastClock) {
+        items.push(
+          <li key={`h-${memKey}`} className="mem-group-head">
+            {clock}
+          </li>,
+        );
+        lastClock = clock;
+      }
     }
-    // Flash the row the moment its memory forms (the step it's created), as it
-    // first appears at the top of the list.
-    const isNew = m.created_turn === currentStep;
+    const isNew = m.created_turn === flashTurn;
     items.push(
       <li key={memKey} className={`mem-item ${kindClass(m.kind)}${isNew ? " is-new" : ""}`}>
         <div className="mem-meta">
