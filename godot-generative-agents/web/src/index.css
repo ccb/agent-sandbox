@@ -1,5 +1,5 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -15,6 +15,6 @@ body,
 
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: #0e1116;
-  color: #e6e6e6;
+  background: #f4f5f7;
+  color: #1f2330;
 }
