@@ -68,6 +68,7 @@ class Property(_StrEnum):
     FLAMMABLE = "flammable"
     WEARABLE = "wearable"
     WIELDABLE = "wieldable"
+    READABLE = "is_readable"  # has writing the READ action can show
 
     # Other item flags (state or descriptors, not affordances)
     IS_WEAPON = "is_weapon"
@@ -75,8 +76,12 @@ class Property(_StrEnum):
     IS_ALCOHOL = "is_alcohol"
     IS_POISONOUS = "is_poisonous"
     IS_LIT = "is_lit"
+    # Concealed until found: a hidden item is not described, in scope, or
+    # gettable until a SEARCH of its location/holder reveals it (clears this).
+    IS_HIDDEN = "is_hidden"
     TASTE = "taste"
     SCENT = "scent"
+    READ_TEXT = "read_text"  # the words shown by READ (a string, not a flag)
 
     # Location / world flags
     IS_LOCKED = "is_locked"
@@ -147,13 +152,17 @@ class ActionName(_StrEnum):
     DESCRIBE = "describe"
     WAIT = "wait"
     QUIT = "quit"
+    HELP = "help"
     SEQUENCE = "sequence"
 
     # Object handling
     GET = "get"
     DROP = "drop"
+    BREAK = "break"
     INVENTORY = "inventory"
     EXAMINE = "examine"
+    READ = "read"
+    SEARCH = "search"
     GIVE = "give"
     UNLOCK_DOOR = "unlock door"
     # Holders: put things in containers / on surfaces, and open/close containers

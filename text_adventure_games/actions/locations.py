@@ -103,10 +103,24 @@ class Go(base.Action):
         if is_main_player:
             self.has_been_visited = True
 
-        # CCB - we don't need to describe this action
-        description = "{character_name} moved to {place}".format(
-            character_name=self.character.name, place=to_loc.name
-        )
+        # The arrival line. "X moved to PLACE" by default; when the mover is
+        # riding a vehicle, the verb comes from the vehicle ("rides" by default,
+        # but e.g. a boat can set ride_verb="rows" -> "X rows the boat to PLACE").
+        # (Followers dragged along get their own "X follows you" line in
+        # drag_followers -- a separate movement mode.)
+        riding = getattr(self.character, "riding", None)
+        if riding is not None:
+            verb = riding.get_property("ride_verb") or "rides"
+            description = "{name} {verb} the {vehicle} to {place}".format(
+                name=self.character.name.capitalize(),
+                verb=verb,
+                vehicle=riding.name,
+                place=to_loc.name,
+            )
+        else:
+            description = "{character_name} moved to {place}".format(
+                character_name=self.character.name.capitalize(), place=to_loc.name
+            )
         if self.location.travel_descriptions[self.direction]:
             description += " " + self.location.travel_descriptions[self.direction]
         self.parser.ok(description)

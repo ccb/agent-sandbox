@@ -27,7 +27,12 @@ class Get(base.Action):
         self.holders = [
             it for it in self.location.items.values() if it.accessible_contents()
         ] + [it for it in self.character.inventory.values() if it.accessible_contents()]
-        scope = dict(self.location.items)
+        # Hidden items can't be grabbed until a SEARCH reveals them.
+        scope = {
+            name: it
+            for name, it in self.location.items.items()
+            if not it.get_property("is_hidden")
+        }
         for h in self.holders:
             for cname, citem in h.accessible_contents().items():
                 scope.setdefault(cname, citem)
@@ -52,8 +57,7 @@ class Get(base.Action):
         * The item must be gettable
         """
         if not self.was_matched(self.item, "I don't see it."):
-            message = "I don't see it."
-            self.parser.fail(message)
+            # was_matched already reported the failure; don't double-report it.
             return False
         if not self.at(self.character, self.location):
             return False
@@ -149,6 +153,92 @@ class Drop(base.Action):
             location=self.location.name,
         )
         self.parser.ok(description)
+
+
+class Break(base.Action):
+    """Break an item that can be broken.
+
+    A breakable item -- one flagged ``is_breakable``, or a fragile one like a
+    glass bottle -- shatters when broken: it is removed from play, and anything
+    it was holding spills out into the room first (so a smashed box leaves its
+    contents behind rather than vanishing them).
+
+    An item flagged ``break_keep`` is instead snapped free and KEPT rather than
+    destroyed. This is Action Castle's dead branch: you BREAK it off the tall
+    tree to carry away as a club (the canonical AC1 verb -- the source lets the
+    player "EXAMINE, BREAK or TAKE the dead branch"). Anything not breakable
+    refuses politely.
+
+    Per-item narration can be set with a ``break_text`` property."""
+
+    ACTION_NAME = "break"
+    ACTION_DESCRIPTION = "Break something"
+    ACTION_ALIASES = ["smash"]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="wants to break something")
+        self.location = self.character.location
+        scope = self.parser.get_items_in_scope(self.character)
+        self.item = self.parser.match_item(command, scope, hint="thing to break")
+
+    def claimed_resource(self):
+        """Two characters reaching to break the same thing contend over it (#42)."""
+        return self.item
+
+    def check_preconditions(self) -> bool:
+        """
+        Preconditions:
+        * The item must be matched (and so in scope).
+        * The item must be breakable -- flagged ``is_breakable`` or fragile.
+        """
+        if not self.was_matched(self.item, "I don't see anything like that to break."):
+            return False
+        breakable = self.item.get_property("is_breakable") or self.item.get_property(
+            Property.IS_FRAGILE
+        )
+        if not breakable:
+            self.parser.fail(f"You can't break the {self.item.name}.")
+            return False
+        return True
+
+    def apply_effects(self):
+        item = self.item
+        if item.get_property("break_keep"):
+            # Snap it free and keep it (e.g. the dead branch off the tree). Take
+            # it out of the room if that's where it sits, then add it to hand.
+            if item.location is not None and item.name in item.location.items:
+                item.location.remove_item(item)
+                item.location = None
+            if not self.character.is_in_inventory(item):
+                self.character.add_to_inventory(item)
+            message = item.get_property("break_text") or (
+                f"You break {item.description} free and take it."
+            )
+            return self.parser.ok(message)
+
+        # Otherwise the item shatters. Spill anything inside it into the room,
+        # then remove the item from wherever it lived.
+        for inner in list(getattr(item, "contents", {}).values()):
+            item.remove_item(inner)
+            inner.location = self.location
+            self.location.add_item(inner)
+        self._remove_from_world(item)
+        message = (
+            item.get_property("break_text") or f"The {item.name} breaks into pieces."
+        )
+        self.parser.ok(message)
+
+    def _remove_from_world(self, item):
+        """Take a broken item out of wherever it lives -- a character's hands or
+        a carried container, a holder in the room, or the room floor."""
+        if item.name in self.character.carried_items():
+            self.character.discard_item(item)
+        elif item.container is not None:
+            item.container.remove_item(item)
+        elif item.location is not None and item.name in item.location.items:
+            item.location.remove_item(item)
+            item.location = None
 
 
 class Inventory(base.Action):
@@ -494,9 +584,19 @@ class Open(base.Action):
 
     def apply_effects(self):
         self.item.set_property("is_closed", False)
-        self.parser.ok(
-            f"{self.character.name.capitalize()} opens the {self.item.name}."
-        )
+        message = f"{self.character.name.capitalize()} opens the {self.item.name}."
+        # Reveal what's inside so the player learns what they can take, rather
+        # than having to guess (the contents are now reachable by GET).
+        contents = [
+            inner
+            for inner in self.item.contents.values()
+            if not inner.get_property("is_hidden")
+        ]
+        if contents:
+            prep = self.item.preposition()
+            listed = ", ".join(inner.description for inner in contents)
+            message += f" {prep.capitalize()} it you see: {listed}."
+        self.parser.ok(message)
 
 
 class Close(base.Action):

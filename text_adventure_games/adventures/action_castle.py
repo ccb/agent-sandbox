@@ -414,6 +414,7 @@ class Growl(actions.Action):
     ACTION_NAME = "growl"
     ACTION_DESCRIPTION = "Growl menacingly at someone"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -438,6 +439,7 @@ class Snarl(actions.Action):
     ACTION_NAME = "snarl"
     ACTION_DESCRIPTION = "Snarl and bare teeth at someone"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -462,6 +464,7 @@ class Pound_Fists(actions.Action):
     ACTION_NAME = "pound fists"
     ACTION_DESCRIPTION = "Pound fists on the ground in rage"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -481,6 +484,7 @@ class Warn(actions.Action):
     ACTION_NAME = "warn"
     ACTION_DESCRIPTION = "Issue a verbal warning to someone"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -505,6 +509,7 @@ class Threaten(actions.Action):
     ACTION_NAME = "threaten"
     ACTION_DESCRIPTION = "Make a threatening gesture or statement"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -531,6 +536,7 @@ class Haunt(actions.Action):
     ACTION_NAME = "haunt"
     ACTION_DESCRIPTION = "Make a ghostly threat to frighten someone"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -563,6 +569,7 @@ class Ghost_Touch(actions.Action):
     ACTION_NAME = "ghost touch"
     ACTION_DESCRIPTION = "Plunge a ghostly hand into someone's chest"
     ACTION_ALIASES = []
+    PLAYER_VISIBLE = False  # an NPC's verb, kept out of the player's HELP menu
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
@@ -742,6 +749,14 @@ def build_game(llm_client=None, embedding_client=None) -> ActionCastle:
     )
     branch.set_property("is_weapon", True)
     branch.set_property("is_fragile", True)
+    # The source lets the player BREAK the dead branch off the tree (a synonym
+    # for taking it); break_keep snaps it free into the inventory rather than
+    # destroying it. It still breaks for good when swung -- see Attack/is_fragile.
+    branch.set_property("break_keep", True)
+    branch.set_property(
+        "break_text", "You snap the stout dead branch free of the tree and take it."
+    )
+    branch.add_command_hint("break branch")
 
     candle = things.Item(
         "candle",
