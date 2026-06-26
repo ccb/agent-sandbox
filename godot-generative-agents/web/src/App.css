@@ -35,6 +35,14 @@
   color: #6b7280;
 }
 
+/* Right-side header group: the view selector plus the Docs link. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
 /* The Game / Agent-cards selector. */
 .view-tabs {
   display: flex;
@@ -61,6 +69,11 @@
   color: #fff;
   background: #2d6cdf;
   border-color: #2d6cdf;
+}
+
+/* Reuses the .view-tab pill styling but is an <a>, so kill the underline. */
+.docs-link {
+  text-decoration: none;
 }
 
 /* The stage holds both pages, stacked. Each page absolutely fills it; the active
