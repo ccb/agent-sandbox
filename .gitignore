@@ -157,10 +157,18 @@ cython_debug/
 .idea/
 
 
-*.json
+# JSON/JSONL here are mostly generated data (OSM dumps, replay traces, fine-tuning
+# sets, the vendored Smallville storage). A blanket `*.json` used to ignore them all,
+# but it also swallowed real source (the furniture catalog, the web app's package.json)
+# and forced `-f` adds, so it's dropped. JSONL (always data here) stays ignored;
+# generated *.json are ignored by path below.
 *.jsonl
 *.json.*
 *.jsonl.*
+
+# Generated per-checkout / per-run — regenerable, never commit.
+godot-generative-agents/maps/penn_replay.json
+tools/geo/out/upenn_core_ville_addresses.json
 
 # Project-shared Claude Code config (commit it); per-dev settings.local.json stays ignored.
 !.claude/settings.json
@@ -205,8 +213,5 @@ godot-generative-agents/web/public/godot/
 godot-generative-agents/web/node_modules/
 godot-generative-agents/web/dist/
 godot-generative-agents/web/*.tsbuildinfo
-# Re-include the app's JSON (package.json, tsconfig*.json and the committed replay)
-# — all otherwise swallowed by the blanket `*.json` above. The excluded dirs above
-# stay excluded (git can't re-include inside an ignored parent), so build output and
-# deps are still skipped. (pnpm-lock.yaml / pnpm-workspace.yaml are YAML, tracked.)
-!godot-generative-agents/web/**/*.json
+# (The app's package.json / tsconfig*.json / committed replay are tracked normally
+# now that the blanket *.json ignore is gone; the build dirs above stay excluded.)
