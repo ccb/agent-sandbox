@@ -85,3 +85,29 @@ def test_dismount_with_no_ride_is_reported():
     game, *_rest, cap = _world(horse_ready=True)
     game.do_command("dismount")
     assert _said(cap, "not riding")
+
+
+def test_riding_changes_the_arrival_verb():
+    # On foot: "moved to". Riding: "<Name> rides the <vehicle> to <place>".
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    game.parser.parse_command("ride horse")
+    game.parser.parse_command("west")
+    assert _said(cap, "rides the horse to Woods")
+    assert not _said(cap, "you moved to Woods")
+
+
+def test_ride_verb_is_customizable_per_vehicle():
+    # A boat can say "rows" instead of the default "rides".
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    horse.set_property("ride_verb", "rows")  # pretend it's a boat
+    game.parser.parse_command("ride horse")
+    game.parser.parse_command("west")
+    assert _said(cap, "rows the horse to Woods")
+
+
+def test_on_foot_arrival_is_unchanged():
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    # No vehicle gate on the reverse trip; walk east on foot.
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "you moved to Field")
