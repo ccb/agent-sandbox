@@ -167,6 +167,10 @@ class CutHair(actions.Action):
 
     def apply_effects(self):
         self.player.set_property("hair_cut", True)
+        # Update the live appearance the mirror reflects (no more "staggeringly long").
+        self.player.appearance["hair"] = (
+            "Your hair is hacked off in a ragged crop where the dagger sawed through it."
+        )
         for store in (self.player.inventory, self.player.worn, self.player.wielded):
             if "dagger" in store:
                 store["dagger"].set_property("dull", True)
@@ -1393,13 +1397,14 @@ def build_game() -> ActionCastle4:
         )
     )
     tower.add_item(dresser)
-    tower.add_item(
-        _fixture(
-            "mirror",
-            "a mirror",
-            "Your hair is staggeringly long -- it drags on the floor behind you.",
-        )
+    # A reflective mirror: EXAMINE MIRROR composes a live reflection of whoever
+    # looks (their appearance + what they're wearing), so it tracks the haircut
+    # and the gown/boots instead of going stale. See Character.reflection.
+    mirror = _fixture(
+        "mirror", "a mirror", "A tall mirror in a tarnished silver frame."
     )
+    mirror.set_property("is_mirror", True)
+    tower.add_item(mirror)
     tower.add_item(
         _fixture(
             "window",
@@ -1538,6 +1543,13 @@ def build_game() -> ActionCastle4:
         "the Princess of Action Castle, in a sparkly gown and tiara",
         "I am the princess, and I am getting out of this tower.",
     )
+    # Physical traits the mirror reflects (CUT HAIR rewrites "hair" live). Clothing
+    # isn't listed here -- the mirror reads `worn`, so the gown/tiara/boots track
+    # themselves.
+    player.appearance = {
+        "hair": "Your hair is staggeringly long -- it drags on the floor behind you.",
+        "feet": "Your feet are bare.",  # synced to footwear by a trigger below
+    }
 
     prince = things.Character(
         "prince",
@@ -1668,6 +1680,22 @@ def build_game() -> ActionCastle4:
         "score_boots",
         lambda g: "boots" in g.player.worn and "boots" not in g._scored_keys,
         lambda g: g.award("boots", 5, "Properly shod for the road ahead."),
+        repeatable=True,
+    )
+
+    # Keep the mirror's "feet" line honest: bare while unshod, silent once she's
+    # wearing footwear (the boots/slippers then show up in the "wearing ..."
+    # line). Fires only when the line is out of sync with what's on her feet.
+    def _feet_line(g):
+        shod = any(
+            it.get_property("wear_slot") == "feet" for it in g.player.worn.values()
+        )
+        return "" if shod else "Your feet are bare."
+
+    game.add_trigger(
+        "sync_feet_reflection",
+        lambda g: g.player.appearance.get("feet") != _feet_line(g),
+        lambda g: g.player.appearance.__setitem__("feet", _feet_line(g)),
         repeatable=True,
     )
     # You've genuinely escaped only by climbing out the window into the Gardens

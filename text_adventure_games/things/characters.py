@@ -116,6 +116,41 @@ class Character(Thing):
         # How far this character perceives, in room hops (issue #80). 0 keeps
         # perception to the current room, byte-identical to before #80.
         self.vision_r = DEFAULT_VISION_R
+        # Physical appearance for a mirror's reflection: an ordered mapping of
+        # feature -> an authored clause about it ({"hair": "Your hair is long."}).
+        # The key lets a game update one trait live (cut hair -> rewrite "hair")
+        # without canned, going-stale examine text. Empty by default; clothing is
+        # NOT stored here -- the mirror reads `worn` directly. See `reflection`.
+        self.appearance: dict[str, str] = {}
+
+    def reflection(self, include_room: bool = False) -> str:
+        """What this character sees of themselves in a mirror, composed live:
+        their `appearance` clauses, then a "You're wearing ..." line built from
+        `worn`, with a non-descript fallback when they have neither. Optionally
+        appends the room, reflected. (Used by Examine on an ``is_mirror`` item.)"""
+
+        def _join(phrases):
+            phrases = list(phrases)
+            if len(phrases) <= 1:
+                return "".join(phrases)
+            if len(phrases) == 2:
+                return f"{phrases[0]} and {phrases[1]}"
+            return ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
+
+        parts = []
+        clauses = [c for c in self.appearance.values() if c]
+        if clauses:
+            parts.append(" ".join(clauses))
+        worn = [it.description for it in self.worn.values()]
+        if worn:
+            parts.append("You're wearing " + _join(worn) + ".")
+        if not parts:
+            parts.append("You see yourself and the room reflected back at you.")
+        if include_room and self.location is not None:
+            parts.append(
+                f"Behind you, the {self.location.name} is reflected, reversed."
+            )
+        return " ".join(parts)
 
     def to_primitive(self):
         """
@@ -156,6 +191,7 @@ class Character(Thing):
         ]
         thing_data["knowledge"] = self.knowledge.to_primitive()
         thing_data["vision_r"] = self.vision_r
+        thing_data["appearance"] = dict(self.appearance)
         return thing_data
 
     @classmethod
@@ -188,6 +224,7 @@ class Character(Thing):
         )
         # .get default keeps save files written before issue #80 loadable.
         instance.vision_r = data.get("vision_r", DEFAULT_VISION_R)
+        instance.appearance = dict(data.get("appearance", {}))
         return instance
 
     def add_to_inventory(self, item):
