@@ -153,19 +153,97 @@ tight rectangle that still contains all four bounding streets).
 `furnish_building.py` opens the roof of a building on the baked urban `.tmj` and
 paints a furnished floor plan (see its module docstring for the run order). What
 tile is what now lives in **`furniture_catalog.json`** — a labeled manifest of
-the three interior sheets wired into the map (`franuka`, `school`, `bath`), each
-entry carrying `(sheet, col, row)`, a footprint `w×h`, a `category`
-(floor/wall/window/door/furniture) and a `room` tag.
+the four sheets the catalog can address: the three interior sheets wired into the
+map (`franuka`, `school`, `bath`) plus `kenney`, the base outdoor tileset (street
+lamps, signs, trees) already present at firstgid 1. Each entry carries
+`(sheet, col, row)`, a footprint `w×h`, a `category`
+(floor/wall/window/door/furniture/prop/tree) and a `room`/context tag.
 
-- The script loads the catalog and exposes `block_named("single_bed")` /
+- The script loads the catalog and exposes `block_named("bed_single")` /
   `tile_named("wall_brick")`, so **an LLM furnishing a room references objects by
-  name** instead of raw atlas coordinates.
-- Verify a coordinate before trusting it:
-  `uv run --with pillow python tools/geo/preview_catalog.py` renders a labeled
-  contact sheet to `out/furniture_catalog_preview.png`; entries with
-  `"verified": false` get a `?` badge (the verified ones come from the original
-  working palette). Pillow is dev-only — neither the game nor the furnish step
-  imports it.
+  name** instead of raw atlas coordinates. The `_llm_guidance` block in the JSON
+  records how many options to show an LLM at once (≤ 12 per category, ≤ 30 per
+  prompt) — past that, selection quality drops, so pre-filter by sheet/category.
+
+Three ways to look at / verify the catalog (all dev-only; the game and the
+furnish step never import them):
+
+- **Interactive web grid (recommended):**
+  `uv run python tools/geo/catalog_web.py --serve` opens a browser editor — flip
+  each tile verified/unverified, browse **every** tile on all four sheets, click a
+  cell to add a new entry, and **Save** writes straight back to
+  `furniture_catalog.json`. Drop `--serve` to instead emit a portable
+  `out/catalog.html` whose Save downloads an updated JSON.
+- **Static contact sheet:**
+  `uv run --with pillow python tools/geo/preview_catalog.py` renders
+  `out/furniture_catalog_preview.png`; `"verified": false` entries get a `?` badge.
+- **Coordinate finder:** `uv run --with pillow python tools/geo/region_grid.py
+  <sheet.png> 16 [--cols c0 c1] [--rows r0 r1] [--scale N]` renders an enlarged,
+  (col,row)-labeled grid of any sheet/region — handy for reading off coordinates
+  before adding catalog entries.
+
+## Outlining a building's exterior (`wall_building.py`)
+
+`wall_building.py` is the exterior counterpart to `furnish_building.py`: another
+post-process for the baked urban `.tmj`. `osm_to_tiled.py` paints each building
+footprint as one **flat brick field tile**, so a building has no defined edge — the
+brick just stops at the street. Real campus buildings read as a massed block with a
+cornice along the roofline and pilasters down the corners.
+
+The script **autotiles the footprint perimeter** with the Kenney pack's brick wall
+frame (4 corners + 4 edges, picked so the trim faces outward), leaving the interior
+fill untouched:
+
+```bash
+# A single brick wall ring (the thin edge line comes free from the ground_edges layer):
+uv run python tools/geo/wall_building.py --sector "Van Pelt Library" --wall wall_brick_red --reset-fill
+uv run python tools/geo/wall_building.py --sector "Houston Hall"     --color grey --reset-fill   # grey stone
+uv run python tools/geo/wall_building.py --seed 202,144 --sector "Fisher Fine Arts" --wall wall_brick_red --reset-fill
+```
+
+- It reads the same footprint the furnisher does (sector ∩ collision in the sim
+  matrix), so cells map 1:1 to the map grid.
+- **Only the perimeter ring is written** — the interior fill is left untouched
+  (it sits under the roof-off cutaway, so its colour doesn't matter). The map's
+  existing `ground_edges` layer already draws a thin stone trim just *outside* the
+  footprint, so a single brick ring reads as "brick wall + thin outer wall" with no
+  second full tile.
+- `--wall` chooses the wall art. The default `kenney` lays the Kenney urban brick
+  **autotile frame**. Naming a `wall` object from `furniture_catalog.json` instead
+  (e.g. `--wall wall_brick_red`) bands the perimeter with that single **Franuka**
+  brick tile — a more detailed brick texture. The Franuka tileset is auto-registered
+  on the `.tmj` if it isn't already.
+- `--color` picks the Kenney autotile colour (used when `--wall kenney`): `red`/
+  `orange` are brick; `grey` is the limestone-trimmed grey **stone** block, for
+  non-brick collegiate-gothic buildings (Houston Hall); `auto` matches the fill.
+- `--seed x,y` targets an **unnamed** building (one with no sim-matrix sector, e.g.
+  the Furness Fisher Fine Arts library) by flood-filling the connected run of
+  buildings-layer cells around that seed. Overrides `--sector`. The `buildings`
+  layer draws *every* OSM footprint, but only *named* buildings get a sector.
+- `--thin-edge` draws **only** a thin grey kerb (the `lawn_edges` stroke) on the
+  apron ring just outside the footprint, hugging the building — a thin outer wall on
+  the `edges` layer. It leaves the `buildings` layer untouched, so it's additive on
+  top of an already-walled building.
+- `--reset-fill` repaints the footprint with its base fill first — use it when
+  re-running with a different layout so an earlier run's wall tiles don't linger.
+- `--outer-frame` (optional) keeps a thicker look: a Kenney frame on the outermost
+  ring with the `--wall` band just inside it.
+
+### Walling every building at once
+
+`wall_all_buildings.py` is a driver over `wall_building.py`'s primitives: it finds
+*every* connected footprint on the `buildings` layer (named **and** unnamed) and
+gives each a single brick ring, the colour picked from the roof tint (red roof →
+terracotta, orange roof → brown). Footprints that already carry a deliberate wall
+(any Franuka brick, or the grey stone frame) are left untouched, so hand-matched
+colours survive. Re-run safe.
+
+```bash
+uv run python tools/geo/wall_all_buildings.py --dry-run   # list what it'd do
+uv run python tools/geo/wall_all_buildings.py             # apply
+```
+- It's idempotent: the perimeter is re-derived and only perimeter cells are
+  rewritten, so it's safe to re-run after a fresh `osm_to_tiled.py` bake.
 
 ## Notes / limitations
 
