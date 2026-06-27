@@ -27,6 +27,8 @@ import os
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import tile_presets
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 MAPS = os.path.join(REPO, "godot-generative-agents", "maps")
@@ -63,12 +65,15 @@ def build_html(catalog: dict, served: bool) -> str:
         for name, meta in catalog["sheets"].items()
     }
     guidance = catalog.get("_llm_guidance", DEFAULT_GUIDANCE)
+    presets = tile_presets.load_presets()
     app = {
         "raw": catalog,
         "sheets": sheets,
         "guidance": guidance,
         "served": served,
         "tile": TILE,
+        "presets": presets.get("presets", {}),
+        "active": presets.get("active"),
     }
     return _TEMPLATE.replace("__DATA__", json.dumps(app))
 
@@ -113,7 +118,15 @@ _TEMPLATE = r"""<!doctype html>
         padding:8px;display:flex;flex-direction:column;gap:4px}
   .card.added{border-color:var(--add)}
   .crop-wrap{height:132px;display:flex;align-items:center;justify-content:center;
-             background:#2c2c38;border-radius:6px;overflow:hidden}
+             border-radius:6px;overflow:hidden;
+             /* checkerboard so transparent areas are obvious vs filled ones */
+             background-color:#3a3a46;
+             background-image:linear-gradient(45deg,#2c2c38 25%,transparent 25%),
+               linear-gradient(-45deg,#2c2c38 25%,transparent 25%),
+               linear-gradient(45deg,transparent 75%,#2c2c38 75%),
+               linear-gradient(-45deg,transparent 75%,#2c2c38 75%);
+             background-size:16px 16px;
+             background-position:0 0,0 8px,8px -8px,-8px 0}
   .crop{image-rendering:pixelated}
   .nm{font-weight:600;font-size:12px;word-break:break-all}
   .lb{color:var(--mut);font-size:11px;min-height:14px}
@@ -138,6 +151,24 @@ _TEMPLATE = r"""<!doctype html>
   .toast{position:fixed;bottom:16px;right:16px;background:#2b4a6b;color:#fff;
          padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none}
   .toast.show{opacity:1}
+  /* presets */
+  .presetbar{background:#1a2230;border:1px solid #2c3b52;border-radius:8px;
+             padding:6px 10px;margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .presetbar b{color:#9fd0ff}
+  .card.inset{outline:2px solid var(--add);outline-offset:-2px}
+  .nmrow{display:flex;justify-content:space-between;align-items:flex-start;gap:4px}
+  .pstar{border:none;background:none;cursor:pointer;font-size:16px;line-height:1;
+         color:var(--add);padding:0}
+  .pnote{width:100%;font-size:11px;margin-top:2px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+         align-items:center;justify-content:center;z-index:20}
+  .modal.show{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+              padding:14px;width:min(760px,92vw);max-height:86vh;
+              display:flex;flex-direction:column;gap:8px}
+  .modal textarea{width:100%;height:52vh;background:#12121a;color:var(--ink);
+                  border:1px solid var(--line);border-radius:6px;padding:8px;
+                  font:12px ui-monospace,SFMono-Regular,monospace}
 </style></head>
 <body>
 <header>
@@ -154,11 +185,25 @@ _TEMPLATE = r"""<!doctype html>
       <option value="true">verified only</option>
       <option value="false">unverified only</option>
       <option value="added">added by me</option>
+      <option value="inpreset">in this preset</option>
     </select>
     <span style="flex:1"></span>
     <span id="stats" class="meta"></span>
-    <button class="primary" onclick="save()">Save</button>
+    <button class="primary" onclick="save()">Save catalog</button>
     <button onclick="revert()">Revert to file</button>
+  </div>
+  <div class="presetbar">
+    <b>LLM preset:</b>
+    <select id="presetSel" onchange="selectPreset(this.value)"></select>
+    <button onclick="newPreset()">New</button>
+    <input id="presetName" placeholder="preset name" style="width:130px">
+    <input id="presetDesc" placeholder="description" style="width:200px">
+    <label><input type="checkbox" id="presetActive"> active for LLM</label>
+    <span id="presetCount" class="meta"></span>
+    <span style="flex:1"></span>
+    <button class="primary" onclick="savePreset()">Save preset</button>
+    <button onclick="deletePreset()">Delete</button>
+    <button onclick="showMenu()">Preview LLM menu</button>
   </div>
 </header>
 <main>
@@ -171,6 +216,12 @@ _TEMPLATE = r"""<!doctype html>
     <div id="sheetview"></div>
   </section>
 </main>
+<div id="modal" class="modal"><div class="box">
+  <div class="row"><b style="flex:1">LLM tile menu &mdash; this preset</b>
+    <button onclick="copyMenu()">Copy</button><button onclick="closeMenu()">Close</button></div>
+  <textarea id="menuText" readonly></textarea>
+  <div class="meta">Same output as <code>tile_presets.py --menu</code> &mdash; paste into a furnishing prompt.</div>
+</div></div>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -211,6 +262,18 @@ function saveLocal(){
   localStorage.setItem('tilecatalog', JSON.stringify({verified, added}));
 }
 
+// ---- preset state (named tile subsets the LLM should use) ----------------
+let PRESETS = JSON.parse(JSON.stringify(APP.presets||{}));
+let ACTIVE = APP.active||null;
+let editing = {name:'', desc:'', tiles:new Set(), notes:{}};
+(function loadLocalPresets(){
+  try{ const s=JSON.parse(localStorage.getItem('tilepresets')||'null');
+    if(s){ PRESETS=s.presets||PRESETS; if('active'in s) ACTIVE=s.active; } }catch(_){}
+})();
+function saveLocalPresets(){
+  localStorage.setItem('tilepresets', JSON.stringify({presets:PRESETS, active:ACTIVE}));
+}
+
 // ---- sprite crop ---------------------------------------------------------
 function cropStyle(o, scale){
   const s = SHEETS[o.sheet];
@@ -235,6 +298,7 @@ function render(){
     if(vf==='true'&&!o.verified) continue;
     if(vf==='false'&&o.verified) continue;
     if(vf==='added'&&!o.added) continue;
+    if(vf==='inpreset'&&!editing.tiles.has(k)) continue;
     const g = o.sheet+' / '+o.category;
     (groups[g]=groups[g]||[]).push(o);
   }
@@ -255,14 +319,23 @@ function render(){
 }
 
 function card(o){
-  const c = document.createElement('div'); c.className='card'+(o.added?' added':'');
+  const inset = editing.tiles.has(o.key);
+  const c = document.createElement('div'); c.className='card'+(o.added?' added':'')+(inset?' inset':'');
   const wrap=document.createElement('div'); wrap.className='crop-wrap';
   const cr=document.createElement('div'); cr.className='crop'; cr.style=cropStyle(o,fitScale(o));
   wrap.appendChild(cr); c.appendChild(wrap);
-  const nm=document.createElement('div'); nm.className='nm'; nm.textContent=o.key; c.appendChild(nm);
+  const nmrow=document.createElement('div'); nmrow.className='nmrow';
+  const nm=document.createElement('div'); nm.className='nm'; nm.textContent=o.key;
+  const star=document.createElement('button'); star.className='pstar';
+  star.title='add/remove from the LLM preset'; star.textContent=inset?'★':'☆';
+  star.onclick=()=>togglePreset(o.key);
+  nmrow.appendChild(nm); nmrow.appendChild(star); c.appendChild(nmrow);
   const lb=document.createElement('div'); lb.className='lb'; lb.textContent=o.label||''; c.appendChild(lb);
   const meta=document.createElement('div'); meta.className='meta';
   meta.textContent=`${o.sheet} (${o.col},${o.row}) ${o.w}x${o.h}`; c.appendChild(meta);
+  if(inset){ const note=document.createElement('input'); note.className='pnote';
+    note.placeholder='note for LLM (optional)'; note.value=editing.notes[o.key]||'';
+    note.oninput=()=>{ editing.notes[o.key]=note.value; }; c.appendChild(note); }
   const row=document.createElement('div'); row.className='row';
   const pill=document.createElement('button');
   pill.className='pill '+(o.verified?'ok':'no');
@@ -405,8 +478,96 @@ function showSec(name){
 let _t; function toast(m){const e=document.getElementById('toast'); e.textContent=m;
   e.className='toast show'; clearTimeout(_t); _t=setTimeout(()=>e.className='toast',1800);}
 
+// ---- presets -------------------------------------------------------------
+function refreshPresetSel(){
+  const sel=document.getElementById('presetSel');
+  const names=Object.keys(PRESETS).sort();
+  sel.innerHTML='<option value="">(none / new)</option>'+names.map(n=>
+    `<option value="${n}"${n===editing.name?' selected':''}>${n}${n===ACTIVE?' ★':''}</option>`).join('');
+}
+function updatePresetCount(){
+  const cap=G.max_per_prompt, n=editing.tiles.size;
+  document.getElementById('presetCount').textContent=
+    `${n} tiles${n>cap?` ⚠ over ${cap}/prompt`:''}`;
+}
+function selectPreset(name){
+  if(!name){ newPreset(); return; }
+  const p=PRESETS[name]||{};
+  editing={name, desc:p.description||'', tiles:new Set(p.tiles||[]), notes:Object.assign({},p.notes||{})};
+  document.getElementById('presetName').value=name;
+  document.getElementById('presetDesc').value=editing.desc;
+  document.getElementById('presetActive').checked=(ACTIVE===name);
+  refreshPresetSel(); updatePresetCount(); render();
+}
+function newPreset(){
+  editing={name:'',desc:'',tiles:new Set(),notes:{}};
+  document.getElementById('presetName').value='';
+  document.getElementById('presetDesc').value='';
+  document.getElementById('presetActive').checked=false;
+  refreshPresetSel(); updatePresetCount(); render();
+}
+function togglePreset(key){
+  if(editing.tiles.has(key)){ editing.tiles.delete(key); delete editing.notes[key]; }
+  else editing.tiles.add(key);
+  updatePresetCount(); render();
+}
+function savePreset(){
+  const name=document.getElementById('presetName').value.trim();
+  if(!name){ toast('preset name required'); return; }
+  editing.name=name; editing.desc=document.getElementById('presetDesc').value.trim();
+  PRESETS[name]={description:editing.desc, tiles:[...editing.tiles],
+    notes:Object.fromEntries(Object.entries(editing.notes).filter(([k,v])=>editing.tiles.has(k)&&v))};
+  if(document.getElementById('presetActive').checked) ACTIVE=name;
+  else if(ACTIVE===name) ACTIVE=null;
+  saveLocalPresets(); persistPresets(); refreshPresetSel();
+}
+function deletePreset(){
+  const name=document.getElementById('presetName').value.trim();
+  if(!name||!PRESETS[name]){ toast('select a saved preset first'); return; }
+  if(!confirm('Delete preset '+name+'?')) return;
+  delete PRESETS[name]; if(ACTIVE===name) ACTIVE=null;
+  saveLocalPresets(); persistPresets(); newPreset();
+}
+async function persistPresets(){
+  const payload={active:ACTIVE, presets:PRESETS};
+  if(APP.served){
+    try{const r=await fetch('/save-presets',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast(r.ok?'saved to tile_presets.json':'save failed');}catch(e){toast('save failed: '+e);}
+  }else{
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='tile_presets.json'; a.click();
+    toast('downloaded — replace tools/geo/tile_presets.json');
+  }
+}
+// LLM tile menu (mirrors tile_presets.py --menu)
+function buildMenu(){
+  const cap=G.options_per_category, max=G.max_per_prompt;
+  const tiles=[...editing.tiles].filter(k=>state.byKey[k]);
+  const byCat={}; tiles.forEach(k=>{(byCat[state.byKey[k].category]=byCat[state.byKey[k].category]||[]).push(k);});
+  const L=[`# Tile menu — preset: ${editing.name||'(unsaved)'}`];
+  if(editing.desc) L.push(editing.desc);
+  L.push('','Use ONLY these tiles when furnishing/parsing the tilemap; reference each by its `name`.',
+    `Option budget: <= ${cap} per category, <= ${max} total.`,'');
+  if(!tiles.length) L.push('_(no tiles in this preset yet)_');
+  Object.keys(byCat).sort().forEach(cat=>{
+    const ks=byCat[cat]; L.push(`## ${cat} (${ks.length})${ks.length>cap?'  !! over budget':''}`);
+    ks.forEach(k=>{const o=state.byKey[k]; const n=editing.notes[k]?`  | note: ${editing.notes[k]}`:'';
+      L.push(`- ${k} [${o.w}x${o.h}] — ${o.label||''}${n}`);}); L.push('');
+  });
+  if(tiles.length>max) L.push(`> ${tiles.length} tiles exceeds the ${max}/prompt budget — split before use.`);
+  return L.join('\n');
+}
+function showMenu(){ document.getElementById('menuText').value=buildMenu();
+  document.getElementById('modal').className='modal show'; }
+function closeMenu(){ document.getElementById('modal').className='modal'; }
+function copyMenu(){ const t=document.getElementById('menuText'); t.select();
+  navigator.clipboard.writeText(t.value).then(()=>toast('copied'),()=>toast('press Cmd/Ctrl+C')); }
+
 // ---- boot ----------------------------------------------------------------
-buildTabs(); drawSheet(curSheet); render();
+buildTabs(); drawSheet(curSheet);
+if(ACTIVE&&PRESETS[ACTIVE]) selectPreset(ACTIVE); else newPreset();
 </script>
 </body></html>"""
 
@@ -428,17 +589,21 @@ def serve(port: int) -> None:
                 self._send(204, b"")
 
         def do_POST(self):  # noqa: N802
-            if self.path != "/save":
+            if self.path not in ("/save", "/save-presets"):
                 self._send(404, b"")
                 return
             n = int(self.headers.get("Content-Length", 0))
             try:
                 data = json.loads(self.rfile.read(n))
-                with open(CATALOG_PATH, "w") as fh:
-                    json.dump(data, fh, indent=2)
-                    fh.write("\n")
+                if self.path == "/save":
+                    with open(CATALOG_PATH, "w") as fh:
+                        json.dump(data, fh, indent=2)
+                        fh.write("\n")
+                    print(f"saved {CATALOG_PATH}")
+                else:  # /save-presets
+                    tile_presets.write_presets(data)
+                    print(f"saved {tile_presets.PRESETS_PATH}")
                 self._send(200, '{"ok":true}', "application/json")
-                print(f"saved {CATALOG_PATH}")
             except Exception as e:  # noqa: BLE001
                 self._send(
                     500, json.dumps({"ok": False, "error": str(e)}), "application/json"
