@@ -665,3 +665,51 @@ def test_talk_to_prince_about_art_gives_the_quest_line():
         ESCAPE_TO_GARDENS + ["south", "south", "talk to prince about art"]
     )
     assert _said(cap, "rescue the princess from yon tower")
+
+
+def test_poacher_cloak_is_wearable_over_the_gown():
+    # The cloak is wearable and layers over the gown (wear_over), not displacing it.
+    game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "take cloak", "wear cloak"])
+    assert "cloak" in game.player.worn and "gown" in game.player.worn
+    assert _said(cap, "over your gown")
+
+
+def test_read_sign_shows_its_directions():
+    game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "north", "west", "read sign"])
+    assert _said(cap, "Breakpoint Bar & Grill")
+    assert not _said(cap, "nothing to read")
+
+
+def test_talk_to_dalton_greets_and_hints_at_wade():
+    game, cap = _play(
+        ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("say wade sent me")]
+        + ["talk to dalton", "talk to dalton about wade"]
+    )
+    assert _said(cap, "Name's Dalton")
+    assert _said(cap, "if *Wade* sent you")
+
+
+# --- Breakpoint flavor: jukebox + drink bottle (optional, coin-driven) -------
+
+
+def _to_breakpoint():
+    # ... say wade sent me, enter -> The Breakpoint (carrying the poacher's purse).
+    W = ac4.WALKTHROUGH_WIN
+    return W[: W.index("say wade sent me") + 2]
+
+
+def test_jukebox_plays_for_a_coin_and_annoys_the_crowd():
+    game, cap = _play(_to_breakpoint() + ["use coin on jukebox", "play metal"])
+    assert _said(cap, "ranchers boo")  # metal annoys the ranchers
+    coins = game.player.carried_items().get("silver coins")
+    assert coins is not None and coins.quantity == 2  # one of three spent
+
+
+def test_play_without_a_coin_is_refused():
+    game, cap = _play(_to_breakpoint() + ["play metal"])
+    assert _said(cap, "Put a coin in the jukebox first")
+
+
+def test_drink_bottle_is_a_gag():
+    game, cap = _play(_to_breakpoint() + ["talk to bartender", "drink bottle"])
+    assert _said(cap, "it burns")
