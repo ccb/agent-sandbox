@@ -665,3 +665,10 @@ def test_talk_to_prince_about_art_gives_the_quest_line():
         ESCAPE_TO_GARDENS + ["south", "south", "talk to prince about art"]
     )
     assert _said(cap, "rescue the princess from yon tower")
+
+
+def test_poacher_cloak_is_wearable_over_the_gown():
+    # The cloak is wearable and layers over the gown (wear_over), not displacing it.
+    game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "take cloak", "wear cloak"])
+    assert "cloak" in game.player.worn and "gown" in game.player.worn
+    assert _said(cap, "over your gown")
