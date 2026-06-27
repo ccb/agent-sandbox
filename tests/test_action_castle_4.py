@@ -665,3 +665,23 @@ def test_talk_to_prince_about_art_gives_the_quest_line():
         ESCAPE_TO_GARDENS + ["south", "south", "talk to prince about art"]
     )
     assert _said(cap, "rescue the princess from yon tower")
+
+
+def test_mirror_reflects_the_haircut_live():
+    # Before: "staggeringly long"; after CUT HAIR: the ragged crop -- same command.
+    before, cap_b = _play(["examine mirror"])
+    assert _said(cap_b, "staggeringly long")
+    after, cap_a = _play(
+        [
+            "out",
+            "down",
+            "open footlocker",
+            "take dagger",
+            "up",
+            "enter",
+            "cut hair",
+            "examine mirror",
+        ]
+    )
+    assert _said(cap_a, "ragged crop")
+    assert not _said(cap_a, "staggeringly long")
