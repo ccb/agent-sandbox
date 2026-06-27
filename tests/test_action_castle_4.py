@@ -687,3 +687,29 @@ def test_talk_to_dalton_greets_and_hints_at_wade():
     )
     assert _said(cap, "Name's Dalton")
     assert _said(cap, "if *Wade* sent you")
+
+
+# --- Breakpoint flavor: jukebox + drink bottle (optional, coin-driven) -------
+
+
+def _to_breakpoint():
+    # ... say wade sent me, enter -> The Breakpoint (carrying the poacher's purse).
+    W = ac4.WALKTHROUGH_WIN
+    return W[: W.index("say wade sent me") + 2]
+
+
+def test_jukebox_plays_for_a_coin_and_annoys_the_crowd():
+    game, cap = _play(_to_breakpoint() + ["use coin on jukebox", "play metal"])
+    assert _said(cap, "ranchers boo")  # metal annoys the ranchers
+    coins = game.player.carried_items().get("silver coins")
+    assert coins is not None and coins.quantity == 2  # one of three spent
+
+
+def test_play_without_a_coin_is_refused():
+    game, cap = _play(_to_breakpoint() + ["play metal"])
+    assert _said(cap, "Put a coin in the jukebox first")
+
+
+def test_drink_bottle_is_a_gag():
+    game, cap = _play(_to_breakpoint() + ["talk to bartender", "drink bottle"])
+    assert _said(cap, "it burns")
