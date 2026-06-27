@@ -11,7 +11,10 @@ separate, deferred concern.
 
 Deliberately OMITTED in v1 (privacy / non-serializable / out of scope):
   - private agent cognition: ``Character.knowledge`` / ``.heard`` (exporting
-    them into a shared omniscient snapshot would leak one agent's mind);
+    them into a shared omniscient snapshot would leak one agent's mind). These
+    live as their own attributes today, so the snapshot already skips them; a
+    pinned ``_PRIVATE_COGNITION_KEYS`` exclude set (issue #185) also blocks any
+    future cognition flag parked in ``Character.properties`` from leaking;
   - runtime-only refs: behavior/agent/following/riding callables, and
     ``Game.triggers`` / ``recipes`` / pending prompt;
   - Block unlock conditions (arbitrary callables): an exit exports only a
@@ -37,6 +40,22 @@ _AFFORDANCE_KEYS = (
     "gettable",
     "wearable",
     "wieldable",
+)
+
+# Private-cognition property keys that must NEVER reach the omniscient snapshot
+# (issue #185). A character's mind -- ``knowledge`` / ``heard`` and any future
+# memory/belief flag -- is private to that agent; surfacing it into a shared,
+# all-seeing snapshot would leak one agent's thoughts to everyone. Those live as
+# their own attributes today (not in ``.properties``), so the export already
+# skips them, but that guarantee is only incidental: a future flag parked in
+# ``Character.properties`` would silently slip through. Pinning the set here and
+# excluding it in ``_character_state`` makes the guarantee explicit and durable.
+# Add any new private-cognition property name to this set.
+_PRIVATE_COGNITION_KEYS = (
+    "knowledge",
+    "heard",
+    "memory",
+    "beliefs",
 )
 
 # How many of the newest events to include (the "recent events" tail).
@@ -206,7 +225,7 @@ def _character_state(character, player) -> CharacterState:
         worn=_items(character.worn),
         wielded=_items(character.wielded),
         goals=tuple(_goal_state(g) for g in getattr(character, "goals", [])),
-        properties=_properties(character),
+        properties=_properties(character, exclude=_PRIVATE_COGNITION_KEYS),
     )
 
 
