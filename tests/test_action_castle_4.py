@@ -672,3 +672,9 @@ def test_poacher_cloak_is_wearable_over_the_gown():
     game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "take cloak", "wear cloak"])
     assert "cloak" in game.player.worn and "gown" in game.player.worn
     assert _said(cap, "over your gown")
+
+
+def test_read_sign_shows_its_directions():
+    game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "north", "west", "read sign"])
+    assert _said(cap, "Breakpoint Bar & Grill")
+    assert not _said(cap, "nothing to read")

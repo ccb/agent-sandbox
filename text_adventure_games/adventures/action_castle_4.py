@@ -1356,13 +1356,17 @@ def build_game() -> ActionCastle4:
             "Watermelons on the vine. Too heavy to carry.",
         )
     )
-    dirt_road.add_item(
-        _fixture(
-            "sign",
-            "a signpost",
-            "North to the Breakpoint Bar & Grill, south to the Double-Deuce Ranch.",
-        )
+    sign = _fixture(
+        "sign",
+        "a signpost",
+        "North to the Breakpoint Bar & Grill, south to the Double-Deuce Ranch.",
     )
+    # READ SIGN shows its lettering (the same directions you'd examine).
+    sign.set_property(
+        Property.READ_TEXT,
+        "North to the Breakpoint Bar & Grill, south to the Double-Deuce Ranch.",
+    )
+    dirt_road.add_item(sign)
     breakpoint.add_item(
         _fixture(
             "jukebox",
