@@ -1,0 +1,5 @@
+{
+  "_README": "Tile-usage presets: named subsets of furniture_catalog.json that say 'these are the tiles an LLM should use when furnishing/parsing the tilemap'. Created/edited in catalog_web.py and consumed by tile_presets.py (--menu prints the LLM-facing tile menu). 'active' names the default preset the LLM uses. Each preset: {description, tiles:[catalog names], notes:{name: hint}}.",
+  "active": null,
+  "presets": {}
+}

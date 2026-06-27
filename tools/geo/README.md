@@ -12,6 +12,27 @@ OSM/GeoJSON ─► project ─► rasterize ─► Tiled (.tmj) ─┬─► Pha
 The shipped example is the **University of Pennsylvania campus**
 ([OSM relation 2594845](https://www.openstreetmap.org/relation/2594845)).
 
+> ## For LLMs / agents: use the tile catalog — do not guess tiles
+>
+> When furnishing, decorating, or parsing the tilemap, **resolve every tile
+> through `tools/geo/furniture_catalog.json`** — the single source of truth for
+> "what tile is what" (name → sheet, `(col,row)`, `w×h`, category, label,
+> `verified`). **Never invent raw atlas coordinates or gids**; reference tiles by
+> their catalog **name** (`block_named("bookshelf")` / `tile_named("wall_brick")`
+> in `furnish_building.py`).
+>
+> **Prefer the active preset.** `tools/geo/tile_presets.json` holds the
+> human-curated subsets a person chose for the LLM to use. Before picking tiles,
+> load the menu with `uv run python tools/geo/tile_presets.py --menu` (active
+> preset) and **use only those tiles**; in code, `tile_presets.objects(name)`
+> returns the catalog filtered to a preset. If no preset is active, fall back to
+> the full catalog but still go through it by name.
+>
+> **Respect the budgets** in the catalog's `_llm_guidance` block: ≤ 12 tile
+> options per category and ≤ 30 per prompt — pre-filter by sheet/category/room.
+> Prefer `verified: true` tiles; treat `verified: false` as candidates to confirm
+> (visually, via `catalog_web.py`) before relying on them.
+
 ## Run
 
 ```bash
@@ -181,6 +202,24 @@ furnish step never import them):
   <sheet.png> 16 [--cols c0 c1] [--rows r0 r1] [--scale N]` renders an enlarged,
   (col,row)-labeled grid of any sheet/region — handy for reading off coordinates
   before adding catalog entries.
+
+### Tile-usage presets (`tile_presets.py` + the web UI)
+
+The full catalog is bigger than you'd hand an LLM at once. A **preset** is a named
+subset — "these are the tiles to use when furnishing/parsing the tilemap" — with
+optional per-tile placement hints, stored in `tile_presets.json` (`active` names
+the default). This is the save/load seam between human curation and the LLM:
+
+- **Create/edit visually:** in `catalog_web.py`, the *LLM preset* bar — pick or
+  name a preset, star tiles into it (☆/★ on each card), add per-tile notes, tick
+  *active for LLM*, and **Save preset** (writes `tile_presets.json` in `--serve`,
+  downloads it otherwise). "Preview LLM menu" shows exactly what the LLM will get.
+- **Consume it (the LLM side):**
+  `uv run python tools/geo/tile_presets.py --menu` prints the budget-aware tile
+  menu (active preset, or `--menu NAME`) to paste into a furnishing prompt;
+  `--list` shows presets, `--use NAME` sets the active one. In code,
+  `tile_presets.objects(name)` returns the catalog filtered to the preset, so
+  `block_named()`/`tile_named()` can be restricted to it.
 
 ## Outlining a building's exterior (`wall_building.py`)
 
