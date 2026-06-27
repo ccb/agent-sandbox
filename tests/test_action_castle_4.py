@@ -678,3 +678,12 @@ def test_read_sign_shows_its_directions():
     game, cap = _play(TO_DEEP_WOODS + ["shoot poacher", "north", "west", "read sign"])
     assert _said(cap, "Breakpoint Bar & Grill")
     assert not _said(cap, "nothing to read")
+
+
+def test_talk_to_dalton_greets_and_hints_at_wade():
+    game, cap = _play(
+        ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("say wade sent me")]
+        + ["talk to dalton", "talk to dalton about wade"]
+    )
+    assert _said(cap, "Name's Dalton")
+    assert _said(cap, "if *Wade* sent you")

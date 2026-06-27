@@ -1424,6 +1424,16 @@ def build_game() -> ActionCastle4:
         "Dalton, a good-looking man by the roadhouse door",
         "I am Dalton; I keep the underage out of the bar.",
     )
+    dalton.talk_text = (
+        '"Howdy, Princess. Name\'s Dalton." He leans off the doorframe. "The '
+        "Breakpoint's twenty-one and over, though -- I'll need to see some I.D.\""
+    )
+    dalton.talk_topics = {
+        # The "wade" hint points at the SAY WADE SENT ME gate.
+        "wade": '"Wade, eh? Well now -- if *Wade* sent you, that\'d be a different story. Just say the word."',
+        "id": "\"No I.D., no entry, darlin'. Them's the rules.\"",
+        "bar": '"The Breakpoint? Rowdiest joint this side of the highway -- bikers, ranchers, and trouble."',
+    }
     bartender = things.Character(
         "bartender", "the Breakpoint's bartender", "I tend bar and I am very busy."
     )
