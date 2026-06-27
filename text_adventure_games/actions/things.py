@@ -357,7 +357,17 @@ class Examine(base.Action):
         """The player wants to examine an item or a character."""
         if self.matched_item:
             base_text = self.matched_item.examine_text or self.matched_item.description
-            self.parser.ok(base_text + self._contents_sentence(self.matched_item))
+            text = base_text + self._contents_sentence(self.matched_item)
+            # A mirror reflects whoever looks into it -- compose the examiner's
+            # live appearance (+ what they're wearing) rather than canned text
+            # that goes stale (e.g. after a haircut). See Character.reflection.
+            if self.matched_item.get_property("is_mirror"):
+                text += " " + self.character.reflection(
+                    include_room=bool(
+                        self.matched_item.get_property("mirror_reflects_room")
+                    )
+                )
+            self.parser.ok(text)
         elif self.matched_character is not None:
             other = self.matched_character
             # Characters may carry an optional richer ``examine_text``; otherwise
