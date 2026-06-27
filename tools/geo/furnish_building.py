@@ -78,7 +78,13 @@ def gid(sheet: str, col: int, row: int) -> int:
 # the room-filling code already uses, so behaviour is unchanged.
 # --------------------------------------------------------------------------- #
 F, S, B = "interior_franuka", "interior_school", "interior_bath"
-_SHEET_ALIAS = {"franuka": F, "school": S, "bath": B}
+_SHEET_ALIAS = {"franuka": F, "school": S, "bath": B, "kenney": "kenney_urban"}
+
+# The base Kenney tileset is already in every map at firstgid 1 (27 cols), so
+# catalog entries on the "kenney" sheet (street lamps, signs, trees) resolve to
+# real gids too — no extra tileset is appended for them.
+_FIRST["kenney_urban"] = 1
+_COLS["kenney_urban"] = 27
 
 
 def block(sheet, c0, r0, w, h):
@@ -92,7 +98,9 @@ def _load_catalog():
         os.path.dirname(os.path.abspath(__file__)), "furniture_catalog.json"
     )
     with open(path) as fh:
-        return json.load(fh)["objects"]
+        objs = json.load(fh)["objects"]
+    # Keys beginning "_" are human-readable section comments, not tile entries.
+    return {k: v for k, v in objs.items() if not k.startswith("_")}
 
 
 CATALOG = _load_catalog()

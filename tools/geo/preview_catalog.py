@@ -35,7 +35,8 @@ def main() -> None:
     }
 
     # Group objects by (category, room) so the sheet reads like the catalog.
-    objs = catalog["objects"]
+    # Keys beginning "_" are human-readable section comments, not tile entries.
+    objs = {k: v for k, v in catalog["objects"].items() if not k.startswith("_")}
     groups: dict[str, list[str]] = {}
     for name, o in objs.items():
         key = (
