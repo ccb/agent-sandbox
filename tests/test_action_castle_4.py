@@ -587,7 +587,7 @@ def test_cut_hair_drops_it_on_the_floor_and_climb_has_narration():
     # Climbing out the window has the rope/rosebush descent flavor.
     game2, cap2 = _play(ESCAPE_TO_GARDENS)
     assert game2.player.location.name == "Gardens"
-    assert _said(cap2, "down the rope") and _said(cap2, "rosebush")
+    assert _said(cap2, "down the hair-rope") and _said(cap2, "rosebush")
 
 
 def test_climb_down_puts_you_on_the_rope_not_yet_escaped():
@@ -606,6 +606,16 @@ def test_jump_from_the_rope_drops_into_the_gardens():
     assert game.player.location.name == "Gardens"
     assert game.player.get_property("escaped")
     assert _said(cap, "rosebush")
+
+
+def test_descent_uses_climbs_then_falls_verbs():
+    # Per-exit move verbs: the rope descent reads "climbs", the drop "falls"
+    # (not the default "moved").
+    game, cap = _play(ESCAPE_TO_GARDENS[:-1])  # up to and incl. "climb down"
+    assert _said(cap, "climbs to Outside the Tower")
+    game, cap = _play(ESCAPE_TO_GARDENS)  # ...then "let go"
+    assert _said(cap, "falls to Gardens")
+    assert not _said(cap, "moved to Gardens")
 
 
 def test_no_climbing_back_up_from_the_gardens():

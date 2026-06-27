@@ -118,8 +118,12 @@ class Go(base.Action):
                 place=to_loc.name,
             )
         else:
-            description = "{character_name} moved to {place}".format(
-                character_name=self.character.name.capitalize(), place=to_loc.name
+            # The exit may name its own verb ("climbs", "falls"); else "moved".
+            verb = self.location.move_verbs.get(self.direction) or "moved"
+            description = "{character_name} {verb} to {place}".format(
+                character_name=self.character.name.capitalize(),
+                verb=verb,
+                place=to_loc.name,
             )
         if self.location.travel_descriptions[self.direction]:
             description += " " + self.location.travel_descriptions[self.direction]
