@@ -787,7 +787,7 @@ class TalkToBartender(actions.Action):
         tray = _item(
             "tray",
             "a tray of drinks",
-            "A tray of longnecks and a basket of fries, going warm.",
+            "Three longneck bottles, carefully balanced on the tray.",
         )
         self.player.add_to_inventory(tray)
         self.parser.ok(
@@ -950,6 +950,153 @@ class UseKeyOnMotorcycle(actions.Action):
             "catches, and ROARS to life. (Now GET ON THE MOTORCYCLE and head EAST or "
             "WEST onto the highway.)"
         )
+
+
+# The jukebox + the drinks tray: optional Breakpoint flavor. The jukebox gives the
+# poacher's silver coins a use (each song costs a coin); every genre just annoys
+# half the crowd. None of it affects the win -- pure color.
+
+
+def _spend_coin(player):
+    """Spend one of the poacher's silver coins (from the carried purse). True if
+    one was spent; decrements the stack and discards it when empty."""
+    coins = player.carried_items().get("silver coins")
+    if coins is None or getattr(coins, "quantity", 1) < 1:
+        return False
+    coins.quantity = getattr(coins, "quantity", 1) - 1
+    if coins.quantity <= 0:
+        player.discard_item(coins)
+    return True
+
+
+class DrinkBottle(actions.Action):
+    """A gag: sneak a sip off the tray you're carrying."""
+
+    ACTION_NAME = "drink bottle"
+    ACTION_DESCRIPTION = "Sneak a sip from the tray"
+    ACTION_ALIASES = [
+        "drink a bottle",
+        "drink from the tray",
+        "drink from tray",
+        "take a sip",
+        "sip drink",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if not _is_holding(self.player, "tray"):
+            self.parser.fail("You've nothing to drink.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You sneak a sip from one of the bottles. Ow -- it burns! Gross. You set "
+            "it back on the tray."
+        )
+
+
+class UseCoinOnJukebox(actions.Action):
+    """Drop one of the poacher's silver coins in the jukebox, then pick a genre."""
+
+    ACTION_NAME = "use coin on jukebox"
+    ACTION_DESCRIPTION = "Put a coin in the jukebox"
+    ACTION_ALIASES = [
+        "use coins on jukebox",
+        "use silver coins on jukebox",
+        "put coin in jukebox",
+        "put a coin in the jukebox",
+        "insert coin",
+        "play jukebox",
+        "use the jukebox",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "jukebox" not in loc.items:
+            self.parser.fail("There's no jukebox here.")
+            return False
+        coins = self.player.carried_items().get("silver coins")
+        if coins is None or getattr(coins, "quantity", 1) < 1:
+            self.parser.fail("You've no coins for the jukebox.")
+            return False
+        return True
+
+    def apply_effects(self):
+        _spend_coin(self.player)
+        self.player.location.items["jukebox"].set_property("credit", True)
+        self.parser.ok("You drop a silver coin into the jukebox. What'll it be?")
+        self.game.pose_prompt(
+            Prompt(
+                text="Country, blues, or metal? (country / blues / metal)",
+                options={
+                    "country": "play country",
+                    "blues": "play blues",
+                    "metal": "play metal",
+                },
+                speaker="jukebox",
+            )
+        )
+
+
+class _PlaySong(actions.Action):
+    """Shared base: play a genre once the jukebox has a coin's credit."""
+
+    GENRE = ""
+    FLAVOR = ""
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "jukebox" not in loc.items:
+            self.parser.fail("There's no jukebox here.")
+            return False
+        if not loc.items["jukebox"].get_property("credit"):
+            self.parser.fail("Put a coin in the jukebox first (USE COIN ON JUKEBOX).")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.items["jukebox"].set_property("credit", False)
+        self.parser.ok(self.FLAVOR)
+
+
+class PlayCountry(_PlaySong):
+    ACTION_NAME = "play country"
+    ACTION_DESCRIPTION = "Play a country song on the jukebox"
+    ACTION_ALIASES = ["play country-and-western", "play country and western"]
+    FLAVOR = (
+        "A twangy, mid-tempo number about drinkin' and horses fills the room. The "
+        "bikers boo and holler at you to put on some metal."
+    )
+
+
+class PlayBlues(_PlaySong):
+    ACTION_NAME = "play blues"
+    ACTION_DESCRIPTION = "Play a blues song on the jukebox"
+    FLAVOR = (
+        "A slow, sad blues about drinkin' and trains. The whole bar boos and yells "
+        "at you to change the song."
+    )
+
+
+class PlayMetal(_PlaySong):
+    ACTION_NAME = "play metal"
+    ACTION_DESCRIPTION = "Play a metal song on the jukebox"
+    FLAVOR = (
+        "A loud, fast anthem about leather, motorcycles, and rock 'n' roll. The "
+        "ranchers boo and yell at you to put on some country."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1484,6 +1631,11 @@ def build_game() -> ActionCastle4:
         StartBrawl,
         CatchKeys,
         UseKeyOnMotorcycle,
+        DrinkBottle,
+        UseCoinOnJukebox,
+        PlayCountry,
+        PlayBlues,
+        PlayMetal,
     ]
     game = ActionCastle4(tower, player, characters, custom_actions)
     _game_ref["game"] = game  # back-fill the OnMotorcycleBlock's Game handle
