@@ -1387,7 +1387,7 @@ def build_game() -> ActionCastle4:
     # themselves.
     player.appearance = {
         "hair": "Your hair is staggeringly long -- it drags on the floor behind you.",
-        "feet": "Your feet are small and delicate, like an elf maiden's.",
+        "feet": "Your feet are bare.",  # synced to footwear by a trigger below
     }
 
     prince = things.Character(
@@ -1504,6 +1504,22 @@ def build_game() -> ActionCastle4:
         "score_boots",
         lambda g: "boots" in g.player.worn and "boots" not in g._scored_keys,
         lambda g: g.award("boots", 5, "Properly shod for the road ahead."),
+        repeatable=True,
+    )
+
+    # Keep the mirror's "feet" line honest: bare while unshod, silent once she's
+    # wearing footwear (the boots/slippers then show up in the "wearing ..."
+    # line). Fires only when the line is out of sync with what's on her feet.
+    def _feet_line(g):
+        shod = any(
+            it.get_property("wear_slot") == "feet" for it in g.player.worn.values()
+        )
+        return "" if shod else "Your feet are bare."
+
+    game.add_trigger(
+        "sync_feet_reflection",
+        lambda g: g.player.appearance.get("feet") != _feet_line(g),
+        lambda g: g.player.appearance.__setitem__("feet", _feet_line(g)),
         repeatable=True,
     )
     # You've genuinely escaped only by climbing out the window into the Gardens
