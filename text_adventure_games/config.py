@@ -150,6 +150,12 @@ class ObservabilityConfig:
     # Include full prompts/responses in the artifact (default: numbers only). The
     # token/cost numbers are always written; this adds the verbose transcript.
     log_prompts: bool = False
+    # Hard LLM cost ceiling in USD for the run, or None (default) for no ceiling
+    # (issue #183). When set, the run's UsageLedger arms a kill-switch: a driver
+    # loop polls UsageLedger.over_budget() and stops once cumulative spend reaches
+    # it -- a guard for unattended or scaled live runs. The in-memory tally is
+    # always on, so a ceiling works with or without a log_path.
+    max_cost_usd: float | None = None
 
     def build_run_log(
         self, *, provider=None, model=None, turn_mode=None, seed=None
@@ -274,8 +280,8 @@ class GameConfig:
         Reads the same ``LLM_*`` vars as
         :func:`~text_adventure_games.llm_client.client_from_env` for the LLM
         section, plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for rendering and
-        ``LLM_LOG`` / ``LLM_LOG_PROMPTS`` for the usage log. Anything unset keeps
-        its default.
+        ``LLM_LOG`` / ``LLM_LOG_PROMPTS`` / ``LLM_MAX_COST`` for the usage log and
+        cost ceiling. Anything unset keeps its default.
         """
         config = cls()
         provider = os.environ.get("LLM_PROVIDER")
@@ -297,6 +303,10 @@ class GameConfig:
             config.observability.log_path = log_path
         if os.environ.get("LLM_LOG_PROMPTS", "").lower() in ("1", "true"):
             config.observability.log_prompts = True
+        # A bad value fails loud rather than silently disabling a safety guard.
+        max_cost = os.environ.get("LLM_MAX_COST")
+        if max_cost:
+            config.observability.max_cost_usd = float(max_cost)
         return config
 
     def to_dict(self) -> dict:
