@@ -685,3 +685,15 @@ def test_mirror_reflects_the_haircut_live():
     )
     assert _said(cap_a, "ragged crop")
     assert not _said(cap_a, "staggeringly long")
+
+
+def test_mirror_feet_line_tracks_footwear():
+    # "Your feet are bare" while unshod; once she dons the boots the feet line
+    # clears (the boots show in the "wearing ..." line instead -- no contradiction).
+    bare, cap_b = _play(["examine mirror"])
+    assert _said(cap_b, "Your feet are bare")
+    shod, cap_s = _play(
+        ["out", "down", "take boots", "wear boots", "up", "enter", "examine mirror"]
+    )
+    assert not _said(cap_s, "feet are bare")
+    assert _said(cap_s, "old army boots")  # now reflected as worn
