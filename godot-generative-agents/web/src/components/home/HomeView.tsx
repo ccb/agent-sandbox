@@ -1,10 +1,15 @@
-import type { ReactNode } from "react";
+// ReactNode is only used by the Icon component below, which is commented out
+// together with the link buttons that use it. Re-enable this import when you
+// re-enable that block.
+// import type { ReactNode } from "react";
 import "./home.css";
 
-// Small inline line-icons for the link buttons. The original Nerfies template
-// uses Font Awesome / Academicons over a CDN, but the companion runs
-// cross-origin isolated (COOP/COEP), which blocks cross-origin subresources —
-// so we inline the icons. Stroke is currentColor (white on the dark buttons).
+// The Paper / arXiv / Video / Code buttons in the hero are commented out for now
+// (see the return below). Their inline SVG line-icons are commented out here
+// along with them, since nothing else uses them. (The original Nerfies template
+// pulls Font Awesome / Academicons from a CDN, which COOP/COEP would block —
+// hence inlining.) Re-enable this block and the buttons together.
+/*
 function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -49,6 +54,7 @@ const CodeIcon = (
     <path d="m15 6 6 6-6 6" />
   </Icon>
 );
+*/
 
 // The repository this companion lives in — a sensible default for the Code link.
 const REPO_URL = "https://github.com/ccb/agent-sandbox";
@@ -75,34 +81,26 @@ export function HomeView() {
             {/* TODO: replace with the real author names + links */}
             <div className="nrf-authors">
               <span className="nrf-author-block">
-                <a href="#">Author One</a>
-                <sup>1</sup>,
+                <a href="#">Author One</a>,
               </span>{" "}
               <span className="nrf-author-block">
-                <a href="#">Author Two</a>
-                <sup>1</sup>,
+                <a href="#">Author Two</a>,
               </span>{" "}
               <span className="nrf-author-block">
-                <a href="#">Author Three</a>
-                <sup>2</sup>,
+                <a href="#">Author Three</a>,
               </span>{" "}
               <span className="nrf-author-block">
                 <a href="#">Advisor Name</a>
-                <sup>2</sup>
               </span>
             </div>
 
-            {/* TODO: replace with the real affiliations */}
-            <div className="nrf-affiliations">
-              <span className="nrf-author-block">
-                <sup>1</sup>University of Pennsylvania,
-              </span>{" "}
-              <span className="nrf-author-block">
-                <sup>2</sup>Affiliation Two
-              </span>
-            </div>
+            {/* Everyone shares one affiliation, so no superscripts are needed. */}
+            <div className="nrf-affiliations">University of Pennsylvania</div>
 
-            {/* TODO: point these at the real paper / arXiv / video URLs */}
+            {/* Paper / arXiv / Video / Code links — commented out for now;
+                re-enable (along with the Icon block at the top of this file)
+                once the paper / arXiv / video URLs exist.
+
             <div className="nrf-links">
               <a className="nrf-button" href="#">
                 {PaperIcon}
@@ -121,6 +119,7 @@ export function HomeView() {
                 <span>Code</span>
               </a>
             </div>
+            */}
           </div>
         </div>
       </section>
