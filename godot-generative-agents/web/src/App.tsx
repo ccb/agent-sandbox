@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { GodotCanvas } from "./components/GodotCanvas";
 import { AgentPanel } from "./components/AgentPanel";
+import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
 import "./App.css";
 
@@ -21,18 +22,19 @@ const PromptReaderView = lazy(() =>
   }))
 );
 
-type View = "game" | "agents" | "prompts" | "reader";
+type View = "home" | "game" | "agents" | "prompts" | "reader";
 
-// Pages selected by the URL hash (#game / #agents / #prompts / #reader) so each
-// is a real, shareable location and the back button works — no router needed.
-// The agent cards are the landing page (the cognitive layer is the point of this
-// companion); the other views are one explicit hop away.
+// Pages selected by the URL hash (#home / #game / #agents / #prompts / #reader)
+// so each is a real, shareable location and the back button works — no router
+// needed. The Nerfies-style project page is the landing view; every other view
+// is one explicit hop away via the menu.
 function viewFromHash(): View {
   const hash = window.location.hash.replace("#", "");
   if (hash === "game") return "game";
+  if (hash === "agents") return "agents";
   if (hash === "prompts") return "prompts";
   if (hash === "reader") return "reader";
-  return "agents";
+  return "home";
 }
 
 // Monochrome line icons for the menu. Stroke is `currentColor`, so each icon
@@ -58,6 +60,13 @@ function NavIcon({ children }: { children: ReactNode }) {
   );
 }
 
+const ICON_HOME = (
+  <NavIcon>
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" />
+    <path d="M9.5 21v-6h5v6" />
+  </NavIcon>
+);
 const ICON_AGENTS = (
   <NavIcon>
     <circle cx="12" cy="7" r="4" />
@@ -158,7 +167,9 @@ export default function App() {
   };
 
   const currentLabel =
-    NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.view === view)?.label ?? "Menu";
+    view === "home"
+      ? "Home"
+      : NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.view === view)?.label ?? "Menu";
 
   return (
     <div className="app" data-view={view}>
@@ -193,6 +204,21 @@ export default function App() {
             </button>
             {menuOpen && (
               <div className="nav-dropdown" role="menu" aria-label="Navigate">
+                {/* The landing page sits on its own above the grouped views. */}
+                <div className="nav-group" role="group">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`nav-item${view === "home" ? " is-active" : ""}`}
+                    onClick={() => {
+                      select("home");
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {ICON_HOME}
+                    Home
+                  </button>
+                </div>
                 {NAV_SECTIONS.map((section) => (
                   <div
                     className="nav-group"
@@ -254,6 +280,14 @@ export default function App() {
             </div>
           )}
         </section>
+
+        {/* The landing page. Mounted only when active — it's a static page with
+            no reason to stay alive behind the other views. */}
+        {view === "home" && (
+          <section className="view view-home">
+            <HomeView />
+          </section>
+        )}
 
         {/* Mounted only when active: Cytoscape needs a sized container at init,
             and (unlike the Godot canvas) this view has no reason to stay alive
