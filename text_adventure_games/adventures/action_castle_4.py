@@ -578,6 +578,16 @@ class ShootPoacher(actions.Action):
         cloak = _item(
             "cloak", "a stained cloak", "The poacher's stained traveling cloak."
         )
+        # Wearable, and it layers over the gown (wear_over) -- the wear-slot
+        # feature's cloak-over-a-gown case. Pure flavor: a bit of disguise.
+        cloak.set_property(Property.WEARABLE, True)
+        cloak.set_property("wear_slot", "body")
+        cloak.set_property("wear_over", True)
+        cloak.set_property(
+            "wear_text",
+            "You pull the poacher's stained cloak over your gown -- less a princess "
+            "now, more a traveler on the road.",
+        )
         self.deep_woods.add_item(purse)
         self.deep_woods.add_item(cloak)
         self.game.award(
