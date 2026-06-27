@@ -1197,15 +1197,18 @@ def build_game() -> ActionCastle4:
     # to go back up -- but once you've dropped, the rope's out of reach from the
     # ground, so Outside -> Gardens is one-way.
     _one_way(tower, "down", outside_tower)  # climb out the window onto the rope
+    tower.move_verbs["down"] = "climbs"  # "Princess climbs to Outside the Tower"
     tower.travel_descriptions["down"] = (
-        "You climb out the window and inch down the rope until you're hanging at its "
-        "end -- a large rosebush waits directly below."
+        "Hand over hand, you work down the hair-rope to its frayed end, where you "
+        "dangle above a large rosebush."
     )
     _one_way(outside_tower, "in", tower)  # climb back in through the window
+    outside_tower.move_verbs["in"] = "climbs"
     outside_tower.travel_descriptions["in"] = (
-        "You haul yourself back up and climb in through the window."
+        "You haul yourself back up and in through the window."
     )
     _one_way(outside_tower, "down", gardens)  # let go / jump -> drop into the gardens
+    outside_tower.move_verbs["down"] = "falls"  # "Princess falls to Gardens"
     outside_tower.travel_descriptions["down"] = (
         "You let go, crashing into the thorny rosebush. It breaks your fall and your "
         "voluminous gown takes the brunt -- torn to ribbons, but you've only a few "

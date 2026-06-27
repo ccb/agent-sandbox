@@ -111,3 +111,16 @@ def test_on_foot_arrival_is_unchanged():
     player.location = woods
     game.parser.parse_command("east")
     assert _said(cap, "You moved to Field")
+
+
+def test_per_exit_move_verb_overrides_moved():
+    # An exit may name its own arrival verb ("climbs", "falls") in place of the
+    # default "moved" -- "X moved to Y" reads "X climbs to Y" for that exit only.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    woods.move_verbs["east"] = "climbs"  # only this exit; field->west is unset
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "You climbs to Field")
+    assert not _said(cap, "moved to Field")
+    # The default ("moved") for an unset exit is covered by
+    # test_on_foot_arrival_is_unchanged.
