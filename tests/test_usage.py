@@ -137,6 +137,33 @@ def test_ledger_summary_shape():
     assert s["input_tokens"] == 10 and s["output_tokens"] == 2
 
 
+# --- UsageLedger cost ceiling / kill-switch (issue #183) ----------------
+
+
+def test_ledger_no_ceiling_is_never_over_budget():
+    led = UsageLedger()  # default: no ceiling
+    led.record(_rec("troll", 9.99))
+    assert led.over_budget() is False
+    assert led.remaining_budget_usd() is None
+
+
+def test_ledger_over_budget_trips_at_or_above_ceiling():
+    led = UsageLedger(max_cost_usd=0.10)
+    led.record(_rec("troll", 0.04))
+    assert led.over_budget() is False  # under the ceiling
+    assert led.remaining_budget_usd() == pytest.approx(0.06)
+    led.record(_rec("troll", 0.06))  # now exactly at the ceiling
+    assert led.over_budget() is True  # >= trips it
+    assert led.remaining_budget_usd() == pytest.approx(0.0)
+
+
+def test_ledger_remaining_budget_clamped_at_zero_on_overshoot():
+    led = UsageLedger(max_cost_usd=0.10)
+    led.record(_rec("troll", 0.25))  # overshoot the ceiling
+    assert led.over_budget() is True
+    assert led.remaining_budget_usd() == 0.0  # never negative
+
+
 # --- record_call (the shared helper) ------------------------------------
 
 

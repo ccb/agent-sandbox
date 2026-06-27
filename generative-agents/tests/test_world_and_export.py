@@ -31,7 +31,7 @@ from backend.smallville_agents import attach_agents
 from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
 from text_adventure_games.reporting import CaptureRenderer, Channel
-from text_adventure_games.usage import UsageLedger
+from text_adventure_games.usage import CallRecord, Usage, UsageLedger
 
 
 @pytest.fixture(scope="module")
@@ -410,3 +410,25 @@ def test_cost_summary_renders_through_reporting_seam(world_map):
     assert any("LLM cost: $" in line for line in lines)
     # One total line plus one per attributed actor.
     assert len(lines) == 1 + len(ledger.totals_by_actor())
+
+
+def test_simulate_halts_when_over_budget(world_map):
+    # The cost ceiling (issue #183) is a kill-switch: once cumulative spend
+    # reaches it, the step loop stops instead of firing thousands more calls.
+    # The mock brain is free, so we pre-charge the ledger past a tiny ceiling;
+    # the loop then halts at the first step boundary and produces no frames.
+    ledger = UsageLedger(max_cost_usd=0.01)
+    ledger.record(CallRecord(usage=Usage("mock", "mock"), cost_usd=1.0))
+    assert ledger.over_budget()
+
+    frames = simulate(world_map, num_steps=10, ledger=ledger)
+    assert frames == []  # halted before running any step
+
+
+def test_simulate_runs_fully_when_under_budget(world_map):
+    # A ceiling set well above the free mock brain's $0 spend is never reached,
+    # so the run is byte-identical to an unbudgeted one (all steps produced).
+    ledger = UsageLedger(max_cost_usd=100.0)
+    frames = simulate(world_map, num_steps=4, ledger=ledger)
+    assert len(frames) == 4
+    assert not ledger.over_budget()

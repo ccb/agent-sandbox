@@ -94,8 +94,10 @@ Non-goals for the first pass:
 - A live cost dashboard or web UI. The artifact is a file; rendering it can come
   later (and should reuse the `reporting.py` renderer seam).
 - Per-token streaming. We capture the `usage` block from the final response.
-- Cross-provider cost parity or budget *enforcement* (hard stops). We report; a
-  later issue can add a ceiling.
+- Cross-provider cost parity. ~~Budget *enforcement* (hard stops)~~ → shipped as
+  a follow-up (#183): `UsageLedger(max_cost_usd=...)` arms a kill-switch and a
+  driver loop polls `over_budget()` to stop a runaway run (CLI `--max-cost`,
+  config `observability.max_cost_usd`, env `LLM_MAX_COST`).
 
 ---
 
