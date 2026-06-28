@@ -727,6 +727,46 @@ def test_cannot_ride_the_horse_onto_the_highway():
     assert _said(cap, "motor vehicle")
 
 
+def _to_caught_keys():
+    w = ac4.WALKTHROUGH_WIN
+    return w[: w.index("punch biker") + 1] + ["catch keys", "out"]
+
+
+def test_the_truck_is_a_second_unready_vehicle():
+    rh = ac4.build_game().locations["Roadhouse"]
+    assert "truck" in rh.items
+    assert rh.items["truck"].is_vehicle() and not rh.items["truck"].vehicle_ready()
+
+
+def test_brawl_drops_both_key_rings_and_catch_grabs_both():
+    game, cap = _play(_to_caught_keys()[:-1])  # through catch keys (still in the bar)
+    assert "keys" in game.player.inventory  # biker skull ring
+    assert "rancher keys" in game.player.inventory  # rancher horseshoe fob
+    game, _ = _play(_to_caught_keys()[:-1] + ["examine rancher keys"])
+
+
+def test_rancher_keys_examine_show_the_double_deuce_fob():
+    game, cap = _play(_to_caught_keys() + ["examine rancher keys"])
+    assert _said(cap, "Double-Deuce") and _said(cap, "RIDE EASY")
+
+
+def test_each_key_only_fits_its_own_vehicle():
+    # With both rings in hand, the skull key is refused by the truck.
+    game, cap = _play(_to_caught_keys() + ["use keys on truck"])
+    # (Holding rancher keys too, so this actually starts it -- instead drop the
+    # rancher keys first to force the wrong-key path.)
+    game, cap = _play(_to_caught_keys() + ["drop rancher keys", "use keys on truck"])
+    assert _said(cap, "skull key doesn't fit")
+
+
+def test_riding_off_in_the_truck_is_a_winning_ending():
+    game, cap = _play(_to_caught_keys() + ["start truck", "get on truck", "east"])
+    assert game.is_game_over()
+    assert _said(cap, "drives the truck to Highway")
+    assert _said(cap, "old truck rattles")
+    assert game.score == 100
+
+
 def test_brush_hair_is_flavor_with_the_hairbrush():
     game, cap = _play(["open dresser", "take hairbrush", "brush hair"])
     assert _said(cap, "two hours")

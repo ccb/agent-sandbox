@@ -545,15 +545,19 @@ class Parser:
         command. If so, return Item, else return None.
         """
         matched_items = {}
+        match_len = {}  # how specific each match was -- length of the matched token
         for item_name in item_dict:
             item = item_dict[item_name]
             # the item matches if its name -- or any registered alias ("cot" for
             # "army cot") -- appears in the command, or it matches the hint
             names = [item_name, *getattr(item, "aliases", ())]
-            if any(n in command for n in names):
+            hits = [n for n in names if n in command]
+            if hits:
                 matched_items[item_name] = item
+                match_len[item_name] = max(len(n) for n in hits)
             if hint and (item_name in hint or hint in item_name):
                 matched_items[item_name] = item
+                match_len.setdefault(item_name, 0)
 
         if len(matched_items) == 0:
             return None
@@ -569,9 +573,11 @@ class Parser:
                 if hint in item_name or item_name in hint:
                     item = matched_items[item_name]
                     return item
-        for item_name in matched_items:
-            item = matched_items[item_name]
-            return item
+        # Otherwise prefer the most specific match: the longest name/alias that
+        # appeared in the command, so "rancher keys" beats "keys" and "army cot"
+        # beats "cot" rather than returning whichever was registered first.
+        best_name = max(matched_items, key=lambda n: match_len.get(n, 0))
+        return matched_items[best_name]
 
     def match_topic(self, command: str, topics: dict[str, str]) -> str | None:
         """Pick the conversation topic a command refers to, or None.
