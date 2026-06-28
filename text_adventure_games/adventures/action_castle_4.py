@@ -1780,6 +1780,26 @@ def build_game() -> ActionCastle4:
     bartender = things.Character(
         "bartender", "the Breakpoint's bartender", "I tend bar and I am very busy."
     )
+    # The crowd the rulebook puts in the bar: bikers and ranchers, the two
+    # factions whose feud the brawl sets off. They don't take turns of their own
+    # -- they react to the jukebox and the brawl in the scripted narration -- but
+    # they're present people you can see, examine, and (fruitlessly) talk to.
+    bikers = things.Character(
+        "bikers",
+        "a pack of leather-clad bikers",
+        "We're the Steel Vipers. We ride, we drink, and we don't make small talk.",
+    )
+    bikers.examine_text = "The Steel Vipers -- all leather, chrome, and attitude, hogging the back tables."
+    bikers.talk_text = '"Beat it, princess," one grunts without looking up.'
+    ranchers = things.Character(
+        "ranchers",
+        "a knot of weathered ranchers",
+        "We work the land hereabouts, miss. Don't want no trouble.",
+    )
+    ranchers.examine_text = (
+        "Sunburnt ranch hands in dusty hats, nursing their beers along the bar."
+    )
+    ranchers.talk_text = "The ranchers just tip their hats and go back to their drinks."
 
     river.add_character(prince)
     old_woods.add_item(deer)
@@ -1787,6 +1807,8 @@ def build_game() -> ActionCastle4:
     ranch.add_character(rancher)
     roadhouse.add_character(dalton)
     breakpoint.add_character(bartender)
+    breakpoint.add_character(bikers)
+    breakpoint.add_character(ranchers)
 
     # --- Start state: the princess wears a gown and a tiara ----------------
     gown = _item(
