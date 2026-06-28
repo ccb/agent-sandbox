@@ -503,6 +503,13 @@ class BrushHair(actions.Action):
 # Read-only actions that don't "let the poacher loose his arrow" (you may look).
 _DEER_SAFE_ACTIONS = {"examine", "describe", "inventory"}
 
+# Actions loud enough to spook the grazing doe in the Old Woods -- talking or
+# yelling aloud (say/talk), smashing something (break). Quiet things (looking,
+# slipping into the shack, taking the crossbow, mounting) leave her be, so you
+# can arm yourself first if you move quietly. (The shack door banging shut as
+# you step out is its own noise -- see the deer_flees trigger.)
+_NOISY_ACTIONS = {"say", "talk", "break"}
+
 
 class FollowDeer(actions.Action):
     """Ride after the deer (from the Old Woods) into the Deep Woods."""
@@ -2176,12 +2183,13 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    # Coming out of the warden's shack spooks the grazing doe: she bolts from the
-    # Old Woods into the Deep Woods. Tracked in two steps -- note the shack visit,
-    # then flee on the way back out -- so you've had your beat inside (and the
-    # crossbow) before the chase. There's no timer on the flee itself; you remount
-    # and FOLLOW DEER at your leisure (the poacher's clock only starts when YOU
-    # reach the Deep Woods, below).
+    # The grazing doe is skittish: a noise in the Old Woods sends her bolting into
+    # the Deep Woods. Two kinds of noise spook her -- the shack door banging shut
+    # as you step out (tracked via visited_shack), and any loud action you take in
+    # the woods (talking/yelling, smashing -- see _NOISY_ACTIONS). Quiet things
+    # leave her be, so a careful player can slip in for the crossbow first; a
+    # careless one spooks her early and chases unarmed. No timer on the flee
+    # itself -- the poacher's clock only starts when YOU reach the Deep Woods.
     game.add_trigger(
         "note_shack_visit",
         lambda g: g.player.location is old_shack
@@ -2196,20 +2204,27 @@ def build_game() -> ActionCastle4:
         deer.examine_text = (
             "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
         )
+        cause = (
+            "The shack door bangs shut behind you"
+            if g.player.get_property("visited_shack")
+            else "At the sudden noise"
+        )
         g.parser.ok(
-            "As you step out of the shack the doe's head snaps up -- alarmed, she "
-            "bolts, white tail flashing, off into the Deep Woods. You'll need the "
-            "horse to FOLLOW DEER and give chase."
+            f"{cause}, and the doe's head snaps up -- in a flash she bolts, white "
+            "tail flashing, off into the Deep Woods."
         )
 
-    game.add_trigger(
-        "deer_flees",
-        lambda g: g.player.location is old_woods
-        and g.player.get_property("visited_shack")
-        and "deer" in old_woods.items,
-        _deer_flees,
-        repeatable=True,
-    )
+    def _noise_spooks_the_doe(g):
+        # Nothing to spook if she's already bolted (or you're not with her).
+        if "deer" not in old_woods.items or g.player.location is not old_woods:
+            return False
+        # The shack door slamming behind you, OR any loud action in the woods.
+        if g.player.get_property("visited_shack"):
+            return True
+        last = g.parser.last_action
+        return last is not None and last.action_name() in _NOISY_ACTIONS
+
+    game.add_trigger("deer_flees", _noise_spooks_the_doe, _deer_flees, repeatable=True)
 
     # The poacher confrontation begins when YOU reach the Deep Woods (the doe has
     # already fled here), with one grace turn -- you arrive, then must act.

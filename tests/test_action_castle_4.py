@@ -525,12 +525,29 @@ def test_follow_deer_before_she_is_spooked_is_refused():
 def test_coming_out_of_the_shack_spooks_the_doe_into_the_deep_woods():
     game, cap = _play(_to_old_woods_mounted() + ["dismount", "enter", "out"])
     assert _said(cap, "bolts")  # she flees on the way out of the shack
+    assert _said(cap, "shack door bangs")
     assert "deer" not in game.locations["Old Woods"].items
     assert "deer" in game.locations["Deep Woods"].items
     # ...and now the chase is on.
     game.do_command("ride horse")
     game.do_command("follow deer")
     assert game.player.location.name == "Deep Woods"
+
+
+def test_a_loud_noise_spooks_the_doe_even_without_the_shack():
+    # Talking aloud in the woods is racket enough -- she bolts (and you've not
+    # got the crossbow, the careless player's just-deserts).
+    game, cap = _play(_to_old_woods_mounted() + ["dismount", "say hello there"])
+    assert _said(cap, "sudden noise") and _said(cap, "bolts")
+    assert "deer" in game.locations["Deep Woods"].items
+
+
+def test_quiet_actions_do_not_spook_the_doe():
+    # Looking and dismounting are quiet; she keeps grazing.
+    game, _ = _play(
+        _to_old_woods_mounted() + ["dismount", "examine deer", "examine shack"]
+    )
+    assert "deer" in game.locations["Old Woods"].items
 
 
 def test_taking_the_purse_scores_and_north_opens():
