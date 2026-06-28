@@ -587,7 +587,7 @@ def test_cut_hair_drops_it_on_the_floor_and_climb_has_narration():
     # Climbing out the window has the rope/rosebush descent flavor.
     game2, cap2 = _play(ESCAPE_TO_GARDENS)
     assert game2.player.location.name == "Gardens"
-    assert _said(cap2, "down the rope") and _said(cap2, "rosebush")
+    assert _said(cap2, "down the hair-rope") and _said(cap2, "rosebush")
 
 
 def test_climb_down_puts_you_on_the_rope_not_yet_escaped():
@@ -608,6 +608,85 @@ def test_jump_from_the_rope_drops_into_the_gardens():
     assert _said(cap, "rosebush")
 
 
+def test_descent_uses_climbs_then_falls_verbs():
+    # Per-exit move verbs: the rope descent reads "climbs", the drop "falls"
+    # (not the default "moved").
+    game, cap = _play(ESCAPE_TO_GARDENS[:-1])  # up to and incl. "climb down"
+    assert _said(cap, "climbs to Outside the Tower")
+    game, cap = _play(ESCAPE_TO_GARDENS)  # ...then "let go"
+    assert _said(cap, "falls to Gardens")
+    assert not _said(cap, "moved to Gardens")
+
+
+# --- The fall's outcome is generated from what she's wearing -----------------
+
+# Reach the guardroom (where the cot holds the boots), then on through the
+# tower escape with whatever footwear is named -- barefoot if none.
+_GUARDROOM = ["out", "down", "open footlocker", "take dagger"]
+_TOWER_ESCAPE = ["up", "enter", "cut hair", "get hair", "make rope", "tie rope"]
+
+
+def _fall_wearing(footwear):
+    cmds = list(_GUARDROOM)
+    if footwear == "boots":
+        cmds += ["get boots", "wear boots"]
+    cmds += _TOWER_ESCAPE
+    if footwear == "glass":
+        cmds += ["get glass slippers", "wear glass slippers"]
+    cmds += ["climb down", "let go"]  # -> Gardens
+    return _play(cmds)
+
+
+def test_fall_in_the_gown_tears_it_to_ribbons():
+    game, cap = _fall_wearing("bare")  # she starts in the gown
+    assert _said(cap, "gown takes the brunt -- torn to ribbons")
+    assert game.player.worn["gown"].description == "a gown torn to ribbons"
+
+
+def test_barefoot_fall_bruises_her_feet():
+    game, cap = _fall_wearing("bare")
+    assert _said(cap, "bare feet land hard")
+    assert "bruised" in game.player.appearance.get("feet_injury", "")
+
+
+def test_glass_slippers_shatter_and_cut_her():
+    game, cap = _fall_wearing("glass")
+    assert _said(cap, "glass slippers shatter")
+    assert "glass slippers" not in game.player.worn  # destroyed
+    assert "cut and bleeding" in game.player.appearance.get("feet_injury", "")
+
+
+def test_army_boots_spare_her_feet():
+    game, cap = _fall_wearing("boots")
+    assert _said(cap, "boots hit the dirt")
+    assert "boots" in game.player.worn
+    assert not game.player.appearance.get("feet_injury")  # unhurt
+
+
+def test_glass_slipper_cuts_make_her_limp_on_foot():
+    game, cap = _fall_wearing("glass")  # soles cut by the shards
+    assert game.player.get_property("move_verb") == "limps"
+    game.do_command("south")  # Gardens -> Drawbridge, on foot
+    assert _said(cap, "limps to Drawbridge")
+
+
+def test_unhurt_feet_do_not_limp():
+    game, cap = _fall_wearing("boots")
+    game.do_command("south")
+    assert _said(cap, "moved to Drawbridge")
+    assert not _said(cap, "limps")
+
+
+def test_river_reflects_the_fall_damage():
+    # The river past the tower is the only mirror left -- it shows the haircut,
+    # scratches, and torn gown.
+    game, cap = _play(ESCAPE_TO_GARDENS + ["south", "south", "examine river"])
+    refl = [t for t in cap.texts(Channel.NARRATION) if "wavering reflection" in t][-1]
+    assert "ragged crop" in refl  # the haircut
+    assert "scratched" in refl  # the rosebush
+    assert "gown torn to ribbons" in refl  # the gown's new description
+
+
 def test_no_climbing_back_up_from_the_gardens():
     # The rope dangles out of reach once you're on the ground -- one-way drop.
     game, _ = _play(ESCAPE_TO_GARDENS + ["up"])
@@ -621,7 +700,7 @@ def test_pick_rose_is_flavor_not_a_bare_bush():
     game, cap = _play(ESCAPE_TO_GARDENS + ["pick rose", "smell rose"])
     assert _said(cap, "picked the lone rose")
     assert "rose" in game.player.inventory
-    assert not _said(cap, "bare")
+    assert not _said(cap, "bare bush")  # not the "nothing left to pick" refusal
 
 
 def test_pick_watermelon_is_a_too_heavy_gag():
