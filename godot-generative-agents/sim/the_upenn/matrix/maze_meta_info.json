@@ -1,7 +1,7 @@
 {
  "world_name": "UPenn",
- "maze_width": 239,
- "maze_height": 273,
+ "maze_width": 245,
+ "maze_height": 276,
  "sq_tile_size": 16,
  "special_constraint": ""
 }
