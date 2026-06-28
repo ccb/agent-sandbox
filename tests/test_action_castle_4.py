@@ -479,7 +479,8 @@ def test_shoot_poacher_saves_the_deer_and_drops_the_purse():
 
 
 def test_shooting_needs_the_crossbow():
-    # Ride in without the crossbow (skip the shack), then it's the wrong tool.
+    # Duck into the shack (which spooks the doe) but don't grab the crossbow, then
+    # chase her in -- and you've got the wrong tool for the poacher.
     game, cap = _play(
         TO_RIVER_WITH_APPLE
         + [
@@ -487,11 +488,49 @@ def test_shooting_needs_the_crossbow():
             "ride horse",
             "north",
             "west",
+            "dismount",
+            "enter",  # into the shack (spooks the deer on the way back out)
+            "out",  # back in the Old Woods -- no crossbow taken
+            "ride horse",
             "follow deer",
             "shoot poacher",
         ]
     )
     assert _said(cap, "nothing to shoot")
+
+
+def _to_old_woods_mounted():
+    return TO_RIVER_WITH_APPLE + ["give apple to horse", "ride horse", "north", "west"]
+
+
+def test_deer_is_an_item_fixture_not_a_character():
+    game, _ = _game()
+    ow = game.locations["Old Woods"]
+    assert "deer" in ow.items  # a fixture you observe...
+    assert "deer" not in ow.characters  # ...not a Character
+    assert not ow.items["deer"].get_property("gettable")
+
+
+def test_examine_the_grazing_doe():
+    game, cap = _play(_to_old_woods_mounted() + ["examine deer"])
+    assert _said(cap, "grazing and doesn't appear to notice you")
+
+
+def test_follow_deer_before_she_is_spooked_is_refused():
+    game, cap = _play(_to_old_woods_mounted() + ["follow deer"])
+    assert game.player.location.name == "Old Woods"
+    assert _said(cap, "nothing to chase yet")
+
+
+def test_coming_out_of_the_shack_spooks_the_doe_into_the_deep_woods():
+    game, cap = _play(_to_old_woods_mounted() + ["dismount", "enter", "out"])
+    assert _said(cap, "bolts")  # she flees on the way out of the shack
+    assert "deer" not in game.locations["Old Woods"].items
+    assert "deer" in game.locations["Deep Woods"].items
+    # ...and now the chase is on.
+    game.do_command("ride horse")
+    game.do_command("follow deer")
+    assert game.player.location.name == "Deep Woods"
 
 
 def test_taking_the_purse_scores_and_north_opens():
@@ -798,8 +837,9 @@ def test_cannot_walk_north_into_the_deep_woods():
     game, cap = _play(setup + ["north"])
     assert game.player.location.name == "Old Woods"  # didn't move; no such exit
     assert not game.is_game_over()
-    # FOLLOW DEER is the way in.
-    game.do_command("follow deer")
+    # FOLLOW DEER is the way in -- once the shack has spooked her into fleeing.
+    for c in ["dismount", "enter", "out", "ride horse", "follow deer"]:
+        game.do_command(c)
     assert game.player.location.name == "Deep Woods"
 
 
