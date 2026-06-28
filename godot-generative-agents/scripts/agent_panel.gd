@@ -98,9 +98,10 @@ func _on_pressed(name: String) -> void:
 
 
 func _refresh() -> void:
-	# Reflect _active in every row: the tracked one reads "Tracking" and is tinted.
+	# Reflect _active in every row: the tracked one is tinted and its button reads
+	# "Untrack" (press it to stop), the rest read "Track".
 	for n in _rows:
 		var r: Dictionary = _rows[n]
 		var is_active: bool = n == _active
-		r["button"].text = "Tracking" if is_active else "Track"
+		r["button"].text = "Untrack" if is_active else "Track"
 		r["row"].modulate = ACTIVE_TINT if is_active else Color.WHITE
