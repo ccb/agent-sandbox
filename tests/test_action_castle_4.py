@@ -241,32 +241,104 @@ def test_tower_stairs_has_only_two_exits():
 
 
 def test_bolting_out_the_front_gate_without_the_dagger_is_doom():
-    # Guardroom WEST -> the guard catches you at the bridge, marches you back and
-    # locks the door; with no dagger to cut your hair, you're trapped forever.
-    game, cap = _play(["out", "down", "west"])
+    # Lower the drawbridge, bolt across (Guardroom WEST) -> the guard catches you
+    # at the bridge, marches you back and locks the door; with no dagger to cut
+    # your hair, you're trapped forever.
+    game, cap = _play(["out", "down", "lower drawbridge", "west"])
     assert _said(cap, "guard")
     assert game.is_game_over()
     assert _said(cap, "nineteen years")
 
 
 def test_caught_with_the_dagger_can_still_escape_by_window():
-    game, cap = _play(["out", "down", "open footlocker", "take dagger", "west"])
+    front_gate = [
+        "out",
+        "down",
+        "open footlocker",
+        "take dagger",
+        "lower drawbridge",
+        "west",
+    ]
+    game, cap = _play(front_gate)
     assert _said(cap, "guard")
     assert game.player.location.name == "Tower"  # marched back upstairs
     assert game.locations["Tower"].get_property("door_locked")
     assert not game.is_game_over()  # the dagger means the window is still open
     # the door is locked now, but the window still works
     game, cap = _play(
-        ["out", "down", "open footlocker", "take dagger", "west"]
+        front_gate
         + ["cut hair", "get hair", "make rope", "tie rope", "climb down", "let go"]
     )
     assert game.player.location.name == "Gardens"
 
 
 def test_the_locked_door_blocks_the_stairs():
-    game, cap = _play(["out", "down", "open footlocker", "take dagger", "west", "out"])
+    game, cap = _play(
+        [
+            "out",
+            "down",
+            "open footlocker",
+            "take dagger",
+            "lower drawbridge",
+            "west",
+            "out",
+        ]
+    )
     assert game.player.location.name == "Tower"
     assert _said(cap, "locked")
+
+
+def test_drawbridge_starts_raised_and_seals_the_front_gate():
+    game, cap = _play(["out", "down", "west"])  # no lowering first
+    assert game.locations["Drawbridge"].get_property("raised")
+    assert game.player.location.name == "Guardroom"  # didn't get out
+    assert _said(cap, "lower it first")
+
+
+def test_lowering_the_drawbridge_opens_the_front_gate():
+    game, cap = _play(["out", "down", "lower drawbridge"])
+    assert not game.locations["Drawbridge"].get_property("raised")
+    assert _said(cap, "sinks down across the moat")
+
+
+def test_winch_only_works_from_the_guardroom():
+    game, cap = _play(ESCAPE_TO_GARDENS + ["lower drawbridge"])  # out in the gardens
+    assert _said(cap, "winch is back in the guardroom")
+
+
+def test_catching_the_princess_hauls_the_drawbridge_back_up():
+    game, cap = _play(
+        ["out", "down", "open footlocker", "take dagger", "lower drawbridge", "west"]
+    )
+    assert _said(cap, "bar themselves inside")  # guards seal the castle
+    assert game.locations["Drawbridge"].get_property("raised")
+
+
+def test_escaping_the_window_seals_the_castle_behind_her():
+    # Even if she lowered the bridge first, slipping out the window raises it --
+    # the castle is sealed, so EAST back in is barred.
+    cmds = [
+        "out",
+        "down",
+        "open footlocker",
+        "take dagger",
+        "lower drawbridge",
+        "up",
+        "enter",
+        "cut hair",
+        "get hair",
+        "make rope",
+        "tie rope",
+        "climb down",
+        "let go",
+    ]
+    game, cap = _play(cmds)
+    assert game.player.location.name == "Gardens"
+    assert game.locations["Drawbridge"].get_property("raised")  # sealed on escape
+    game.do_command("south")  # -> Drawbridge
+    game.do_command("east")  # try back into the castle
+    assert game.player.location.name == "Drawbridge"  # sealed out
+    assert _said(cap, "no way back inside")
 
 
 # --- Slice 4a: the horse ---------------------------------------------------
@@ -407,7 +479,8 @@ def test_shoot_poacher_saves_the_deer_and_drops_the_purse():
 
 
 def test_shooting_needs_the_crossbow():
-    # Ride in without the crossbow (skip the shack), then it's the wrong tool.
+    # Duck into the shack (which spooks the doe) but don't grab the crossbow, then
+    # chase her in -- and you've got the wrong tool for the poacher.
     game, cap = _play(
         TO_RIVER_WITH_APPLE
         + [
@@ -415,11 +488,66 @@ def test_shooting_needs_the_crossbow():
             "ride horse",
             "north",
             "west",
+            "dismount",
+            "enter",  # into the shack (spooks the deer on the way back out)
+            "out",  # back in the Old Woods -- no crossbow taken
+            "ride horse",
             "follow deer",
             "shoot poacher",
         ]
     )
     assert _said(cap, "nothing to shoot")
+
+
+def _to_old_woods_mounted():
+    return TO_RIVER_WITH_APPLE + ["give apple to horse", "ride horse", "north", "west"]
+
+
+def test_deer_is_an_item_fixture_not_a_character():
+    game, _ = _game()
+    ow = game.locations["Old Woods"]
+    assert "deer" in ow.items  # a fixture you observe...
+    assert "deer" not in ow.characters  # ...not a Character
+    assert not ow.items["deer"].get_property("gettable")
+
+
+def test_examine_the_grazing_doe():
+    game, cap = _play(_to_old_woods_mounted() + ["examine deer"])
+    assert _said(cap, "grazing and doesn't appear to notice you")
+
+
+def test_follow_deer_before_she_is_spooked_is_refused():
+    game, cap = _play(_to_old_woods_mounted() + ["follow deer"])
+    assert game.player.location.name == "Old Woods"
+    assert _said(cap, "nothing to chase yet")
+
+
+def test_coming_out_of_the_shack_spooks_the_doe_into_the_deep_woods():
+    game, cap = _play(_to_old_woods_mounted() + ["dismount", "enter", "out"])
+    assert _said(cap, "bolts")  # she flees on the way out of the shack
+    assert _said(cap, "shack door bangs")
+    assert "deer" not in game.locations["Old Woods"].items
+    assert "deer" in game.locations["Deep Woods"].items
+    # ...and now the chase is on.
+    game.do_command("ride horse")
+    game.do_command("follow deer")
+    assert game.player.location.name == "Deep Woods"
+
+
+def test_a_loud_noise_spooks_the_doe_even_without_the_shack():
+    # Talking aloud in the woods is racket enough -- she bolts (and you've not
+    # got the crossbow, the careless player's just-deserts).
+    game, cap = _play(_to_old_woods_mounted() + ["dismount", "say hello there"])
+    assert _said(cap, "sudden noise") and _said(cap, "bolts")
+    assert "deer" in game.locations["Deep Woods"].items
+
+
+def test_quiet_actions_do_not_spook_the_doe():
+    # Looking and dismounting are quiet; she keeps grazing.
+    game, _ = _play(
+        _to_old_woods_mounted() + ["dismount", "examine deer", "examine shack"]
+    )
+    assert "deer" in game.locations["Old Woods"].items
 
 
 def test_taking_the_purse_scores_and_north_opens():
@@ -547,12 +675,63 @@ def test_say_wade_sent_me_needs_having_met_wade():
     assert not game.locations["Roadhouse"].get_property("admitted")
 
 
+def test_breakpoint_is_crowded_with_bikers_and_ranchers():
+    bp = ac4.build_game().locations["The Breakpoint"]
+    assert {"bartender", "bikers", "ranchers"} <= set(bp.characters)
+
+
+def test_examine_and_talk_to_the_bar_crowd():
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("talk to bartender")]
+    game, cap = _play(cmds + ["examine bikers", "talk to ranchers"])
+    assert _said(cap, "Steel Vipers")  # examine bikers
+    assert _said(cap, "tip their hats")  # talk to ranchers
+
+
 def test_brawl_requires_provoking_the_biker_first():
     cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("talk to bartender") + 1]
     cmds += ["punch biker"]  # before serving table four
     game, cap = _play(cmds)
     assert _said(cap, "Nobody's looking for a fight")
     assert "keys" not in game.player.location.items
+
+
+def test_shack_description_drops_the_crossbow_once_taken():
+    to_shack = TO_RIVER_WITH_APPLE + [
+        "give apple to horse",
+        "ride horse",
+        "north",
+        "west",
+        "dismount",
+        "enter",
+    ]
+    game, _ = _play(to_shack)
+    assert "There's a crossbow here" in game.locations["Old Shack"].description
+    game, _ = _play(to_shack + ["take crossbow"])
+    desc = game.locations["Old Shack"].description
+    assert "crossbow here" not in desc and "bare pegs" in desc
+
+
+def test_deep_woods_description_drops_the_poacher_once_dealt():
+    game, _ = _play(TO_DEEP_WOODS)
+    assert "cloaked figure stalks" in game.locations["Deep Woods"].description
+    game, _ = _play(TO_DEEP_WOODS + ["shoot poacher"])
+    desc = game.locations["Deep Woods"].description
+    assert "stalks" not in desc and "poacher gone" in desc
+
+
+def test_river_description_drops_the_horse_once_ridden_off():
+    game, _ = _play(TO_RIVER_WITH_APPLE)  # horse still tethered
+    assert "tethered to a tree" in game.locations["Down by the River"].description
+    game, _ = _play(
+        TO_RIVER_WITH_APPLE + ["give apple to horse", "ride horse", "north"]
+    )
+    assert "tethered" not in game.locations["Down by the River"].description
+
+
+def test_breakpoint_description_reflects_the_brawl():
+    # Through "punch biker", which kicks off the brawl.
+    game, _ = _play(ac4.WALKTHROUGH_WIN[:41])
+    assert "brawl underway" in game.locations["The Breakpoint"].description
 
 
 def test_cannot_ride_the_horse_onto_the_highway():
@@ -563,6 +742,66 @@ def test_cannot_ride_the_horse_onto_the_highway():
     game, cap = _play(cmds)
     assert game.player.location.name == "Roadhouse"
     assert _said(cap, "motor vehicle")
+
+
+def _to_keys(grab_rancher=True):
+    # Through the brawl: CATCH KEYS grabs the biker's skull ring; the ranchers'
+    # fob is on the floor, picked up separately (GET RANCHER KEYS).
+    w = ac4.WALKTHROUGH_WIN
+    cmds = w[: w.index("punch biker") + 1] + ["catch keys"]
+    if grab_rancher:
+        cmds += ["get rancher keys"]
+    return cmds + ["out"]
+
+
+def test_the_truck_is_a_second_unready_vehicle():
+    rh = ac4.build_game().locations["Roadhouse"]
+    assert "truck" in rh.items
+    assert rh.items["truck"].is_vehicle() and not rh.items["truck"].vehicle_ready()
+
+
+def test_the_punch_knocks_loose_only_the_bikers_keyring():
+    # CATCH grabs the biker's skull ring; the ranchers' fob is on the floor, not
+    # in hand, until you GET it.
+    game, cap = _play(
+        ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("punch biker") + 1]
+        + ["catch keys"]
+    )
+    assert "keys" in game.player.inventory  # biker skull ring caught
+    assert "rancher keys" not in game.player.inventory  # not auto-grabbed
+    assert "rancher keys" in game.player.location.items  # still on the floor
+    game.do_command("get rancher keys")
+    assert "rancher keys" in game.player.inventory
+
+
+def test_brawl_narration_matches_the_blow():
+    base = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("punch biker")]
+    _, cap = _play(base + ["throw drink at biker"])
+    assert _said(cap, "toss a drink") and not _said(cap, "crack a bottle")
+    _, cap = _play(base + ["smash bottle"])
+    assert _said(cap, "smash a bottle")
+    # Either way, only the biker's keyring is named as knocked loose.
+    assert _said(cap, "skull keyring is knocked loose")
+    assert not _said(cap, "horseshoe fob")
+
+
+def test_rancher_keys_examine_show_the_double_deuce_fob():
+    game, cap = _play(_to_keys() + ["examine rancher keys"])
+    assert _said(cap, "Double-Deuce") and _said(cap, "RIDE EASY")
+
+
+def test_each_key_only_fits_its_own_vehicle():
+    # Holding only the skull keys (never grabbed the rancher fob), the truck balks.
+    game, cap = _play(_to_keys(grab_rancher=False) + ["use keys on truck"])
+    assert _said(cap, "skull key doesn't fit")
+
+
+def test_riding_off_in_the_truck_is_a_winning_ending():
+    game, cap = _play(_to_keys() + ["start truck", "get on truck", "east"])
+    assert game.is_game_over()
+    assert _said(cap, "drives the truck to Highway")
+    assert _said(cap, "old truck rattles")
+    assert game.score == 100
 
 
 def test_brush_hair_is_flavor_with_the_hairbrush():
@@ -587,7 +826,7 @@ def test_cut_hair_drops_it_on_the_floor_and_climb_has_narration():
     # Climbing out the window has the rope/rosebush descent flavor.
     game2, cap2 = _play(ESCAPE_TO_GARDENS)
     assert game2.player.location.name == "Gardens"
-    assert _said(cap2, "down the rope") and _said(cap2, "rosebush")
+    assert _said(cap2, "down the hair-rope") and _said(cap2, "rosebush")
 
 
 def test_climb_down_puts_you_on_the_rope_not_yet_escaped():
@@ -608,6 +847,85 @@ def test_jump_from_the_rope_drops_into_the_gardens():
     assert _said(cap, "rosebush")
 
 
+def test_descent_uses_climbs_then_falls_verbs():
+    # Per-exit move verbs: the rope descent reads "climbs", the drop "falls"
+    # (not the default "moved").
+    game, cap = _play(ESCAPE_TO_GARDENS[:-1])  # up to and incl. "climb down"
+    assert _said(cap, "climbs to Outside the Tower")
+    game, cap = _play(ESCAPE_TO_GARDENS)  # ...then "let go"
+    assert _said(cap, "falls to Gardens")
+    assert not _said(cap, "moved to Gardens")
+
+
+# --- The fall's outcome is generated from what she's wearing -----------------
+
+# Reach the guardroom (where the cot holds the boots), then on through the
+# tower escape with whatever footwear is named -- barefoot if none.
+_GUARDROOM = ["out", "down", "open footlocker", "take dagger"]
+_TOWER_ESCAPE = ["up", "enter", "cut hair", "get hair", "make rope", "tie rope"]
+
+
+def _fall_wearing(footwear):
+    cmds = list(_GUARDROOM)
+    if footwear == "boots":
+        cmds += ["get boots", "wear boots"]
+    cmds += _TOWER_ESCAPE
+    if footwear == "glass":
+        cmds += ["get glass slippers", "wear glass slippers"]
+    cmds += ["climb down", "let go"]  # -> Gardens
+    return _play(cmds)
+
+
+def test_fall_in_the_gown_tears_it_to_ribbons():
+    game, cap = _fall_wearing("bare")  # she starts in the gown
+    assert _said(cap, "gown takes the brunt -- torn to ribbons")
+    assert game.player.worn["gown"].description == "a gown torn to ribbons"
+
+
+def test_barefoot_fall_bruises_her_feet():
+    game, cap = _fall_wearing("bare")
+    assert _said(cap, "bare feet land hard")
+    assert "bruised" in game.player.appearance.get("feet_injury", "")
+
+
+def test_glass_slippers_shatter_and_cut_her():
+    game, cap = _fall_wearing("glass")
+    assert _said(cap, "glass slippers shatter")
+    assert "glass slippers" not in game.player.worn  # destroyed
+    assert "cut and bleeding" in game.player.appearance.get("feet_injury", "")
+
+
+def test_army_boots_spare_her_feet():
+    game, cap = _fall_wearing("boots")
+    assert _said(cap, "boots hit the dirt")
+    assert "boots" in game.player.worn
+    assert not game.player.appearance.get("feet_injury")  # unhurt
+
+
+def test_glass_slipper_cuts_make_her_limp_on_foot():
+    game, cap = _fall_wearing("glass")  # soles cut by the shards
+    assert game.player.get_property("move_verb") == "limps"
+    game.do_command("south")  # Gardens -> Drawbridge, on foot
+    assert _said(cap, "limps to Drawbridge")
+
+
+def test_unhurt_feet_do_not_limp():
+    game, cap = _fall_wearing("boots")
+    game.do_command("south")
+    assert _said(cap, "moved to Drawbridge")
+    assert not _said(cap, "limps")
+
+
+def test_river_reflects_the_fall_damage():
+    # The river past the tower is the only mirror left -- it shows the haircut,
+    # scratches, and torn gown.
+    game, cap = _play(ESCAPE_TO_GARDENS + ["south", "south", "examine river"])
+    refl = [t for t in cap.texts(Channel.NARRATION) if "wavering reflection" in t][-1]
+    assert "ragged crop" in refl  # the haircut
+    assert "scratched" in refl  # the rosebush
+    assert "gown torn to ribbons" in refl  # the gown's new description
+
+
 def test_no_climbing_back_up_from_the_gardens():
     # The rope dangles out of reach once you're on the ground -- one-way drop.
     game, _ = _play(ESCAPE_TO_GARDENS + ["up"])
@@ -621,7 +939,7 @@ def test_pick_rose_is_flavor_not_a_bare_bush():
     game, cap = _play(ESCAPE_TO_GARDENS + ["pick rose", "smell rose"])
     assert _said(cap, "picked the lone rose")
     assert "rose" in game.player.inventory
-    assert not _said(cap, "bare")
+    assert not _said(cap, "bare bush")  # not the "nothing left to pick" refusal
 
 
 def test_pick_watermelon_is_a_too_heavy_gag():
@@ -647,8 +965,9 @@ def test_cannot_walk_north_into_the_deep_woods():
     game, cap = _play(setup + ["north"])
     assert game.player.location.name == "Old Woods"  # didn't move; no such exit
     assert not game.is_game_over()
-    # FOLLOW DEER is the way in.
-    game.do_command("follow deer")
+    # FOLLOW DEER is the way in -- once the shack has spooked her into fleeing.
+    for c in ["dismount", "enter", "out", "ride horse", "follow deer"]:
+        game.do_command(c)
     assert game.player.location.name == "Deep Woods"
 
 

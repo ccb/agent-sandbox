@@ -620,6 +620,31 @@ def test_crying_baby_is_fatal_at_the_deep_ravine():
     assert _said(cap, "stirges")
 
 
+def test_a_loud_action_alerts_the_bandits():
+    # Noise of your own (not just the baby) gives you away.
+    game, cap = _game()
+    _solo_to(game, "Bandit Camp")
+    game.do_command("say hey you lot")  # yelling aloud
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "Your sudden racket alerts the bandits")
+
+
+def test_a_loud_action_alerts_the_stirges():
+    game, cap = _game()
+    _solo_to(game, "Deep Ravine")
+    game.do_command("say hello down there")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "alerts the stirges")
+
+
+def test_quiet_actions_do_not_alert_the_bandits():
+    game, cap = _game()
+    _solo_to(game, "Bandit Camp")
+    game.do_command("examine bandits")  # quiet
+    game.do_command("look")
+    assert not game.is_game_over()
+
+
 def test_feeding_stew_quiets_the_baby_and_makes_it_safe():
     game, cap = _game()
     baby = _with_crying_baby(game)

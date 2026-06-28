@@ -503,6 +503,13 @@ class BrushHair(actions.Action):
 # Read-only actions that don't "let the poacher loose his arrow" (you may look).
 _DEER_SAFE_ACTIONS = {"examine", "describe", "inventory"}
 
+# Actions loud enough to spook the grazing doe in the Old Woods -- talking or
+# yelling aloud (say/talk), smashing something (break). Quiet things (looking,
+# slipping into the shack, taking the crossbow, mounting) leave her be, so you
+# can arm yourself first if you move quietly. (The shack door banging shut as
+# you step out is its own noise -- see the deer_flees trigger.)
+_NOISY_ACTIONS = {"say", "talk", "break"}
+
 
 class FollowDeer(actions.Action):
     """Ride after the deer (from the Old Woods) into the Deep Woods."""
@@ -523,6 +530,15 @@ class FollowDeer(actions.Action):
         if riding is None or riding.name != "horse":
             self.parser.fail("You'd never catch her on foot -- you'll need the horse.")
             return False
+        # There's a chase only once she's bolted. While she's still grazing in
+        # the Old Woods there's nothing to follow -- hinting at the shack, where
+        # emerging spooks her (and where the crossbow is, which you'll want).
+        if "deer" in self.player.location.items:
+            self.parser.fail(
+                "The doe is still grazing, unspooked -- there's nothing to chase "
+                "yet. (The game warden's shack might be worth a look first.)"
+            )
+            return False
         return True
 
     def apply_effects(self):
@@ -531,6 +547,72 @@ class FollowDeer(actions.Action):
             "the Deep Woods."
         )
         _relocate(self.game, self.player, "Deep Woods")
+
+
+class _WorkWinch(actions.Action):
+    """Shared base for the guardroom drawbridge winch. Subclasses set the
+    target state (``_target_raised``) and the success line."""
+
+    _target_raised = True
+    _already = "The drawbridge is already there."
+    _line = ""
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.drawbridge = self.game.locations["Drawbridge"]
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Guardroom":
+            self.parser.fail(
+                "There's no winch here. The drawbridge winch is back in the guardroom."
+            )
+            return False
+        if bool(self.drawbridge.get_property("raised")) == self._target_raised:
+            self.parser.fail(self._already)
+            return False
+        return True
+
+    def apply_effects(self):
+        self.drawbridge.set_property("raised", self._target_raised)
+        self.parser.ok(self._line)
+
+
+class LowerDrawbridge(_WorkWinch):
+    """Work the guardroom winch to lower the drawbridge across the moat."""
+
+    ACTION_NAME = "lower drawbridge"
+    ACTION_DESCRIPTION = "Lower the castle drawbridge"
+    ACTION_ALIASES = [
+        "lower the drawbridge",
+        "lower bridge",
+        "lower the bridge",
+        "lower drawbridge with winch",
+    ]
+    _target_raised = False
+    _already = "The drawbridge is already down."
+    _line = (
+        "You throw your weight on the great winch. With a shriek of chains the "
+        "drawbridge sinks down across the moat -- the way west lies open."
+    )
+
+
+class RaiseDrawbridge(_WorkWinch):
+    """Work the guardroom winch to haul the drawbridge back up."""
+
+    ACTION_NAME = "raise drawbridge"
+    ACTION_DESCRIPTION = "Raise the castle drawbridge"
+    ACTION_ALIASES = [
+        "raise the drawbridge",
+        "raise bridge",
+        "raise the bridge",
+    ]
+    _target_raised = True
+    _already = "The drawbridge is already up."
+    _line = (
+        "You crank the winch the other way; the drawbridge groans back up, sealing "
+        "the castle gate."
+    )
 
 
 class ShootPoacher(actions.Action):
@@ -810,6 +892,12 @@ class ServeTableFour(actions.Action):
         "give tray to table four",
         "deliver tray",
         "deliver the tray",
+        # "table 4" (the numeral) reads the same as "table four"
+        "take tray to table 4",
+        "bring tray to table 4",
+        "take the tray to table 4",
+        "serve table 4",
+        "give tray to table 4",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -858,6 +946,7 @@ class StartBrawl(actions.Action):
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         self.player = self.game.player
+        self.command = command
 
     def check_preconditions(self) -> bool:
         loc = self.player.location
@@ -872,21 +961,47 @@ class StartBrawl(actions.Action):
             return False
         return True
 
+    def _opening_blow(self) -> str:
+        """The first move, worded to match how the player threw it."""
+        cmd = self.command.lower()
+        if "throw" in cmd or "drink" in cmd:
+            return "You toss a drink in the biker's face"
+        if "smash" in cmd or "bottle" in cmd:
+            return "You smash a bottle over the biker's head"
+        if "deck" in cmd:
+            return "You deck the biker with a roundhouse"
+        if "punch" in cmd or "hit" in cmd:
+            return "You crack the biker across the jaw"
+        return "You throw the first punch"
+
     def apply_effects(self):
         loc = self.player.location
         loc.set_property("brawled", True)
+        # You hit the BIKER, so his skull keyring is what's knocked loose -- CATCH
+        # it. The ranchers get dragged into the melee too and their truck keys end
+        # up on the floor (a separate GET; see CatchKeys' pointer), so that ring
+        # is the brawl's doing, not your punch.
         keys = _item(
             "keys",
             "a ring of motorcycle keys",
             "A heavy skull keyring stamped ROCK HARD, RIDE FREE.",
         )
         loc.add_item(keys)
+        rancher_keys = _item(
+            "rancher keys",
+            "a ring of truck keys",
+            "A tooled-leather horseshoe fob, branded with the Double-Deuce mark and "
+            "stamped RIDE EASY.",
+        )
+        rancher_keys.add_alias("truck keys")
+        rancher_keys.add_alias("horseshoe keys")
+        loc.add_item(rancher_keys)
         self.game.award(
             "brawl",
             5,
-            "You crack a bottle over his head and the Breakpoint ERUPTS -- fists, "
-            "stools, and longnecks flying. In the chaos a ring of motorcycle keys is "
-            "knocked loose and skitters across the floor. (Quick -- CATCH KEYS!)",
+            f"{self._opening_blow()} and the Breakpoint ERUPTS -- fists, stools, and "
+            "longnecks flying. His skull keyring is knocked loose and skitters across "
+            "the floor. (Quick -- CATCH KEYS!)",
         )
 
 
@@ -907,13 +1022,14 @@ class CatchKeys(actions.Action):
         return True
 
     def apply_effects(self):
-        keys = self.player.location.items["keys"]
-        self.player.location.remove_item(keys)
+        # CATCH grabs the biker's airborne skull keyring (what your punch knocked
+        # loose). The ranchers' fob is left lying on the floor in the melee -- the
+        # room listing shows it; the player can notice and GET it on their own.
+        loc = self.player.location
+        keys = loc.items["keys"]
+        loc.remove_item(keys)
         self.player.add_to_inventory(keys)
-        self.parser.ok(
-            "You snatch the keys out of the air and bolt for the door before anyone's "
-            "the wiser."
-        )
+        self.parser.ok("You grab the skull keys out of the air, quick as a cat.")
 
 
 class UseKeyOnMotorcycle(actions.Action):
@@ -940,7 +1056,10 @@ class UseKeyOnMotorcycle(actions.Action):
             self.parser.fail("There's no motorcycle here.")
             return False
         if not _is_holding(self.player, "keys"):
-            self.parser.fail("You don't have any keys.")
+            if _is_holding(self.player, "rancher keys"):
+                self.parser.fail("The horseshoe-fob key doesn't fit the chopper.")
+            else:
+                self.parser.fail("You don't have any keys.")
             return False
         if loc.items["motorcycle"].vehicle_ready():
             self.parser.fail("The chopper's already running.")
@@ -953,6 +1072,48 @@ class UseKeyOnMotorcycle(actions.Action):
             "You slot the skull key home and thumb the starter. The chopper coughs, "
             "catches, and ROARS to life. (Now GET ON THE MOTORCYCLE and head EAST or "
             "WEST onto the highway.)"
+        )
+
+
+class UseKeyOnTruck(actions.Action):
+    ACTION_NAME = "use key on truck"
+    ACTION_DESCRIPTION = "Start the pickup truck with the ranchers' keys"
+    ACTION_ALIASES = [
+        "use keys on truck",
+        "use rancher keys on truck",
+        "use truck keys on truck",
+        "start the truck",
+        "start truck",
+        "start the pickup",
+        "put key in truck",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "truck" not in loc.items:
+            self.parser.fail("There's no truck here.")
+            return False
+        if not _is_holding(self.player, "rancher keys"):
+            if _is_holding(self.player, "keys"):
+                self.parser.fail("That skull key doesn't fit the truck's ignition.")
+            else:
+                self.parser.fail("You don't have any keys.")
+            return False
+        if loc.items["truck"].vehicle_ready():
+            self.parser.fail("The truck's already idling.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.items["truck"].set_property("vehicle_ready", True)
+        self.parser.ok(
+            "You jam the horseshoe-fob key in and crank it. The old truck shudders, "
+            "belches blue smoke, and rumbles to life. (Now GET ON THE TRUCK and head "
+            "EAST or WEST onto the highway.)"
         )
 
 
@@ -1150,7 +1311,7 @@ def build_game() -> ActionCastle4:
     )
     old_woods = L(
         "Old Woods",
-        "You're in the Old Woods. The game warden's shack is here. You see a deer!",
+        "You're in the Old Woods. The game warden's shack is here.",
     )
     old_shack = L("Old Shack", "The game warden's shack. There's a crossbow here.")
     deep_woods = L(
@@ -1197,27 +1358,78 @@ def build_game() -> ActionCastle4:
     # to go back up -- but once you've dropped, the rope's out of reach from the
     # ground, so Outside -> Gardens is one-way.
     _one_way(tower, "down", outside_tower)  # climb out the window onto the rope
+    tower.move_verbs["down"] = "climbs"  # "Princess climbs to Outside the Tower"
     tower.travel_descriptions["down"] = (
-        "You climb out the window and inch down the rope until you're hanging at its "
-        "end -- a large rosebush waits directly below."
+        "Hand over hand, you work down the hair-rope to its frayed end, where you "
+        "dangle above a large rosebush."
     )
     _one_way(outside_tower, "in", tower)  # climb back in through the window
+    outside_tower.move_verbs["in"] = "climbs"
     outside_tower.travel_descriptions["in"] = (
-        "You haul yourself back up and climb in through the window."
+        "You haul yourself back up and in through the window."
     )
     _one_way(outside_tower, "down", gardens)  # let go / jump -> drop into the gardens
-    outside_tower.travel_descriptions["down"] = (
-        "You let go, crashing into the thorny rosebush. It breaks your fall and your "
-        "voluminous gown takes the brunt -- torn to ribbons, but you've only a few "
-        "scratches."
-    )
+    outside_tower.move_verbs["down"] = "falls"  # "Princess falls to Gardens"
+
+    def _worn_feet(player):
+        """The footwear she's wearing as she drops, or None if barefoot."""
+        return next(
+            (
+                it
+                for it in player.worn.values()
+                if it.get_property("wear_slot") == "feet"
+            ),
+            None,
+        )
+
+    def _describe_fall(g):
+        """The drop's narration, generated from what she's wearing: the gown only
+        'takes the brunt' if she's in it, and her feet fare differently in glass,
+        boots, or bare. Paired with the fall_into_rosebush trigger, which makes
+        the state match (tears the gown, shatters the slippers, marks her)."""
+        p = g.player
+        parts = ["You let go, crashing into the thorny rosebush."]
+        if "gown" in p.worn:
+            parts.append(
+                "It breaks your fall and your voluminous gown takes the brunt -- "
+                "torn to ribbons, but you've only a few scratches."
+            )
+        else:
+            parts.append(
+                "It breaks your fall, but with no gown to shield you the thorns "
+                "rake your arms and shoulders raw."
+            )
+        feet = _worn_feet(p)
+        if feet is None:
+            parts.append("Your bare feet land hard, left tender and bruised.")
+        elif feet.name == "glass slippers":
+            parts.append(
+                "The glass slippers shatter on impact, shards slicing your soles."
+            )
+        elif feet.name == "boots":
+            parts.append(
+                "Your army boots hit the dirt with a thud and a puff of dust -- "
+                "your feet, at least, are fine."
+            )
+        else:
+            parts.append(
+                f"Luckily the {feet.name} cushion the landing -- your feet are fine."
+            )
+        return " ".join(parts)
+
+    outside_tower.travel_descriptions["down"] = _describe_fall
     _one_way(tower_stairs, "enter", tower)
     tower_stairs.add_connection("down", guardroom)  # auto: guardroom up -> stairs
-    # WEST out of the castle is one-way -- "returning to the castle is out of the
-    # question" (rulebook p9) -- and the guard is waiting at the bridge (trigger
-    # below): a break for it gets you marched back upstairs unless you've already
-    # slipped out the tower window.
-    _one_way(guardroom, "west", drawbridge)
+    # The drawbridge is the castle gate, between the Guardroom (inside) and the
+    # bridge/outer grounds. It starts RAISED (she's a prisoner, the castle is
+    # sealed): WEST out of the guardroom and EAST back in are both barred until
+    # the winch lowers it. The front gate is still a trap -- lower the bridge,
+    # bolt across, and the guard marches you back (trigger below) and hauls it up
+    # again -- so the real way out is the tower window. Once she's out (caught
+    # then escaped, or straight out the window) the bridge stays up: "returning
+    # to the castle is out of the question" (rulebook p9).
+    drawbridge.set_property("raised", True)
+    guardroom.add_connection("west", drawbridge)  # auto: drawbridge east -> guardroom
     # Gardens / river
     gardens.add_connection("south", drawbridge)  # auto: drawbridge north -> gardens
     drawbridge.add_connection("south", river)  # auto: river north -> drawbridge
@@ -1289,6 +1501,35 @@ def build_game() -> ActionCastle4:
             return bool(self.tower.get_property("door_locked"))
 
     tower.add_block("out", LockedDoorBlock(tower))
+
+    # The drawbridge gates the castle gate both ways while it's raised: you can't
+    # bolt WEST out of the guardroom, and you can't come back EAST into the castle.
+    # (It gates only this crossing -- the outer grounds stay connected, so a raised
+    # bridge is never a dead-end.)
+    class DrawbridgeRaisedBlock(blocks.Block):
+        def __init__(self, drawbridge, message):
+            super().__init__("The drawbridge is raised", message)
+            self.drawbridge = drawbridge
+
+        def is_blocked(self) -> bool:
+            return bool(self.drawbridge.get_property("raised"))
+
+    guardroom.add_block(
+        "west",
+        DrawbridgeRaisedBlock(
+            drawbridge,
+            "The drawbridge is hauled up. You'll have to lower it first -- there's "
+            "a great winch here in the guardroom.",
+        ),
+    )
+    drawbridge.add_block(
+        "east",
+        DrawbridgeRaisedBlock(
+            drawbridge,
+            "The drawbridge is hauled up, sealing the castle gate -- there's no way "
+            "back inside.",
+        ),
+    )
 
     # You must get off the horse to squeeze into the warden's shack.
     class DismountBlock(blocks.Block):
@@ -1362,14 +1603,14 @@ def build_game() -> ActionCastle4:
             super().__init__(
                 "No wheels",
                 "You'll need a motor vehicle to take the highway. (Start the "
-                "MOTORCYCLE, then GET ON it.)",
+                "MOTORCYCLE or the TRUCK, then GET ON it.)",
             )
             self.game_ref = game_ref
 
         def is_blocked(self) -> bool:
             player = self.game_ref["game"].player
             riding = getattr(player, "riding", None)
-            return riding is None or riding.name != "motorcycle"
+            return riding is None or riding.name not in ("motorcycle", "truck")
 
     # The Game isn't built yet; hand the block a holder we fill in below.
     _game_ref = {}
@@ -1464,6 +1705,17 @@ def build_game() -> ActionCastle4:
     )
     cot.add_item(boots)
     guardroom.add_item(cot)
+    # The drawbridge winch -- LOWER / RAISE DRAWBRIDGE work it (see _WorkWinch).
+    winch = _fixture(
+        "winch",
+        "a great iron winch",
+        "A great iron winch wound with chain -- this is what raises and lowers the "
+        "castle drawbridge. Try LOWER DRAWBRIDGE.",
+    )
+    winch.add_alias("crank")
+    winch.add_alias("windlass")
+    winch.add_alias("drawbridge winch")
+    guardroom.add_item(winch)
     rosebushes = _fixture(
         "rosebushes",
         "thorny rosebushes",
@@ -1494,6 +1746,17 @@ def build_game() -> ActionCastle4:
         "mount_refusal_message", "The mare steps away and whinnies, shaking its mane."
     )
     river.add_item(mare)
+    # The river doubles as a mirror -- EXAMINE RIVER (or WATER) gives back a live
+    # reflection. It's the only reflective surface past the tower, so it's where
+    # she sees what the fall did: shorn hair, scratches, the torn gown, her feet.
+    river_water = _fixture(
+        "river",
+        "the slow-moving river",
+        "The slow water gives back a wavering reflection.",
+    )
+    river_water.add_alias("water")
+    river_water.set_property("is_mirror", True)
+    river.add_item(river_water)
     old_shack.add_item(
         _item(
             "crossbow",
@@ -1537,6 +1800,19 @@ def build_game() -> ActionCastle4:
     bike.set_property("mount_refusal_message", "The bike won't start without a key.")
     roadhouse.add_item(bike)
 
+    # The ranchers' pickup -- the other way out, started by the horseshoe-fob keys.
+    truck = _fixture(
+        "truck",
+        "a rusty pickup truck",
+        "An old rustbucket -- creaky springs, bald tires, a gun rack in the back window.",
+    )
+    truck.add_alias("pickup")
+    truck.add_alias("pickup truck")
+    truck.make_vehicle(ready=False)
+    truck.set_property("ride_verb", "drives")  # "Princess drives the truck to ..."
+    truck.set_property("mount_refusal_message", "The truck won't start without a key.")
+    roadhouse.add_item(truck)
+
     # --- Characters --------------------------------------------------------
     player = things.Character(
         "princess",
@@ -1564,9 +1840,16 @@ def build_game() -> ActionCastle4:
         "tower": '"Yon tower is where the princess sleeps for all eternity, cursed by an evil witch\'s spell... or something."',
         "princess": '"I hear she is beautiful -- rose lips, flaxen hair, and delicate feet like an elf maid."',
     }
-    deer = things.Character(
-        "deer", "a beautiful doe", "A grazing doe, alert to any sign of danger."
+    # The deer is a passive creature you observe and chase, not someone you talk
+    # to -- so it's an Item fixture (gettable=False), like the horse, not a
+    # Character. It grazes in the Old Woods and bolts to the Deep Woods when you
+    # emerge from the warden's shack (see the deer_flees trigger).
+    deer = things.Item(
+        "deer",
+        "a beautiful doe",
+        "The beautiful doe is grazing and doesn't appear to notice you.",
     )
+    deer.set_property("gettable", False)
     poacher = things.Character(
         "poacher",
         "a grizzled poacher in a stained cloak",
@@ -1596,13 +1879,35 @@ def build_game() -> ActionCastle4:
     bartender = things.Character(
         "bartender", "the Breakpoint's bartender", "I tend bar and I am very busy."
     )
+    # The crowd the rulebook puts in the bar: bikers and ranchers, the two
+    # factions whose feud the brawl sets off. They don't take turns of their own
+    # -- they react to the jukebox and the brawl in the scripted narration -- but
+    # they're present people you can see, examine, and (fruitlessly) talk to.
+    bikers = things.Character(
+        "bikers",
+        "a pack of leather-clad bikers",
+        "We're the Steel Vipers. We ride, we drink, and we don't make small talk.",
+    )
+    bikers.examine_text = "The Steel Vipers -- all leather, chrome, and attitude, hogging the back tables."
+    bikers.talk_text = '"Beat it, princess," one grunts without looking up.'
+    ranchers = things.Character(
+        "ranchers",
+        "a knot of weathered ranchers",
+        "We work the land hereabouts, miss. Don't want no trouble.",
+    )
+    ranchers.examine_text = (
+        "Sunburnt ranch hands in dusty hats, nursing their beers along the bar."
+    )
+    ranchers.talk_text = "The ranchers just tip their hats and go back to their drinks."
 
     river.add_character(prince)
-    old_woods.add_character(deer)
+    old_woods.add_item(deer)
     deep_woods.add_character(poacher)
     ranch.add_character(rancher)
     roadhouse.add_character(dalton)
     breakpoint.add_character(bartender)
+    breakpoint.add_character(bikers)
+    breakpoint.add_character(ranchers)
 
     # --- Start state: the princess wears a gown and a tiara ----------------
     gown = _item(
@@ -1620,11 +1925,13 @@ def build_game() -> ActionCastle4:
     player.wear(gown)
     player.wear(tiara)
 
-    characters = [prince, deer, poacher, rancher, dalton, bartender]
+    characters = [prince, poacher, rancher, dalton, bartender]  # deer is an Item
     custom_actions = [
         CutHair,
         TieRope,
         LetGo,
+        LowerDrawbridge,
+        RaiseDrawbridge,
         KillSelf,
         PickApple,
         EatApple,
@@ -1643,6 +1950,7 @@ def build_game() -> ActionCastle4:
         StartBrawl,
         CatchKeys,
         UseKeyOnMotorcycle,
+        UseKeyOnTruck,
         DrinkBottle,
         UseCoinOnJukebox,
         PlayCountry,
@@ -1698,13 +2006,63 @@ def build_game() -> ActionCastle4:
         lambda g: g.player.appearance.__setitem__("feet", _feet_line(g)),
         repeatable=True,
     )
+
     # You've genuinely escaped only by climbing out the window into the Gardens
     # (the one room reachable solely via the rope). Marking it here lets the
     # guard trigger tell a real escape from a doomed break for the front gate.
+    def _mark_escaped(g):
+        g.player.set_property("escaped", True)
+        # The castle seals behind her -- if she'd lowered the drawbridge on a
+        # front-gate attempt, it goes back up now ("no return", rulebook p9).
+        drawbridge.set_property("raised", True)
+
     game.add_trigger(
         "mark_escaped",
         lambda g: g.player.location is gardens and not g.player.get_property("escaped"),
-        lambda g: g.player.set_property("escaped", True),
+        _mark_escaped,
+        repeatable=True,
+    )
+
+    # The drop leaves its mark: make the state match _describe_fall's narration.
+    # The gown (if worn) is shredded; the glass slippers shatter and cut her;
+    # bare feet bruise; boots spare her. feet_injury is a separate appearance
+    # key so the sync_feet_reflection trigger (which owns "feet") can't clobber
+    # it. Once, on the first landing.
+    def _fall_damage(g):
+        p = g.player
+        p.set_property("fell", True)
+        if "gown" in p.worn:
+            gown = p.worn["gown"]
+            gown.description = "a gown torn to ribbons"
+            gown.examine_text = (
+                "Your once-sparkly gown, shredded to ribbons by the rosebush."
+            )
+            p.appearance["marks"] = "Your arms and shoulders are lightly scratched."
+        else:
+            p.appearance["marks"] = (
+                "Your arms and shoulders are raw and badly scratched."
+            )
+        feet = _worn_feet(p)
+        if feet is None:
+            p.appearance["feet_injury"] = (
+                "Your soles ache, tender and bruised from the hard landing."
+            )
+        elif feet.name == "glass slippers":
+            p.worn.pop("glass slippers")  # shattered -- gone
+            p.appearance["feet_injury"] = (
+                "Your soles are cut and bleeding from the broken glass."
+            )
+            # Cut feet change her gait: she LIMPS on foot from here on (the
+            # arrival line reads "Princess limps to ..."). It only shows while
+            # walking -- once she's on the horse or motorcycle the riding line
+            # takes over. Pure flavor, the gag's just reward for glass footwear.
+            p.set_property("move_verb", "limps")
+        # boots / other footwear: no lasting injury
+
+    game.add_trigger(
+        "fall_into_rosebush",
+        lambda g: g.player.location is gardens and not g.player.get_property("fell"),
+        _fall_damage,
         repeatable=True,
     )
     game.add_trigger(
@@ -1722,9 +2080,12 @@ def build_game() -> ActionCastle4:
         g.parser.ok(
             "You make a break for it across the bridge -- and run smack into the "
             "tower's guard. \"Hey! What are you doing sneaking around? Back to your "
-            "chambers at once!\" You're marched upstairs, and the door locks behind you."
+            "chambers at once!\" You're marched upstairs, the door locks behind you, "
+            "and the drawbridge is hauled up with a clatter of chains -- the guards "
+            "bar themselves inside."
         )
         tower.set_property("door_locked", True)
+        drawbridge.set_property("raised", True)
         _relocate(g, g.player, "Tower")
 
     game.add_trigger(
@@ -1794,10 +2155,20 @@ def build_game() -> ActionCastle4:
         g.player.set_property("rode_the_highway", True)
         g.award("highway", 50)
         g.award("finish", 5)
+        riding = getattr(g.player, "riding", None)
+        if riding is not None and riding.name == "truck":
+            lead = (
+                "The old truck rattles out onto the blacktop, bald tires singing, and "
+                "the Breakpoint shrinks in the cracked mirror"
+            )
+        else:
+            lead = (
+                "You open the throttle and the chopper howls; the Breakpoint vanishes "
+                "behind you"
+            )
         ending = (
-            "You open the throttle and the Breakpoint vanishes behind you. No tower, "
-            "no curse, no prince -- just you, the bike, and the whole wide world. You "
-            "ride off into your own happily-ever-after. THE END."
+            f"{lead}. No tower, no curse, no prince -- just you, the open road, and "
+            "the whole wide world. You ride off into your own happily-ever-after. THE END."
         )
         g.parser.ok(ending)
         g.game_over = True
@@ -1812,15 +2183,54 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    # The deer flees into the Deep Woods and the poacher confrontation begins,
-    # with one grace turn (you arrive, then must act). Hesitating -- any committal
-    # action but shooting -- lets him kill the deer and you're lost: THE END.
+    # The grazing doe is skittish: a noise in the Old Woods sends her bolting into
+    # the Deep Woods. Two kinds of noise spook her -- the shack door banging shut
+    # as you step out (tracked via visited_shack), and any loud action you take in
+    # the woods (talking/yelling, smashing -- see _NOISY_ACTIONS). Quiet things
+    # leave her be, so a careful player can slip in for the crossbow first; a
+    # careless one spooks her early and chases unarmed. No timer on the flee
+    # itself -- the poacher's clock only starts when YOU reach the Deep Woods.
+    game.add_trigger(
+        "note_shack_visit",
+        lambda g: g.player.location is old_shack
+        and not g.player.get_property("visited_shack"),
+        lambda g: g.player.set_property("visited_shack", True),
+        repeatable=True,
+    )
+
+    def _deer_flees(g):
+        old_woods.remove_item(deer)
+        deep_woods.add_item(deer)
+        deer.examine_text = (
+            "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
+        )
+        cause = (
+            "The shack door bangs shut behind you"
+            if g.player.get_property("visited_shack")
+            else "At the sudden noise"
+        )
+        g.parser.ok(
+            f"{cause}, and the doe's head snaps up -- in a flash she bolts, white "
+            "tail flashing, off into the Deep Woods."
+        )
+
+    def _noise_spooks_the_doe(g):
+        # Nothing to spook if she's already bolted (or you're not with her).
+        if "deer" not in old_woods.items or g.player.location is not old_woods:
+            return False
+        # The shack door slamming behind you, OR any loud action in the woods.
+        if g.player.get_property("visited_shack"):
+            return True
+        last = g.parser.last_action
+        return last is not None and last.action_name() in _NOISY_ACTIONS
+
+    game.add_trigger("deer_flees", _noise_spooks_the_doe, _deer_flees, repeatable=True)
+
+    # The poacher confrontation begins when YOU reach the Deep Woods (the doe has
+    # already fled here), with one grace turn -- you arrive, then must act.
+    # Hesitating -- any committal action but shooting -- lets him kill the deer
+    # and you're lost: THE END.
     def deer_confrontation(g):
-        deer = g.characters.get("deer")
-        if deer is not None and deer.location is not deep_woods:
-            if deer.location is not None:
-                deer.location.remove_character(deer)
-            deep_woods.add_character(deer)
         if not deep_woods.get_property(
             "confront_started"
         ) and not deep_woods.get_property("poacher_dealt"):
@@ -1854,6 +2264,78 @@ def build_game() -> ActionCastle4:
         ),
         repeatable=True,
     )
+
+    # --- Room descriptions that track state -------------------------------------
+    # Some rooms would otherwise hardcode transient details -- a crossbow on the
+    # wall, a poacher stalking the deer, a horse tethered by the river. Each gets
+    # a small function that regenerates its description from the current state,
+    # kept in sync by a trigger (the same self-syncing pattern as the mirror's
+    # feet line). The transient *objects* are already listed dynamically under
+    # "You see:" / "Characters:"; these conditionals keep the prose honest too.
+    def _sync_description(name, loc, fn):
+        game.add_trigger(
+            name,
+            lambda g, loc=loc, fn=fn: loc.description != fn(g),
+            lambda g, loc=loc, fn=fn: setattr(loc, "description", fn(g)),
+            repeatable=True,
+        )
+
+    def _shack_desc(g):
+        if "crossbow" in old_shack.items:
+            return "The game warden's shack. There's a crossbow here."
+        return "The game warden's shack -- bare pegs on the wall where a crossbow once hung."
+
+    def _deep_woods_desc(g):
+        if deep_woods.get_property("poacher_dealt"):
+            return (
+                "Primordial forest, the canopy thick overhead. The trees are still "
+                "now -- the poacher gone, the doe safe."
+            )
+        return (
+            "Primordial forest, the canopy thick overhead. A cloaked figure stalks "
+            "the deer through the trees."
+        )
+
+    def _river_desc(g):
+        if "horse" in river.items:
+            return (
+                "Down by the river, a white mare is tethered to a tree and a young "
+                "man paints at an easel. The drawbridge is north."
+            )
+        return "Down by the river, a young man paints at an easel. The drawbridge is north."
+
+    def _drawbridge_desc(g):
+        base = (
+            "A bridge spans the river. A path heads north to the gardens and south "
+            "along the river. The Old Woods lie west."
+        )
+        # The raised/lowered castle gate (the drawbridge feature). Guarded so this
+        # stays the plain base description until that feature wires the east exit.
+        if drawbridge.get_property("raised"):
+            return (
+                base
+                + " The drawbridge is hauled up, sealing the castle gate to the east."
+            )
+        if "east" in drawbridge.connections:
+            return base + " The lowered drawbridge leads east into the castle."
+        return base
+
+    def _breakpoint_desc(g):
+        if breakpoint.get_property("brawled"):
+            return (
+                "The Breakpoint Bar & Grill -- a full-blown brawl underway, chairs "
+                "and bottles flying. A jukebox blares in the corner."
+            )
+        return (
+            "The Breakpoint Bar & Grill -- rowdy and packed with bikers and ranchers. "
+            "There's a jukebox here, and a bartender tending bar."
+        )
+
+    _sync_description("sync_shack_desc", old_shack, _shack_desc)
+    _sync_description("sync_deep_woods_desc", deep_woods, _deep_woods_desc)
+    _sync_description("sync_river_desc", river, _river_desc)
+    _sync_description("sync_drawbridge_desc", drawbridge, _drawbridge_desc)
+    _sync_description("sync_breakpoint_desc", breakpoint, _breakpoint_desc)
 
     return game
 
