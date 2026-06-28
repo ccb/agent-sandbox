@@ -21,14 +21,14 @@ def test_say_broadcast_lands_in_history():
     game, guard, thief = _say_game()
     ok = game.parser.parse_command("say hello there", actor=guard)
     assert ok is True
-    assert "guard says: hello there" in _history_text(game)
+    assert "Guard says: hello there" in _history_text(game)
 
 
 def test_say_directed_to_colocated_character():
     game, guard, thief = _say_game()
     ok = game.parser.parse_command("say to thief hello", actor=guard)
     assert ok is True
-    assert "guard says to thief: hello" in _history_text(game)
+    assert "Guard says to thief: hello" in _history_text(game)
 
 
 def test_say_empty_message_fails():
@@ -55,20 +55,20 @@ def test_say_speak_alias_routes():
     game, guard, thief = _say_game()
     ok = game.parser.parse_command("speak greetings", actor=guard)
     assert ok is True
-    assert "guard says: greetings" in _history_text(game)
+    assert "Guard says: greetings" in _history_text(game)
 
 
 def test_say_message_with_command_keyword_is_not_hijacked():
     game, guard, thief = _say_game()
     ok = game.parser.parse_command("say drop it now", actor=guard)
     assert ok is True
-    assert "guard says: drop it now" in _history_text(game)
+    assert "Guard says: drop it now" in _history_text(game)
 
 
 def test_route_attributes_say_to_actor_not_named_target():
     game, guard, thief = _say_game()
     _route(guard, game, "say to thief hello")
-    assert "guard says to thief: hello" in _history_text(game)
+    assert "Guard says to thief: hello" in _history_text(game)
 
 
 def test_say_broadcast_preserves_casing():
@@ -76,7 +76,7 @@ def test_say_broadcast_preserves_casing():
     game, guard, thief = _say_game()
     ok = game.parser.parse_command("say Hello There", actor=guard)
     assert ok is True
-    assert "guard says: Hello There" in _history_text(game)
+    assert "Guard says: Hello There" in _history_text(game)
 
 
 def test_say_to_unknown_name_is_broadcast():
@@ -85,7 +85,7 @@ def test_say_to_unknown_name_is_broadcast():
     # No character named "arms" exists, so this is a broadcast.
     ok = game.parser.parse_command("say to arms everyone", actor=guard)
     assert ok is True
-    assert "guard says: to arms everyone" in _history_text(game)
+    assert "Guard says: to arms everyone" in _history_text(game)
 
 
 def test_say_word_boundary_recipient_match():
@@ -95,7 +95,7 @@ def test_say_word_boundary_recipient_match():
     ok = game.parser.parse_command("say to thiefery is doomed", actor=guard)
     assert ok is True
     # Must be a broadcast (not directed at thief) with the full message intact.
-    assert "guard says: to thiefery is doomed" in _history_text(game)
+    assert "Guard says: to thiefery is doomed" in _history_text(game)
 
 
 # --- Talk: default line + topic dialogue (talk_text / talk_topics) ----------
