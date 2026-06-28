@@ -21,8 +21,8 @@ personas:
     Van Pelt Library between classes.
   emoji: 📚
   start_tile:
-  - 13
-  - 15
+  - 16
+  - 18
   schedule:
   - place: Van Pelt Library
     activity: studying for an organic chemistry exam
@@ -45,8 +45,8 @@ personas:
     College Hall. I am thoughtful, a bit formal, and devoted to my students.
   emoji: 🧑‍🏫
   start_tile:
-  - 77
-  - 158
+  - 80
+  - 161
   schedule:
   - place: Williams Hall
     activity: giving a morning lecture
@@ -70,8 +70,8 @@ personas:
     Hall studio.
   emoji: ✏️
   start_tile:
-  - 177
-  - 61
+  - 180
+  - 64
   schedule:
   - place: Meyerson Hall
     activity: working on a studio model
