@@ -49,8 +49,18 @@ var _agents := {}  # name -> {sprite, label}
 var _t := 0.0
 var _anim_t := 0.0
 
+@onready var _camera: Camera2D = $Camera2D
+@onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
+
 
 func _ready() -> void:
+	# The sidebar drives the camera: Track a character to follow them, toggle off (or
+	# pan the map) to release. The panel emits requests; we translate them to camera
+	# calls and keep its highlight in sync when the camera releases on its own.
+	_panel.track_requested.connect(_on_track_requested)
+	_panel.stop_requested.connect(_on_stop_requested)
+	_camera.follow_stopped.connect(_panel.clear_active)
+
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
 	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
 	if OS.has_feature("web"):
@@ -100,9 +110,12 @@ func _load_replay_from_text(text: String) -> void:
 	var meta: Dictionary = data["meta"]
 	_tile_px = int(meta["tile_px"])
 	_frames = data["frames"]
+	var thumb := _make_thumbnail()
 	for i in meta["personas"].size():
 		_names.append(meta["personas"][i]["name"])
 		_spawn_agent(meta["personas"][i]["name"], i)
+		# Mirror the world sprite's tint in the sidebar so the two agree at a glance.
+		_panel.add_character(meta["personas"][i]["name"], thumb, TINTS[i % TINTS.size()])
 
 	# Place everyone on their first frame, then optionally fast-forward the clock.
 	_t = preview_step * step_seconds
@@ -144,6 +157,26 @@ func _spawn_agent(name: String, index: int) -> void:
 func _tile_to_world(x: int, y: int) -> Vector2:
 	# Tile centre in the map's pixel space (the campus TileMapLayer is unscaled).
 	return Vector2((x + 0.5) * _tile_px, (y + 0.5) * _tile_px)
+
+
+func _make_thumbnail() -> AtlasTexture:
+	# The row-0 / column-0 standing frame of the shared player sheet, reused (tinted
+	# per row by the panel) as every sidebar icon — one instance is fine for all rows.
+	var at := AtlasTexture.new()
+	at.atlas = player_sheet
+	var fw := float(player_sheet.get_width()) / SHEET_HFRAMES
+	var fh := float(player_sheet.get_height()) / SHEET_VFRAMES
+	at.region = Rect2(0.0, 0.0, fw, fh)
+	return at
+
+
+func _on_track_requested(name: String) -> void:
+	if _agents.has(name):
+		_camera.follow(_agents[name]["node"])
+
+
+func _on_stop_requested() -> void:
+	_camera.stop_following()
 
 
 func _process(delta: float) -> void:
