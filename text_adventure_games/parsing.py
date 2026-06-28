@@ -625,6 +625,14 @@ class Parser:
             items_in_scope[item_name] = item
         for item_name in character.inventory:
             items_in_scope[item_name] = character.inventory[item_name]
+        # What a character has on -- worn or wielded -- is in scope too: you can
+        # EXAMINE the gown you're wearing or the sword in your hand, unlock a
+        # door with a sheathed key, and so on. (GET/DROP/GIVE build their own
+        # scopes and guard the worn/wielded cases, so they're unaffected.)
+        for item_name in character.worn:
+            items_in_scope[item_name] = character.worn[item_name]
+        for item_name in character.wielded:
+            items_in_scope[item_name] = character.wielded[item_name]
         # Items inside an OPEN holder that is itself in scope are reachable too
         # -- a blanket in a boat, a candle on a table, an item in a carried bag
         # -- so they can be examined/referenced by name. One level deep.
