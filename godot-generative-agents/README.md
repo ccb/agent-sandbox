@@ -1,88 +1,51 @@
 # godot-generative-agents
 
-A tiny [Godot 4.6](https://godotengine.org) sandbox that proves we can pull the
-**Cute Fantasy** sprite pack into Godot and drive characters around. Right now the
-characters just **wander on their own** — no player controls. The name signals where
-this is headed: the same auto-moving sprites are the substrate that LLM-driven agents
-(the rest of this repo) could later steer.
+A tiny [Godot 4.6](https://godotengine.org) sandbox that renders the **real
+University of Pennsylvania campus** in Godot and plays back a generative-agents
+simulation walking across it. It's a *viewer*: the simulation runs offline in Python
+(the rest of this repo) and Godot draws the world + the agents moving through it.
 
 ## What's in the scene
 
-`scenes/main.tscn` is a small top-down world built entirely from the pack's art:
+Two scenes render the same campus — the academic core block (34th–36th ×
+Spruce–Walnut), built from OpenStreetMap data by the repo's geo tool
+(`tools/geo/osm_to_tiled.py`) and drawn with **Kenney's RPG Urban Pack (CC0)**:
 
-- the **real University of Pennsylvania campus** (`scripts/campus_map.gd` on a
-  `TileMapLayer`) — the actual streets, footpaths (Locust Walk!), lawns and building
-  footprints from OpenStreetMap, overlaid with Cute Fantasy tiles. (`scripts/ground.gd`
-  is the original hand-made grass/paths/pond demo, kept for reference.)
-- a few **oak trees** for decoration, with `y_sort` enabled so characters pass in
-  front of / behind them correctly;
-- four **wandering characters** (`scripts/wanderer.gd`), each moving on its own:
+- **`scenes/campus_urban.tscn`** — the campus on its own (the **default** scene):
+  brick buildings, asphalt streets, tan paving for Locust Walk, green lawns. Pan and
+  zoom to explore it.
+- **`scenes/penn_replay.tscn`** — the same campus with a **generative-agents
+  simulation** playing on top: a few Penn personas walking between real buildings on
+  their daily schedules (see *Watching the Penn agent simulation* below).
 
-| Node     | Sheet                                  | What it does                     |
-|----------|----------------------------------------|----------------------------------|
-| Player   | `Cute_Fantasy_Free/Player/Player.png`  | walks to random points           |
-| Skeleton | `Cute_Fantasy_Free/Enemies/Skeleton.png` | walks to random points         |
-| Pig      | `Cute_Fantasy_Free/Animals/Pig/Pig.png` | trots to random points          |
-| Slime    | `Cute_Fantasy_Free/Enemies/Slime_Green.png` | hops to random points       |
+Both share a generic map renderer (`scripts/tiled_map.gd`) and a pan/zoom camera
+(`scripts/camera_controls.gd`).
 
-Each character eases toward a random target, picks a new one on arrival, flips to face
-its direction of travel, and plays a walk/hop animation by stepping through one row of
-its sprite sheet. (They wander the whole screen, including over the path and pond —
-there's no collision yet; that's a natural next step.)
+## How it works
 
-## How it works (two small scripts)
+**`tiled_map.gd`** (the `Map` node in both scenes). A *generic* renderer for any Tiled
+map whose tileset is one packed image: it reads the `.tmj`, loads the referenced
+sheet, registers every tile, and paints each layer by GID. We use it to show the
+campus drawn with **real art** — `maps/upenn_core_urban.tmj`, baked with **Kenney's
+RPG Urban Pack (CC0)** by the geo tool (`--theme urban`): brick buildings, asphalt
+streets, tan paving for Locust Walk, green for the lawns. The geo tool rotates the map
+so Penn's streets run **straight along the X/Y axes** (the real grid is ~8.6° off
+north) instead of on a slant, and the renderer uses nearest filtering + tile padding
+so there are **no seams** between tiles. This is the no-plugin equivalent of importing
+that `.tmj` with the [YATI](https://github.com/Kiamo2/YATI) addon, and the same file
+also loads natively in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it
+references.)
 
-**`wanderer.gd`** (on each character `Sprite2D`). A sprite sheet is a grid of small
-frames; the script is configured per-character in the scene via exported variables:
-
-- `sheet_hframes` / `sheet_vframes` — the sheet's grid (columns × rows)
-- `walk_row` / `walk_len` — which row is the walk cycle and how many frames it has
-- `anim_fps`, `move_speed`, `arrive_dist` — animation/movement tuning
-
-In `_ready()` it slices the sheet (`hframes`/`vframes`) and picks a first target; in
-`_process()` it moves, flips, and advances the animation frame. No `AnimationPlayer`
-or `SpriteFrames` resource — it's all a few lines of readable code, so it's easy to
-follow and easy to extend (e.g. replace `_pick_target()` with an agent's decision).
-
-**`ground.gd`** (the original hand-made demo `TileSet`). It builds its `TileSet` in code
-from the pack's 16×16 tiles — grass and path are single fill tiles; the pond reuses the
-3×3 "water-in-grass" nine-slice (corners/edges/centre) from the `Water_Tile` sheet so its
-border blends into the grass. Then it just loops over `set_cell()` to lay down the
-grass, the crossing paths, and the pond. Building the set in code keeps everything in
-plain, readable GDScript with no binary tile data to hand-edit.
-
-**`campus_map.gd`** (the `Campus` `TileMapLayer` in `main.tscn`). Same idea as
-`ground.gd`, but instead of a hand-drawn layout it loads a **real map**:
-`maps/upenn_core.tmj`, a Tiled tilemap generated from OpenStreetMap data by the repo's
-geo tool (`tools/geo/osm_to_tiled.py`). A `.tmj` is just JSON — six tile layers whose
-cells carry a category code (ground / grass / water / path / road / building). The script
-reads that JSON (`FileAccess` + `JSON`, so **no Tiled importer is needed**), builds a
-`TileSet` from the pack's tiles, and paints each cell with the matching Cute Fantasy tile
-(roads = the dirt path tinted darker; buildings = a 16×16 crop of the house roof). A
-`Camera2D` zooms out to frame the whole campus.
-
-**`tiled_map.gd`** (the `Map` node in `scenes/campus_urban.tscn`). A *generic*
-renderer for any Tiled map whose tileset is one packed image: it reads the `.tmj`,
-loads the referenced sheet, registers every tile, and paints each layer by GID. We
-use it to show the same campus drawn with **real art** — `maps/upenn_core_urban.tmj`,
-baked with **Kenney's RPG Urban Pack (CC0)** by the geo tool (`--theme urban`):
-brick buildings, asphalt streets, tan paving for Locust Walk, green for the lawns.
-The geo tool rotates the map so Penn's streets run **straight along the X/Y axes**
-(the real grid is ~8.6° off north) instead of on a slant, and the renderer uses
-nearest filtering + tile padding so there are **no seams** between tiles. This is
-the no-plugin equivalent of importing that `.tmj` with the
-[YATI](https://github.com/Kiamo2/YATI) addon, and the same file also loads natively
-in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it references.)
+`scripts/penn_replay.gd` drives the agent replay on top of that map — see *Watching
+the Penn agent simulation* below.
 
 ### Regenerating / swapping the campus map
 
-The `maps/*.tmj` files are **copies** of the geo tool's output. To refresh them, or
+`maps/upenn_core_urban.tmj` is a **copy** of the geo tool's output. To refresh it, or
 to render the full campus instead of the 34th–38th × Spruce–Walnut core subset:
 
 ```bash
-uv run python tools/geo/osm_to_tiled.py --area core                 # Cute Fantasy map (placeholder GIDs)
 uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
-cp tools/geo/out/upenn_core.tmj        godot-generative-agents/maps/
 cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/maps/
 cp tools/geo/out/tilemap_packed.png    godot-generative-agents/maps/
 ```
@@ -97,19 +60,22 @@ Open the project folder in the Godot 4.6 editor and press **Play** (F5), or from
 terminal:
 
 ```bash
-# Windowed (Cute Fantasy campus + wanderers):
+# The campus in real Kenney CC0 urban art (the default scene):
 /Applications/Godot.app/Contents/MacOS/Godot --path .
-
-# The same campus in real Kenney CC0 urban art:
-/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/campus_urban.tscn
 
 # Watch the agent simulation replay on the campus:
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
 
-# Headless smoke test (imports + runs ~300 frames, then quits):
-/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --import
-/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --quit-after 300
+# Headless smoke test — load every scene and check its map painted (exit 0 = OK):
+./run_smoke_test.sh
 ```
+
+`run_smoke_test.sh` loads each content scene headless and fails (non-zero exit) if a
+scene can't load or its campus map painted zero cells — so a broken `.tmj` / tileset
+regen is caught in CI or before you push, instead of silently rendering an empty
+world. It needs no GPU (it reads the tilemap's cell data, not pixels). `uv run pytest
+tests/test_godot_smoke.py` runs the same check and skips cleanly when Godot isn't
+installed.
 
 The first run regenerates the `.godot/` import cache (git-ignored); the committed
 `*.import` / `*.uid` sidecars let Godot recognize the assets without re-importing
@@ -133,29 +99,16 @@ uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
 
 The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast) and
 `the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
-The agent *engine* (deciding, pathfinding) is reused from the `gen_agents` package,
+The agent *engine* (deciding, pathfinding) is reused from `generative-agents/backend`,
 so this is the same simulation that runs there — just rendered here instead of in
 Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path the
 sim chose, with a name + activity label above each sprite. (`sim/` carries a
 `.gdignore` so Godot leaves the Python alone.)
 
-### Watching it in a browser
-
-The same replay also runs **in a web browser** via a WebAssembly export, wrapped in
-a small React + Vite + TypeScript shell — no native Godot install needed just to
-view it, and the foundation for a future agent-info companion app. See
-[`web/README.md`](web/README.md) for the stack, architecture, and how to run /
-contribute. Quick start:
-
-```bash
-cd web && pnpm install && pnpm gen:replay && pnpm export:godot && pnpm dev
-```
-
 ## Where this fits — the full-port proposals
 
 This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
-It is **not** yet wired to the generative-agents simulation. Two design docs in this PR
-sketch the road from here to a real Godot frontend:
+Two design docs in the repo sketch the road from here to a fully-wired Godot frontend:
 
 - [`../docs/design/custom-world-authoring.md`](../docs/design/custom-world-authoring.md) —
   authoring our own world + sprites (map layers, semantic maze CSVs, personas, licensing).
@@ -165,7 +118,10 @@ sketch the road from here to a real Godot frontend:
 
 ## Assets & license
 
-Art is the **Cute Fantasy (Free)** pack by Kenmi, kept under `Cute_Fantasy_Free/`
-with its original `read_me.txt`. Per that license it is **free for non-commercial use
-and may be modified, but not redistributed or resold**. It lives here only for this
-private research repo.
+- **Campus tiles** — Kenney's [RPG Urban Pack](https://kenney.nl) (CC0, public
+  domain), baked into `maps/tilemap_packed.png` by the geo tool. Interior cutaway art
+  is credited separately in `maps/INTERIOR_CREDITS.md`.
+- **Agent sprites** — the **Cute Fantasy (Free)** pack by Kenmi, kept under
+  `Cute_Fantasy_Free/` with its original `read_me.txt`. Per that license it is **free
+  for non-commercial use and may be modified, but not redistributed or resold**. It
+  lives here only for this private research repo.
