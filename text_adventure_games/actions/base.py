@@ -342,6 +342,11 @@ class ActionSequence(Action):
         responses = []
         for cmd in self.command.split(","):
             cmd = cmd.strip()
+            if not cmd:
+                # Skip empty segments -- a trailing comma, a doubled comma, or
+                # stray whitespace shouldn't fire "I'm not sure what you want
+                # to do" on a blank command.
+                continue
             responses.append(self.parser.parse_command(cmd, actor=self.actor))
         return responses
 
