@@ -32,6 +32,13 @@ extends Camera2D
 @export var gesture_pan_speed: float = 12.0
 # Seconds for the "reset to default view" glide.
 @export var reset_time: float = 0.25
+# Magnification used while tracking an agent (see follow). Stays within
+# _home_zoom..max_zoom so the usual zoom rules still hold.
+@export var follow_zoom: float = 1.6
+
+# Emitted when agent-follow is cleared (by stop_following, a manual pan, or Reset),
+# so a UI panel can drop its "tracking" highlight.
+signal follow_stopped
 
 # The scene's starting view, captured in _ready() — what Reset returns to.
 var _home_position: Vector2
@@ -40,6 +47,8 @@ var _home_zoom: Vector2
 var _dragging := false
 # True while the Reset glide is running (we leave the tween alone, no clamping).
 var _resetting := false
+# The agent node the camera is centring on each frame, or null when free.
+var _follow_target: Node2D = null
 # The map's world bounds, computed once on first use (see _map_bounds).
 var _bounds := Rect2()
 var _have_bounds := false
@@ -63,6 +72,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			event.button_index == MOUSE_BUTTON_LEFT
 			or event.button_index == MOUSE_BUTTON_MIDDLE):
 		_dragging = event.pressed
+		if event.pressed:
+			stop_following()  # grabbing the map takes manual control back
 	elif event is InputEventMouseMotion and _dragging:
 		# Move the world with the cursor: shift the camera opposite the drag,
 		# converting screen pixels to world units through the current zoom.
@@ -73,6 +84,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMagnifyGesture:
 		_zoom_at_mouse(event.factor)
 	elif event is InputEventPanGesture:
+		stop_following()  # a two-finger swipe is a manual pan
 		global_position += event.delta * gesture_pan_speed / zoom
 		_clamp_position()
 
@@ -102,8 +114,34 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
 		dir.y += 1.0
 	if dir != Vector2.ZERO:
+		stop_following()  # arrow / WASD pan takes manual control back
 		global_position += dir.normalized() * key_pan_speed * delta / zoom.x
 		_clamp_position()
+		return
+
+	# Otherwise, if we're tracking an agent, glue the view to it each frame.
+	if _follow_target != null and is_instance_valid(_follow_target):
+		global_position = _follow_target.global_position
+		_clamp_position()
+
+
+func follow(target: Node2D) -> void:
+	# Start centring the view on `target` every frame and glide the zoom in to the
+	# tracking level. Position is handled in _process (so it keeps up as the agent
+	# walks); only the zoom needs a tween here.
+	_follow_target = target
+	_resetting = false  # cancel any in-flight Reset glide so following can take over
+	var tw := create_tween()
+	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "zoom", Vector2(follow_zoom, follow_zoom), reset_time)
+
+
+func stop_following() -> void:
+	# Release the camera; leave it wherever it is (Reset / R returns to the default).
+	if _follow_target == null:
+		return
+	_follow_target = null
+	follow_stopped.emit()
 
 
 func _zoom_at_mouse(factor: float) -> void:
@@ -186,6 +224,7 @@ func _find_tilemap() -> TileMapLayer:
 
 
 func _reset_view() -> void:
+	stop_following()  # Reset means "back to the default view", not "keep tracking"
 	_resetting = true
 	var tw := create_tween().set_parallel(true)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
