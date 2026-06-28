@@ -875,18 +875,30 @@ class StartBrawl(actions.Action):
     def apply_effects(self):
         loc = self.player.location
         loc.set_property("brawled", True)
+        # The bikers and ranchers both spill their keys in the chaos -- the
+        # skull ring (the chopper) and the ranchers' horseshoe fob (the truck).
         keys = _item(
             "keys",
             "a ring of motorcycle keys",
             "A heavy skull keyring stamped ROCK HARD, RIDE FREE.",
         )
+        rancher_keys = _item(
+            "rancher keys",
+            "a ring of truck keys",
+            "A tooled-leather horseshoe fob, branded with the Double-Deuce mark and "
+            "stamped RIDE EASY.",
+        )
+        rancher_keys.add_alias("truck keys")
+        rancher_keys.add_alias("horseshoe keys")
         loc.add_item(keys)
+        loc.add_item(rancher_keys)
         self.game.award(
             "brawl",
             5,
             "You crack a bottle over his head and the Breakpoint ERUPTS -- fists, "
-            "stools, and longnecks flying. In the chaos a ring of motorcycle keys is "
-            "knocked loose and skitters across the floor. (Quick -- CATCH KEYS!)",
+            "stools, and longnecks flying. Two key rings are knocked loose and "
+            "skitter across the floor: a biker's skull keyring and a rancher's "
+            "horseshoe fob. (Quick -- CATCH KEYS!)",
         )
 
 
@@ -901,18 +913,22 @@ class CatchKeys(actions.Action):
 
     def check_preconditions(self) -> bool:
         loc = self.player.location
-        if loc is None or "keys" not in loc.items:
+        if loc is None or not any(k in loc.items for k in ("keys", "rancher keys")):
             self.parser.fail("There are no keys here to catch.")
             return False
         return True
 
     def apply_effects(self):
-        keys = self.player.location.items["keys"]
-        self.player.location.remove_item(keys)
-        self.player.add_to_inventory(keys)
+        # Grab whichever rings are loose -- both, if the brawl knocked both free.
+        loc = self.player.location
+        for name in ("keys", "rancher keys"):
+            if name in loc.items:
+                k = loc.items[name]
+                loc.remove_item(k)
+                self.player.add_to_inventory(k)
         self.parser.ok(
             "You snatch the keys out of the air and bolt for the door before anyone's "
-            "the wiser."
+            "the wiser. (USE KEYS ON the MOTORCYCLE or the TRUCK out front.)"
         )
 
 
@@ -940,7 +956,10 @@ class UseKeyOnMotorcycle(actions.Action):
             self.parser.fail("There's no motorcycle here.")
             return False
         if not _is_holding(self.player, "keys"):
-            self.parser.fail("You don't have any keys.")
+            if _is_holding(self.player, "rancher keys"):
+                self.parser.fail("The horseshoe-fob key doesn't fit the chopper.")
+            else:
+                self.parser.fail("You don't have any keys.")
             return False
         if loc.items["motorcycle"].vehicle_ready():
             self.parser.fail("The chopper's already running.")
@@ -953,6 +972,48 @@ class UseKeyOnMotorcycle(actions.Action):
             "You slot the skull key home and thumb the starter. The chopper coughs, "
             "catches, and ROARS to life. (Now GET ON THE MOTORCYCLE and head EAST or "
             "WEST onto the highway.)"
+        )
+
+
+class UseKeyOnTruck(actions.Action):
+    ACTION_NAME = "use key on truck"
+    ACTION_DESCRIPTION = "Start the pickup truck with the ranchers' keys"
+    ACTION_ALIASES = [
+        "use keys on truck",
+        "use rancher keys on truck",
+        "use truck keys on truck",
+        "start the truck",
+        "start truck",
+        "start the pickup",
+        "put key in truck",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "truck" not in loc.items:
+            self.parser.fail("There's no truck here.")
+            return False
+        if not _is_holding(self.player, "rancher keys"):
+            if _is_holding(self.player, "keys"):
+                self.parser.fail("That skull key doesn't fit the truck's ignition.")
+            else:
+                self.parser.fail("You don't have any keys.")
+            return False
+        if loc.items["truck"].vehicle_ready():
+            self.parser.fail("The truck's already idling.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.player.location.items["truck"].set_property("vehicle_ready", True)
+        self.parser.ok(
+            "You jam the horseshoe-fob key in and crank it. The old truck shudders, "
+            "belches blue smoke, and rumbles to life. (Now GET ON THE TRUCK and head "
+            "EAST or WEST onto the highway.)"
         )
 
 
@@ -1362,14 +1423,14 @@ def build_game() -> ActionCastle4:
             super().__init__(
                 "No wheels",
                 "You'll need a motor vehicle to take the highway. (Start the "
-                "MOTORCYCLE, then GET ON it.)",
+                "MOTORCYCLE or the TRUCK, then GET ON it.)",
             )
             self.game_ref = game_ref
 
         def is_blocked(self) -> bool:
             player = self.game_ref["game"].player
             riding = getattr(player, "riding", None)
-            return riding is None or riding.name != "motorcycle"
+            return riding is None or riding.name not in ("motorcycle", "truck")
 
     # The Game isn't built yet; hand the block a holder we fill in below.
     _game_ref = {}
@@ -1537,6 +1598,19 @@ def build_game() -> ActionCastle4:
     bike.set_property("mount_refusal_message", "The bike won't start without a key.")
     roadhouse.add_item(bike)
 
+    # The ranchers' pickup -- the other way out, started by the horseshoe-fob keys.
+    truck = _fixture(
+        "truck",
+        "a rusty pickup truck",
+        "An old rustbucket -- creaky springs, bald tires, a gun rack in the back window.",
+    )
+    truck.add_alias("pickup")
+    truck.add_alias("pickup truck")
+    truck.make_vehicle(ready=False)
+    truck.set_property("ride_verb", "drives")  # "Princess drives the truck to ..."
+    truck.set_property("mount_refusal_message", "The truck won't start without a key.")
+    roadhouse.add_item(truck)
+
     # --- Characters --------------------------------------------------------
     player = things.Character(
         "princess",
@@ -1643,6 +1717,7 @@ def build_game() -> ActionCastle4:
         StartBrawl,
         CatchKeys,
         UseKeyOnMotorcycle,
+        UseKeyOnTruck,
         DrinkBottle,
         UseCoinOnJukebox,
         PlayCountry,
@@ -1794,10 +1869,20 @@ def build_game() -> ActionCastle4:
         g.player.set_property("rode_the_highway", True)
         g.award("highway", 50)
         g.award("finish", 5)
+        riding = getattr(g.player, "riding", None)
+        if riding is not None and riding.name == "truck":
+            lead = (
+                "The old truck rattles out onto the blacktop, bald tires singing, and "
+                "the Breakpoint shrinks in the cracked mirror"
+            )
+        else:
+            lead = (
+                "You open the throttle and the chopper howls; the Breakpoint vanishes "
+                "behind you"
+            )
         ending = (
-            "You open the throttle and the Breakpoint vanishes behind you. No tower, "
-            "no curse, no prince -- just you, the bike, and the whole wide world. You "
-            "ride off into your own happily-ever-after. THE END."
+            f"{lead}. No tower, no curse, no prince -- just you, the open road, and "
+            "the whole wide world. You ride off into your own happily-ever-after. THE END."
         )
         g.parser.ok(ending)
         g.game_over = True
