@@ -241,32 +241,104 @@ def test_tower_stairs_has_only_two_exits():
 
 
 def test_bolting_out_the_front_gate_without_the_dagger_is_doom():
-    # Guardroom WEST -> the guard catches you at the bridge, marches you back and
-    # locks the door; with no dagger to cut your hair, you're trapped forever.
-    game, cap = _play(["out", "down", "west"])
+    # Lower the drawbridge, bolt across (Guardroom WEST) -> the guard catches you
+    # at the bridge, marches you back and locks the door; with no dagger to cut
+    # your hair, you're trapped forever.
+    game, cap = _play(["out", "down", "lower drawbridge", "west"])
     assert _said(cap, "guard")
     assert game.is_game_over()
     assert _said(cap, "nineteen years")
 
 
 def test_caught_with_the_dagger_can_still_escape_by_window():
-    game, cap = _play(["out", "down", "open footlocker", "take dagger", "west"])
+    front_gate = [
+        "out",
+        "down",
+        "open footlocker",
+        "take dagger",
+        "lower drawbridge",
+        "west",
+    ]
+    game, cap = _play(front_gate)
     assert _said(cap, "guard")
     assert game.player.location.name == "Tower"  # marched back upstairs
     assert game.locations["Tower"].get_property("door_locked")
     assert not game.is_game_over()  # the dagger means the window is still open
     # the door is locked now, but the window still works
     game, cap = _play(
-        ["out", "down", "open footlocker", "take dagger", "west"]
+        front_gate
         + ["cut hair", "get hair", "make rope", "tie rope", "climb down", "let go"]
     )
     assert game.player.location.name == "Gardens"
 
 
 def test_the_locked_door_blocks_the_stairs():
-    game, cap = _play(["out", "down", "open footlocker", "take dagger", "west", "out"])
+    game, cap = _play(
+        [
+            "out",
+            "down",
+            "open footlocker",
+            "take dagger",
+            "lower drawbridge",
+            "west",
+            "out",
+        ]
+    )
     assert game.player.location.name == "Tower"
     assert _said(cap, "locked")
+
+
+def test_drawbridge_starts_raised_and_seals_the_front_gate():
+    game, cap = _play(["out", "down", "west"])  # no lowering first
+    assert game.locations["Drawbridge"].get_property("raised")
+    assert game.player.location.name == "Guardroom"  # didn't get out
+    assert _said(cap, "lower it first")
+
+
+def test_lowering_the_drawbridge_opens_the_front_gate():
+    game, cap = _play(["out", "down", "lower drawbridge"])
+    assert not game.locations["Drawbridge"].get_property("raised")
+    assert _said(cap, "sinks down across the moat")
+
+
+def test_winch_only_works_from_the_guardroom():
+    game, cap = _play(ESCAPE_TO_GARDENS + ["lower drawbridge"])  # out in the gardens
+    assert _said(cap, "winch is back in the guardroom")
+
+
+def test_catching_the_princess_hauls_the_drawbridge_back_up():
+    game, cap = _play(
+        ["out", "down", "open footlocker", "take dagger", "lower drawbridge", "west"]
+    )
+    assert _said(cap, "bar themselves inside")  # guards seal the castle
+    assert game.locations["Drawbridge"].get_property("raised")
+
+
+def test_escaping_the_window_seals_the_castle_behind_her():
+    # Even if she lowered the bridge first, slipping out the window raises it --
+    # the castle is sealed, so EAST back in is barred.
+    cmds = [
+        "out",
+        "down",
+        "open footlocker",
+        "take dagger",
+        "lower drawbridge",
+        "up",
+        "enter",
+        "cut hair",
+        "get hair",
+        "make rope",
+        "tie rope",
+        "climb down",
+        "let go",
+    ]
+    game, cap = _play(cmds)
+    assert game.player.location.name == "Gardens"
+    assert game.locations["Drawbridge"].get_property("raised")  # sealed on escape
+    game.do_command("south")  # -> Drawbridge
+    game.do_command("east")  # try back into the castle
+    assert game.player.location.name == "Drawbridge"  # sealed out
+    assert _said(cap, "no way back inside")
 
 
 # --- Slice 4a: the horse ---------------------------------------------------
