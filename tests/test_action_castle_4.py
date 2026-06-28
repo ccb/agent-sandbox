@@ -727,9 +727,14 @@ def test_cannot_ride_the_horse_onto_the_highway():
     assert _said(cap, "motor vehicle")
 
 
-def _to_caught_keys():
+def _to_keys(grab_rancher=True):
+    # Through the brawl: CATCH KEYS grabs the biker's skull ring; the ranchers'
+    # fob is on the floor, picked up separately (GET RANCHER KEYS).
     w = ac4.WALKTHROUGH_WIN
-    return w[: w.index("punch biker") + 1] + ["catch keys", "out"]
+    cmds = w[: w.index("punch biker") + 1] + ["catch keys"]
+    if grab_rancher:
+        cmds += ["get rancher keys"]
+    return cmds + ["out"]
 
 
 def test_the_truck_is_a_second_unready_vehicle():
@@ -738,29 +743,44 @@ def test_the_truck_is_a_second_unready_vehicle():
     assert rh.items["truck"].is_vehicle() and not rh.items["truck"].vehicle_ready()
 
 
-def test_brawl_drops_both_key_rings_and_catch_grabs_both():
-    game, cap = _play(_to_caught_keys()[:-1])  # through catch keys (still in the bar)
-    assert "keys" in game.player.inventory  # biker skull ring
-    assert "rancher keys" in game.player.inventory  # rancher horseshoe fob
-    game, _ = _play(_to_caught_keys()[:-1] + ["examine rancher keys"])
+def test_the_punch_knocks_loose_only_the_bikers_keyring():
+    # CATCH grabs the biker's skull ring; the ranchers' fob is on the floor, not
+    # in hand, until you GET it.
+    game, cap = _play(
+        ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("punch biker") + 1]
+        + ["catch keys"]
+    )
+    assert "keys" in game.player.inventory  # biker skull ring caught
+    assert "rancher keys" not in game.player.inventory  # not auto-grabbed
+    assert "rancher keys" in game.player.location.items  # still on the floor
+    game.do_command("get rancher keys")
+    assert "rancher keys" in game.player.inventory
+
+
+def test_brawl_narration_matches_the_blow():
+    base = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("punch biker")]
+    _, cap = _play(base + ["throw drink at biker"])
+    assert _said(cap, "dash your drink") and not _said(cap, "crack a bottle")
+    _, cap = _play(base + ["smash bottle"])
+    assert _said(cap, "smash a bottle")
+    # Either way, only the biker's keyring is named as knocked loose.
+    assert _said(cap, "skull keyring is knocked loose")
+    assert not _said(cap, "horseshoe fob")
 
 
 def test_rancher_keys_examine_show_the_double_deuce_fob():
-    game, cap = _play(_to_caught_keys() + ["examine rancher keys"])
+    game, cap = _play(_to_keys() + ["examine rancher keys"])
     assert _said(cap, "Double-Deuce") and _said(cap, "RIDE EASY")
 
 
 def test_each_key_only_fits_its_own_vehicle():
-    # With both rings in hand, the skull key is refused by the truck.
-    game, cap = _play(_to_caught_keys() + ["use keys on truck"])
-    # (Holding rancher keys too, so this actually starts it -- instead drop the
-    # rancher keys first to force the wrong-key path.)
-    game, cap = _play(_to_caught_keys() + ["drop rancher keys", "use keys on truck"])
+    # Holding only the skull keys (never grabbed the rancher fob), the truck balks.
+    game, cap = _play(_to_keys(grab_rancher=False) + ["use keys on truck"])
     assert _said(cap, "skull key doesn't fit")
 
 
 def test_riding_off_in_the_truck_is_a_winning_ending():
-    game, cap = _play(_to_caught_keys() + ["start truck", "get on truck", "east"])
+    game, cap = _play(_to_keys() + ["start truck", "get on truck", "east"])
     assert game.is_game_over()
     assert _said(cap, "drives the truck to Highway")
     assert _said(cap, "old truck rattles")
