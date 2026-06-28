@@ -72,11 +72,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			event.button_index == MOUSE_BUTTON_LEFT
 			or event.button_index == MOUSE_BUTTON_MIDDLE):
 		_dragging = event.pressed
-		if event.pressed:
-			stop_following()  # grabbing the map takes manual control back
 	elif event is InputEventMouseMotion and _dragging:
 		# Move the world with the cursor: shift the camera opposite the drag,
-		# converting screen pixels to world units through the current zoom.
+		# converting screen pixels to world units through the current zoom. Moving the
+		# camera by hand takes control back from any agent-follow (the sidebar clears
+		# via the follow_stopped signal).
+		stop_following()
 		global_position -= event.relative / zoom
 		_clamp_position()
 
