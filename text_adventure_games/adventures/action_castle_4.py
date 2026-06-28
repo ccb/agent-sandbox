@@ -885,6 +885,12 @@ class ServeTableFour(actions.Action):
         "give tray to table four",
         "deliver tray",
         "deliver the tray",
+        # "table 4" (the numeral) reads the same as "table four"
+        "take tray to table 4",
+        "bring tray to table 4",
+        "take the tray to table 4",
+        "serve table 4",
+        "give tray to table 4",
     ]
 
     def __init__(self, game, command, actor=None):
