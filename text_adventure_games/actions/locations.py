@@ -125,8 +125,14 @@ class Go(base.Action):
                 verb=verb,
                 place=to_loc.name,
             )
-        if self.location.travel_descriptions[self.direction]:
-            description += " " + self.location.travel_descriptions[self.direction]
+        # A travel description may be a plain string or a callable(game) -> str
+        # computed at traversal time (e.g. an outcome that depends on what the
+        # traveller is wearing). Either is appended after the arrival line.
+        travel = self.location.travel_descriptions[self.direction]
+        if callable(travel):
+            travel = travel(self.game)
+        if travel:
+            description += " " + travel
         self.parser.ok(description)
 
         # Some locations finish game

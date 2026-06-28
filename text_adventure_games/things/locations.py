@@ -81,7 +81,12 @@ class Location(Thing):
             for k in self.connections:
                 thing_data["travel_descriptions"][k] = ""
 
-        thing_data["travel_descriptions"] = self.travel_descriptions
+        # A travel description may be a callable(game) -> str (dynamic, computed
+        # at traversal time); those can't be serialized, so save only the static
+        # string entries (a saved game loses the dynamic flavor, not its state).
+        thing_data["travel_descriptions"] = {
+            k: v for k, v in self.travel_descriptions.items() if isinstance(v, str)
+        }
         thing_data["move_verbs"] = self.move_verbs
 
         items = {k: Item.to_primitive(v) for k, v in self.items.items()}
