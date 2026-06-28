@@ -760,7 +760,7 @@ def test_the_punch_knocks_loose_only_the_bikers_keyring():
 def test_brawl_narration_matches_the_blow():
     base = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("punch biker")]
     _, cap = _play(base + ["throw drink at biker"])
-    assert _said(cap, "dash your drink") and not _said(cap, "crack a bottle")
+    assert _said(cap, "toss a drink") and not _said(cap, "crack a bottle")
     _, cap = _play(base + ["smash bottle"])
     assert _said(cap, "smash a bottle")
     # Either way, only the biker's keyring is named as knocked loose.
