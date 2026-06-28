@@ -124,3 +124,13 @@ def test_per_exit_move_verb_overrides_moved():
     assert not _said(cap, "moved to Field")
     # The default ("moved") for an unset exit is covered by
     # test_on_foot_arrival_is_unchanged.
+
+
+def test_travel_description_can_be_a_callable():
+    # A travel description may be computed at traversal time -- e.g. text that
+    # depends on game state -- not just a fixed string.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    woods.travel_descriptions["east"] = lambda g: f"You stroll past the {horse.name}."
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "You stroll past the horse.")
