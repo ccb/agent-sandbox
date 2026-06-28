@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Godot Generative Agents"
-config/description="A tiny Godot 4 sandbox: a few Cute Fantasy sprites that wander on their own. No player controls — the substrate for agent-driven characters later."
-run/main_scene="res://scenes/main.tscn"
+config/description="A tiny Godot 4 sandbox: render the real UPenn campus (OSM→Tiled, Kenney CC0 art) and play back a generative-agents simulation on it."
+run/main_scene="res://scenes/campus_urban.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
 
