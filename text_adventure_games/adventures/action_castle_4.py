@@ -1855,6 +1855,78 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
+    # --- Room descriptions that track state -------------------------------------
+    # Some rooms would otherwise hardcode transient details -- a crossbow on the
+    # wall, a poacher stalking the deer, a horse tethered by the river. Each gets
+    # a small function that regenerates its description from the current state,
+    # kept in sync by a trigger (the same self-syncing pattern as the mirror's
+    # feet line). The transient *objects* are already listed dynamically under
+    # "You see:" / "Characters:"; these conditionals keep the prose honest too.
+    def _sync_description(name, loc, fn):
+        game.add_trigger(
+            name,
+            lambda g, loc=loc, fn=fn: loc.description != fn(g),
+            lambda g, loc=loc, fn=fn: setattr(loc, "description", fn(g)),
+            repeatable=True,
+        )
+
+    def _shack_desc(g):
+        if "crossbow" in old_shack.items:
+            return "The game warden's shack. There's a crossbow here."
+        return "The game warden's shack -- bare pegs on the wall where a crossbow once hung."
+
+    def _deep_woods_desc(g):
+        if deep_woods.get_property("poacher_dealt"):
+            return (
+                "Primordial forest, the canopy thick overhead. The trees are still "
+                "now -- the poacher gone, the doe safe."
+            )
+        return (
+            "Primordial forest, the canopy thick overhead. A cloaked figure stalks "
+            "the deer through the trees."
+        )
+
+    def _river_desc(g):
+        if "horse" in river.items:
+            return (
+                "Down by the river, a white mare is tethered to a tree and a young "
+                "man paints at an easel. The drawbridge is north."
+            )
+        return "Down by the river, a young man paints at an easel. The drawbridge is north."
+
+    def _drawbridge_desc(g):
+        base = (
+            "A bridge spans the river. A path heads north to the gardens and south "
+            "along the river. The Old Woods lie west."
+        )
+        # The raised/lowered castle gate (the drawbridge feature). Guarded so this
+        # stays the plain base description until that feature wires the east exit.
+        if drawbridge.get_property("raised"):
+            return (
+                base
+                + " The drawbridge is hauled up, sealing the castle gate to the east."
+            )
+        if "east" in drawbridge.connections:
+            return base + " The lowered drawbridge leads east into the castle."
+        return base
+
+    def _breakpoint_desc(g):
+        if breakpoint.get_property("brawled"):
+            return (
+                "The Breakpoint Bar & Grill -- a full-blown brawl underway, chairs "
+                "and bottles flying. A jukebox blares in the corner."
+            )
+        return (
+            "The Breakpoint Bar & Grill -- rowdy and packed with bikers and ranchers. "
+            "There's a jukebox here, and a bartender tending bar."
+        )
+
+    _sync_description("sync_shack_desc", old_shack, _shack_desc)
+    _sync_description("sync_deep_woods_desc", deep_woods, _deep_woods_desc)
+    _sync_description("sync_river_desc", river, _river_desc)
+    _sync_description("sync_drawbridge_desc", drawbridge, _drawbridge_desc)
+    _sync_description("sync_breakpoint_desc", breakpoint, _breakpoint_desc)
+
     return game
 
 

@@ -555,6 +555,45 @@ def test_brawl_requires_provoking_the_biker_first():
     assert "keys" not in game.player.location.items
 
 
+def test_shack_description_drops_the_crossbow_once_taken():
+    to_shack = TO_RIVER_WITH_APPLE + [
+        "give apple to horse",
+        "ride horse",
+        "north",
+        "west",
+        "dismount",
+        "enter",
+    ]
+    game, _ = _play(to_shack)
+    assert "There's a crossbow here" in game.locations["Old Shack"].description
+    game, _ = _play(to_shack + ["take crossbow"])
+    desc = game.locations["Old Shack"].description
+    assert "crossbow here" not in desc and "bare pegs" in desc
+
+
+def test_deep_woods_description_drops_the_poacher_once_dealt():
+    game, _ = _play(TO_DEEP_WOODS)
+    assert "cloaked figure stalks" in game.locations["Deep Woods"].description
+    game, _ = _play(TO_DEEP_WOODS + ["shoot poacher"])
+    desc = game.locations["Deep Woods"].description
+    assert "stalks" not in desc and "poacher gone" in desc
+
+
+def test_river_description_drops_the_horse_once_ridden_off():
+    game, _ = _play(TO_RIVER_WITH_APPLE)  # horse still tethered
+    assert "tethered to a tree" in game.locations["Down by the River"].description
+    game, _ = _play(
+        TO_RIVER_WITH_APPLE + ["give apple to horse", "ride horse", "north"]
+    )
+    assert "tethered" not in game.locations["Down by the River"].description
+
+
+def test_breakpoint_description_reflects_the_brawl():
+    # Through "punch biker", which kicks off the brawl.
+    game, _ = _play(ac4.WALKTHROUGH_WIN[:41])
+    assert "brawl underway" in game.locations["The Breakpoint"].description
+
+
 def test_cannot_ride_the_horse_onto_the_highway():
     # Skip the ranch entirely and arrive at the roadhouse still mounted; the
     # highway exits demand the motorcycle specifically.
