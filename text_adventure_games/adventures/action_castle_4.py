@@ -1794,6 +1794,11 @@ def build_game() -> ActionCastle4:
             p.appearance["feet_injury"] = (
                 "Your soles are cut and bleeding from the broken glass."
             )
+            # Cut feet change her gait: she LIMPS on foot from here on (the
+            # arrival line reads "Princess limps to ..."). It only shows while
+            # walking -- once she's on the horse or motorcycle the riding line
+            # takes over. Pure flavor, the gag's just reward for glass footwear.
+            p.set_property("move_verb", "limps")
         # boots / other footwear: no lasting injury
 
     game.add_trigger(

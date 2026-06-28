@@ -663,6 +663,20 @@ def test_army_boots_spare_her_feet():
     assert not game.player.appearance.get("feet_injury")  # unhurt
 
 
+def test_glass_slipper_cuts_make_her_limp_on_foot():
+    game, cap = _fall_wearing("glass")  # soles cut by the shards
+    assert game.player.get_property("move_verb") == "limps"
+    game.do_command("south")  # Gardens -> Drawbridge, on foot
+    assert _said(cap, "limps to Drawbridge")
+
+
+def test_unhurt_feet_do_not_limp():
+    game, cap = _fall_wearing("boots")
+    game.do_command("south")
+    assert _said(cap, "moved to Drawbridge")
+    assert not _said(cap, "limps")
+
+
 def test_river_reflects_the_fall_damage():
     # The river past the tower is the only mirror left -- it shows the haircut,
     # scratches, and torn gown.
