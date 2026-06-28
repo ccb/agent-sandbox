@@ -40,3 +40,44 @@ def test_doubled_and_whitespace_commas_are_ignored():
     game.parser.parse_command("west, , east,  ,")
     assert player.location.name == "Field"
     assert not _confused(cap)
+
+
+def test_sequence_fires_triggers_between_commands():
+    # A trigger keyed to a TRANSIENT intermediate state (being in the woods) must
+    # still fire when the woods is only passed through inside a comma-sequence --
+    # each sub-command takes its own turn, so the react phase runs per step, not
+    # once at the end.
+    game, player, cap = _world()
+    game.add_trigger(
+        "saw_woods",
+        lambda g: g.player.location.name == "Woods"
+        and not g.player.get_property("saw_woods"),
+        lambda g: g.player.set_property("saw_woods", True),
+        repeatable=True,
+    )
+    # Into the woods and back to the field, as one comma-sequence. The player is
+    # never *in* the woods at the end -- only midway through.
+    game.do_command("west, east")
+    assert player.location.name == "Field"
+    assert player.get_property("saw_woods")
+
+
+def test_sequence_takes_one_turn_per_command():
+    game, player, cap = _world()
+    start = game.turn
+    game.do_command("west, east")  # two real moves
+    assert game.turn == start + 2
+
+
+def test_sequence_stops_at_game_over():
+    game, player, cap = _world()
+    game.add_trigger(
+        "end_in_woods",
+        lambda g: g.player.location.name == "Woods",
+        lambda g: setattr(g, "game_over", True),
+        repeatable=True,
+    )
+    # "east" after "west" should never run -- the game ends in the woods.
+    game.do_command("west, east")
+    assert game.is_game_over()
+    assert player.location.name == "Woods"

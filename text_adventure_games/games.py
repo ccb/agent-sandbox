@@ -218,6 +218,23 @@ class Game:
 
             return run_simultaneous_round(self, command)
 
+        # A comma-separated list is a sequence: run each sub-command as its own
+        # full turn, so NPC turns and the react phase (triggers) fire *between*
+        # them -- behaving exactly as if the commands were typed one per line. A
+        # trigger keyed to a state you only pass through mid-sequence (e.g.
+        # visiting a room) still fires. Empty segments (a trailing/doubled comma)
+        # are skipped; a game-ending sub-command stops the rest.
+        if "," in command:
+            results = []
+            for part in command.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                if self.is_game_over():
+                    break
+                results.append(self.do_command(part))
+            return all(results) if results else False
+
         # The player is the subject of any command entered here, so pass them as
         # the explicit actor. This keeps the event log correct even when the
         # command names another character (e.g. "attack troll") — without it the
