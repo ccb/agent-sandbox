@@ -1197,20 +1197,66 @@ def build_game() -> ActionCastle4:
     # to go back up -- but once you've dropped, the rope's out of reach from the
     # ground, so Outside -> Gardens is one-way.
     _one_way(tower, "down", outside_tower)  # climb out the window onto the rope
+    tower.move_verbs["down"] = "climbs"  # "Princess climbs to Outside the Tower"
     tower.travel_descriptions["down"] = (
-        "You climb out the window and inch down the rope until you're hanging at its "
-        "end -- a large rosebush waits directly below."
+        "Hand over hand, you work down the hair-rope to its frayed end, where you "
+        "dangle above a large rosebush."
     )
     _one_way(outside_tower, "in", tower)  # climb back in through the window
+    outside_tower.move_verbs["in"] = "climbs"
     outside_tower.travel_descriptions["in"] = (
-        "You haul yourself back up and climb in through the window."
+        "You haul yourself back up and in through the window."
     )
     _one_way(outside_tower, "down", gardens)  # let go / jump -> drop into the gardens
-    outside_tower.travel_descriptions["down"] = (
-        "You let go, crashing into the thorny rosebush. It breaks your fall and your "
-        "voluminous gown takes the brunt -- torn to ribbons, but you've only a few "
-        "scratches."
-    )
+    outside_tower.move_verbs["down"] = "falls"  # "Princess falls to Gardens"
+
+    def _worn_feet(player):
+        """The footwear she's wearing as she drops, or None if barefoot."""
+        return next(
+            (
+                it
+                for it in player.worn.values()
+                if it.get_property("wear_slot") == "feet"
+            ),
+            None,
+        )
+
+    def _describe_fall(g):
+        """The drop's narration, generated from what she's wearing: the gown only
+        'takes the brunt' if she's in it, and her feet fare differently in glass,
+        boots, or bare. Paired with the fall_into_rosebush trigger, which makes
+        the state match (tears the gown, shatters the slippers, marks her)."""
+        p = g.player
+        parts = ["You let go, crashing into the thorny rosebush."]
+        if "gown" in p.worn:
+            parts.append(
+                "It breaks your fall and your voluminous gown takes the brunt -- "
+                "torn to ribbons, but you've only a few scratches."
+            )
+        else:
+            parts.append(
+                "It breaks your fall, but with no gown to shield you the thorns "
+                "rake your arms and shoulders raw."
+            )
+        feet = _worn_feet(p)
+        if feet is None:
+            parts.append("Your bare feet land hard, left tender and bruised.")
+        elif feet.name == "glass slippers":
+            parts.append(
+                "The glass slippers shatter on impact, shards slicing your soles."
+            )
+        elif feet.name == "boots":
+            parts.append(
+                "Your army boots hit the dirt with a thud and a puff of dust -- "
+                "your feet, at least, are fine."
+            )
+        else:
+            parts.append(
+                f"Luckily the {feet.name} cushion the landing -- your feet are fine."
+            )
+        return " ".join(parts)
+
+    outside_tower.travel_descriptions["down"] = _describe_fall
     _one_way(tower_stairs, "enter", tower)
     tower_stairs.add_connection("down", guardroom)  # auto: guardroom up -> stairs
     # WEST out of the castle is one-way -- "returning to the castle is out of the
@@ -1494,6 +1540,17 @@ def build_game() -> ActionCastle4:
         "mount_refusal_message", "The mare steps away and whinnies, shaking its mane."
     )
     river.add_item(mare)
+    # The river doubles as a mirror -- EXAMINE RIVER (or WATER) gives back a live
+    # reflection. It's the only reflective surface past the tower, so it's where
+    # she sees what the fall did: shorn hair, scratches, the torn gown, her feet.
+    river_water = _fixture(
+        "river",
+        "the slow-moving river",
+        "The slow water gives back a wavering reflection.",
+    )
+    river_water.add_alias("water")
+    river_water.set_property("is_mirror", True)
+    river.add_item(river_water)
     old_shack.add_item(
         _item(
             "crossbow",
@@ -1705,6 +1762,49 @@ def build_game() -> ActionCastle4:
         "mark_escaped",
         lambda g: g.player.location is gardens and not g.player.get_property("escaped"),
         lambda g: g.player.set_property("escaped", True),
+        repeatable=True,
+    )
+
+    # The drop leaves its mark: make the state match _describe_fall's narration.
+    # The gown (if worn) is shredded; the glass slippers shatter and cut her;
+    # bare feet bruise; boots spare her. feet_injury is a separate appearance
+    # key so the sync_feet_reflection trigger (which owns "feet") can't clobber
+    # it. Once, on the first landing.
+    def _fall_damage(g):
+        p = g.player
+        p.set_property("fell", True)
+        if "gown" in p.worn:
+            gown = p.worn["gown"]
+            gown.description = "a gown torn to ribbons"
+            gown.examine_text = (
+                "Your once-sparkly gown, shredded to ribbons by the rosebush."
+            )
+            p.appearance["marks"] = "Your arms and shoulders are lightly scratched."
+        else:
+            p.appearance["marks"] = (
+                "Your arms and shoulders are raw and badly scratched."
+            )
+        feet = _worn_feet(p)
+        if feet is None:
+            p.appearance["feet_injury"] = (
+                "Your soles ache, tender and bruised from the hard landing."
+            )
+        elif feet.name == "glass slippers":
+            p.worn.pop("glass slippers")  # shattered -- gone
+            p.appearance["feet_injury"] = (
+                "Your soles are cut and bleeding from the broken glass."
+            )
+            # Cut feet change her gait: she LIMPS on foot from here on (the
+            # arrival line reads "Princess limps to ..."). It only shows while
+            # walking -- once she's on the horse or motorcycle the riding line
+            # takes over. Pure flavor, the gag's just reward for glass footwear.
+            p.set_property("move_verb", "limps")
+        # boots / other footwear: no lasting injury
+
+    game.add_trigger(
+        "fall_into_rosebush",
+        lambda g: g.player.location is gardens and not g.player.get_property("fell"),
+        _fall_damage,
         repeatable=True,
     )
     game.add_trigger(
