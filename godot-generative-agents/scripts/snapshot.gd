@@ -5,9 +5,9 @@ extends Node
 ## Run (windowed — pixel capture needs a real renderer, so NOT --headless):
 ##   Godot --path <project> res://scenes/snapshot.tscn
 ##   Godot --path <project> res://scenes/snapshot.tscn -- <scene.tscn> <out.png>
-## With no args it snapshots scenes/main.tscn to campus_snapshot.png.
+## With no args it snapshots scenes/campus_urban.tscn to campus_snapshot.png.
 
-const DEFAULT_SCENE := "res://scenes/main.tscn"
+const DEFAULT_SCENE := "res://scenes/campus_urban.tscn"
 const DEFAULT_OUT := "res://campus_snapshot.png"
 
 
