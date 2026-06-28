@@ -658,6 +658,18 @@ def test_say_wade_sent_me_needs_having_met_wade():
     assert not game.locations["Roadhouse"].get_property("admitted")
 
 
+def test_breakpoint_is_crowded_with_bikers_and_ranchers():
+    bp = ac4.build_game().locations["The Breakpoint"]
+    assert {"bartender", "bikers", "ranchers"} <= set(bp.characters)
+
+
+def test_examine_and_talk_to_the_bar_crowd():
+    cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("talk to bartender")]
+    game, cap = _play(cmds + ["examine bikers", "talk to ranchers"])
+    assert _said(cap, "Steel Vipers")  # examine bikers
+    assert _said(cap, "tip their hats")  # talk to ranchers
+
+
 def test_brawl_requires_provoking_the_biker_first():
     cmds = ac4.WALKTHROUGH_WIN[: ac4.WALKTHROUGH_WIN.index("talk to bartender") + 1]
     cmds += ["punch biker"]  # before serving table four
