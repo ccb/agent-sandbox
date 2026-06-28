@@ -128,7 +128,12 @@ class Parser:
         )
 
     def ok(self, description: str):
-        """Report a successful action's world narration."""
+        """Report a successful action's world narration. The first character is
+        capitalized so narration always opens with a capital, even when it
+        starts with a lower-cased name ("princess got ..." -> "Princess got
+        ...")."""
+        if description:
+            description = description[0].upper() + description[1:]
         self._emit(Channel.NARRATION, description)
         self.add_description_to_history(description)
 
