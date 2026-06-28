@@ -958,7 +958,7 @@ class StartBrawl(actions.Action):
         """The first move, worded to match how the player threw it."""
         cmd = self.command.lower()
         if "throw" in cmd or "drink" in cmd:
-            return "You dash your drink in the biker's face"
+            return "You toss a drink in the biker's face"
         if "smash" in cmd or "bottle" in cmd:
             return "You smash a bottle over the biker's head"
         if "deck" in cmd:
@@ -1016,23 +1016,13 @@ class CatchKeys(actions.Action):
 
     def apply_effects(self):
         # CATCH grabs the biker's airborne skull keyring (what your punch knocked
-        # loose). The ranchers' fob is on the floor in the melee -- point the
-        # player at it; they GET it separately if they want the truck.
+        # loose). The ranchers' fob is left lying on the floor in the melee -- the
+        # room listing shows it; the player can notice and GET it on their own.
         loc = self.player.location
         keys = loc.items["keys"]
         loc.remove_item(keys)
         self.player.add_to_inventory(keys)
-        note = (
-            " A horseshoe-fob keyring lies on the floor too -- GET RANCHER KEYS for the "
-            "truck."
-            if "rancher keys" in loc.items
-            else ""
-        )
-        self.parser.ok(
-            "You snatch the skull keys out of the air and bolt for the door before "
-            "anyone's the wiser." + note + " (USE KEYS ON the MOTORCYCLE or the TRUCK "
-            "out front.)"
-        )
+        self.parser.ok("You grab the skull keys out of the air, quick as a cat.")
 
 
 class UseKeyOnMotorcycle(actions.Action):
