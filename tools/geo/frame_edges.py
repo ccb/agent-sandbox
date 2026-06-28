@@ -248,12 +248,11 @@ def frame_tmj(tmj: dict, pad: int, old_w: int, old_h: int) -> None:
     for x in range(pad, w, 2):
         lay["roads"][cyb * w + x] = DASH_H
 
-    # 6. Straight RIGHT road + dashed centreline. It spans the FULL height (touching
-    #    the top + bottom edges), and at the two right corners widens out to the right
-    #    edge so the road reaches the frame corner there.
-    fill_rect(lay["roads"], w, rx0, w - pad, 0, h, ROAD)  # full-height band
-    fill_rect(lay["roads"], w, rx0, w, 0, pad + ROAD_THICK, ROAD)  # -> top-right corner
-    fill_rect(lay["roads"], w, rx0, w, by0, h, ROAD)  # -> bottom-right corner
+    # 6. Straight RIGHT road + dashed centreline, spanning the FULL height. Because
+    #    the top + bottom roads also run to the right edge, the roads cross to form an
+    #    intersection at each right corner -- but the outer corner square itself is
+    #    left unpaved, so the very corner of the frame stays grass (and planted).
+    fill_rect(lay["roads"], w, rx0, w - pad, 0, h, ROAD)
     cx = rx0 + ROAD_THICK // 2
     for y in range(0, h, 2):
         lay["roads"][y * w + cx] = DASH_V
