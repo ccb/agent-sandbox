@@ -42,6 +42,7 @@ import os
 
 from furnish_building import CATALOG, SHEETS, _FIRST, load_matrix_sector, tile_named
 
+
 # --------------------------------------------------------------------------- #
 # Brick wall frames, by colour. The Kenney RPG Urban sheet (referenced whole as
 # GID = sheet-index + 1) carries each building as a wall autotile block: a tan/grey
@@ -134,9 +135,7 @@ def place_thin_edge(tmj, roof, W, H, dry_run):
     stroke on each apron cell's building-facing side, so it hugs the building. Writes
     to the `edges` layer (which renders above the ground, below buildings). Returns
     the number of apron cells stroked."""
-    edges = next(
-        (L for L in tmj["layers"] if L.get("name") == "edges"), None
-    )
+    edges = next((L for L in tmj["layers"] if L.get("name") == "edges"), None)
     if edges is None:
         raise SystemExit("no 'edges' layer in the .tmj")
     data = edges["data"]
@@ -178,8 +177,12 @@ def flood_fill_building(data, W, H, sx, sy):
         x, y = q.popleft()
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             nx, ny = x + dx, y + dy
-            if 0 <= nx < W and 0 <= ny < H and (nx, ny) not in seen \
-               and data[ny * W + nx] != 0:
+            if (
+                0 <= nx < W
+                and 0 <= ny < H
+                and (nx, ny) not in seen
+                and data[ny * W + nx] != 0
+            ):
                 seen.add((nx, ny))
                 q.append((nx, ny))
     return seen
@@ -201,8 +204,7 @@ def outer_two_rings(roof):
     ring2 = {
         (x, y)
         for (x, y) in roof
-        if (x, y) not in ring1
-        and any((x + dx, y + dy) in ring1 for dx, dy in dirs)
+        if (x, y) not in ring1 and any((x + dx, y + dy) in ring1 for dx, dy in dirs)
     }
     return ring1, ring2
 
@@ -305,23 +307,25 @@ def main():
     tmj = json.load(open(args.tmj))
     W, H = tmj["width"], tmj["height"]
 
-    buildings = next(
-        L for L in tmj["layers"] if L.get("name") == "buildings"
-    )
+    buildings = next(L for L in tmj["layers"] if L.get("name") == "buildings")
     data = buildings["data"]
 
     if args.seed:
         sx, sy = (int(v) for v in args.seed.split(","))
         roof = flood_fill_building(data, W, H, sx, sy)
         sid = f"seed {sx},{sy}"
-        label = args.sector if args.sector != "Van Pelt Library" else f"building@{sx},{sy}"
+        label = (
+            args.sector if args.sector != "Van Pelt Library" else f"building@{sx},{sy}"
+        )
     else:
         sid, roof, _apron = load_matrix_sector(args.matrix, args.sector, W, H)
         label = args.sector
 
     if args.thin_edge:
         n = place_thin_edge(tmj, roof, W, H, args.dry_run)
-        print(f"{label}: {sid}  footprint={len(roof)} cells  thin kerb on {n} apron cells")
+        print(
+            f"{label}: {sid}  footprint={len(roof)} cells  thin kerb on {n} apron cells"
+        )
         if args.dry_run:
             return
         with open(args.tmj, "w") as fh:
@@ -330,9 +334,7 @@ def main():
         return
 
     # The footprint's most common current fill tile fixes the existing colour.
-    fills = collections.Counter(
-        data[y * W + x] for x, y in roof if data[y * W + x]
-    )
+    fills = collections.Counter(data[y * W + x] for x, y in roof if data[y * W + x])
     fill_gid = fills.most_common(1)[0][0] if fills else 0
 
     # Resolve the Kenney frame (always available) and, if --wall names a catalog
@@ -373,6 +375,7 @@ def main():
         band_desc = f"'{args.wall}' brick" if wall_gid is not None else f"{family} fill"
         desc = f"Kenney {family} frame + {band_desc} band (gid {band_gid})"
     elif wall_gid is not None:
+
         def cell_gid(x, y):
             inside = all(
                 (x + dx, y + dy) in roof
@@ -382,6 +385,7 @@ def main():
 
         desc = f"Franuka '{args.wall}' ({CATALOG[args.wall]['label']}) gid {wall_gid}"
     else:
+
         def cell_gid(x, y):
             return perimeter_tile(x, y, roof, frame)
 
@@ -404,7 +408,9 @@ def main():
         if not args.dry_run:
             data[y * W + x] = gid
         painted += 1
-    print(f"  perimeter cells walled: {painted}  (interior {len(roof) - painted} untouched)")
+    print(
+        f"  perimeter cells walled: {painted}  (interior {len(roof) - painted} untouched)"
+    )
 
     if args.dry_run:
         return
