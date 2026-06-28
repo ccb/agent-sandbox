@@ -523,6 +523,15 @@ class FollowDeer(actions.Action):
         if riding is None or riding.name != "horse":
             self.parser.fail("You'd never catch her on foot -- you'll need the horse.")
             return False
+        # There's a chase only once she's bolted. While she's still grazing in
+        # the Old Woods there's nothing to follow -- hinting at the shack, where
+        # emerging spooks her (and where the crossbow is, which you'll want).
+        if "deer" in self.player.location.items:
+            self.parser.fail(
+                "The doe is still grazing, unspooked -- there's nothing to chase "
+                "yet. (The game warden's shack might be worth a look first.)"
+            )
+            return False
         return True
 
     def apply_effects(self):
@@ -1150,7 +1159,7 @@ def build_game() -> ActionCastle4:
     )
     old_woods = L(
         "Old Woods",
-        "You're in the Old Woods. The game warden's shack is here. You see a deer!",
+        "You're in the Old Woods. The game warden's shack is here.",
     )
     old_shack = L("Old Shack", "The game warden's shack. There's a crossbow here.")
     deep_woods = L(
@@ -1564,9 +1573,16 @@ def build_game() -> ActionCastle4:
         "tower": '"Yon tower is where the princess sleeps for all eternity, cursed by an evil witch\'s spell... or something."',
         "princess": '"I hear she is beautiful -- rose lips, flaxen hair, and delicate feet like an elf maid."',
     }
-    deer = things.Character(
-        "deer", "a beautiful doe", "A grazing doe, alert to any sign of danger."
+    # The deer is a passive creature you observe and chase, not someone you talk
+    # to -- so it's an Item fixture (gettable=False), like the horse, not a
+    # Character. It grazes in the Old Woods and bolts to the Deep Woods when you
+    # emerge from the warden's shack (see the deer_flees trigger).
+    deer = things.Item(
+        "deer",
+        "a beautiful doe",
+        "The beautiful doe is grazing and doesn't appear to notice you.",
     )
+    deer.set_property("gettable", False)
     poacher = things.Character(
         "poacher",
         "a grizzled poacher in a stained cloak",
@@ -1598,7 +1614,7 @@ def build_game() -> ActionCastle4:
     )
 
     river.add_character(prince)
-    old_woods.add_character(deer)
+    old_woods.add_item(deer)
     deep_woods.add_character(poacher)
     ranch.add_character(rancher)
     roadhouse.add_character(dalton)
@@ -1620,7 +1636,7 @@ def build_game() -> ActionCastle4:
     player.wear(gown)
     player.wear(tiara)
 
-    characters = [prince, deer, poacher, rancher, dalton, bartender]
+    characters = [prince, poacher, rancher, dalton, bartender]  # deer is an Item
     custom_actions = [
         CutHair,
         TieRope,
@@ -1812,15 +1828,46 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    # The deer flees into the Deep Woods and the poacher confrontation begins,
-    # with one grace turn (you arrive, then must act). Hesitating -- any committal
-    # action but shooting -- lets him kill the deer and you're lost: THE END.
+    # Coming out of the warden's shack spooks the grazing doe: she bolts from the
+    # Old Woods into the Deep Woods. Tracked in two steps -- note the shack visit,
+    # then flee on the way back out -- so you've had your beat inside (and the
+    # crossbow) before the chase. There's no timer on the flee itself; you remount
+    # and FOLLOW DEER at your leisure (the poacher's clock only starts when YOU
+    # reach the Deep Woods, below).
+    game.add_trigger(
+        "note_shack_visit",
+        lambda g: g.player.location is old_shack
+        and not g.player.get_property("visited_shack"),
+        lambda g: g.player.set_property("visited_shack", True),
+        repeatable=True,
+    )
+
+    def _deer_flees(g):
+        old_woods.remove_item(deer)
+        deep_woods.add_item(deer)
+        deer.examine_text = (
+            "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
+        )
+        g.parser.ok(
+            "As you step out of the shack the doe's head snaps up -- alarmed, she "
+            "bolts, white tail flashing, off into the Deep Woods. You'll need the "
+            "horse to FOLLOW DEER and give chase."
+        )
+
+    game.add_trigger(
+        "deer_flees",
+        lambda g: g.player.location is old_woods
+        and g.player.get_property("visited_shack")
+        and "deer" in old_woods.items,
+        _deer_flees,
+        repeatable=True,
+    )
+
+    # The poacher confrontation begins when YOU reach the Deep Woods (the doe has
+    # already fled here), with one grace turn -- you arrive, then must act.
+    # Hesitating -- any committal action but shooting -- lets him kill the deer
+    # and you're lost: THE END.
     def deer_confrontation(g):
-        deer = g.characters.get("deer")
-        if deer is not None and deer.location is not deep_woods:
-            if deer.location is not None:
-                deer.location.remove_character(deer)
-            deep_woods.add_character(deer)
         if not deep_woods.get_property(
             "confront_started"
         ) and not deep_woods.get_property("poacher_dealt"):
