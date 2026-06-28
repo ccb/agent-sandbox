@@ -48,7 +48,19 @@ to render the full campus instead of the 34th–38th × Spruce–Walnut core sub
 uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
 cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/maps/
 cp tools/geo/out/tilemap_packed.png    godot-generative-agents/maps/
+
+# Post-processes that the committed map bakes in (re-run after a fresh bake, in
+# this order — both edit maps/upenn_core_urban.tmj in place and are re-run safe):
+uv run python tools/geo/wall_all_buildings.py                        # brick wall every building
+uv run python tools/geo/furnish_building.py --sector "Williams Hall" # open the roof + furnish
 ```
+
+The committed `maps/upenn_core_urban.tmj` already includes those two post-processes
+(brick-walled buildings + the furnished Williams Hall cutaway), so the demo renders
+them out of the box. The wall colour is chosen automatically from each building's roof
+tint; to hand-match a specific building, run `wall_building.py --sector "<name>"` with
+the colour you want before `wall_all_buildings.py` (it leaves already-styled buildings
+alone). Both post-processes need the map grid to match the sim matrix 1:1 (239×273).
 
 `scripts/snapshot.gd` / `scenes/snapshot.tscn` are a small dev utility: run that scene
 (optionally with `-- <scene.tscn> <out.png>`) to save a screenshot of a map, used to
