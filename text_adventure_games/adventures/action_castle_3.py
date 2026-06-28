@@ -2228,43 +2228,50 @@ def build_game() -> ActionCastle3:
         repeatable=False,
     )
 
-    # The goblin baby. While it's crying it wails in each new room, and that
-    # wailing is fatal at the Bandit Camp (alerts the bandits) and the Deep
-    # Ravine (alerts the stirges). Feeding it mushroom stew quiets it.
+    # Noise gives you away at an ambush spot. Two sources: the goblin baby's
+    # wailing (it cries in each new room until fed mushroom stew), and any loud
+    # action of your own -- yelling aloud or smashing something (_NOISY_ACTIONS).
+    # Quiet moves are safe -- sneaking in, CASTing SLEEP on the bandits, taking
+    # the bow, even TALKing (they only jeer) -- which is the whole point of the
+    # stealth here. The Bandit Camp and the Deep Ravine (stirges) are the spots
+    # where a racket gets you killed.
+    _NOISY_ACTIONS = {"say", "break"}  # racket loud enough to give you away
+
     def _carrying_crying_baby(g):
         baby = _held_item(g.player, "baby goblin")
         return baby is not None and baby.get_property("crying")
 
-    def baby_alerts_bandits(g):
-        _die(
-            g,
-            "The baby's wailing alerts the bandits. They overwhelm you and drag you "
-            "off into the woods to be eaten by wild animals. THE END.",
+    def _gave_yourself_away(g):
+        """How you made noise this turn (a phrase to open the death line), or
+        None if you kept quiet."""
+        if _carrying_crying_baby(g):
+            return "The baby's wailing"
+        last = g.parser.last_action
+        if last is not None and last.action_name() in _NOISY_ACTIONS:
+            return "Your sudden racket"
+        return None
+
+    def _add_ambush_trigger(name, location_name, fate):
+        game.add_trigger(
+            name,
+            lambda g: g.player.location is not None
+            and g.player.location.name == location_name
+            and _gave_yourself_away(g) is not None,
+            lambda g: _die(g, f"{_gave_yourself_away(g)} alerts {fate}"),
+            repeatable=False,
         )
 
-    game.add_trigger(
-        "baby_alerts_bandits",
-        lambda g: _carrying_crying_baby(g)
-        and g.player.location is not None
-        and g.player.location.name == "Bandit Camp",
-        baby_alerts_bandits,
-        repeatable=False,
+    _add_ambush_trigger(
+        "noise_alerts_bandits",
+        "Bandit Camp",
+        "the bandits. They overwhelm you and drag you off into the woods to be "
+        "eaten by wild animals. THE END.",
     )
-
-    def baby_alerts_stirges(g):
-        _die(
-            g,
-            "The baby's wailing alerts the stirges. They swarm you, stabbing with "
-            "their needle beaks and draining your blood. THE END.",
-        )
-
-    game.add_trigger(
-        "baby_alerts_stirges",
-        lambda g: _carrying_crying_baby(g)
-        and g.player.location is not None
-        and g.player.location.name == "Deep Ravine",
-        baby_alerts_stirges,
-        repeatable=False,
+    _add_ambush_trigger(
+        "noise_alerts_stirges",
+        "Deep Ravine",
+        "the stirges. They swarm you, stabbing with their needle beaks and "
+        "draining your blood. THE END.",
     )
 
     # Flavor: the baby wails once each time you carry it into a new room (so the
