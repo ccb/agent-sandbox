@@ -230,24 +230,32 @@ def frame_tmj(tmj: dict, pad: int, old_w: int, old_h: int) -> None:
     clear_road(max(right_clear, pad), w - pad, pad, inner_bot)  # right band
     clear_road(pad, pad + WALK_THICK + 3, pad, inner_bot)  # left band (street-ends)
 
+    # The top + bottom roads run out to the RIGHT edge (cols pad..w) instead of
+    # stopping at the inner margin, so the perimeter road reaches the frame corner
+    # at the top-right and bottom-right (the left + middle margins stay planted).
+    rx0 = w - pad - ROAD_THICK
+    by0 = inner_bot - ROAD_THICK
+
     # 4. Straight TOP road + dashed centreline.
-    fill_rect(lay["roads"], w, pad, w - pad, pad, pad + ROAD_THICK, ROAD)
+    fill_rect(lay["roads"], w, pad, w, pad, pad + ROAD_THICK, ROAD)
     cy = pad + ROAD_THICK // 2
-    for x in range(pad, w - pad, 2):
+    for x in range(pad, w, 2):
         lay["roads"][cy * w + x] = DASH_H
 
     # 5. Straight BOTTOM road + dashed centreline (just inside the bottom margin).
-    by0 = inner_bot - ROAD_THICK
-    fill_rect(lay["roads"], w, pad, w - pad, by0, inner_bot, ROAD)
+    fill_rect(lay["roads"], w, pad, w, by0, inner_bot, ROAD)
     cyb = by0 + ROAD_THICK // 2
-    for x in range(pad, w - pad, 2):
+    for x in range(pad, w, 2):
         lay["roads"][cyb * w + x] = DASH_H
 
-    # 6. Straight RIGHT road + dashed centreline, spanning top road to bottom road.
-    rx0 = w - pad - ROAD_THICK
-    fill_rect(lay["roads"], w, rx0, w - pad, pad, inner_bot, ROAD)
+    # 6. Straight RIGHT road + dashed centreline. It spans the FULL height (touching
+    #    the top + bottom edges), and at the two right corners widens out to the right
+    #    edge so the road reaches the frame corner there.
+    fill_rect(lay["roads"], w, rx0, w - pad, 0, h, ROAD)  # full-height band
+    fill_rect(lay["roads"], w, rx0, w, 0, pad + ROAD_THICK, ROAD)  # -> top-right corner
+    fill_rect(lay["roads"], w, rx0, w, by0, h, ROAD)  # -> bottom-right corner
     cx = rx0 + ROAD_THICK // 2
-    for y in range(pad, inner_bot, 2):
+    for y in range(0, h, 2):
         lay["roads"][y * w + cx] = DASH_V
 
     # 7. Straight LEFT walkway (pedestrian paving, in the paths layer).
@@ -305,11 +313,18 @@ def plant_margins(tmj: dict, pad: int) -> int:
         base + idx for idx, weight in PLANT_WEIGHTS.items() for _ in range(weight)
     ]
     rng = random.Random(PLANT_SEED)
+    # Don't plant on paving: the right roads run into the margin at the corners, so
+    # skip any margin cell already covered by a road or walkway.
+    lay = tilelayers(tmj)
+    paved = lay["roads"], lay["paths"]
     data = [0] * (w * h)
     planted = 0
     for x, y in margin_cells(w, h, pad):
+        i = y * w + x
+        if any(p[i] for p in paved):
+            continue
         if rng.random() < PLANT_FILL:
-            data[y * w + x] = rng.choice(palette)
+            data[i] = rng.choice(palette)
             planted += 1
     layer_id = int(tmj.get("nextlayerid", len(tmj["layers"]) + 1))
     tmj["layers"].append(
