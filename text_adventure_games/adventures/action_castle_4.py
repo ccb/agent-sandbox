@@ -533,6 +533,72 @@ class FollowDeer(actions.Action):
         _relocate(self.game, self.player, "Deep Woods")
 
 
+class _WorkWinch(actions.Action):
+    """Shared base for the guardroom drawbridge winch. Subclasses set the
+    target state (``_target_raised``) and the success line."""
+
+    _target_raised = True
+    _already = "The drawbridge is already there."
+    _line = ""
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.drawbridge = self.game.locations["Drawbridge"]
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "Guardroom":
+            self.parser.fail(
+                "There's no winch here. The drawbridge winch is back in the guardroom."
+            )
+            return False
+        if bool(self.drawbridge.get_property("raised")) == self._target_raised:
+            self.parser.fail(self._already)
+            return False
+        return True
+
+    def apply_effects(self):
+        self.drawbridge.set_property("raised", self._target_raised)
+        self.parser.ok(self._line)
+
+
+class LowerDrawbridge(_WorkWinch):
+    """Work the guardroom winch to lower the drawbridge across the moat."""
+
+    ACTION_NAME = "lower drawbridge"
+    ACTION_DESCRIPTION = "Lower the castle drawbridge"
+    ACTION_ALIASES = [
+        "lower the drawbridge",
+        "lower bridge",
+        "lower the bridge",
+        "lower drawbridge with winch",
+    ]
+    _target_raised = False
+    _already = "The drawbridge is already down."
+    _line = (
+        "You throw your weight on the great winch. With a shriek of chains the "
+        "drawbridge sinks down across the moat -- the way west lies open."
+    )
+
+
+class RaiseDrawbridge(_WorkWinch):
+    """Work the guardroom winch to haul the drawbridge back up."""
+
+    ACTION_NAME = "raise drawbridge"
+    ACTION_DESCRIPTION = "Raise the castle drawbridge"
+    ACTION_ALIASES = [
+        "raise the drawbridge",
+        "raise bridge",
+        "raise the bridge",
+    ]
+    _target_raised = True
+    _already = "The drawbridge is already up."
+    _line = (
+        "You crank the winch the other way; the drawbridge groans back up, sealing "
+        "the castle gate."
+    )
+
+
 class ShootPoacher(actions.Action):
     """Loose the crossbow at the poacher -- he flees, dropping his purse + cloak,
     and the deer is saved."""
@@ -1213,11 +1279,16 @@ def build_game() -> ActionCastle4:
     )
     _one_way(tower_stairs, "enter", tower)
     tower_stairs.add_connection("down", guardroom)  # auto: guardroom up -> stairs
-    # WEST out of the castle is one-way -- "returning to the castle is out of the
-    # question" (rulebook p9) -- and the guard is waiting at the bridge (trigger
-    # below): a break for it gets you marched back upstairs unless you've already
-    # slipped out the tower window.
-    _one_way(guardroom, "west", drawbridge)
+    # The drawbridge is the castle gate, between the Guardroom (inside) and the
+    # bridge/outer grounds. It starts RAISED (she's a prisoner, the castle is
+    # sealed): WEST out of the guardroom and EAST back in are both barred until
+    # the winch lowers it. The front gate is still a trap -- lower the bridge,
+    # bolt across, and the guard marches you back (trigger below) and hauls it up
+    # again -- so the real way out is the tower window. Once she's out (caught
+    # then escaped, or straight out the window) the bridge stays up: "returning
+    # to the castle is out of the question" (rulebook p9).
+    drawbridge.set_property("raised", True)
+    guardroom.add_connection("west", drawbridge)  # auto: drawbridge east -> guardroom
     # Gardens / river
     gardens.add_connection("south", drawbridge)  # auto: drawbridge north -> gardens
     drawbridge.add_connection("south", river)  # auto: river north -> drawbridge
@@ -1289,6 +1360,35 @@ def build_game() -> ActionCastle4:
             return bool(self.tower.get_property("door_locked"))
 
     tower.add_block("out", LockedDoorBlock(tower))
+
+    # The drawbridge gates the castle gate both ways while it's raised: you can't
+    # bolt WEST out of the guardroom, and you can't come back EAST into the castle.
+    # (It gates only this crossing -- the outer grounds stay connected, so a raised
+    # bridge is never a dead-end.)
+    class DrawbridgeRaisedBlock(blocks.Block):
+        def __init__(self, drawbridge, message):
+            super().__init__("The drawbridge is raised", message)
+            self.drawbridge = drawbridge
+
+        def is_blocked(self) -> bool:
+            return bool(self.drawbridge.get_property("raised"))
+
+    guardroom.add_block(
+        "west",
+        DrawbridgeRaisedBlock(
+            drawbridge,
+            "The drawbridge is hauled up. You'll have to lower it first -- there's "
+            "a great winch here in the guardroom.",
+        ),
+    )
+    drawbridge.add_block(
+        "east",
+        DrawbridgeRaisedBlock(
+            drawbridge,
+            "The drawbridge is hauled up, sealing the castle gate -- there's no way "
+            "back inside.",
+        ),
+    )
 
     # You must get off the horse to squeeze into the warden's shack.
     class DismountBlock(blocks.Block):
@@ -1464,6 +1564,17 @@ def build_game() -> ActionCastle4:
     )
     cot.add_item(boots)
     guardroom.add_item(cot)
+    # The drawbridge winch -- LOWER / RAISE DRAWBRIDGE work it (see _WorkWinch).
+    winch = _fixture(
+        "winch",
+        "a great iron winch",
+        "A great iron winch wound with chain -- this is what raises and lowers the "
+        "castle drawbridge. Try LOWER DRAWBRIDGE.",
+    )
+    winch.add_alias("crank")
+    winch.add_alias("windlass")
+    winch.add_alias("drawbridge winch")
+    guardroom.add_item(winch)
     rosebushes = _fixture(
         "rosebushes",
         "thorny rosebushes",
@@ -1625,6 +1736,8 @@ def build_game() -> ActionCastle4:
         CutHair,
         TieRope,
         LetGo,
+        LowerDrawbridge,
+        RaiseDrawbridge,
         KillSelf,
         PickApple,
         EatApple,
@@ -1698,13 +1811,20 @@ def build_game() -> ActionCastle4:
         lambda g: g.player.appearance.__setitem__("feet", _feet_line(g)),
         repeatable=True,
     )
+
     # You've genuinely escaped only by climbing out the window into the Gardens
     # (the one room reachable solely via the rope). Marking it here lets the
     # guard trigger tell a real escape from a doomed break for the front gate.
+    def _mark_escaped(g):
+        g.player.set_property("escaped", True)
+        # The castle seals behind her -- if she'd lowered the drawbridge on a
+        # front-gate attempt, it goes back up now ("no return", rulebook p9).
+        drawbridge.set_property("raised", True)
+
     game.add_trigger(
         "mark_escaped",
         lambda g: g.player.location is gardens and not g.player.get_property("escaped"),
-        lambda g: g.player.set_property("escaped", True),
+        _mark_escaped,
         repeatable=True,
     )
     game.add_trigger(
@@ -1722,9 +1842,12 @@ def build_game() -> ActionCastle4:
         g.parser.ok(
             "You make a break for it across the bridge -- and run smack into the "
             "tower's guard. \"Hey! What are you doing sneaking around? Back to your "
-            "chambers at once!\" You're marched upstairs, and the door locks behind you."
+            "chambers at once!\" You're marched upstairs, the door locks behind you, "
+            "and the drawbridge is hauled up with a clatter of chains -- the guards "
+            "bar themselves inside."
         )
         tower.set_property("door_locked", True)
+        drawbridge.set_property("raised", True)
         _relocate(g, g.player, "Tower")
 
     game.add_trigger(
