@@ -262,13 +262,20 @@ class Inventory(base.Action):
         return True
 
     def apply_effects(self):
-        if len(self.character.inventory) == 0:
-            description = f"{self.character.name}'s inventory is empty."
-            self.parser.ok(description)
-        else:
-            description = f"{self.character.name}'s inventory contains:\n"
-            for item_name in self.character.inventory:
-                item = self.character.inventory[item_name]
+        char = self.character
+        # Nothing carried, worn, or wielded -- a single empty line.
+        if not char.inventory and not char.worn and not char.wielded:
+            self.parser.ok(f"{char.name}'s inventory is empty.")
+            return
+
+        # Three sections in order: what's carried, then worn, then wielded.
+        # Only non-empty sections are shown (but "carried" always appears, as
+        # "empty", when something is worn/wielded but nothing is in hand).
+        sections = []
+        if char.inventory:
+            carried = f"{char.name}'s inventory contains:\n"
+            for item_name in char.inventory:
+                item = char.inventory[item_name]
                 if item.get_property("is_container"):
                     if item.capacity is None:
                         gauge = "({count})".format(count=item.current_count())
@@ -276,19 +283,35 @@ class Inventory(base.Action):
                         gauge = "({count}/{cap})".format(
                             count=item.current_count(), cap=item.capacity
                         )
-                    description += "* {item} {gauge}\n".format(
+                    carried += "* {item} {gauge}\n".format(
                         item=item.description, gauge=gauge
                     )
                     for inner_name in item.contents:
                         inner = item.contents[inner_name]
-                        description += "    - {item}{qty}\n".format(
+                        carried += "    - {item}{qty}\n".format(
                             item=inner.description, qty=_qty_suffix(inner)
                         )
                 else:
-                    description += "* {item}{qty}\n".format(
+                    carried += "* {item}{qty}\n".format(
                         item=item.description, qty=_qty_suffix(item)
                     )
-            self.parser.ok(description)
+            sections.append(carried.rstrip("\n"))
+        else:
+            sections.append(f"{char.name}'s inventory is empty.")
+
+        def _listing(title, slot):
+            body = "".join(
+                "* {item}{qty}\n".format(item=it.description, qty=_qty_suffix(it))
+                for it in slot.values()
+            )
+            return f"{title}\n{body}".rstrip("\n")
+
+        if char.worn:
+            sections.append(_listing("Wearing:", char.worn))
+        if char.wielded:
+            sections.append(_listing("Wielding:", char.wielded))
+
+        self.parser.ok("\n\n".join(sections))
 
 
 class Examine(base.Action):
