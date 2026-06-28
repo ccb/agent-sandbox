@@ -939,6 +939,7 @@ class StartBrawl(actions.Action):
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         self.player = self.game.player
+        self.command = command
 
     def check_preconditions(self) -> bool:
         loc = self.player.location
@@ -953,16 +954,32 @@ class StartBrawl(actions.Action):
             return False
         return True
 
+    def _opening_blow(self) -> str:
+        """The first move, worded to match how the player threw it."""
+        cmd = self.command.lower()
+        if "throw" in cmd or "drink" in cmd:
+            return "You dash your drink in the biker's face"
+        if "smash" in cmd or "bottle" in cmd:
+            return "You smash a bottle over the biker's head"
+        if "deck" in cmd:
+            return "You deck the biker with a roundhouse"
+        if "punch" in cmd or "hit" in cmd:
+            return "You crack the biker across the jaw"
+        return "You throw the first punch"
+
     def apply_effects(self):
         loc = self.player.location
         loc.set_property("brawled", True)
-        # The bikers and ranchers both spill their keys in the chaos -- the
-        # skull ring (the chopper) and the ranchers' horseshoe fob (the truck).
+        # You hit the BIKER, so his skull keyring is what's knocked loose -- CATCH
+        # it. The ranchers get dragged into the melee too and their truck keys end
+        # up on the floor (a separate GET; see CatchKeys' pointer), so that ring
+        # is the brawl's doing, not your punch.
         keys = _item(
             "keys",
             "a ring of motorcycle keys",
             "A heavy skull keyring stamped ROCK HARD, RIDE FREE.",
         )
+        loc.add_item(keys)
         rancher_keys = _item(
             "rancher keys",
             "a ring of truck keys",
@@ -971,15 +988,13 @@ class StartBrawl(actions.Action):
         )
         rancher_keys.add_alias("truck keys")
         rancher_keys.add_alias("horseshoe keys")
-        loc.add_item(keys)
         loc.add_item(rancher_keys)
         self.game.award(
             "brawl",
             5,
-            "You crack a bottle over his head and the Breakpoint ERUPTS -- fists, "
-            "stools, and longnecks flying. Two key rings are knocked loose and "
-            "skitter across the floor: a biker's skull keyring and a rancher's "
-            "horseshoe fob. (Quick -- CATCH KEYS!)",
+            f"{self._opening_blow()} and the Breakpoint ERUPTS -- fists, stools, and "
+            "longnecks flying. His skull keyring is knocked loose and skitters across "
+            "the floor. (Quick -- CATCH KEYS!)",
         )
 
 
@@ -994,22 +1009,29 @@ class CatchKeys(actions.Action):
 
     def check_preconditions(self) -> bool:
         loc = self.player.location
-        if loc is None or not any(k in loc.items for k in ("keys", "rancher keys")):
+        if loc is None or "keys" not in loc.items:
             self.parser.fail("There are no keys here to catch.")
             return False
         return True
 
     def apply_effects(self):
-        # Grab whichever rings are loose -- both, if the brawl knocked both free.
+        # CATCH grabs the biker's airborne skull keyring (what your punch knocked
+        # loose). The ranchers' fob is on the floor in the melee -- point the
+        # player at it; they GET it separately if they want the truck.
         loc = self.player.location
-        for name in ("keys", "rancher keys"):
-            if name in loc.items:
-                k = loc.items[name]
-                loc.remove_item(k)
-                self.player.add_to_inventory(k)
+        keys = loc.items["keys"]
+        loc.remove_item(keys)
+        self.player.add_to_inventory(keys)
+        note = (
+            " A horseshoe-fob keyring lies on the floor too -- GET RANCHER KEYS for the "
+            "truck."
+            if "rancher keys" in loc.items
+            else ""
+        )
         self.parser.ok(
-            "You snatch the keys out of the air and bolt for the door before anyone's "
-            "the wiser. (USE KEYS ON the MOTORCYCLE or the TRUCK out front.)"
+            "You snatch the skull keys out of the air and bolt for the door before "
+            "anyone's the wiser." + note + " (USE KEYS ON the MOTORCYCLE or the TRUCK "
+            "out front.)"
         )
 
 
