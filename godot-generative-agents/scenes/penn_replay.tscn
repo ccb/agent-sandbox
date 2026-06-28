@@ -14,13 +14,13 @@ player_sheet = ExtResource("3_player")
 script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
 
-; The map is the 34th–36th x Spruce–Walnut block (3792x4336 px at 1 m/tile),
+; The map is the 34th–36th x Spruce–Walnut block (3920x4464 px at 1 m/tile),
 ; cropped to the four street edges — a PORTRAIT map in a 1920x1080 landscape
 ; window. zoom 0.249 contain-fits: the FULL block is visible (the height fills the
-; window: 4336 * 0.249 ~= 1080 px), at the cost of grey margins on the left/right
+; window: 4464 * 0.242 ~= 1080 px), at the cost of grey margins on the left/right
 ; (a portrait map can't fill a landscape window without cropping). Centred on the
 ; block centre so it's symmetric.
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(1896, 2168)
-zoom = Vector2(0.249, 0.249)
+position = Vector2(1960, 2232)
+zoom = Vector2(0.242, 0.242)
 script = ExtResource("4_cam")
