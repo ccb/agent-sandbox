@@ -88,7 +88,7 @@ def test_accrue_memories_builds_a_stream():
     isabella = chars["Isabella Rodriguez"]  # Hobbs Cafe, a 7-resident hub
     texts = [r.text for r in isabella.agent.memory.records]
     assert "I traveled to Hobbs Cafe." in texts
-    assert any("did: travel to Hobbs Cafe" in t for t in texts)  # perceived a neighbor
+    assert any("arrived from" in t for t in texts)  # perceived a neighbor arriving
     assert len(isabella.agent.memory.records) > 4
 
 

@@ -483,11 +483,8 @@ class Parser:
         # explicitly (the player via Game.do_command, an NPC via its behavior),
         # falling back to scanning the command only when none was supplied.
         acting = actor if actor is not None else self.get_character(command)
-        origin = (
-            acting.location.name
-            if acting is not None and acting.location is not None
-            else None
-        )
+        origin_loc = acting.location if acting is not None else None
+        origin = origin_loc.name if origin_loc is not None else None
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
@@ -497,21 +494,62 @@ class Parser:
             # character even when several act in one round.
             if acting is not None:
                 acting.last_action = action
-            # Log it with its actor and origin location. Disturbance triggers
-            # read these per-round events (Game.disturbances_this_round) rather
-            # than the single global last_action, so they see every actor's move
-            # and survive a switch to per-agent turns (#25).
+            # Where it ended up, and (for a move) which way -- so perception can
+            # tell a departure from an arrival and name the direction.
+            dest_loc = acting.location if acting is not None else None
+            dest = dest_loc.name if dest_loc is not None else None
+            direction = None
+            if origin_loc is not None and dest_loc is not None and dest_loc is not origin_loc:
+                direction = next(
+                    (d for d, r in origin_loc.connections.items() if r is dest_loc),
+                    None,
+                )
+            radius = action.audible_radius() if hasattr(action, "audible_radius") else 0
+            # Log it with its actor, origin/destination, and how far the sound
+            # carries. Disturbance triggers (Game.disturbances_this_round) and
+            # agent perception read these per-round events rather than the single
+            # global last_action, so they see every actor's move and survive a
+            # switch to per-agent turns (#25).
             #
             # (An ActionSequence re-enters parse_command per sub-command, so one
             # comma-separated command logs each sub-command plus the wrapping
             # "sequence" action — a future event-log consumer (#9) should expect that.)
+            payload = {
+                "location": origin,
+                "dest": dest,
+                "dir": direction,
+                "heard_radius": radius,
+            }
+            if radius > 0:
+                # How the sound reads to someone who only hears it (no sight).
+                payload["sound"] = action.sound_description()
             self.game.log_event(
                 acting.name if acting is not None else None,
                 action.action_name(),
                 command,
-                payload={"location": origin},
+                payload=payload,
             )
+            # A loud action carries to nearby rooms -- let the player hear it
+            # from afar if they're within earshot but not where it happened.
+            if radius > 0:
+                self._player_overhears(action, origin, radius)
         return success
+
+    def _player_overhears(self, action, origin, radius):
+        """Narrate a loud action to the player when they're within its sound
+        radius but in a different room (so they can't see it)."""
+        game = self.game
+        player = getattr(game, "player", None)
+        if player is None or player.location is None or origin is None:
+            return
+        if not hasattr(game, "audible_rooms"):
+            return
+        heard = game.audible_rooms(origin, radius)
+        if player.location.name not in heard:
+            return  # at the source (sees it) or out of earshot
+        direction = heard[player.location.name]
+        where = f"the {direction}" if direction else "somewhere nearby"
+        self.ok(f"From {where} you hear {action.sound_description()}.")
 
     def get_character(
         self,

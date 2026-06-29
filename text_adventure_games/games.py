@@ -864,6 +864,40 @@ class Game:
                 break  # radius exceeds the map; nothing more to reach
         return result
 
+    def audible_rooms(self, origin, radius) -> dict:
+        """``{room_name: direction_back_toward_origin}`` for rooms within
+        ``radius`` hops of ``origin`` (a Location or its name), excluding the
+        origin itself (issue #80 hearing).
+
+        The hearing counterpart to :meth:`perceivable_locations`: a loud event's
+        sound reaches these rooms, and each value is the exit *in that room* that
+        points back toward the source -- so a listener can be told which way it
+        came from. ``radius <= 0`` reaches nowhere (the sound stays in its room).
+        """
+        loc = origin if hasattr(origin, "connections") else self.locations.get(origin)
+        if loc is None or radius <= 0:
+            return {}
+        result: dict = {}
+        seen = {id(loc)}
+        frontier = [loc]
+        for _ in range(radius):
+            nxt = []
+            for room in frontier:
+                for neighbor in room.connections.values():
+                    if id(neighbor) in seen:
+                        continue
+                    seen.add(id(neighbor))
+                    # the exit in `neighbor` that leads back toward the source
+                    back = next(
+                        (d for d, r in neighbor.connections.items() if r is room), None
+                    )
+                    result[neighbor.name] = back
+                    nxt.append(neighbor)
+            frontier = nxt
+            if not frontier:
+                break
+        return result
+
     def set_parser(self, parser):
         """
         Use a different parser for this game.
