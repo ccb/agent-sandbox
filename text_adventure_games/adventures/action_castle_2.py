@@ -247,21 +247,40 @@ def _wake_and_challenge(game, dragon, roar):
     )
 
 
-class DragonWakes(reactions.WakesAtNoise):
-    """The sleeping dragon wakes at any noise it hears in the trove -- a shout, a
-    smash, even a crash a room away -- and rears into the wits/steel challenge. Its
-    sleep state is the inverse of the ``awake`` flag the dragon's actions use.
+class DragonLingers(reactions.Countdown):
+    """The sleeping dragon's menace is *presence*, not noise (Parsely: "any move
+    besides exiting the room will wake the dragon"). Stepping into the trove starts
+    a one-turn clock: it stirs as you arrive, and if you're still there next turn
+    it rears into the wits/steel challenge. Leave -- or never dawdle -- and you're
+    safe.
 
-    (Deliberately rousing it with WAKE DRAGON, or robbing the hoard, are handled
-    by their own action/trigger; a quiet visitor can now study the hoard without
-    waking it -- only noise gives them away.)"""
+    A thing-owned Countdown like the poacher and demon; its clock simply starts on
+    *your* arrival rather than a fleeing creature's, and "leaving" is the cancel.
+    Re-arming (``REPEATABLE``) so a later return is risky too. Deliberately rousing
+    it with WAKE DRAGON, or robbing the hoard, are handled by their own
+    action/trigger."""
 
-    def ready(self) -> bool:
-        return not self.owner.get_property("awake")  # "asleep" == not yet awake
+    DELAY = 1
+    REPEATABLE = True  # re-arm each time you step back in
 
-    def apply_effects(self):
+    def stimulus(self) -> bool:
+        # Arm the moment you enter the trove, while the dragon still sleeps.
+        return not self.owner.get_property("awake") and self.game.entered_this_round(
+            self.game.player, self.owner.location
+        )
+
+    def warning(self) -> str:
+        return "The dragon stirs in its sleep, one claw twitching. Best not linger."
+
+    def cancelled(self) -> bool:
+        # Safe if you've stepped back out (or it's already roused another way).
+        return bool(self.owner.get_property("awake")) or (
+            self.game.player.location is not self.owner.location
+        )
+
+    def consequence(self, game):
         _wake_and_challenge(
-            self.game,
+            game,
             self.owner,
             'The dragon wakes, eyes you hungrily and roars, "Another mortal dares '
             'challenge me? Choose a weapon: wits or steel."',
@@ -1336,11 +1355,11 @@ def build_game() -> ActionCastle2:
         )
     )
 
-    # The dragon wakes at NOISE rather than at lingering: it's a WakesAtNoise
-    # reaction (see DragonWakes), attached after the game is built. A quiet visitor
-    # can study the hoard; a shout or a smash (even a room away) rouses it into the
-    # wits/steel challenge. (Deliberate WAKE DRAGON and the theft-kill above are
-    # unchanged.)
+    # Lingering wakes the dragon (rulebook: "any other move besides exiting the
+    # room will wake the dragon"). It's a DragonLingers Countdown reaction attached
+    # after the game is built: one grace turn (it stirs as you arrive), then the
+    # challenge if you're still there. (Deliberate WAKE DRAGON and the theft-kill
+    # above are unchanged.)
 
     # Returning to the Moat carrying the gold is fatal (you sink and drown).
     def gold_drown(g):
@@ -1432,9 +1451,9 @@ def build_game() -> ActionCastle2:
     for name, cond, act, repeat in game_triggers:
         game.add_trigger(name, cond, act, repeatable=repeat)
 
-    # The dragon's noise reflex (thing-owned reaction, evaluated in the react
-    # phase): a sound it hears in the trove rouses it into the challenge.
-    game.add_reaction(dragon, DragonWakes())
+    # The dragon's linger reflex (thing-owned reaction, evaluated in the react
+    # phase): dawdle in the trove and it rouses into the challenge.
+    game.add_reaction(dragon, DragonLingers())
 
     # A block so the moat tunnel only opens after MOVE STONE.
     from text_adventure_games import blocks
