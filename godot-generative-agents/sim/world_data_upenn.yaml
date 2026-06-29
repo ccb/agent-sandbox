@@ -13,20 +13,23 @@
 # Buildings used (all real, all inside the 34th-36th x Spruce-Walnut block):
 #   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
 #   Irvine Auditorium. This block is Penn's academic core (College Green) and has
-#   no residence in frame, so each persona's `home` is the in-block building they
-#   start and spend their day in, and every `start_tile` is the walkable doorstep
-#   the geo tool reported for that building (tools/geo/out/upenn_core_ville_addresses.json).
+#   no residence in frame, so each persona starts on the campus walks (`home: Penn
+#   campus`, the outdoor hub) at a `start_tile` just outside their first building --
+#   so even the first stop is a walk *into* the building through its door, not an
+#   activity performed on the doorstep. (The mock brain travels whenever its current
+#   location differs from the stop's place; starting at the hub makes stop 1 a real
+#   trip inside.)
 
 personas:
 - name: Maya Chen
-  home: Van Pelt Library
+  home: Penn campus
   persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
     diligent, and a little caffeine-dependent. I spend most of my day studying in
     Van Pelt Library between classes.
   emoji: 📚
   start_tile:
-  - 16
-  - 18
+  - 164
+  - 57
   schedule:
   - place: Van Pelt Library
     activity: studying for an organic chemistry exam
@@ -44,13 +47,13 @@ personas:
     activity: reviewing her notes before tomorrow
     emoji: 📖
 - name: Professor Ellis
-  home: College Hall
+  home: Penn campus
   persona: I am Professor Ellis, 52. I teach history at Penn and keep an office in
     College Hall. I am thoughtful, a bit formal, and devoted to my students.
   emoji: 🧑‍🏫
   start_tile:
-  - 80
-  - 161
+  - 40
+  - 265
   schedule:
   - place: Williams Hall
     activity: giving a morning lecture
@@ -68,14 +71,14 @@ personas:
     activity: holding office hours
     emoji: 🧑‍🏫
 - name: Diego Torres
-  home: Meyerson Hall
+  home: Penn campus
   persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
     creative, focused, and always sketching. I spend long hours in the Meyerson
     Hall studio.
   emoji: ✏️
   start_tile:
-  - 180
-  - 64
+  - 194
+  - 48
   schedule:
   - place: Meyerson Hall
     activity: working on a studio model
