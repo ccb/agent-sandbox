@@ -41,6 +41,35 @@ SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
 
 
+def _gate_conversations_by_perception(built):
+    """Make the Penn agents converse only with whoever they can *perceive*.
+
+    The engine already perceives by tile distance (``TiledGame`` overrides
+    ``perceivable_locations`` for sight, vision_r=8), but its *hearing* seam
+    (``audience_for``) is still room-based by default -- so two residents would
+    only talk when in the exact same arena, even when standing far apart on the
+    map. We keep that fix in the Godot sim (not the shared engine): override the
+    Penn game's ``audience_for`` to reuse its own ``perceivable_locations``, so an
+    agent's conversation partners are exactly the residents within its perception
+    radius. ``simulate``'s conversation loop reads ``audience_for`` (via
+    ``can_converse`` / ``find_conversation_pairs``), so this gates dialogue by
+    proximity with no engine change.
+
+    ``build_world`` returns ``(game, characters)``; we patch the game and pass it
+    straight through.
+    """
+    game, characters = built
+
+    def audience_for(speaker, message, target=None):
+        audience = []
+        for loc in game.perceivable_locations(speaker):
+            audience.extend(c for c in loc.characters.values() if c is not speaker)
+        return audience
+
+    game.audience_for = audience_for
+    return game, characters
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
     ap.add_argument("--steps", type=int, default=DEFAULT_STEPS)
@@ -66,7 +95,9 @@ def main() -> int:
         world_map,
         args.steps,
         personas=personas,
-        build_world_fn=lambda wm: build_world(wm, personas, locations),
+        build_world_fn=lambda wm: _gate_conversations_by_perception(
+            build_world(wm, personas, locations)
+        ),
         out_memories=memory_streams,
     )
 
