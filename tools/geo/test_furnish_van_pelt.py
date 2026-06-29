@@ -55,6 +55,18 @@ def test_furniture_never_clipped_cardinal_rule():
             idx = int(idx_s)
             assert (idx % W, idx // W) in interior, f"{fname} {idx} would be clipped"
 
+def test_no_phantom_walls_after_apply():
+    # No wing-wall sprite may sit on a walkable (collision==0) cell.
+    tmj = _fresh_tmj()
+    W = tmj["width"]
+    fv.apply(tmj, fv.load_asset(HERE), MATRIX)
+    coll = open(os.path.join(MATRIX, "maze", "collision_maze.csv")).read().strip().split(", ")
+    for name in ("westwing_walls", "eastwing_walls"):
+        L = next(x for x in tmj["layers"] if x.get("name") == name)
+        for i, v in enumerate(L["data"]):
+            if v:
+                assert coll[i] == "1", f"{name} sprite on walkable cell {(i % W, i // W)}"
+
 def test_idempotent():
     a = _fresh_tmj(); fv.apply(a, fv.load_asset(HERE), MATRIX)
     b = copy.deepcopy(a); fv.apply(b, fv.load_asset(HERE), MATRIX)

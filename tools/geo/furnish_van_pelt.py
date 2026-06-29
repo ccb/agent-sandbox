@@ -7,7 +7,10 @@ ONLY -- the matrix (arenas / collision) is owned by add_entrances.py.
 
 Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 Cells that fall outside Van Pelt's walkable interior (the throat-seam slivers)
-are clipped, so no sprite is placed on a wall or outside the building."""
+are clipped, so no sprite is placed on a wall or outside the building.
+
+Ordering requirement: must run AFTER add_entrances.py so that collision_maze.csv
+reflects any doorways punched through partition walls before phantom-wall clearing."""
 import argparse, json, os, shutil
 
 from add_entrances import read_flat, split_footprint
@@ -70,6 +73,17 @@ def apply(tmj, asset, matrix_dir):
     names = [L.get("name") for L in tmj["layers"]]
     at = names.index("entrance_floor") + 1 if "entrance_floor" in names else len(tmj["layers"])
     tmj["layers"][at:at] = new_layers
+
+    # Clear any wing-wall sprite that sits on a walkable (collision==0) cell so
+    # that doorways punched by add_entrances.py are not blocked by phantom walls.
+    collision = read_flat(os.path.join(matrix_dir, "maze", "collision_maze.csv"))
+    wall_names = {"westwing_walls", "eastwing_walls"}
+    for layer in new_layers:
+        if layer["name"] in wall_names:
+            for i, v in enumerate(layer["data"]):
+                if v != 0 and collision[i] == "0":
+                    layer["data"][i] = 0
+
     return clipped
 
 
@@ -86,7 +100,8 @@ def main():
     args = ap.parse_args()
 
     asset = load_asset(here)
-    tmj = json.load(open(args.tmj))
+    with open(args.tmj) as fh:
+        tmj = json.load(fh)
     clipped = apply(tmj, asset, args.matrix)
     print(f"transplanted {len(asset['layer_order'])} layers; clipped {clipped} cells")
     if args.dry_run:
