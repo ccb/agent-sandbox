@@ -26,6 +26,7 @@ Run interactively:   python action_castle_4.py
 """
 
 from text_adventure_games import games, things, actions, blocks, Recipe, Prompt
+from text_adventure_games import reactions
 from text_adventure_games.enums import Property
 
 # ---------------------------------------------------------------------------
@@ -497,18 +498,82 @@ class BrushHair(actions.Action):
 # The poacher + the deer (Slice 4b). Ride after the deer into the Deep Woods,
 # where a poacher has it in his sights. SHOOT POACHER (with the crossbow) saves
 # the deer (+5) and he flees, dropping his coin purse (+5 to take) and cloak.
-# Hesitate -- any committal action but shooting -- and the deer dies: THE END.
+#
+# Both threats are programmable reactions (docs/design/reactions.md), owned by
+# the things themselves rather than by location triggers:
+#   * the doe is a FleesAtNoise startle -- she bolts at ANY noise she hears in
+#     the Old Woods (the shack door banging as you step out, or a loud action of
+#     your own). What counts as noise is the source's business (an action's
+#     AUDIBLE_RADIUS, or emit_sound for the door), so there's no per-scene "loud
+#     verbs" list here; quiet things (looking, taking the crossbow, mounting)
+#     leave her be, so you can arm yourself first if you move quietly.
+#   * the poacher is a Countdown -- the doe's arrival in the Deep Woods puts her
+#     in his sights and starts a clock; reach him and SHOOT before it elapses or
+#     he looses his arrow. The clock starts the moment she's cornered, whether or
+#     not you've followed yet, so a careful approach has to be a fast one.
 # ---------------------------------------------------------------------------
 
-# Read-only actions that don't "let the poacher loose his arrow" (you may look).
-_DEER_SAFE_ACTIONS = {"examine", "describe", "inventory"}
 
-# Actions loud enough to spook the grazing doe in the Old Woods -- talking or
-# yelling aloud (say/talk), smashing something (break). Quiet things (looking,
-# slipping into the shack, taking the crossbow, mounting) leave her be, so you
-# can arm yourself first if you move quietly. (The shack door banging shut as
-# you step out is its own noise -- see the deer_flees trigger.)
-_NOISY_ACTIONS = {"say", "talk", "break"}
+class DoeFlees(reactions.FleesAtNoise):
+    """The grazing doe bolts to the Deep Woods at the first noise she hears, and
+    once she's at bay there the examine text reflects the poacher's crossbow."""
+
+    def apply_effects(self):
+        super().apply_effects()  # relocate + narrate
+        self.owner.examine_text = (
+            "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
+        )
+
+    def narration(self, dest) -> str:
+        cue = (self.cause or {}).get("description", "a noise")
+        return (
+            f"{cue[:1].upper()}{cue[1:]}, and the doe's head snaps up -- in a flash "
+            "she bolts, white tail flashing, off into the Deep Woods."
+        )
+
+
+class PoacherShoots(reactions.Countdown):
+    """The poacher's lethal clock. The moment the doe is driven into his clearing
+    she's at bay; a few turns later he looses his arrow -- unless you reach him
+    and SHOOT POACHER first (which sets ``poacher_dealt`` and calls it off).
+
+    Anchored on the doe's arrival, not yours: the delay covers a prompt ride +
+    FOLLOW DEER with one turn to spare to loose your own bolt, so dawdling on the
+    way costs the doe her life."""
+
+    DELAY = 4
+
+    def __init__(self, quarry):
+        super().__init__()
+        self.quarry = quarry  # the doe
+        self._clearing = None  # captured when the countdown starts
+
+    def stimulus(self) -> bool:
+        return self.game.entered_this_round(self.quarry, self.owner.location)
+
+    def apply_effects(self):
+        # Capture the clearing now, while the poacher is still standing in it:
+        # SHOOT POACHER removes him (location -> None), but the scheduled shot
+        # still resolves and must read the cancel flag off the room, not the
+        # vanished poacher.
+        self._clearing = self.owner.location
+        super().apply_effects()
+
+    def cancelled(self) -> bool:
+        return bool(self._clearing.get_property("poacher_dealt"))
+
+    def warning(self) -> str:
+        return (
+            "Off through the trees the doe is brought to bay -- a poacher's "
+            "crossbow rises. There's no time to lose."
+        )
+
+    def consequence(self, game):
+        _die(
+            game,
+            "Too slow -- the poacher looses his arrow and the doe drops. With no "
+            "guide, you wander the Deep Woods until you are hopelessly lost. THE END.",
+        )
 
 
 class FollowDeer(actions.Action):
@@ -2198,68 +2263,25 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    def _deer_flees(g, cause):
-        old_woods.remove_item(deer)
-        deep_woods.add_item(deer)
-        deer.examine_text = (
-            "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
-        )
-        g.parser.ok(
-            f"{cause[0].upper()}{cause[1:]}, and the doe's head snaps up -- in a "
-            "flash she bolts, white tail flashing, off into the Deep Woods."
-        )
-
-    # Event-based (multi-agent-safe): the doe bolts at a noise in the Old Woods
-    # -- the shack door banging shut as you step out (extra), or any loud action
-    # there (_NOISY_ACTIONS). Reads the round's events, not parser.last_action.
-    game.add_disturbance_trigger(
-        old_woods,
-        _deer_flees,
-        loud=_NOISY_ACTIONS,
-        extra=lambda g: (
-            "the shack door bangs shut behind you"
-            if g.player.get_property("visited_shack")
-            else None
-        ),
-        present=lambda g: "deer" in old_woods.items and g.player.location is old_woods,
-        name="deer_flees",
-    )
-
-    # The poacher confrontation begins when YOU reach the Deep Woods (the doe has
-    # already fled here), with one grace turn -- you arrive, then must act.
-    # Hesitating -- any committal action but shooting -- lets him kill the deer
-    # and you're lost: THE END.
-    def deer_confrontation(g):
-        if not deep_woods.get_property(
-            "confront_started"
-        ) and not deep_woods.get_property("poacher_dealt"):
-            deep_woods.set_property("confront_started", True)
-            deep_woods.set_property("confront_turn", g.turn)
-
+    # The shack door bangs shut the first time you step back out into the Old
+    # Woods -- an ambient noise the door emits (the source owns its volume), which
+    # the doe's startle reaction hears. Registered BEFORE the doe's reaction so,
+    # in the same react phase, the sound is logged before she listens for it.
     game.add_trigger(
-        "deer_confrontation",
-        lambda g: g.player.location is deep_woods,
-        deer_confrontation,
-        repeatable=True,
+        "shack_door_bang",
+        lambda g: g.player.location is old_woods
+        and g.player.get_property("visited_shack"),
+        lambda g: g.emit_sound(
+            old_woods, 1, "the shack door bangs shut behind you"
+        ),
+        repeatable=False,  # bangs once
     )
 
-    # Event-based standoff: once the confrontation is live (past its grace turn),
-    # any action in the Deep Woods that isn't shooting -- look is safe -- lets the
-    # poacher loose his arrow. The "anything but X" framing uses `safe=`; reads
-    # the round's events, not parser.last_action.
-    game.add_disturbance_trigger(
-        deep_woods,
-        lambda g, cause: _die(
-            g,
-            "You hesitate, and the poacher looses his arrow -- the doe drops. With no "
-            "guide, you wander the Deep Woods until you are hopelessly lost. THE END.",
-        ),
-        safe=_DEER_SAFE_ACTIONS,
-        present=lambda g: deep_woods.get_property("confront_started")
-        and not deep_woods.get_property("poacher_dealt")
-        and g.turn > (deep_woods.get_property("confront_turn") or 0),
-        name="poacher_kills_deer",
-    )
+    # The doe bolts at any noise she hears in the Old Woods; the poacher's clock
+    # starts the instant she's driven into his clearing. Both are thing-owned
+    # reactions (see DoeFlees / PoacherShoots above) evaluated in the react phase.
+    game.add_reaction(deer, DoeFlees(to=deep_woods))
+    game.add_reaction(poacher, PoacherShoots(quarry=deer))
 
     # --- Room descriptions that track state -------------------------------------
     # Some rooms would otherwise hardcode transient details -- a crossbow on the
