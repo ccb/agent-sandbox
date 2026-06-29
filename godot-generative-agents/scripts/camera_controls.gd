@@ -35,6 +35,9 @@ extends Camera2D
 # Magnification used while tracking an agent (see follow). Stays within
 # _home_zoom..max_zoom so the usual zoom rules still hold.
 @export var follow_zoom: float = 1.6
+# Easing rate for the minimap click-to-recentre glide (see move_to). Higher is
+# snappier — the camera closes most of the remaining gap each frame.
+@export var pan_glide_speed: float = 12.0
 
 # Emitted when agent-follow is cleared (by stop_following, a manual pan, or Reset),
 # so a UI panel can drop its "tracking" highlight.
@@ -60,6 +63,10 @@ var _dragging := false
 var _resetting := false
 # The agent node the camera is centring on each frame, or null when free.
 var _follow_target: Node2D = null
+# A world point the camera is gliding toward after a minimap click/drag (see
+# move_to); _pan_active is false when no such glide is in progress.
+var _pan_target := Vector2.ZERO
+var _pan_active := false
 # The map's world bounds, computed once on first use (see _map_bounds).
 var _bounds := Rect2()
 var _have_bounds := false
@@ -102,6 +109,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _dragging or event.position.distance_to(_press_pos) >= DRAG_THRESHOLD_PX:
 			_dragging = true
 			stop_following()
+			_pan_active = false  # a hand-drag cancels any minimap glide
 			global_position -= event.relative / zoom
 			_clamp_position()
 
@@ -110,6 +118,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_zoom_at_mouse(event.factor)
 	elif event is InputEventPanGesture:
 		stop_following()  # a two-finger swipe is a manual pan
+		_pan_active = false
 		global_position += event.delta * gesture_pan_speed / zoom
 		_clamp_position()
 
@@ -140,8 +149,21 @@ func _process(delta: float) -> void:
 		dir.y += 1.0
 	if dir != Vector2.ZERO:
 		stop_following()  # arrow / WASD pan takes manual control back
+		_pan_active = false  # ...and cancels any minimap glide
 		global_position += dir.normalized() * key_pan_speed * delta / zoom.x
 		_clamp_position()
+		return
+
+	# A minimap click/drag asked us to glide to a world point: ease toward it each
+	# frame, clamped to the map. One easing rule serves both gestures — a single click
+	# animates over a few frames, and a drag (which keeps moving the target) is chased
+	# smoothly. Stop once we've essentially arrived, or settled against a clamped edge.
+	if _pan_active:
+		var before := global_position
+		global_position = global_position.lerp(_pan_target, 1.0 - exp(-pan_glide_speed * delta))
+		_clamp_position()
+		if global_position.distance_to(before) < 0.25:
+			_pan_active = false
 		return
 
 	# Otherwise, if we're tracking an agent, glue the view to it each frame.
@@ -167,6 +189,16 @@ func stop_following() -> void:
 		return
 	_follow_target = null
 	follow_stopped.emit()
+
+
+func move_to(world_pos: Vector2) -> void:
+	# Glide the view to centre on a world point — the minimap's click-to-recentre.
+	# Takes manual control back from any agent-follow and cancels a Reset glide;
+	# _process eases us there (and keeps easing as the point moves during a drag).
+	stop_following()
+	_resetting = false
+	_pan_target = world_pos
+	_pan_active = true
 
 
 func reset_view() -> void:
@@ -285,6 +317,7 @@ func _find_tilemap() -> TileMapLayer:
 
 func _reset_view() -> void:
 	stop_following()  # Reset means "back to the default view", not "keep tracking"
+	_pan_active = false  # ...and drops any in-flight minimap glide
 	_resetting = true
 	var tw := create_tween().set_parallel(true)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
