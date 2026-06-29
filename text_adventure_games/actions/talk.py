@@ -142,6 +142,13 @@ class Say(base.Action):
     ACTION_DESCRIPTION = "Say something out loud; others in the room hear it"
     ACTION_ALIASES = ["speak"]
 
+    # Speaking out loud carries one room (issue #80 hearing): a startle reaction
+    # (the AC4 doe) keys on any sound it hears. Quiet "talk to" stays room-scoped.
+    AUDIBLE_RADIUS = 1
+
+    def sound_description(self) -> str:
+        return "a raised voice"
+
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         # Resolve the speaker from the text BEFORE the verb so a player-issued
