@@ -226,12 +226,15 @@ the default). This is the save/load seam between human curation and the LLM:
 `add_entrances.py` makes campus buildings **enterable** — agents can walk inside,
 but only through a door. Out of the box every footprint is a solid wall and agents
 stop at the edge; this post-process hollows each in-frame building so the inside is
-walkable floor, the 1-tile perimeter stays a wall, and exactly **one** perimeter
-cell is opened as a door. Because the backend pathfinder is a BFS over the
-collision grid, a wall ring with a single gap means "enter/exit through the door"
-is enforced by the map itself — **no movement-code changes**. The door is placed
-where a natural OSM footway leads up to the building (nearest the `paths` layer),
-falling back to the most open side.
+walkable floor and the 1-tile perimeter stays a wall, then opens a door wherever a
+footway leads in. Because the backend pathfinder is a BFS over the collision grid,
+a wall ring whose only gaps are doors means "enter/exit through a door" is enforced
+by the map itself — **no movement-code changes**. Doors are found by marking every
+perimeter cell that faces a `paths` tile (within `PATH_REACH`) and grouping those
+into contiguous runs: each run is one door, as wide as and aligned with its walk
+(capped at `MAX_DOOR_WIDTH`). A building reached by several walks therefore gets
+**several doors** (College Hall has many); one reached by none falls back to a
+single door at the nearest path.
 
 It edits both halves of the world in step:
 

@@ -63,7 +63,8 @@ GROUNDS = "grounds"  # the outside-edge arena every building already has
 LOBBY = "lobby"  # the new interior arena this tool adds
 INTERIOR_ARENA_BASE = 1000  # interior arena id = base + sector id (no id clashes)
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
-MAX_DOOR_WIDTH = 3  # a natural doorway; also caps walls that front a wide plaza
+MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
+#                     opening end to end (a building may still have several doors)
 PATH_REACH = 3  # how far out (tiles) to look for the approaching footway
 
 # Shell tiles (same as Williams' cutaway).
@@ -220,41 +221,21 @@ def choose_door(foot, perimeter, interior, collision, dist, W, H):
     return best[1] if best else None
 
 
-def widen_door(d, foot, perimeter, interior, paths, W, H):
-    """Widen the single door cell `d` to match the footway leading up to it.
+def find_doors(foot, perimeter, interior, paths, W, H):
+    """All doors for a building -- one per footway that leads up to it.
 
-    A 1-tile door under a 3-tile-wide path reads wrong, so we open the contiguous
-    run of perimeter cells (along the wall, centred on `d`) that *face the path* --
-    i.e. whose outward ray hits a `paths` tile within a few cells. That makes the
-    opening as wide as, and aligned with, the approaching walk. Capped at
-    `MAX_DOOR_WIDTH` so a footway running *along* a wall can't open the whole side;
-    if `d` faces no path (the fallback door), it stays a single cell."""
-    # Outward normal: the direction from d to outside the footprint.
-    normal = next(
-        (
-            (dx, dy)
-            for dx, dy in NEIGHBOURS
-            if (d[0] + dx, d[1] + dy) not in foot
-            and 0 <= d[0] + dx < W
-            and 0 <= d[1] + dy < H
-        ),
-        None,
-    )
-    if normal is None:
-        return {d}
-    par = (-normal[1], normal[0])  # along the wall, perpendicular to the normal
+    Many buildings are reached by more than one walk (College Hall has paths on
+    several sides), so rather than a single door we open *every* place a path
+    arrives. A perimeter cell belongs to a door when it both links inside to
+    outside and *faces a path* (one of its outward rays hits a `paths` tile within
+    `PATH_REACH` cells). Those cells are grouped into contiguous runs along the
+    wall -- each run is one door, as wide as and aligned with its walk, capped at
+    `MAX_DOOR_WIDTH` so a wall fronting a wide plaza can't open end to end.
 
-    def faces_path(c):
-        for k in range(1, PATH_REACH + 1):
-            p = (c[0] + normal[0] * k, c[1] + normal[1] * k)
-            if not (0 <= p[0] < W and 0 <= p[1] < H) or p in foot:
-                return False
-            if paths[p[1] * W + p[0]]:
-                return True
-        return False
+    Returns a list of door cell-sets, or ``None`` if no path reaches the building
+    (the caller then falls back to a single nearest-path door)."""
 
     def openable(c):
-        # A perimeter cell that genuinely links inside to outside.
         if c not in perimeter:
             return False
         has_in = any((c[0] + a, c[1] + b) in interior for a, b in NEIGHBOURS)
@@ -264,25 +245,45 @@ def widen_door(d, foot, perimeter, interior, paths, W, H):
         )
         return has_in and has_out
 
-    if not faces_path(d):
-        return {d}
-    run = {d}
-    for sign in (1, -1):  # grow both ways along the wall while still facing the path
-        j = 1
-        while j <= MAX_DOOR_WIDTH:
-            c = (d[0] + sign * j * par[0], d[1] + sign * j * par[1])
-            if openable(c) and faces_path(c):
-                run.add(c)
-                j += 1
-            else:
-                break
-    if len(run) > MAX_DOOR_WIDTH:  # keep the cells nearest d (centred on the path)
-        run = set(
-            sorted(
-                run, key=lambda c: abs((c[0] - d[0]) * par[0] + (c[1] - d[1]) * par[1])
-            )[:MAX_DOOR_WIDTH]
-        )
-    return run
+    def faces_path(c):
+        # Look outward in every direction that leaves the footprint.
+        for dx, dy in NEIGHBOURS:
+            if (c[0] + dx, c[1] + dy) in foot:
+                continue
+            for k in range(1, PATH_REACH + 1):
+                p = (c[0] + dx * k, c[1] + dy * k)
+                if not (0 <= p[0] < W and 0 <= p[1] < H) or p in foot:
+                    break
+                if paths[p[1] * W + p[0]]:
+                    return True
+        return False
+
+    facing = {c for c in perimeter if openable(c) and faces_path(c)}
+    if not facing:
+        return None
+
+    # Group facing cells into contiguous runs along the wall (4-connected).
+    doors, seen = [], set()
+    for cell in facing:
+        if cell in seen:
+            continue
+        run, stack = [], [cell]
+        seen.add(cell)
+        while stack:
+            x, y = stack.pop()
+            run.append((x, y))
+            for dx, dy in NEIGHBOURS:
+                nb = (x + dx, y + dy)
+                if nb in facing and nb not in seen:
+                    seen.add(nb)
+                    stack.append(nb)
+        if len(run) > MAX_DOOR_WIDTH:  # keep the cells nearest the run's middle
+            cx = sum(x for x, _ in run) / len(run)
+            cy = sum(y for _, y in run) / len(run)
+            run = sorted(run, key=lambda c: (c[0] - cx) ** 2 + (c[1] - cy) ** 2)
+            run = run[:MAX_DOOR_WIDTH]
+        doors.append(set(run))
+    return doors
 
 
 # --------------------------------------------------------------------------- #
@@ -476,27 +477,28 @@ def main():
             continue
 
         if name == WILLIAMS:
-            # Match the furnished art's south door (bottom cell of those columns).
-            door = set()
+            # Match the furnished art's single south door (those columns' bottom).
+            wd = set()
             for dx in WILLIAMS_DOOR_X:
                 col = [y for (x, y) in foot if x == dx]
                 if col:
-                    door.add((dx, max(col)))
-            door = {d for d in door if d in perimeter} or {min(perimeter)}
+                    wd.add((dx, max(col)))
+            doors = [{d for d in wd if d in perimeter} or {min(perimeter)}]
         else:
-            d = choose_door(foot, perimeter, interior, solid, dist, W, H)
-            if d is None:
-                door = {min(perimeter)}
-            else:
-                # Widen the door to match the footway approaching it.
-                door = widen_door(d, foot, perimeter, interior, paths_layer, W, H)
+            # One door per footway leading in; fall back to a single nearest-path
+            # door if no path actually reaches this building.
+            doors = find_doors(foot, perimeter, interior, paths_layer, W, H)
+            if doors is None:
+                d = choose_door(foot, perimeter, interior, solid, dist, W, H)
+                doors = [{d} if d else {min(perimeter)}]
+        door_cells = set().union(*doors)
 
-        # Collision: hollow the inside, keep the ring a wall, open the door.
+        # Collision: hollow the inside, keep the ring a wall, open every door.
         for x, y in interior:
             collision[y * W + x] = "0"
         for x, y in perimeter:
             collision[y * W + x] = "1"
-        for x, y in door:
+        for x, y in door_cells:
             collision[y * W + x] = "0"
 
         # Interior arena -> address UPenn:<name>:lobby
@@ -507,8 +509,11 @@ def main():
         arena_lobby_rows.append([lobby_id, WORLD, name, LOBBY])
 
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
-            picture_jobs.append((name, foot, perimeter, door))
-        summary.append((name, len(foot), len(interior), f"door {sorted(door)}"))
+            picture_jobs.append((name, foot, perimeter, door_cells))
+        widths = ", ".join(str(len(d)) for d in sorted(doors, key=lambda s: min(s)))
+        summary.append(
+            (name, len(foot), len(interior), f"{len(doors)} door(s) w[{widths}]")
+        )
 
     # ----- rebuild the block tables (drop phantoms, add new sectors + lobbies) ---
     live_ids = {s for s in sector_m if s != "0"}
