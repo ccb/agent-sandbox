@@ -68,6 +68,7 @@ var _last_step := -1
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
+@onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
 
 
 func _ready() -> void:
@@ -87,6 +88,13 @@ func _ready() -> void:
 	# first) and follow any later layout/theme resize.
 	_camera.set_left_inset(_panel.custom_minimum_size.x)
 	_panel.resized.connect(func() -> void: _camera.set_left_inset(_panel.size.x))
+
+	# The bottom-right minimap: a campus overview with an agent dot each and a box for
+	# the on-screen slice. Like the sidebar it's pure UI — we hand it the camera (to
+	# draw the frame box and learn the map), add the agents after load, and route its
+	# click-to-recentre back to the camera so a click glides the main view there.
+	_minimap.configure(_camera)
+	_minimap.recenter_requested.connect(_camera.move_to)
 
 	# Playback controls: pause/resume, seek along the timeline, change speed.
 	_panel.play_pause_requested.connect(_on_play_pause)
@@ -158,10 +166,14 @@ func _load_replay_from_text(text: String) -> void:
 	_frames = data["frames"]
 	var thumb := _make_thumbnail()
 	for i in meta["personas"].size():
-		_names.append(meta["personas"][i]["name"])
-		_spawn_agent(meta["personas"][i]["name"], i)
-		# Mirror the world sprite's tint in the sidebar so the two agree at a glance.
-		_panel.add_character(meta["personas"][i]["name"], thumb, TINTS[i % TINTS.size()])
+		var pname: String = meta["personas"][i]["name"]
+		var tint: Color = TINTS[i % TINTS.size()]
+		_names.append(pname)
+		_spawn_agent(pname, i)
+		# Mirror the world sprite's tint in the sidebar and on the minimap dot, so the
+		# three views of each character all agree at a glance.
+		_panel.add_character(pname, thumb, tint)
+		_minimap.add_agent(pname, _agents[pname]["node"], tint)
 
 	# Size the timeline to the replay (frames are 0..last) and seed the readout.
 	var last := maxi(_frames.size() - 1, 0)
