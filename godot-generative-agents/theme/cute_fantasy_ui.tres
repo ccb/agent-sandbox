@@ -9,13 +9,12 @@
 ; The panel background is light parchment, so every font_color here is dark brown
 ; (white text — Godot's default — would be invisible on it). Region rectangles were
 ; measured off the sheets; see the PR description for the exact coordinates.
-[gd_resource type="Theme" load_steps=20 format=3]
+[gd_resource type="Theme" load_steps=19 format=3]
 
 [ext_resource type="Texture2D" uid="uid://bj3bpcl2rstqx" path="res://Cute_Fantasy_UI/UI/UI_Frames.png" id="1_frames"]
 [ext_resource type="Texture2D" uid="uid://b6hkmhfupgk1t" path="res://Cute_Fantasy_UI/UI/UI_Buttons.png" id="2_buttons"]
 [ext_resource type="Texture2D" uid="uid://c2fh14esdsa05" path="res://Cute_Fantasy_UI/UI/UI_Sliders.png" id="3_sliders"]
 [ext_resource type="Texture2D" uid="uid://dov0hipjrxxtw" path="res://Cute_Fantasy_UI/UI/UI_Ribbons.png" id="4_ribbons"]
-[ext_resource type="FontFile" uid="uid://dd5jhb3w33me2" path="res://Cute_Fantasy_UI/Fonts/CuteFantasy-5x9.ttf" id="5_font"]
 
 ; --- Panel: the parchment frame with metal corner brackets (tan row of UI_Frames) ---
 [sub_resource type="AtlasTexture" id="At_panel"]
@@ -116,8 +115,9 @@ content_margin_top = 3.0
 content_margin_bottom = 5.0
 
 [resource]
-default_font = ExtResource("5_font")
-default_font_size = 22
+; Use Godot's clean built-in font (no default_font set) — the pack's pixel font
+; reads poorly at small sizes; the textured frame/buttons/ribbon still carry the look.
+default_font_size = 20
 Button/colors/font_color = Color(0.27, 0.17, 0.11, 1)
 Button/colors/font_hover_color = Color(0.18, 0.1, 0.06, 1)
 Button/colors/font_pressed_color = Color(0.18, 0.1, 0.06, 1)
