@@ -56,6 +56,10 @@ var _names: Array = []
 var _agents := {}  # name -> {sprite, label}
 var _t := 0.0
 var _anim_t := 0.0
+var _paused := false
+var _speed := 1.0
+var _last_status_step := -1         # last frame index pushed to the sidebar rows
+var _sky: CanvasModulate            # clock-driven day-night tint over the campus
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
@@ -69,7 +73,19 @@ func _ready() -> void:
 	_panel.stop_requested.connect(_on_stop_requested)
 	_panel.zoom_in_requested.connect(_camera.zoom_in)
 	_panel.zoom_out_requested.connect(_camera.zoom_out)
+	_panel.reset_requested.connect(_camera.reset_view)
 	_camera.follow_stopped.connect(_panel.clear_active)
+
+	# Playback controls: pause/resume, seek along the timeline, change speed.
+	_panel.play_pause_requested.connect(_on_play_pause)
+	_panel.seek_requested.connect(_on_seek)
+	_panel.speed_changed.connect(func(m: float) -> void: _speed = m)
+	_panel.set_playing(not _paused)
+
+	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
+	# so the campus warms/dims with the in-game time of day.
+	_sky = CanvasModulate.new()
+	add_child(_sky)
 
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
 	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
@@ -129,6 +145,10 @@ func _load_replay_from_text(text: String) -> void:
 		# Mirror the world sprite's tint in the sidebar so the two agree at a glance.
 		_panel.add_character(meta["personas"][i]["name"], thumb, TINTS[i % TINTS.size()])
 
+	# Size the timeline to the replay (frames are 0..last) and seed the readout.
+	var last := maxi(_frames.size() - 1, 0)
+	_panel.set_progress(preview_step, last)
+
 	# Place everyone on their first frame, then optionally fast-forward the clock.
 	_t = preview_step * step_seconds
 	_anim_t = 0.0
@@ -167,6 +187,29 @@ func _format_sim_time(sim_seconds: int) -> String:
 func _update_clock() -> void:
 	var sim_seconds := int((_t / step_seconds) * float(_sec_per_step))
 	_panel.set_clock_text(_format_sim_time(sim_seconds))
+	if _sky != null:
+		var dt: Dictionary = Time.get_datetime_dict_from_unix_time(_start_unix + sim_seconds)
+		_sky.color = _time_of_day_color(float(dt["hour"]) + float(dt["minute"]) / 60.0)
+
+
+func _time_of_day_color(hour: float) -> Color:
+	# A gentle wash: cool/dim overnight, neutral at midday, warm at dawn & dusk.
+	# `t` is a daylight factor (0 = deep night, 1 = full day) that ramps over the
+	# 5–8h and 17–20h transitions; `warm` peaks during those same transitions.
+	var night := Color(0.55, 0.6, 0.78)
+	var day := Color(1.0, 1.0, 1.0)
+	var dusk := Color(1.0, 0.82, 0.62)
+	var t: float
+	if hour < 5.0 or hour >= 20.0:
+		t = 0.0
+	elif hour < 8.0:
+		t = (hour - 5.0) / 3.0
+	elif hour < 17.0:
+		t = 1.0
+	else:
+		t = (20.0 - hour) / 3.0
+	var warm := clampf(1.0 - absf(t - 0.5) * 2.0, 0.0, 1.0)
+	return night.lerp(day, t).lerp(dusk, warm * 0.35)
 
 
 func _spawn_agent(name: String, index: int) -> void:
@@ -225,11 +268,26 @@ func _on_stop_requested() -> void:
 	_camera.stop_following()
 
 
+func _on_play_pause() -> void:
+	_paused = not _paused
+	_panel.set_playing(not _paused)
+
+
+func _on_seek(step: int) -> void:
+	# Jump the playhead; _process re-renders from _t every frame, so the seek shows
+	# even while paused.
+	_t = float(step) * step_seconds
+	_anim_t = 0.0
+
+
 func _process(delta: float) -> void:
 	if _frames.is_empty():
 		return
-	_t += delta
-	_anim_t += delta
+	# Advance only while playing; the render below always runs from _t, so a seek (or
+	# the day-night tint) still updates the view while paused.
+	if not _paused:
+		_t += delta * _speed
+		_anim_t += delta * _speed
 	_update_clock()
 
 	var last := _frames.size() - 1
@@ -241,6 +299,7 @@ func _process(delta: float) -> void:
 		looped = true
 	var frac: float = 0.0 if looped else fpos - float(i)
 	var j: int = i if looped else i + 1
+	_panel.set_progress(i, last)
 
 	for name in _names:
 		var a: Dictionary = _frames[i][name]
@@ -259,3 +318,12 @@ func _process(delta: float) -> void:
 		# "<activity> @ UPenn:Building:grounds" -> just the activity for the label.
 		var act := String(a["act"]).split(" @ ")[0]
 		agent["label"].text = "%s\n%s %s" % [name, a["e"], act]
+
+	# Mirror each agent's current activity into the sidebar, only when the frame index
+	# changes (per-frame work is wasted — the text is identical within a step).
+	if i != _last_status_step:
+		_last_status_step = i
+		for name in _names:
+			var a: Dictionary = _frames[i][name]
+			var act := String(a["act"]).split(" @ ")[0]
+			_panel.set_character_status(name, "%s %s" % [a["e"], act])

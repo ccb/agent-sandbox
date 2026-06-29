@@ -145,6 +145,12 @@ func stop_following() -> void:
 	follow_stopped.emit()
 
 
+func reset_view() -> void:
+	# Public entry point for a UI button: glide back to the scene's default framing
+	# (same as pressing R / Home). Releases any agent-follow on the way.
+	_reset_view()
+
+
 func zoom_in() -> void:
 	_zoom_keep_centre(zoom_step)
 
