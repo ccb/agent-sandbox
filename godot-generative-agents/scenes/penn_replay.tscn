@@ -34,7 +34,7 @@ script = ExtResource("4_cam")
 
 [node name="AgentPanel" type="PanelContainer" parent="UI"]
 anchor_bottom = 1.0
-offset_right = 220.0
+offset_right = 300.0
 grow_vertical = 2
 theme = ExtResource("6_theme")
 script = ExtResource("5_panel")
