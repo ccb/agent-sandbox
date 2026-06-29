@@ -99,6 +99,11 @@ func _ready() -> void:
 	_sky = CanvasModulate.new()
 	add_child(_sky)
 
+	# Let agents be picked by clicking their sprite (see _spawn_agent's Area2D). Mouse
+	# picking on 2D physics bodies/areas is off by default, so the per-agent click
+	# pick is dead until we switch it on for this scene's viewport.
+	get_viewport().physics_object_picking = true
+
 	_is_web = OS.has_feature("web")
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
 	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
@@ -254,7 +259,46 @@ func _spawn_agent(name: String, index: int) -> void:
 	label.custom_minimum_size = Vector2(220, 0)
 	node.add_child(label)
 
+	# A click target over the sprite, so you can track an agent by clicking them on
+	# the map (not just via the sidebar's Track button). The box roughly covers the
+	# scaled character; clicking it toggles tracking through the same panel path the
+	# sidebar uses. A pointing-hand cursor on hover advertises that they're clickable.
+	var area := Area2D.new()
+	area.input_pickable = true
+	var collider := CollisionShape2D.new()
+	var box := RectangleShape2D.new()
+	box.size = Vector2(SPRITE_HALF_PX * 1.5, SPRITE_HALF_PX * 2.0)
+	collider.shape = box
+	area.add_child(collider)
+	area.input_event.connect(_on_agent_input.bind(name))
+	area.mouse_entered.connect(
+		func() -> void: Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
+	)
+	area.mouse_exited.connect(
+		func() -> void: Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+	)
+	node.add_child(area)
+
 	_agents[name] = {"node": node, "sprite": spr, "label": label}
+
+
+func _on_agent_input(
+	_viewport: Node, event: InputEvent, _shape_idx: int, name: String
+) -> void:
+	# A left-click on an agent's sprite tracks them (or untracks if already tracked) —
+	# the same toggle as the sidebar's Track button, driven through the panel so the
+	# highlight and camera-follow stay consistent. Mark the pick handled so a click on
+	# two overlapping agents doesn't fall through and toggle the one behind as well.
+	# (Keeping the click from being read as a map drag-pan is the camera's job — see
+	# camera_controls.gd's DRAG_THRESHOLD_PX — because physics picking runs after the
+	# camera's _unhandled_input, so consuming it here is too late to stop that.)
+	if (
+		event is InputEventMouseButton
+		and event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+	):
+		get_viewport().set_input_as_handled()
+		_panel.toggle_track(name)
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
