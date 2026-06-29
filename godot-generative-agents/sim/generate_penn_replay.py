@@ -27,6 +27,7 @@ import os
 from gen_agents import path_finder
 from gen_agents.build_world import build_world, load_world_data
 from gen_agents.run_simulation import simulate
+from gen_agents.smallville_agents import SMALLVILLE_VISION_R
 from gen_agents.world_map import WorldMap
 
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -170,6 +171,11 @@ def main() -> int:
             "steps": len(frames),
             "sec_per_step": SEC_PER_STEP,
             "start": SIM_START,
+            # Perception radius (tiles) the sim used to gate sight + conversation,
+            # so the viewer can draw the matching "perception fog" when tracking an
+            # agent. Personas don't override it in world_data_upenn.yaml, so the
+            # global default describes every agent.
+            "vision_r": SMALLVILLE_VISION_R,
             "personas": [{"name": p["name"], "emoji": p["emoji"]} for p in personas],
         },
         "frames": [
