@@ -50,7 +50,10 @@ const MONTHS := [
 
 # Speech/thought bubbles float above the nameplate. A bubble is this wide (its
 # text wraps and centres inside); position.x = -half that centres it over the sprite.
-const BUBBLE_WIDTH := 280.0
+const BUBBLE_WIDTH := 210.0
+# Bubble text size, and how far the bubble's top sits above the nameplate.
+const BUBBLE_FONT_SIZE := 18
+const BUBBLE_Y_OFFSET := 78.0
 # A conversation bubble (and its link) shows for this many sim steps from the moment
 # the dialogue first appears, fading out over the last FADE steps. The replay's
 # `chat` field is *sticky* (it lingers on an agent until their next conversation),
@@ -58,7 +61,11 @@ const BUBBLE_WIDTH := 280.0
 const BUBBLE_HOLD_STEPS := 6.0
 const BUBBLE_FADE_STEPS := 2.0
 # Long utterances are clipped so a bubble stays a couple of lines tall.
-const BUBBLE_MAX_CHARS := 140
+const BUBBLE_MAX_CHARS := 120
+# Bubble text colours: near-black for dialogue, the sidebar's muted brown for the
+# (quieter) activity bubble, so the two read differently at a glance.
+const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
+const ACTIVITY_TEXT_COLOR := Color(0.42, 0.32, 0.24)
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -130,8 +137,12 @@ func _ready() -> void:
 	# once the cast grows and they overlap); speech bubbles for live conversations
 	# always show. The checkbox defaults on, matching _show_activity_bubbles.
 	_panel.bubbles_toggled.connect(func(on: bool) -> void: _show_activity_bubbles = on)
-	_speech_style = _make_bubble_style(Color(1.0, 1.0, 1.0, 0.92))
-	_thought_style = _make_bubble_style(Color(0.96, 0.97, 1.0, 0.78))
+	# Two visibly different cards: dialogue is a bright white speech bubble with a
+	# blue outline and a squared-off bottom-left corner (a pointer toward the
+	# speaker), while an action/activity reads as a quieter parchment note with a
+	# soft brown outline and all corners rounded.
+	_speech_style = _make_bubble_style(Color(1.0, 1.0, 1.0, 0.95), Color(0.25, 0.52, 0.85), 3, true)
+	_thought_style = _make_bubble_style(Color(0.96, 0.93, 0.84, 0.82), Color(0.42, 0.32, 0.24, 0.55), 2, false)
 	# Conversation links live above the campus (runtime children draw over the tscn's
 	# map) but below the agent sprites (added later still), so a line sits under the
 	# people it connects.
@@ -294,32 +305,34 @@ func _spawn_agent(name: String, index: int) -> void:
 	node.add_child(label)
 
 	# A speech/thought bubble parked above the nameplate; hidden until there's
-	# something to show. _refresh_bubble fills it and fades it per step.
+	# something to show. _refresh_bubble fills it (text, style, colour) and fades it.
 	var bubble := Label.new()
-	bubble.add_theme_font_size_override("font_size", 24)
-	bubble.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08))
+	bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
 	bubble.add_theme_stylebox_override("normal", _thought_style)
+	bubble.add_theme_color_override("font_color", ACTIVITY_TEXT_COLOR)
 	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
 	# Centre it over the sprite and park it above the nameplate (which sits at
 	# -(half + 50)); it grows downward from here but the clip keeps it short.
-	bubble.position = Vector2(-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + 110.0))
+	bubble.position = Vector2(-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET))
 	bubble.visible = false
 	node.add_child(bubble)
 
 	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble}
 
 
-func _make_bubble_style(bg: Color) -> StyleBoxFlat:
-	# A soft rounded card behind the bubble text — speech (opaque white) and thought
-	# (paler) reuse this with different fills.
+func _make_bubble_style(bg: Color, border_col: Color, border_w: int, tail: bool) -> StyleBoxFlat:
+	# A rounded card behind the bubble text. `tail` squares off the bottom-left
+	# corner so a speech bubble reads as pointing down toward the speaker.
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(12)
-	sb.set_content_margin_all(8.0)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(0.0, 0.0, 0.0, 0.25)
+	sb.set_corner_radius_all(9)
+	if tail:
+		sb.corner_radius_bottom_left = 0
+	sb.set_content_margin_all(6.0)
+	sb.set_border_width_all(border_w)
+	sb.border_color = border_col
 	return sb
 
 
@@ -496,9 +509,11 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 		if mode == "speech":
 			bubble.text = String(_speech_text.get(name, ""))
 			bubble.add_theme_stylebox_override("normal", _speech_style)
+			bubble.add_theme_color_override("font_color", SPEECH_TEXT_COLOR)
 		else:
 			bubble.text = activity
 			bubble.add_theme_stylebox_override("normal", _thought_style)
+			bubble.add_theme_color_override("font_color", ACTIVITY_TEXT_COLOR)
 
 	bubble.visible = true
 	bubble.modulate.a = (
