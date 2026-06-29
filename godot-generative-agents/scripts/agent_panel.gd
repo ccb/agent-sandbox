@@ -28,13 +28,14 @@ signal reset_requested
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
-# Greyed status line under each character's name.
-const STATUS_COLOR := Color(0.75, 0.75, 0.75)
+# Muted status line under each character's name — a soft brown that stays legible
+# on the Cute Fantasy theme's light parchment panel (plain grey would wash out).
+const STATUS_COLOR := Color(0.42, 0.32, 0.24)
 # Playback speeds offered in the Speed dropdown.
 const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 
 var _clock: Label
-var _play: Button                   # play/pause toggle (glyph set by set_playing)
+var _play: Button                   # play/pause toggle (label set by set_playing)
 var _scrubber: HSlider              # timeline; value is the current frame index
 var _step_label: Label              # "step N / total"
 var _updating_scrubber := false     # true while we set the scrubber from playback
@@ -59,8 +60,10 @@ func _ready() -> void:
 	clock_row.add_theme_constant_override("separation", 6)
 	col.add_child(clock_row)
 
+	# A small "Time" caption stands in for a clock glyph — the Cute Fantasy pixel
+	# font has no emoji, so an 🕗 would render as an empty box.
 	var clock_icon := Label.new()
-	clock_icon.text = "🕗"
+	clock_icon.text = "Time"
 	clock_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	clock_row.add_child(clock_icon)
 
@@ -76,7 +79,7 @@ func _ready() -> void:
 	col.add_child(zoom_row)
 
 	var zoom_out := Button.new()
-	zoom_out.text = "−"
+	zoom_out.text = "-"
 	zoom_out.tooltip_text = "Zoom out"
 	zoom_out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zoom_out.pressed.connect(func() -> void: zoom_out_requested.emit())
@@ -97,7 +100,7 @@ func _ready() -> void:
 
 	# Playback controls: pause/resume, a seekable timeline, and a speed picker.
 	_play = Button.new()
-	_play.text = "⏸ Pause"
+	_play.text = "Pause"
 	_play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_play.pressed.connect(func() -> void: play_pause_requested.emit())
 	col.add_child(_play)
@@ -126,7 +129,7 @@ func _ready() -> void:
 	var speed := OptionButton.new()
 	speed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for i in SPEEDS.size():
-		speed.add_item("%s×" % _trim_speed(SPEEDS[i]), i)
+		speed.add_item("%sx" % _trim_speed(SPEEDS[i]), i)
 		if SPEEDS[i] == 1.0:
 			speed.select(i)  # default to real-time
 	speed.item_selected.connect(func(i: int) -> void: speed_changed.emit(SPEEDS[i]))
@@ -134,6 +137,11 @@ func _ready() -> void:
 
 	var title := Label.new()
 	title.text = "CHARACTERS"
+	# Sits on a Cute Fantasy ribbon banner (TitleRibbon variation in the theme),
+	# centred across the sidebar width.
+	title.theme_type_variation = "TitleRibbon"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 18)
 	col.add_child(title)
 
@@ -199,7 +207,7 @@ func set_character_status(name: String, text: String) -> void:
 
 
 func set_playing(playing: bool) -> void:
-	_play.text = "⏸ Pause" if playing else "▶ Play"
+	_play.text = "Pause" if playing else "Play"
 
 
 func set_progress(step: int, total: int) -> void:
