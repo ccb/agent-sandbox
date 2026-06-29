@@ -278,6 +278,39 @@ class Game:
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
 
+    def emit_sound(self, location, radius, description):
+        """Emit an ambient noise at *location* -- a sound that no actor's command
+        produced (a slamming door, a wailing baby, distant thunder).
+
+        Logs a ``EventKind.SOUND`` event whose payload matches a noisy action's
+        (``location``/``heard_radius``/``sound``), so perception and startle
+        reactions treat it exactly like the sound of an action: it is heard in its
+        origin room and carries ``radius`` hops outward. The source owns its
+        volume -- the door declares "I am loud," not whatever reacts to it.
+
+        ``radius`` is the number of room-hops the sound carries beyond its origin
+        (>= 1 for a noise meant to be heard). A player within earshot but in
+        another room overhears it narrated, mirroring a loud action."""
+        loc = location if hasattr(location, "name") else self.locations.get(location)
+        loc_name = getattr(loc, "name", location)
+        payload = {
+            "location": loc_name,
+            "dest": None,
+            "dir": None,
+            "heard_radius": radius,
+            "sound": description,
+        }
+        self.log_event(None, EventKind.SOUND, description, payload=payload)
+        # Let a player in earshot but elsewhere overhear it (same courtesy the
+        # parser extends to a loud action; the source room narrates it itself).
+        player = getattr(self, "player", None)
+        if radius > 0 and loc_name and player is not None and player.location is not None:
+            heard = self.audible_rooms(loc_name, radius)
+            if player.location.name in heard:
+                direction = heard[player.location.name]
+                where = f"the {direction}" if direction else "somewhere nearby"
+                self.parser.ok(f"From {where} you hear {description}.")
+
     def disturbances_this_round(self, location_name):
         """``(actor_name, action_name)`` for every action taken at
         ``location_name`` during the current round (since the player's command
@@ -292,6 +325,66 @@ class Game:
             for e in self.events[self._round_event_start :]
             if (e.payload or {}).get("location") == location_name
         ]
+
+    def sounds_audible_at(self, location, exclude=None):
+        """The sounds heard at *location* this round, as a list of
+        ``{"description", "direction", "origin"}`` dicts.
+
+        A "sound" is any event with ``heard_radius > 0`` -- a noisy action or an
+        ``emit_sound`` ambient noise. It is audible in its origin room
+        (``direction`` None) and ``radius`` hops outward (``direction`` = the way
+        back toward the source, from :meth:`audible_rooms`). This is the
+        multi-agent-safe stimulus a startle reaction reads: "is there any sound
+        where I'm standing?" -- near or far, by the same hearing machinery
+        perception uses. ``exclude`` (an actor name) drops a thing's own sounds so
+        it never startles at itself."""
+        loc_name = getattr(location, "name", location)
+        sounds = []
+        for e in self.events[self._round_event_start :]:
+            payload = e.payload or {}
+            radius = payload.get("heard_radius") or 0
+            if radius <= 0:
+                continue
+            if exclude is not None and e.actor == exclude:
+                continue
+            origin = payload.get("location")
+            if not origin:
+                continue
+            description = payload.get("sound") or "a commotion"
+            if origin == loc_name:
+                sounds.append(
+                    {"description": description, "direction": None, "origin": origin}
+                )
+            else:
+                reach = self.audible_rooms(origin, radius)
+                if loc_name in reach:
+                    sounds.append(
+                        {
+                            "description": description,
+                            "direction": reach[loc_name],
+                            "origin": origin,
+                        }
+                    )
+        return sounds
+
+    def entered_this_round(self, thing, location):
+        """True if *thing* moved *into* *location* during the current round.
+
+        Reads the round's movement events (a successful move logs origin in
+        ``payload["location"]`` and destination in ``payload["dest"]``), so it is
+        multi-agent-safe and sees arrivals by any actor. This is the stimulus a
+        :class:`~text_adventure_games.reactions.Reaction` keys on when it should
+        fire the moment a particular creature is driven into a room -- e.g. the
+        poacher's countdown starting when the doe is cornered."""
+        thing_name = getattr(thing, "name", thing)
+        loc_name = getattr(location, "name", location)
+        for e in self.events[self._round_event_start :]:
+            if e.actor != thing_name:
+                continue
+            payload = e.payload or {}
+            if payload.get("dest") == loc_name and payload.get("location") != loc_name:
+                return True
+        return False
 
     def add_disturbance_trigger(
         self,
