@@ -66,6 +66,8 @@ WORLD = "UPenn"
 GROUNDS = "grounds"  # the outside-edge arena every building already has
 LOBBY = "lobby"  # the new interior arena this tool adds
 INTERIOR_ARENA_BASE = 1000  # interior arena id = base + sector id (no id clashes)
+ROOM_ARENA_BASE = 10000  # room arena id = base + sector*100 + index (clears lobby range)
+ROOM_SUBDIVIDE = {"Van Pelt Library"}  # buildings whose interior is split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
 #                     opening end to end (a building may still have several doors)
@@ -397,6 +399,78 @@ def paint_interior(floor, perimeter, foot, door, W):
 
 
 # --------------------------------------------------------------------------- #
+# Room-subdivision helpers
+# --------------------------------------------------------------------------- #
+def load_room_plan():
+    """(rooms, wall_cells) from van_pelt_interior.json: the 25 room rects and the
+    partition-wall cell set. Returns ([], set()) if the asset is missing."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "van_pelt_interior.json")
+    if not os.path.exists(path):
+        return [], set()
+    with open(path) as fh:
+        a = json.load(fh)
+    W = a["width"]
+    rooms = a["rooms"]
+    wall_cells = {(i % W, i // W) for i in a["wall_cells"]}
+    return rooms, wall_cells
+
+
+def _punch_doorway(room_cells, walk, collision, W):
+    """Carve one cell gap between sealed room_cells and the adjacent walk.
+
+    Called when a room's walkable cells are not connected to the rest of the
+    building interior. Finds the partition-wall cell (currently collision=1)
+    adjacent to room_cells that also neighbours a walk cell and opens it."""
+    for (x, y) in sorted(room_cells):
+        for dx, dy in NEIGHBOURS:
+            wall = (x + dx, y + dy)
+            wx, wy = wall
+            if collision[wy * W + wx] != "1":
+                continue
+            # Is there a walk cell on the other side of this wall?
+            for dx2, dy2 in NEIGHBOURS:
+                nb = (wx + dx2, wy + dy2)
+                if nb in walk:
+                    collision[wy * W + wx] = "0"
+                    walk.add(wall)
+                    return
+
+
+def subdivide_rooms(sid, name, interior, door_cells, collision, arena_m,
+                    room_rows, W, room_plan):
+    """Turn one building's lobby interior into per-room arenas + partition walls.
+    Stamps over the already-written lobby base, so cells in no room stay lobby."""
+    rooms, wall_cells = room_plan
+    # partition walls become collision (but never seal the building door)
+    for (x, y) in (wall_cells & interior) - door_cells:
+        collision[y * W + x] = "1"
+    walk = {(x, y) for (x, y) in interior if collision[y * W + x] == "0"}
+    for idx, room in enumerate(rooms):
+        rid = str(ROOM_ARENA_BASE + int(sid) * 100 + idx)
+        c0, r0, c1, r1 = room["rect"]
+        room_walk = {(x, y) for y in range(r0, r1 + 1) for x in range(c0, c1 + 1)
+                     if (x, y) in walk}
+        if room_walk:
+            # Check if room_walk is reachable from walk \ room_walk via BFS.
+            other_walk = walk - room_walk
+            reachable = False
+            for cell in room_walk:
+                for dx, dy in NEIGHBOURS:
+                    if (cell[0] + dx, cell[1] + dy) in other_walk:
+                        reachable = True
+                        break
+                if reachable:
+                    break
+            if not reachable and other_walk:
+                _punch_doorway(room_walk, walk, collision, W)
+        for y in range(r0, r1 + 1):
+            for x in range(c0, c1 + 1):
+                if (x, y) in walk:
+                    arena_m[y * W + x] = rid
+        room_rows.append([rid, WORLD, name, room["name"]])
+
+
+# --------------------------------------------------------------------------- #
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
@@ -501,6 +575,8 @@ def main():
 
     # ----- carve every target ---------------------------------------------------
     arena_lobby_rows = []  # (lobby_id, world, sector, "lobby")
+    arena_room_rows = []   # (room_id, world, sector, room_name) for subdivided buildings
+    room_plan = load_room_plan()
     picture_jobs = []  # (name, foot, perimeter, door) for the .tmj cutaway
     summary = []
     for name in sorted(named_targets):
@@ -549,6 +625,10 @@ def main():
             arena_m[y * W + x] = lobby_id
         arena_lobby_rows.append([lobby_id, WORLD, name, LOBBY])
 
+        if name in ROOM_SUBDIVIDE:
+            subdivide_rooms(sid, name, interior, door_cells, collision, arena_m,
+                            arena_room_rows, W, room_plan)
+
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
             picture_jobs.append((name, foot, perimeter, door_cells))
         widths = ", ".join(str(len(d)) for d in sorted(doors, key=lambda s: min(s)))
@@ -565,6 +645,7 @@ def main():
         [sid, WORLD, name_by_id[sid], GROUNDS] for sid in sorted(live_ids, key=int)
     ]
     new_arena_rows += sorted(arena_lobby_rows, key=lambda r: int(r[0]))
+    new_arena_rows += sorted(arena_room_rows, key=lambda r: int(r[0]))
 
     print(
         f"buildings in frame: {len(new_sector_rows)} "
