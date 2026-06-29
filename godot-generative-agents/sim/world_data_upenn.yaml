@@ -1,10 +1,14 @@
 # A small University of Pennsylvania cast for the generative-agents sim, walking
 # the REAL campus. The map is derived from OpenStreetMap by
-# tools/geo/osm_to_ville.py (the_upenn matrix); each location's `address` is one
-# of that matrix's "UPenn:<building>:grounds" sector addresses, and every
-# `start_tile` is a walkable doorstep tile the geo tool reported for that
-# building. The mock brain drives each persona through its schedule, so this runs
-# offline, deterministically, and free -- the same as the_ville cast.
+# tools/geo/osm_to_ville.py (the_upenn matrix). Each building now has a walkable
+# interior reached through a single door (tools/geo/add_entrances.py), so each
+# location's `address` is the building's "UPenn:<building>:lobby" INTERIOR address
+# -- "study in Van Pelt Library" walks the agent in through the door rather than
+# stopping at the edge. (The matrix still has "UPenn:<building>:grounds" for the
+# outside, and the pathfinder can only cross the wall ring at the door.) Every
+# `start_tile` is a walkable doorstep tile just outside its building. The mock
+# brain drives each persona through its schedule, so this runs offline,
+# deterministically, and free -- the same as the_ville cast.
 #
 # Buildings used (all real, all inside the 34th-36th x Spruce-Walnut block):
 #   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
@@ -96,19 +100,19 @@ locations:
   hub: true
 - name: College Hall
   description: Penn's oldest building and administrative heart, on College Green.
-  address: UPenn:College Hall:grounds
+  address: UPenn:College Hall:lobby
 - name: Van Pelt Library
   description: The main university library, where students study at all hours.
-  address: UPenn:Van Pelt Library:grounds
+  address: UPenn:Van Pelt Library:lobby
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
-  address: UPenn:Houston Hall:grounds
+  address: UPenn:Houston Hall:lobby
 - name: Williams Hall
   description: A classroom and language-department building just off College Green.
-  address: UPenn:Williams Hall:grounds
+  address: UPenn:Williams Hall:lobby
 - name: Meyerson Hall
   description: Home of the Weitzman School of Design, full of architecture studios.
-  address: UPenn:Meyerson Hall:grounds
+  address: UPenn:Meyerson Hall:lobby
 - name: Irvine Auditorium
   description: The landmark auditorium that hosts lectures and performances.
-  address: UPenn:Irvine Auditorium:grounds
+  address: UPenn:Irvine Auditorium:lobby
