@@ -538,7 +538,7 @@ def test_a_loud_noise_spooks_the_doe_even_without_the_shack():
     # Talking aloud in the woods is racket enough -- she bolts (and you've not
     # got the crossbow, the careless player's just-deserts).
     game, cap = _play(_to_old_woods_mounted() + ["dismount", "say hello there"])
-    assert _said(cap, "sudden noise") and _said(cap, "bolts")
+    assert _said(cap, "racket") and _said(cap, "bolts")
     assert "deer" in game.locations["Deep Woods"].items
 
 
