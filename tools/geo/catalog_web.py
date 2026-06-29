@@ -241,7 +241,7 @@ const ORIG = Object.keys(RAW.objects);            // preserves order incl _comme
 function freshState(){
   const byKey = {}; const order = [];
   for(const k of ORIG){ if(k.startsWith('_')) continue;
-    byKey[k] = Object.assign({key:k, added:false}, RAW.objects[k]); order.push(k); }
+    byKey[k] = Object.assign({key:k, origKey:k, added:false}, RAW.objects[k]); order.push(k); }
   return {byKey, order, added:[]};
 }
 let state = freshState();
@@ -435,14 +435,18 @@ function addEntry(sheet,col,row){
 
 // ---- export / save -------------------------------------------------------
 function buildCatalog(){
+  // map each surviving original by its ORIGINAL key so renames are found
+  const byOrig={};
+  for(const k of state.order){ const o=state.byKey[k]; if(!o.added) byOrig[o.origKey]=o; }
   const objs={};
   for(const k of ORIG){
-    if(k.startsWith('_')) objs[k]=RAW.objects[k];
-    else if(state.byKey[k]) objs[k]=toObj(state.byKey[k]);
+    if(k.startsWith('_')){ objs[k]=RAW.objects[k]; continue; }
+    const o=byOrig[k];                 // undefined only if somehow removed
+    if(o) objs[o.key]=toObj(o);        // o.key may differ from k after a rename
   }
   if(state.added.length){
     objs['_comment_user_added']='--- added via catalog_web.py ---';
-    for(const k of state.added) objs[k]=toObj(state.byKey[k]);
+    for(const k of state.added){ const o=state.byKey[k]; if(o) objs[o.key]=toObj(o); }
   }
   const out={}; if(RAW._README)out._README=RAW._README;
   if(RAW._llm_guidance)out._llm_guidance=RAW._llm_guidance;
