@@ -1,0 +1,146 @@
+; Cute Fantasy UI theme for the replay sidebar (agent_panel.gd).
+;
+; Skins Godot's default controls with the wood/tan variants from the Cute Fantasy
+; UI pack (godot-generative-agents/Cute_Fantasy_UI/), the companion to the Cute
+; Fantasy world tiles. Each entry points a StyleBoxTexture at a 9-sliced region of
+; a sprite sheet (via an AtlasTexture); the project already renders textures with
+; Nearest filtering, so the pixel art stays crisp when the 9-slice stretches.
+;
+; The panel background is light parchment, so every font_color here is dark brown
+; (white text — Godot's default — would be invisible on it). Region rectangles were
+; measured off the sheets; see the PR description for the exact coordinates.
+[gd_resource type="Theme" load_steps=20 format=3]
+
+[ext_resource type="Texture2D" uid="uid://bj3bpcl2rstqx" path="res://Cute_Fantasy_UI/UI/UI_Frames.png" id="1_frames"]
+[ext_resource type="Texture2D" uid="uid://b6hkmhfupgk1t" path="res://Cute_Fantasy_UI/UI/UI_Buttons.png" id="2_buttons"]
+[ext_resource type="Texture2D" uid="uid://c2fh14esdsa05" path="res://Cute_Fantasy_UI/UI/UI_Sliders.png" id="3_sliders"]
+[ext_resource type="Texture2D" uid="uid://dov0hipjrxxtw" path="res://Cute_Fantasy_UI/UI/UI_Ribbons.png" id="4_ribbons"]
+[ext_resource type="FontFile" uid="uid://dd5jhb3w33me2" path="res://Cute_Fantasy_UI/Fonts/CuteFantasy-5x9.ttf" id="5_font"]
+
+; --- Panel: the parchment frame with metal corner brackets (tan row of UI_Frames) ---
+[sub_resource type="AtlasTexture" id="At_panel"]
+atlas = ExtResource("1_frames")
+region = Rect2(1067, 11, 26, 26)
+
+[sub_resource type="StyleBoxTexture" id="SB_panel"]
+texture = SubResource("At_panel")
+texture_margin_left = 8.0
+texture_margin_right = 8.0
+texture_margin_top = 8.0
+texture_margin_bottom = 8.0
+content_margin_left = 8.0
+content_margin_right = 8.0
+content_margin_top = 8.0
+content_margin_bottom = 8.0
+
+; --- Buttons: tan rounded button, three rows = idle / hover / pressed ---
+[sub_resource type="AtlasTexture" id="At_btn_normal"]
+atlas = ExtResource("2_buttons")
+region = Rect2(1, 1, 30, 14)
+
+[sub_resource type="StyleBoxTexture" id="SB_btn_normal"]
+texture = SubResource("At_btn_normal")
+texture_margin_left = 6.0
+texture_margin_right = 6.0
+texture_margin_top = 4.0
+texture_margin_bottom = 5.0
+content_margin_left = 8.0
+content_margin_right = 8.0
+content_margin_top = 4.0
+content_margin_bottom = 5.0
+
+[sub_resource type="AtlasTexture" id="At_btn_hover"]
+atlas = ExtResource("2_buttons")
+region = Rect2(1, 17, 30, 14)
+
+[sub_resource type="StyleBoxTexture" id="SB_btn_hover"]
+texture = SubResource("At_btn_hover")
+texture_margin_left = 6.0
+texture_margin_right = 6.0
+texture_margin_top = 4.0
+texture_margin_bottom = 5.0
+content_margin_left = 8.0
+content_margin_right = 8.0
+content_margin_top = 4.0
+content_margin_bottom = 5.0
+
+[sub_resource type="AtlasTexture" id="At_btn_pressed"]
+atlas = ExtResource("2_buttons")
+region = Rect2(1, 33, 30, 14)
+
+[sub_resource type="StyleBoxTexture" id="SB_btn_pressed"]
+texture = SubResource("At_btn_pressed")
+texture_margin_left = 6.0
+texture_margin_right = 6.0
+texture_margin_top = 4.0
+texture_margin_bottom = 5.0
+content_margin_left = 8.0
+content_margin_right = 8.0
+content_margin_top = 5.0
+content_margin_bottom = 4.0
+
+; Borderless focus box — the textured button already shows focus via hover; this
+; suppresses Godot's default blue focus rectangle on top of the art.
+[sub_resource type="StyleBoxEmpty" id="SB_focus"]
+
+; --- Slider: thin tan groove track + round tan grabber knob (UI_Sliders) ---
+[sub_resource type="AtlasTexture" id="At_track"]
+atlas = ExtResource("3_sliders")
+region = Rect2(154, 102, 30, 4)
+
+[sub_resource type="StyleBoxTexture" id="SB_track"]
+texture = SubResource("At_track")
+texture_margin_left = 6.0
+texture_margin_right = 6.0
+texture_margin_top = 1.0
+texture_margin_bottom = 1.0
+
+[sub_resource type="AtlasTexture" id="At_grabber"]
+atlas = ExtResource("3_sliders")
+region = Rect2(308, 115, 8, 10)
+
+; --- Title ribbon: tan banner behind the "CHARACTERS" header ---
+[sub_resource type="AtlasTexture" id="At_ribbon"]
+atlas = ExtResource("4_ribbons")
+region = Rect2(8, 1, 64, 20)
+
+[sub_resource type="StyleBoxTexture" id="SB_ribbon"]
+texture = SubResource("At_ribbon")
+texture_margin_left = 18.0
+texture_margin_right = 18.0
+texture_margin_top = 4.0
+texture_margin_bottom = 6.0
+content_margin_left = 20.0
+content_margin_right = 20.0
+content_margin_top = 3.0
+content_margin_bottom = 5.0
+
+[resource]
+default_font = ExtResource("5_font")
+default_font_size = 16
+Button/colors/font_color = Color(0.27, 0.17, 0.11, 1)
+Button/colors/font_hover_color = Color(0.18, 0.1, 0.06, 1)
+Button/colors/font_pressed_color = Color(0.18, 0.1, 0.06, 1)
+Button/colors/font_focus_color = Color(0.27, 0.17, 0.11, 1)
+Button/colors/font_disabled_color = Color(0.5, 0.42, 0.36, 1)
+Button/styles/normal = SubResource("SB_btn_normal")
+Button/styles/hover = SubResource("SB_btn_hover")
+Button/styles/pressed = SubResource("SB_btn_pressed")
+Button/styles/disabled = SubResource("SB_btn_normal")
+Button/styles/focus = SubResource("SB_focus")
+Label/colors/font_color = Color(0.27, 0.17, 0.11, 1)
+OptionButton/colors/font_color = Color(0.27, 0.17, 0.11, 1)
+OptionButton/colors/font_hover_color = Color(0.18, 0.1, 0.06, 1)
+OptionButton/colors/font_pressed_color = Color(0.18, 0.1, 0.06, 1)
+OptionButton/styles/normal = SubResource("SB_btn_normal")
+OptionButton/styles/hover = SubResource("SB_btn_hover")
+OptionButton/styles/pressed = SubResource("SB_btn_pressed")
+OptionButton/styles/focus = SubResource("SB_focus")
+PanelContainer/styles/panel = SubResource("SB_panel")
+HSlider/icons/grabber = SubResource("At_grabber")
+HSlider/icons/grabber_highlight = SubResource("At_grabber")
+HSlider/icons/grabber_disabled = SubResource("At_grabber")
+HSlider/styles/slider = SubResource("SB_track")
+TitleRibbon/base_type = "Label"
+TitleRibbon/colors/font_color = Color(0.27, 0.17, 0.11, 1)
+TitleRibbon/styles/normal = SubResource("SB_ribbon")
