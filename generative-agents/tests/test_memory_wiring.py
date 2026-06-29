@@ -288,7 +288,7 @@ def test_resident_perceives_colocated_resident():
     # Maria, co-located, perceives Isabella's logged arrival -- and not her own.
     perceived = maria.agent.memory.ingest_events(game, maria)
     texts = [r.text for r in perceived]
-    assert "Isabella Rodriguez did: travel to Hobbs Cafe" in texts
+    assert "Isabella Rodriguez arrived from Isabella Rodriguez's apartment" in texts
     assert all(not t.startswith("Maria Lopez did:") for t in texts)
     assert all(r.kind == MemoryKind.OBSERVATION for r in perceived)
 
@@ -305,7 +305,7 @@ def test_perceived_memory_enters_observation():
     cmd = observe_and_decide(game, maria, 1)
     observation = _observation_seen_by(maria)
     assert "Relevant memories:" in observation
-    assert "Isabella Rodriguez did: travel to Hobbs Cafe" in observation
+    assert "Isabella Rodriguez arrived from" in observation
     assert cmd.startswith("perform")
 
 
