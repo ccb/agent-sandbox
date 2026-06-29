@@ -1,0 +1,366 @@
+/* Prompt-chain visualizer styles, ported from promptviz/webapp/static/style.css.
+   The dark GitHub-style palette is scoped to .pcv (the rest of the companion is
+   light), so these CSS vars don't leak. The --k-* kind colors mirror KIND_COLOR
+   in cytoscapeSetup.ts — keep them in sync. */
+.pcv {
+  --bg: #0d1117;
+  --bg-soft: #161b22;
+  --bg-inset: #0a0e14;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #8b949e;
+  --k-start: #8b949e;
+  --k-decision: #58a6ff;
+  --k-parse: #d29922;
+  --k-narrate: #3fb950;
+  --k-gate: #bc8cff;
+  --fired: #f85149;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+/* --- top bar --- */
+.pcv-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+.pcv-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.pcv-logo {
+  font-size: 18px;
+}
+.pcv-name {
+  font-size: 14px;
+}
+.pcv-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.pcv-controls select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+/* --- layout: graph + side panel --- */
+.pcv-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pcv-graph-pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.pcv-cy {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 20%, #131a23 0, var(--bg) 70%);
+}
+.pcv-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+/* --- legend (bottom-left of the graph) --- */
+.pcv-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.pcv-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pcv-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+.pcv-swatch.k-start {
+  background: var(--k-start);
+}
+.pcv-swatch.k-decision {
+  background: var(--k-decision);
+}
+.pcv-swatch.k-parse {
+  background: var(--k-parse);
+}
+.pcv-swatch.k-narrate {
+  background: var(--k-narrate);
+}
+.pcv-swatch.k-gate {
+  background: var(--k-gate);
+  border-radius: 0;
+  transform: rotate(45deg) scale(0.82);
+}
+
+/* --- side panel --- */
+.pcv-panel {
+  flex: 0 0 clamp(360px, 34vw, 520px);
+  border-left: 1px solid var(--border);
+  background: var(--bg-soft);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.1rem 2rem;
+}
+.pcv-panel-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding-top: 2rem;
+  text-align: center;
+}
+.pcv-node-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+.pcv-kind-badge {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.pcv-kind-badge.start {
+  color: var(--k-start);
+}
+.pcv-kind-badge.decision {
+  color: var(--k-decision);
+}
+.pcv-kind-badge.parse {
+  color: var(--k-parse);
+}
+.pcv-kind-badge.narrate {
+  color: var(--k-narrate);
+}
+.pcv-kind-badge.gate {
+  color: var(--k-gate);
+}
+.pcv-node-desc {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pcv-note {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.pcv-error {
+  font-size: 0.82rem;
+  color: var(--fired);
+}
+.pcv-section-label {
+  margin: 1rem 0 0.4rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.pcv-template-name {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--k-decision);
+}
+.pcv-inputs {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.pcv-inputs dt {
+  font-family: var(--mono);
+  color: var(--text);
+}
+.pcv-inputs dd {
+  margin: 0 0 0.5rem;
+  color: var(--text-dim);
+}
+.pcv-code {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Prompt reader: a table of every template + a click-through modal --- */
+.pcv-reader-body {
+  position: relative; /* anchor the absolute .pcv-status overlay */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* No top padding: the sticky `th` pins to the scroll container's padding box,
+     so any top padding leaves a gap that rows scroll up into and show *above*
+     the headers. Keeping it 0 makes the header row sit flush at the top. */
+  padding: 0 1.25rem 2rem;
+}
+.pcv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.pcv-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.pcv-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.pcv-table tbody tr {
+  cursor: pointer;
+}
+.pcv-table tbody tr:hover {
+  background: var(--bg-inset);
+}
+.pcv-table tbody tr:focus {
+  outline: none;
+  background: var(--bg-inset);
+  box-shadow: inset 2px 0 0 var(--k-decision);
+}
+.pcv-cell-name {
+  font-family: var(--mono);
+  color: var(--k-decision);
+  white-space: nowrap;
+}
+.pcv-cell-desc {
+  color: var(--text);
+  line-height: 1.45;
+}
+.pcv-pkg-badge {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+/* --- modal --- */
+.pcv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(1, 4, 9, 0.7);
+}
+.pcv-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: 85vh;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(1, 4, 9, 0.6);
+}
+.pcv-modal-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.pcv-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.pcv-modal-close {
+  flex: none;
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.pcv-modal-close:hover {
+  color: var(--text);
+}
+.pcv-modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.1rem 1.5rem;
+}

@@ -23,6 +23,13 @@ docs_dir: docs
 
 theme:
   name: readthedocs
+  # Skip the theme's CDN-hosted highlight.js. The Godot web companion can serve
+  # this site at /docs/ (see godot-generative-agents/web), and that app sets a
+  # COOP/COEP `require-corp` policy for its threaded WASM — which blocks
+  # cross-origin scripts like the cdnjs highlight.js. Build-time Pygments
+  # highlighting (pymdownx.highlight, below) colors code locally instead, so the
+  # docs stay self-contained and load fine under that policy.
+  highlightjs: false
 
 plugins:
   - search
