@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/penn_replay.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/agent_panel.gd" id="5_panel"]
 [ext_resource type="Theme" path="res://theme/cute_fantasy_ui.tres" id="6_theme"]
 [ext_resource type="Script" path="res://scripts/building_labels.gd" id="7_buildings"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="8_minimap"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -45,3 +46,8 @@ offset_right = 300.0
 grow_vertical = 2
 theme = ExtResource("6_theme")
 script = ExtResource("5_panel")
+
+; Bottom-right minimap overview (minimap.gd). penn_replay.gd sizes + anchors it and
+; feeds it the camera + agents after load; sits over the campus in the bottom-right.
+[node name="Minimap" type="Control" parent="UI"]
+script = ExtResource("8_minimap")
