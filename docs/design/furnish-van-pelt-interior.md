@@ -88,6 +88,12 @@ here.
   floors render above it. No `entrance_floor` cells are removed.
 - Clip the 10 throat-seam cells (cols 66–67) that fall outside the carved footprint.
 - **Cardinal rule:** never place part of a multi-tile sprite — verify 0 partial sprites.
+- **Clear phantom walls:** after inserting the layers, zero any `westwing_walls`/
+  `eastwing_walls` sprite that sits on a walkable cell (`collision_maze == "0"`). This
+  keeps the picture consistent with the matrix when `add_entrances` auto-opens a doorway
+  in a partition (see §3, `_punch_doorway`). Because it reads the final collision grid,
+  **`furnish_van_pelt.py` must run *after* `add_entrances.py`** (the regeneration step
+  already does so). Floors/furniture are never touched; only walkable wall cells clear.
 
 ### 3. Matrix subdivision — inside `add_entrances.py` (opt-in)
 
@@ -113,6 +119,12 @@ opts in; Williams and every other building do not, so they are unchanged):
   (= sector ids, where the old branch's `34`–`58` collided).
 - Because this runs *inside* the authoritative rebuild, re-running `add_entrances.py`
   reproduces the subdivision identically (idempotent) instead of clobbering it.
+- **Sealed-room safety net (`_punch_doorway`):** a room whose walkable cells are
+  isolated from the rest of the interior (a partition with no designed doorway gap) is
+  given one deterministic 1-cell opening into an adjacent room. The old branch was
+  visual-only, so it had at least one such room — `Microtext Collection`, sealed on all
+  four sides; it now gets a west doorway into `Staff Area`. The phantom wall this would
+  leave in the picture is cleared by §2's collision-aware wall sweep.
 
 Van Pelt **stays** in the plain-cutaway `picture_jobs` (unlike Williams): `add_entrances`
 strips and repaints `entrance_floor` each run, so its plain cutaway (floor + perimeter +
@@ -156,8 +168,8 @@ becoming an arena `13000`–`13024`:
 ## Testing
 
 - **Picture:** 0 partial sprites; every transplanted cell inside the carved footprint;
-  interior layers in canonical z-order; `furnish_building.py` output for Williams
-  byte-identical (untouched).
+  interior layers in canonical z-order; **0 phantom walls** (no wing-wall sprite on a
+  walkable cell); `furnish_building.py` output for Williams byte-identical (untouched).
 - **Matrix:** after `add_entrances.py`, the 25 Van Pelt arenas are present in
   `arena_blocks.csv` with non-clashing ids; `collision_maze` partition walls match the
   asset's wall cells; **every room arena BFS-reachable from the building entrance**
@@ -179,10 +191,12 @@ becoming an arena `13000`–`13024`:
 
 ## Risks / notes
 
-- **Connectivity is the main risk.** The designed doorways (wall gaps) must chain every
-  room to the single building entrance once walls become collision. The BFS test gates
-  this; unreachable rooms get a doorway added (or the entrance relocated) during
-  implementation.
+- **Connectivity (resolved).** The designed doorways (wall gaps) must chain every room
+  to the single building entrance once walls become collision. The BFS test gates this.
+  One room — `Microtext Collection` — was sealed in the design (no doorway gap); it is
+  auto-given a deterministic west doorway into `Staff Area` by `_punch_doorway`, and the
+  resulting phantom wall is cleared by §2's collision-aware sweep. The carved east door
+  is kept (no Williams-style override). All 25 room arenas are BFS-reachable.
 - **entrance_floor reconciliation:** must clear exactly the plain interior floor that the
   detailed floors replace, without disturbing the perimeter/door or neighbouring
   buildings' `entrance_floor` cells.
