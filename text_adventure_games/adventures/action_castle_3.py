@@ -38,6 +38,7 @@ Run interactively:   python action_castle_3.py
 """
 
 from text_adventure_games import games, things, actions, blocks, Recipe
+from text_adventure_games import reactions
 from text_adventure_games.enums import Property
 
 # ---------------------------------------------------------------------------
@@ -1291,12 +1292,28 @@ class PushStatue(actions.Action):
 
 # Actions that don't count as "doing something" in front of the demon -- you may
 # look at it before you act, but anything else gets you devoured.
-_DEMON_SAFE_ACTIONS = {"examine", "describe", "inventory"}
-
 _DEMON_DEATH = (
     "The demon falls upon you with tooth, tusk and tentacle. When it is done, "
     "there is nothing left to bury. THE END."
 )
+
+
+class DemonDevours(reactions.Countdown):
+    """The summoned demon's clock (docs/design/reactions.md): once it claws up
+    from the pit you have a beat to THROW JAVELIN -- you may look once, but dawdle
+    past the window and it devours you. The throw sets ``banished_demon``, which
+    calls the strike off."""
+
+    DELAY = 2
+
+    def stimulus(self) -> bool:
+        return bool(self.game.locations["Chaos Chapel"].get_property("demon_present"))
+
+    def cancelled(self) -> bool:
+        return bool(self.game.player.get_property("banished_demon"))
+
+    def consequence(self, game):
+        _die(game, _DEMON_DEATH)
 
 
 class OpenDoor(actions.Action):
@@ -2367,18 +2384,11 @@ def build_game() -> ActionCastle3:
         repeatable=True,
     )
 
-    # Event-based standoff: while the demon looms (past its grace turn), anything
-    # in the chapel but throwing the javelin -- you may look first -- gets you
-    # devoured. The "anything but X" framing uses `safe=`; reads the round's
-    # events, not parser.last_action.
-    game.add_disturbance_trigger(
-        chaos_chapel,
-        lambda g, cause: _die(g, _DEMON_DEATH),
-        safe=_DEMON_SAFE_ACTIONS,
-        present=lambda g: chaos_chapel.get_property("demon_present")
-        and g.turn > (chaos_chapel.get_property("demon_summoned_turn") or 0),
-        name="demon_devours",
-    )
+    # The demon is a Countdown (see DemonDevours): its appearance starts a clock,
+    # and THROW JAVELIN cancels it. A thing-owned reaction on the demon, replacing
+    # the old location standoff. Registered after summon_demon so, in the same
+    # react phase, demon_present is set before the countdown reads it.
+    game.add_reaction(demon, DemonDevours())
 
     return game
 
