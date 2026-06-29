@@ -15,9 +15,13 @@ for (issue #82): :class:`TiledGame` answers "what's nearby" with **tile
 distance**, so two residents standing near each other *on the map* perceive each
 other in the sim.
 
-This is the canonical worked example of the engine's design note: *to change what
-an agent can see, override ``perceivable_locations``* -- the sight counterpart to
-overriding ``audience_for`` to change what it can hear.
+This is the canonical worked example of the engine's design note about its two
+"nearby" seams. :class:`TiledGame` overrides *both*, by the same tile distance:
+``perceivable_locations`` (sight -- what an agent sees and remembers) and
+``audience_for`` (hearing -- who an agent can talk with). So perception and
+conversation share one notion of proximity: a resident converses with whoever is
+close enough *on the map* to perceive, not only with whoever happens to share its
+arena (issues #82, #86).
 """
 
 from text_adventure_games import games
@@ -27,8 +31,10 @@ class TiledGame(games.Game):
     """A ``Game`` that perceives by tile distance over a :class:`WorldMap`.
 
     Identical to the engine ``Game`` except it carries a ``world_map`` and
-    overrides :meth:`perceivable_locations`. With no ``world_map`` it falls back
-    to the current room, so it is a safe drop-in even before a map is loaded.
+    overrides :meth:`perceivable_locations` (sight) and :meth:`audience_for`
+    (hearing) to measure "nearby" by tile distance. With no ``world_map`` both
+    fall back to the current room, so it is a safe drop-in even before a map is
+    loaded.
     """
 
     def __init__(self, *args, world_map=None, **kwargs):
@@ -68,3 +74,22 @@ class TiledGame(games.Game):
         # `origin == origin` -> gap 0, so the current room is always included;
         # `or [loc]` is a belt-and-braces guard for an odd address mapping.
         return near or [loc]
+
+    def audience_for(self, speaker, message, target=None):
+        """Characters within ``speaker.vision_r`` *tiles* who hear the message.
+
+        The hearing counterpart to :meth:`perceivable_locations`, and the seam
+        that gates Smallville conversations by proximity: an agent should only
+        converse with someone it could perceive, so we reuse the very same
+        tile-distance query and return everyone standing in an in-range location
+        (the speaker aside). Two residents thus talk when they're close *on the
+        map*, not only when they happen to share one arena (issue #86).
+
+        Falls back to the engine's room-based audience for free: with no
+        ``world_map`` (or ``vision_r <= 0``) ``perceivable_locations`` yields just
+        the speaker's own room, so the audience is everyone co-located with them.
+        """
+        audience = []
+        for loc in self.perceivable_locations(speaker):
+            audience.extend(c for c in loc.characters.values() if c is not speaker)
+        return audience

@@ -236,3 +236,85 @@ def test_llm_agent_converse_tool_without_utterance_is_silent():
 def test_base_agent_converse_is_silent():
     # A plain ScriptedAgent with no converse_rule never speaks.
     assert ScriptedAgent(lambda o: "look").converse("obs", "bob") is None
+
+
+# --- TiledGame: audibility by tile distance (issues #82, #86) ----------------
+#
+# Smallville arenas are separate Locations, so the engine's room-based audience
+# would never let two residents in different arenas talk. TiledGame overrides
+# audience_for to measure "nearby" by tile distance (mirroring its perception
+# seam), so conversation is gated by the same vision radius as sight.
+
+from gen_agents.tiled_game import TiledGame  # noqa: E402
+
+
+class _StubMap:
+    """A WorldMap stand-in: ``tile_gap`` returns a fixed distance per address pair."""
+
+    def __init__(self, gap):
+        self._gap = gap
+
+    def tile_gap(self, a, b):
+        return 0 if a == b else self._gap
+
+
+def _two_arenas(gap, *, with_map=True):
+    """Two tile-addressed arenas ``gap`` tiles apart, an agent-driven resident in
+    each (and the player parked in the first). Returns (game, alice, bob)."""
+    a = Location("A", "arena A")
+    b = Location("B", "arena B")
+    a.tile_address = "Ville:A:spot"
+    b.tile_address = "Ville:B:spot"
+    a.add_connection("east", b)  # so both arenas register in game.locations
+    player = Character("player", "you", "")
+    alice = Character("alice", "alice", "")
+    bob = Character("bob", "bob", "")
+    alice.set_agent(ScriptedAgent(lambda obs: None))
+    bob.set_agent(ScriptedAgent(lambda obs: None))
+    a.add_character(player)
+    a.add_character(alice)
+    b.add_character(bob)
+    game = TiledGame(
+        a,
+        player,
+        characters=[alice, bob],
+        world_map=_StubMap(gap) if with_map else None,
+    )
+    return game, alice, bob
+
+
+def test_tiled_audience_includes_residents_within_vision_radius():
+    game, alice, bob = _two_arenas(gap=3)
+    alice.vision_r = 5
+    audience = game.audience_for(alice, "")
+    assert bob in audience
+    assert alice not in audience  # a speaker never hears itself
+
+
+def test_tiled_audience_excludes_residents_beyond_vision_radius():
+    game, alice, bob = _two_arenas(gap=8)
+    alice.vision_r = 2
+    assert bob not in game.audience_for(alice, "")
+
+
+def test_tiled_conversation_is_gated_by_proximity():
+    # The conversation layer reads audience_for through can_converse /
+    # find_conversation_pairs, so the tile gating flows straight through.
+    near, alice, bob = _two_arenas(gap=3)
+    alice.vision_r = bob.vision_r = 5
+    assert convo.can_converse(near, alice, bob)
+    assert (alice, bob) in convo.find_conversation_pairs(near, [alice, bob])
+
+    far, carol, dave = _two_arenas(gap=20)
+    carol.vision_r = dave.vision_r = 2
+    assert not convo.can_converse(far, carol, dave)
+    assert convo.find_conversation_pairs(far, [carol, dave]) == []
+
+
+def test_tiled_audience_falls_back_to_room_without_map():
+    # No world_map -> perceivable_locations yields just the speaker's arena, so
+    # the audience is the engine's co-located default and bob (a separate arena)
+    # is out of earshot even with a wide radius.
+    game, alice, bob = _two_arenas(gap=1, with_map=False)
+    alice.vision_r = 5
+    assert bob not in game.audience_for(alice, "")
