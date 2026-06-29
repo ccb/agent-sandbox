@@ -19,6 +19,8 @@ extends Node2D
 @export var step_seconds: float = 0.10
 ## Start the clock this many steps in — handy for screenshots mid-walk. 0 = start.
 @export var preview_step: int = 0
+## In-game time at step 0 (overridden by replay meta["start"] when present).
+@export var sim_start: String = "2023-02-13 08:00:00"
 
 # The Cute Fantasy player sheet is a 6x10 grid; row 0 is a 6-frame walk cycle.
 const SHEET_HFRAMES := 6
@@ -41,8 +43,14 @@ const TINTS := [
 	Color(0.80, 1.0, 0.78),  # Diego - green
 	Color(1.0, 0.86, 0.70),  # spare - orange
 ]
+const MONTHS := [
+	"January", "February", "March", "April", "May", "June",
+	"July", "August", "September", "October", "November", "December",
+]
 
 var _tile_px := 16
+var _sec_per_step := 10
+var _start_unix := 0
 var _frames: Array = []
 var _names: Array = []
 var _agents := {}  # name -> {sprite, label}
@@ -59,6 +67,8 @@ func _ready() -> void:
 	# calls and keep its highlight in sync when the camera releases on its own.
 	_panel.track_requested.connect(_on_track_requested)
 	_panel.stop_requested.connect(_on_stop_requested)
+	_panel.zoom_in_requested.connect(_camera.zoom_in)
+	_panel.zoom_out_requested.connect(_camera.zoom_out)
 	_camera.follow_stopped.connect(_panel.clear_active)
 
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
@@ -109,6 +119,8 @@ func _load_replay_from_text(text: String) -> void:
 
 	var meta: Dictionary = data["meta"]
 	_tile_px = int(meta["tile_px"])
+	_sec_per_step = int(meta.get("sec_per_step", 10))
+	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
 	_frames = data["frames"]
 	var thumb := _make_thumbnail()
 	for i in meta["personas"].size():
@@ -120,7 +132,41 @@ func _load_replay_from_text(text: String) -> void:
 	# Place everyone on their first frame, then optionally fast-forward the clock.
 	_t = preview_step * step_seconds
 	_anim_t = 0.0
+	_update_clock()
 	print("penn_replay: %d steps, %d personas" % [_frames.size(), _names.size()])
+
+
+func _parse_sim_start(text: String) -> int:
+	# "2023-02-13 08:00:00" -> unix seconds for the in-game clock anchor.
+	var parts := text.strip_edges().split(" ", false)
+	if parts.size() != 2:
+		push_warning("penn_replay: bad sim start %r, using epoch" % text)
+		return 0
+	var date := parts[0].split("-", false)
+	var clock := parts[1].split(":", false)
+	if date.size() != 3 or clock.size() != 3:
+		push_warning("penn_replay: bad sim start %r, using epoch" % text)
+		return 0
+	return int(Time.get_unix_time_from_datetime_dict({
+		"year": int(date[0]),
+		"month": int(date[1]),
+		"day": int(date[2]),
+		"hour": int(clock[0]),
+		"minute": int(clock[1]),
+		"second": int(clock[2]),
+	}))
+
+
+func _format_sim_time(sim_seconds: int) -> String:
+	var dt: Dictionary = Time.get_datetime_dict_from_unix_time(_start_unix + sim_seconds)
+	return "%s %d, %d, %02d:%02d:%02d" % [
+		MONTHS[dt["month"] - 1], dt["day"], dt["year"], dt["hour"], dt["minute"], dt["second"]
+	]
+
+
+func _update_clock() -> void:
+	var sim_seconds := int((_t / step_seconds) * float(_sec_per_step))
+	_panel.set_clock_text(_format_sim_time(sim_seconds))
 
 
 func _spawn_agent(name: String, index: int) -> void:
@@ -184,6 +230,7 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_anim_t += delta
+	_update_clock()
 
 	var last := _frames.size() - 1
 	var fpos := _t / step_seconds
