@@ -1,9 +1,9 @@
 {
-  "_README": "Labeled tile catalog consumed by furnish_building.py (and meant to be edited by an LLM/human placing tiles). Coordinates are (col,row) atlas cells on the named sheet; w/h is the object footprint in tiles. 'category' is one of floor|wall|window|door|furniture|prop|tree; furniture/prop also carry a 'room' or context tag. 'verified': true means the coordinate is taken from a known-good working palette (renders correctly in the map); false means it was read off an annotated contact sheet (region_grid.py / preview_catalog.py / catalog_web.py) and should be eyeballed before relying on it. Four sheets are addressable: franuka (32x32), school (16x16), bath (16x16) — the appended interior sheets — and kenney (27x18), the base outdoor tileset already in every map at firstgid 1. Curation note (2026-06-27): franuka furniture is kept to ONE colour per type for now (diversify later); the bath/school/kenney selections follow the user's region picks. Verify/browse tiles visually with: uv run python tools/geo/catalog_web.py --serve",
+  "_README": "Labeled tile catalog consumed by furnish_building.py (and meant to be edited by an LLM/human placing tiles). Coordinates are (col,row) atlas cells on the named sheet; w/h is the object footprint in tiles. 'category' is one of floor|wall|window|door|furniture|prop|tree; furniture/prop also carry a 'room' or context tag. 'verified': true means the coordinate is taken from a known-good working palette (renders correctly in the map); false means it was read off an annotated contact sheet (region_grid.py / preview_catalog.py / catalog_web.py) and should be eyeballed before relying on it. Four sheets are addressable: franuka (32x32), school (16x16), bath (16x16) \u2014 the appended interior sheets \u2014 and kenney (27x18), the base outdoor tileset already in every map at firstgid 1. Curation note (2026-06-27): franuka furniture is kept to ONE colour per type for now (diversify later); the bath/school/kenney selections follow the user's region picks. Verify/browse tiles visually with: uv run python tools/geo/catalog_web.py --serve",
   "_llm_guidance": {
     "options_per_category": 12,
     "max_per_prompt": 30,
-    "note": "When asking an LLM to choose tiles, show at most ~12 options per decision (one floor menu, one wall menu, a short furniture menu) and ~30 total in a single prompt. Past that, selection quality drops: the model starts ignoring options, repeating choices, or picking by list position rather than fit. Always pre-filter to the task (by sheet/category/room) instead of pasting the whole catalog, and prefer verified:true tiles — unverified ones are candidates, not guarantees."
+    "note": "When asking an LLM to choose tiles, show at most ~12 options per decision (one floor menu, one wall menu, a short furniture menu) and ~30 total in a single prompt. Past that, selection quality drops: the model starts ignoring options, repeating choices, or picking by list position rather than fit. Always pre-filter to the task (by sheet/category/room) instead of pasting the whole catalog, and prefer verified:true tiles \u2014 unverified ones are candidates, not guarantees."
   },
   "sheets": {
     "franuka": {
@@ -356,6 +356,507 @@
       "room": "dining",
       "label": "square dining table (light)",
       "verified": true
+    },
+    "_comment_franuka_pass2": "--- pass 2: recognizable franuka furniture/props (best-guess, unverified) ---",
+    "bookshelf_clutter": {
+      "sheet": "franuka",
+      "col": 2,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "bookshelf with clutter on shelves (red-brown)",
+      "verified": false
+    },
+    "shelf_empty": {
+      "sheet": "franuka",
+      "col": 4,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "empty open shelving unit (red-brown)",
+      "verified": false
+    },
+    "cabinet_wood": {
+      "sheet": "franuka",
+      "col": 10,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall closed cabinet, double door (wood/orange)",
+      "verified": false
+    },
+    "bookshelf_wood": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood bookshelf with items + drawers",
+      "verified": false
+    },
+    "bookshelf_wood_books": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood bookshelf with colorful books",
+      "verified": false
+    },
+    "armchair_pink": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (pink)",
+      "verified": false
+    },
+    "armchair_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (orange)",
+      "verified": false
+    },
+    "armchair_green": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (green)",
+      "verified": false
+    },
+    "armchair_red": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 22,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (red)",
+      "verified": false
+    },
+    "round_table_small": {
+      "sheet": "franuka",
+      "col": 10,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "small round pedestal table (white top)",
+      "verified": false
+    },
+    "nightstand_candle": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "small nightstand with a lit candle",
+      "verified": false
+    },
+    "stool_wood": {
+      "sheet": "franuka",
+      "col": 8,
+      "row": 17,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "wooden stool",
+      "verified": false
+    },
+    "chair_wood": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 17,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "wooden chair (side view)",
+      "verified": false
+    },
+    "sofa_orange": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 27,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "long padded sofa (orange)",
+      "verified": false
+    },
+    "sofa_orange_sectional": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 27,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "U-shaped sectional sofa (orange)",
+      "verified": false
+    },
+    "dresser_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 26,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "chest of drawers (orange)",
+      "verified": false
+    },
+    "wardrobe_orange": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 26,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "wardrobe / cupboard (orange)",
+      "verified": false
+    },
+    "dresser_tan": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 29,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "tall chest of drawers (tan)",
+      "verified": false
+    },
+    "wardrobe_tan": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall wardrobe, double door (tan)",
+      "verified": false
+    },
+    "bookshelf_tan": {
+      "sheet": "franuka",
+      "col": 29,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall bookshelf with books (tan)",
+      "verified": false
+    },
+    "cabinet_display": {
+      "sheet": "franuka",
+      "col": 27,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "display cabinet with items + books (tan)",
+      "verified": false
+    },
+    "cabinet_drawers_red": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 27,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "low cabinet with drawers (red-brown)",
+      "verified": false
+    },
+    "stove": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 24,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "kitchen stove / oven with backsplash",
+      "verified": false
+    },
+    "fireplace_unlit": {
+      "sheet": "franuka",
+      "col": 22,
+      "row": 26,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "stone fireplace, unlit",
+      "verified": false
+    },
+    "plant_large": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 12,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "large leafy potted plant",
+      "verified": false
+    },
+    "floor_lamp": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 18,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "standing floor lamp",
+      "verified": false
+    },
+    "rug_red": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (red)",
+      "verified": false
+    },
+    "rug_orange": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (orange/brown)",
+      "verified": false
+    },
+    "rug_green": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (green)",
+      "verified": false
+    },
+    "rug_magenta": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (magenta)",
+      "verified": false
+    },
+    "rug_cyan": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (cyan)",
+      "verified": false
+    },
+    "barrel": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 13,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "label": "wooden barrel",
+      "verified": false
+    },
+    "basket_fruit": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "wicker basket of red fruit",
+      "verified": false
+    },
+    "basket_wicker": {
+      "sheet": "franuka",
+      "col": 22,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "empty wicker basket",
+      "verified": false
+    },
+    "crate": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "wooden crate",
+      "verified": false
+    },
+    "pot": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "small cooking pot",
+      "verified": false
+    },
+    "chest": {
+      "sheet": "franuka",
+      "col": 25,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "treasure chest (closed)",
+      "verified": false
+    },
+    "mug": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "mug / tankard",
+      "verified": false
+    },
+    "jar": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "storage jar / canister",
+      "verified": false
+    },
+    "bottle_wine": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "green wine bottle",
+      "verified": false
+    },
+    "bottle_purple": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 16,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "purple potion bottle",
+      "verified": false
+    },
+    "bowl": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "bowl / small pot",
+      "verified": false
+    },
+    "knife": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 16,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "kitchen knife / cleaver",
+      "verified": false
+    },
+    "lantern": {
+      "sheet": "franuka",
+      "col": 28,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "hanging lantern (lit)",
+      "verified": false
+    },
+    "hanging_herbs": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 18,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "drying herbs on a rack",
+      "verified": false
+    },
+    "carrot": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "carrot",
+      "verified": false
+    },
+    "bread": {
+      "sheet": "franuka",
+      "col": 25,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "loaf of bread",
+      "verified": false
+    },
+    "book_stack_red": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 23,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "book (red cover)",
+      "verified": false
+    },
+    "quill_ink": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 23,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "quill pen and inkpot",
+      "verified": false
+    },
+    "scroll": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 24,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "rolled paper scroll",
+      "verified": false
     },
     "_comment_food": "--- franuka: food props to place on tables (see image refs) ---",
     "food_salad": {
