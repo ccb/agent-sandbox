@@ -25,6 +25,9 @@ signal seek_requested(step: int)
 signal speed_changed(multiplier: float)
 # The "Reset view" button was pressed.
 signal reset_requested
+# The "Activity bubbles" checkbox was toggled (on = show the always-on activity
+# bubbles over each agent; speech bubbles for live conversations show regardless).
+signal bubbles_toggled(on: bool)
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
@@ -134,6 +137,15 @@ func _ready() -> void:
 			speed.select(i)  # default to real-time
 	speed.item_selected.connect(func(i: int) -> void: speed_changed.emit(SPEEDS[i]))
 	speed_row.add_child(speed)
+
+	# Toggle the always-on activity bubbles over each agent (handy once the cast
+	# grows and they crowd the map). Defaults on; speech bubbles for live
+	# conversations are unaffected.
+	var bubbles := CheckButton.new()
+	bubbles.text = "Activity bubbles"
+	bubbles.button_pressed = true
+	bubbles.toggled.connect(func(on: bool) -> void: bubbles_toggled.emit(on))
+	col.add_child(bubbles)
 
 	var title := Label.new()
 	title.text = "CHARACTERS"

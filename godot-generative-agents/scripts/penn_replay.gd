@@ -48,6 +48,18 @@ const MONTHS := [
 	"July", "August", "September", "October", "November", "December",
 ]
 
+# Speech/thought bubbles float above the nameplate. A bubble is this wide (its
+# text wraps and centres inside); position.x = -half that centres it over the sprite.
+const BUBBLE_WIDTH := 280.0
+# A conversation bubble (and its link) shows for this many sim steps from the moment
+# the dialogue first appears, fading out over the last FADE steps. The replay's
+# `chat` field is *sticky* (it lingers on an agent until their next conversation),
+# so we time-box the bubble ourselves rather than leave it up forever.
+const BUBBLE_HOLD_STEPS := 6.0
+const BUBBLE_FADE_STEPS := 2.0
+# Long utterances are clipped so a bubble stays a couple of lines tall.
+const BUBBLE_MAX_CHARS := 140
+
 var _tile_px := 16
 var _sec_per_step := 10
 var _start_unix := 0
@@ -65,6 +77,21 @@ var _sky: CanvasModulate            # clock-driven day-night tint over the campu
 # (-1 = none pushed yet) lets us call out only when the integer step changes.
 var _is_web := false
 var _last_step := -1
+
+# In-world expressiveness: a bubble above each agent (their latest line while in a
+# conversation, otherwise their current activity) plus a link between two agents who
+# are talking. See _refresh_bubble / _refresh_links.
+var _show_activity_bubbles := true
+var _last_chat := {}        # name -> the `chat` value seen last step (for onset diff)
+var _speech_text := {}      # name -> the line to show in the speech bubble
+var _activity_text := {}    # name -> "emoji activity" for the activity bubble
+var _bubble_until := {}     # name -> sim step (float) the speech bubble fades out at
+var _convo_partner := {}    # name -> the other speaker's name, for the link
+var _bubble_mode := {}      # name -> "speech" | "activity" | "" (so we restyle only on change)
+var _links_node: Node2D     # parents one Line2D per active conversation pair
+var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
+var _speech_style: StyleBoxFlat
+var _thought_style: StyleBoxFlat
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
@@ -98,6 +125,18 @@ func _ready() -> void:
 	# so the campus warms/dims with the in-game time of day.
 	_sky = CanvasModulate.new()
 	add_child(_sky)
+
+	# In-world bubbles: the sidebar can hide the always-on activity bubbles (handy
+	# once the cast grows and they overlap); speech bubbles for live conversations
+	# always show. The checkbox defaults on, matching _show_activity_bubbles.
+	_panel.bubbles_toggled.connect(func(on: bool) -> void: _show_activity_bubbles = on)
+	_speech_style = _make_bubble_style(Color(1.0, 1.0, 1.0, 0.92))
+	_thought_style = _make_bubble_style(Color(0.96, 0.97, 1.0, 0.78))
+	# Conversation links live above the campus (runtime children draw over the tscn's
+	# map) but below the agent sprites (added later still), so a line sits under the
+	# people it connects.
+	_links_node = Node2D.new()
+	add_child(_links_node)
 
 	_is_web = OS.has_feature("web")
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
@@ -254,7 +293,34 @@ func _spawn_agent(name: String, index: int) -> void:
 	label.custom_minimum_size = Vector2(220, 0)
 	node.add_child(label)
 
-	_agents[name] = {"node": node, "sprite": spr, "label": label}
+	# A speech/thought bubble parked above the nameplate; hidden until there's
+	# something to show. _refresh_bubble fills it and fades it per step.
+	var bubble := Label.new()
+	bubble.add_theme_font_size_override("font_size", 24)
+	bubble.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08))
+	bubble.add_theme_stylebox_override("normal", _thought_style)
+	bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
+	# Centre it over the sprite and park it above the nameplate (which sits at
+	# -(half + 50)); it grows downward from here but the clip keeps it short.
+	bubble.position = Vector2(-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + 110.0))
+	bubble.visible = false
+	node.add_child(bubble)
+
+	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble}
+
+
+func _make_bubble_style(bg: Color) -> StyleBoxFlat:
+	# A soft rounded card behind the bubble text — speech (opaque white) and thought
+	# (paler) reuse this with different fills.
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(12)
+	sb.set_content_margin_all(8.0)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(0.0, 0.0, 0.0, 0.25)
+	return sb
 
 
 func _tile_to_world(x: int, y: int) -> Vector2:
@@ -339,7 +405,18 @@ func _process(delta: float) -> void:
 		for name in _names:
 			var a: Dictionary = _frames[i][name]
 			var act := String(a["act"]).split(" @ ")[0]
-			_panel.set_character_status(name, "%s %s" % [a["e"], act])
+			_activity_text[name] = "%s %s" % [a["e"], act]
+			_panel.set_character_status(name, _activity_text[name])
+			_update_agent_speech(name, a, i)
+			# Keep an already-showing activity bubble's text current for this step.
+			if _bubble_mode.get(name, "") == "activity":
+				(_agents[name]["bubble"] as Label).text = _activity_text[name]
+
+	# Bubbles + links refresh every frame (not just on a step change) so the fade is
+	# smooth as the playhead advances within a step.
+	for name in _names:
+		_refresh_bubble(name, fpos)
+	_refresh_links(fpos)
 
 	# Web: tell the React companion panel which step we're showing, so its agent
 	# card + memory list track the canvas. Godot is the clock; we push only on a
@@ -350,3 +427,125 @@ func _process(delta: float) -> void:
 		JavaScriptBridge.eval(
 			"window.__pennReplayStep && window.__pennReplayStep(%d)" % i, true
 		)
+
+
+func _update_agent_speech(name: String, frame: Dictionary, step: int) -> void:
+	# Detect the start of a conversation by diffing this agent's `chat` against last
+	# step's. `chat` is a list of [speaker, line] pairs shared by both talkers (or
+	# null/absent when silent), and it lingers after the talk ends — so we react only
+	# to a *change*, then show the bubble for a fixed, fading window. The mock brain
+	# never fills `chat`, so this is a no-op there (activity bubbles still show).
+	var chat: Variant = frame.get("chat")
+	if chat != null and chat is Array and not (chat as Array).is_empty() \
+			and chat != _last_chat.get(name):
+		_speech_text[name] = _clip(_latest_line_by(chat, name))
+		_convo_partner[name] = _other_speaker(chat, name)
+		_bubble_until[name] = float(step) + BUBBLE_HOLD_STEPS
+	_last_chat[name] = chat
+
+
+func _latest_line_by(chat: Array, name: String) -> String:
+	# The agent's own most recent utterance in the transcript (falling back to the
+	# last line if they somehow never speak in it).
+	var line := ""
+	for pair in chat:
+		if pair is Array and pair.size() >= 2 and String(pair[0]) == name:
+			line = String(pair[1])
+	if line == "" and not chat.is_empty():
+		var last_pair: Variant = chat[chat.size() - 1]
+		if last_pair is Array and (last_pair as Array).size() >= 2:
+			line = String(last_pair[1])
+	return line
+
+
+func _other_speaker(chat: Array, name: String) -> String:
+	# The first speaker in the transcript who isn't this agent — their conversation
+	# partner, used to draw the link.
+	for pair in chat:
+		if pair is Array and pair.size() >= 1 and String(pair[0]) != name:
+			return String(pair[0])
+	return ""
+
+
+func _clip(text: String) -> String:
+	if text.length() <= BUBBLE_MAX_CHARS:
+		return text
+	return text.substr(0, BUBBLE_MAX_CHARS - 1).strip_edges() + "…"
+
+
+func _refresh_bubble(name: String, fpos: float) -> void:
+	# Pick the bubble's mode for the current playhead: a speech bubble while the
+	# agent is inside its conversation window, else the activity bubble (if enabled),
+	# else hidden. Text + stylebox change only when the mode flips; alpha animates.
+	var bubble: Label = _agents[name]["bubble"]
+	var until: float = _bubble_until.get(name, -1.0)
+	var activity: String = String(_activity_text.get(name, ""))
+	var mode := ""
+	if fpos <= until:
+		mode = "speech"
+	elif _show_activity_bubbles and activity != "":
+		mode = "activity"
+
+	if mode == "":
+		bubble.visible = false
+		_bubble_mode[name] = ""
+		return
+
+	if _bubble_mode.get(name, "") != mode:
+		_bubble_mode[name] = mode
+		if mode == "speech":
+			bubble.text = String(_speech_text.get(name, ""))
+			bubble.add_theme_stylebox_override("normal", _speech_style)
+		else:
+			bubble.text = activity
+			bubble.add_theme_stylebox_override("normal", _thought_style)
+
+	bubble.visible = true
+	bubble.modulate.a = (
+		clampf((until - fpos) / BUBBLE_FADE_STEPS, 0.0, 1.0) if mode == "speech" else 1.0
+	)
+
+
+func _refresh_links(fpos: float) -> void:
+	# Draw a line between each pair mid-conversation right now (this agent inside its
+	# speech window with a known, present partner). Lines are pooled by pair key and
+	# just hidden when idle, so a replay never churns Line2D nodes.
+	var active := {}
+	for name in _names:
+		var until: float = _bubble_until.get(name, -1.0)
+		if fpos > until:
+			continue
+		var partner := String(_convo_partner.get(name, ""))
+		if partner == "" or not _agents.has(partner):
+			continue
+		var key: String = (name + "\n" + partner) if name < partner else (partner + "\n" + name)
+		var rem_other: float = _bubble_until.get(partner, -1.0) - fpos
+		active[key] = [name, partner, minf(until - fpos, rem_other)]
+
+	for key in _link_lines:
+		(_link_lines[key] as Line2D).visible = active.has(key)
+
+	for key in active:
+		var entry: Array = active[key]
+		var line := _link_line(key)
+		line.visible = true
+		line.points = PackedVector2Array([
+			_agents[entry[0]]["node"].position,
+			_agents[entry[1]]["node"].position,
+		])
+		line.modulate.a = clampf(float(entry[2]) / BUBBLE_FADE_STEPS, 0.0, 1.0)
+
+
+func _link_line(key: String) -> Line2D:
+	# Lazily create (then reuse) the Line2D for a conversation pair.
+	if _link_lines.has(key):
+		return _link_lines[key]
+	var line := Line2D.new()
+	line.width = 6.0
+	line.default_color = Color(1.0, 0.78, 0.30, 0.9)  # warm, like a chat highlight
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	line.antialiased = true
+	_links_node.add_child(line)
+	_link_lines[key] = line
+	return line
