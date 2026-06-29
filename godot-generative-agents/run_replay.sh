@@ -36,4 +36,14 @@ if [[ "$SCENE" == *penn_replay* && ! -f "$PROJECT_DIR/maps/penn_replay.json" ]];
   exit 1
 fi
 
+# Compile any assets whose import cache is missing. Godot stores each asset as a
+# committed source file + .import sidecar, but the compiled result lives in the
+# git-ignored, per-machine .godot/ cache. A fresh checkout (or a pull that added
+# art) therefore has the sources but no cache, so textures fail to load and themed
+# UI renders broken. Opening the editor would import them; launching a scene
+# directly does not — so do it here. The import is incremental: slow only the first
+# time, a quick scan afterwards.
+echo "Importing assets (first run compiles them; later runs are a quick scan)…" >&2
+"$GODOT" --headless --path "$PROJECT_DIR" --import
+
 exec "$GODOT" --path "$PROJECT_DIR" "res://$SCENE"
