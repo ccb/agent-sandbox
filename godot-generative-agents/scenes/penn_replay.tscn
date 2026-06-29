@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/penn_replay.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/camera_controls.gd" id="4_cam"]
 [ext_resource type="Script" path="res://scripts/agent_panel.gd" id="5_panel"]
 [ext_resource type="Theme" path="res://theme/cute_fantasy_ui.tres" id="6_theme"]
+[ext_resource type="Script" path="res://scripts/building_labels.gd" id="7_buildings"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -15,6 +16,12 @@ player_sheet = ExtResource("3_player")
 [node name="Map" type="TileMapLayer" parent="."]
 script = ExtResource("2_tiled")
 map_path = "res://maps/upenn_core_urban.tmj"
+
+; Floating building name-plates over the campus, shown zoomed-out and faded as you
+; zoom in (building_labels.gd). Sits above the Map but before the agent sprites
+; penn_replay.gd adds at runtime, so agent name-plates always draw on top.
+[node name="BuildingLabels" type="Node2D" parent="."]
+script = ExtResource("7_buildings")
 
 ; The map is the 34th–36th x Spruce–Walnut block (3920x4464 px at 1 m/tile),
 ; cropped to the four street edges — a PORTRAIT map in a 1920x1080 landscape
