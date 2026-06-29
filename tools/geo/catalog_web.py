@@ -245,27 +245,61 @@ function freshState(){
   return {byKey, order, added:[]};
 }
 let state = freshState();
+let editing = {name:'', desc:'', tiles:new Set(), notes:{}};
 loadLocal();
 
+function byOrig(ok){
+  for(const k of state.order){ const o=state.byKey[k]; if(!o.added && o.origKey===ok) return o; }
+  return null;
+}
+function renameKey(oldKey,newKey){
+  if(oldKey===newKey) return;
+  const o=state.byKey[oldKey]; if(!o) return;
+  o.key=newKey;
+  delete state.byKey[oldKey]; state.byKey[newKey]=o;
+  const i=state.order.indexOf(oldKey); if(i>=0) state.order[i]=newKey;
+  const a=state.added.indexOf(oldKey); if(a>=0) state.added[a]=newKey;
+  if(editing.tiles.has(oldKey)){ editing.tiles.delete(oldKey); editing.tiles.add(newKey); }
+  if(oldKey in editing.notes){ editing.notes[newKey]=editing.notes[oldKey]; delete editing.notes[oldKey]; }
+}
 function loadLocal(){
   try{
     const s = JSON.parse(localStorage.getItem('tilecatalog')||'null');
     if(!s) return;
-    for(const [k,v] of Object.entries(s.verified||{})) if(state.byKey[k]) state.byKey[k].verified=v;
-    for(const e of (s.added||[])){ state.byKey[e.key]=Object.assign({added:true},e);
-      state.order.push(e.key); state.added.push(e.key); }
+    for(const [ok,v] of Object.entries(s.verified||{})){
+      const cur=byOrig(ok); if(cur) cur.verified=v;
+    }
+    for(const [ok,e] of Object.entries(s.edits||{})){
+      const cur=byOrig(ok); if(!cur) continue;
+      cur.label=e.label; cur.category=e.category;
+      cur.w=e.w; cur.h=e.h; cur.col=e.col; cur.row=e.row;
+      if(e.key && e.key!==cur.key) renameKey(cur.key, e.key);
+    }
+    for(const en of (s.added||[])){
+      state.byKey[en.key]=Object.assign({added:true},en);
+      state.order.push(en.key); state.added.push(en.key);
+    }
   }catch(_){}
 }
 function saveLocal(){
-  const verified={}; for(const k of state.order) if(!state.byKey[k].added) verified[k]=state.byKey[k].verified;
+  const verified={}, edits={};
+  for(const k of state.order){
+    const o=state.byKey[k]; if(o.added) continue;
+    verified[o.origKey]=o.verified;
+    const base=RAW.objects[o.origKey]||{};
+    if(o.key!==o.origKey || (o.label||'')!==(base.label||'') || o.category!==base.category
+       || o.w!==base.w || o.h!==base.h || o.col!==base.col || o.row!==base.row){
+      edits[o.origKey]={key:o.key,label:o.label||'',category:o.category,
+                        w:o.w,h:o.h,col:o.col,row:o.row};
+    }
+  }
   const added = state.added.map(k=>state.byKey[k]);
-  localStorage.setItem('tilecatalog', JSON.stringify({verified, added}));
+  localStorage.setItem('tilecatalog', JSON.stringify({verified, added, edits}));
 }
 
 // ---- preset state (named tile subsets the LLM should use) ----------------
 let PRESETS = JSON.parse(JSON.stringify(APP.presets||{}));
 let ACTIVE = APP.active||null;
-let editing = {name:'', desc:'', tiles:new Set(), notes:{}};
 (function loadLocalPresets(){
   try{ const s=JSON.parse(localStorage.getItem('tilepresets')||'null');
     if(s){ PRESETS=s.presets||PRESETS; if('active'in s) ACTIVE=s.active; } }catch(_){}
