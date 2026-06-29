@@ -1,0 +1,389 @@
+/* The agent-cards page. The card, the persona navigator, and the memory list are
+   a close port of the original generative-agents (Smallville) replay UI — same
+   light palette, per-kind memory colours, and "new memory" flash — laid out to
+   use the whole page: one cohesive panel (navigator header + two columns) rather
+   than a stack of separate boxes. */
+
+/* The panel takes most of the page width (the original was a cramped 380px
+   sidebar). It is the agents <section>'s one scroll container; nothing inside
+   scrolls on its own, so there's never a nested scrollbar to fight. Slightly
+   smaller base font than the page default keeps the dense card legible without
+   feeling oversized. */
+.agent-panel {
+  width: 80%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 22px 0 48px;
+  font-size: 13.5px;
+}
+
+/* ---------- The cohesive panel ---------------------------------------------- */
+/* One white card holding everything, so the navigator and the two columns read
+   as a single piece. No `overflow` here — the navigator below relies on this not
+   being a clipping/scroll ancestor so it can stick to the page scroll. */
+.agent-board {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Persona navigator (panel header) -------------------------------- */
+/* Prev/next arrows with a name indicator between them (Smallville's #agent-nav).
+   It's the panel's header bar and sticks to the top of the page while you scroll
+   a long memory history, so you can flip agents without scrolling back up. */
+.agent-nav {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  /* Centre the arrows + name as one compact cluster, rather than pinning the
+     arrows to the far edges of a wide header (which leaves them stranded). */
+  justify-content: center;
+  gap: 0.9em;
+  padding: 0.85em 1.25em;
+  background: #fff;
+  border-bottom: 1px solid #eef0f4;
+  border-radius: 14px 14px 0 0;
+}
+
+.agent-nav-btn {
+  flex: none;
+  width: 2.3em;
+  height: 2.3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 1.2em;
+  line-height: 1;
+  color: #2b2f3a;
+  background: #f6f7f9;
+  border: 1px solid #dcdfe4;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.agent-nav-btn:hover:not(:disabled) {
+  background: #eceef2;
+}
+
+.agent-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.agent-indicator {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  min-width: 9em;
+  font-size: 1.15em;
+  font-weight: 600;
+  color: #1f2330;
+  overflow-wrap: anywhere;
+}
+
+.agent-indicator-emoji {
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+/* A quiet "i / N" position counter beside the name. */
+.agent-indicator-count {
+  font-size: 0.72em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+  background: #f1f2f5;
+  border: 1px solid #e3e6ee;
+  border-radius: 999px;
+  padding: 0.15em 0.6em;
+}
+
+/* ---------- Two-column body ------------------------------------------------- */
+/* Left: the agent's details (the card). Right: its full memory history. A hairline
+   between them; on a narrow viewport they stack and the rule moves to the top. */
+.agent-board-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.agent-board-main {
+  padding: 1.5em 1.6em;
+}
+
+.agent-board-side {
+  padding: 1.5em 1.6em;
+  border-left: 1px solid #eef0f4;
+}
+
+@media (max-width: 820px) {
+  .agent-panel {
+    width: 92%;
+  }
+  .agent-board-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-board-side {
+    border-left: none;
+    border-top: 1px solid #eef0f4;
+  }
+}
+
+/* ---------- Agent card (left column) ---------------------------------------- */
+/* No box of its own — the board is the box; this is just the layout of the head
+   and fields. */
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  margin-bottom: 1.35em;
+  padding-bottom: 1.1em;
+  border-bottom: 1px solid #f1f2f5;
+}
+
+/* The on-map sprite, drawn pixel-perfect on a <canvas> by SpritePreview and scaled
+   up here. `pixelated` keeps the 32×32 art crisp; the soft tile sits it on a faint
+   plinth like Smallville's portrait. */
+.agent-portrait {
+  width: 4.25em;
+  height: 4.25em;
+  flex: none;
+  image-rendering: pixelated;
+  border-radius: 11px;
+  background: #f3f4f7;
+}
+
+.agent-name {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: 1.4em;
+  line-height: 1.2;
+  color: #1f2330;
+}
+
+.agent-name-emoji {
+  font-size: 0.8em;
+  line-height: 1;
+}
+
+.agent-field {
+  margin-bottom: 1em;
+}
+
+.agent-field:last-child {
+  margin-bottom: 0;
+}
+
+.agent-field-label {
+  display: block;
+  font-size: 0.74em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a90a0;
+  margin-bottom: 0.25em;
+}
+
+.agent-field-value {
+  display: block;
+  font-size: 0.97em;
+  line-height: 1.45;
+  color: #2b2f3a;
+  overflow-wrap: anywhere;
+}
+
+.agent-field-value .muted,
+.muted {
+  color: #9aa0b0;
+}
+
+.chat-line {
+  margin-bottom: 2px;
+}
+
+.chat-speaker {
+  font-weight: 600;
+  color: #5b6478;
+}
+
+/* ---------- Full memory history (right column) ------------------------------ */
+.agent-history-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.74em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a90a0;
+  margin-bottom: 0.25em;
+}
+
+.agent-history-count {
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+  background: #eef0f5;
+  border-radius: 999px;
+  padding: 0.05em 0.5em;
+}
+
+.mem-empty {
+  margin: 0.7em 0 0;
+  font-size: 0.95em;
+  color: #9aa0b0;
+}
+
+.mem-list {
+  list-style: none;
+  margin: 0.5em 0 0;
+  padding: 0;
+}
+
+/* The card's "Memories retrieved" shorthand is a small ranked set, so it sits
+   tight under its field label with no extra top margin. */
+.agent-field .mem-list {
+  margin-top: 0.35em;
+}
+
+/* Memories formed at the same in-game time cluster under one time header. */
+.mem-group-head {
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a90a0;
+  font-variant-numeric: tabular-nums;
+  padding: 0.2em 0.55em 0.15em;
+}
+
+.mem-group-head:not(:first-child) {
+  margin-top: 0.25em;
+  padding-top: 0.5em;
+  border-top: 1px solid #e3e6ee;
+}
+
+/* Each memory is a row: a meta line (kind pill + quiet importance) above the
+   text, with a faint per-kind left accent so kinds read at a glance. */
+.mem-item {
+  font-size: 0.9em;
+  line-height: 1.4;
+  color: #2b2f3a;
+  padding: 0.45em 0.65em 0.45em 0.55em;
+  border-left: 3px solid transparent;
+}
+
+.mem-item + .mem-item {
+  border-top: 1px solid #f2f3f7;
+}
+
+.mem-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.25em;
+}
+
+.mem-kind {
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 0.1em 0.45em;
+  color: #5b6478;
+  background: #eef0f5;
+}
+
+.mem-imp {
+  margin-left: auto;
+  font-size: 0.78em;
+  color: #9aa0b0;
+}
+
+.mem-text {
+  display: block;
+}
+
+/* Per-kind accents (left bar + pill), matching the Smallville palette. */
+.mem-observation {
+  border-left-color: #9cc0f5;
+}
+.mem-observation .mem-kind {
+  color: #1a56b8;
+  background: #e6f0fe;
+}
+
+.mem-plan {
+  border-left-color: #f0c071;
+}
+.mem-plan .mem-kind {
+  color: #b06a00;
+  background: #fdf0db;
+}
+
+.mem-reflection {
+  border-left-color: #c79cf0;
+}
+.mem-reflection .mem-kind {
+  color: #6b29b8;
+  background: #f1e6fd;
+}
+
+.mem-chat {
+  border-left-color: #8fd3bd;
+}
+.mem-chat .mem-kind {
+  color: #1a7a5a;
+  background: #e3f6ee;
+}
+
+/* When a new memory arrives as the replay plays, its row flashes for a few
+   seconds (amber two-pulse), so you can see what the agent just took in. */
+@keyframes mem-flash-in {
+  0% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+  8% {
+    background-color: rgba(255, 214, 102, 0.9);
+  }
+  32% {
+    background-color: rgba(255, 214, 102, 0.15);
+  }
+  56% {
+    background-color: rgba(255, 214, 102, 0.9);
+  }
+  80% {
+    background-color: rgba(255, 214, 102, 0.15);
+  }
+  100% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+}
+
+.mem-item.is-new {
+  animation: mem-flash-in 4s ease-in-out 1;
+}
+
+@keyframes mem-flash-soft {
+  0% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+  15% {
+    background-color: rgba(255, 214, 102, 0.8);
+  }
+  100% {
+    background-color: rgba(255, 214, 102, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mem-item.is-new {
+    animation: mem-flash-soft 2.5s ease-out 1;
+  }
+}
