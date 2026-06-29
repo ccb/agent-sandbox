@@ -31,13 +31,13 @@ personas:
   - 164
   - 57
   schedule:
+  - place: Houston Hall
+    activity: grabbing a morning coffee at the student union
+    emoji: ☕
+    steps: 100
   - place: Van Pelt Library
     activity: studying for an organic chemistry exam
     emoji: 📚
-    steps: 60
-  - place: Houston Hall
-    activity: grabbing lunch at the student union
-    emoji: 🍜
     steps: 40
   - place: College Hall
     activity: heading to an afternoon seminar
@@ -55,14 +55,17 @@ personas:
   - 40
   - 265
   schedule:
-  - place: Williams Hall
-    activity: giving a morning lecture
-    emoji: 🗣️
-    steps: 70
   - place: Houston Hall
-    activity: having lunch with a colleague
-    emoji: 🍽️
-    steps: 40
+    activity: meeting a student over coffee
+    emoji: ☕
+    # Ellis lingers at the student union all morning, so he is still there when
+    # Maya arrives -- they share Houston Hall and (with a real brain) their
+    # perception radii touch, so a conversation can happen.
+    steps: 200
+  - place: Williams Hall
+    activity: giving a midday lecture
+    emoji: 🗣️
+    steps: 25
   - place: Van Pelt Library
     activity: pulling sources for a paper
     emoji: 📜
