@@ -247,9 +247,10 @@ func _spawn_agent(name: String, index: int) -> void:
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 10)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Park the two-line nameplate just above the sprite's head (the ~90px covers
-	# the two text lines), so it tracks the sprite size instead of overlapping it.
-	label.position = Vector2(-110, -(SPRITE_HALF_PX + 90.0))
+	# Park the single-line nameplate just above the sprite's head (the ~50px covers
+	# the one text line), so it tracks the sprite size instead of overlapping it.
+	# The current activity lives in the sidebar, so the label only shows the name.
+	label.position = Vector2(-110, -(SPRITE_HALF_PX + 50.0))
 	label.custom_minimum_size = Vector2(220, 0)
 	node.add_child(label)
 
@@ -327,10 +328,6 @@ func _process(delta: float) -> void:
 			agent["sprite"].flip_h = int(b["x"]) < int(a["x"])
 		var frame_in_row: int = (int(_anim_t * ANIM_FPS) % WALK_LEN) if moving else 0
 		agent["sprite"].frame = WALK_ROW * SHEET_HFRAMES + frame_in_row
-
-		# "<activity> @ UPenn:Building:grounds" -> just the activity for the label.
-		var act := String(a["act"]).split(" @ ")[0]
-		agent["label"].text = "%s\n%s %s" % [name, a["e"], act]
 
 	# Mirror each agent's current activity into the sidebar, only when the frame index
 	# changes (per-frame work is wasted — the text is identical within a step).
