@@ -815,16 +815,20 @@ def route_with_retry(
 # ----------------------------------------------------------------------
 
 
-def _resolve_duration(agent: Agent, game) -> int | None:
+def _resolve_duration(agent: Agent, game, character) -> int | None:
     """Minutes the agent's last successful action should cost the turn budget.
 
     Precedence (issue #24): the agent's own estimate if it gave one, else the
     executed action's declared ``DURATION``, else ``None`` (no declared cost ->
     the turn loop treats it as a full budget, i.e. one action this turn).
+
+    Reads the duration off *this character's* last action, not a single global
+    parser field -- so it stays correct when several characters act in a round
+    (a switch to per-agent turns can't make it read someone else's move).
     """
     if agent.last_duration is not None:
         return agent.last_duration
-    last_action = getattr(game.parser, "last_action", None)
+    last_action = getattr(character, "last_action", None)
     if last_action is not None:
         return last_action.get_duration()
     return None
@@ -888,7 +892,7 @@ def make_react_behavior(
         agent.action_names = list(game.parser.actions)
         if not react_behavior(character, game, agent, max_retries=retries):
             return None
-        return _resolve_duration(agent, game)
+        return _resolve_duration(agent, game, character)
 
     return behavior
 
@@ -943,7 +947,7 @@ def make_hybrid_behavior(
         agent.goals = character.goals
         agent.action_names = list(game.parser.actions)
         if react_behavior(character, game, agent, max_retries=retries):
-            return _resolve_duration(agent, game)
+            return _resolve_duration(agent, game, character)
         # LLM produced nothing usable: fall back to the scripted behavior, whose
         # return value (None for legacy behaviors) decides whether the turn loop
         # continues — legacy scripted behaviors stay at one action per turn.
