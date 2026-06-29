@@ -1,21 +1,26 @@
 extends PanelContainer
-## A left sidebar listing the replay's characters, each with a "Track" button.
+## A left sidebar with the sim clock, zoom controls, and a character list (each
+## row has a "Track" button).
 ##
 ## This panel is pure UI — it knows nothing about the camera or the agent nodes. The
-## replay viewer (penn_replay.gd) fills it via add_character() and listens for the
-## signals below to drive the camera; it also calls clear_active() when the camera
-## stops following on its own (e.g. the user panned the map), so the highlight stays
-## in sync. Rows are built in code (matching penn_replay's build-nodes-in-code style)
-## so the scene file only needs the empty PanelContainer.
+## replay viewer (penn_replay.gd) fills it via add_character(), drives the clock via
+## set_clock_text(), and listens for the signals below to drive the camera; it also
+## calls clear_active() when the camera stops following on its own (e.g. the user
+## panned the map), so the highlight stays in sync. Rows are built in code (matching
+## penn_replay's build-nodes-in-code style) so the scene file only needs the empty
+## PanelContainer.
 
 # A row's Track button was pressed and that character is not already being tracked.
 signal track_requested(name: String)
 # The currently-tracked character's button was pressed again (toggle off).
 signal stop_requested
+signal zoom_in_requested
+signal zoom_out_requested
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
 
+var _clock: Label
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row: HBoxContainer, button: Button}
 var _active := ""                   # name of the tracked character, or "" when free
@@ -33,6 +38,40 @@ func _ready() -> void:
 	col.add_theme_constant_override("separation", 8)
 	margin.add_child(col)
 
+	var clock_row := HBoxContainer.new()
+	clock_row.add_theme_constant_override("separation", 6)
+	col.add_child(clock_row)
+
+	var clock_icon := Label.new()
+	clock_icon.text = "🕗"
+	clock_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	clock_row.add_child(clock_icon)
+
+	_clock = Label.new()
+	_clock.text = "—"
+	_clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_clock.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_clock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	clock_row.add_child(_clock)
+
+	var zoom_row := HBoxContainer.new()
+	zoom_row.add_theme_constant_override("separation", 6)
+	col.add_child(zoom_row)
+
+	var zoom_out := Button.new()
+	zoom_out.text = "−"
+	zoom_out.tooltip_text = "Zoom out"
+	zoom_out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_out.pressed.connect(func() -> void: zoom_out_requested.emit())
+	zoom_row.add_child(zoom_out)
+
+	var zoom_in := Button.new()
+	zoom_in.text = "+"
+	zoom_in.tooltip_text = "Zoom in"
+	zoom_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_in.pressed.connect(func() -> void: zoom_in_requested.emit())
+	zoom_row.add_child(zoom_in)
+
 	var title := Label.new()
 	title.text = "CHARACTERS"
 	title.add_theme_font_size_override("font_size", 18)
@@ -48,6 +87,10 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
+
+
+func set_clock_text(text: String) -> void:
+	_clock.text = text
 
 
 func add_character(name: String, thumb: Texture2D, tint: Color) -> void:

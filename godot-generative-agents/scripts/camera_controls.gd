@@ -145,6 +145,14 @@ func stop_following() -> void:
 	follow_stopped.emit()
 
 
+func zoom_in() -> void:
+	_zoom_keep_centre(zoom_step)
+
+
+func zoom_out() -> void:
+	_zoom_keep_centre(1.0 / zoom_step)
+
+
 func _zoom_at_mouse(factor: float) -> void:
 	# Zoom while keeping the world point under the cursor pinned in place.
 	var world_before := get_global_mouse_position()
