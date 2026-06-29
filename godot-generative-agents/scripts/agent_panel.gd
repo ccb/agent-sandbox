@@ -45,7 +45,7 @@ var _active := ""                   # name of the tracked character, or "" when 
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(220, 0)
+	custom_minimum_size = Vector2(300, 0)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "top", "right", "bottom"]:
@@ -142,7 +142,7 @@ func _ready() -> void:
 	title.theme_type_variation = "TitleRibbon"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 30)
 	col.add_child(title)
 
 	# Scroll the list if the cast outgrows the window height.
@@ -186,7 +186,7 @@ func add_character(name: String, thumb: Texture2D, tint: Color) -> void:
 
 	var status := Label.new()
 	status.text = ""
-	status.add_theme_font_size_override("font_size", 12)
+	status.add_theme_font_size_override("font_size", 16)
 	status.add_theme_color_override("font_color", STATUS_COLOR)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_col.add_child(status)
