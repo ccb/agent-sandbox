@@ -24,6 +24,7 @@ import os
 
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `gen_agents` package now, so a plain import works -- no sys.path juggling.
+from gen_agents import path_finder
 from gen_agents.build_world import build_world, load_world_data
 from gen_agents.run_simulation import simulate
 from gen_agents.world_map import WorldMap
@@ -39,6 +40,62 @@ OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 DEFAULT_STEPS = 400
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
+
+
+def _pin_building_meeting_points(world_map, offset=5.0):
+    """Route agents heading into a building toward its *centre* (on the side they
+    approach from), instead of the nearest tile of its huge lobby address.
+
+    A building's interior is one big address (Houston Hall's "lobby" is ~2000 tiles
+    spanning the whole footprint) and ``walk_path`` aims for the *nearest* such tile
+    -- so two residents arriving from opposite sides settle at opposite edges, tens
+    of tiles apart, even though the sim counts them co-located. A perception-gated
+    conversation between them then renders as a long line across the building.
+
+    Here we wrap ``walk_path`` so each agent walks to a tile a few (`offset`) tiles
+    off the building's centre toward where it came from: residents converge near the
+    middle -- close enough to read as together (a short conversation link) -- while
+    still arriving from their own sides rather than stacking on one tile. The
+    interior addressing is untouched (these are ordinary lobby tiles); if the target
+    isn't reachable we fall back to the original nearest-tile routing, so no agent
+    is ever stranded.
+    """
+    orig_walk_path = world_map.walk_path
+    centres: dict = {}
+
+    def centre_of(address):
+        if address not in centres:
+            tiles = [
+                t for t in world_map.tiles_for(address) if not world_map.is_blocked(t)
+            ]
+            if tiles:
+                cx = sum(t[0] for t in tiles) / len(tiles)
+                cy = sum(t[1] for t in tiles) / len(tiles)
+                centres[address] = (cx, cy, tiles)
+            else:
+                centres[address] = None
+        return centres[address]
+
+    def walk_path(from_tile, address):
+        info = centre_of(address)
+        if info:
+            cx, cy, tiles = info
+            dx, dy = from_tile[0] - cx, from_tile[1] - cy
+            dist = (dx * dx + dy * dy) ** 0.5 or 1.0
+            # A point `offset` tiles from the centre toward the agent's approach...
+            tx, ty = cx + dx / dist * offset, cy + dy / dist * offset
+            # ...then the nearest actual lobby tile to it.
+            target = min(tiles, key=lambda t: (t[0] - tx) ** 2 + (t[1] - ty) ** 2)
+            if tuple(from_tile) != target:
+                path = path_finder.path_finder(
+                    world_map.collision, tuple(from_tile), target, 1
+                )
+                if path and len(path) > 1:
+                    return [tuple(t) for t in path[1:]]
+        return orig_walk_path(from_tile, address)  # target unreachable -> nearest tile
+
+    world_map.walk_path = walk_path
+    return world_map
 
 
 def _gate_conversations_by_perception(built):
@@ -77,7 +134,7 @@ def main() -> int:
     args = ap.parse_args()
 
     personas, locations = load_world_data(WORLD_DATA)
-    world_map = WorldMap(UPENN_DIR)
+    world_map = _pin_building_meeting_points(WorldMap(UPENN_DIR))
     print(
         f"Loaded the_upenn ({world_map.width}x{world_map.height}); "
         f"{len(personas)} personas. Simulating {args.steps} steps..."
