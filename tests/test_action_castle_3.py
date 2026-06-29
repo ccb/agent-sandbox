@@ -846,7 +846,10 @@ def test_javelin_summons_the_demon():
 def test_dawdling_in_front_of_the_demon_is_fatal():
     game, cap = _game()
     _summon_demon(game)
-    game.do_command("south")  # trying to flee (or do anything) -> devoured
+    # The demon is on a clock: you may look once, but dawdle past the window
+    # instead of throwing the javelin and it devours you.
+    game.do_command("look")
+    game.do_command("south")  # still dithering -> devoured
     assert game.is_game_over() and not game.is_won()
     assert _said(cap, "nothing left to bury")
 
