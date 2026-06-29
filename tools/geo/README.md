@@ -221,6 +221,51 @@ the default). This is the save/load seam between human curation and the LLM:
   `tile_presets.objects(name)` returns the catalog filtered to the preset, so
   `block_named()`/`tile_named()` can be restricted to it.
 
+## Doors & enterable interiors (`add_entrances.py`)
+
+`add_entrances.py` makes campus buildings **enterable** — agents can walk inside,
+but only through a door. Out of the box every footprint is a solid wall and agents
+stop at the edge; this post-process hollows each in-frame building so the inside is
+walkable floor and the 1-tile perimeter stays a wall, then opens a door wherever a
+footway leads in. Because the backend pathfinder is a BFS over the collision grid,
+a wall ring whose only gaps are doors means "enter/exit through a door" is enforced
+by the map itself — **no movement-code changes**. Doors are found by marking every
+perimeter cell that a `paths` tile sits *directly against* (`PATH_REACH` = 1, so a
+walk merely passing a couple of tiles away doesn't punch a door onto blank ground)
+and grouping those into contiguous runs: each run is one door, as wide as and
+aligned with its walk (capped at `MAX_DOOR_WIDTH`). A building reached by several
+walks therefore gets **several doors** (College Hall has many); one reached by none
+falls back to a single door at the nearest path.
+
+It edits both halves of the world in step:
+
+- **Matrix** (`the_upenn/matrix`): carves `collision_maze` (interior → walkable,
+  perimeter → wall, door → open) and tags the interior as a new arena, so the
+  address `UPenn:<building>:lobby` resolves and a `world_data` location can send an
+  agent inside (`:grounds` still means the outside edge). It also names the few
+  footprints OSM left unnamed (by street address) and drops the stale "phantom"
+  sector rows whose footprints fell outside the cropped frame.
+- **Picture** (`upenn_core_urban.tmj`): opens the roof and paints a plain cutaway
+  (floor + wall, with each door left as an open gap in the wall ring) using the same
+  interior tiles as `furnish_building.py`. Williams Hall already has a *furnished*
+  cutaway, so its picture is left alone and only its collision is carved (door lined
+  up with its art).
+
+Run it after the bake + Williams furnish (it's idempotent — recomputes every
+footprint from an invariant mask, so re-runs are byte-stable):
+
+```bash
+uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
+uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/sim/the_upenn
+uv run python tools/geo/furnish_building.py                          # Williams interior
+uv run python tools/geo/add_entrances.py                             # doors + interiors
+uv run python godot-generative-agents/sim/generate_building_labels.py
+LLM_PROVIDER=mock uv run python godot-generative-agents/sim/generate_penn_replay.py
+```
+
+`--dry-run` reports each building's footprint/interior size and chosen door cell
+without writing.
+
 ## Outlining a building's exterior (`wall_building.py`)
 
 `wall_building.py` is the exterior counterpart to `furnish_building.py`: another
