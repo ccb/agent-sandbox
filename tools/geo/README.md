@@ -259,12 +259,37 @@ uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the m
 uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/sim/the_upenn
 uv run python tools/geo/furnish_building.py                          # Williams interior
 uv run python tools/geo/add_entrances.py                             # doors + interiors
+uv run python tools/geo/block_grass.py                               # lawns become un-walkable
 uv run python godot-generative-agents/sim/generate_building_labels.py
 LLM_PROVIDER=mock uv run python godot-generative-agents/sim/generate_penn_replay.py
 ```
 
 `--dry-run` reports each building's footprint/interior size and chosen door cell
 without writing.
+
+## Keeping agents off the lawns (`block_grass.py`)
+
+`block_grass.py` walls off the grass so the pathfinder routes agents onto the
+sidewalks instead of cutting straight across the lawns. The backend pathfinder is
+a BFS over `collision_maze.csv` (a tile is walkable iff its cell is `"0"`), and
+the bake only made building footprints + water walls — lawns stayed walkable. This
+post-process flips every **visible** grass tile to a wall, so it's enforced by the
+map itself with **no movement-code changes** (same trick `add_entrances.py` uses).
+
+"Visible" grass is a `landuse` cell on the `.tmj` with no walkable surface painted
+on top: a lawn tile that has a `paths`, `roads`, `entrance_floor`, or
+`williams_floor` tile over it reads as pavement and stays walkable, and tiles that
+are already walls (buildings, water) are left untouched. The grid lines up
+tile-for-tile with the `.tmj`, so its layers index the same cells as the matrix.
+
+```bash
+uv run python tools/geo/block_grass.py --dry-run   # report, change nothing
+uv run python tools/geo/block_grass.py             # wall the lawns
+```
+
+Idempotent: grass is detected from the (unchanged) `landuse` layer, not from the
+collision it writes, so re-running is a no-op. Run it after `add_entrances.py` so
+the carved interiors/doors are already in the collision it extends.
 
 ## Outlining a building's exterior (`wall_building.py`)
 
