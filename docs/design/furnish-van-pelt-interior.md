@@ -114,8 +114,12 @@ opts in; Williams and every other building do not, so they are unchanged):
 - Because this runs *inside* the authoritative rebuild, re-running `add_entrances.py`
   reproduces the subdivision identically (idempotent) instead of clobbering it.
 
-Also exclude Van Pelt from the plain-cutaway `picture_jobs` (as Williams already is) —
-its picture is the transplanted detail, not a generated cutaway.
+Van Pelt **stays** in the plain-cutaway `picture_jobs` (unlike Williams): `add_entrances`
+strips and repaints `entrance_floor` each run, so its plain cutaway (floor + perimeter +
+door) must keep being painted as Van Pelt's base. The transplanted detail layers
+(§2) render *above* it — the detail covers the plain interior floor, while the
+perimeter and door read from `entrance_floor` at the edges (the detail layers paint
+almost no perimeter, only 9 cells).
 
 **Entrance reconciliation (resolved during implementation):**
 `add_entrances.py` carved Van Pelt's one door on the far-east wall (col 155, rows
