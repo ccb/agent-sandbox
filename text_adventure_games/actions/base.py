@@ -1,10 +1,11 @@
 from __future__ import annotations
 from ..things import Thing, Character, Item, Location
+from ..reactions import GatedEffect
 from ..enums import ActionName
 import re
 
 
-class Action:
+class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a
     specific set of Actions that can do.  The Action class that checks
@@ -18,6 +19,12 @@ class Action:
     Every action must implement two functions:
       * check_preconditions()
       * apply_effects()
+
+    An Action is a command-triggered :class:`~text_adventure_games.reactions.GatedEffect`:
+    the parser builds it from a command, then calls it, which runs the
+    gate->effect contract inherited from ``GatedEffect``. A
+    :class:`~text_adventure_games.reactions.Reaction` is the same contract pulled
+    by the world rather than by a command.
     """
 
     ACTION_NAME: str | None = None
@@ -133,11 +140,7 @@ class Action:
         """
         return self.parser.ok("no effect")
 
-    def __call__(self):
-        self._preconditions_passed = False
-        if self.check_preconditions():
-            self._preconditions_passed = True
-            return self.apply_effects()
+    # __call__ (the gate->effect runner) is inherited from GatedEffect.
 
     def claimed_resource(self):
         """The single world resource this action reaches for — the thing two
