@@ -389,13 +389,15 @@ function card(o){
   return c;
 }
 
+let _editKey=null;
 function openEdit(key){
+  _editKey=key;
   const o=state.byKey[key]; if(!o) return;
   const cats=['furniture','floor','wall','window','door','prop','tree'];
   const f=document.getElementById('editform'); f.className='addform show';
   const esc=s=>(s||'').replace(/"/g,'&quot;');
   f.innerHTML=`
-    <div style="font-weight:700;color:var(--add)">Edit ${o.sheet} &mdash; ${esc(o.key)}</div>
+    <div style="font-weight:700;color:var(--add)">Edit ${esc(o.sheet)} &mdash; ${esc(o.key)}</div>
     <label>name<input id="e_name" value="${esc(o.key)}"></label>
     <label>label<input id="e_label" style="width:160px" value="${esc(o.label)}"></label>
     <label>category<select id="e_cat">
@@ -404,12 +406,13 @@ function openEdit(key){
     <label>row<input id="e_row" type="number" value="${o.row}" min="0"></label>
     <label>w<input id="e_w" type="number" value="${o.w}" min="1"></label>
     <label>h<input id="e_h" type="number" value="${o.h}" min="1"></label>
-    <button class="primary" onclick="saveEdit('${o.key}')">Save</button>
+    <button class="primary" onclick="saveEdit()">Save</button>
     <button onclick="closeEdit()">Cancel</button>`;
   f.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function closeEdit(){ document.getElementById('editform').className='addform'; }
-function saveEdit(oldKey){
+function saveEdit(){
+  const oldKey=_editKey;
   const o=state.byKey[oldKey]; if(!o){ closeEdit(); return; }
   const name=document.getElementById('e_name').value.trim();
   if(!name){ toast('name required'); return; }
