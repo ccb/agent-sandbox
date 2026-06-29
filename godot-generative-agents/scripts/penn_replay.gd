@@ -299,12 +299,15 @@ func _process(delta: float) -> void:
 		return
 	# Advance only while playing; the render below always runs from _t, so a seek (or
 	# the day-night tint) still updates the view while paused.
+	var last := _frames.size() - 1
 	if not _paused:
 		_t += delta * _speed
 		_anim_t += delta * _speed
+		# Hold the playhead at the final step: the replay has no more frames, so the
+		# clock must stop here rather than tick on past the end of the simulation.
+		_t = min(_t, float(last) * step_seconds)
 	_update_clock()
 
-	var last := _frames.size() - 1
 	var fpos := _t / step_seconds
 	var i := int(fpos)
 	var looped := false
