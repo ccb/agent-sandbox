@@ -409,13 +409,13 @@ def load_room_plan():
         return [], set()
     with open(path) as fh:
         a = json.load(fh)
-    W = a["width"]
+    json_w = a["width"]
     rooms = a["rooms"]
-    wall_cells = {(i % W, i // W) for i in a["wall_cells"]}
+    wall_cells = {(i % json_w, i // json_w) for i in a["wall_cells"]}
     return rooms, wall_cells
 
 
-def _punch_doorway(room_cells, walk, collision, W):
+def _punch_doorway(room_cells, walk, collision, W, H):
     """Carve one cell gap between sealed room_cells and the adjacent walk.
 
     Called when a room's walkable cells are not connected to the rest of the
@@ -425,6 +425,8 @@ def _punch_doorway(room_cells, walk, collision, W):
         for dx, dy in NEIGHBOURS:
             wall = (x + dx, y + dy)
             wx, wy = wall
+            if not (0 <= wx < W and 0 <= wy < H):
+                continue
             if collision[wy * W + wx] != "1":
                 continue
             # Is there a walk cell on the other side of this wall?
@@ -437,7 +439,7 @@ def _punch_doorway(room_cells, walk, collision, W):
 
 
 def subdivide_rooms(sid, name, interior, door_cells, collision, arena_m,
-                    room_rows, W, room_plan):
+                    room_rows, W, H, room_plan):
     """Turn one building's lobby interior into per-room arenas + partition walls.
     Stamps over the already-written lobby base, so cells in no room stay lobby."""
     rooms, wall_cells = room_plan
@@ -462,7 +464,7 @@ def subdivide_rooms(sid, name, interior, door_cells, collision, arena_m,
                 if reachable:
                     break
             if not reachable and other_walk:
-                _punch_doorway(room_walk, walk, collision, W)
+                _punch_doorway(room_walk, walk, collision, W, H)
         for y in range(r0, r1 + 1):
             for x in range(c0, c1 + 1):
                 if (x, y) in walk:
@@ -627,7 +629,7 @@ def main():
 
         if name in ROOM_SUBDIVIDE:
             subdivide_rooms(sid, name, interior, door_cells, collision, arena_m,
-                            arena_room_rows, W, room_plan)
+                            arena_room_rows, W, H, room_plan)
 
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
             picture_jobs.append((name, foot, perimeter, door_cells))
