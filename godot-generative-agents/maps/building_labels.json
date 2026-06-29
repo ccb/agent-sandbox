@@ -1,0 +1,50 @@
+{
+ "tile_px": 16,
+ "buildings": [
+  {
+   "name": "Claudia Cohen Hall",
+   "x": 40.26,
+   "y": 200.5
+  },
+  {
+   "name": "College Hall",
+   "x": 122.01,
+   "y": 175.36
+  },
+  {
+   "name": "Houston Hall",
+   "x": 119.82,
+   "y": 236.37
+  },
+  {
+   "name": "Irvine Auditorium",
+   "x": 196.22,
+   "y": 230.15
+  },
+  {
+   "name": "Jaffe Building",
+   "x": 170.48,
+   "y": 27.41
+  },
+  {
+   "name": "Meyerson Hall",
+   "x": 202.13,
+   "y": 78.06
+  },
+  {
+   "name": "Sweeten Alumni Building",
+   "x": 37.0,
+   "y": 110.0
+  },
+  {
+   "name": "Van Pelt Library",
+   "x": 89.05,
+   "y": 42.67
+  },
+  {
+   "name": "Williams Hall",
+   "x": 40.38,
+   "y": 243.94
+  }
+ ]
+}
