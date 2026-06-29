@@ -1,4 +1,4 @@
-# Furnish Van Pelt Library via the door-gated interior system
+# Transplant the hand-designed Van Pelt Library interior onto godot-ga-main
 
 **Date:** 2026-06-29
 **Branch:** `feat/furnish-van-pelt` (off `godot-ga-main`); PR targets `godot-ga-main`.
@@ -6,156 +6,148 @@
 
 ## Goal
 
-Give Van Pelt Library a furnished, navigable library interior on `godot-ga-main`,
-using the campus's *current* door-gated interior system — the same machinery that
-furnished Williams Hall. Van Pelt's rooms become individually addressable arenas
-(e.g. `UPenn:Van Pelt Library:Moelis Family Grand Reading Room`).
+Bring the **meticulously hand-designed** Van Pelt Library interior — 25 named rooms
+with their walls and furniture, built on the abandoned branch `feat/map-asset-creation`
+(tip `f5219ce`) — onto the current `godot-ga-main`, wired into its door-gated interior
+system so every room is an individually addressable, navigable arena
+(`UPenn:Van Pelt Library:<room>`).
 
-This re-implements, on the current architecture, what an abandoned branch
-(`feat/map-asset-creation`, tip `f5219ce`) did with a now-defunct pipeline. We carry
-over only that branch's *content* (the library theme and room names), not its code.
+We **preserve** the design (transplant the actual painted tiles + room rectangles); we
+do **not** regenerate it procedurally. The old branch's *generator code*
+(`westwing.py`/`eastwing.py`/`furnish_library.py`/`wall_contour.py`/`build_arenas.py`)
+is **not** ported — only its output is kept, as a frozen asset.
 
-## Background / why this shape
+## Why transplant (not regenerate)
 
-`godot-ga-main` reworked building interiors into a unified door-gated system and
-diverged hard from the old branch:
+The decisive measurement: the old branch's designed interior and godot-ga-main's carved
+Van Pelt interior occupy essentially the **same cells**.
 
-- `add_entrances.py` (PR #240) hollows each OSM building footprint into a walkable
-  interior, keeps a 1-tile perimeter wall, opens exactly one door gap (BFS over the
-  collision grid enforces "enter through the door"), and tags the interior as one
-  arena, id `INTERIOR_ARENA_BASE (1000) + sector_id`.
-- `furnish_building.py` paints a furnished cutaway into the **picture** (the `.tmj`)
-  only; it *reads* the sim matrix to find a footprint but never writes it. It
-  currently hardcodes Williams Hall's room plan and knows the room kinds
-  `classroom` / `office` / `restroom` plus a central `atrium`.
-- The old branch's `buildings`-layer brick perimeter and its
-  `westwing/eastwing/furnish_library/wall_contour/build_arenas` pipeline assume a map
-  structure that no longer exists (the `buildings` layer on `godot-ga-main` is empty;
-  footprints live in `entrance_floor`). That code is **dropped**, not ported.
+- godot-ga-main carved interior (arena `1030`): 4,659 cells.
+- old-branch designed floors: 4,638 cells; **overlap with carved: 4,628** (99.8%).
+- only 10 designed cells fall outside the carved footprint (a sliver at the throat
+  seam, cols 66–67); only 31 carved cells are uncovered (bare floor).
 
-Van Pelt already exists on `godot-ga-main`: sector 30, carved enterable by
-`add_entrances.py` with one lobby arena `1030`, footprint at cols 17–157 / rows 17–68.
-Its carved interior (arena `1030`, 4,659 floor cells) is an H-shaped hall: a west
-block (cols 19–67, rows 19–56) and an east block (cols 89–155, rows 27–66), joined by
-an open central band (rows 34–49) through a throat at cols 68–88. The single entrance
-door is a 3-wide gap on the **east** wall (col 155, rows 56–58).
+So the design drops onto godot-ga-main's footprint almost exactly. Regenerating
+procedurally (the earlier plan) would discard the hand-tuned walls and furniture for no
+benefit. Transplanting keeps them and is *simpler* engine-side.
+
+## Background (current architecture)
+
+- `add_entrances.py` (PR #240) carved every OSM footprint into a walkable interior with
+  a 1-tile perimeter wall and exactly one BFS-enforced door, tagging the interior as one
+  arena (`INTERIOR_ARENA_BASE 1000 + sector_id`; Van Pelt sector 30 → lobby `1030`).
+- `furnish_building.py` paints a *procedural* cutaway into the picture for Williams Hall.
+  **It is not used for Van Pelt and is left unchanged.**
+- `entrance_floor` (a `.tmj` tile layer) holds godot-ga-main's plain Van Pelt cutaway:
+  it covers 100% of the carved interior (4,659 cells) plus the perimeter wall + door.
+- Tilesets are **identical** between the old branch and godot-ga-main (same `firstgid`s),
+  so the old branch's tile GIDs are valid as-is on the current map.
+
+The old branch's interior lives in six tile layers — `westwing_floors`,
+`eastwing_floors`, `westwing_walls`, `eastwing_walls`, `westwing_furniture`,
+`eastwing_furniture` (floors 4,638 / walls 501 / furniture 1,537 cells) — and a named
+`arenas` object layer with the 25 room rectangles. The old `buildings`-layer brick
+perimeter (417 cells) is **superseded** by godot-ga-main's `entrance_floor` cutaway and
+is dropped. Of the 501 wall cells, only 9 touch the perimeter; the rest are interior
+partitions — the room dividers, with 1-tile gaps as doorways.
 
 ## Architecture
 
-A single **per-building room plan** is the source of truth, consumed by both tools so
-the painted walls (picture) and the collision walls + arenas (matrix) are always the
-same rectangles.
+A frozen interior asset + one new applier tool. Existing furnishing tools are untouched.
 
-### 1. Shared room plan
+### 1. Interior asset — `tools/geo/van_pelt_interior.json`
 
-A per-sector plan record: a list of rooms, each `{name, kind, rect (x0,y0,x1,y1
-inclusive), door (side, width)}`, plus optional atrium dressing (reception, seating,
-plants) and a `subdivide` flag (default `False`) that opts the building's matrix into
-per-room arena subdivision (see §3). Lives in one place and is keyed by sector name.
-Williams' existing plan is migrated into this structure unchanged (`subdivide` omitted
-→ `False`); Van Pelt's is added with `subdivide: True`.
+The user's design, extracted **once** from `f5219ce`:
 
-Each room's `door (side, width)` names the wall (`top`/`bottom`/`left`/`right`) carved
-open onto its neighbour in the circulation chain below — e.g. Study Booths' door is on
-its `top` wall into Weigle Commons. The picture painter and the matrix subdivider read
-the same `door` field, so the visual gap and the collision gap coincide.
+- the six interior tile layers as cell→GID data (sparse, keyed by cell index);
+- the 25 named room rectangles from the `arenas` object layer (`name` + tile-rect).
 
-Decision: keep the plan in `furnish_building.py` as `PLANS = {sector_name: plan}`, and
-have `add_entrances.py` import it. `furnish_building.py` is the natural home (it already
-holds Williams' `ROOMS`); `add_entrances.py` already imports `furnish_building` helpers,
-so the dependency direction is unchanged.
+Committed to the repo so the transplant is reproducible and reviewable without the
+abandoned branch.
 
-### 2. `furnish_building.py` — picture (generalized)
+### 2. Applier — `tools/geo/furnish_van_pelt.py`
 
-- Replace the module-level Williams constants (`ROOMS`, `SEATING_CLUSTERS`,
-  `RECEPTION`, `ATRIUM_PLANTS`, `SOUTH_DOOR_X`) with a `PLANS[sector]` lookup selected
-  by the existing `--sector` flag.
-- **Williams output must stay byte-identical** after the refactor (regression guard).
-- Add three library room kinds to `furnish_room`:
-  - `reading_room` — long reading tables down the centre + bookshelves along the top
-    wall; rugs/plants as space allows.
-  - `stacks` — parallel rows of bookshelves with aisles.
-  - `study` — individual study desks/booths in a grid.
-  Reuse existing furniture constants (`BOOKSHELF`, `DESK`, `TEACHER_DESK`, `RUG`,
-  `SOFA`, `SIDE_TABLE`, `PLANT`, …); pull any missing library tile from the existing
-  `furniture_catalog.json` (extend the catalog, don't hand-build GIDs).
-- The all-or-nothing `stamp()` guarantee already enforces the **cardinal rule** (no
-  multi-tile sprite is ever placed partially). Verify 0 partial sprites after a run.
+Applies the asset to the current map + matrix, **idempotently** (strips its own
+additions and restores the lobby baseline before re-applying; calls `backup_tmj` first).
 
-### 3. `add_entrances.py` — matrix (per-room subdivision, opt-in)
+**Picture (`upenn_core_urban.tmj`):**
+- Insert the six interior layers in canonical interior z-order (floors < walls <
+  furniture), above `entrance_floor`.
+- Clear `entrance_floor`'s plain interior floor where the detailed floors replace it;
+  keep its perimeter wall + door tiles.
+- Clip the 10 throat-seam cells (cols 66–67) that fall outside the carved footprint.
+- **Cardinal rule:** never place part of a multi-tile sprite — verify 0 partial sprites
+  after applying.
 
-- After carving a building's lobby as today, if the building's plan sets
-  `subdivide: True` (Van Pelt does; Williams does **not**), subdivide its interior:
-  - paint interior collision walls (`collision==1`) on each room's borders, matching
-    the picture's room rects;
-  - open one door gap per room (collision `0`) onto the adjacent circulation space,
-    sized to the plan's door width;
-  - assign each room a new arena id and stamp its cells in `arena_maze.csv`;
-  - add `arena_blocks.csv` rows `<id>, UPenn, Van Pelt Library, <room name>`.
-- **Arena id scheme:** room arenas use `ROOM_ARENA_BASE (2000) + sector_id*10 +
-  room_index`. Van Pelt (sector 30) → `2300`–`2304`. This avoids the densely packed
-  lobby range `1000`–`1036` and allows up to 10 rooms per building.
-- Buildings without a room plan, or whose plan does not opt in, keep today's single
-  lobby arena — so Williams and every other building are **unchanged**.
-- Idempotency is preserved: the room subdivision recomputes from the original footprint
-  + plan each run, exactly as the lobby carve already does.
+**Matrix (`the_upenn/matrix`):**
+- Replace Van Pelt's single lobby arena (`1030`) with the 25 room arenas: stamp each
+  room's cells in `arena_maze.csv`; add `arena_blocks.csv` rows
+  `<id>, UPenn, Van Pelt Library, <name>`.
+- **Arena id scheme:** `ROOM_ARENA_BASE (10000) + sector_id*100 + room_index` → Van Pelt
+  `13000`–`13024`. Avoids the packed lobby range (`1000`–`1036`) and the grounds ids
+  (= sector ids, where the old branch's `34`–`58` collided).
+- Set interior partition walls (the transplanted wall cells) to `collision==1` in
+  `collision_maze.csv`, leaving the designed doorway gaps open. The building's existing
+  perimeter wall + door stay as `add_entrances.py` left them.
+
+**Entrance reconciliation (resolved during implementation):**
+godot-ga-main carved Van Pelt's one door on the far-east wall (col 155, rows 56–58); the
+design's `Entrance` room is bottom-center (cols 95–136). During implementation, inspect
+how the designed doorways chain to the carved door and pick the cleaner option — either
+relocate the carved door to the designed `Entrance`, or keep the east door and ensure a
+path into the interior — and flag the choice in the plan for review. Hard requirement:
+every one of the 25 room arenas must be BFS-reachable from the single building entrance.
 
 ### Data flow
 
 ```
-sector_blocks.csv ─┐
-                   ├─► add_entrances.py ─► collision_maze, arena_maze, arena_blocks   (matrix: walls, doors, room arenas)
-PLANS[sector] ─────┤                                                                   ▲ same rects
-                   └─► furnish_building.py --sector "Van Pelt Library" ─► .tmj picture  (floor, walls, furniture)
+f5219ce layers + arenas ──(one-time extract)──► tools/geo/van_pelt_interior.json
+                                                          │
+                              furnish_van_pelt.py ◄────────┘
+                                   ├─► upenn_core_urban.tmj   (6 interior layers; entrance_floor reconciled)
+                                   └─► arena_maze / arena_blocks / collision_maze   (25 arenas; partition collision)
 ```
 
-## The Van Pelt room plan
+## Rooms
 
-Five rooms, fitted to the real interior (verified against arena `1030`), in the real
-floor plan's west→east order. Regions are interior-cell extents (cols × rows,
-inclusive); exact wall lines reuse the building perimeter where a room abuts it.
+All 25 are preserved as designed (names already match the real floor plan), each
+becoming an arena `13000`–`13024`:
 
-| Arena | Name | Kind | Region (cols × rows) | Notes |
-|---|---|---|---|---|
-| `2300` | Weigle Information Commons | `reading_room` | 19–67 × 19–49 | west block, main hall |
-| `2301` | Study Booths | `study` | 19–67 × 50–56 | west block, south strip |
-| `2302` | Kamin Gallery | `stacks` | 68–88 × 34–49 | central connector (throat) bridging the wings |
-| `2303` | East Commons / Circulation | `reading_room` | 89–129 × 27–66 | east block, west slice |
-| `2304` | Moelis Family Grand Reading Room | `reading_room` | 130–155 × 27–66 | easternmost slice; holds the east entrance door |
+`113`, `114`, `116`, `117`, `118`, `119`, `120`, `121`, `122`, `123`, `124`, `125`,
+`126`, `127`, `West Wing Books`, `Lounge`, `Hallway`, `Kamin Gallery`, `Circulation`,
+`Microtext Collection`, `Staff Area`, `Research Data and Digital Scholarship Exchange`,
+`Moelis Family Grand Reading Room`, `Study Booths`, `Entrance`.
 
-**Circulation (every room BFS-reachable from the entrance):**
-east door → Moelis → East Commons → Kamin Gallery → Weigle Commons → Study Booths.
-Each room opens onto its neighbour along that chain; no dead ends.
-
-A handful of single-cell slivers at block edges (col 68 west; the row-56 notch) are
-absorbed into the adjacent room so no interior cell is left unassigned.
+(The earlier 5-room procedural proposal is **superseded** by this full design.)
 
 ## Testing
 
-- **Williams regression:** `furnish_building.py --sector "Williams Hall"` produces a
-  byte-identical `.tmj` to pre-refactor; `add_entrances.py` produces byte-identical
-  matrix CSVs for Williams and every non-opted-in building.
-- **Van Pelt picture:** furnishes with **0 partial sprites** and **0 overlaps** (the
-  `stamp()` invariant), every placed object inside the footprint.
-- **Van Pelt matrix:** the 5 room arenas appear in `arena_blocks.csv`; every room
-  arena is reachable from the entrance door by BFS over `collision_maze.csv` (assert
-  connectivity, mirroring `path_finder.py`).
-- **Idempotency:** running each tool twice yields identical output.
+- **Picture:** 0 partial sprites; every transplanted cell inside the carved footprint;
+  interior layers in canonical z-order; `furnish_building.py` output for Williams
+  byte-identical (untouched).
+- **Matrix:** the 25 Van Pelt arenas present in `arena_blocks.csv` with non-clashing
+  ids; `collision_maze` partition walls match the painted walls; **every room arena
+  BFS-reachable from the building entrance** (mirror `path_finder.py`).
+- **Idempotency:** running `furnish_van_pelt.py` twice yields identical map + matrix.
+- **No regression:** Williams and all other buildings' picture + matrix unchanged.
 
 ## Out of scope (YAGNI)
 
-- Resurrecting the old branch's `westwing.py` / `eastwing.py` / `furnish_library.py` /
-  `wall_contour.py` / `build_arenas.py`, its `buildings`-layer perimeter, or its
-  expanded footprint.
-- A distinct `gallery` room kind with display cases (Kamin Gallery uses `stacks` for
-  now). Can be added later if desired.
-- Upper floors of Van Pelt; only the carved ground-floor interior is furnished.
-- Relocating the entrance door (it stays where `add_entrances.py` placed it).
+- Porting the old generator code (`westwing.py`/`eastwing.py`/`furnish_library.py`/
+  `wall_contour.py`/`build_arenas.py`); we keep only their frozen output.
+- Generalizing `furnish_building.py` or adding library room kinds (the regeneration plan
+  — no longer needed).
+- The old `buildings`-layer brick perimeter (superseded by `entrance_floor`).
+- Upper floors of Van Pelt; only the carved ground-floor interior is transplanted.
 
 ## Risks / notes
 
-- The entrance lands in Moelis's east wall, so agents enter through the grand reading
-  room — consistent with the real building's east staircase entrance near Moelis.
-- Interior walls added to the matrix must line up cell-for-cell with the picture's
-  room walls; the shared plan is what guarantees this, so both consumers must read the
-  same rects with the same inclusive-rectangle convention.
+- **Connectivity is the main risk.** The designed doorways (wall gaps) must chain every
+  room to the single building entrance once walls become collision. The BFS test gates
+  this; unreachable rooms get a doorway added (or the entrance relocated) during
+  implementation.
+- **entrance_floor reconciliation:** must clear exactly the plain interior floor that the
+  detailed floors replace, without disturbing the perimeter/door or neighbouring
+  buildings' `entrance_floor` cells.
+- The asset freezes GIDs; valid only while tileset `firstgid`s stay identical (they are
+  today). If a tileset is renumbered later, the asset must be re-extracted.
