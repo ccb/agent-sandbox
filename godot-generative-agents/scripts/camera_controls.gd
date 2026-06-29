@@ -52,6 +52,11 @@ var _follow_target: Node2D = null
 # The map's world bounds, computed once on first use (see _map_bounds).
 var _bounds := Rect2()
 var _have_bounds := false
+# Screen-pixels down the LEFT edge hidden behind the on-screen sidebar
+# (agent_panel.gd, in the UI CanvasLayer). The clamp frames the map into the
+# UNCOVERED part of the window so the bar never permanently hides campus you
+# can't pan to. 0 = no sidebar. Set by penn_replay.gd via set_left_inset().
+var _left_inset := 0.0
 
 
 func _ready() -> void:
@@ -151,6 +156,13 @@ func reset_view() -> void:
 	_reset_view()
 
 
+func set_left_inset(px: float) -> void:
+	# Tell the camera how many screen-pixels the sidebar covers down the left edge.
+	# Re-frame immediately so the change (or the initial seed) takes effect at once.
+	_left_inset = maxf(px, 0.0)
+	_clamp_position()
+
+
 func zoom_in() -> void:
 	_zoom_keep_centre(zoom_step)
 
@@ -189,23 +201,37 @@ func _clamp_position() -> void:
 	# map edge while the view stays inside.
 	var b := _map_bounds()
 	var half := get_viewport().get_visible_rect().size * 0.5 / zoom
-	var lo := b.position + half
-	var hi := b.end - half
+	var home := _home_target()
+	# The sidebar hides _left_inset screen-pixels down the left, so the map only has
+	# to fill the window to its right; this is that strip's width in world units.
+	var inset_world := _left_inset / zoom.x
 	var p := global_position
 	for axis in 2:
-		if lo[axis] > hi[axis]:
-			# The map is smaller than the view on this axis — e.g. the default
-			# view, where the whole block already fits the height. Lock to the
-			# home position so it can't drift and uncover grey.
-			p[axis] = _home_position[axis]
+		var lo := b.position[axis] + half[axis]
+		var hi := b.end[axis] - half[axis]
+		if axis == 0:
+			# Let the camera travel further left by the sidebar width, so the map's
+			# left edge can slide out from under the bar (its grey is hidden anyway).
+			# Only the X low bound moves; every other edge stays flush with the map.
+			lo -= inset_world
+		if lo > hi:
+			# The map is smaller than the (uncovered) view on this axis — e.g. the
+			# default view, where the whole block already fits. Lock to the home
+			# frame so it can't drift and uncover grey.
+			p[axis] = home[axis]
 		else:
-			# Keep the view inside the map, but never refuse the home position, so
-			# a scene whose default deliberately shows a margin still opens on its
+			# Keep the view inside the map, but never refuse the home frame, so a
+			# scene whose default deliberately shows a margin still opens on its
 			# intended frame (we only stop it from revealing *more* than that).
-			var a_lo: float = minf(lo[axis], _home_position[axis])
-			var a_hi: float = maxf(hi[axis], _home_position[axis])
-			p[axis] = clampf(p[axis], a_lo, a_hi)
+			p[axis] = clampf(p[axis], minf(lo, home[axis]), maxf(hi, home[axis]))
 	global_position = p
+
+
+func _home_target() -> Vector2:
+	# The scene's default frame, shifted right by half the sidebar (in world units at
+	# the home zoom) so the bar sits over the grey margin and covers no campus. With
+	# no sidebar (_left_inset 0) this is just the scene's home position.
+	return Vector2(_home_position.x - _left_inset * 0.5 / _home_zoom.x, _home_position.y)
 
 
 func _map_bounds() -> Rect2:
@@ -243,6 +269,6 @@ func _reset_view() -> void:
 	_resetting = true
 	var tw := create_tween().set_parallel(true)
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "global_position", _home_position, reset_time)
+	tw.tween_property(self, "global_position", _home_target(), reset_time)
 	tw.tween_property(self, "zoom", _home_zoom, reset_time)
 	tw.finished.connect(func() -> void: _resetting = false)
