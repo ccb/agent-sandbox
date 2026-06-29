@@ -21,7 +21,7 @@ Run the walkthrough:  python action_castle_2.py --walk        (champion ending)
                       python action_castle_2.py --walk-marry  (marriage ending)
 """
 
-from text_adventure_games import games, things, actions, Prompt
+from text_adventure_games import games, things, actions, reactions, Prompt
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -245,6 +245,27 @@ def _wake_and_challenge(game, dragon, roar):
             speaker="dragon",
         )
     )
+
+
+class DragonWakes(reactions.WakesAtNoise):
+    """The sleeping dragon wakes at any noise it hears in the trove -- a shout, a
+    smash, even a crash a room away -- and rears into the wits/steel challenge. Its
+    sleep state is the inverse of the ``awake`` flag the dragon's actions use.
+
+    (Deliberately rousing it with WAKE DRAGON, or robbing the hoard, are handled
+    by their own action/trigger; a quiet visitor can now study the hoard without
+    waking it -- only noise gives them away.)"""
+
+    def ready(self) -> bool:
+        return not self.owner.get_property("awake")  # "asleep" == not yet awake
+
+    def apply_effects(self):
+        _wake_and_challenge(
+            self.game,
+            self.owner,
+            'The dragon wakes, eyes you hungrily and roars, "Another mortal dares '
+            'challenge me? Choose a weapon: wits or steel."',
+        )
 
 
 class WakeDragon(actions.Action):
@@ -1315,38 +1336,11 @@ def build_game() -> ActionCastle2:
         )
     )
 
-    # Lingering wakes the dragon (rulebook: "any other move besides exiting the
-    # room will wake the dragon"). One turn of grace: on arrival it merely stirs,
-    # so you can look and still leave safely; a second action while you're still
-    # here rouses it into the wits/steel challenge. (Theft is handled above;
-    # stealing kills you outright, so this skips when you're holding loot.)
-    def dragon_stirs(g):
-        if not dragon.get_property("stirring"):
-            dragon.set_property("stirring", True)
-            g.parser.ok(
-                "The dragon stirs in its sleep, one claw twitching. Best not linger."
-            )
-        else:
-            _wake_and_challenge(
-                g,
-                dragon,
-                'The dragon wakes, eyes you hungrily and roars, "Another mortal '
-                'dares challenge me? Choose a weapon: wits or steel."',
-            )
-
-    game_triggers.append(
-        (
-            "dragon_stirs",
-            lambda g: dragon is not None
-            and not dragon.get_property("awake")
-            and not dragon.get_property("reward_taken")
-            and not g.game_over
-            and g.player.location is trove
-            and not any(_is_holding(g.player, n) for n in ("gold", "sword", "ring")),
-            dragon_stirs,
-            True,
-        )
-    )
+    # The dragon wakes at NOISE rather than at lingering: it's a WakesAtNoise
+    # reaction (see DragonWakes), attached after the game is built. A quiet visitor
+    # can study the hoard; a shout or a smash (even a room away) rouses it into the
+    # wits/steel challenge. (Deliberate WAKE DRAGON and the theft-kill above are
+    # unchanged.)
 
     # Returning to the Moat carrying the gold is fatal (you sink and drown).
     def gold_drown(g):
@@ -1437,6 +1431,10 @@ def build_game() -> ActionCastle2:
 
     for name, cond, act, repeat in game_triggers:
         game.add_trigger(name, cond, act, repeatable=repeat)
+
+    # The dragon's noise reflex (thing-owned reaction, evaluated in the react
+    # phase): a sound it hears in the trove rouses it into the challenge.
+    game.add_reaction(dragon, DragonWakes())
 
     # A block so the moat tunnel only opens after MOVE STONE.
     from text_adventure_games import blocks
