@@ -2302,6 +2302,11 @@ def build_game() -> ActionCastle3:
         baby = _held_item(g.player, "baby goblin")
         baby.set_property("last_cry_loc", g.player.location.name)
         g.parser.ok("The goblin baby wails as you enter.")
+        # The wail is a real emitted sound (the source owns its volume): perception
+        # picks it up and it carries to the next room. The Bandit Camp / Deep Ravine
+        # ambush still keys on the crying baby through its own disturbance trigger;
+        # this just puts the noise into the world model.
+        g.emit_sound(g.player.location, 1, "the baby's wailing")
 
     game.add_trigger(
         "baby_wails",
