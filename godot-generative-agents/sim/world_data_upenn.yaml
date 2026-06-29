@@ -60,9 +60,12 @@ personas:
     emoji: 🗣️
     steps: 70
   - place: Houston Hall
-    activity: having lunch with a colleague
+    activity: having a long lunch with a colleague
     emoji: 🍽️
-    steps: 40
+    # A long lunch so Professor Ellis is still at Houston Hall when Maya arrives
+    # for her own lunch -- they overlap in the student union, which (with a real
+    # brain) is where their perception radii touch and a conversation can happen.
+    steps: 120
   - place: Van Pelt Library
     activity: pulling sources for a paper
     emoji: 📜
