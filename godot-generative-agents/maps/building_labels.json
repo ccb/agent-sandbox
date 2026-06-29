@@ -33,8 +33,8 @@
   },
   {
    "name": "Sweeten Alumni Building",
-   "x": 37.0,
-   "y": 110.0
+   "x": 37.24,
+   "y": 109.95
   },
   {
    "name": "Van Pelt Library",
@@ -45,6 +45,21 @@
    "name": "Williams Hall",
    "x": 40.38,
    "y": 243.94
+  },
+  {
+   "name": "220 South 34th Street",
+   "x": 207.64,
+   "y": 149.6
+  },
+  {
+   "name": "3537 Locust Walk",
+   "x": 19.31,
+   "y": 110.91
+  },
+  {
+   "name": "Locust Walk Annex",
+   "x": 28.52,
+   "y": 75.58
   }
  ]
 }
