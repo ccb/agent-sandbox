@@ -81,6 +81,13 @@ func _ready() -> void:
 	_panel.reset_requested.connect(_camera.reset_view)
 	_camera.follow_stopped.connect(_panel.clear_active)
 
+	# The sidebar overlays the left edge; tell the camera its width so the pan/zoom
+	# clamp frames the map into the open area to its right (campus never hides under
+	# the bar). Seed from custom_minimum_size (set in the panel's _ready, which runs
+	# first) and follow any later layout/theme resize.
+	_camera.set_left_inset(_panel.custom_minimum_size.x)
+	_panel.resized.connect(func() -> void: _camera.set_left_inset(_panel.size.x))
+
 	# Playback controls: pause/resume, seek along the timeline, change speed.
 	_panel.play_pause_requested.connect(_on_play_pause)
 	_panel.seek_requested.connect(_on_seek)
