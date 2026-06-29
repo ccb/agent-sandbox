@@ -99,9 +99,15 @@ opts in; Williams and every other building do not, so they are unchanged):
 - After hollowing Van Pelt's interior, set the partition-wall cells to `collision==1`
   in `collision_maze` (the building perimeter + chosen door are carved as today; the
   designed doorway gaps in the partitions stay `0`).
-- Instead of one lobby arena, stamp each room's interior cells in `arena_maze` with a
-  per-room id and emit one `arena_blocks` row per room
+- Stamp each room's *walkable* interior cells (collision `0`, inside the room's rect,
+  inside the carved interior) in `arena_maze` with a per-room id, in fixed asset order
+  (later rooms win the rare walkable-overlap cell — ~30 cells, mostly shared walls that
+  are collision anyway). Emit one `arena_blocks` row per room
   (`<id>, UPenn, Van Pelt Library, <name>`).
+- The 25 rects cover ~3,578 of the 4,659 interior cells; the remaining ~1,081 cells are
+  circulation not inside any named room. **Keep the lobby arena (`1030`) for those
+  leftover cells** (addressable as `UPenn:Van Pelt Library:lobby`). So Van Pelt's arena
+  rows = grounds + lobby + 25 rooms.
 - **Arena id scheme:** `ROOM_ARENA_BASE (10000) + sector_id*100 + room_index` → Van Pelt
   `13000`–`13024`. Avoids the packed lobby range (`1000`–`1036`) and the grounds ids
   (= sector ids, where the old branch's `34`–`58` collided).
