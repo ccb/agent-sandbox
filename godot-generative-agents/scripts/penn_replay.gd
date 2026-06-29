@@ -21,6 +21,9 @@ extends Node2D
 @export var preview_step: int = 0
 ## In-game time at step 0 (overridden by replay meta["start"] when present).
 @export var sim_start: String = "2023-02-13 08:00:00"
+## Draw a short breadcrumb trail behind each agent so you can see where they just
+## came from. Set false to hide every trail.
+@export var show_trail: bool = true
 
 # The Cute Fantasy player sheet is a 6x10 grid; row 0 is a 6-frame walk cycle.
 const SHEET_HFRAMES := 6
@@ -36,6 +39,10 @@ const SPRITE_SCALE := 2.0
 # The character art is centred in its frame, so the sprite's head sits this far
 # above the node origin; the nameplate is parked just above that.
 const SPRITE_HALF_PX := 16.0 * SPRITE_SCALE
+# Breadcrumb trail: how many past tile steps trail behind each agent, and how
+# opaque its freshest (head) end is — the tail fades to fully transparent with age.
+const TRAIL_LEN := 8
+const TRAIL_HEAD_ALPHA := 0.7
 # A distinct tint per persona so they're easy to tell apart at a glance.
 const TINTS := [
 	Color(1.0, 0.95, 0.95),  # Maya  - warm white
@@ -60,6 +67,7 @@ var _paused := false
 var _speed := 1.0
 var _last_status_step := -1         # last frame index pushed to the sidebar rows
 var _sky: CanvasModulate            # clock-driven day-night tint over the campus
+var _trails: Node2D                 # parent of the per-agent breadcrumb Line2Ds
 # Web only: push the current step to the page so the React companion panel can
 # follow the replay. `_is_web` gates the JS calls to web exports; `_last_step`
 # (-1 = none pushed yet) lets us call out only when the integer step changes.
@@ -106,6 +114,12 @@ func _ready() -> void:
 	# so the campus warms/dims with the in-game time of day.
 	_sky = CanvasModulate.new()
 	add_child(_sky)
+
+	# Holds the per-agent breadcrumb Line2Ds. Added here, before the agent sprites are
+	# spawned during load, so the trails always draw underneath the sprites they trail
+	# (same z, earlier in the tree) yet above the campus map.
+	_trails = Node2D.new()
+	add_child(_trails)
 
 	# Let agents be picked by clicking their sprite (see _spawn_agent's Area2D). Mouse
 	# picking on 2D physics bodies/areas is off by default, so the per-agent click
@@ -291,7 +305,24 @@ func _spawn_agent(name: String, index: int) -> void:
 	)
 	node.add_child(area)
 
-	_agents[name] = {"node": node, "sprite": spr, "label": label}
+	# A breadcrumb trail behind this agent: a polyline through its recent tile centres,
+	# tinted like the sprite and fading from opaque at the head (where the sprite is) to
+	# transparent at the tail (oldest step). Lives under _trails in world space — the
+	# points carry absolute positions, so the line itself stays at the origin.
+	var tint: Color = TINTS[index % TINTS.size()]
+	var trail := Line2D.new()
+	trail.width = float(_tile_px) * 0.45
+	trail.joint_mode = Line2D.LINE_JOINT_ROUND
+	trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	trail.end_cap_mode = Line2D.LINE_CAP_ROUND
+	var grad := Gradient.new()
+	grad.set_color(0, Color(tint.r, tint.g, tint.b, 0.0))            # tail: oldest, clear
+	grad.set_color(1, Color(tint.r, tint.g, tint.b, TRAIL_HEAD_ALPHA))  # head: newest
+	trail.gradient = grad
+	trail.visible = show_trail
+	_trails.add_child(trail)
+
+	_agents[name] = {"node": node, "sprite": spr, "label": label, "trail": trail}
 
 
 func _on_agent_input(
@@ -316,6 +347,21 @@ func _on_agent_input(
 func _tile_to_world(x: int, y: int) -> Vector2:
 	# Tile centre in the map's pixel space (the campus TileMapLayer is unscaled).
 	return Vector2((x + 0.5) * _tile_px, (y + 0.5) * _tile_px)
+
+
+func _update_trail(trail: Line2D, name: String, step: int, head: Vector2) -> void:
+	# Rebuild the breadcrumb as the tile centres for the last TRAIL_LEN steps up to
+	# `step`, tipped with the sprite's live eased position so the head stays glued to
+	# the agent between tiles. Reading straight from _frames (rather than buffering as
+	# we go) keeps the trail correct after a seek or scrub, backwards as well as
+	# forwards. The gradient maps tail→head along the line, so older points fade out.
+	var pts := PackedVector2Array()
+	var start := maxi(0, step - TRAIL_LEN + 1)
+	for k in range(start, step + 1):
+		var f: Dictionary = _frames[k][name]
+		pts.append(_tile_to_world(int(f["x"]), int(f["y"])))
+	pts.append(head)
+	trail.points = pts
 
 
 func _make_thumbnail() -> AtlasTexture:
@@ -381,6 +427,8 @@ func _process(delta: float) -> void:
 		var pb := _tile_to_world(int(b["x"]), int(b["y"]))
 		var agent: Dictionary = _agents[name]
 		agent["node"].position = pa.lerp(pb, frac)
+		if show_trail:
+			_update_trail(agent["trail"], name, i, agent["node"].position)
 
 		var moving: bool = a["x"] != b["x"] or a["y"] != b["y"]
 		if moving and b["x"] != a["x"]:
