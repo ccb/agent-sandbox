@@ -38,6 +38,7 @@ OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 
 DEFAULT_STEPS = 400
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
+SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
 
 
 def main() -> int:
@@ -69,6 +70,7 @@ def main() -> int:
             "height": world_map.height,
             "steps": len(frames),
             "sec_per_step": SEC_PER_STEP,
+            "start": SIM_START,
             "personas": [{"name": p["name"], "emoji": p["emoji"]} for p in personas],
         },
         "frames": [
