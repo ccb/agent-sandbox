@@ -39,6 +39,9 @@ script = ExtResource("4_cam")
 ; character sidebar sits in the left grey margin a portrait map leaves in a
 ; landscape window, so it covers no campus. penn_replay.gd fills it after load.
 [node name="UI" type="CanvasLayer" parent="."]
+; Above the runtime "perception fog" overlay (penn_replay.gd adds it on its own
+; CanvasLayer at layer 1), so the sidebar + minimap are never dimmed by the fog.
+layer = 10
 
 [node name="AgentPanel" type="PanelContainer" parent="UI"]
 anchor_bottom = 1.0

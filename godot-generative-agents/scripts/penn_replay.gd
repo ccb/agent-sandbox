@@ -74,6 +74,17 @@ const BUBBLE_MAX_CHARS := 120
 # Near-black dialogue text on the white speech bubble.
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
 
+# Perception fog: while you Track an agent, the campus OUTSIDE their perception
+# radius is dimmed under a translucent grey cover, leaving a clear circle around
+# them -- so you see what that agent can actually perceive (the same vision_r tiles
+# the sim uses to gate sight and conversation). Cleared when not tracking anyone.
+# The radius comes from the replay meta (`vision_r`, in tiles); this is the fallback
+# if an older replay omits it. The feather is the soft edge width (screen pixels),
+# and the colour is the grey wash applied at full strength outside the circle.
+const FOG_FALLBACK_VISION_R := 8
+const FOG_FEATHER_PX := 64.0
+const FOG_COLOR := Color(0.16, 0.17, 0.21, 0.72)
+
 var _tile_px := 16
 var _sec_per_step := 10
 var _start_unix := 0
@@ -106,6 +117,17 @@ var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
 
+# Perception fog (see FOG_* above). `_tracked_name` is the agent the camera is
+# following (set on Track, cleared on release), or "" when free -- the fog only
+# shows while it's set. `_vision_r` is the radius in tiles, read from the replay
+# meta. The fog is a screen-space ColorRect (on its own CanvasLayer, below the UI)
+# whose shader clears a circle around the tracked agent each frame.
+var _tracked_name := ""
+var _vision_r := FOG_FALLBACK_VISION_R
+var _fog: CanvasLayer
+var _fog_rect: ColorRect
+var _fog_mat: ShaderMaterial
+
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
@@ -121,6 +143,10 @@ func _ready() -> void:
 	_panel.zoom_out_requested.connect(_camera.zoom_out)
 	_panel.reset_requested.connect(_camera.reset_view)
 	_camera.follow_stopped.connect(_panel.clear_active)
+	# The fog tracks whoever the camera is following; when the follow is released
+	# (Stop, a manual pan, Reset, or tracking a different agent), clear the target so
+	# the fog lifts. `_on_track_requested` sets it when a new follow begins.
+	_camera.follow_stopped.connect(_on_follow_stopped)
 
 	# The sidebar overlays the left edge; tell the camera its width so the pan/zoom
 	# clamp frames the map into the open area to its right (campus never hides under
@@ -162,6 +188,8 @@ func _ready() -> void:
 	# people it connects.
 	_links_node = Node2D.new()
 	add_child(_links_node)
+
+	_setup_fog()
 
 	# Let agents be picked by clicking their sprite (see _spawn_agent's Area2D). Mouse
 	# picking on 2D physics bodies/areas is off by default, so the per-agent click
@@ -218,6 +246,9 @@ func _load_replay_from_text(text: String) -> void:
 	var meta: Dictionary = data["meta"]
 	_tile_px = int(meta["tile_px"])
 	_sec_per_step = int(meta.get("sec_per_step", 10))
+	# Perception radius for the tracking fog -- the sim's vision_r, falling back to
+	# the Smallville default for older replays that don't record it.
+	_vision_r = int(meta.get("vision_r", FOG_FALLBACK_VISION_R))
 	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
 	_frames = data["frames"]
 	var thumb := _make_thumbnail()
@@ -448,11 +479,75 @@ func _make_thumbnail() -> AtlasTexture:
 
 func _on_track_requested(name: String) -> void:
 	if _agents.has(name):
+		# Remember who we're tracking so the perception fog can centre on them. Set it
+		# before follow() so a switch from agent A to B doesn't briefly clear it (B's
+		# follow() doesn't emit follow_stopped, so _on_follow_stopped won't fire here).
+		_tracked_name = name
 		_camera.follow(_agents[name]["node"])
 
 
 func _on_stop_requested() -> void:
+	# Releasing the camera emits follow_stopped, which clears _tracked_name (and so
+	# lifts the fog) via _on_follow_stopped.
 	_camera.stop_following()
+
+
+func _on_follow_stopped() -> void:
+	# The camera stopped following (Stop button, manual pan, Reset). Drop the tracked
+	# agent so the perception fog lifts on the next frame.
+	_tracked_name = ""
+
+
+func _setup_fog() -> void:
+	# Build the perception-fog overlay: a full-screen grey ColorRect, driven by
+	# perception_fog.gdshader, on its own CanvasLayer. Layer 1 sits it ABOVE the
+	# world (the root canvas, layer 0 -- map, sprites, trails, links) yet BELOW the
+	# UI (the tscn's UI CanvasLayer is layer 10), so the fog dims the campus but never
+	# the sidebar or minimap. Hidden until you Track an agent; _update_fog drives it.
+	_fog = CanvasLayer.new()
+	_fog.layer = 1
+	add_child(_fog)
+
+	_fog_mat = ShaderMaterial.new()
+	_fog_mat.shader = load("res://shaders/perception_fog.gdshader")
+	_fog_mat.set_shader_parameter("feather", FOG_FEATHER_PX)
+	_fog_mat.set_shader_parameter("cover_color", FOG_COLOR)
+
+	_fog_rect = ColorRect.new()
+	_fog_rect.material = _fog_mat
+	_fog_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Let clicks, drags and hovers pass straight through to the map and the agents
+	# beneath -- the fog is a visual wash, not an input catcher.
+	_fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fog_rect.visible = false
+	_fog.add_child(_fog_rect)
+
+
+func _update_fog() -> void:
+	# Centre the clear circle on the tracked agent each frame (it walks, the camera
+	# follows, and the window can resize), or hide the whole overlay when nothing is
+	# tracked. Everything is computed in the overlay's own screen pixels: the canvas
+	# transform maps the agent's world position to the screen and carries the camera
+	# zoom, so the radius (vision_r tiles, in world pixels) scales with how far you're
+	# zoomed in -- the fog's clear circle always covers exactly the agent's perception.
+	if _fog == null:
+		return
+	if _tracked_name == "" or not _agents.has(_tracked_name):
+		_fog_rect.visible = false
+		return
+
+	var node: Node2D = _agents[_tracked_name]["node"]
+	var xform := get_viewport().get_canvas_transform()
+	var center: Vector2 = xform * node.global_position
+	var zoom := xform.get_scale().x
+	var radius := float(_vision_r) * float(_tile_px) * zoom
+	var size := get_viewport().get_visible_rect().size
+
+	_fog_rect.size = size
+	_fog_rect.visible = true
+	_fog_mat.set_shader_parameter("rect_size", size)
+	_fog_mat.set_shader_parameter("center", center)
+	_fog_mat.set_shader_parameter("radius", radius)
 
 
 func _on_play_pause() -> void:
@@ -523,6 +618,9 @@ func _process(delta: float) -> void:
 	for name in _names:
 		_refresh_bubble(name, fpos)
 	_refresh_links(fpos)
+
+	# Dim everything outside the tracked agent's perception radius (no-op when free).
+	_update_fog()
 
 	# Web: tell the React companion panel which step we're showing, so its agent
 	# card + memory list track the canvas. Godot is the clock; we push only on a
