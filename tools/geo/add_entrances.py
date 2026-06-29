@@ -63,6 +63,8 @@ GROUNDS = "grounds"  # the outside-edge arena every building already has
 LOBBY = "lobby"  # the new interior arena this tool adds
 INTERIOR_ARENA_BASE = 1000  # interior arena id = base + sector id (no id clashes)
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
+MAX_DOOR_WIDTH = 3  # a natural doorway; also caps walls that front a wide plaza
+PATH_REACH = 3  # how far out (tiles) to look for the approaching footway
 
 # Shell tiles (same as Williams' cutaway).
 FLOOR = fb.FLOOR
@@ -216,6 +218,71 @@ def choose_door(foot, perimeter, interior, collision, dist, W, H):
         if best is None or key < best[0]:
             best = (key, (x, y))
     return best[1] if best else None
+
+
+def widen_door(d, foot, perimeter, interior, paths, W, H):
+    """Widen the single door cell `d` to match the footway leading up to it.
+
+    A 1-tile door under a 3-tile-wide path reads wrong, so we open the contiguous
+    run of perimeter cells (along the wall, centred on `d`) that *face the path* --
+    i.e. whose outward ray hits a `paths` tile within a few cells. That makes the
+    opening as wide as, and aligned with, the approaching walk. Capped at
+    `MAX_DOOR_WIDTH` so a footway running *along* a wall can't open the whole side;
+    if `d` faces no path (the fallback door), it stays a single cell."""
+    # Outward normal: the direction from d to outside the footprint.
+    normal = next(
+        (
+            (dx, dy)
+            for dx, dy in NEIGHBOURS
+            if (d[0] + dx, d[1] + dy) not in foot
+            and 0 <= d[0] + dx < W
+            and 0 <= d[1] + dy < H
+        ),
+        None,
+    )
+    if normal is None:
+        return {d}
+    par = (-normal[1], normal[0])  # along the wall, perpendicular to the normal
+
+    def faces_path(c):
+        for k in range(1, PATH_REACH + 1):
+            p = (c[0] + normal[0] * k, c[1] + normal[1] * k)
+            if not (0 <= p[0] < W and 0 <= p[1] < H) or p in foot:
+                return False
+            if paths[p[1] * W + p[0]]:
+                return True
+        return False
+
+    def openable(c):
+        # A perimeter cell that genuinely links inside to outside.
+        if c not in perimeter:
+            return False
+        has_in = any((c[0] + a, c[1] + b) in interior for a, b in NEIGHBOURS)
+        has_out = any(
+            (c[0] + a, c[1] + b) not in foot and 0 <= c[0] + a < W and 0 <= c[1] + b < H
+            for a, b in NEIGHBOURS
+        )
+        return has_in and has_out
+
+    if not faces_path(d):
+        return {d}
+    run = {d}
+    for sign in (1, -1):  # grow both ways along the wall while still facing the path
+        j = 1
+        while j <= MAX_DOOR_WIDTH:
+            c = (d[0] + sign * j * par[0], d[1] + sign * j * par[1])
+            if openable(c) and faces_path(c):
+                run.add(c)
+                j += 1
+            else:
+                break
+    if len(run) > MAX_DOOR_WIDTH:  # keep the cells nearest d (centred on the path)
+        run = set(
+            sorted(
+                run, key=lambda c: abs((c[0] - d[0]) * par[0] + (c[1] - d[1]) * par[1])
+            )[:MAX_DOOR_WIDTH]
+        )
+    return run
 
 
 # --------------------------------------------------------------------------- #
@@ -418,7 +485,11 @@ def main():
             door = {d for d in door if d in perimeter} or {min(perimeter)}
         else:
             d = choose_door(foot, perimeter, interior, solid, dist, W, H)
-            door = {d} if d else {min(perimeter)}
+            if d is None:
+                door = {min(perimeter)}
+            else:
+                # Widen the door to match the footway approaching it.
+                door = widen_door(d, foot, perimeter, interior, paths_layer, W, H)
 
         # Collision: hollow the inside, keep the ring a wall, open the door.
         for x, y in interior:
