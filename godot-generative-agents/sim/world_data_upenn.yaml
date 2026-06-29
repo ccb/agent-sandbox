@@ -1,28 +1,35 @@
 # A small University of Pennsylvania cast for the generative-agents sim, walking
 # the REAL campus. The map is derived from OpenStreetMap by
-# tools/geo/osm_to_ville.py (the_upenn matrix); each location's `address` is one
-# of that matrix's "UPenn:<building>:grounds" sector addresses, and every
-# `start_tile` is a walkable doorstep tile the geo tool reported for that
-# building. The mock brain drives each persona through its schedule, so this runs
-# offline, deterministically, and free -- the same as the_ville cast.
+# tools/geo/osm_to_ville.py (the_upenn matrix). Each building now has a walkable
+# interior reached through a single door (tools/geo/add_entrances.py), so each
+# location's `address` is the building's "UPenn:<building>:lobby" INTERIOR address
+# -- "study in Van Pelt Library" walks the agent in through the door rather than
+# stopping at the edge. (The matrix still has "UPenn:<building>:grounds" for the
+# outside, and the pathfinder can only cross the wall ring at the door.) Every
+# `start_tile` is a walkable doorstep tile just outside its building. The mock
+# brain drives each persona through its schedule, so this runs offline,
+# deterministically, and free -- the same as the_ville cast.
 #
 # Buildings used (all real, all inside the 34th-36th x Spruce-Walnut block):
 #   College Hall, Van Pelt Library, Houston Hall, Williams Hall, Meyerson Hall,
 #   Irvine Auditorium. This block is Penn's academic core (College Green) and has
-#   no residence in frame, so each persona's `home` is the in-block building they
-#   start and spend their day in, and every `start_tile` is the walkable doorstep
-#   the geo tool reported for that building (tools/geo/out/upenn_core_ville_addresses.json).
+#   no residence in frame, so each persona starts on the campus walks (`home: Penn
+#   campus`, the outdoor hub) at a `start_tile` just outside their first building --
+#   so even the first stop is a walk *into* the building through its door, not an
+#   activity performed on the doorstep. (The mock brain travels whenever its current
+#   location differs from the stop's place; starting at the hub makes stop 1 a real
+#   trip inside.)
 
 personas:
 - name: Maya Chen
-  home: Van Pelt Library
+  home: Penn campus
   persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
     diligent, and a little caffeine-dependent. I spend most of my day studying in
     Van Pelt Library between classes.
   emoji: 📚
   start_tile:
-  - 16
-  - 18
+  - 164
+  - 57
   schedule:
   - place: Van Pelt Library
     activity: studying for an organic chemistry exam
@@ -40,13 +47,13 @@ personas:
     activity: reviewing her notes before tomorrow
     emoji: 📖
 - name: Professor Ellis
-  home: College Hall
+  home: Penn campus
   persona: I am Professor Ellis, 52. I teach history at Penn and keep an office in
     College Hall. I am thoughtful, a bit formal, and devoted to my students.
   emoji: 🧑‍🏫
   start_tile:
-  - 80
-  - 161
+  - 40
+  - 265
   schedule:
   - place: Williams Hall
     activity: giving a morning lecture
@@ -64,14 +71,14 @@ personas:
     activity: holding office hours
     emoji: 🧑‍🏫
 - name: Diego Torres
-  home: Meyerson Hall
+  home: Penn campus
   persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
     creative, focused, and always sketching. I spend long hours in the Meyerson
     Hall studio.
   emoji: ✏️
   start_tile:
-  - 180
-  - 64
+  - 194
+  - 48
   schedule:
   - place: Meyerson Hall
     activity: working on a studio model
@@ -96,19 +103,19 @@ locations:
   hub: true
 - name: College Hall
   description: Penn's oldest building and administrative heart, on College Green.
-  address: UPenn:College Hall:grounds
+  address: UPenn:College Hall:lobby
 - name: Van Pelt Library
   description: The main university library, where students study at all hours.
-  address: UPenn:Van Pelt Library:grounds
+  address: UPenn:Van Pelt Library:lobby
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
-  address: UPenn:Houston Hall:grounds
+  address: UPenn:Houston Hall:lobby
 - name: Williams Hall
   description: A classroom and language-department building just off College Green.
-  address: UPenn:Williams Hall:grounds
+  address: UPenn:Williams Hall:lobby
 - name: Meyerson Hall
   description: Home of the Weitzman School of Design, full of architecture studios.
-  address: UPenn:Meyerson Hall:grounds
+  address: UPenn:Meyerson Hall:lobby
 - name: Irvine Auditorium
   description: The landmark auditorium that hosts lectures and performances.
-  address: UPenn:Irvine Auditorium:grounds
+  address: UPenn:Irvine Auditorium:lobby
