@@ -175,6 +175,13 @@ class Break(base.Action):
     ACTION_DESCRIPTION = "Break something"
     ACTION_ALIASES = ["smash"]
 
+    # A crash carries two rooms (issue #80 hearing): loud enough to set off a
+    # startle reaction well beyond the room it happens in.
+    AUDIBLE_RADIUS = 2
+
+    def sound_description(self) -> str:
+        return "the crash of something breaking"
+
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to break something")

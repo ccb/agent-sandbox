@@ -535,10 +535,10 @@ def test_coming_out_of_the_shack_spooks_the_doe_into_the_deep_woods():
 
 
 def test_a_loud_noise_spooks_the_doe_even_without_the_shack():
-    # Talking aloud in the woods is racket enough -- she bolts (and you've not
-    # got the crossbow, the careless player's just-deserts).
+    # Talking aloud in the woods is noise enough -- she hears the raised voice and
+    # bolts (and you've not got the crossbow, the careless player's just-deserts).
     game, cap = _play(_to_old_woods_mounted() + ["dismount", "say hello there"])
-    assert _said(cap, "racket") and _said(cap, "bolts")
+    assert _said(cap, "raised voice") and _said(cap, "bolts")
     assert "deer" in game.locations["Deep Woods"].items
 
 
@@ -563,7 +563,9 @@ def test_north_is_barred_until_the_poacher_is_dealt_with():
 
 
 def test_hesitating_lets_the_poacher_kill_the_deer():
-    game, cap = _play(TO_DEEP_WOODS + ["south"])  # flee instead of shooting
+    # The poacher is on a clock (started when the doe was cornered): you may look
+    # once, but dawdle past the window instead of shooting and he looses his arrow.
+    game, cap = _play(TO_DEEP_WOODS + ["look", "look"])
     assert game.is_game_over() and not game.is_won()
     assert _said(cap, "doe drops")
 
