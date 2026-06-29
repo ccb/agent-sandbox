@@ -35,6 +35,13 @@ class Action:
     # existed. Subclasses set a positive integer to make the action cheaper.
     DURATION: int = None
 
+    # How many room-hops the *sound* of this action carries (issue #80 hearing).
+    # 0 (the default) means it's heard only in the room it happens in, so
+    # perception stays room-scoped until an action opts in -- a SHOUT/SCREAM
+    # might use 2, a crash 1. This is the action's physical volume, distinct from
+    # the contextual "does it disturb this creature" sets used by threat triggers.
+    AUDIBLE_RADIUS: int = 0
+
     def __init__(self, game, actor=None):
         self.game = game
         self.parser = game.parser
@@ -47,6 +54,15 @@ class Action:
         the default simply returns the declared ``DURATION``.
         """
         return self.DURATION
+
+    def audible_radius(self) -> int:
+        """Room-hops this action's sound carries (override for dynamic volume)."""
+        return self.AUDIBLE_RADIUS
+
+    def sound_description(self) -> str:
+        """How the sound reads to someone who hears it from another room (they
+        can't see what happened). Override for flavor (e.g. "a scream")."""
+        return "a commotion"
 
     def acting_character(self, command, **kwargs):
         """Resolve who performs this action: the explicit actor if one was
