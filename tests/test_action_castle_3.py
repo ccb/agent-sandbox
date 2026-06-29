@@ -620,6 +620,17 @@ def test_crying_baby_is_fatal_at_the_deep_ravine():
     assert _said(cap, "stirges")
 
 
+def test_carrying_the_crying_baby_emits_a_wail_sound():
+    # The wail is a real emitted sound now (physical-sound model), so perception
+    # hears it -- separate from the ambush trigger that still keys on the baby.
+    game, _ = _game()
+    _with_crying_baby(game)
+    _solo_to(game, "Crossroads")
+    game.do_command("west")  # -> Dark Forest (safe); the baby wails on entering
+    heard = game.sounds_audible_at(game.player.location)
+    assert any("baby's wailing" in s["description"] for s in heard)
+
+
 def test_a_loud_action_alerts_the_bandits():
     # Noise of your own (not just the baby) gives you away.
     game, cap = _game()
