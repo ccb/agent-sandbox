@@ -355,6 +355,31 @@ class Game:
         self.triggers.append(trigger)
         return trigger
 
+    def add_reaction(self, thing, reaction):
+        """Attach a :class:`~text_adventure_games.reactions.Reaction` to *thing*
+        and register it for the react phase.
+
+        Sets the reaction's ``owner`` and ``game``, appends it to
+        ``thing.reactions``, and wires it into the trigger driver so it is
+        evaluated each round after every actor has moved: the reaction's
+        ``check_preconditions`` becomes the trigger condition (it stashes
+        ``cause``) and its ``apply_effects`` the trigger action.
+        ``Reaction.REPEATABLE`` selects one-shot (the default -- flee/wake once)
+        vs. re-arming-every-round semantics.
+
+        Runtime-only, like ``behavior``: re-attach reactions in ``build_game``;
+        they are never serialized."""
+        reaction.owner = thing
+        reaction.game = self
+        thing.reactions.append(reaction)
+        self.add_trigger(
+            reaction.name,
+            lambda g, r=reaction: r.check_preconditions(),
+            lambda g, r=reaction: r.apply_effects(),
+            repeatable=reaction.REPEATABLE,
+        )
+        return reaction
+
     def add_recipe(self, recipe):
         """Register a crafting Recipe (see crafting.py). The Craft action and the
         parser's crafting verbs consult ``self.recipes``."""

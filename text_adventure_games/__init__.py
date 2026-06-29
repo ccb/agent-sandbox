@@ -20,6 +20,7 @@ from .config import (
 )
 from .prompts import Prompt
 from .crafting import Recipe, Ingredient
+from .reactions import GatedEffect, Reaction
 from .world_state import WorldState, world_state
 
 __all__ = [
@@ -40,6 +41,8 @@ __all__ = [
     "Prompt",
     "Recipe",
     "Ingredient",
+    "GatedEffect",
+    "Reaction",
     "WorldState",
     "world_state",
 ]
