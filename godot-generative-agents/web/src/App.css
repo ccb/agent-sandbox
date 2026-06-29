@@ -2,33 +2,229 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Clip the stage so the embedded Godot canvas can never push layout or scroll
+     the header out of view (see index.css). */
+  overflow: hidden;
 }
 
 .app-header {
-  padding: 10px 16px;
-  border-bottom: 1px solid #222a35;
-  background: #11151c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #dcdfe4;
+  background: #fff;
+  /* Own stacking layer above the canvas, so the nav bar always paints on top of
+     the game even if the canvas is ever positioned over it. */
+  position: relative;
+  z-index: 10;
+  flex: none;
 }
 
 .app-header h1 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  color: #1f2330;
 }
 
 .app-sub {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #8a93a3;
+  color: #6b7280;
 }
 
-/* The stage fills the rest of the viewport; the Godot canvas absolutely fills it.
-   `min-height: 0` lets this flex child actually shrink so the canvas can size to
-   the available space. Later, side panels can sit alongside the canvas here. */
+/* Right-side header group (the nav menu). */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+/* Collapsed navigation: a pill trigger that opens a dropdown of views. */
+.nav-menu {
+  position: relative;
+}
+
+/* Icon-only trigger (a 3-bar "hamburger"). */
+.nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #3a4150;
+  background: #eceef1;
+  border: 1px solid #dcdfe4;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.nav-trigger:hover {
+  background: #e3e6ea;
+}
+
+.nav-burger {
+  display: block;
+  fill: currentColor;
+}
+
+/* The popup menu, anchored under the trigger. The header owns a stacking layer
+   (z-index above the canvas), so this paints over the active view below. */
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 184px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #dcdfe4;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+/* A labeled group of menu items (e.g. "Game", "Prompts"). */
+.nav-group + .nav-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #eceef1;
+}
+
+.nav-group-heading {
+  padding: 4px 10px 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  color: #3a4150;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: #eceef1;
+}
+
+.nav-item.is-active {
+  color: #fff;
+  background: #2d6cdf;
+}
+
+/* Fixed-size monochrome SVG icon (stroke inherits the item's text color). */
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* The Docs link leaves the app, so set it off below a divider. */
+.nav-item--link {
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid #eceef1;
+  color: #2d6cdf;
+}
+
+/* The stage holds both pages, stacked. Each page absolutely fills it; the active
+   one is shown. `min-height: 0` lets the canvas size to the available space. */
 .app-stage {
   position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+}
+
+/* The canvas page stays rendered underneath at all times (so Godot never resizes
+   to zero); the agents page is an opaque overlay on top when active. */
+.view-game {
+  z-index: 1;
+}
+
+.view-agents {
+  z-index: 2;
+  overflow-y: auto;
+  background: #eceef1;
+  /* This page is its own (only) scroll container. `contain` stops a scroll that
+     reaches the end from chaining to the body and rubber-banding, which used to
+     reveal the black canvas behind it as a flickering bar at the bottom. */
+  overscroll-behavior: contain;
+}
+
+/* Off the game view the canvas is hidden with `visibility` (not `display: none`)
+   so it keeps its CSS size — the Godot engine runs `canvasResizePolicy: 2` and
+   would shrink its framebuffer to zero if the canvas collapsed, so it must stay
+   laid out at full size while not painting. Not painting also means there's no
+   black canvas to show through on overscroll. */
+.app:not([data-view="game"]) .view-game {
+  visibility: hidden;
+}
+
+/* The agent-cards page is always mounted (so the canvas underneath keeps its
+   size); show it only on its own view. */
+.app:not([data-view="agents"]) .view-agents {
+  display: none;
+}
+
+/* The prompt views (chains graph, reader) are opaque dark overlays, mounted only
+   when active (App.tsx), so they just need a layer above the canvas. */
+.view-prompts,
+.view-reader {
+  z-index: 2;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+/* The landing page: an opaque white overlay (mounted only when active) that owns
+   its own vertical scroll, like the agents page. */
+.view-home {
+  z-index: 2;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+}
+
+/* Shown while a lazy-loaded prompt chunk downloads. */
+.pcv-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8b949e;
+  font-size: 13px;
+}
+
+.agents-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
 }
 
 .godot-canvas-wrap {
@@ -37,12 +233,21 @@
 }
 
 .godot-canvas {
-  width: 100%;
-  height: 100%;
   display: block;
   background: #000;
   /* Pixel art: never smooth the campus tiles when the canvas is scaled. */
   image-rendering: pixelated;
+  /* The Godot engine (canvasResizePolicy: 2) sets the canvas to
+     `position:absolute; top:0; left:0` and sizes it to the whole window on every
+     resize. Pin it to the wrap (which fills the stage, below the header) and
+     force its display size to the wrap with !important so that engine-set inline
+     size can't make it overflow the stage or cover the nav bar. The drawing
+     buffer stays window-sized; the browser scales it into this box. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .godot-status {
@@ -52,7 +257,7 @@
   transform: translate(-50%, -50%);
   font-size: 13px;
   line-height: 1.5;
-  color: #aab3c0;
+  color: #cfd6e0;
   text-align: center;
   max-width: 80%;
   pointer-events: none;

@@ -10,13 +10,20 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "export:godot": "bash scripts/export-godot.sh",
-    "gen:replay": "bash scripts/gen-replay.sh"
+    "gen:replay": "bash scripts/gen-replay.sh",
+    "gen:docs": "bash scripts/gen-docs.sh",
+    "gen:promptviz": "bash scripts/gen-promptviz.sh"
   },
   "dependencies": {
+    "cytoscape": "3.30.2",
+    "cytoscape-dagre": "2.5.0",
+    "dagre": "0.8.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/cytoscape": "3.21.9",
+    "@types/dagre": "0.7.52",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

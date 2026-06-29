@@ -56,6 +56,11 @@ var _names: Array = []
 var _agents := {}  # name -> {sprite, label}
 var _t := 0.0
 var _anim_t := 0.0
+# Web only: push the current step to the page so the React companion panel can
+# follow the replay. `_is_web` gates the JS calls to web exports; `_last_step`
+# (-1 = none pushed yet) lets us call out only when the integer step changes.
+var _is_web := false
+var _last_step := -1
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
@@ -71,9 +76,10 @@ func _ready() -> void:
 	_panel.zoom_out_requested.connect(_camera.zoom_out)
 	_camera.follow_stopped.connect(_panel.clear_active)
 
+	_is_web = OS.has_feature("web")
 	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
 	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
-	if OS.has_feature("web"):
+	if _is_web:
 		_load_replay_web()
 	else:
 		_load_replay_desktop()
@@ -259,3 +265,13 @@ func _process(delta: float) -> void:
 		# "<activity> @ UPenn:Building:grounds" -> just the activity for the label.
 		var act := String(a["act"]).split(" @ ")[0]
 		agent["label"].text = "%s\n%s %s" % [name, a["e"], act]
+
+	# Web: tell the React companion panel which step we're showing, so its agent
+	# card + memory list track the canvas. Godot is the clock; we push only on a
+	# step change. `window.__pennReplayStep` is registered by the web shell and is
+	# simply absent on a plain export, where this whole call is a harmless no-op.
+	if _is_web and i != _last_step:
+		_last_step = i
+		JavaScriptBridge.eval(
+			"window.__pennReplayStep && window.__pennReplayStep(%d)" % i, true
+		)
