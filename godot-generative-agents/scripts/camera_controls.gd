@@ -40,10 +40,21 @@ extends Camera2D
 # so a UI panel can drop its "tracking" highlight.
 signal follow_stopped
 
+# A press that moves less than this many screen-pixels before release is treated as
+# a click, not a drag — so we never pan (or drop an agent-follow) for it. This is
+# what lets "click an agent to track them" survive the tiny cursor jitter of a real
+# click: without it, any motion while the button is down cancels the follow the
+# click just started, and you'd zoom in on the agent but not actually follow.
+const DRAG_THRESHOLD_PX := 6.0
+
 # The scene's starting view, captured in _ready() — what Reset returns to.
 var _home_position: Vector2
 var _home_zoom: Vector2
-# True while a mouse-button drag-pan is in progress.
+# A left/middle button is held, so a drag MIGHT start — but it's still just a click
+# until the cursor moves past DRAG_THRESHOLD_PX (see _unhandled_input).
+var _press_armed := false
+var _press_pos := Vector2.ZERO
+# True once an armed press has moved far enough to count as a drag-pan in progress.
 var _dragging := false
 # True while the Reset glide is running (we leave the tween alone, no clamping).
 var _resetting := false
@@ -72,19 +83,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_zoom_at_mouse(1.0 / zoom_step)
 
-	# Hold the left or middle mouse button to drag the map around.
+	# Hold the left or middle mouse button to drag the map around. A press only ARMS a
+	# drag; it doesn't pan (or take control back from an agent-follow) until the cursor
+	# moves past DRAG_THRESHOLD_PX. That tolerance is what keeps a click — e.g. clicking
+	# an agent to track them — from being read as a tiny pan that cancels the follow.
 	if event is InputEventMouseButton and (
 			event.button_index == MOUSE_BUTTON_LEFT
 			or event.button_index == MOUSE_BUTTON_MIDDLE):
-		_dragging = event.pressed
-	elif event is InputEventMouseMotion and _dragging:
-		# Move the world with the cursor: shift the camera opposite the drag,
-		# converting screen pixels to world units through the current zoom. Moving the
-		# camera by hand takes control back from any agent-follow (the sidebar clears
-		# via the follow_stopped signal).
-		stop_following()
-		global_position -= event.relative / zoom
-		_clamp_position()
+		_press_armed = event.pressed
+		_press_pos = event.position
+		_dragging = false
+	elif event is InputEventMouseMotion and _press_armed:
+		# Ignore the jitter of a click; only once we've moved past the threshold does
+		# this become a real pan. Move the world with the cursor: shift the camera
+		# opposite the drag, converting screen pixels to world units through the current
+		# zoom. Panning by hand takes control back from any agent-follow (the sidebar
+		# clears via the follow_stopped signal).
+		if _dragging or event.position.distance_to(_press_pos) >= DRAG_THRESHOLD_PX:
+			_dragging = true
+			stop_following()
+			global_position -= event.relative / zoom
+			_clamp_position()
 
 	# Trackpad gestures (macOS): pinch to zoom, two-finger swipe to pan.
 	elif event is InputEventMagnifyGesture:

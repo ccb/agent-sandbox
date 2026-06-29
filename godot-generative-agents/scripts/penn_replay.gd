@@ -287,8 +287,11 @@ func _on_agent_input(
 ) -> void:
 	# A left-click on an agent's sprite tracks them (or untracks if already tracked) —
 	# the same toggle as the sidebar's Track button, driven through the panel so the
-	# highlight and camera-follow stay consistent. We mark the press handled so the
-	# camera doesn't also read it as the start of a map drag-pan.
+	# highlight and camera-follow stay consistent. Mark the pick handled so a click on
+	# two overlapping agents doesn't fall through and toggle the one behind as well.
+	# (Keeping the click from being read as a map drag-pan is the camera's job — see
+	# camera_controls.gd's DRAG_THRESHOLD_PX — because physics picking runs after the
+	# camera's _unhandled_input, so consuming it here is too late to stop that.)
 	if (
 		event is InputEventMouseButton
 		and event.pressed
