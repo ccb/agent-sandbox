@@ -240,6 +240,15 @@ func clear_active() -> void:
 	_refresh()
 
 
+func toggle_track(name: String) -> void:
+	# Public entry point for an out-of-panel trigger — e.g. clicking the agent's
+	# sprite on the map. Behaves exactly like pressing that character's Track button
+	# (toggles tracking + the row highlight and emits track/stop), so the two ways in
+	# stay in lock-step. No-op for an unknown name.
+	if _rows.has(name):
+		_on_pressed(name)
+
+
 func _on_pressed(name: String) -> void:
 	if _active == name:
 		_active = ""
