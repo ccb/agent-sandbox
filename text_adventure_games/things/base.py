@@ -43,6 +43,13 @@ class Thing:
         # implemented in the Parser.
         self.commands = set()
 
+        # Stimulus-triggered reflexes owned by this thing (see reactions.py).
+        # Attached with game.add_reaction and evaluated in the post-round react
+        # phase. Runtime-only like a Character's behavior -- they hold live
+        # callables/state, so they are re-attached by build_game, never
+        # serialized (to_primitive omits them).
+        self.reactions: list = []
+
     def to_primitive(self):
         """
         Puts the main fields of this base class into a dictionary
