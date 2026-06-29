@@ -77,6 +77,10 @@ class Character(Thing):
         self.inventory = {}
         self.worn = {}
         self.wielded = {}
+        # The last action this character successfully took (a runtime field, not
+        # serialized). Per-actor so the turn loop can charge its duration without
+        # a single global parser.last_action that the next actor would overwrite.
+        self.last_action = None
         # Base hand limit (issue #43). None means unlimited so existing games
         # are unchanged. Container `contents` do not count against this; the
         # container item itself occupies one hand slot.

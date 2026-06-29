@@ -2198,33 +2198,32 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    def _deer_flees(g):
+    def _deer_flees(g, cause):
         old_woods.remove_item(deer)
         deep_woods.add_item(deer)
         deer.examine_text = (
             "The doe stands at bay, wide-eyed, a poacher's crossbow trained on her."
         )
-        cause = (
-            "The shack door bangs shut behind you"
-            if g.player.get_property("visited_shack")
-            else "At the sudden noise"
-        )
         g.parser.ok(
-            f"{cause}, and the doe's head snaps up -- in a flash she bolts, white "
-            "tail flashing, off into the Deep Woods."
+            f"{cause[0].upper()}{cause[1:]}, and the doe's head snaps up -- in a "
+            "flash she bolts, white tail flashing, off into the Deep Woods."
         )
 
-    def _noise_spooks_the_doe(g):
-        # Nothing to spook if she's already bolted (or you're not with her).
-        if "deer" not in old_woods.items or g.player.location is not old_woods:
-            return False
-        # The shack door slamming behind you, OR any loud action in the woods.
-        if g.player.get_property("visited_shack"):
-            return True
-        last = g.parser.last_action
-        return last is not None and last.action_name() in _NOISY_ACTIONS
-
-    game.add_trigger("deer_flees", _noise_spooks_the_doe, _deer_flees, repeatable=True)
+    # Event-based (multi-agent-safe): the doe bolts at a noise in the Old Woods
+    # -- the shack door banging shut as you step out (extra), or any loud action
+    # there (_NOISY_ACTIONS). Reads the round's events, not parser.last_action.
+    game.add_disturbance_trigger(
+        old_woods,
+        _deer_flees,
+        loud=_NOISY_ACTIONS,
+        extra=lambda g: (
+            "the shack door bangs shut behind you"
+            if g.player.get_property("visited_shack")
+            else None
+        ),
+        present=lambda g: "deer" in old_woods.items and g.player.location is old_woods,
+        name="deer_flees",
+    )
 
     # The poacher confrontation begins when YOU reach the Deep Woods (the doe has
     # already fled here), with one grace turn -- you arrive, then must act.
@@ -2244,25 +2243,22 @@ def build_game() -> ActionCastle4:
         repeatable=True,
     )
 
-    def _poacher_kills_deer(g):
-        if deep_woods.get_property("poacher_dealt"):
-            return False
-        if not deep_woods.get_property("confront_started"):
-            return False
-        if g.turn <= deep_woods.get_property("confront_turn"):
-            return False  # the grace turn (you just rode in)
-        last = g.parser.last_action
-        return last is not None and last.action_name() not in _DEER_SAFE_ACTIONS
-
-    game.add_trigger(
-        "poacher_kills_deer",
-        _poacher_kills_deer,
-        lambda g: _die(
+    # Event-based standoff: once the confrontation is live (past its grace turn),
+    # any action in the Deep Woods that isn't shooting -- look is safe -- lets the
+    # poacher loose his arrow. The "anything but X" framing uses `safe=`; reads
+    # the round's events, not parser.last_action.
+    game.add_disturbance_trigger(
+        deep_woods,
+        lambda g, cause: _die(
             g,
             "You hesitate, and the poacher looses his arrow -- the doe drops. With no "
             "guide, you wander the Deep Woods until you are hopelessly lost. THE END.",
         ),
-        repeatable=True,
+        safe=_DEER_SAFE_ACTIONS,
+        present=lambda g: deep_woods.get_property("confront_started")
+        and not deep_woods.get_property("poacher_dealt")
+        and g.turn > (deep_woods.get_property("confront_turn") or 0),
+        name="poacher_kills_deer",
     )
 
     # --- Room descriptions that track state -------------------------------------

@@ -92,10 +92,6 @@ class Parser:
         # Set by fail() so the ReAct loop can read the reason without side-effects
         self.last_fail_message: str | None = None
 
-        # The most recent action that passed its preconditions; the NPC turn
-        # loop reads its get_duration() to charge the per-turn budget (issue #24).
-        self.last_action = None
-
         # How output is shown. The engine builds Messages (by Channel) and hands
         # them to a Renderer; the default picks a colored terminal renderer when
         # one fits, else a plain fallback. Web mode passes a WebRenderer.
@@ -480,24 +476,41 @@ class Parser:
                 return self.parse_command(forwarded, actor=actor)
             self.fail("I'm not sure what you want to do.")
             return False
+        # Resolve the acting character and where they stand *before* the action
+        # runs. A GO moves them, but the action belongs (in the event log) to the
+        # place it was taken -- so "flee south" counts as a disturbance of the
+        # room you fled, not the one you arrived in. The actor is threaded in
+        # explicitly (the player via Game.do_command, an NPC via its behavior),
+        # falling back to scanning the command only when none was supplied.
+        acting = actor if actor is not None else self.get_character(command)
+        origin = (
+            acting.location.name
+            if acting is not None and acting.location is not None
+            else None
+        )
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
-            # Remember the action that just ran so the NPC turn loop can read
-            # its in-game duration when charging the per-turn budget (issue #24).
-            self.last_action = action
-            # Attribute the event to whoever is acting. The actor is threaded in
-            # explicitly — the player via Game.do_command, an NPC via its
-            # behavior — so we record the true subject of the command. Only fall
-            # back to scanning the command for a name when no actor was supplied,
-            # which keeps the field correct even for player commands that name
-            # another character (e.g. "attack troll").
+            # Remember the action that just ran *on the actor* -- not a single
+            # global field -- so the NPC turn loop can read its in-game duration
+            # when charging the per-turn budget (issue #24), correctly per
+            # character even when several act in one round.
+            if acting is not None:
+                acting.last_action = action
+            # Log it with its actor and origin location. Disturbance triggers
+            # read these per-round events (Game.disturbances_this_round) rather
+            # than the single global last_action, so they see every actor's move
+            # and survive a switch to per-agent turns (#25).
             #
             # (An ActionSequence re-enters parse_command per sub-command, so one
             # comma-separated command logs each sub-command plus the wrapping
             # "sequence" action — a future event-log consumer (#9) should expect that.)
-            event_actor = actor if actor is not None else self.get_character(command)
-            self.game.log_event(event_actor.name, action.action_name(), command)
+            self.game.log_event(
+                acting.name if acting is not None else None,
+                action.action_name(),
+                command,
+                payload={"location": origin},
+            )
         return success
 
     def get_character(
