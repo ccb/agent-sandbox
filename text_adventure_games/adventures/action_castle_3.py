@@ -2241,37 +2241,42 @@ def build_game() -> ActionCastle3:
         baby = _held_item(g.player, "baby goblin")
         return baby is not None and baby.get_property("crying")
 
-    def _gave_yourself_away(g):
-        """How you made noise this turn (a phrase to open the death line), or
-        None if you kept quiet."""
-        if _carrying_crying_baby(g):
-            return "The baby's wailing"
-        last = g.parser.last_action
-        if last is not None and last.action_name() in _NOISY_ACTIONS:
-            return "Your sudden racket"
-        return None
+    def _baby_wailing(g):
+        return "the baby's wailing" if _carrying_crying_baby(g) else None
 
-    def _add_ambush_trigger(name, location_name, fate):
-        game.add_trigger(
-            name,
-            lambda g: g.player.location is not None
-            and g.player.location.name == location_name
-            and _gave_yourself_away(g) is not None,
-            lambda g: _die(g, f"{_gave_yourself_away(g)} alerts {fate}"),
-            repeatable=False,
-        )
+    def _ambush(g, cause, fate):
+        _die(g, f"{cause[0].upper()}{cause[1:]} alerts {fate}")
 
-    _add_ambush_trigger(
-        "noise_alerts_bandits",
+    # Event-based (multi-agent-safe): at an ambush spot, the baby's wailing or any
+    # loud action of yours gives you away. Reads the round's events, not
+    # parser.last_action, so it survives a switch to per-agent turns.
+    game.add_disturbance_trigger(
         "Bandit Camp",
-        "the bandits. They overwhelm you and drag you off into the woods to be "
-        "eaten by wild animals. THE END.",
+        lambda g, cause: _ambush(
+            g,
+            cause,
+            "the bandits. They overwhelm you and drag you off into the woods to be "
+            "eaten by wild animals. THE END.",
+        ),
+        loud=_NOISY_ACTIONS,
+        extra=_baby_wailing,
+        present=lambda g: g.player.location is not None
+        and g.player.location.name == "Bandit Camp",
+        name="noise_alerts_bandits",
     )
-    _add_ambush_trigger(
-        "noise_alerts_stirges",
+    game.add_disturbance_trigger(
         "Deep Ravine",
-        "the stirges. They swarm you, stabbing with their needle beaks and "
-        "draining your blood. THE END.",
+        lambda g, cause: _ambush(
+            g,
+            cause,
+            "the stirges. They swarm you, stabbing with their needle beaks and "
+            "draining your blood. THE END.",
+        ),
+        loud=_NOISY_ACTIONS,
+        extra=_baby_wailing,
+        present=lambda g: g.player.location is not None
+        and g.player.location.name == "Deep Ravine",
+        name="noise_alerts_stirges",
     )
 
     # Flavor: the baby wails once each time you carry it into a new room (so the
@@ -2362,23 +2367,17 @@ def build_game() -> ActionCastle3:
         repeatable=True,
     )
 
-    # While the demon looms, anything but throwing the javelin (you may look at
-    # it first) gets you devoured.
-    def demon_devours(g):
-        _die(g, _DEMON_DEATH)
-
-    def _demon_will_devour(g):
-        if not chaos_chapel.get_property("demon_present"):
-            return False
-        if g.turn <= (chaos_chapel.get_property("demon_summoned_turn") or 0):
-            return False  # the turn it's summoned is a grace turn
-        last = g.parser.last_action
-        if last is None:
-            return False
-        return last.action_name() not in _DEMON_SAFE_ACTIONS
-
-    game.add_trigger(
-        "demon_devours", _demon_will_devour, demon_devours, repeatable=True
+    # Event-based standoff: while the demon looms (past its grace turn), anything
+    # in the chapel but throwing the javelin -- you may look first -- gets you
+    # devoured. The "anything but X" framing uses `safe=`; reads the round's
+    # events, not parser.last_action.
+    game.add_disturbance_trigger(
+        chaos_chapel,
+        lambda g, cause: _die(g, _DEMON_DEATH),
+        safe=_DEMON_SAFE_ACTIONS,
+        present=lambda g: chaos_chapel.get_property("demon_present")
+        and g.turn > (chaos_chapel.get_property("demon_summoned_turn") or 0),
+        name="demon_devours",
     )
 
     return game

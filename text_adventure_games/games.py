@@ -116,6 +116,11 @@ class Game:
 
         # Event log (issue #6): append-only record of what happened each round
         self.events = []
+        # Index into `events` marking the start of the current round (set by
+        # do_command / run_simultaneous_round before the player acts). Lets a
+        # react-phase trigger ask "what happened *this round*" without relying on
+        # the turn counter, which increments mid-round (see disturbances_this_round).
+        self._round_event_start = 0
 
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
@@ -240,6 +245,7 @@ class Game:
         # command names another character (e.g. "attack troll") — without it the
         # parser falls back to scanning the command for a name and would mis-log
         # the event under the named target instead of the player.
+        self._round_event_start = len(self.events)  # this command begins a round
         success = self.parser.parse_command(command, actor=self.player)
         if success:
             self.end_turn()
@@ -271,6 +277,77 @@ class Game:
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def disturbances_this_round(self, location_name):
+        """``(actor_name, action_name)`` for every action taken at
+        ``location_name`` during the current round (since the player's command
+        began this turn).
+
+        This is the multi-agent-safe way to ask "what just happened here." It
+        reads the round's logged events rather than the single global
+        ``parser.last_action`` -- so it sees *every* actor's move, not merely
+        whoever acted last, and keeps working once turns become per-agent (#25)."""
+        return [
+            (e.actor, e.action)
+            for e in self.events[self._round_event_start :]
+            if (e.payload or {}).get("location") == location_name
+        ]
+
+    def add_disturbance_trigger(
+        self,
+        location,
+        reaction,
+        *,
+        loud=None,
+        safe=None,
+        extra=None,
+        present=None,
+        exclude=None,
+        name=None,
+    ):
+        """Register a trigger that fires when something disturbs ``location``
+        this round, calling ``reaction(game, cause)``.
+
+        A disturbance is, in order: whatever ``extra(game)`` reports -- a
+        scene-specific noise such as a slamming door or a wailing baby, returned
+        as a cause phrase (or None); or a *loud* action taken at the location by
+        a present actor (its name in ``loud``); or -- if ``safe`` is given
+        instead of ``loud`` -- any action there NOT in ``safe`` (the "anything
+        but X" framing a standoff uses). ``present(game)`` optionally gates the
+        whole thing on the threat still being active; ``exclude`` names an actor
+        whose own actions don't count.
+
+        Multi-agent-safe: it inspects the round's events (disturbances_this_round),
+        never ``parser.last_action``."""
+        loc_name = getattr(location, "name", location)
+
+        def _cause(g):
+            if extra is not None:
+                reported = extra(g)
+                if reported:
+                    return reported
+            for actor, act in g.disturbances_this_round(loc_name):
+                if actor == exclude:
+                    continue
+                disturbing = (
+                    act in loud
+                    if loud is not None
+                    else (safe is not None and act not in safe)
+                )
+                if disturbing:
+                    return (
+                        "your sudden racket"
+                        if actor == g.player.name
+                        else f"the {actor}'s racket"
+                    )
+            return None
+
+        self.add_trigger(
+            name or f"disturbance:{loc_name}",
+            lambda g: (present is None or present(g)) and _cause(g) is not None,
+            lambda g: reaction(g, _cause(g)),
+            repeatable=True,
+        )
 
     def add_trigger(self, name, condition, action, repeatable=False):
         """Register a Trigger evaluated in the post-round react phase (issue #6)."""
