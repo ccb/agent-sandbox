@@ -23,10 +23,14 @@ post-process opens each target building up:
     helpers we reuse. (Williams already has a *furnished* cutaway, so we leave its
     picture alone and only carve its collision, lining the door up with its art.)
 
-The **door** is placed where a natural OSM footway leads up to the building: we
-flood-fill walking distance from every path tile (the ``paths`` layer) and put the
-door on the perimeter cell whose outside neighbour is nearest a path. With no path
-nearby we fall back to the most open side.
+**Doors** go where a natural OSM footway leads up to the building. A wall cell is
+opened when a path tile (the ``paths`` layer) sits *directly against* it; the run of
+such cells along one wall becomes one door, as wide as its walk (capped). A building
+reached by several walks gets several doors. If no path touches the wall at all we
+fall back to a single door at the nearest approach (a flood-fill of walking distance
+from the paths picks the closest wall). A door is just an open gap in the wall ring
+-- a passage framed by the surrounding wall, with no door leaf -- so it reads the
+same whichever way the wall faces.
 
 We also tidy the building tables: name the few footprints OSM left unnamed (by
 their street address) so they become enterable too, and drop the stale "phantom"
@@ -65,14 +69,18 @@ INTERIOR_ARENA_BASE = 1000  # interior arena id = base + sector id (no id clashe
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
 #                     opening end to end (a building may still have several doors)
-PATH_REACH = 3  # how far out (tiles) to look for the approaching footway
+PATH_REACH = 1  # a door only forms where a footway tile sits DIRECTLY against the
+#                 wall (1 tile out). A path 2+ tiles away is a walk passing by, not
+#                 an approach -- looking further once let College Hall's door drift
+#                 off its entrance spur onto the blank stone beside a passing walk.
+FALLBACK_DOOR_WIDTH = 3  # buildings with no path touching the wall get one door at
+#                          the nearest approach, this wide (a normal entrance).
 
-# Shell tiles (same as Williams' cutaway).
+# Shell tiles (same as Williams' cutaway). A door is just an open gap in the wall
+# ring -- floor with no leaf sprite -- so it reads the same whichever way the wall
+# faces; no door tile is needed.
 FLOOR = fb.FLOOR
 WALL = fb.WALL
-# door_wood is a 1-wide, 2-tall sprite (top jamb above the threshold).
-DOOR_BOTTOM = fb.tile_named("door_wood")  # bottom tile == the catalog anchor
-DOOR_TOP = fb.gid("interior_franuka", 6, 6)  # the tile right above it
 
 NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
@@ -221,29 +229,58 @@ def choose_door(foot, perimeter, interior, collision, dist, W, H):
     return best[1] if best else None
 
 
+def links_in_out(c, foot, interior, W, H):
+    """True if perimeter cell `c` could be a door: it touches the interior on one
+    side and a cell outside the footprint on another (so opening it joins in+out)."""
+    x, y = c
+    has_in = any((x + a, y + b) in interior for a, b in NEIGHBOURS)
+    has_out = any(
+        (x + a, y + b) not in foot and 0 <= x + a < W and 0 <= y + b < H
+        for a, b in NEIGHBOURS
+    )
+    return has_in and has_out
+
+
+def widen_fallback(seed, perimeter, interior, foot, W, H, width=FALLBACK_DOOR_WIDTH):
+    """Grow a single fallback door cell along its wall to a natural entrance width.
+
+    Extends from `seed` in both directions parallel to the wall (perpendicular to the
+    cell's outward normal), keeping cells that are themselves valid door cells, up to
+    `width` total. Used only when no footway touches the building."""
+    out = next(
+        ((a, b) for a, b in NEIGHBOURS if (seed[0] + a, seed[1] + b) not in foot), None
+    )
+    if out is None:
+        return {seed}
+    # Wall runs perpendicular to the outward normal.
+    alongs = [(0, 1), (0, -1)] if out[0] != 0 else [(1, 0), (-1, 0)]
+    cells = {seed}
+    for ax, ay in alongs:
+        c = seed
+        while len(cells) < width:
+            c = (c[0] + ax, c[1] + ay)
+            if c in perimeter and links_in_out(c, foot, interior, W, H):
+                cells.add(c)
+            else:
+                break
+    return cells
+
+
 def find_doors(foot, perimeter, interior, paths, W, H):
     """All doors for a building -- one per footway that leads up to it.
 
     Many buildings are reached by more than one walk (College Hall has paths on
     several sides), so rather than a single door we open *every* place a path
     arrives. A perimeter cell belongs to a door when it both links inside to
-    outside and *faces a path* (one of its outward rays hits a `paths` tile within
-    `PATH_REACH` cells). Those cells are grouped into contiguous runs along the
-    wall -- each run is one door, as wide as and aligned with its walk, capped at
-    `MAX_DOOR_WIDTH` so a wall fronting a wide plaza can't open end to end.
+    outside and *faces a path* -- one of its outward rays hits a `paths` tile
+    within `PATH_REACH` cells (1: the path must sit directly against the wall, so a
+    walk merely passing a couple of tiles away does not punch a door). Those cells
+    are grouped into contiguous runs along the wall -- each run is one door, as wide
+    as and aligned with its walk, capped at `MAX_DOOR_WIDTH` so a wall fronting a
+    wide plaza can't open end to end.
 
     Returns a list of door cell-sets, or ``None`` if no path reaches the building
     (the caller then falls back to a single nearest-path door)."""
-
-    def openable(c):
-        if c not in perimeter:
-            return False
-        has_in = any((c[0] + a, c[1] + b) in interior for a, b in NEIGHBOURS)
-        has_out = any(
-            (c[0] + a, c[1] + b) not in foot and 0 <= c[0] + a < W and 0 <= c[1] + b < H
-            for a, b in NEIGHBOURS
-        )
-        return has_in and has_out
 
     def faces_path(c):
         # Look outward in every direction that leaves the footprint.
@@ -258,7 +295,9 @@ def find_doors(foot, perimeter, interior, paths, W, H):
                     return True
         return False
 
-    facing = {c for c in perimeter if openable(c) and faces_path(c)}
+    facing = {
+        c for c in perimeter if links_in_out(c, foot, interior, W, H) and faces_path(c)
+    }
     if not facing:
         return None
 
@@ -320,45 +359,41 @@ def strip_entrance_layers(tmj):
     ]
 
 
-def insert_entrance_layers(tmj, W, H, floor, furn):
+def insert_entrance_layers(tmj, W, H, floor):
     next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
-
-    def mk(name, data, lid):
-        return {
-            "type": "tilelayer",
-            "name": name,
-            "id": lid,
-            "x": 0,
-            "y": 0,
-            "width": W,
-            "height": H,
-            "opacity": 1,
-            "visible": True,
-            "data": data,
-        }
-
-    floor_layer = mk("entrance_floor", floor, next_id)
-    furn_layer = mk("entrance_furniture", furn, next_id + 1)
+    floor_layer = {
+        "type": "tilelayer",
+        "name": "entrance_floor",
+        "id": next_id,
+        "x": 0,
+        "y": 0,
+        "width": W,
+        "height": H,
+        "opacity": 1,
+        "visible": True,
+        "data": floor,
+    }
     if "nextlayerid" in tmj:
-        tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 2)
-    # Sit them just above buildings (with williams_*), below trees.
+        tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 1)
+    # Sit it just above buildings (with williams_*), below trees.
     names = [L.get("name") for L in tmj["layers"]]
     at = names.index("buildings") + 1 if "buildings" in names else len(tmj["layers"])
-    tmj["layers"][at:at] = [floor_layer, furn_layer]
+    tmj["layers"][at:at] = [floor_layer]
 
 
-def paint_interior(floor, furn, foot, perimeter, door, W):
-    """Paint one building's plain cutaway onto the floor/furniture layers."""
+def paint_interior(floor, perimeter, foot, door, W):
+    """Paint one building's plain cutaway onto the floor layer.
+
+    Floor over the whole footprint, wall around the perimeter, and each door cell
+    re-opened to floor. A door is just that open gap in the wall ring -- a passage
+    you walk through, framed by the surrounding wall -- with no door leaf, which
+    reads the same whichever way the wall faces."""
     for x, y in foot:
         floor[y * W + x] = FLOOR
     for x, y in perimeter:
         floor[y * W + x] = WALL
-    # The door: open the wall to floor, then stand a door sprite in the gap.
     for x, y in door:
         floor[y * W + x] = FLOOR
-        furn[y * W + x] = DOOR_BOTTOM
-        if (x, y - 1) in foot:  # 2-tall door reads best with its jamb above
-            furn[(y - 1) * W + x] = DOOR_TOP
 
 
 # --------------------------------------------------------------------------- #
@@ -490,7 +525,13 @@ def main():
             doors = find_doors(foot, perimeter, interior, paths_layer, W, H)
             if doors is None:
                 d = choose_door(foot, perimeter, interior, solid, dist, W, H)
-                doors = [{d} if d else {min(perimeter)}]
+                doors = [
+                    (
+                        widen_fallback(d, perimeter, interior, foot, W, H)
+                        if d
+                        else {min(perimeter)}
+                    )
+                ]
         door_cells = set().union(*doors)
 
         # Collision: hollow the inside, keep the ring a wall, open every door.
@@ -547,12 +588,11 @@ def main():
     strip_entrance_layers(tmj)
     ensure_interior_tilesets(tmj)
     floor = [0] * (W * H)
-    furn = [0] * (W * H)
     for name, foot, perimeter, door in picture_jobs:
         fb.clear_roof_on(tmj, "buildings", foot, W)
         fb.clear_roof_on(tmj, "trees", foot, W)
-        paint_interior(floor, furn, foot, perimeter, door, W)
-    insert_entrance_layers(tmj, W, H, floor, furn)
+        paint_interior(floor, perimeter, foot, door, W)
+    insert_entrance_layers(tmj, W, H, floor)
     with open(args.tmj, "w") as fh:
         json.dump(tmj, fh, separators=(",", ":"))
     print(f"  wrote {os.path.relpath(args.tmj)} ({len(picture_jobs)} plain cutaways)")

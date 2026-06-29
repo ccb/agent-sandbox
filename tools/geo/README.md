@@ -230,11 +230,12 @@ walkable floor and the 1-tile perimeter stays a wall, then opens a door wherever
 footway leads in. Because the backend pathfinder is a BFS over the collision grid,
 a wall ring whose only gaps are doors means "enter/exit through a door" is enforced
 by the map itself — **no movement-code changes**. Doors are found by marking every
-perimeter cell that faces a `paths` tile (within `PATH_REACH`) and grouping those
-into contiguous runs: each run is one door, as wide as and aligned with its walk
-(capped at `MAX_DOOR_WIDTH`). A building reached by several walks therefore gets
-**several doors** (College Hall has many); one reached by none falls back to a
-single door at the nearest path.
+perimeter cell that a `paths` tile sits *directly against* (`PATH_REACH` = 1, so a
+walk merely passing a couple of tiles away doesn't punch a door onto blank ground)
+and grouping those into contiguous runs: each run is one door, as wide as and
+aligned with its walk (capped at `MAX_DOOR_WIDTH`). A building reached by several
+walks therefore gets **several doors** (College Hall has many); one reached by none
+falls back to a single door at the nearest path.
 
 It edits both halves of the world in step:
 
@@ -245,9 +246,10 @@ It edits both halves of the world in step:
   footprints OSM left unnamed (by street address) and drops the stale "phantom"
   sector rows whose footprints fell outside the cropped frame.
 - **Picture** (`upenn_core_urban.tmj`): opens the roof and paints a plain cutaway
-  (floor + wall + a `door_wood` tile) using the same interior tiles as
-  `furnish_building.py`. Williams Hall already has a *furnished* cutaway, so its
-  picture is left alone and only its collision is carved (door lined up with its art).
+  (floor + wall, with each door left as an open gap in the wall ring) using the same
+  interior tiles as `furnish_building.py`. Williams Hall already has a *furnished*
+  cutaway, so its picture is left alone and only its collision is carved (door lined
+  up with its art).
 
 Run it after the bake + Williams furnish (it's idempotent — recomputes every
 footprint from an invariant mask, so re-runs are byte-stable):
