@@ -27,13 +27,39 @@ if [[ -z "$GODOT" ]]; then
   exit 1
 fi
 
-# The replay reads maps/penn_replay.json, which is git-ignored (regenerated per
-# checkout). Nudge the user if it's missing instead of opening to an empty map.
-if [[ "$SCENE" == *penn_replay* && ! -f "$PROJECT_DIR/maps/penn_replay.json" ]]; then
-  echo "No maps/penn_replay.json yet — generate it first (from the repo root):" >&2
-  echo "  uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/sim/the_upenn" >&2
-  echo "  LLM_PROVIDER=mock uv run python godot-generative-agents/sim/generate_penn_replay.py" >&2
-  exit 1
+# maps/penn_replay.json is a *baked* artifact: generate_penn_replay.py runs the sim
+# against the committed collision matrix + world data and freezes the agent paths
+# into JSON. It's git-ignored (regenerated per checkout), and the Godot viewer only
+# plays it back — it never re-reads the matrix. So it can silently fall out of date
+# when its inputs change underneath it (a new building, a moved persona, the grass
+# block, …). Re-bake with this single command — do NOT run osm_to_ville.py here:
+# that regenerates the matrix from OSM at a possibly different grid size and would
+# overwrite committed edits (e.g. the walled-off lawns). Only reshape the campus
+# with osm_to_ville when you actually mean to.
+REPLAY_JSON="$PROJECT_DIR/maps/penn_replay.json"
+BAKE_CMD="LLM_PROVIDER=mock uv run python godot-generative-agents/sim/generate_penn_replay.py"
+# Files the bake reads; if any is newer than the baked replay, the replay is stale.
+REPLAY_INPUTS=(
+  "$PROJECT_DIR/sim/the_upenn/matrix/maze/collision_maze.csv"
+  "$PROJECT_DIR/sim/world_data_upenn.yaml"
+)
+
+if [[ "$SCENE" == *penn_replay* ]]; then
+  if [[ ! -f "$REPLAY_JSON" ]]; then
+    # Missing entirely — bake it before we open to an empty map.
+    echo "No maps/penn_replay.json yet — bake it first (from the repo root):" >&2
+    echo "  $BAKE_CMD" >&2
+    exit 1
+  fi
+  # Present but possibly stale — warn (don't block: you may want the old one).
+  for input in "${REPLAY_INPUTS[@]}"; do
+    if [[ -f "$input" && "$input" -nt "$REPLAY_JSON" ]]; then
+      echo "⚠️  maps/penn_replay.json is older than $(basename "$input") — the replay" >&2
+      echo "    may not reflect the latest map/world (re-bake to refresh it):" >&2
+      echo "      $BAKE_CMD" >&2
+      break
+    fi
+  done
 fi
 
 # Compile any assets whose import cache is missing. Godot stores each asset as a
