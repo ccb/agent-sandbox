@@ -38,7 +38,13 @@ WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 
-DEFAULT_STEPS = 400
+# A full campus day: every persona crosses the (large) map several times AND now
+# walks a multi-room circuit inside Van Pelt. At one tile per step a single
+# cross-campus leg is ~200 steps, so 400 ended mid-morning -- agents barely reached
+# their first building. 1200 lets the whole cast complete its day, including the
+# in-library room-to-room movement (Maya's two Van Pelt visits, Ellis's stacks run,
+# Diego's gallery circuit). The viewer's playback speed is independent of this.
+DEFAULT_STEPS = 1200
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
 
