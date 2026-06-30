@@ -43,12 +43,17 @@ const SPRITE_HALF_PX := 16.0 * SPRITE_SCALE
 # opaque its freshest (head) end is — the tail fades to fully transparent with age.
 const TRAIL_LEN := 8
 const TRAIL_HEAD_ALPHA := 0.7
-# A distinct tint per persona so they're easy to tell apart at a glance.
+# A distinct tint per persona so they're easy to tell apart at a glance. Indexed by
+# persona order (modulo length), shared by the world sprite, the sidebar row, and the
+# minimap dot. Seven tints keep the current Penn cast each a different colour.
 const TINTS := [
-	Color(1.0, 0.95, 0.95),  # Maya  - warm white
-	Color(0.70, 0.82, 1.0),  # Ellis - blue
-	Color(0.80, 1.0, 0.78),  # Diego - green
-	Color(1.0, 0.86, 0.70),  # spare - orange
+	Color(1.0, 0.95, 0.95),  # Maya    - warm white
+	Color(0.70, 0.82, 1.0),  # Ellis   - blue
+	Color(0.80, 1.0, 0.78),  # Diego   - green
+	Color(1.0, 0.86, 0.70),  # Priya   - amber
+	Color(1.0, 0.95, 0.55),  # Marcus  - yellow
+	Color(1.0, 0.78, 0.92),  # Tanaka  - pink
+	Color(0.70, 1.0, 0.97),  # Sofia   - cyan
 ]
 const MONTHS := [
 	"January", "February", "March", "April", "May", "June",
