@@ -19,6 +19,21 @@
 #   activity performed on the doorstep. (The mock brain travels whenever its current
 #   location differs from the stop's place; starting at the hub makes stop 1 a real
 #   trip inside.)
+#
+# Van Pelt Library is furnished into 25 navigable rooms (tools/geo/furnish_van_pelt.py
+# + add_entrances.py, #268), each its own arena address "UPenn:Van Pelt Library:<room>".
+# So instead of stopping in the lobby, the cast below sends its Van Pelt stops to
+# specific rooms: a location like "Van Pelt — Moelis Reading Room" carries the address
+# "UPenn:Van Pelt Library:Moelis Family Grand Reading Room", and the pathfinder routes
+# the agent in through the door and between rooms through the interior doorways. Maya
+# walks a real in-library circuit (circulation desk -> reading room in the morning, the
+# book stacks -> study booths at night), so the replay shows room-to-room movement
+# inside the building rather than an agent frozen at the threshold.
+#
+# Heads-up when adding rooms: a place name must not contain a bare compass word
+# ("north"/"east"/...), because the parser reads "travel to <place>" as a movement
+# command and would treat e.g. "West Wing" as "go west". (That is why the west-wing
+# stacks are named "Book Stacks" here, not "West Wing Stacks".)
 
 personas:
 - name: Maya Chen
@@ -31,19 +46,29 @@ personas:
   - 164
   - 57
   schedule:
-  - place: Houston Hall
-    activity: grabbing a morning coffee at the student union
-    emoji: ☕
-    steps: 100
-  - place: Van Pelt Library
+  # Maya starts on the walk right outside Van Pelt's east door, so her day opens
+  # with a walk straight into the library and a circuit through its rooms.
+  - place: Van Pelt — Circulation Desk
+    activity: checking out a reserved organic chemistry textbook
+    emoji: 📚
+    steps: 15
+  - place: Van Pelt — Moelis Reading Room
     activity: studying for an organic chemistry exam
     emoji: 📚
-    steps: 40
+    steps: 35
+  - place: Houston Hall
+    activity: grabbing a coffee at the student union
+    emoji: ☕
+    steps: 100
   - place: College Hall
     activity: heading to an afternoon seminar
     emoji: 🎓
     steps: 50
-  - place: Van Pelt Library
+  - place: Van Pelt — Book Stacks
+    activity: pulling a few references off the shelves
+    emoji: 📖
+    steps: 20
+  - place: Van Pelt — Study Booths
     activity: reviewing her notes before tomorrow
     emoji: 📖
 - name: Professor Ellis
@@ -58,18 +83,22 @@ personas:
   - place: Houston Hall
     activity: meeting a student over coffee
     emoji: ☕
-    # Ellis lingers at the student union all morning, so he is still there when
-    # Maya arrives -- they share Houston Hall and (with a real brain) their
-    # perception radii touch, so a conversation can happen.
+    # Ellis lingers at the student union through the morning -- both he and Maya
+    # pass through Houston Hall, so with a real brain (and tighter timing) their
+    # perception radii can touch here and a conversation can happen.
     steps: 200
   - place: Williams Hall
     activity: giving a midday lecture
     emoji: 🗣️
     steps: 25
-  - place: Van Pelt Library
+  - place: Van Pelt — Microtext Collection
+    activity: scanning microfilm of primary sources
+    emoji: 📜
+    steps: 20
+  - place: Van Pelt — Book Stacks
     activity: pulling sources for a paper
     emoji: 📜
-    steps: 50
+    steps: 30
   - place: College Hall
     activity: holding office hours
     emoji: 🧑‍🏫
@@ -87,10 +116,14 @@ personas:
     activity: working on a studio model
     emoji: ✏️
     steps: 65
-  - place: Van Pelt Library
+  - place: Van Pelt — Kamin Gallery
+    activity: studying precedents in the gallery exhibits
+    emoji: 🏛️
+    steps: 20
+  - place: Van Pelt — Digital Scholarship Exchange
     activity: researching precedents for a project
     emoji: 🏛️
-    steps: 45
+    steps: 25
   - place: Irvine Auditorium
     activity: attending a guest lecture
     emoji: 🎤
@@ -110,6 +143,29 @@ locations:
 - name: Van Pelt Library
   description: The main university library, where students study at all hours.
   address: UPenn:Van Pelt Library:lobby
+# Named rooms inside Van Pelt (each a furnished, navigable arena from #268). Targeting
+# these instead of the lobby walks an agent through the door and between rooms.
+- name: Van Pelt — Circulation Desk
+  description: The circulation and reserve desk just inside Van Pelt's doors.
+  address: UPenn:Van Pelt Library:Circulation
+- name: Van Pelt — Moelis Reading Room
+  description: The Moelis Family Grand Reading Room, Van Pelt's flagship study hall.
+  address: UPenn:Van Pelt Library:Moelis Family Grand Reading Room
+- name: Van Pelt — Book Stacks
+  description: The west-wing book stacks, rows of open shelving.
+  address: UPenn:Van Pelt Library:West Wing Books
+- name: Van Pelt — Study Booths
+  description: Quiet individual study booths in the west wing.
+  address: UPenn:Van Pelt Library:Study Booths
+- name: Van Pelt — Microtext Collection
+  description: The microfilm and microfiche archive of historical print.
+  address: UPenn:Van Pelt Library:Microtext Collection
+- name: Van Pelt — Kamin Gallery
+  description: The Kamin Gallery, Van Pelt's exhibition space.
+  address: UPenn:Van Pelt Library:Kamin Gallery
+- name: Van Pelt — Digital Scholarship Exchange
+  description: The Research Data and Digital Scholarship Exchange, for data and digital work.
+  address: UPenn:Van Pelt Library:Research Data and Digital Scholarship Exchange
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
   address: UPenn:Houston Hall:lobby
