@@ -19,6 +19,7 @@ room bounding boxes are drawn (a ``houston_arenas`` object layer).
 
 Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 """
+
 import argparse
 import json
 import os
@@ -26,20 +27,20 @@ import shutil
 
 from add_entrances import split_footprint
 
-HOUSTON_SECTOR = "14"      # UPenn:Houston Hall
-HOUSTON_LOBBY = "1014"     # INTERIOR_ARENA_BASE (1000) + sector 14
-FLOOR_GID = 589            # interior_franuka plank_floor_light (col 6,row 2) -- the
-                           # light wood plank Van Pelt + Fisher use (campus-consistent).
+HOUSTON_SECTOR = "14"  # UPenn:Houston Hall
+HOUSTON_LOBBY = "1014"  # INTERIOR_ARENA_BASE (1000) + sector 14
+FLOOR_GID = 589  # interior_franuka plank_floor_light (col 6,row 2) -- the
+# light wood plank Van Pelt + Fisher use (campus-consistent).
 FLOOR_LAYER = "houston_floor"
 
 # wall_set_red thin-line edges (interior_franuka 3x3 autotile at col0/row0,
 # firstgid 519): a ~5px maroon strip on one side of the cell, transparent
 # backing, so it sits on its own layer above the floor.
-WALL_R = 553   # right edge
-WALL_B = 584   # bottom edge
+WALL_R = 553  # right edge
+WALL_B = 584  # bottom edge
 WALL_BR = 585  # bottom-right corner (cell needs both a right and bottom strip)
 WALL_LAYER = "houston_walls"
-DOOR_W = 2     # centered doorway gap, in cells, per partition segment
+DOOR_W = 2  # centered doorway gap, in cells, per partition segment
 
 # rugs sit on their own layer UNDER the furniture so a sofa/table can rest on one
 RUG_LAYER = "houston_rugs"
@@ -50,10 +51,26 @@ OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER, RUG_LAYER, FURN_LAYER]
 
 # Tileset firstgids + column counts (from upenn_core_urban.tmj) so a catalog
 # (sheet,col,row) resolves to a GID and multi-tile sprites can be walked.
-_FIRSTGID = {"franuka": 519, "school": 1543, "bath": 1799, "kenney": 1,
-             "alchemy": 3000, "bedroom": 4024, "clockwork": 5048, "music": 6072}
-_SHEET_COLS = {"franuka": 32, "school": 16, "bath": 16, "kenney": 27,
-               "alchemy": 32, "bedroom": 32, "clockwork": 32, "music": 32}
+_FIRSTGID = {
+    "franuka": 519,
+    "school": 1543,
+    "bath": 1799,
+    "kenney": 1,
+    "alchemy": 3000,
+    "bedroom": 4024,
+    "clockwork": 5048,
+    "music": 6072,
+}
+_SHEET_COLS = {
+    "franuka": 32,
+    "school": 16,
+    "bath": 16,
+    "kenney": 27,
+    "alchemy": 32,
+    "bedroom": 32,
+    "clockwork": 32,
+    "music": 32,
+}
 
 
 def read_flat(path):
@@ -68,13 +85,19 @@ def houston_interior_cells(tmj, matrix_dir):
     perimeter ring. Computed from the footprint, not the arena ids, so it stays
     correct after add_entrances subdivides the interior into per-room arenas."""
     W, H = tmj["width"], tmj["height"]
-    ef = next((L for L in tmj["layers"]
-               if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"), None)
-    entrance = ({(i % W, i // W) for i, v in enumerate(ef["data"]) if v}
-                if ef else set())
+    ef = next(
+        (
+            L
+            for L in tmj["layers"]
+            if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"
+        ),
+        None,
+    )
+    entrance = {(i % W, i // W) for i, v in enumerate(ef["data"]) if v} if ef else set()
     sector = read_flat(os.path.join(matrix_dir, "maze", "sector_maze.csv"))
-    foot = {(i % W, i // W) for i, s in enumerate(sector)
-            if s == HOUSTON_SECTOR} & entrance
+    foot = {
+        (i % W, i // W) for i, s in enumerate(sector) if s == HOUSTON_SECTOR
+    } & entrance
     _perimeter, interior = split_footprint(foot, W, H)
     return {y * W + x for (x, y) in interior}
 
@@ -83,8 +106,14 @@ def read_sections(tmj):
     """Room name -> (c0, r0, c1, r1) inclusive tile rect, from the hand-drawn
     houston_arenas object layer. Objects whose name contains 'rug' are rug-fill
     regions, not rooms, so they are excluded (consistent with Fisher)."""
-    fa = next((L for L in tmj["layers"]
-               if L.get("name") == "houston_arenas" and L.get("type") == "objectgroup"), None)
+    fa = next(
+        (
+            L
+            for L in tmj["layers"]
+            if L.get("name") == "houston_arenas" and L.get("type") == "objectgroup"
+        ),
+        None,
+    )
     secs = {}
     if not fa:
         return secs
@@ -142,9 +171,16 @@ def _strip(tmj, names):
 
 def _new_layer(name, data, W, H, layer_id):
     return {
-        "type": "tilelayer", "name": name, "id": layer_id,
-        "x": 0, "y": 0, "width": W, "height": H,
-        "opacity": 1, "visible": True, "data": data,
+        "type": "tilelayer",
+        "name": name,
+        "id": layer_id,
+        "x": 0,
+        "y": 0,
+        "width": W,
+        "height": H,
+        "opacity": 1,
+        "visible": True,
+        "data": data,
     }
 
 
@@ -165,7 +201,11 @@ def apply(tmj, matrix_dir):
         tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 1)
 
     names = [L.get("name") for L in tmj["layers"]]
-    at = names.index("entrance_floor") + 1 if "entrance_floor" in names else len(tmj["layers"])
+    at = (
+        names.index("entrance_floor") + 1
+        if "entrance_floor" in names
+        else len(tmj["layers"])
+    )
     tmj["layers"][at:at] = [floor]
     return len(interior)
 
@@ -215,8 +255,10 @@ def _wall_data(tmj, interior, W, H):
 
     # A boundary is walled only between two interior cells of different rooms
     # (or a room and circulation); skip room|perimeter (perimeter blocks already).
-    vert = collections.defaultdict(list)   # (c, pair) -> rows; wall on (c,r) right edge
-    horiz = collections.defaultdict(list)  # (r, pair) -> cols; wall on (c,r) bottom edge
+    vert = collections.defaultdict(list)  # (c, pair) -> rows; wall on (c,r) right edge
+    horiz = collections.defaultdict(
+        list
+    )  # (r, pair) -> cols; wall on (c,r) bottom edge
     for idx in interior:
         c, r = idx % W, idx // W
         ra = cell2room.get(idx)
@@ -248,7 +290,7 @@ def _wall_data(tmj, interior, W, H):
                     Hcells.add((c, r))
 
     data = [0] * (W * H)
-    for (c, r) in Vcells | Hcells:
+    for c, r in Vcells | Hcells:
         v, h = (c, r) in Vcells, (c, r) in Hcells
         data[r * W + c] = WALL_BR if (v and h) else (WALL_R if v else WALL_B)
 
@@ -336,7 +378,7 @@ def _room_layouts(sections):
             add("sofa", c1 - 4, r0 + 1)
             add("sofa", c1 - 4, r1 - 2)
             add("candelabra", c0 + 14, r0 + 5)
-            for (px, py) in ((c0, r0), (c1 - 1, r0), (c0, r1 - 1), (c1 - 1, r1 - 1)):
+            for px, py in ((c0, r0), (c1 - 1, r0), (c0, r1 - 1), (c1 - 1, r1 - 1)):
                 add("plant", px, py)
         elif name == "Reading Room":
             # bookshelves line both long walls; reading tables down the middle
@@ -349,8 +391,16 @@ def _room_layouts(sections):
                 add("armchair_orange", c0 + 5, rr)
         elif name == "Chess Room":
             # chess tables (small round tables + stools) with snacks on/at them
-            foods = ["food_ham", "food_salad", "food_fish", "bread",
-                     "food_bowl", "basket_fruit", "mug", "food_sausage"]
+            foods = [
+                "food_ham",
+                "food_salad",
+                "food_fish",
+                "bread",
+                "food_bowl",
+                "basket_fruit",
+                "mug",
+                "food_sausage",
+            ]
             k = 0
             for rr in (r0 + 2, r0 + 6, r0 + 10):
                 for cc in (c0 + 2, c0 + 6):
@@ -440,7 +490,9 @@ def apply_furniture(tmj, matrix_dir):
     if "nextlayerid" in tmj:
         tmj["nextlayerid"] = max(tmj["nextlayerid"], base + 2)
     names = [L.get("name") for L in tmj["layers"]]
-    anchor = next((n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None)
+    anchor = next(
+        (n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None
+    )
     at = names.index(anchor) + 1 if anchor else len(tmj["layers"])
     tmj["layers"][at:at] = [rugs, furn]
     return placed, proposed
@@ -450,11 +502,20 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tmj", default=os.path.join(
-        repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"))
-    ap.add_argument("--matrix", default=os.path.join(
-        repo, "godot-generative-agents", "sim", "the_upenn", "matrix"))
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -463,8 +524,10 @@ def main():
     floored = apply(tmj, args.matrix)
     print(f"houston_floor: painted {floored} interior cells (GID {FLOOR_GID})")
     walls, doors, removed = apply_walls(tmj, args.matrix)
-    print(f"houston_walls: {walls} wall cells, {doors} doorway cells "
-          f"({removed} removed to keep <=3 per 2x2)")
+    print(
+        f"houston_walls: {walls} wall cells, {doors} doorway cells "
+        f"({removed} removed to keep <=3 per 2x2)"
+    )
     fplaced, fprop = apply_furniture(tmj, args.matrix)
     print(f"houston_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
