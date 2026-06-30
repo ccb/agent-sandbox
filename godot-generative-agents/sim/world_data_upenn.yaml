@@ -55,11 +55,13 @@ personas:
   - place: Van Pelt — Moelis Reading Room
     activity: studying for an organic chemistry exam
     emoji: 📚
-    steps: 35
+    # A long morning in the reading room: Priya Nair shares it with her, so this
+    # window has to outlast their conversation (see the `meetings` block below).
+    steps: 70
   - place: Houston Hall
     activity: grabbing a coffee at the student union
     emoji: ☕
-    steps: 100
+    steps: 60
   - place: College Hall
     activity: heading to an afternoon seminar
     emoji: 🎓
@@ -83,10 +85,9 @@ personas:
   - place: Houston Hall
     activity: meeting a student over coffee
     emoji: ☕
-    # Ellis lingers at the student union through the morning -- both he and Maya
-    # pass through Houston Hall, so with a real brain (and tighter timing) their
-    # perception radii can touch here and a conversation can happen.
-    steps: 200
+    # Ellis lingers at the student union through the morning; Marcus Webb joins him
+    # for coffee here (see the `meetings` block), so this window stays long.
+    steps: 150
   - place: Williams Hall
     activity: giving a midday lecture
     emoji: 🗣️
@@ -119,7 +120,9 @@ personas:
   - place: Van Pelt — Kamin Gallery
     activity: studying precedents in the gallery exhibits
     emoji: 🏛️
-    steps: 20
+    # Sofia Ramirez wanders in while Diego is here (see `meetings`), so give the
+    # gallery stop a long window for their exchange.
+    steps: 70
   - place: Van Pelt — Digital Scholarship Exchange
     activity: researching precedents for a project
     emoji: 🏛️
@@ -131,6 +134,107 @@ personas:
   - place: Meyerson Hall
     activity: refining the model late into the day
     emoji: ✏️
+- name: Priya Nair
+  home: Penn campus
+  persona: I am Priya Nair, 20, a junior studying computer science at Penn. I am
+    sharp, social, and always somewhere between a problem set and a coffee. Maya and
+    I have been study buddies since freshman bio.
+  emoji: 💻
+  # Starts on the walk beside Van Pelt's east door, next to Maya, so the two of them
+  # head into the reading room together.
+  start_tile:
+  - 163
+  - 57
+  schedule:
+  - place: Van Pelt — Moelis Reading Room
+    activity: working through a problem set with Maya
+    emoji: 💻
+    # Priya gets to the reading room first and settles in for a long morning;
+    # Maya arrives later (after the circulation desk), so this stays long enough
+    # that the two overlap through their whole conversation.
+    steps: 200
+  - place: Houston Hall
+    activity: grabbing lunch between classes
+    emoji: 🥪
+    steps: 50
+  - place: Van Pelt — Digital Scholarship Exchange
+    activity: pulling a dataset for a course project
+    emoji: 💻
+    steps: 40
+  - place: College Hall
+    activity: heading to an afternoon lecture
+    emoji: 🎓
+- name: Marcus Webb
+  home: Penn campus
+  persona: I am Marcus Webb, 20, a sophomore and part-time campus tour guide. I am
+    chatty, upbeat, and I know every shortcut on Locust Walk. I'm taking Professor
+    Ellis's history seminar this term.
+  emoji: 🎒
+  # Starts just outside Houston Hall, where he grabs coffee before a morning tour --
+  # the same student union where Ellis is holding court.
+  start_tile:
+  - 120
+  - 223
+  schedule:
+  - place: Houston Hall
+    activity: grabbing coffee before a campus tour
+    emoji: ☕
+    # Marcus gets here first; he lingers long enough that Ellis (a longer walk from
+    # the southwest) arrives and they share the student union through their whole
+    # coffee chat (see `meetings`).
+    steps: 220
+  - place: College Hall
+    activity: leading a tour group past the green
+    emoji: 🎒
+    steps: 45
+  - place: Van Pelt — Microtext Collection
+    activity: digging up an old campus map for the tour
+    emoji: 🗺️
+- name: Professor Tanaka
+  home: Penn campus
+  persona: I am Professor Tanaka, 47, a physicist at Penn. I am precise and warm with
+    students, and happiest explaining the universe with a marker in hand.
+  emoji: 🔬
+  # Starts outside Irvine, where she is hosting an afternoon guest lecture, and stays
+  # long enough that Diego and Sofia arrive while she is still setting up.
+  start_tile:
+  - 180
+  - 212
+  schedule:
+  - place: Irvine Auditorium
+    activity: setting up for an afternoon guest lecture
+    emoji: 🔬
+    # Holds the hall all afternoon -- long enough that Sofia (who only drifts over
+    # after a long spell in the gallery) arrives while she is still there (see
+    # `meetings`).
+    steps: 800
+  - place: Williams Hall
+    activity: holding a problem session for her physics class
+    emoji: 🧮
+- name: Sofia Ramirez
+  home: Penn campus
+  persona: I am Sofia Ramirez, 18, a first-year still finding my way around Penn. I
+    am wide-eyed, friendly, and curious about everything on campus.
+  emoji: 🗺️
+  # Starts in the north of campus near Meyerson, then drifts into Van Pelt's gallery
+  # and on to the guest lecture at Irvine.
+  start_tile:
+  - 191
+  - 63
+  schedule:
+  - place: Van Pelt — Kamin Gallery
+    activity: wandering the gallery exhibits
+    emoji: 🖼️
+    # Lingers in the gallery long enough that Diego (who arrives much later, after
+    # his Meyerson studio session and the cross-campus walk) overlaps with her here
+    # through their whole exchange (see `meetings`).
+    steps: 220
+  - place: Irvine Auditorium
+    activity: sitting in on a guest lecture
+    emoji: 🎤
+    steps: 60
+  - place: Houston Hall
+    activity: meeting friends for dinner
 
 locations:
 - name: Penn campus
@@ -178,3 +282,56 @@ locations:
 - name: Irvine Auditorium
   description: The landmark auditorium that hosts lectures and performances.
   address: UPenn:Irvine Auditorium:lobby
+
+# ---------------------------------------------------------------------------
+# Scripted meetings (read by sim/generate_penn_replay.py, NOT by the engine's
+# load_world_data). The mock brain never produces dialogue, so to show the
+# viewer's speech-bubble + conversation-link feature offline we author a short
+# exchange per meeting and the generator injects it into the replay's `chat`
+# field -- but ONLY across the frames where the participants are actually within
+# the perception radius of each other (proximity-honest: a bubble/link is never
+# drawn between agents who aren't really standing together on the map). If a
+# meeting's participants never co-locate long enough in a given bake, the
+# generator skips it and logs a warning rather than faking a cross-map chat.
+#
+# Each `dialogue` line is [speaker, text]; the speaker must be a participant.
+# Keep exchanges short: the viewer plays ~14 steps per line, and the whole
+# exchange must fit inside the window the participants are actually together.
+#
+# `at` names the location (must match a `locations` name above) where the meeting
+# happens. The generator routes the participants to a tight rendezvous cluster
+# inside that place -- a few tiles apart, so they settle within perception range
+# of each other (a short conversation link) rather than at opposite edges of a big
+# room. The participants' schedules still have to put them there at the same time.
+meetings:
+- label: Maya & Priya cram for the orgo exam (Moelis Reading Room)
+  at: Van Pelt — Moelis Reading Room
+  participants: [Maya Chen, Priya Nair]
+  dialogue:
+  - [Maya Chen, "Priya! Did you get through the reaction mechanisms?"]
+  - [Priya Nair, "Barely -- chapter 12 nearly broke me. You?"]
+  - [Maya Chen, "Same. Want to quiz each other before the exam?"]
+  - [Priya Nair, "Yes. Then I owe us both a coffee at Houston."]
+- label: Diego shows Sofia around the gallery (Kamin Gallery)
+  at: Van Pelt — Kamin Gallery
+  participants: [Diego Torres, Sofia Ramirez]
+  dialogue:
+  - [Sofia Ramirez, "Oh wow -- is this whole gallery student work?"]
+  - [Diego Torres, "Some of it. I'm pulling precedents for my studio project."]
+  - [Sofia Ramirez, "That's amazing. I had no idea the library had this."]
+  - [Diego Torres, "Stick around -- the guest lecture at Irvine is worth it too."]
+- label: Ellis and Marcus over coffee (Houston Hall)
+  at: Houston Hall
+  participants: [Professor Ellis, Marcus Webb]
+  dialogue:
+  - [Marcus Webb, "Morning, Professor! Mind if I take this seat?"]
+  - [Professor Ellis, "Of course, Marcus. How's the seminar treating you?"]
+  - [Marcus Webb, "Loving it -- though the reading is no joke."]
+  - [Professor Ellis, "It never is. My office hours are open if you need them."]
+- label: Before the guest lecture at Irvine (Irvine Auditorium)
+  at: Irvine Auditorium
+  participants: [Professor Tanaka, Sofia Ramirez]
+  dialogue:
+  - [Professor Tanaka, "Find a seat anywhere -- we start in a few minutes."]
+  - [Sofia Ramirez, "Thank you! I've never been inside Irvine before."]
+  - [Professor Tanaka, "First time? Sit close -- the demos are the best part."]
