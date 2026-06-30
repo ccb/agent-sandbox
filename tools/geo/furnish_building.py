@@ -55,14 +55,29 @@ SHEETS = [
     ("interior_school", "interior_school.png", 16, 16),  # desks / blackboards
     ("interior_bath", "interior_bath.png", 16, 16),  # toilets / sinks
 ]
+# Franuka expansion sheets (each 32x32) appended later. Their firstgids are
+# PINNED above decor_plants (which ends at gid 2138) so they never collide, and
+# spaced 1024 apart so each sheet owns a clean block.
+EXPANSION_SHEETS = [
+    # name, image file, cols, rows, pinned firstgid
+    ("interior_alchemy", "interior_alchemy.png", 32, 32, 3000),
+    ("interior_bedroom", "interior_bedroom.png", 32, 32, 4024),
+    ("interior_clockwork", "interior_clockwork.png", 32, 32, 5048),
+    ("interior_music", "interior_music.png", 32, 32, 6072),
+]
 
-# Resolve each sheet's firstgid + column count in declaration order.
+# Resolve each sheet's firstgid + column count.
 _FIRST, _COLS = {}, {}
 _g = FIRST_GID
 for name, _image, cols, rows in SHEETS:
     _FIRST[name] = _g
     _COLS[name] = cols
     _g += cols * rows
+for name, _image, cols, rows, firstgid in EXPANSION_SHEETS:
+    _FIRST[name] = firstgid
+    _COLS[name] = cols
+# every appended interior sheet as (name, image, cols, rows), for tileset insertion
+_ALL_SHEETS = SHEETS + [(n, i, c, r) for (n, i, c, r, _fg) in EXPANSION_SHEETS]
 
 
 def gid(sheet: str, col: int, row: int) -> int:
@@ -78,7 +93,17 @@ def gid(sheet: str, col: int, row: int) -> int:
 # the room-filling code already uses, so behaviour is unchanged.
 # --------------------------------------------------------------------------- #
 F, S, B = "interior_franuka", "interior_school", "interior_bath"
-_SHEET_ALIAS = {"franuka": F, "school": S, "bath": B, "kenney": "kenney_urban"}
+A = "interior_alchemy"
+_SHEET_ALIAS = {
+    "franuka": F,
+    "school": S,
+    "bath": B,
+    "kenney": "kenney_urban",
+    "alchemy": A,
+    "bedroom": "interior_bedroom",
+    "clockwork": "interior_clockwork",
+    "music": "interior_music",
+}
 
 # The base Kenney tileset is already in every map at firstgid 1 (27 cols), so
 # catalog entries on the "kenney" sheet (street lamps, signs, trees) resolve to
@@ -401,7 +426,7 @@ def strip_previous(tmj):
 
 
 def append_tilesets(tmj):
-    for name, img, cols, rows in SHEETS:
+    for name, img, cols, rows in _ALL_SHEETS:
         tmj["tilesets"].append(
             {
                 "firstgid": _FIRST[name],
