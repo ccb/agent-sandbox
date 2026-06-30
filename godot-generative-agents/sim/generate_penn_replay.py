@@ -22,6 +22,8 @@ import argparse
 import json
 import os
 
+import yaml
+
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
@@ -47,6 +49,15 @@ OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 DEFAULT_STEPS = 1200
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
+
+# How the Godot viewer (scripts/penn_replay.gd) plays a `chat` transcript back:
+# ~DIALOGUE_LINE_STEPS replay steps per line, with the last line fading over
+# DIALOGUE_FADE_STEPS. We mirror them here so the conversation injector only fires
+# a meeting when the participants stay together long enough for the whole exchange
+# to play out on the map (otherwise the bubbles/link would linger after they part).
+# Keep in sync with the constants of the same name in penn_replay.gd.
+DIALOGUE_LINE_STEPS = 14
+DIALOGUE_FADE_STEPS = 2
 
 
 def _pin_building_meeting_points(world_map, offset=5.0):
@@ -105,6 +116,69 @@ def _pin_building_meeting_points(world_map, offset=5.0):
     return world_map
 
 
+def _rendezvous_clusters(world_map, addresses, spacing=4):
+    """For each meeting venue, a tight cluster of a few walkable tiles near its
+    centre, all within a couple of `spacing` of each other.
+
+    Routing every participant of a meeting onto one of these (below) makes them
+    settle a handful of tiles apart -- comfortably inside the perception radius, so
+    a conversation reads as people standing together with a short link, rather than
+    at opposite ends of a big room (which the per-side centre routing can leave
+    them). Tiles are taken from the venue's own arena, so they're always walkable
+    and inside the room.
+    """
+    clusters: dict = {}
+    for address in addresses:
+        tiles = [t for t in world_map.tiles_for(address) if not world_map.is_blocked(t)]
+        if not tiles:
+            continue
+        cx = sum(t[0] for t in tiles) / len(tiles)
+        cy = sum(t[1] for t in tiles) / len(tiles)
+        # The centre tile plus two neighbours offset by `spacing`, each snapped to
+        # the nearest real arena tile; de-duplicated but order-preserving.
+        wants = [(cx, cy), (cx + spacing, cy), (cx, cy + spacing)]
+        cluster: list = []
+        for wx, wy in wants:
+            t = min(tiles, key=lambda p: (p[0] - wx) ** 2 + (p[1] - wy) ** 2)
+            if t not in cluster:
+                cluster.append(t)
+        if cluster:
+            clusters[address] = cluster
+    return clusters
+
+
+def _pin_meeting_rendezvous(world_map, venues):
+    """Route each successive arrival at a meeting venue to a distinct tile in its
+    rendezvous cluster (round-robin), so participants converge a few tiles apart.
+
+    Wraps whatever ``walk_path`` is already installed (e.g. the centre routing
+    above) and only intercepts the venue addresses; every other destination falls
+    through unchanged. Any two cluster tiles are within perception range, so it
+    doesn't matter which arrival gets which slot -- participants always end up close
+    enough to converse. If the cluster tile is somehow unreachable we fall back to
+    the underlying routing, so no agent is stranded.
+    """
+    orig_walk_path = world_map.walk_path
+    counts: dict = {address: 0 for address in venues}
+
+    def walk_path(from_tile, address):
+        cluster = venues.get(address)
+        if cluster:
+            target = tuple(cluster[counts[address] % len(cluster)])
+            counts[address] += 1
+            if tuple(from_tile) == target:
+                return []  # already standing on the rendezvous tile
+            path = path_finder.path_finder(
+                world_map.collision, tuple(from_tile), target, 1
+            )
+            if path and len(path) > 1:
+                return [tuple(t) for t in path[1:]]
+        return orig_walk_path(from_tile, address)
+
+    world_map.walk_path = walk_path
+    return world_map
+
+
 def _gate_conversations_by_perception(built):
     """Make the Penn agents converse only with whoever they can *perceive*.
 
@@ -134,6 +208,105 @@ def _gate_conversations_by_perception(built):
     return game, characters
 
 
+def _load_meetings(path):
+    """Read the authored `meetings` block from the world YAML (or [] if absent).
+
+    `load_world_data` only returns personas + locations, so we read the file
+    ourselves for this Godot-only extra. Each meeting is
+    ``{label?, participants: [name...], dialogue: [[speaker, text], ...]}``.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("meetings", []) or []
+
+
+def _inject_scripted_conversations(replay, meetings, vision_r):
+    """Paint authored dialogue into the replay's `chat` field -- proximity-honestly.
+
+    The mock brain never speaks, so the viewer's speech-bubble + conversation-link
+    feature would otherwise never fire. For each authored meeting we find the
+    longest stretch of the bake where *every* participant is within ``vision_r``
+    tiles of each other (the same radius the viewer draws as perception fog), and
+    only if that stretch is long enough to play the whole exchange do we write the
+    transcript onto each participant's `chat` for that window. The viewer keys the
+    bubble/link off `chat`, so a conversation is only ever drawn between agents who
+    are genuinely standing together on the map.
+
+    If a meeting's participants never co-locate long enough in this bake, it is
+    SKIPPED with a warning rather than faked across the map -- so changing a
+    schedule can quietly drop a meeting, and the log says which and why.
+    """
+    frames = replay["frames"]
+    n = len(frames)
+    if n == 0:
+        return
+
+    def co_located(i, participants):
+        pts = []
+        for p in participants:
+            ent = frames[i].get(p)
+            if ent is None:
+                return False
+            pts.append((ent["x"], ent["y"]))
+        for a in range(len(pts)):
+            for b in range(a + 1, len(pts)):
+                dx, dy = pts[a][0] - pts[b][0], pts[a][1] - pts[b][1]
+                if (dx * dx + dy * dy) ** 0.5 > vision_r:
+                    return False
+        return True
+
+    cast = set(frames[0].keys())
+    print(f"Injecting scripted conversations (vision_r={vision_r} tiles):")
+    fired = 0
+    for m in meetings:
+        participants = m.get("participants", [])
+        dialogue = [[str(s), str(t)] for s, t in m.get("dialogue", [])]
+        label = m.get("label", " + ".join(participants))
+        missing = [p for p in participants if p not in cast]
+        if len(participants) < 2 or not dialogue or missing:
+            print(f"  - SKIP  {label}: bad spec (missing {missing or 'dialogue'}).")
+            continue
+
+        # Frames the whole exchange needs to play (incl. the final fade).
+        need = len(dialogue) * DIALOGUE_LINE_STEPS + DIALOGUE_FADE_STEPS
+
+        # Longest contiguous run where all participants are mutually within range.
+        best_start, best_len, cur_start = -1, 0, None
+        for i in range(n):
+            if co_located(i, participants):
+                cur_start = i if cur_start is None else cur_start
+                if i - cur_start + 1 > best_len:
+                    best_len, best_start = i - cur_start + 1, cur_start
+            else:
+                cur_start = None
+
+        if best_len < need:
+            print(
+                f"  - SKIP  {label}: longest co-located window {best_len} steps "
+                f"< {need} needed for {len(dialogue)} lines."
+            )
+            continue
+
+        start, end = best_start, best_start + need
+        # Don't garble a participant who is already mid-conversation in this window.
+        clash = any(
+            frames[i][p].get("chat") for i in range(start, end) for p in participants
+        )
+        if clash:
+            print(f"  - SKIP  {label}: overlaps another meeting's window.")
+            continue
+
+        for i in range(start, end):
+            for p in participants:
+                frames[i][p]["chat"] = dialogue
+        fired += 1
+        print(
+            f"  - FIRE  {label}: steps {start}-{end} "
+            f"({len(participants)} agents, window {best_len} steps)."
+        )
+    print(f"Injected {fired}/{len(meetings)} meetings.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
     ap.add_argument("--steps", type=int, default=DEFAULT_STEPS)
@@ -141,7 +314,22 @@ def main() -> int:
     args = ap.parse_args()
 
     personas, locations = load_world_data(WORLD_DATA)
+    meetings = _load_meetings(WORLD_DATA)
+
     world_map = _pin_building_meeting_points(WorldMap(UPENN_DIR))
+    # Route each meeting's participants to a tight rendezvous cluster inside its
+    # venue, so they settle close enough to converse (the centre routing alone can
+    # leave them just out of perception range -- see _rendezvous_clusters).
+    addr_of = {loc["name"]: loc.get("address") for loc in locations}
+    venue_addrs = {
+        addr_of[m["at"]]
+        for m in meetings
+        if m.get("at") in addr_of and addr_of[m["at"]]
+    }
+    world_map = _pin_meeting_rendezvous(
+        world_map, _rendezvous_clusters(world_map, venue_addrs)
+    )
+
     print(
         f"Loaded the_upenn ({world_map.width}x{world_map.height}); "
         f"{len(personas)} personas. Simulating {args.steps} steps..."
@@ -209,6 +397,12 @@ def main() -> int:
         # The panel filters to created_turn <= current step to show history so far.
         "memory_streams": memory_streams,
     }
+
+    # Light up the viewer's speech-bubble + conversation-link feature with authored
+    # dialogue, but only across the frames where the participants are actually
+    # standing together (see _inject_scripted_conversations). No-op if the world
+    # has no `meetings` block.
+    _inject_scripted_conversations(replay, meetings, SMALLVILLE_VISION_R)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as fh:
