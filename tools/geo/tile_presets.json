@@ -1,5 +1,35 @@
 {
   "_README": "Tile-usage presets: named subsets of furniture_catalog.json that say 'these are the tiles an LLM should use when furnishing/parsing the tilemap'. Created/edited in catalog_web.py and consumed by tile_presets.py (--menu prints the LLM-facing tile menu). 'active' names the default preset the LLM uses. Each preset: {description, tiles:[catalog names], notes:{name: hint}}.",
-  "active": null,
-  "presets": {}
+  "active": "general-library",
+  "presets": {
+    "general-library": {
+      "description": "Generally used for libraries",
+      "tiles": [
+        "door_wood",
+        "floor_stone_hex",
+        "armchair",
+        "sofa",
+        "fireplace",
+        "candelabra",
+        "dining_table_light",
+        "bookshelf_wood_books",
+        "armchair_orange",
+        "bookshelf_tan",
+        "rug_red",
+        "crate",
+        "lantern",
+        "book_stack_red",
+        "quill_ink",
+        "scroll",
+        "wall_brick",
+        "wall_set_red",
+        "student_desk",
+        "student_desk_open",
+        "teacher_desk",
+        "blackboard",
+        "books_green"
+      ],
+      "notes": {}
+    }
+  }
 }
