@@ -41,7 +41,19 @@ WALL_BR = 585  # bottom-right corner (cell needs both a right and bottom strip)
 WALL_LAYER = "houston_walls"
 DOOR_W = 2     # centered doorway gap, in cells, per partition segment
 
-OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER]
+# rugs sit on their own layer UNDER the furniture so a sofa/table can rest on one
+RUG_LAYER = "houston_rugs"
+FURN_LAYER = "houston_furniture"
+RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cyan"}
+
+OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER, RUG_LAYER, FURN_LAYER]
+
+# Tileset firstgids + column counts (from upenn_core_urban.tmj) so a catalog
+# (sheet,col,row) resolves to a GID and multi-tile sprites can be walked.
+_FIRSTGID = {"franuka": 519, "school": 1543, "bath": 1799, "kenney": 1,
+             "alchemy": 3000, "bedroom": 4024, "clockwork": 5048, "music": 6072}
+_SHEET_COLS = {"franuka": 32, "school": 16, "bath": 16, "kenney": 27,
+               "alchemy": 32, "bedroom": 32, "clockwork": 32, "music": 32}
 
 
 def read_flat(path):
@@ -255,6 +267,169 @@ def apply_walls(tmj, matrix_dir):
     return sum(1 for v in data if v), doors, removed
 
 
+def load_sprites():
+    """catalog name -> (top_left_gid, w, h, sheet) for every catalogued sprite."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "furniture_catalog.json")) as fh:
+        cat = json.load(fh)
+    out = {}
+    for name, v in cat["objects"].items():
+        if not (isinstance(v, dict) and v.get("sheet") in _FIRSTGID):
+            continue
+        sheet = v["sheet"]
+        gid = _FIRSTGID[sheet] + v["row"] * _SHEET_COLS[sheet] + v["col"]
+        out[name] = (gid, v["w"], v["h"], sheet)
+    return out
+
+
+def _stamp(data, occ, sprites, name, c, r, walk, W):
+    """Place a whole multi-tile sprite with its top-left at (c, r). Refuses (and
+    changes nothing) unless every one of its w*h cells is walkable floor and
+    unoccupied -- the cardinal rule: never place part of a sprite. Returns bool."""
+    gid, w, h, sheet = sprites[name]
+    cols = _SHEET_COLS[sheet]
+    cells = [(c + dx, r + dy) for dy in range(h) for dx in range(w)]
+    if any((x, y) not in walk or (x, y) in occ for (x, y) in cells):
+        return False
+    for dy in range(h):
+        for dx in range(w):
+            x, y = c + dx, r + dy
+            data[y * W + x] = gid + dy * cols + dx
+            occ.add((x, y))
+    return True
+
+
+def _room_layouts(sections):
+    """Per-room furniture placements as (name, col, row) of each sprite's
+    top-left, following the franuka idiom (Examples) + the Fisher/Van Pelt
+    layouts: rug + seating clusters, shelves along walls, plants in corners.
+    Over-proposes freely; _stamp skips anything that would clip a wall/overlap."""
+    out = []
+    add = lambda *t: out.append(t)
+
+    for name, (c0, r0, c1, r1) in sections.items():
+        if name == "Reception Hall":
+            # grand lounge: rugs ringed with cushion seating + sofas + plants
+            for cc in (c0 + 4, c0 + 22):
+                add("rug_red", cc, r0 + 3)
+                add("round_table_small", cc + 1, r0 + 4)
+                add("cushion", cc - 2, r0 + 3)
+                add("cushion_orange", cc + 3, r0 + 3)
+                add("cushion_cream", cc - 2, r0 + 6)
+                add("cushion_red", cc + 3, r0 + 6)
+            add("sofa", c1 - 4, r0 + 1)
+            add("sofa", c1 - 4, r1 - 2)
+            add("candelabra", c0 + 14, r0 + 5)
+            for (px, py) in ((c0, r0), (c1 - 1, r0), (c0, r1 - 1), (c1 - 1, r1 - 1)):
+                add("plant", px, py)
+        elif name == "Reading Room":
+            # bookshelves line both long walls; reading tables down the middle
+            for r in range(r0 + 1, r1 - 2, 3):
+                add("bookshelf_wood_books", c0, r)
+                add("bookshelf_wood_books", c1 - 1, r)
+            for rr in (r0 + 4, r0 + 12, r0 + 19):
+                add("round_table_small", c0 + 4, rr)
+                add("armchair", c0 + 3, rr)
+                add("armchair_orange", c0 + 5, rr)
+        elif name == "Chess Room":
+            # chess tables (small round tables + stools) with snacks on/at them
+            foods = ["food_ham", "food_salad", "food_fish", "bread",
+                     "food_bowl", "basket_fruit", "mug", "food_sausage"]
+            k = 0
+            for rr in (r0 + 2, r0 + 6, r0 + 10):
+                for cc in (c0 + 2, c0 + 6):
+                    add("round_table_small", cc, rr)
+                    add("stool_wood", cc - 1, rr)
+                    add("stool_wood", cc + 1, rr)
+                    add(foods[k % len(foods)], cc, rr - 1)
+                    k += 1
+            add("plant", c1 - 1, r1 - 1)
+        elif name == "Bathroom":
+            # small room: fixtures along the back wall
+            add("toilet", c0 + 1, r0)
+            add("sink", c0 + 4, r0)
+            add("mirror", c0 + 7, r0)
+            add("towels", c0 + 9, r0)
+            add("bathmat", c0 + 1, r0 + 2)
+        elif name == "Billiard Room":
+            # billiard tables (dining_table stand-ins) in rows + stools
+            for rr in (r0 + 2, r0 + 8):
+                for cc in range(c0 + 2, c1 - 2, 6):
+                    add("dining_table", cc, rr)
+                    add("stool_wood", cc - 1, rr + 1)
+                    add("stool_wood", cc + 2, rr + 1)
+            add("plant", c0 + 1, r1 - 1)
+        elif name == "Shuffle Board Room":
+            add("rug_green", c0 + 2, r0 + 2)
+            add("dining_table", c0 + 9, r0 + 2)
+            add("dining_table", c0 + 15, r0 + 2)
+            add("stool_wood", c0 + 1, r1 - 1)
+            add("plant", c1 - 1, r0)
+        elif name == "Ladies Parlor":
+            # parlor with the piano (music), sofa + armchairs on a rug
+            add("piano_upright", c0 + 1, r0 + 1)
+            add("rug_magenta", c0 + 5, r0 + 2)
+            add("sofa", c0 + 5, r0 + 2)
+            add("armchair", c0 + 9, r0 + 3)
+            add("side_table", c0 + 8, r0 + 3)
+            add("plant", c1 - 1, r1 - 1)
+        elif name == "Secretarys Office":
+            add("rug_blue", c0 + 3, r0 + 2)
+            add("teacher_desk", c0 + 3, r0 + 2)
+            add("cabinet_display", c1 - 1, r0 + 1)
+            add("bookshelf", c0 + 1, r0 + 1)
+            add("plant", c1 - 1, r1 - 1)
+        elif name == "Correspond":
+            # correspondence/writing room: desks with quills + a tan shelf
+            for rr in (r0 + 2, r0 + 6, r0 + 10):
+                add("student_desk_quill", c0 + 2, rr)
+                add("inkwell", c0 + 2, rr - 1)
+                add("student_desk_quill", c0 + 5, rr)
+                add("quill_ink", c0 + 5, rr - 1)
+            add("bookshelf_tan", c1 - 1, r0 + 1)
+    return out
+
+
+def apply_furniture(tmj, matrix_dir):
+    """Insert two stacked layers above houston_walls: houston_rugs (floor rugs,
+    under) and houston_furniture (on top), so a sofa/table can sit on a rug.
+    Picture-only (not collision). Returns (placed, proposed)."""
+    W, H = tmj["width"], tmj["height"]
+    _strip(tmj, {RUG_LAYER, FURN_LAYER})
+
+    interior = houston_interior_cells(tmj, matrix_dir)
+    wl = next((L for L in tmj["layers"] if L.get("name") == WALL_LAYER), None)
+    walls = {(i % W, i // W) for i, v in enumerate(wl["data"]) if v} if wl else set()
+    walk = {(i % W, i // W) for i in interior} - walls
+
+    sprites = load_sprites()
+    sections = read_sections(tmj)
+    rug_data = [0] * (W * H)
+    furn_data = [0] * (W * H)
+    rug_occ, furn_occ = set(), set()
+    proposed = placed = 0
+    for name, c, r in _room_layouts(sections):
+        proposed += 1
+        if name not in sprites:
+            continue
+        if name in RUGS:
+            ok = _stamp(rug_data, rug_occ, sprites, name, c, r, walk, W)
+        else:
+            ok = _stamp(furn_data, furn_occ, sprites, name, c, r, walk, W)
+        placed += ok
+
+    base = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
+    rugs = _new_layer(RUG_LAYER, rug_data, W, H, base)
+    furn = _new_layer(FURN_LAYER, furn_data, W, H, base + 1)
+    if "nextlayerid" in tmj:
+        tmj["nextlayerid"] = max(tmj["nextlayerid"], base + 2)
+    names = [L.get("name") for L in tmj["layers"]]
+    anchor = next((n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None)
+    at = names.index(anchor) + 1 if anchor else len(tmj["layers"])
+    tmj["layers"][at:at] = [rugs, furn]
+    return placed, proposed
+
+
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
@@ -274,6 +449,8 @@ def main():
     walls, doors, removed = apply_walls(tmj, args.matrix)
     print(f"houston_walls: {walls} wall cells, {doors} doorway cells "
           f"({removed} removed to keep <=3 per 2x2)")
+    fplaced, fprop = apply_furniture(tmj, args.matrix)
+    print(f"houston_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
         return
     shutil.copy2(args.tmj, args.tmj + ".bak")
