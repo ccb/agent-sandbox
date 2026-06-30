@@ -340,7 +340,7 @@ def ensure_interior_tilesets(tmj):
     """Append furnish_building's interior tilesets only if they're missing, so our
     floor/wall/door gids resolve even on a freshly-baked map."""
     have = {t.get("name") for t in tmj["tilesets"]}
-    for name, img, cols, rows in fb.SHEETS:
+    for name, img, cols, rows in fb._ALL_SHEETS:
         if name in have:
             continue
         tmj["tilesets"].append(
