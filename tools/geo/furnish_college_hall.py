@@ -19,6 +19,7 @@ room bounding boxes are drawn (a ``college_hall_arenas`` object layer).
 
 Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 """
+
 import argparse
 import json
 import os
@@ -26,20 +27,20 @@ import shutil
 
 from add_entrances import split_footprint
 
-COLLEGE_SECTOR = "8"       # UPenn:College Hall
-COLLEGE_LOBBY = "1008"     # INTERIOR_ARENA_BASE (1000) + sector 8
-FLOOR_GID = 627            # interior_franuka floor_stone_hex (col 12,row 3) -- grey
-                           # hex stone, fitting College Hall's stone character.
+COLLEGE_SECTOR = "8"  # UPenn:College Hall
+COLLEGE_LOBBY = "1008"  # INTERIOR_ARENA_BASE (1000) + sector 8
+FLOOR_GID = 627  # interior_franuka floor_stone_hex (col 12,row 3) -- grey
+# hex stone, fitting College Hall's stone character.
 FLOOR_LAYER = "college_hall_floor"
 
 # wall_set_red thin-line edges (interior_franuka 3x3 autotile at col0/row0):
 # a ~5px maroon strip on one side of the cell, transparent backing, on its own
 # layer above the floor.
-WALL_R = 553   # right edge
-WALL_B = 584   # bottom edge
+WALL_R = 553  # right edge
+WALL_B = 584  # bottom edge
 WALL_BR = 585  # bottom-right corner (cell needs both a right and bottom strip)
 WALL_LAYER = "college_hall_walls"
-DOOR_W = 2     # centered doorway gap, in cells, per partition segment
+DOOR_W = 2  # centered doorway gap, in cells, per partition segment
 WALL_SET = {WALL_R, WALL_B, WALL_BR}  # all wall_set_red edge gids this tool places
 
 # Three stacked layers: rugs UNDER furniture (so a sofa/table sits on a rug),
@@ -48,9 +49,23 @@ RUG_LAYER = "college_hall_rugs"
 FURN_LAYER = "college_hall_furniture"
 PROP_LAYER = "college_hall_props"
 RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cyan"}
-PROPS = {"food_ham", "food_salad", "food_bowl", "food_fish", "food_sausage",
-         "bread", "basket_fruit", "mug", "jar", "pot", "books_green",
-         "book_stack_red", "quill_ink", "inkwell", "scroll"}
+PROPS = {
+    "food_ham",
+    "food_salad",
+    "food_bowl",
+    "food_fish",
+    "food_sausage",
+    "bread",
+    "basket_fruit",
+    "mug",
+    "jar",
+    "pot",
+    "books_green",
+    "book_stack_red",
+    "quill_ink",
+    "inkwell",
+    "scroll",
+}
 
 # Room pairs that should flow openly into each other (no partition at all -- the
 # whole seam between them is cleared, including any circulation gap). Keeps the
@@ -72,13 +87,19 @@ def college_interior_cells(tmj, matrix_dir):
     perimeter ring. Computed from the footprint, not the arena ids, so it stays
     correct after add_entrances subdivides the interior into per-room arenas."""
     W, H = tmj["width"], tmj["height"]
-    ef = next((L for L in tmj["layers"]
-               if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"), None)
-    entrance = ({(i % W, i // W) for i, v in enumerate(ef["data"]) if v}
-                if ef else set())
+    ef = next(
+        (
+            L
+            for L in tmj["layers"]
+            if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"
+        ),
+        None,
+    )
+    entrance = {(i % W, i // W) for i, v in enumerate(ef["data"]) if v} if ef else set()
     sector = read_flat(os.path.join(matrix_dir, "maze", "sector_maze.csv"))
-    foot = {(i % W, i // W) for i, s in enumerate(sector)
-            if s == COLLEGE_SECTOR} & entrance
+    foot = {
+        (i % W, i // W) for i, s in enumerate(sector) if s == COLLEGE_SECTOR
+    } & entrance
     _perimeter, interior = split_footprint(foot, W, H)
     return {y * W + x for (x, y) in interior}
 
@@ -87,9 +108,14 @@ def read_sections(tmj):
     """Room name -> (c0, r0, c1, r1) inclusive tile rect, from the hand-drawn
     college_hall_arenas object layer. Objects whose name contains 'rug' are
     rug-fill regions, not rooms, so they are excluded (consistent with Fisher)."""
-    fa = next((L for L in tmj["layers"]
-               if L.get("name") == "college_hall_arenas" and L.get("type") == "objectgroup"),
-              None)
+    fa = next(
+        (
+            L
+            for L in tmj["layers"]
+            if L.get("name") == "college_hall_arenas" and L.get("type") == "objectgroup"
+        ),
+        None,
+    )
     secs = {}
     if not fa:
         return secs
@@ -135,11 +161,11 @@ def _clear_open_seams(data, sections, W):
             continue
         ax0, ay0, ax1, ay1 = sections[a]
         bx0, by0, bx1, by1 = sections[b]
-        if ay1 <= by0 or by1 <= ay0:                      # vertically stacked
+        if ay1 <= by0 or by1 <= ay0:  # vertically stacked
             r0, r1 = (ay1, by0) if ay1 <= by0 else (by1, ay0)
             cs, ce = max(ax0, bx0), min(ax1, bx1)
             band = [(c, r) for r in range(r0, r1 + 1) for c in range(cs, ce + 1)]
-        elif ax1 <= bx0 or bx1 <= ax0:                    # horizontally adjacent
+        elif ax1 <= bx0 or bx1 <= ax0:  # horizontally adjacent
             c0, c1 = (ax1, bx0) if ax1 <= bx0 else (bx1, ax0)
             rs, re = max(ay0, by0), min(ay1, by1)
             band = [(c, r) for c in range(c0, c1 + 1) for r in range(rs, re + 1)]
@@ -171,9 +197,16 @@ def _strip(tmj, names):
 
 def _new_layer(name, data, W, H, layer_id):
     return {
-        "type": "tilelayer", "name": name, "id": layer_id,
-        "x": 0, "y": 0, "width": W, "height": H,
-        "opacity": 1, "visible": True, "data": data,
+        "type": "tilelayer",
+        "name": name,
+        "id": layer_id,
+        "x": 0,
+        "y": 0,
+        "width": W,
+        "height": H,
+        "opacity": 1,
+        "visible": True,
+        "data": data,
     }
 
 
@@ -194,7 +227,11 @@ def apply(tmj, matrix_dir):
         tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 1)
 
     names = [L.get("name") for L in tmj["layers"]]
-    at = names.index("entrance_floor") + 1 if "entrance_floor" in names else len(tmj["layers"])
+    at = (
+        names.index("entrance_floor") + 1
+        if "entrance_floor" in names
+        else len(tmj["layers"])
+    )
     tmj["layers"][at:at] = [floor]
     return len(interior)
 
@@ -239,8 +276,10 @@ def _wall_data(tmj, interior, W, H):
     def inter(c, r):
         return (r * W + c) in interior
 
-    vert = collections.defaultdict(list)   # (c, pair) -> rows; wall on (c,r) right edge
-    horiz = collections.defaultdict(list)  # (r, pair) -> cols; wall on (c,r) bottom edge
+    vert = collections.defaultdict(list)  # (c, pair) -> rows; wall on (c,r) right edge
+    horiz = collections.defaultdict(
+        list
+    )  # (r, pair) -> cols; wall on (c,r) bottom edge
     for idx in interior:
         c, r = idx % W, idx // W
         ra = cell2room.get(idx)
@@ -276,7 +315,7 @@ def _wall_data(tmj, interior, W, H):
         v, h = (c, r) in Vcells, (c, r) in Hcells
         data[r * W + c] = WALL_BR if (v and h) else (WALL_R if v else WALL_B)
 
-    _clear_open_seams(data, sections, W)     # open the central-space room seams
+    _clear_open_seams(data, sections, W)  # open the central-space room seams
     removed = _enforce_max3_per_2x2(data, W, H)
     return data, doors, removed
 
@@ -317,8 +356,11 @@ def load_sprites(tmj):
         cat = json.load(fh)
 
     def norm(n):
-        return (n.replace("interior_", "").replace("kenney_urban", "kenney")
-                .replace("tilemap_packed", "kenney"))
+        return (
+            n.replace("interior_", "")
+            .replace("kenney_urban", "kenney")
+            .replace("tilemap_packed", "kenney")
+        )
 
     sheets = {norm(t["name"]): (t["firstgid"], t["columns"]) for t in tmj["tilesets"]}
     out = {}
@@ -375,17 +417,19 @@ def _room_layouts(sections):
             # cushion lounge: each colour is a 4x4 block of 2x2 cushions packed
             # edge-to-edge, but the centre 2x2 of each block becomes a pair of
             # dining tables -> cushions read as vertical strips flanking tables.
-            for col_name, zc in (("cushion", c0 + 2),
-                                 ("cushion_red", c0 + 12),
-                                 ("cushion_orange", c0 + 22)):
+            for col_name, zc in (
+                ("cushion", c0 + 2),
+                ("cushion_red", c0 + 12),
+                ("cushion_orange", c0 + 22),
+            ):
                 for ri, rr in enumerate(range(r0 + 6, r0 + 13, 2)):
                     for ci, cc in enumerate(range(zc, zc + 8, 2)):
                         if ci in (1, 2):
-                            continue                     # centre columns -> tables only
+                            continue  # centre columns -> tables only
                         add(col_name, cc, rr)
-                add("dining_table", zc + 2, r0 + 8)      # 2x3 tables in the centre
+                add("dining_table", zc + 2, r0 + 8)  # 2x3 tables in the centre
                 add("dining_table", zc + 4, r0 + 8)
-            add("candelabra", c0 + 10, r0 + 7)           # in the gaps between blocks
+            add("candelabra", c0 + 10, r0 + 7)  # in the gaps between blocks
             add("candelabra", c0 + 20, r0 + 9)
             for px, py in ((c0, r1 - 1), (c1 - 1, r0), (c1 - 1, r1 - 1)):
                 add("plant", px, py)
@@ -428,15 +472,15 @@ def _room_layouts(sections):
             foods = ["food_ham", "food_salad", "bread", "food_bowl", "basket_fruit"]
             i = 0
             for cc in range(c0 + 1, c1 - 3, 4):
-                add("dining_table_light", cc, r0)        # 2x3 table
-                add(foods[i % len(foods)], cc, r0)       # food on the table top
+                add("dining_table_light", cc, r0)  # 2x3 table
+                add(foods[i % len(foods)], cc, r0)  # food on the table top
                 add(foods[(i + 1) % len(foods)], cc + 1, r0)
                 i += 2
             add("counter", c1 - 2, r0)
         elif name == "Kitchen Out":
             for c in range(c0 + 1, c1 - 1, 2):
                 add("counter", c, r0)
-            add("dining_table_light", c0 + 1, r0 + 3)    # table with food on top
+            add("dining_table_light", c0 + 1, r0 + 3)  # table with food on top
             add("food_salad", c0 + 1, r0 + 3)
             add("bread", c0 + 2, r0 + 3)
             add("barrel", c1 - 1, r1 - 2)
@@ -483,9 +527,9 @@ def apply_furniture(tmj, matrix_dir):
     proposed = placed = 0
     for name, c, r in _room_layouts(sections):
         proposed += 1
-        if name in RUGS:                 # under everything
+        if name in RUGS:  # under everything
             placed += _stamp(rug_data, rug_occ, sprites, name, c, r, walk, W)
-        elif name in PROPS:              # over furniture (food/books sit on tables)
+        elif name in PROPS:  # over furniture (food/books sit on tables)
             placed += _stamp(prop_data, prop_occ, sprites, name, c, r, walk, W)
         else:
             placed += _stamp(furn_data, furn_occ, sprites, name, c, r, walk, W)
@@ -497,9 +541,11 @@ def apply_furniture(tmj, matrix_dir):
     if "nextlayerid" in tmj:
         tmj["nextlayerid"] = max(tmj["nextlayerid"], base + 3)
     names = [L.get("name") for L in tmj["layers"]]
-    anchor = next((n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None)
+    anchor = next(
+        (n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None
+    )
     at = names.index(anchor) + 1 if anchor else len(tmj["layers"])
-    tmj["layers"][at:at] = [rugs, furn, props]   # rugs < furniture < props
+    tmj["layers"][at:at] = [rugs, furn, props]  # rugs < furniture < props
     return placed, proposed
 
 
@@ -507,11 +553,20 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tmj", default=os.path.join(
-        repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"))
-    ap.add_argument("--matrix", default=os.path.join(
-        repo, "godot-generative-agents", "sim", "the_upenn", "matrix"))
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -520,8 +575,10 @@ def main():
     floored = apply(tmj, args.matrix)
     print(f"college_hall_floor: painted {floored} interior cells (GID {FLOOR_GID})")
     walls, doors, removed = apply_walls(tmj, args.matrix)
-    print(f"college_hall_walls: {walls} wall cells, {doors} doorway cells "
-          f"({removed} removed to keep <=3 per 2x2)")
+    print(
+        f"college_hall_walls: {walls} wall cells, {doors} doorway cells "
+        f"({removed} removed to keep <=3 per 2x2)"
+    )
     fplaced, fprop = apply_furniture(tmj, args.matrix)
     print(f"college_hall_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
