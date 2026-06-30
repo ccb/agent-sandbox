@@ -16,6 +16,35 @@
 - Add a small lint/render helper for furnishing scripts (footprint-on-floor, no-overlap, doorway-clear) instead of eyeballing.
 - Furnish the next building with the same floor → walls → furniture layer pattern.
 
+## 2026-06-29
+**Focus:** landed Van Pelt Library furnishing and the franuka catalog UI; finished the east-wing room layout.
+
+**Done today:**
+- Furnished Van Pelt as **25 navigable per-room arenas** via the door-gated system — transplanted the hand-designed interior onto the live picture, subdivided rooms in `add_entrances.py`, regenerated map + matrix, and cleared phantom wall sprites on auto-doorway cells. Merged as **PR #268**.
+- Shipped the franuka catalog UI: ~50 more catalogued tiles, in-browser edit/rename persisted in `localStorage` (keyed by `origKey`), and a 23-tile general-library tile preset. Merged as **PR #269**.
+- Finished the east-wing room layout — single-tile doors that open only onto the open area, and floored the Kamin Gallery seam so the throat connects both wings.
+
+**Blockers / questions:**
+- The latest franuka batch was catalogued **unverified** (read off the `preview_catalog.py` contact sheet, not the known-good palette), so coordinates need an eyeball before being relied on.
+
+**Next:**
+- Furnish the next campus building (Fisher) with the same door-gated room system + library preset.
+- Verify the unverified franuka tiles against the contact sheet.
+
+## 2026-06-26
+**Focus:** made the map-furnishing pipeline data-driven via a labeled tile catalog, then regenerated the UPenn matrix + map.
+
+**Done today:**
+- Added `furniture_catalog.json` — a labeled manifest of the three interior sheets (franuka/school/bath), each object keyed by name with `(sheet,col,row)`, a w×h footprint, and a category + room tag — and rewired `furnish_building.py` to resolve every palette constant from it (GIDs unchanged, painted map identical); added `preview_catalog.py` to render a labeled contact sheet.
+- Expanded the catalog 41→55 objects: colored double beds/armchairs, a sofa, rugs, a dresser, a candelabra, and a new kitchen category (counter).
+- Regenerated the UPenn matrix + map to a consistent 239×273 grid; dropped the blanket `*.json` ignore so the matrix meta is tracked.
+
+**Blockers / questions:**
+- New catalog coordinates were eyeballed off the contact sheet rather than the working palette, so they're flagged unverified pending visual review.
+
+**Next:**
+- Verify the catalog tiles visually, then add building wall tools + tile-usage presets on top of the catalog.
+
 ## 2026-06-25
 **Focus:** working on issue #87 (surfacing chat end to end), testing a real LLM run, and working on game planning
 
