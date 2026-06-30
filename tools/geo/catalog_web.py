@@ -207,6 +207,7 @@ _TEMPLATE = r"""<!doctype html>
   </div>
 </header>
 <main>
+  <div id="editform" class="addform"></div>
   <section id="sec-catalog" class="sec show"></section>
   <section id="sec-browse" class="sec">
     <div class="legend">Click any cell to add it as a new entry. Green = verified
@@ -241,31 +242,65 @@ const ORIG = Object.keys(RAW.objects);            // preserves order incl _comme
 function freshState(){
   const byKey = {}; const order = [];
   for(const k of ORIG){ if(k.startsWith('_')) continue;
-    byKey[k] = Object.assign({key:k, added:false}, RAW.objects[k]); order.push(k); }
+    byKey[k] = Object.assign({key:k, origKey:k, added:false}, RAW.objects[k]); order.push(k); }
   return {byKey, order, added:[]};
 }
 let state = freshState();
+let editing = {name:'', desc:'', tiles:new Set(), notes:{}};
 loadLocal();
 
+function byOrig(ok){
+  for(const k of state.order){ const o=state.byKey[k]; if(!o.added && o.origKey===ok) return o; }
+  return null;
+}
+function renameKey(oldKey,newKey){
+  if(oldKey===newKey) return;
+  const o=state.byKey[oldKey]; if(!o) return;
+  o.key=newKey;
+  delete state.byKey[oldKey]; state.byKey[newKey]=o;
+  const i=state.order.indexOf(oldKey); if(i>=0) state.order[i]=newKey;
+  const a=state.added.indexOf(oldKey); if(a>=0) state.added[a]=newKey;
+  if(editing.tiles.has(oldKey)){ editing.tiles.delete(oldKey); editing.tiles.add(newKey); }
+  if(oldKey in editing.notes){ editing.notes[newKey]=editing.notes[oldKey]; delete editing.notes[oldKey]; }
+}
 function loadLocal(){
   try{
     const s = JSON.parse(localStorage.getItem('tilecatalog')||'null');
     if(!s) return;
-    for(const [k,v] of Object.entries(s.verified||{})) if(state.byKey[k]) state.byKey[k].verified=v;
-    for(const e of (s.added||[])){ state.byKey[e.key]=Object.assign({added:true},e);
-      state.order.push(e.key); state.added.push(e.key); }
+    for(const [ok,v] of Object.entries(s.verified||{})){
+      const cur=byOrig(ok); if(cur) cur.verified=v;
+    }
+    for(const [ok,e] of Object.entries(s.edits||{})){
+      const cur=byOrig(ok); if(!cur) continue;
+      cur.label=e.label; cur.category=e.category;
+      cur.w=e.w; cur.h=e.h; cur.col=e.col; cur.row=e.row;
+      if(e.key && e.key!==cur.key) renameKey(cur.key, e.key);
+    }
+    for(const en of (s.added||[])){
+      state.byKey[en.key]=Object.assign({added:true},en);
+      state.order.push(en.key); state.added.push(en.key);
+    }
   }catch(_){}
 }
 function saveLocal(){
-  const verified={}; for(const k of state.order) if(!state.byKey[k].added) verified[k]=state.byKey[k].verified;
+  const verified={}, edits={};
+  for(const k of state.order){
+    const o=state.byKey[k]; if(o.added) continue;
+    verified[o.origKey]=o.verified;
+    const base=RAW.objects[o.origKey]||{};
+    if(o.key!==o.origKey || (o.label||'')!==(base.label||'') || o.category!==base.category
+       || o.w!==base.w || o.h!==base.h || o.col!==base.col || o.row!==base.row){
+      edits[o.origKey]={key:o.key,label:o.label||'',category:o.category,
+                        w:o.w,h:o.h,col:o.col,row:o.row};
+    }
+  }
   const added = state.added.map(k=>state.byKey[k]);
-  localStorage.setItem('tilecatalog', JSON.stringify({verified, added}));
+  localStorage.setItem('tilecatalog', JSON.stringify({verified, added, edits}));
 }
 
 // ---- preset state (named tile subsets the LLM should use) ----------------
 let PRESETS = JSON.parse(JSON.stringify(APP.presets||{}));
 let ACTIVE = APP.active||null;
-let editing = {name:'', desc:'', tiles:new Set(), notes:{}};
 (function loadLocalPresets(){
   try{ const s=JSON.parse(localStorage.getItem('tilepresets')||'null');
     if(s){ PRESETS=s.presets||PRESETS; if('active'in s) ACTIVE=s.active; } }catch(_){}
@@ -342,6 +377,9 @@ function card(o){
   pill.textContent=o.verified?'✓ verified':'? unverified';
   pill.onclick=()=>{o.verified=!o.verified; render();};
   row.appendChild(pill);
+  const eb=document.createElement('button'); eb.className='pill'; eb.textContent='edit';
+  eb.title='rename / re-identify this tile'; eb.onclick=()=>openEdit(o.key);
+  row.appendChild(eb);
   if(o.added){ const d=document.createElement('button'); d.className='pill del'; d.textContent='delete';
     d.onclick=()=>{ delete state.byKey[o.key];
       state.order=state.order.filter(k=>k!==o.key);
@@ -349,6 +387,44 @@ function card(o){
     row.appendChild(d); }
   c.appendChild(row);
   return c;
+}
+
+let _editKey=null;
+function openEdit(key){
+  _editKey=key;
+  const o=state.byKey[key]; if(!o) return;
+  const cats=['furniture','floor','wall','window','door','prop','tree'];
+  const f=document.getElementById('editform'); f.className='addform show';
+  const esc=s=>(s||'').replace(/"/g,'&quot;');
+  f.innerHTML=`
+    <div style="font-weight:700;color:var(--add)">Edit ${esc(o.sheet)} &mdash; ${esc(o.key)}</div>
+    <label>name<input id="e_name" value="${esc(o.key)}"></label>
+    <label>label<input id="e_label" style="width:160px" value="${esc(o.label)}"></label>
+    <label>category<select id="e_cat">
+      ${cats.map(c=>`<option${c===o.category?' selected':''}>${c}</option>`).join('')}</select></label>
+    <label>col<input id="e_col" type="number" value="${o.col}" min="0"></label>
+    <label>row<input id="e_row" type="number" value="${o.row}" min="0"></label>
+    <label>w<input id="e_w" type="number" value="${o.w}" min="1"></label>
+    <label>h<input id="e_h" type="number" value="${o.h}" min="1"></label>
+    <button class="primary" onclick="saveEdit()">Save</button>
+    <button onclick="closeEdit()">Cancel</button>`;
+  f.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeEdit(){ document.getElementById('editform').className='addform'; }
+function saveEdit(){
+  const oldKey=_editKey;
+  const o=state.byKey[oldKey]; if(!o){ closeEdit(); return; }
+  const name=document.getElementById('e_name').value.trim();
+  if(!name){ toast('name required'); return; }
+  if(name!==oldKey && state.byKey[name]){ toast('name already exists'); return; }
+  o.label=document.getElementById('e_label').value.trim();
+  o.category=document.getElementById('e_cat').value;
+  o.col=+document.getElementById('e_col').value||0;
+  o.row=+document.getElementById('e_row').value||0;
+  o.w=+document.getElementById('e_w').value||1;
+  o.h=+document.getElementById('e_h').value||1;
+  if(name!==oldKey) renameKey(oldKey,name);
+  closeEdit(); render(); drawSheet(curSheet); toast('updated '+name);
 }
 
 function renderStats(){
@@ -435,14 +511,18 @@ function addEntry(sheet,col,row){
 
 // ---- export / save -------------------------------------------------------
 function buildCatalog(){
+  // map each surviving original by its ORIGINAL key so renames are found
+  const byOrig={};
+  for(const k of state.order){ const o=state.byKey[k]; if(!o.added) byOrig[o.origKey]=o; }
   const objs={};
   for(const k of ORIG){
-    if(k.startsWith('_')) objs[k]=RAW.objects[k];
-    else if(state.byKey[k]) objs[k]=toObj(state.byKey[k]);
+    if(k.startsWith('_')){ objs[k]=RAW.objects[k]; continue; }
+    const o=byOrig[k];                 // undefined only if somehow removed
+    if(o) objs[o.key]=toObj(o);        // o.key may differ from k after a rename
   }
   if(state.added.length){
     objs['_comment_user_added']='--- added via catalog_web.py ---';
-    for(const k of state.added) objs[k]=toObj(state.byKey[k]);
+    for(const k of state.added){ const o=state.byKey[k]; if(o) objs[o.key]=toObj(o); }
   }
   const out={}; if(RAW._README)out._README=RAW._README;
   if(RAW._llm_guidance)out._llm_guidance=RAW._llm_guidance;
@@ -470,6 +550,7 @@ function revert(){ if(!confirm('Discard local edits and reload the saved file?')
   localStorage.removeItem('tilecatalog'); state=freshState(); render(); drawSheet(curSheet); }
 
 function showSec(name){
+  closeEdit();
   document.querySelectorAll('.tab[data-sec]').forEach(t=>
     t.classList.toggle('sel',t.dataset.sec===name));
   document.getElementById('sec-catalog').classList.toggle('show',name==='catalog');
