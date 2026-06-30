@@ -80,14 +80,14 @@ def test_smoke_tour_traverses_every_room_cleanly():
     for cmd in tomb.WALK:
         game.do_command(cmd)
         visited.add(game.player.location.name)
-    # the tour reaches all eight rooms...
-    assert len(visited) == 8
-    # ...with no failed move or unparsed/missing command along the way
+    # the safe tour reaches the seven survivable rooms (it avoids the lethal Sphere)
+    assert len(visited) == 7
+    # ...with no failed move or unparsed/missing command, and survives (it creeps)
     texts = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "i'm not sure what you want to do" not in texts
     assert "does not have an exit" not in texts
     assert "you don't see anything special" not in texts
-    assert not game.is_game_over()  # nothing lethal in the scaffold
+    assert not game.is_game_over()  # the safe tour creeps, so nothing kills you
 
 
 # --- Phase 2: the canopic seal puzzle + Silas --------------------------------
@@ -99,18 +99,24 @@ def _texts(game):
     return cap
 
 
-def _grab_both_jars_to_canopic(game):
-    """From the Exterior: east -> Warriors (falcon jar), east -> Hounds (jackal
-    jar), up -> the Canopic hall. Leaves the player holding both jars."""
-    for cmd in ["east", "take falcon jar", "east", "take jackal jar", "up"]:
-        game.do_command(cmd)
+def _bring_jars_to_canopic(game):
+    """Test shortcut for the seal-mechanic tests: hand the player both jars and
+    stand them in the Canopic hall, skipping the lure-and-fight (covered in the
+    Phase 3 section). The jars are otherwise worn by the Spawn."""
+    canopic = game.locations["Hall of the Canopic Jars"]
+    for sp in ("spawn of guts", "spawn of brain"):
+        spawn = game.characters[sp]
+        for jar in list(spawn.inventory.values()):
+            spawn.remove_from_inventory(jar)
+            game.player.add_to_inventory(jar)
+    game.relocate(game.player, canopic)
 
 
 def test_silas_warns_about_the_spawn_and_the_seal():
     game = _game()
     cap = _texts(game)
-    game.do_command("north")  # -> Hall of Youth
-    game.do_command("north")  # -> Hall of Memory (Silas)
+    game.do_command("sneak north")  # -> Hall of Youth (creep past the bats)
+    game.do_command("sneak north")  # -> Hall of Memory (Silas)
     game.do_command("talk to silas")
     assert "plinth of its kind" in " ".join(cap.texts(Channel.NARRATION))
 
@@ -118,15 +124,25 @@ def test_silas_warns_about_the_spawn_and_the_seal():
 def test_memory_crystals_give_the_head_to_organ_clue():
     game = _game()
     cap = _texts(game)
-    game.do_command("north")
-    game.do_command("north")
+    game.do_command("sneak north")
+    game.do_command("sneak north")
     game.do_command("examine crystal lattice")
     assert "the jackal -- strangely -- his brain" in " ".join(cap.texts(Channel.NARRATION))
 
 
+def test_a_sealed_jar_reveals_its_organ_only_when_opened():
+    game = _game()
+    cap = _texts(game)
+    _bring_jars_to_canopic(game)              # hands the player the falcon jar
+    game.do_command("examine falcon jar")     # sealed -> says nothing of the organ
+    game.do_command("open falcon jar")        # now it reveals the intestines
+    texts = " ".join(cap.texts(Channel.NARRATION))
+    assert "in it you see: a coil of cured intestines" in texts.lower()
+
+
 def test_the_seal_bars_the_stair_until_both_jars_are_placed():
     game = _game()
-    _grab_both_jars_to_canopic(game)
+    _bring_jars_to_canopic(game)
     assert game.player.location.name == "Hall of the Canopic Jars"
     game.do_command("up")  # the crystal seal blocks the stair
     assert game.player.location.name == "Hall of the Canopic Jars"
@@ -135,19 +151,76 @@ def test_the_seal_bars_the_stair_until_both_jars_are_placed():
 
 def test_wrong_plinth_does_not_open_the_seal():
     game = _game()
-    _grab_both_jars_to_canopic(game)
+    _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on jackal plinth")  # mismatch
     game.do_command("put jackal jar on falcon plinth")  # mismatch
     assert not game.locations["Hall of the Canopic Jars"].get_property("seal_open")
-    game.do_command("up")
-    assert game.player.location.name == "Hall of the Canopic Jars"  # still barred
 
 
-def test_matching_both_jars_opens_the_seal_and_the_stair():
+def test_matching_both_jars_opens_the_seal():
     game = _game()
-    _grab_both_jars_to_canopic(game)
+    _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on falcon plinth")
     game.do_command("put jackal jar on jackal plinth")
     assert game.locations["Hall of the Canopic Jars"].get_property("seal_open")
-    game.do_command("up")  # the stair is open now
-    assert game.player.location.name == "Burial Sphere of Nassak An-Rah"
+
+
+# --- Phase 3: the tomb listens (noise, Spawn lure, deaths) -------------------
+
+
+def _arm_and_reach_canopic(game):
+    """Sneak in, take the prismatic blade from the Hall of Warriors, and creep up
+    to the Canopic hall -- armed and safe."""
+    for cmd in ["sneak east", "take prismatic blade", "sneak east", "sneak up"]:
+        game.do_command(cmd)
+
+
+def test_striding_into_a_hall_is_deadly_but_creeping_is_safe():
+    loud = _game()
+    loud.do_command("north")  # STRIDE into the Hall of Youth -> the bats
+    assert loud.is_game_over() and not loud.is_won()
+
+    quiet = _game()
+    quiet.do_command("sneak north")  # creep in -> safe
+    assert not quiet.is_game_over()
+    assert quiet.player.location.name == "Hall of Youth"
+
+
+def test_a_loud_action_in_a_hall_is_deadly():
+    game = _game()
+    game.do_command("sneak north")  # -> Hall of Youth (safe)
+    game.do_command("say anyone there?")  # but shouting wakes the bats
+    assert game.is_game_over() and not game.is_won()
+
+
+def test_the_burial_sphere_is_lethal_to_enter():
+    game = _game()
+    _bring_jars_to_canopic(game)
+    game.do_command("put falcon jar on falcon plinth")
+    game.do_command("put jackal jar on jackal plinth")
+    game.do_command("up")  # step into the Sphere -> the Fungal Horror
+    assert game.is_game_over() and not game.is_won()
+
+
+def test_the_mantis_song_lures_the_spawn_to_the_canopic_hall():
+    game = _game()
+    for cmd in ["sneak north", "sneak north", "sneak up"]:  # -> Canopic, silently
+        game.do_command(cmd)
+    canopic = game.player.location
+    assert "spawn of brain" not in canopic.characters  # they start in the lower halls
+    for _ in range(5):
+        game.do_command("say come to me")  # the mantis-head sings; the Spawn home in
+    assert "spawn of guts" in canopic.characters
+    assert "spawn of brain" in canopic.characters
+
+
+def test_felling_a_lured_spawn_drops_its_canopic_jar():
+    game = _game()
+    _arm_and_reach_canopic(game)
+    canopic = game.player.location
+    for _ in range(5):
+        game.do_command("say come to me")  # lure both up
+    assert "spawn of guts" in canopic.characters
+    game.do_command("attack spawn of guts with blade")
+    assert "falcon jar" in canopic.items  # the felled Spawn dropped its jar
+    assert not game.is_game_over()  # fighting in the (safe) Canopic hall is fine

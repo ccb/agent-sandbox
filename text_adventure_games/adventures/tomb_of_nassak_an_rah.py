@@ -11,7 +11,83 @@ a world you can walk and read.
     Run:  python -m text_adventure_games.adventures.tomb_of_nassak_an_rah [--walk]
 """
 
-from text_adventure_games import games, things, actions, blocks
+from text_adventure_games import games, things, actions, blocks, reactions
+
+
+def _die(game, message):
+    """End the game with a death line (the tomb is deadly)."""
+    game.parser.ok(message)
+    game.game_over = True
+    game.game_over_description = message
+
+
+# Actions a deadly room's listeners treat as silent -- everything else is "noise".
+_QUIET = {"sneak", "examine", "describe", "inventory", "wait", "get", "drop", "put", "talk"}
+# In the zero-g Burial Sphere even sneaking stirs the fungus; only looking is safe.
+_QUIET_SPHERE = {"examine", "describe", "inventory"}
+
+
+def _deadly_room(game, room, message, quiet=_QUIET):
+    """Register a death: while the player stands in *room*, any noisy act associated
+    with it this round is fatal -- a noisy arrival (a plain ``go``, not a ``sneak``)
+    or a loud action done there (``say``/``break``/``attack``). Quiet acts are safe.
+    Only the *player's* own actions count, so a creature lured through the room
+    doesn't set it off."""
+
+    def condition(g):
+        if g.player.location is not room:
+            return False
+        for e in g.events[g._round_event_start :]:
+            if e.actor != g.player.name or e.action in quiet:
+                continue
+            payload = e.payload or {}
+            if payload.get("dest") == room.name or payload.get("location") == room.name:
+                return True
+        return False
+
+    game.add_trigger(
+        f"deadly:{room.name}", condition, lambda g: _die(g, message), repeatable=True
+    )
+
+
+class Sneak(actions.Go):
+    """Move quietly -- a silent ``Go``. Creeping is the only safe way through the
+    lower halls and past their listeners; striding (``go``) gives you away.
+
+    Aliases are the multi-word ``sneak <dir>`` / ``creep <dir>`` forms so the
+    parser's specific-first pass routes them here rather than letting the bare
+    direction (a ``Go`` alias of the same length, e.g. "north") pre-empt them."""
+
+    ACTION_NAME = "sneak"
+    ACTION_DESCRIPTION = "Move quietly in a direction (don't wake the tomb)"
+    ACTION_ALIASES = [
+        f"{verb} {direction}"
+        for verb in ("sneak", "creep", "tiptoe")
+        for direction in ("north", "south", "east", "west", "up", "down", "in", "out")
+    ]
+
+    def __init__(self, game, command, actor=None):
+        cl = command.lower()
+        for verb in ("sneak to", "creep to", "tiptoe to", "sneak", "creep", "tiptoe"):
+            if cl.startswith(verb):
+                command = "go " + command[len(verb) :].strip()
+                break
+        super().__init__(game, command, actor=actor)
+
+
+class FungalSong(reactions.Startle):
+    """The Canopic hall's mantis-headed jar -- split and fungal -- SINGS whenever it
+    hears a noise, and the wail carries across the whole tomb, luring the Spawn
+    (which are :class:`DrawnToSound`) to the singer. Re-arms each round."""
+
+    REPEATABLE = True
+
+    def apply_effects(self):
+        self.game.parser.ok(
+            "The mantis-headed jar splits wider and SINGS -- a tuneless, carrying "
+            "wail that fills the tomb."
+        )
+        self.game.emit_sound(self.owner.location, 6, "a tuneless fungal song")
 
 
 class CrystalSeal(blocks.Block):
@@ -47,6 +123,18 @@ def _scenery(location, name, description, examine_text):
     it.set_property("gettable", False)
     location.add_item(it)
     return it
+
+
+def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
+    """A sealed canopic jar: a closed container holding the Autarch's preserved
+    organ. The organ is revealed only when the jar is OPENED (examining the sealed
+    jar tells you nothing of what's inside)."""
+    jar = things.Item(name, description, examine_text).make_container()
+    jar.set_property("is_closed", True)
+    organ = things.Item(organ_name, organ_desc, organ_desc)
+    organ.set_property("gettable", False)
+    jar.add_item(organ)
+    return jar
 
 
 def build_game():
@@ -158,15 +246,25 @@ def build_game():
     _scenery(warriors, "cylinders", "four plexiglas burial cylinders",
              "Each holds a guard-mummy in Autarchy armour, prismatic blade at rest, "
              "the glass fogged from within by threads of orange fungus.")
-    # The three present jars sit on their plinths -- examinable clues to which
-    # organ each head holds (the empty plinths name the two that are missing).
-    _scenery(canopic, "baboon jar", "a baboon-headed canopic jar",
-             "The baboon-headed jar holds the Autarch's lungs, sealed on its plinth.")
-    _scenery(canopic, "human jar", "a human-headed canopic jar",
-             "The human-headed jar holds the Autarch's liver, sealed on its plinth.")
-    _scenery(canopic, "mantis jar", "a mantis-headed canopic jar",
-             "The mantis holds the eyes -- but this jar is split and fungal, a "
-             "misshapen orange head budding from the crack. It is unnervingly still.")
+    # The three present jars sit on their plinths -- sealed containers. OPEN one to
+    # learn which organ it holds (a second route to the head->organ matching, on
+    # top of the plinth carvings and the memory crystals).
+    baboon_jar = _canopic_jar(
+        "baboon jar", "a baboon-headed canopic jar",
+        "A sealed jar with a baboon's head. Something shifts dryly inside.",
+        "lungs", "a pair of withered lungs")
+    human_jar = _canopic_jar(
+        "human jar", "a human-headed canopic jar",
+        "A sealed jar with a man's face. Something shifts inside.",
+        "liver", "a leathery liver")
+    mantis_jar = _canopic_jar(
+        "mantis jar", "a mantis-headed canopic jar",
+        "A split, fungal jar with a mantis's head, a misshapen orange growth budding "
+        "from the crack. It stirs at the faintest sound, as if listening.",
+        "fungal eyes", "a clutch of fungus-clotted eyes")
+    for j in (baboon_jar, human_jar, mantis_jar):
+        j.set_property("gettable", False)
+        canopic.add_item(j)
 
     # The two empty plinths are surfaces you set the missing jars ON; each is
     # carved with the head that belongs there.
@@ -191,19 +289,48 @@ def build_game():
              "A corpse turned to stone mid-meditation, orange fungus weeping from its "
              "eyes and mouth -- the wellspring, it seems, of all the rot below.")
 
-    # The two MISSING jars. In the finished game the Spawn wear these (Phase 3
-    # relocates them onto the creatures and gates them behind a fight); for now
-    # they lie loose in the lower halls so the seal puzzle is solvable on its own.
-    falcon_jar = things.Item(
+    # The two missing jars are WORN by the Spawn (each as a hat). Knock a Spawn out
+    # (it needs a weapon -- the prismatic blade below) and it drops the jar.
+    falcon_jar = _canopic_jar(
         "falcon jar", "a falcon-headed canopic jar",
-        "A sealed jar with a falcon's head -- it holds the Autarch's intestines.",
-    )
-    jackal_jar = things.Item(
+        "A sealed jar with a falcon's head. Something coils inside.",
+        "intestines", "a coil of cured intestines")
+    jackal_jar = _canopic_jar(
         "jackal jar", "a jackal-headed canopic jar",
-        "A sealed jar with a jackal's head -- it holds the Autarch's brain.",
+        "A sealed jar with a jackal's head. Something heavy rolls inside.",
+        "brain", "the Autarch's shrivelled brain")
+
+    spawn_guts = things.Character(
+        "spawn of guts", "a fungal spawn wearing a falcon-headed jar",
+        "I am what is left of the Autarch's appetites.",
     )
-    warriors.add_item(falcon_jar)   # TODO P3: worn by the Spawn of An-Rah's Guts
-    hounds.add_item(jackal_jar)     # TODO P3: worn by the Spawn of An-Rah's Brain
+    spawn_guts.examine_text = (
+        "An octopus of orange fungus and grave-cured intestine, the falcon canopic "
+        "jar worn on top like a hat. It sways toward any sound."
+    )
+    spawn_guts.add_to_inventory(falcon_jar)
+    spawn_brain = things.Character(
+        "spawn of brain", "a fungal spawn wearing a jackal-headed jar",
+        "I am what is left of the Autarch's thoughts.",
+    )
+    spawn_brain.examine_text = (
+        "A fungal brain that walks on two tiny legs, the jackal canopic jar worn as "
+        "a hat. It twitches toward every noise."
+    )
+    spawn_brain.add_to_inventory(jackal_jar)
+    warriors.add_character(spawn_guts)
+    hounds.add_character(spawn_brain)
+
+    # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
+    # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
+    # you fight the Spawn.)
+    blade = things.Item(
+        "prismatic blade", "a guard's prismatic blade",
+        "An Autarchy guard's blade, its edge fracturing the light into colours.",
+    )
+    blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
+    blade.add_alias("blade")
+    warriors.add_item(blade)
 
     # Silas -- the synthetic archivist (the hint NPC). His combat / pacify / rob
     # outcomes arrive with later phases (the dagger, Friend's Fungus); for now he
@@ -241,7 +368,32 @@ def build_game():
     )
     player.add_to_inventory(glowstone)
 
-    game = TombGame(exterior, player, characters=[silas])
+    game = TombGame(
+        exterior, player, characters=[silas, spawn_guts, spawn_brain],
+        custom_actions=[Sneak],
+    )
+
+    # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
+    # any noise in the Canopic hall into a luring song. Make a racket there and the
+    # Spawn come to you -- the safe place to fight them (the halls are deadly).
+    game.add_reaction(mantis_jar, FungalSong())
+    game.add_reaction(spawn_guts, reactions.DrawnToSound())
+    game.add_reaction(spawn_brain, reactions.DrawnToSound())
+
+    # The tomb listens. A noisy move (a plain `go`) or a loud act (`say`/`break`/
+    # `attack`) is fatal in the lower halls and the Burial Sphere; creep, and act
+    # quietly. (Lethality is a playtest dial.)
+    _deadly_room(game, youth,
+                 "Your noise wakes the roosting bats; they boil down in a shrieking "
+                 "cloud and tear you apart in the dark. THE END.")
+    for hall in (memory, hounds, warriors):
+        _deadly_room(game, hall,
+                     "Your noise carries. Pthalo-jackals pour from the shadows, drag "
+                     "you down, and feed. THE END.")
+    _deadly_room(game, sphere,
+                 "At the first stir of movement the orange mass erupts from the "
+                 "coffin -- the Fungal Horror -- and drowns you in acid. THE END.",
+                 quiet=_QUIET_SPHERE)
 
     # Placement trigger: both missing jars on their matching plinths -> the seal
     # opens. Fires once.
@@ -267,15 +419,15 @@ def build_game():
 # A smoke tour (--walk): traverse every room and read it. No win yet.
 # ---------------------------------------------------------------------------
 
+# A SAFE tour: the tomb is deadly now, so creep (sneak) through the halls and
+# don't enter the lethal Burial Sphere. Visits the seven survivable rooms.
 WALK = [
-    "examine tomb", "up", "examine ossified corpse",   # -> Summit
-    "in",                                              # -> Burial Sphere (down the chimney)
-    "examine coffin", "down",                          # -> Canopic (the aperture)
-    "examine falcon plinth", "examine baboon jar", "down",  # -> Memory
-    "examine crystal lattice", "south",                # -> Youth
-    "examine statues", "west",                         # -> Hounds
-    "examine tank", "west",                            # -> Warriors
-    "examine cylinders",
+    "examine tomb", "up", "examine ossified corpse", "down",  # Summit and back (safe)
+    "sneak north", "examine statues",                        # -> Hall of Youth (creep past the bats)
+    "sneak north", "talk to silas", "examine crystal lattice",  # -> Hall of Memory
+    "sneak north", "take prismatic blade", "examine cylinders",  # -> Hall of Warriors
+    "sneak east", "examine tank",                            # -> Hall of Hounds
+    "sneak up", "open baboon jar", "examine falcon plinth",  # -> Canopic hall
 ]
 
 
