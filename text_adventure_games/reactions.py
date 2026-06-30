@@ -212,6 +212,37 @@ class WakesAtNoise(Startle):
         self.game.parser.ok(f"The noise wakes {name}.")
 
 
+class DrawnToSound(Startle):
+    """The moth-to-flame inverse of :class:`FleesAtNoise`: the owner moves one hop
+    *toward* the loudest sound it hears each round, until it reaches the source.
+
+    For pursuers, lured beasts, sirens -- anything that homes on noise. Re-arms
+    every round (``REPEATABLE = True``), so sustained noise keeps drawing it in;
+    silence lets it stop. The AC4-style doe flees noise; this is its opposite, and
+    the Tomb's Spawn use it (lured to the singing fungal head)."""
+
+    REPEATABLE = True
+    REACH = 12  # hops to search for a path back to the source; spans any real map
+
+    def apply_effects(self):
+        origin = (self.cause or {}).get("origin")
+        loc = getattr(self.owner, "location", None)
+        if not origin or loc is None or origin == loc.name:
+            return  # no source, or already standing on it
+        # audible_rooms(origin, r)[my_room] is the exit in my room toward origin --
+        # the first step on the shortest path back to the noise.
+        step = self.game.audible_rooms(origin, self.REACH).get(loc.name)
+        dest = loc.connections.get(step) if step else None
+        if dest is not None:
+            _relocate_and_log(self.game, self.owner, dest)
+            self.game.parser.ok(self.narration(dest))
+
+    def narration(self, dest) -> str:
+        name = getattr(self.owner, "name", "it")
+        cue = (self.cause or {}).get("description", "a sound")
+        return f"Drawn by {cue}, the {name} moves off toward {dest.name}."
+
+
 class Countdown(Reaction):
     """A clock: a stimulus starts it, and ``DELAY`` turns later a consequence
     lands unless it was averted.

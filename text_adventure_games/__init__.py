@@ -26,6 +26,7 @@ from .reactions import (
     Startle,
     FleesAtNoise,
     WakesAtNoise,
+    DrawnToSound,
     Countdown,
 )
 from .world_state import WorldState, world_state
@@ -53,6 +54,7 @@ __all__ = [
     "Startle",
     "FleesAtNoise",
     "WakesAtNoise",
+    "DrawnToSound",
     "Countdown",
     "WorldState",
     "world_state",

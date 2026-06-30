@@ -26,6 +26,16 @@ class _Noise(actions.base.Action):
         return "a loud noise"
 
 
+class _Horn(_Noise):
+    """A very loud test command -- carries across a whole short map."""
+
+    ACTION_NAME = "horn"
+    AUDIBLE_RADIUS = 5
+
+    def sound_description(self):
+        return "a horn blast"
+
+
 def _line(*names):
     rooms = [things.Location(n, f"Room {n}.") for n in names]
     for a, b in zip(rooms, rooms[1:]):
@@ -33,6 +43,7 @@ def _line(*names):
     player = things.Character("you", "the player", "I explore.")
     game = games.Game(rooms[0], player)
     game.parser.add_action(_Noise)
+    game.parser.add_action(_Horn)
     return game, player, rooms
 
 
@@ -149,3 +160,37 @@ def test_countdown_can_be_cancelled_before_it_lands():
     game.do_command("look")
     game.do_command("look")
     assert boom.boomed == []
+
+
+# --- DrawnToSound ------------------------------------------------------------
+
+
+def test_drawn_to_sound_advances_one_hop_toward_the_noise_each_round():
+    game, player, (a, b, c) = _line("A", "B", "C")  # A --north--> B --north--> C
+    beast = things.Character("beast", "a lured beast", "I hunt the noise.")
+    c.add_character(beast)
+    game.add_reaction(beast, reactions.DrawnToSound())
+
+    # Player stays in A and blows the horn; the beast in C homes in, a hop a round.
+    game.do_command("horn")
+    assert beast.location is b      # C -> B (one hop toward the source)
+    game.do_command("horn")
+    assert beast.location is a      # B -> A (reaches the source)
+
+
+def test_drawn_to_sound_holds_still_in_silence():
+    game, player, (a, b, c) = _line("A", "B", "C")
+    beast = things.Character("beast", "a lured beast", "I hunt the noise.")
+    c.add_character(beast)
+    game.add_reaction(beast, reactions.DrawnToSound())
+    game.do_command("look")         # no noise
+    assert beast.location is c      # stays put
+
+
+def test_drawn_to_sound_does_not_overshoot_the_source():
+    game, player, (a, b) = _line("A", "B")
+    beast = things.Character("beast", "a lured beast", "I hunt the noise.")
+    a.add_character(beast)           # already in the room the noise comes from
+    game.add_reaction(beast, reactions.DrawnToSound())
+    game.do_command("horn")          # noise originates in A, where the beast already is
+    assert beast.location is a       # doesn't wander off
