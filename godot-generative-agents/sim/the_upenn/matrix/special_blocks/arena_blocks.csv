@@ -7,7 +7,7 @@
 27, UPenn, Sweeten Alumni Building, grounds
 30, UPenn, Van Pelt Library, grounds
 32, UPenn, Williams Hall, grounds
-34, UPenn, 220 South 34th Street, grounds
+34, UPenn, Fisher Fine Arts Library, grounds
 35, UPenn, 3537 Locust Walk, grounds
 36, UPenn, Locust Walk Annex, grounds
 1007, UPenn, Claudia Cohen Hall, lobby
@@ -19,7 +19,7 @@
 1027, UPenn, Sweeten Alumni Building, lobby
 1030, UPenn, Van Pelt Library, lobby
 1032, UPenn, Williams Hall, lobby
-1034, UPenn, 220 South 34th Street, lobby
+1034, UPenn, Fisher Fine Arts Library, lobby
 1035, UPenn, 3537 Locust Walk, lobby
 1036, UPenn, Locust Walk Annex, lobby
 13000, UPenn, Van Pelt Library, 113
@@ -47,3 +47,9 @@
 13022, UPenn, Van Pelt Library, Staff Area
 13023, UPenn, Van Pelt Library, Study Booths
 13024, UPenn, Van Pelt Library, West Wing Books
+13400, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room
+13401, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section
+13402, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library
+13403, UPenn, Fisher Fine Arts Library, Ross Gallery
+13404, UPenn, Fisher Fine Arts Library, Staff Office
+13405, UPenn, Fisher Fine Arts Library, Computing & Printing

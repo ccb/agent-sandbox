@@ -69,7 +69,9 @@ INTERIOR_ARENA_BASE = 1000  # interior arena id = base + sector id (no id clashe
 ROOM_ARENA_BASE = (
     10000  # room arena id = base + sector*100 + index (clears lobby range)
 )
-ROOM_SUBDIVIDE = {"Van Pelt Library"}  # buildings whose interior is split into rooms
+VAN_PELT = "Van Pelt Library"
+FISHER = "Fisher Fine Arts Library"  # the Furness building at 220 South 34th Street
+ROOM_SUBDIVIDE = {VAN_PELT, FISHER}  # buildings whose interior is split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
 #                     opening end to end (a building may still have several doors)
@@ -91,7 +93,9 @@ NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 # Footprints OSM never named (no `name` tag), keyed by a cell we know is inside
 # them, with the street-address name to give each. See the plan / README.
 UNNAMED = [
-    {"name": "220 South 34th Street", "seed": (208, 150)},
+    # OSM left the Furness building untagged; we give it its real name (it's a
+    # known landmark, not just an address) rather than the street-address fallback.
+    {"name": "Fisher Fine Arts Library", "seed": (208, 150)},
     {"name": "3537 Locust Walk", "seed": (19, 111)},
     {"name": "Locust Walk Annex", "seed": (29, 76)},
 ]
@@ -419,6 +423,24 @@ def load_room_plan():
     return rooms, wall_cells
 
 
+def load_fisher_plan(tmj, W, interior):
+    """(rooms, wall_cells) for Fisher: room rects from the hand-drawn
+    `fisher_arenas` object layer, and partition-wall cells derived from the same
+    WALLS spec the picture uses (furnish_fisher.iter_wall_cells). Deriving the
+    walls from fisher_arenas -- not the fisher_walls picture layer -- keeps the
+    matrix and picture in lock-step no matter which tool runs first. Returns
+    ([], set()) if fisher_arenas is absent (Fisher not authored yet)."""
+    import furnish_fisher as ff
+
+    sections = ff.read_sections(tmj)
+    if not sections:
+        return [], set()
+    interior_idx = {y * W + x for (x, y) in interior}
+    rooms = [{"name": nm, "rect": list(rect)} for nm, rect in sections.items()]
+    wall_cells = {cell for _side, cell in ff.iter_wall_cells(sections, interior_idx, W)}
+    return rooms, wall_cells
+
+
 def _punch_doorway(room_cells, walk, collision, W, H):
     """Carve one cell gap between sealed room_cells and the adjacent walk.
 
@@ -637,6 +659,7 @@ def main():
         arena_lobby_rows.append([lobby_id, WORLD, name, LOBBY])
 
         if name in ROOM_SUBDIVIDE:
+            plan = room_plan if name == VAN_PELT else load_fisher_plan(tmj, W, interior)
             subdivide_rooms(
                 sid,
                 name,
@@ -647,7 +670,7 @@ def main():
                 arena_room_rows,
                 W,
                 H,
-                room_plan,
+                plan,
             )
 
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
