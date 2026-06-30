@@ -49,18 +49,8 @@ RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cy
 
 OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER, RUG_LAYER, FURN_LAYER]
 
-# Tileset firstgids + column counts (from upenn_core_urban.tmj) so a catalog
-# (sheet,col,row) resolves to a GID and multi-tile sprites can be walked.
-_FIRSTGID = {
-    "franuka": 519,
-    "school": 1543,
-    "bath": 1799,
-    "kenney": 1,
-    "alchemy": 3000,
-    "bedroom": 4024,
-    "clockwork": 5048,
-    "music": 6072,
-}
+# Tile columns per sheet (image width / 16). Firstgids are NOT hardcoded -- they
+# shift when tilesets are repacked, so load_sprites reads them live from the tmj.
 _SHEET_COLS = {
     "franuka": 32,
     "school": 16,
@@ -325,17 +315,23 @@ def apply_walls(tmj, matrix_dir):
     return sum(1 for v in data if v), doors, removed
 
 
-def load_sprites():
-    """catalog name -> (top_left_gid, w, h, sheet) for every catalogued sprite."""
+def load_sprites(tmj):
+    """catalog name -> (top_left_gid, w, h, sheet) for every catalogued sprite.
+
+    Firstgids are read from the live tmj (matching each catalog sheet's image
+    file to a tileset), so repacking the tilesets can't desync the gids."""
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(here, "furniture_catalog.json")) as fh:
         cat = json.load(fh)
+    file2fg = {t["image"]: t["firstgid"] for t in tmj["tilesets"] if "image" in t}
+    sheet_fg = {s: file2fg[meta["file"]] for s, meta in cat["sheets"].items()
+                if meta.get("file") in file2fg}
     out = {}
     for name, v in cat["objects"].items():
-        if not (isinstance(v, dict) and v.get("sheet") in _FIRSTGID):
+        if not (isinstance(v, dict) and v.get("sheet") in sheet_fg):
             continue
         sheet = v["sheet"]
-        gid = _FIRSTGID[sheet] + v["row"] * _SHEET_COLS[sheet] + v["col"]
+        gid = sheet_fg[sheet] + v["row"] * _SHEET_COLS[sheet] + v["col"]
         out[name] = (gid, v["w"], v["h"], sheet)
     return out
 
@@ -468,7 +464,7 @@ def apply_furniture(tmj, matrix_dir):
     walls = {(i % W, i // W) for i, v in enumerate(wl["data"]) if v} if wl else set()
     walk = {(i % W, i // W) for i in interior} - walls
 
-    sprites = load_sprites()
+    sprites = load_sprites(tmj)
     sections = read_sections(tmj)
     rug_data = [0] * (W * H)
     furn_data = [0] * (W * H)
