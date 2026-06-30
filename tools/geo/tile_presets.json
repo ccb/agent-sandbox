@@ -3,13 +3,14 @@
   "active": "general-library",
   "presets": {
     "general-library": {
-      "description": "Library furnishing palette: reading rooms, book stacks, study/computing desks, staff areas. Used to furnish Fisher Fine Arts Library (and reusable for Van Pelt-style interiors).",
+      "description": "General interior furnishing palette: reading rooms / book stacks / study desks (library) AND lounges, cafes, studios, galleries (a student commons like Meyerson). Restored 45-tile library palette + cafe food, a clockwork floor lamp, and moon paintings.",
       "tiles": [
         "door_wood",
         "wall_set_red",
         "wall_brick",
         "plank_floor_light",
         "floor_stone_hex",
+        "floor_tile_cream",
         "rug_red",
         "rug_blue",
         "rug_orange",
@@ -20,6 +21,7 @@
         "dining_table_light",
         "table",
         "round_table_small",
+        "counter",
         "armchair",
         "armchair_orange",
         "armchair_red",
@@ -41,6 +43,7 @@
         "candelabra",
         "lantern",
         "floor_lamp",
+        "clockwork_lamp_floor",
         "plant",
         "plant_large",
         "side_table",
@@ -49,22 +52,29 @@
         "quill_ink",
         "inkwell",
         "scroll",
-        "crate"
+        "crate",
+        "basket_fruit",
+        "food_sausage",
+        "food_ham",
+        "food_fish",
+        "food_salad",
+        "food_bowl",
+        "mug",
+        "painting_moon",
+        "painting_moon_light"
       ],
       "notes": {
-        "rug_red": "reading-room / staff centerpiece rug; place a table on it with armchairs around (the franuka idiom)",
-        "rug_blue": "alternate centerpiece rug (Van Pelt used blue)",
-        "dining_table": "main reading-room table; 2x3, seat armchairs on its long sides",
-        "dining_table_light": "lighter-wood reading table variant",
-        "bookshelf_wood_books": "colorful-book shelf for reading rooms / core reading",
-        "bookshelf_tan": "tan stacks for the rare-books library (visually distinct from the reading-room shelves)",
-        "cabinet_display": "glass display cabinet for rare books / gallery",
-        "student_desk_quill": "study/computing desk with quill (computers not modeled yet)",
-        "fireplace": "lit hearth for reading rooms + staff office; 2x3, set against a wall with armchairs/plant beside it",
-        "scroll": "place on rare-books tables",
-        "quill_ink": "place on computing/printing desks",
-        "crate": "stored in the staff office",
-        "plant": "corner / fireplace-side greenery"
+        "rug_cyan": "Meyerson Lounge centerpiece rug",
+        "counter": "cafe service counter; line along a wall, set food/mugs on top",
+        "round_table_small": "cafe / lounge bistro table; ring stools or chairs around it",
+        "stool_wood": "cafe counter / bistro seating",
+        "clockwork_lamp_floor": "ornate floor lamp; cafe corner or beside the counter",
+        "painting_moon": "framed moon painting; hang on a gallery wall",
+        "painting_moon_light": "illuminated moon painting; gallery focal piece",
+        "cabinet_display": "glass display case for the gallery",
+        "basket_fruit": "fruit on the cafe counter",
+        "food_ham": "cafe counter food",
+        "food_salad": "cafe counter food"
       }
     }
   }
