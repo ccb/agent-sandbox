@@ -170,18 +170,16 @@ def apply(tmj, matrix_dir):
     return len(interior)
 
 
-def apply_walls(tmj, matrix_dir):
-    """Insert the houston_walls layer (above houston_floor): auto-enclose every
-    room by walling each boundary where a room cell meets a different room or
-    open circulation, with a centered doorway per partition segment. Boundaries
-    against the building perimeter are skipped (the perimeter already walls
-    them). Returns (wall_cells, doorway_cells)."""
+def _wall_data(tmj, interior, W, H):
+    """Compute the houston_walls tile data (flat array of wall gids) from the
+    room boxes: auto-enclose every boundary where a room cell meets a different
+    room or open circulation (skipping the building perimeter, which already
+    blocks), close 1-cell circulation gaps so abutting rooms share a single
+    boundary, leave a centered doorway per partition, and enforce <=3 wall cells
+    per 2x2. `interior` is a set of flat indices. Returns (data, doors, removed).
+    Shared by the picture (apply_walls) and the matrix (houston_wall_cells)."""
     import collections
 
-    W, H = tmj["width"], tmj["height"]
-    _strip(tmj, {WALL_LAYER})
-
-    interior = houston_interior_cells(tmj, matrix_dir)   # set of flat indices
     sections = read_sections(tmj)
     cell2room = {}
     for nm, (c0, r0, c1, r1) in sections.items():
@@ -255,7 +253,25 @@ def apply_walls(tmj, matrix_dir):
         data[r * W + c] = WALL_BR if (v and h) else (WALL_R if v else WALL_B)
 
     removed = _enforce_max3_per_2x2(data, W, H)  # no 2x2 may hold 4 wall cells
+    return data, doors, removed
 
+
+def houston_wall_cells(tmj, interior, W, H):
+    """The partition-wall cell set {(x, y)} -- exactly the cells apply_walls
+    paints. `interior` is a set of flat indices. Used by
+    add_entrances.load_houston_plan to derive collision from the room boxes, so
+    matrix and picture stay in lock-step."""
+    data, _doors, _removed = _wall_data(tmj, interior, W, H)
+    return {(i % W, i // W) for i, v in enumerate(data) if v}
+
+
+def apply_walls(tmj, matrix_dir):
+    """Insert the houston_walls layer (above houston_floor) from _wall_data.
+    Returns (wall_cells, doorway_cells, removed)."""
+    W, H = tmj["width"], tmj["height"]
+    _strip(tmj, {WALL_LAYER})
+    interior = houston_interior_cells(tmj, matrix_dir)
+    data, doors, removed = _wall_data(tmj, interior, W, H)
     next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
     walls = _new_layer(WALL_LAYER, data, W, H, next_id)
     if "nextlayerid" in tmj:
