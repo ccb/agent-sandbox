@@ -8,8 +8,11 @@ W, H = 245, 279
 FISHER = "Fisher Fine Arts Library"
 ROOM_IDS = list(range(13400, 13406))
 ROOMS = {
-    "Seng Tee Lee Reading Room", "Fisher Core Reading Section",
-    "Fisher Rare Books Library", "Ross Gallery", "Staff Office",
+    "Seng Tee Lee Reading Room",
+    "Fisher Core Reading Section",
+    "Fisher Rare Books Library",
+    "Ross Gallery",
+    "Staff Office",
     "Computing & Printing",
 }
 
@@ -20,8 +23,18 @@ def _run(tmp):
     shutil.copytree(SRC_MATRIX, mdir)
     tmap = os.path.join(tmp, "map.tmj")
     shutil.copy2(SRC_MAP, tmap)
-    subprocess.run([sys.executable, os.path.join(HERE, "add_entrances.py"),
-                    "--tmj", tmap, "--matrix", mdir], check=True, cwd=HERE)
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
     return mdir, tmap
 
 
@@ -58,6 +71,7 @@ def test_rug_boxes_are_not_arenas(tmp_path):
 
 def test_partition_walls_block(tmp_path):
     import furnish_fisher as ff
+
     mdir, tmap = _run(str(tmp_path))
     tmj = json.load(open(tmap))
     sections = ff.read_sections(tmj)
@@ -65,7 +79,7 @@ def test_partition_walls_block(tmp_path):
     walls = {cell for _side, cell in ff.iter_wall_cells(sections, interior, W)}
     assert walls, "expected Fisher partition walls"
     coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
-    for (x, y) in walls:
+    for x, y in walls:
         assert coll[y * W + x] == "1", f"partition cell {(x, y)} is not blocking"
 
 
@@ -79,12 +93,14 @@ def test_every_fisher_room_reachable_from_a_door(tmp_path):
         for y in (0, H - 1):
             i = y * W + x
             if coll[i] == "0" and not seen[i]:
-                seen[i] = True; q.append((x, y))
+                seen[i] = True
+                q.append((x, y))
     for y in range(H):
         for x in (0, W - 1):
             i = y * W + x
             if coll[i] == "0" and not seen[i]:
-                seen[i] = True; q.append((x, y))
+                seen[i] = True
+                q.append((x, y))
     reached = set()
     while q:
         x, y = q.popleft()
@@ -94,15 +110,22 @@ def test_every_fisher_room_reachable_from_a_door(tmp_path):
             if 0 <= nx < W and 0 <= ny < H:
                 j = ny * W + nx
                 if coll[j] == "0" and not seen[j]:
-                    seen[j] = True; q.append((nx, ny))
+                    seen[j] = True
+                    q.append((nx, ny))
     for rid in ROOM_IDS:
-        assert str(rid) in reached, f"Fisher room arena {rid} unreachable through the door"
+        assert (
+            str(rid) in reached
+        ), f"Fisher room arena {rid} unreachable through the door"
 
 
 def test_van_pelt_unchanged_regression(tmp_path):
     mdir, _ = _run(str(tmp_path))
     rows = _arena_blocks(mdir)
-    vp = [r for r in rows if r[2] == "Van Pelt Library" and r[3] not in ("grounds", "lobby")]
+    vp = [
+        r
+        for r in rows
+        if r[2] == "Van Pelt Library" and r[3] not in ("grounds", "lobby")
+    ]
     assert len(vp) == 25  # adding Fisher must not disturb Van Pelt's subdivision
 
 
@@ -110,7 +133,17 @@ def test_idempotent(tmp_path):
     mdir, tmap = _run(str(tmp_path))
     a = open(os.path.join(mdir, "maze", "arena_maze.csv")).read()
     c = open(os.path.join(mdir, "maze", "collision_maze.csv")).read()
-    subprocess.run([sys.executable, os.path.join(HERE, "add_entrances.py"),
-                    "--tmj", tmap, "--matrix", mdir], check=True, cwd=HERE)
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
     assert open(os.path.join(mdir, "maze", "arena_maze.csv")).read() == a
     assert open(os.path.join(mdir, "maze", "collision_maze.csv")).read() == c
