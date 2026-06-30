@@ -12,6 +12,7 @@ a world you can walk and read.
 """
 
 from text_adventure_games import games, things, actions, blocks, reactions
+from text_adventure_games.enums import Property
 
 
 def _die(game, message):
@@ -27,15 +28,22 @@ _QUIET = {"sneak", "examine", "describe", "inventory", "wait", "get", "drop", "p
 _QUIET_SPHERE = {"examine", "describe", "inventory"}
 
 
-def _deadly_room(game, room, message, quiet=_QUIET):
+def _is_holding(character, name):
+    return name in character.inventory
+
+
+def _deadly_room(game, room, message, quiet=_QUIET, gate=None):
     """Register a death: while the player stands in *room*, any noisy act associated
     with it this round is fatal -- a noisy arrival (a plain ``go``, not a ``sneak``)
     or a loud action done there (``say``/``break``/``attack``). Quiet acts are safe.
     Only the *player's* own actions count, so a creature lured through the room
-    doesn't set it off."""
+    doesn't set it off. ``gate`` (a predicate) can switch the danger off -- e.g. the
+    Burial Sphere stops being lethal once the Fungal Horror is dead."""
 
     def condition(g):
         if g.player.location is not room:
+            return False
+        if gate is not None and not gate(g):
             return False
         for e in g.events[g._round_event_start :]:
             if e.actor != g.player.name or e.action in quiet:
@@ -90,6 +98,101 @@ class FungalSong(reactions.Startle):
         self.game.emit_sound(self.owner.location, 6, "a tuneless fungal song")
 
 
+class BurnCorpse(actions.Action):
+    """Burn the ossified corpse at the Summit -- the root of the fungus. With the
+    gel and the igniter it goes up in flame, and the whole network (the Fungal
+    Horror included, far below) dies with it. The elegant boss solution: it makes
+    the Burial Sphere safe to enter without ever fighting the Horror."""
+
+    ACTION_NAME = "burn corpse"
+    ACTION_DESCRIPTION = "Set the ossified corpse alight (needs gel and a flame)"
+    ACTION_ALIASES = [
+        "burn ossified corpse", "burn the corpse", "ignite corpse",
+        "torch corpse", "burn mystic", "burn the ossified corpse",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        if self.player.location is None or self.player.location.name != "The Summit":
+            self.parser.fail("There's nothing here to burn.")
+            return False
+        if self.player.location.get_property("cleansed"):
+            self.parser.fail("The corpse is already ash; the fungus is dead.")
+            return False
+        if not (_is_holding(self.player, "flask of gel") and _is_holding(self.player, "plasma-igniter")):
+            self.parser.fail(
+                "You'd need something that burns and a flame to light it -- gel, and an igniter."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        gel = self.player.inventory.get("flask of gel")
+        if gel is not None:
+            self.player.remove_from_inventory(gel)
+        self.player.location.set_property("cleansed", True)
+        self.game.locations["Burial Sphere of Nassak An-Rah"].set_property("horror_dead", True)
+        self.parser.ok(
+            "You splash the embalming gel over the ossified mystic and strike the "
+            "igniter. Orange flame roars down the fungal chimney -- and far below, the "
+            "whole rotten network shudders and dies. The Fungal Horror sloughs into "
+            "ash. The tomb falls silent at last."
+        )
+        self.game.award("cleanse", 30, None)
+
+
+class PryCoffin(actions.Action):
+    """Pry open the Autarch's anti-entropy coffin in the zero-g Burial Sphere to
+    claim the Exotica. The coffin floats off the wall; you can only get the
+    purchase to force it open while anchored by the magnetic boots."""
+
+    ACTION_NAME = "pry coffin"
+    ACTION_DESCRIPTION = "Pry open the floating coffin (needs the magnetic boots)"
+    ACTION_ALIASES = [
+        "open coffin", "open the coffin", "pry open coffin", "pry the coffin",
+        "loot coffin", "loot the coffin", "pry open the coffin",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "coffin" not in loc.items:
+            self.parser.fail("There's no coffin here.")
+            return False
+        if loc.items["coffin"].get_property("pried"):
+            self.parser.fail("The coffin is already open.")
+            return False
+        if "magnetic boots" not in self.player.worn:
+            self.parser.fail(
+                "The coffin floats in the dead centre, out of reach -- you flail in "
+                "the zero gravity and get nowhere. You need purchase. (Magnetic boots?)"
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        coffin = loc.items["coffin"]
+        coffin.set_property("pried", True)
+        taken = []
+        for item in list(coffin.contents.values()):
+            coffin.remove_item(item)
+            loc.add_item(item)
+            taken.append(item.name)
+        self.parser.ok(
+            "Anchored by the magnetic boots, you brace against the coffin and force "
+            "the glass apart. Among the Autarch's drifting bones you find: "
+            + ", ".join(taken) + "."
+        )
+        self.game.award("exotica", 30, None)
+
+
 class CrystalSeal(blocks.Block):
     """The red-crystal seal barring the stair from the Canopic hall up to the
     Burial Sphere. It clears once both missing canopic jars sit on their matching
@@ -105,6 +208,23 @@ class CrystalSeal(blocks.Block):
 
     def is_blocked(self) -> bool:
         return not self.canopic.get_property("seal_open")
+
+
+class ChokedChimney(blocks.Block):
+    """The fungal chimney between the Summit and the Burial Sphere is too choked
+    with spores to pass without breathing protection -- so the only way into the
+    Sphere is the front stair (the canopic seal). (A respirator route is a future
+    extension.)"""
+
+    def __init__(self):
+        super().__init__(
+            "The fungal chimney",
+            "The chimney is packed with orange spores -- you'd choke before you were "
+            "halfway. You'd need breathing protection to brave it.",
+        )
+
+    def is_blocked(self) -> bool:
+        return True
 
 
 class TombGame(games.Game):
@@ -224,9 +344,12 @@ def build_game():
     # seal Block; open for now so the scaffold is fully walkable).
     canopic.add_connection("up", sphere)          # sphere.down -> canopic (the aperture)
 
-    # The fungal chimney joins the Sphere's crown to the Summit: go "in" the
-    # chimney from the summit to descend, "out" to climb back up.
+    # The fungal chimney joins the Sphere's crown to the Summit -- but it's choked
+    # with spores (impassable in v1), so the Sphere is reached only by the front
+    # stair (the canopic seal). Both directions are blocked.
     summit.add_connection("in", sphere)           # auto: sphere out -> summit
+    summit.add_block("in", ChokedChimney())
+    sphere.add_block("out", ChokedChimney())
 
     # --- Atmosphere: examinable scenery (hooks for later phases) -------------
     _scenery(exterior, "tomb", "the Tomb of Nassak An-Rah",
@@ -282,9 +405,26 @@ def build_game():
     jackal_plinth.set_property("gettable", False)
     canopic.add_item(falcon_plinth)
     canopic.add_item(jackal_plinth)
-    _scenery(sphere, "coffin", "the Autarch's anti-entropy coffin",
-             "A clouded glass sphere at the chamber's heart, its preserving field "
-             "failing, its interior a slow orange churn. An-Rah's bones hang within.")
+    dagger = things.Item(
+        "synth-hunting dagger", "An-Rah's synth-hunting dagger",
+        "A dagger that flashes coded LogLang as you grip it -- synthetics flinch "
+        "from its wielder.")
+    dagger.set_property("is_weapon", True)
+    dagger.add_alias("dagger")
+    manifold_box = things.Item(
+        "manifold box", "An-Rah's manifold box",
+        "A small gilded box that doesn't quite fit the space it sits in -- "
+        "hypergeometric, and heavier inside than out.")
+    manifold_box.add_alias("box")
+    coffin = _scenery(
+        sphere, "coffin", "the Autarch's anti-entropy coffin",
+        "A clouded glass sphere at the chamber's heart, its field failing, its "
+        "interior a slow orange churn. The Autarch's bones -- and his Exotica -- "
+        "drift sealed within. You'd have to PRY it open.")
+    coffin.make_container()
+    coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
+    coffin.add_item(dagger)
+    coffin.add_item(manifold_box)
     _scenery(summit, "ossified corpse", "an ossified mystic",
              "A corpse turned to stone mid-meditation, orange fungus weeping from its "
              "eyes and mouth -- the wellspring, it seems, of all the rot below.")
@@ -332,6 +472,31 @@ def build_game():
     blade.add_alias("blade")
     warriors.add_item(blade)
 
+    # Endgame gear: a plasma-igniter and magnetic boots (more guard kit), and a
+    # flask of flammable embalming gel from the hound tank.
+    igniter = things.Item(
+        "plasma-igniter", "an Autarchy plasma-igniter",
+        "A guard's plasma-igniter -- a thumb-flame hot enough to light anything.",
+    )
+    igniter.add_alias("igniter")
+    boots = things.Item(
+        "magnetic boots", "a pair of magnetic boots",
+        "Heavy Autarchy boots that clamp to metal -- the way to keep your footing "
+        "in a zero-gravity chamber.",
+    )
+    boots.set_property(Property.WEARABLE, True)
+    boots.set_property("wear_slot", "feet")
+    boots.add_alias("boots")
+    warriors.add_item(igniter)
+    warriors.add_item(boots)
+    gel = things.Item(
+        "flask of gel", "a flask of embalming gel",
+        "A flask of luminous embalming gel scooped from the hound tank. It reeks, "
+        "and it burns.",
+    )
+    gel.add_alias("gel")
+    hounds.add_item(gel)
+
     # Silas -- the synthetic archivist (the hint NPC). His combat / pacify / rob
     # outcomes arrive with later phases (the dagger, Friend's Fungus); for now he
     # warns you about the Spawn and the seal if you talk to him.
@@ -370,8 +535,9 @@ def build_game():
 
     game = TombGame(
         exterior, player, characters=[silas, spawn_guts, spawn_brain],
-        custom_actions=[Sneak],
+        custom_actions=[Sneak, BurnCorpse, PryCoffin],
     )
+    game.max_score = 100
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
@@ -393,7 +559,8 @@ def build_game():
     _deadly_room(game, sphere,
                  "At the first stir of movement the orange mass erupts from the "
                  "coffin -- the Fungal Horror -- and drowns you in acid. THE END.",
-                 quiet=_QUIET_SPHERE)
+                 quiet=_QUIET_SPHERE,
+                 gate=lambda g: not sphere.get_property("horror_dead"))
 
     # Placement trigger: both missing jars on their matching plinths -> the seal
     # opens. Fires once.
@@ -410,8 +577,31 @@ def build_game():
             "As the last jar settles onto its plinth, the crimson light steadies to "
             "white. The crystal seal sighs apart into motes, baring the stair up."
         )
+        g.award("seal", 20, None)
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
+
+    # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
+    def _escape(g):
+        g.player.set_property("escaped", True)
+        g.award("escape", 20, None)
+        g.parser.ok(
+            "You climb out into the phthalo sands. The dying sun stains the dunes "
+            "red, the Autarch's Exotica heavy in your pack. You have plundered the "
+            f"Tomb of Nassak An-Rah and lived. (Score {g.score}/{g.max_score}.) THE END."
+        )
+        g.game_over = True
+        g.game_over_description = "Escaped the Blue Ruins with the Autarch's Exotica."
+
+    game.add_trigger(
+        "escape",
+        lambda g: g.player.location is exterior
+        and "synth-hunting dagger" in g.player.inventory
+        and "manifold box" in g.player.inventory
+        and not g.game_over,
+        _escape,
+        repeatable=False,
+    )
     return game
 
 
@@ -431,21 +621,46 @@ WALK = [
 ]
 
 
+# The full 100/100 winning run: arm up (creeping the deadly halls), lure and fell
+# the Spawn to claim the jars, open the seal, climb out and burn the corpse to
+# kill the Horror, then loot the now-safe Sphere with the boots and escape.
+WIN_WALKTHROUGH = [
+    "sneak east", "take blade", "take igniter", "take boots",       # Warriors: arm
+    "sneak east", "take gel",                                       # Hounds: gel
+    "sneak up",                                                     # -> Canopic
+    "say come", "say come", "say come", "say come", "say come",     # the mantis lures the Spawn
+    "attack spawn of guts with blade", "attack spawn of brain with blade",
+    "take falcon jar", "take jackal jar",
+    "put falcon jar on falcon plinth", "put jackal jar on jackal plinth",  # seal opens
+    "sneak down", "sneak south", "sneak south",                     # Canopic -> Exterior
+    "up", "burn corpse",                                            # Summit: cleanse the root
+    "down", "sneak north", "sneak north", "sneak up",               # back to Canopic
+    "up", "wear boots", "pry coffin",                               # Sphere: loot
+    "take dagger", "take manifold box",
+    "sneak down", "sneak down", "sneak south", "sneak south",       # escape -> WIN
+]
+
+
 def _run(commands):
     game = build_game()
     game.parser.parse_command("look")
     for cmd in commands:
+        if game.is_game_over():
+            break
         print(f"\n>>> {cmd}")
         game.do_command(cmd)
     print("\n" + "=" * 60)
-    print(f"Scaffold tour complete. Rooms reachable; nothing lethal yet.")
+    print(f"WON: {game.is_won()}   GAME_OVER: {game.is_game_over()}   "
+          f"SCORE: {game.score}/{game.max_score}")
     return game
 
 
 if __name__ == "__main__":
     import sys
 
-    if "--walk" in sys.argv:
+    if "--win" in sys.argv:
+        _run(WIN_WALKTHROUGH)
+    elif "--walk" in sys.argv:
         _run(WALK)
     else:
         build_game().game_loop()
