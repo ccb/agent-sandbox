@@ -492,7 +492,33 @@ Box, and leave — a lower score but a victory.)
 
 ---
 
-## 14. Resolved decisions
+## 14. Implementation status (v1 — shipped)
+
+Built and merged across four phases (`adventures/tomb_of_nassak_an_rah.py`,
+`tests/test_tomb_of_nassak_an_rah.py`); a full winning run scores **100/100** and
+is verified by the suite (`python -m ...tomb_of_nassak_an_rah --win`).
+
+**Done:**
+- The 8-room map (the diamond + sealed stair + choked chimney) with Vaarn prose.
+- The canopic spine puzzle: sealed-container jars (open to reveal the organ),
+  five plinths, the `CrystalSeal` block, head→organ matching.
+- Noise as the core mechanic: `sneak` vs striding, deadly rooms (bats, jackals,
+  the Fungal Horror), and the **`DrawnToSound`** engine reaction driving the
+  mantis-song Spawn lure.
+- Silas the hint NPC; the prismatic blade; one-hit-KO Spawn that drop their jars.
+- The fire/cleanse boss solution (burn the Ossified Corpse → the Horror dies →
+  the Sphere is safe); the zero-g coffin pried only with the magnetic boots; the
+  Exotica (Synth-hunting Dagger, Manifold Box); escape-to-win; the 100-pt score.
+
+**Deferred to stretch (per §13), not yet built:**
+- Ancestry select; the burn-in-the-sphere boss solution; the **Manifold Box
+  angle puzzle → An-Rah's ego-core**; **Friend's Fungus**, the **Ulfire Lantern**,
+  and **Silas's emergent fate**; the cyborg-hound / Singing-Crystal collector
+  loot; the respirator + chimney back-door; richer push/grab/throw zero-g; and
+  the inherently-noisy-*movement* dial (v1 keys threats on loud actions + noisy
+  arrivals, with `sneak` as the safe move).
+
+## 15. Resolved decisions
 
 - **Player:** a nameless Vaarn scavenger for v1 (ancestry-select is stretch, §13).
 - **Combat:** puzzle-forward with a thin HP layer; fire is a scarce, multi-target
