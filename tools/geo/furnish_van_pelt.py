@@ -11,6 +11,7 @@ are clipped, so no sprite is placed on a wall or outside the building.
 
 Ordering requirement: must run AFTER add_entrances.py so that collision_maze.csv
 reflects any doorways punched through partition walls before phantom-wall clearing."""
+
 import argparse, json, os, shutil
 
 from add_entrances import read_flat, split_footprint
@@ -29,7 +30,9 @@ def van_pelt_interior_cells(matrix_dir, W, H, entrance_cells):
     add_entrances: the sector-30 footprint (sector cells that are part of the
     painted building, i.e. in entrance_floor) minus its 1-tile perimeter ring."""
     sector = read_flat(os.path.join(matrix_dir, "maze", "sector_maze.csv"))
-    foot = {(i % W, i // W) for i, s in enumerate(sector) if s == SECTOR} & entrance_cells
+    foot = {
+        (i % W, i // W) for i, s in enumerate(sector) if s == SECTOR
+    } & entrance_cells
     _perimeter, interior = split_footprint(foot, W, H)
     return interior
 
@@ -45,10 +48,17 @@ def apply(tmj, asset, matrix_dir):
     order = asset["layer_order"]
     _strip(tmj, set(order))
 
-    ef = next((L for L in tmj["layers"]
-               if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"), None)
-    entrance_cells = ({(i % W, i // W) for i, v in enumerate(ef["data"]) if v}
-                      if ef else set())
+    ef = next(
+        (
+            L
+            for L in tmj["layers"]
+            if L.get("name") == "entrance_floor" and L.get("type") == "tilelayer"
+        ),
+        None,
+    )
+    entrance_cells = (
+        {(i % W, i // W) for i, v in enumerate(ef["data"]) if v} if ef else set()
+    )
     interior = van_pelt_interior_cells(matrix_dir, W, H, entrance_cells)
 
     next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
@@ -62,16 +72,29 @@ def apply(tmj, asset, matrix_dir):
                 data[idx] = g
             else:
                 clipped += 1
-        new_layers.append({
-            "type": "tilelayer", "name": name, "id": next_id + k,
-            "x": 0, "y": 0, "width": W, "height": H,
-            "opacity": 1, "visible": True, "data": data,
-        })
+        new_layers.append(
+            {
+                "type": "tilelayer",
+                "name": name,
+                "id": next_id + k,
+                "x": 0,
+                "y": 0,
+                "width": W,
+                "height": H,
+                "opacity": 1,
+                "visible": True,
+                "data": data,
+            }
+        )
     if "nextlayerid" in tmj:
         tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + len(order))
 
     names = [L.get("name") for L in tmj["layers"]]
-    at = names.index("entrance_floor") + 1 if "entrance_floor" in names else len(tmj["layers"])
+    at = (
+        names.index("entrance_floor") + 1
+        if "entrance_floor" in names
+        else len(tmj["layers"])
+    )
     tmj["layers"][at:at] = new_layers
 
     # Clear any wing-wall sprite that sits on a walkable (collision==0) cell so
@@ -90,12 +113,21 @@ def apply(tmj, asset, matrix_dir):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tmj", default=os.path.join(
-        repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"))
-    ap.add_argument("--matrix", default=os.path.join(
-        repo, "godot-generative-agents", "sim", "the_upenn", "matrix"))
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
