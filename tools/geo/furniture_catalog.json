@@ -333,6 +333,39 @@
       "label": "large blue cushion / seat",
       "verified": true
     },
+    "cushion_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large orange cushion / seat",
+      "verified": false
+    },
+    "cushion_cream": {
+      "sheet": "franuka",
+      "col": 16,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large cream cushion / seat",
+      "verified": false
+    },
+    "cushion_red": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large red cushion / seat",
+      "verified": true
+    },
     "wardrobe": {
       "sheet": "franuka",
       "col": 25,
@@ -426,7 +459,7 @@
       "h": 3,
       "category": "furniture",
       "label": "wood bookshelf with colorful books",
-      "verified": true
+      "verified": false
     },
     "armchair_pink": {
       "sheet": "franuka",
@@ -446,7 +479,7 @@
       "h": 1,
       "category": "furniture",
       "label": "padded armchair (orange)",
-      "verified": true
+      "verified": false
     },
     "armchair_green": {
       "sheet": "franuka",
@@ -456,7 +489,7 @@
       "h": 1,
       "category": "furniture",
       "label": "padded armchair (green)",
-      "verified": true
+      "verified": false
     },
     "armchair_red": {
       "sheet": "franuka",
@@ -466,7 +499,7 @@
       "h": 1,
       "category": "furniture",
       "label": "padded armchair (red)",
-      "verified": true
+      "verified": false
     },
     "round_table_small": {
       "sheet": "franuka",
@@ -526,7 +559,7 @@
       "h": 2,
       "category": "furniture",
       "label": "U-shaped sectional sofa (orange)",
-      "verified": false
+      "verified": true
     },
     "dresser_orange": {
       "sheet": "franuka",
@@ -576,7 +609,7 @@
       "h": 3,
       "category": "furniture",
       "label": "tall bookshelf with books (tan)",
-      "verified": true
+      "verified": false
     },
     "cabinet_display": {
       "sheet": "franuka",
@@ -600,7 +633,7 @@
     },
     "stove": {
       "sheet": "franuka",
-      "col": 9,
+      "col": 8,
       "row": 24,
       "w": 3,
       "h": 2,
@@ -636,7 +669,7 @@
       "h": 2,
       "category": "furniture",
       "label": "hanging_light",
-      "verified": true
+      "verified": false
     },
     "rug_red": {
       "sheet": "franuka",
@@ -646,7 +679,7 @@
       "h": 3,
       "category": "furniture",
       "label": "patterned rug (red)",
-      "verified": true
+      "verified": false
     },
     "rug_orange": {
       "sheet": "franuka",
@@ -726,7 +759,7 @@
       "h": 1,
       "category": "prop",
       "label": "wooden crate",
-      "verified": true
+      "verified": false
     },
     "pot": {
       "sheet": "franuka",
@@ -856,7 +889,7 @@
       "h": 1,
       "category": "prop",
       "label": "book (red cover)",
-      "verified": true
+      "verified": false
     },
     "quill_ink": {
       "sheet": "franuka",
@@ -866,7 +899,7 @@
       "h": 1,
       "category": "prop",
       "label": "quill pen and inkpot",
-      "verified": true
+      "verified": false
     },
     "scroll": {
       "sheet": "franuka",
@@ -876,7 +909,7 @@
       "h": 1,
       "category": "prop",
       "label": "rolled paper scroll",
-      "verified": true
+      "verified": false
     },
     "_comment_food": "--- franuka: food props to place on tables (see image refs) ---",
     "food_salad": {
@@ -1457,7 +1490,7 @@
       "col": 27,
       "row": 21,
       "w": 1,
-      "h": 2,
+      "h": 1,
       "category": "furniture",
       "label": "multi-arm candelabra (lit)",
       "verified": false
@@ -1470,7 +1503,7 @@
       "h": 1,
       "category": "prop",
       "label": "blue bowl of food",
-      "verified": false
+      "verified": true
     },
     "food_pot": {
       "sheet": "franuka",
@@ -1521,7 +1554,7 @@
       "h": 2,
       "category": "furniture",
       "label": "alchemy workbench with bottles",
-      "verified": false
+      "verified": true
     },
     "wall_stone_grey": {
       "sheet": "alchemy",
@@ -1581,7 +1614,7 @@
       "h": 2,
       "category": "furniture",
       "label": "wooden chest (alchemy)",
-      "verified": false
+      "verified": true
     },
     "_comment_bedroom": "--- Expansion_Bedroom (interior_bedroom.png, firstgid 4024) ---",
     "double_bed": {
@@ -1609,7 +1642,7 @@
       "col": 0,
       "row": 13,
       "w": 2,
-      "h": 2,
+      "h": 3,
       "category": "furniture",
       "label": "made single bed",
       "verified": false
@@ -1622,7 +1655,7 @@
       "h": 3,
       "category": "furniture",
       "label": "tall grandfather clock",
-      "verified": false
+      "verified": true
     },
     "painting_moon": {
       "sheet": "bedroom",
@@ -1632,9 +1665,9 @@
       "h": 3,
       "category": "prop",
       "label": "framed moon painting",
-      "verified": false
+      "verified": true
     },
-    "painting_moon_large": {
+    "painting_moon_light": {
       "sheet": "bedroom",
       "col": 24,
       "row": 10,
@@ -1642,7 +1675,7 @@
       "h": 3,
       "category": "prop",
       "label": "large framed moon painting",
-      "verified": false
+      "verified": true
     },
     "mirror_standing": {
       "sheet": "bedroom",
@@ -1663,7 +1696,7 @@
       "h": 4,
       "category": "furniture",
       "label": "copper pipe organ (piano-like)",
-      "verified": false
+      "verified": true
     },
     "clockwork_lamp_floor": {
       "sheet": "clockwork",
@@ -1683,7 +1716,7 @@
       "h": 1,
       "category": "prop",
       "label": "glowing ceiling light",
-      "verified": false
+      "verified": true
     },
     "clockwork_machine_copper": {
       "sheet": "clockwork",
@@ -1713,7 +1746,7 @@
       "h": 3,
       "category": "furniture",
       "label": "copper grandfather clock",
-      "verified": false
+      "verified": true
     },
     "_comment_music": "--- Expansion_Music (interior_music.png, firstgid 6072) ---",
     "wall_set_silver": {
@@ -1751,10 +1784,10 @@
       "col": 0,
       "row": 10,
       "w": 2,
-      "h": 3,
+      "h": 2,
       "category": "furniture",
       "label": "upright piano",
-      "verified": false
+      "verified": true
     },
     "pipe_brass": {
       "sheet": "clockwork",
@@ -1775,26 +1808,6 @@
       "category": "wall",
       "label": "wood plank wall top",
       "verified": false
-    },
-    "bookshelf_clutter": {
-      "sheet": "franuka",
-      "col": 2,
-      "row": 12,
-      "w": 2,
-      "h": 3,
-      "category": "furniture",
-      "label": "bookshelf with clutter on shelves (red-brown)",
-      "verified": false
-    },
-    "painting_moon_light": {
-      "sheet": "bedroom",
-      "col": 24,
-      "row": 10,
-      "w": 3,
-      "h": 3,
-      "category": "prop",
-      "label": "large framed moon painting",
-      "verified": true
     }
   }
 }
