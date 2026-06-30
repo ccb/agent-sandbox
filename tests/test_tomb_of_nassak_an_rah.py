@@ -88,3 +88,66 @@ def test_smoke_tour_traverses_every_room_cleanly():
     assert "does not have an exit" not in texts
     assert "you don't see anything special" not in texts
     assert not game.is_game_over()  # nothing lethal in the scaffold
+
+
+# --- Phase 2: the canopic seal puzzle + Silas --------------------------------
+
+
+def _texts(game):
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    return cap
+
+
+def _grab_both_jars_to_canopic(game):
+    """From the Exterior: east -> Warriors (falcon jar), east -> Hounds (jackal
+    jar), up -> the Canopic hall. Leaves the player holding both jars."""
+    for cmd in ["east", "take falcon jar", "east", "take jackal jar", "up"]:
+        game.do_command(cmd)
+
+
+def test_silas_warns_about_the_spawn_and_the_seal():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")  # -> Hall of Youth
+    game.do_command("north")  # -> Hall of Memory (Silas)
+    game.do_command("talk to silas")
+    assert "plinth of its kind" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_memory_crystals_give_the_head_to_organ_clue():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")
+    game.do_command("north")
+    game.do_command("examine crystal lattice")
+    assert "the jackal -- strangely -- his brain" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_the_seal_bars_the_stair_until_both_jars_are_placed():
+    game = _game()
+    _grab_both_jars_to_canopic(game)
+    assert game.player.location.name == "Hall of the Canopic Jars"
+    game.do_command("up")  # the crystal seal blocks the stair
+    assert game.player.location.name == "Hall of the Canopic Jars"
+    assert not game.locations["Hall of the Canopic Jars"].get_property("seal_open")
+
+
+def test_wrong_plinth_does_not_open_the_seal():
+    game = _game()
+    _grab_both_jars_to_canopic(game)
+    game.do_command("put falcon jar on jackal plinth")  # mismatch
+    game.do_command("put jackal jar on falcon plinth")  # mismatch
+    assert not game.locations["Hall of the Canopic Jars"].get_property("seal_open")
+    game.do_command("up")
+    assert game.player.location.name == "Hall of the Canopic Jars"  # still barred
+
+
+def test_matching_both_jars_opens_the_seal_and_the_stair():
+    game = _game()
+    _grab_both_jars_to_canopic(game)
+    game.do_command("put falcon jar on falcon plinth")
+    game.do_command("put jackal jar on jackal plinth")
+    assert game.locations["Hall of the Canopic Jars"].get_property("seal_open")
+    game.do_command("up")  # the stair is open now
+    assert game.player.location.name == "Burial Sphere of Nassak An-Rah"
