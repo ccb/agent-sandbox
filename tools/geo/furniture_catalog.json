@@ -1808,6 +1808,127 @@
       "category": "wall",
       "label": "wood plank wall top",
       "verified": false
+    },
+    "_comment_music_instruments": "--- music: harps, strings, drums, sheet-music stand (rows 5-8) ---",
+    "music_stand": {
+      "sheet": "music",
+      "col": 0,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "sheet-music stand",
+      "verified": false
+    },
+    "harp_gold": {
+      "sheet": "music",
+      "col": 4,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "golden concert harp",
+      "verified": false
+    },
+    "harp_copper": {
+      "sheet": "music",
+      "col": 6,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "copper harp",
+      "verified": false
+    },
+    "harp_silver": {
+      "sheet": "music",
+      "col": 8,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "silver harp",
+      "verified": false
+    },
+    "cello": {
+      "sheet": "music",
+      "col": 10,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "cello (red-brown)",
+      "verified": false
+    },
+    "violin": {
+      "sheet": "music",
+      "col": 11,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "violin / viola (tan)",
+      "verified": false
+    },
+    "double_bass": {
+      "sheet": "music",
+      "col": 12,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "double bass (silver)",
+      "verified": false
+    },
+    "cello_wood": {
+      "sheet": "music",
+      "col": 13,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "upright cello (wood)",
+      "verified": false
+    },
+    "drum": {
+      "sheet": "music",
+      "col": 15,
+      "row": 5,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "drum with sticks",
+      "verified": false
+    },
+    "drum_white": {
+      "sheet": "music",
+      "col": 17,
+      "row": 5,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "white drum with sticks",
+      "verified": false
+    },
+    "lute": {
+      "sheet": "music",
+      "col": 16,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "round-body lute",
+      "verified": false
+    },
+    "accordion": {
+      "sheet": "music",
+      "col": 19,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "red accordion / concertina",
+      "verified": false
     }
   }
 }
