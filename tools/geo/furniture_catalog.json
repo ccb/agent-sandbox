@@ -25,6 +25,26 @@
       "file": "tilemap_packed.png",
       "cols": 27,
       "rows": 18
+    },
+    "alchemy": {
+      "file": "interior_alchemy.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "bedroom": {
+      "file": "interior_bedroom.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "clockwork": {
+      "file": "interior_clockwork.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "music": {
+      "file": "interior_music.png",
+      "cols": 32,
+      "rows": 32
     }
   },
   "objects": {
@@ -1350,6 +1370,454 @@
       "category": "tree",
       "label": "autumn tree cluster (3x3)",
       "verified": true
+    },
+    "cushion_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large orange cushion / seat",
+      "verified": false
+    },
+    "cushion_cream": {
+      "sheet": "franuka",
+      "col": 16,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large cream cushion / seat",
+      "verified": false
+    },
+    "cushion_red": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large red cushion / seat",
+      "verified": false
+    },
+    "kitchen_clutter": {
+      "sheet": "franuka",
+      "col": 2,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "bookshelf with clutter on shelves (red-brown)",
+      "verified": true
+    },
+    "_comment_pass3": "--- pass 3: franuka colour variants (diversify; unverified, refine in catalog_web) ---",
+    "wall_red": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid crimson wall top",
+      "verified": false
+    },
+    "wall_blue": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid blue wall top",
+      "verified": false
+    },
+    "wall_cream": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid cream/beige wall top",
+      "verified": false
+    },
+    "wall_magenta": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid magenta wall top",
+      "verified": false
+    },
+    "wall_green": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid green wall top",
+      "verified": false
+    },
+    "floor_round_stone": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "round cobble stone floor (light)",
+      "verified": false
+    },
+    "floor_cobble": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "cobblestone floor",
+      "verified": false
+    },
+    "floor_tile_blue": {
+      "sheet": "franuka",
+      "col": 11,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "blue-grey tile floor",
+      "verified": false
+    },
+    "candelabra_arms": {
+      "sheet": "franuka",
+      "col": 27,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "multi-arm candelabra (lit)",
+      "verified": false
+    },
+    "food_bowl_blue": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 22,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "blue bowl of food",
+      "verified": false
+    },
+    "food_pot": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "small cooking pot of food",
+      "verified": false
+    },
+    "_comment_alchemy": "--- Expansion_AlchemyLab (interior_alchemy.png, firstgid 3000): alchemy lab furniture/props ---",
+    "shelf_metal": {
+      "sheet": "alchemy",
+      "col": 4,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "metal/steel shelving unit (alchemy)",
+      "verified": false
+    },
+    "shelf_alchemy_red": {
+      "sheet": "alchemy",
+      "col": 0,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "red alchemy shelf with items",
+      "verified": false
+    },
+    "bookshelf_alchemy": {
+      "sheet": "alchemy",
+      "col": 2,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood alchemy bookshelf",
+      "verified": false
+    },
+    "alchemy_workbench": {
+      "sheet": "alchemy",
+      "col": 0,
+      "row": 11,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "alchemy workbench with bottles",
+      "verified": false
+    },
+    "wall_stone_grey": {
+      "sheet": "alchemy",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "pale grey stone brick wall",
+      "verified": false
+    },
+    "wall_stone_tan": {
+      "sheet": "alchemy",
+      "col": 11,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "tan stone brick wall",
+      "verified": false
+    },
+    "magic_circle_green": {
+      "sheet": "alchemy",
+      "col": 12,
+      "row": 20,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "green summoning/magic circle (floor)",
+      "verified": false
+    },
+    "magic_circle_red": {
+      "sheet": "alchemy",
+      "col": 15,
+      "row": 20,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "red summoning/magic circle (floor)",
+      "verified": false
+    },
+    "crystal_cluster": {
+      "sheet": "alchemy",
+      "col": 6,
+      "row": 18,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "glowing crystal cluster",
+      "verified": false
+    },
+    "chest_alchemy": {
+      "sheet": "alchemy",
+      "col": 18,
+      "row": 23,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "wooden chest (alchemy)",
+      "verified": true
+    },
+    "_comment_bedroom": "--- Expansion_Bedroom (interior_bedroom.png, firstgid 4024) ---",
+    "double_bed": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 16,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "double bed with headboard",
+      "verified": false
+    },
+    "double_bed_blue": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 19,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "double bed (blue) with headboard",
+      "verified": false
+    },
+    "bed_single_made": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 13,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "made single bed",
+      "verified": false
+    },
+    "grandfather_clock": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 10,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall grandfather clock",
+      "verified": true
+    },
+    "painting_moon": {
+      "sheet": "bedroom",
+      "col": 24,
+      "row": 7,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "framed moon painting",
+      "verified": true
+    },
+    "painting_moon_light": {
+      "sheet": "bedroom",
+      "col": 24,
+      "row": 10,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "large framed moon painting",
+      "verified": true
+    },
+    "mirror_standing": {
+      "sheet": "bedroom",
+      "col": 21,
+      "row": 10,
+      "w": 1,
+      "h": 3,
+      "category": "furniture",
+      "label": "standing mirror (gold frame)",
+      "verified": false
+    },
+    "_comment_clockwork": "--- Expansion_ClockworkFactory (interior_clockwork.png, firstgid 5048) ---",
+    "pipe_organ": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 6,
+      "w": 3,
+      "h": 4,
+      "category": "furniture",
+      "label": "copper pipe organ (piano-like)",
+      "verified": false
+    },
+    "clockwork_lamp_floor": {
+      "sheet": "clockwork",
+      "col": 5,
+      "row": 8,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "floor lamp with glowing orb",
+      "verified": false
+    },
+    "clockwork_light": {
+      "sheet": "clockwork",
+      "col": 13,
+      "row": 8,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "glowing ceiling light",
+      "verified": false
+    },
+    "clockwork_machine_copper": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 13,
+      "w": 4,
+      "h": 3,
+      "category": "furniture",
+      "label": "large copper clockwork machine",
+      "verified": false
+    },
+    "clockwork_machine_steel": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 16,
+      "w": 4,
+      "h": 3,
+      "category": "furniture",
+      "label": "large steel clockwork machine",
+      "verified": false
+    },
+    "clock_clockwork": {
+      "sheet": "clockwork",
+      "col": 20,
+      "row": 0,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "copper grandfather clock",
+      "verified": false
+    },
+    "_comment_music": "--- Expansion_Music (interior_music.png, firstgid 6072) ---",
+    "wall_set_silver": {
+      "sheet": "music",
+      "col": 0,
+      "row": 0,
+      "w": 3,
+      "h": 3,
+      "category": "wall",
+      "label": "silver-framed wall enclosure (3x3)",
+      "verified": false
+    },
+    "wall_set_blue": {
+      "sheet": "music",
+      "col": 5,
+      "row": 0,
+      "w": 3,
+      "h": 3,
+      "category": "wall",
+      "label": "blue-framed wall enclosure (3x3)",
+      "verified": false
+    },
+    "wall_wood_herringbone": {
+      "sheet": "music",
+      "col": 10,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "herringbone wood wall top",
+      "verified": false
+    },
+    "piano_upright": {
+      "sheet": "music",
+      "col": 0,
+      "row": 10,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "upright piano",
+      "verified": false
+    },
+    "pipe_brass": {
+      "sheet": "clockwork",
+      "col": 29,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "label": "brass pipe segment",
+      "verified": false
+    },
+    "wall_wood_panel": {
+      "sheet": "music",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "wood plank wall top",
+      "verified": false
     }
   }
 }
