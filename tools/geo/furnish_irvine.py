@@ -43,7 +43,18 @@ WALL_LAYER = "irvine_walls"
 DOOR_W = 2     # centered doorway gap, in cells, per partition segment
 WALL_SET = {WALL_R, WALL_B, WALL_BR}
 
-OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER]
+# rugs sit on their own layer UNDER the furniture so a sofa/table can rest on one
+RUG_LAYER = "irvine_rugs"
+FURN_LAYER = "irvine_furniture"
+RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cyan"}
+
+OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER, RUG_LAYER, FURN_LAYER]
+
+# Tile columns per sheet (image width / 16). Firstgids are NOT hardcoded -- they
+# shift whenever the tilesets are repacked, so load_sprites reads them live from
+# the .tmj (matching each catalog sheet's image file to a tileset).
+_SHEET_COLS = {"franuka": 32, "school": 16, "bath": 16, "kenney": 27,
+               "alchemy": 32, "bedroom": 32, "clockwork": 32, "music": 32}
 
 
 def read_flat(path):
@@ -270,6 +281,195 @@ def apply_walls(tmj, matrix_dir):
     return sum(1 for v in data if v), doors, removed
 
 
+def load_sprites(tmj):
+    """catalog name -> (top_left_gid, w, h, sheet) for every catalogued sprite.
+
+    Firstgids are read from the live tmj (matching each catalog sheet's image
+    file to a tileset), so repacking the tilesets can't desync the gids."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "furniture_catalog.json")) as fh:
+        cat = json.load(fh)
+    file2fg = {t["image"]: t["firstgid"] for t in tmj["tilesets"] if "image" in t}
+    sheet_fg = {s: file2fg[meta["file"]] for s, meta in cat["sheets"].items()
+                if meta.get("file") in file2fg}
+    out = {}
+    for name, v in cat["objects"].items():
+        if not (isinstance(v, dict) and v.get("sheet") in sheet_fg):
+            continue
+        sheet = v["sheet"]
+        gid = sheet_fg[sheet] + v["row"] * _SHEET_COLS[sheet] + v["col"]
+        out[name] = (gid, v["w"], v["h"], sheet)
+    return out
+
+
+def _stamp(data, occ, sprites, name, c, r, walk, W):
+    """Place a whole multi-tile sprite with top-left at (c, r). Refuses (and
+    changes nothing) unless every w*h cell is walkable floor and unoccupied --
+    the cardinal rule: never place part of a sprite. Returns bool."""
+    gid, w, h, sheet = sprites[name]
+    cols = _SHEET_COLS[sheet]
+    cells = [(c + dx, r + dy) for dy in range(h) for dx in range(w)]
+    if any((x, y) not in walk or (x, y) in occ for (x, y) in cells):
+        return False
+    for dy in range(h):
+        for dx in range(w):
+            x, y = c + dx, r + dy
+            data[y * W + x] = gid + dy * cols + dx
+            occ.add((x, y))
+    return True
+
+
+def _fill_rug(rug_data, sprites, name, box, walk, W):
+    """Nine-slice a rug across a box so it reads as one continuous rug of any
+    size (the 3x3 rug supplies corner/edge/center tiles). Only walkable cells
+    are painted. Returns the count filled."""
+    gid, w, h, sheet = sprites[name]
+    cols = _SHEET_COLS[sheet]
+    c0, r0, c1, r1 = box
+    filled = 0
+    for r in range(r0, r1 + 1):
+        dy = 0 if r == r0 else (2 if r == r1 else 1)
+        for c in range(c0, c1 + 1):
+            if (c, r) not in walk:
+                continue
+            dx = 0 if c == c0 else (2 if c == c1 else 1)
+            rug_data[r * W + c] = gid + dy * cols + dx
+            filled += 1
+    return filled
+
+
+def _grouped_sections(tmj):
+    """Merge sub-boxes into one bounding rect per room group (Stage 1/2/3 ->
+    one 'Stage' rect, etc.) so each zone is furnished as a unit."""
+    groups = {}
+    for nm, (c0, r0, c1, r1) in read_sections(tmj).items():
+        g = _group(nm)
+        if g in groups:
+            a, b, cc, dd = groups[g]
+            groups[g] = (min(a, c0), min(b, r0), max(cc, c1), max(dd, r1))
+        else:
+            groups[g] = (c0, r0, c1, r1)
+    return groups
+
+
+def _room_layouts(sections):
+    """Per-zone furniture as (name, col, row) of each sprite's top-left. An
+    auditorium: pipe organ on the stage, rows of seats facing it, foyer/lobby
+    lounge seating. Over-proposes; _stamp skips anything off-floor/overlapping."""
+    out = []
+    add = lambda *t: out.append(t)
+
+    for name, (c0, r0, c1, r1) in sections.items():
+        cx = (c0 + c1) // 2
+        if name == "Stage":
+            add("pipe_organ", cx - 1, r0 + 4)                 # 3x4 organ, back-center
+            add("plant_large", c0 + 1, r1 - 1)
+            add("plant_large", c1 - 1, r1 - 1)
+            add("candelabra", c0 + 3, r0 + 5)
+            add("candelabra", c1 - 3, r0 + 5)
+            add("lantern", cx - 1, r0 + 3)
+            # music ensemble in front of the organ: each instrument gets its own
+            # (distinct) chair + a sheet-music stand
+            ensemble = [
+                ("harp_gold", "stool_wood"),
+                ("cello", "chair_wood"),
+                ("violin", "armchair"),
+                ("double_bass", "armchair_orange"),
+                ("cello_wood", "armchair_green"),
+                ("harp_silver", "armchair_red"),
+            ]
+            ir = r1 - 4
+            for k, (inst, chair) in enumerate(ensemble):
+                gc = c0 + 3 + k * 5
+                add("music_stand", gc - 1, ir)   # stand holds the sheet music
+                add(inst, gc, ir)
+                add(chair, gc + 1, ir + 1)        # the player's chair beside it
+        elif name == "Auditorium":
+            # dense rows of seats facing the stage: every other row (legroom),
+            # a seat in every column, with the center aisle left for the runner
+            for rr in range(r0 + 1, r1, 2):
+                for cc in range(c0 + 1, c1):
+                    if abs(cc - cx) <= 1:                     # center aisle (carpet)
+                        continue
+                    add("chair_wood", cc, rr)
+        elif name in ("West Foyer", "East Foyer"):
+            rug = "rug_blue" if name == "West Foyer" else "rug_green"
+            add(rug, c0 + 1, r0 + 2)
+            add("sofa", c0 + 1, r0 + 2)
+            add("sofa", c0 + 1, r0 + 8)
+            add("armchair", c0 + 5, r0 + 3)
+            add("armchair_orange", c0 + 5, r0 + 6)
+            add("side_table", c0 + 4, r0 + 4)
+            add("round_table_small", c0 + 5, r0 + 9)
+            add("floor_lamp", c0 + 1, r0 + 12)
+            add("lantern", c0 + 3, r0)
+            for px, py in ((c0, r0), (c1 - 1, r0), (c0, r1 - 1), (c1 - 1, r1 - 1)):
+                add("plant", px, py)
+        elif name == "Lobby":
+            add("counter", c0 + 2, r0 + 1)                    # ticket / info counter
+            add("grandfather_clock", c1 - 2, r0 + 1)
+            add("sofa", c0 + 5, r1 - 3)
+            add("sofa", c1 - 7, r1 - 3)
+            add("floor_lamp", c0 + 2, r1 - 3)
+            add("floor_lamp", c1 - 3, r1 - 3)
+            add("lantern", cx - 6, r0)
+            add("lantern", cx + 6, r0)
+            for px, py in ((c0, r0), (c1 - 1, r0), (c0, r1 - 1), (c1 - 1, r1 - 1)):
+                add("plant", px, py)
+    return out
+
+
+def apply_furniture(tmj, matrix_dir):
+    """Insert two stacked layers above irvine_walls: irvine_rugs (under) and
+    irvine_furniture (on top), so a sofa/rug compose. Picture-only (not
+    collision). Returns (placed, proposed)."""
+    W, H = tmj["width"], tmj["height"]
+    _strip(tmj, {RUG_LAYER, FURN_LAYER})
+
+    interior = irvine_interior_cells(tmj, matrix_dir)
+    wl = next((L for L in tmj["layers"] if L.get("name") == WALL_LAYER), None)
+    walls = {(i % W, i // W) for i, v in enumerate(wl["data"]) if v} if wl else set()
+    walk = {(i % W, i // W) for i in interior} - walls
+
+    sprites = load_sprites(tmj)
+    grouped = _grouped_sections(tmj)
+    rug_data = [0] * (W * H)
+    furn_data = [0] * (W * H)
+    rug_occ, furn_occ = set(), set()
+    proposed = placed = 0
+    for name, c, r in _room_layouts(grouped):
+        proposed += 1
+        if name not in sprites:
+            continue
+        if name in RUGS:
+            ok = _stamp(rug_data, rug_occ, sprites, name, c, r, walk, W)
+        else:
+            ok = _stamp(furn_data, furn_occ, sprites, name, c, r, walk, W)
+        placed += ok
+
+    # red carpet: a runner down the auditorium center aisle (from the stage
+    # front) plus the whole lobby -- one rug "leading through" to the stage.
+    if "Auditorium" in grouped:
+        ac0, ar0, ac1, ar1 = grouped["Auditorium"]
+        acx = (ac0 + ac1) // 2
+        top = grouped["Stage"][3] if "Stage" in grouped else ar0
+        _fill_rug(rug_data, sprites, "rug_red", (acx - 1, top, acx + 1, ar1), walk, W)
+    if "Lobby" in grouped:
+        lc0, lr0, lc1, lr1 = grouped["Lobby"]
+        _fill_rug(rug_data, sprites, "rug_red", (lc0 + 1, lr0, lc1 - 1, lr1 - 1), walk, W)
+
+    base = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
+    rugs = _new_layer(RUG_LAYER, rug_data, W, H, base)
+    furn = _new_layer(FURN_LAYER, furn_data, W, H, base + 1)
+    if "nextlayerid" in tmj:
+        tmj["nextlayerid"] = max(tmj["nextlayerid"], base + 2)
+    names = [L.get("name") for L in tmj["layers"]]
+    anchor = next((n for n in (WALL_LAYER, FLOOR_LAYER, "entrance_floor") if n in names), None)
+    at = names.index(anchor) + 1 if anchor else len(tmj["layers"])
+    tmj["layers"][at:at] = [rugs, furn]
+    return placed, proposed
+
+
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
@@ -289,6 +489,8 @@ def main():
     walls, doors, removed = apply_walls(tmj, args.matrix)
     print(f"irvine_walls: {walls} wall cells, {doors} doorway cells "
           f"({removed} removed to keep <=3 per 2x2)")
+    fplaced, fprop = apply_furniture(tmj, args.matrix)
+    print(f"irvine_furniture: placed {fplaced}/{fprop} sprites")
     if args.dry_run:
         return
     shutil.copy2(args.tmj, args.tmj + ".bak")

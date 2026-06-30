@@ -88,7 +88,7 @@ def test_furniture_and_rugs_only_on_interior():
 
 def test_stamp_refuses_partial_sprite():
     # cardinal rule: a multi-tile sprite is placed whole or not at all
-    sprites = fh.load_sprites()
+    sprites = fh.load_sprites(_fresh())
     _gid, w, h, _sheet = sprites["bookshelf"]  # a 2x3 sprite
     W, GH = 10, 20
     full = {(c, r) for r in range(h) for c in range(w)}
