@@ -224,3 +224,53 @@ def test_felling_a_lured_spawn_drops_its_canopic_jar():
     game.do_command("attack spawn of guts with blade")
     assert "falcon jar" in canopic.items  # the felled Spawn dropped its jar
     assert not game.is_game_over()  # fighting in the (safe) Canopic hall is fine
+
+
+# --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
+
+
+def test_the_choked_chimney_cannot_be_passed():
+    game = _game()
+    game.do_command("up")          # -> Summit (safe)
+    game.do_command("in")          # try the fungal chimney down to the Sphere
+    assert game.player.location.name == "The Summit"  # blocked by spores
+
+
+def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
+    game = _game()
+    # Arm with gel + igniter, creep out to the Exterior, climb up, burn the root.
+    for cmd in ["sneak east", "take igniter", "sneak east", "take gel",
+                "sneak east", "sneak south", "up", "burn corpse"]:
+        game.do_command(cmd)
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    assert sphere.get_property("horror_dead")
+    assert game.locations["The Summit"].get_property("cleansed")
+
+
+def test_prying_the_coffin_needs_the_magnetic_boots():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)         # pretend it's cleansed
+    game.relocate(game.player, sphere)
+    game.do_command("pry coffin")                    # no boots -> refused
+    assert sphere.items["coffin"].get_property("pried") in (False, None)
+    assert "synth-hunting dagger" not in sphere.items
+    # with the boots worn, it works
+    boots = game.locations["Hall of Warriors"].items["magnetic boots"]
+    game.locations["Hall of Warriors"].remove_item(boots)
+    game.player.add_to_inventory(boots)
+    game.do_command("wear boots")
+    game.do_command("pry coffin")
+    assert sphere.items["coffin"].get_property("pried")
+    assert "synth-hunting dagger" in sphere.items
+
+
+def test_the_full_winning_run_scores_100():
+    game = _game()
+    for cmd in tomb.WIN_WALKTHROUGH:
+        if game.is_game_over():
+            break
+        game.do_command(cmd)
+    assert game.is_won()
+    assert game.score == 100 == game.max_score
+    assert game.player.location.name == "Tomb Exterior"
