@@ -8,8 +8,14 @@ W, H = 245, 279
 HOUSTON = "Houston Hall"
 ROOM_IDS = list(range(11400, 11409))
 ROOMS = {
-    "Reception Hall", "Billiard Room", "Bathroom", "Shuffle Board Room",
-    "Ladies Parlor", "Secretarys Office", "Chess Room", "Reading Room",
+    "Reception Hall",
+    "Billiard Room",
+    "Bathroom",
+    "Shuffle Board Room",
+    "Ladies Parlor",
+    "Secretarys Office",
+    "Chess Room",
+    "Reading Room",
     "Correspond",
 }
 
@@ -19,8 +25,18 @@ def _run(tmp):
     shutil.copytree(SRC_MATRIX, mdir)
     tmap = os.path.join(tmp, "map.tmj")
     shutil.copy2(SRC_MAP, tmap)
-    subprocess.run([sys.executable, os.path.join(HERE, "add_entrances.py"),
-                    "--tmj", tmap, "--matrix", mdir], check=True, cwd=HERE)
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
     return mdir, tmap
 
 
@@ -49,13 +65,14 @@ def test_9_houston_room_arenas_present(tmp_path):
 
 def test_partition_walls_block(tmp_path):
     import furnish_houston as fh
+
     mdir, tmap = _run(str(tmp_path))
     tmj = json.load(open(tmap))
     interior = fh.houston_interior_cells(tmj, mdir)
     walls = fh.houston_wall_cells(tmj, interior, W, H)
     assert walls, "expected Houston partition walls"
     coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
-    for (x, y) in walls:
+    for x, y in walls:
         assert coll[y * W + x] == "1", f"partition cell {(x, y)} is not blocking"
 
 
@@ -69,12 +86,14 @@ def test_every_houston_room_reachable_from_a_door(tmp_path):
         for y in (0, H - 1):
             i = y * W + x
             if coll[i] == "0" and not seen[i]:
-                seen[i] = True; q.append((x, y))
+                seen[i] = True
+                q.append((x, y))
     for y in range(H):
         for x in (0, W - 1):
             i = y * W + x
             if coll[i] == "0" and not seen[i]:
-                seen[i] = True; q.append((x, y))
+                seen[i] = True
+                q.append((x, y))
     reached = set()
     while q:
         x, y = q.popleft()
@@ -84,16 +103,27 @@ def test_every_houston_room_reachable_from_a_door(tmp_path):
             if 0 <= nx < W and 0 <= ny < H:
                 j = ny * W + nx
                 if coll[j] == "0" and not seen[j]:
-                    seen[j] = True; q.append((nx, ny))
+                    seen[j] = True
+                    q.append((nx, ny))
     for rid in ROOM_IDS:
-        assert str(rid) in reached, f"Houston room arena {rid} unreachable through the door"
+        assert (
+            str(rid) in reached
+        ), f"Houston room arena {rid} unreachable through the door"
 
 
 def test_other_buildings_unchanged_regression(tmp_path):
     mdir, _ = _run(str(tmp_path))
     rows = _arena_blocks(mdir)
-    vp = [r for r in rows if r[2] == "Van Pelt Library" and r[3] not in ("grounds", "lobby")]
-    fi = [r for r in rows if r[2] == "Fisher Fine Arts Library" and r[3] not in ("grounds", "lobby")]
+    vp = [
+        r
+        for r in rows
+        if r[2] == "Van Pelt Library" and r[3] not in ("grounds", "lobby")
+    ]
+    fi = [
+        r
+        for r in rows
+        if r[2] == "Fisher Fine Arts Library" and r[3] not in ("grounds", "lobby")
+    ]
     assert len(vp) == 25 and len(fi) == 6  # adding Houston disturbs neither
 
 
@@ -101,7 +131,17 @@ def test_idempotent(tmp_path):
     mdir, tmap = _run(str(tmp_path))
     a = open(os.path.join(mdir, "maze", "arena_maze.csv")).read()
     c = open(os.path.join(mdir, "maze", "collision_maze.csv")).read()
-    subprocess.run([sys.executable, os.path.join(HERE, "add_entrances.py"),
-                    "--tmj", tmap, "--matrix", mdir], check=True, cwd=HERE)
+    subprocess.run(
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
+    )
     assert open(os.path.join(mdir, "maze", "arena_maze.csv")).read() == a
     assert open(os.path.join(mdir, "maze", "collision_maze.csv")).read() == c
