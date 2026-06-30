@@ -22,40 +22,62 @@ def _die(game, message):
     game.game_over_description = message
 
 
-# Actions a deadly room's listeners treat as silent -- everything else is "noise".
-_QUIET = {"sneak", "examine", "describe", "inventory", "wait", "get", "drop", "put", "talk"}
-# In the zero-g Burial Sphere even sneaking stirs the fungus; only looking is safe.
-_QUIET_SPHERE = {"examine", "describe", "inventory"}
+# "Loud" actions are everything NOT in a hazard's quiet set. Movement (go/sneak)
+# and looking are always quiet -- you may walk the tomb freely. What kills is
+# LIGHT (the bats), sustained NOISE (the jackals), SPORES (the chimney), or
+# disturbing the coffin (the Horror) -- and every hazard warns before it kills.
+_QUIET = {"go", "sneak", "look", "examine", "describe", "inventory", "wait",
+          "get", "drop", "put", "talk", "open", "wear"}
+# To the Fungal Horror, even rummaging is a disturbance: only moving and looking
+# are safe (so you can enter, see it, and back out -- but not loot it alive).
+_QUIET_SPHERE = {"go", "sneak", "look", "examine", "describe", "inventory"}
 
 
 def _is_holding(character, name):
     return name in character.inventory
 
 
-def _deadly_room(game, room, message, quiet=_QUIET, gate=None):
-    """Register a death: while the player stands in *room*, any noisy act associated
-    with it this round is fatal -- a noisy arrival (a plain ``go``, not a ``sneak``)
-    or a loud action done there (``say``/``break``/``attack``). Quiet acts are safe.
-    Only the *player's* own actions count, so a creature lured through the room
-    doesn't set it off. ``gate`` (a predicate) can switch the danger off -- e.g. the
-    Burial Sphere stops being lethal once the Fungal Horror is dead."""
+def _player_was_loud_in(g, room, quiet):
+    """True if the player did a loud (non-quiet) action located in *room* this
+    round. Movement and looking never count -- only acts like say / break / attack
+    / pry. (Creatures' own actions don't count -- it's the player giving themselves
+    away.)"""
+    for e in g.events[g._round_event_start :]:
+        if (
+            e.actor == g.player.name
+            and e.action not in quiet
+            and (e.payload or {}).get("location") == room.name
+        ):
+            return True
+    return False
 
-    def condition(g):
-        if g.player.location is not room:
-            return False
-        if gate is not None and not gate(g):
-            return False
-        for e in g.events[g._round_event_start :]:
-            if e.actor != g.player.name or e.action in quiet:
-                continue
-            payload = e.payload or {}
-            if payload.get("dest") == room.name or payload.get("location") == room.name:
-                return True
-        return False
 
-    game.add_trigger(
-        f"deadly:{room.name}", condition, lambda g: _die(g, message), repeatable=True
-    )
+def _hazard(game, room, *, danger, warn, kill, limit=3, gate=None):
+    """A patient room hazard. Each round the player is in *room* and ``danger(g)``
+    holds (and ``gate`` allows), a counter escalates and ``warn(n)`` is narrated; at
+    ``limit`` it ``kill``s. The counter resets the instant the danger lifts -- you
+    douse the light, fall quiet, put on the mask, step out -- so a hazard always
+    warns first and there is always a way clear. (Replaces instant death-on-entry:
+    you can walk in, get a warning, and react.)"""
+    key = f"_hz:{room.name}"
+
+    def tick(g):
+        active = (
+            g.player.location is room
+            and (gate is None or gate(g))
+            and danger(g)
+        )
+        if not active:
+            room.set_property(key, 0)
+            return
+        n = (room.get_property(key) or 0) + 1
+        room.set_property(key, n)
+        if n >= limit:
+            _die(g, kill)
+        else:
+            g.parser.ok(warn(n))
+
+    game.add_trigger(f"hazard:{room.name}", lambda g: True, tick, repeatable=True)
 
 
 class Sneak(actions.Go):
@@ -210,23 +232,6 @@ class CrystalSeal(blocks.Block):
         return not self.canopic.get_property("seal_open")
 
 
-class ChokedChimney(blocks.Block):
-    """The fungal chimney between the Summit and the Burial Sphere is too choked
-    with spores to pass without breathing protection -- so the only way into the
-    Sphere is the front stair (the canopic seal). (A respirator route is a future
-    extension.)"""
-
-    def __init__(self):
-        super().__init__(
-            "The fungal chimney",
-            "The chimney is packed with orange spores -- you'd choke before you were "
-            "halfway. You'd need breathing protection to brave it.",
-        )
-
-    def is_blocked(self) -> bool:
-        return True
-
-
 class TombGame(games.Game):
     """The adventure's Game. Winning (later) is "got out of the tomb alive with the
     Exotica" -- the ``escaped`` flag a future escape trigger will set. For now it
@@ -311,6 +316,12 @@ def build_game():
         "fungus fronding from its eyes and open mouth and down into the chimney that "
         "drops through the tomb's crown.",
     )
+    chimney = things.Location(
+        "The Fungal Chimney",
+        "A vertical shaft choked with orange fungus, dropping from the summit into "
+        "the burial sphere below. The air is thick with drifting spores -- every "
+        "breath sears. You shouldn't linger; the way down is below, the summit above.",
+    )
 
     # --- Connections (see spec §3) ------------------------------------------
     # Three entrances off the Exterior: the western (child) mouth, the eastern
@@ -344,12 +355,11 @@ def build_game():
     # seal Block; open for now so the scaffold is fully walkable).
     canopic.add_connection("up", sphere)          # sphere.down -> canopic (the aperture)
 
-    # The fungal chimney joins the Sphere's crown to the Summit -- but it's choked
-    # with spores (impassable in v1), so the Sphere is reached only by the front
-    # stair (the canopic seal). Both directions are blocked.
-    summit.add_connection("in", sphere)           # auto: sphere out -> summit
-    summit.add_block("in", ChokedChimney())
-    sphere.add_block("out", ChokedChimney())
+    # The fungal chimney is a real, passable, spore-choked ROOM between the Summit
+    # and the Sphere's crown. You CAN go "in" -- but the spores choke you worse each
+    # round you linger (the hazard, below); dash through, or wear a respirator.
+    summit.add_connection("in", chimney)          # auto: chimney out -> summit
+    chimney.add_connection("down", sphere)        # auto: sphere up -> chimney
 
     # --- Atmosphere: examinable scenery (hooks for later phases) -------------
     _scenery(exterior, "tomb", "the Tomb of Nassak An-Rah",
@@ -358,6 +368,10 @@ def build_game():
     _scenery(youth, "statues", "blue statues of the boy-Autarch",
              "Nassak An-Rah as an infant, a child, a youth -- each rendered with "
              "unsettling tenderness in cold blue stone.")
+    _scenery(youth, "ceiling", "the dark ceiling",
+             "You peer up into the black. The whole vault is packed with roosting "
+             "bats, twitching and shifting. Bring a light among them -- or raise a "
+             "din -- and they'll come down in a screaming cloud. Go dark and quiet.")
     _scenery(memory, "crystal lattice", "lattices of memory-crystal",
              "Lazulite crystals knit across the walls. One holds the Autarch's "
              "embalming: the baboon took his lungs, the human his liver, the mantis "
@@ -487,8 +501,16 @@ def build_game():
     boots.set_property(Property.WEARABLE, True)
     boots.set_property("wear_slot", "feet")
     boots.add_alias("boots")
+    respirator = things.Item(
+        "respirator", "an Autarchy respirator",
+        "A guard's filter-mask -- clean air in a spore-choked place.",
+    )
+    respirator.set_property(Property.WEARABLE, True)
+    respirator.set_property("wear_slot", "face")
+    respirator.add_alias("mask")
     warriors.add_item(igniter)
     warriors.add_item(boots)
+    warriors.add_item(respirator)
     gel = things.Item(
         "flask of gel", "a flask of embalming gel",
         "A flask of luminous embalming gel scooped from the hound tank. It reeks, "
@@ -546,21 +568,54 @@ def build_game():
     game.add_reaction(spawn_guts, reactions.DrawnToSound())
     game.add_reaction(spawn_brain, reactions.DrawnToSound())
 
-    # The tomb listens. A noisy move (a plain `go`) or a loud act (`say`/`break`/
-    # `attack`) is fatal in the lower halls and the Burial Sphere; creep, and act
-    # quietly. (Lethality is a playtest dial.)
-    _deadly_room(game, youth,
-                 "Your noise wakes the roosting bats; they boil down in a shrieking "
-                 "cloud and tear you apart in the dark. THE END.")
+    # The tomb's hazards: each is patient (warns, then kills after a few rounds) and
+    # has a clear out. You may WALK anywhere freely -- only light, noise, spores, or
+    # disturbing the dead are dangerous.
+
+    # The Hall of Youth is pitch dark; the description swaps to "lit" (and the bats
+    # rouse) the moment you carry a light in. Drop the glowstone to go dark.
+    def _youth_desc(g):
+        if _is_holding(g.player, "glowstone"):
+            return ("Sand-scoured walls, lit blue by your glowstone -- statues of the "
+                    "boy-Autarch crowd the chamber. Overhead the whole ceiling seethes: "
+                    "thousands of bats, wheeling and dropping at the light.")
+        return ("Pitch dark -- you can see almost nothing. Leathery wings rustle and "
+                "shift somewhere overhead. (Light, or a loud noise, would wake "
+                "whatever roosts up there. Best go dark and quiet.)")
+    game.add_trigger("youth_dark",
+                     lambda g: youth.description != _youth_desc(g),
+                     lambda g: setattr(youth, "description", _youth_desc(g)),
+                     repeatable=True)
+
+    # The bats: roused by LIGHT or a loud noise in the Hall of Youth.
+    _hazard(game, youth,
+            danger=lambda g: _is_holding(g.player, "glowstone") or _player_was_loud_in(g, youth, _QUIET),
+            warn=lambda n: f"The bats seethe and drop, shrieking, batting at your face -- ({n}/3). Go dark and quiet, NOW.",
+            kill="The bats boil down in a screaming cloud and tear you apart in the dark. THE END.")
+
+    # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
+    # and rummaging are fine; shouting and smashing are not).
     for hall in (memory, hounds, warriors):
-        _deadly_room(game, hall,
-                     "Your noise carries. Pthalo-jackals pour from the shadows, drag "
-                     "you down, and feed. THE END.")
-    _deadly_room(game, sphere,
-                 "At the first stir of movement the orange mass erupts from the "
-                 "coffin -- the Fungal Horror -- and drowns you in acid. THE END.",
-                 quiet=_QUIET_SPHERE,
-                 gate=lambda g: not sphere.get_property("horror_dead"))
+        _hazard(game, hall,
+                danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
+                warn=lambda n: f"Yellow eyes gather in the shadows; the pthalo-jackals are closing -- ({n}/3). Quiet, or get out.",
+                kill="The pack pours from the dark, drags you down, and feeds. THE END.")
+
+    # The chimney's spores: choke you each round you're in it without a respirator.
+    _hazard(game, chimney,
+            danger=lambda g: not (_is_holding(g.player, "respirator") or "respirator" in g.player.worn),
+            warn=lambda n: f"The spores sear your lungs; you can barely breathe -- ({n}/3). Get out, or mask up.",
+            kill="The spores fill your lungs and you choke to death in the chimney. THE END.")
+
+    # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
+    # wearing, any racket) makes it erupt. Looking is safe -- enter, see it, and
+    # back out. Cleansing the corpse (Summit) kills it and lifts this.
+    _hazard(game, sphere,
+            danger=lambda g: _player_was_loud_in(g, sphere, _QUIET_SPHERE),
+            warn=lambda n: f"The orange mass in the coffin shudders and reaches toward you -- ({n}/2). Don't disturb it -- it's still alive.",
+            kill="The Fungal Horror erupts from the coffin and drowns you in acid. THE END.",
+            limit=2,
+            gate=lambda g: not sphere.get_property("horror_dead"))
 
     # Placement trigger: both missing jars on their matching plinths -> the seal
     # opens. Fires once.
@@ -613,11 +668,12 @@ def build_game():
 # don't enter the lethal Burial Sphere. Visits the seven survivable rooms.
 WALK = [
     "examine tomb", "up", "examine ossified corpse", "down",  # Summit and back (safe)
-    "sneak north", "examine statues",                        # -> Hall of Youth (creep past the bats)
-    "sneak north", "talk to silas", "examine crystal lattice",  # -> Hall of Memory
-    "sneak north", "take prismatic blade", "examine cylinders",  # -> Hall of Warriors
-    "sneak east", "examine tank",                            # -> Hall of Hounds
-    "sneak up", "open baboon jar", "examine falcon plinth",  # -> Canopic hall
+    "drop glowstone",                                        # go dark for the bats
+    "north", "examine ceiling", "examine statues",           # -> Hall of Youth (dark, safe)
+    "north", "talk to silas", "examine crystal lattice",     # -> Hall of Memory
+    "north", "take prismatic blade", "examine cylinders",    # -> Hall of Warriors
+    "east", "examine tank",                                  # -> Hall of Hounds
+    "up", "open baboon jar", "examine falcon plinth",        # -> Canopic hall
 ]
 
 
@@ -625,6 +681,7 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
+    "drop glowstone",                                               # go dark -- the bats hate light
     "sneak east", "take blade", "take igniter", "take boots",       # Warriors: arm
     "sneak east", "take gel",                                       # Hounds: gel
     "sneak up",                                                     # -> Canopic

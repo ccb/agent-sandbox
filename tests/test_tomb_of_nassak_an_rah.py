@@ -20,7 +20,7 @@ def _goes(game, room, direction, dest):
 # --- the map -----------------------------------------------------------------
 
 
-def test_all_eight_locations_exist():
+def test_all_nine_locations_exist():
     game = _game()
     expected = {
         "Tomb Exterior",
@@ -31,6 +31,7 @@ def test_all_eight_locations_exist():
         "Hall of the Canopic Jars",
         "Burial Sphere of Nassak An-Rah",
         "The Summit",
+        "The Fungal Chimney",
     }
     assert expected <= set(game.locations)
 
@@ -58,9 +59,11 @@ def test_the_stairs_seal_and_chimney():
     assert _goes(game, "Hall of the Canopic Jars", "down", "Hall of Memory")
     assert _goes(game, "Hall of the Canopic Jars", "up", "Burial Sphere of Nassak An-Rah")
     assert _goes(game, "Burial Sphere of Nassak An-Rah", "down", "Hall of the Canopic Jars")
-    # the fungal chimney (in/out) joins the sphere's crown to the summit
-    assert _goes(game, "The Summit", "in", "Burial Sphere of Nassak An-Rah")
-    assert _goes(game, "Burial Sphere of Nassak An-Rah", "out", "The Summit")
+    # the fungal chimney is a room between the summit and the sphere's crown
+    assert _goes(game, "The Summit", "in", "The Fungal Chimney")
+    assert _goes(game, "The Fungal Chimney", "down", "Burial Sphere of Nassak An-Rah")
+    assert _goes(game, "The Fungal Chimney", "out", "The Summit")
+    assert _goes(game, "Burial Sphere of Nassak An-Rah", "up", "The Fungal Chimney")
 
 
 # --- start state + atmosphere ------------------------------------------------
@@ -175,30 +178,45 @@ def _arm_and_reach_canopic(game):
         game.do_command(cmd)
 
 
-def test_striding_into_a_hall_is_deadly_but_creeping_is_safe():
-    loud = _game()
-    loud.do_command("north")  # STRIDE into the Hall of Youth -> the bats
-    assert loud.is_game_over() and not loud.is_won()
-
-    quiet = _game()
-    quiet.do_command("sneak north")  # creep in -> safe
-    assert not quiet.is_game_over()
-    assert quiet.player.location.name == "Hall of Youth"
-
-
-def test_a_loud_action_in_a_hall_is_deadly():
+def test_walking_into_a_dark_hall_is_safe():
     game = _game()
-    game.do_command("sneak north")  # -> Hall of Youth (safe)
-    game.do_command("say anyone there?")  # but shouting wakes the bats
+    game.do_command("drop glowstone")  # go dark
+    game.do_command("north")           # STRIDE into the Hall of Youth -- no longer fatal
+    assert not game.is_game_over()
+    assert game.player.location.name == "Hall of Youth"
+
+
+def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
+    game = _game()                      # starts holding the (lit) glowstone
+    game.do_command("north")            # into the Youth WITH light -> the bats stir...
+    assert not game.is_game_over()       # ...a warning first
+    game.do_command("look")
+    game.do_command("look")             # keep lingering with light -> the swarm takes you
     assert game.is_game_over() and not game.is_won()
 
 
-def test_the_burial_sphere_is_lethal_to_enter():
+def test_sustained_noise_in_a_hall_kills_but_warns_first():
+    game = _game()
+    game.do_command("drop glowstone")
+    game.do_command("sneak east")       # -> Hall of Warriors (safe to enter)
+    game.do_command("say hey")          # one shout: a warning, not death
+    assert not game.is_game_over()
+    game.do_command("say hey")
+    game.do_command("say hey")          # keep it up -> the pthalo-jackals take you
+    assert game.is_game_over() and not game.is_won()
+
+
+def test_the_live_sphere_kills_only_when_you_disturb_it():
     game = _game()
     _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on falcon plinth")
     game.do_command("put jackal jar on jackal plinth")
-    game.do_command("up")  # step into the Sphere -> the Fungal Horror
+    game.do_command("up")               # entering and looking is safe
+    assert not game.is_game_over()
+    game.do_command("look")
+    assert not game.is_game_over()
+    game.do_command("say boo")          # but any racket disturbs the live Horror...
+    game.do_command("say boo")          # ...and it erupts (limit 2)
     assert game.is_game_over() and not game.is_won()
 
 
@@ -229,11 +247,15 @@ def test_felling_a_lured_spawn_drops_its_canopic_jar():
 # --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
 
 
-def test_the_choked_chimney_cannot_be_passed():
+def test_the_chimney_is_passable_but_chokes_without_a_mask():
     game = _game()
-    game.do_command("up")          # -> Summit (safe)
-    game.do_command("in")          # try the fungal chimney down to the Sphere
-    assert game.player.location.name == "The Summit"  # blocked by spores
+    game.do_command("up")          # -> Summit
+    game.do_command("in")          # into the fungal chimney -- passable now, not blocked
+    assert game.player.location.name == "The Fungal Chimney"
+    assert not game.is_game_over()  # one breath is survivable (a warning)
+    game.do_command("look")
+    game.do_command("look")        # linger in the spores -> choke to death
+    assert game.is_game_over() and not game.is_won()
 
 
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
