@@ -73,7 +73,14 @@ VAN_PELT = "Van Pelt Library"
 FISHER = "Fisher Fine Arts Library"  # the Furness building at 220 South 34th Street
 MEYERSON = "Meyerson Hall"
 HOUSTON = "Houston Hall"
-ROOM_SUBDIVIDE = {VAN_PELT, FISHER, MEYERSON, HOUSTON}  # buildings split into rooms
+COLLEGE = "College Hall"
+ROOM_SUBDIVIDE = {
+    VAN_PELT,
+    FISHER,
+    MEYERSON,
+    HOUSTON,
+    COLLEGE,
+}  # buildings split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
 #                     opening end to end (a building may still have several doors)
@@ -473,6 +480,23 @@ def load_houston_plan(tmj, W, H, interior):
     return rooms, wall_cells
 
 
+def load_college_hall_plan(tmj, W, H, interior):
+    """(rooms, wall_cells) for College Hall from college_hall_arenas. Partitions
+    are auto-enclosed (including the open Central/Great/Kitchen seams that are
+    deliberately left wall-free), so the wall cells come from
+    furnish_college_hall.college_wall_cells -- the same computation the picture
+    uses, so matrix and picture stay in lock-step."""
+    import furnish_college_hall as fc
+
+    sections = fc.read_sections(tmj)
+    if not sections:
+        return [], set()
+    interior_idx = {y * W + x for (x, y) in interior}
+    rooms = [{"name": nm, "rect": list(rect)} for nm, rect in sections.items()]
+    wall_cells = fc.college_wall_cells(tmj, interior_idx, W, H)
+    return rooms, wall_cells
+
+
 def _punch_doorway(room_cells, walk, collision, W, H):
     """Carve one cell gap between sealed room_cells and the adjacent walk.
 
@@ -697,6 +721,8 @@ def main():
                 plan = load_fisher_plan(tmj, W, interior)
             elif name == HOUSTON:
                 plan = load_houston_plan(tmj, W, H, interior)
+            elif name == COLLEGE:
+                plan = load_college_hall_plan(tmj, W, H, interior)
             else:
                 plan = load_meyerson_plan(tmj, W, interior)
             subdivide_rooms(
