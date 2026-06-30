@@ -36,8 +36,12 @@ def test_layer_stack_order():
     fh.apply_furniture(tmj, MATRIX)
     names = [L.get("name") for L in tmj["layers"]]
     ef = names.index("entrance_floor")
-    assert names[ef + 1:ef + 5] == [
-        "houston_floor", "houston_walls", "houston_rugs", "houston_furniture"]
+    assert names[ef + 1 : ef + 5] == [
+        "houston_floor",
+        "houston_walls",
+        "houston_rugs",
+        "houston_furniture",
+    ]
 
 
 def test_walls_on_interior_with_doorways():
@@ -58,8 +62,12 @@ def test_no_2x2_has_four_walls():
     bad = 0
     for r in range(H - 1):
         for c in range(W - 1):
-            quad = (wl[r * W + c], wl[r * W + c + 1],
-                    wl[(r + 1) * W + c], wl[(r + 1) * W + c + 1])
+            quad = (
+                wl[r * W + c],
+                wl[r * W + c + 1],
+                wl[(r + 1) * W + c],
+                wl[(r + 1) * W + c + 1],
+            )
             if sum(1 for g in quad if g in fh.WALL_SET) >= 4:
                 bad += 1
     assert bad == 0, f"{bad} 2x2 windows hold 4 wall_set_red cells (double walls)"
@@ -73,7 +81,9 @@ def test_furniture_and_rugs_only_on_interior():
     interior = _interior(tmj)
     for layer in ("houston_rugs", "houston_furniture"):
         outside = _cells(tmj, layer) - interior
-        assert not outside, f"{layer} has cells outside the interior: {sorted(outside)[:5]}"
+        assert (
+            not outside
+        ), f"{layer} has cells outside the interior: {sorted(outside)[:5]}"
 
 
 def test_stamp_refuses_partial_sprite():
@@ -94,9 +104,13 @@ def test_stamp_refuses_partial_sprite():
 
 def test_idempotent():
     a = _fresh()
-    fh.apply(a, MATRIX); fh.apply_walls(a, MATRIX); fh.apply_furniture(a, MATRIX)
+    fh.apply(a, MATRIX)
+    fh.apply_walls(a, MATRIX)
+    fh.apply_furniture(a, MATRIX)
     b = _fresh()
-    fh.apply(b, MATRIX); fh.apply_walls(b, MATRIX); fh.apply_furniture(b, MATRIX)
+    fh.apply(b, MATRIX)
+    fh.apply_walls(b, MATRIX)
+    fh.apply_furniture(b, MATRIX)
     layers = ("houston_floor", "houston_walls", "houston_rugs", "houston_furniture")
     da = {n: next(L["data"] for L in a["layers"] if L["name"] == n) for n in layers}
     db = {n: next(L["data"] for L in b["layers"] if L["name"] == n) for n in layers}
