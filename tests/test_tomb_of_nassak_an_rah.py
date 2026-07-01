@@ -194,6 +194,30 @@ def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
     assert "hall of memory" in lit      # exits now visible
 
 
+def test_the_ceiling_is_heard_in_the_dark_and_seen_once_lit():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")            # dark Youth
+    game.do_command("examine ceiling")  # can't see -> hear the bats (the clue)
+    dark = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "leathery wings" in dark
+    assert "roosting bats" not in dark  # the visual detail is withheld in the dark
+    cap2 = _texts(game)
+    game.do_command("light glowstone")  # now lit -> the visual ceiling
+    game.do_command("examine ceiling")
+    lit = " ".join(cap2.texts(Channel.NARRATION)).lower()
+    assert "seethes with roosting bats" in lit
+
+
+def test_you_can_feel_and_listen_in_the_dark_without_waking_the_bats():
+    game = _game()
+    game.do_command("north")            # dark Youth, glowstone unlit
+    for probe in ("feel", "listen", "examine ceiling", "feel statues"):
+        game.do_command(probe)
+    assert not game.is_game_over()      # quiet senses don't rouse them
+    assert game.player.location.name == "Hall of Youth"
+
+
 def test_walking_into_a_dark_hall_is_safe():
     game = _game()
     game.do_command("drop glowstone")  # go dark

@@ -50,6 +50,44 @@ class Thing:
         # serialized (to_primitive omits them).
         self.reactions: list = []
 
+        # Non-sight senses this thing can be perceived by, each mapped to the
+        # text a probe (feel/listen/smell) or an examine-in-the-dark reveals
+        # (see perception.py, Layer 2). SIGHT is implicit -- it uses the normal
+        # description / examine_text. Empty by default (sight only), so nothing
+        # changes until a game opts a thing in via ``perceptible_by``. Build-time
+        # config like reactions/veils; not serialized.
+        self._senses: dict = {}
+
+    def perceptible_by(self, sense, text: str | None = None):
+        """Tag this thing as perceptible by a non-sight *sense* (touch, hearing,
+        smell), with the *text* that sense reveals -- e.g.::
+
+            statue.perceptible_by(Sense.TOUCH, "cold stone, taller than you")
+            ceiling.perceptible_by(Sense.HEARING, "leathery wings, seething")
+
+        Sight needs no tagging (it uses ``examine_text``). Returns ``self`` so
+        calls chain. See docs/design/perception.md."""
+        self._senses[sense] = text
+        return self
+
+    def senses(self) -> set:
+        """The senses that reach this thing: always SIGHT, plus any added."""
+        from ..perception import Sense
+
+        return {Sense.SIGHT} | set(self._senses)
+
+    def sense_text(self, sense) -> str | None:
+        """What this thing presents to *sense*, or ``None`` if that sense doesn't
+        reach it. SIGHT -> ``examine_text`` (or ``description``); a tagged
+        non-sight sense -> its text (or a terse generic); untagged -> ``None``."""
+        from ..perception import Sense, GENERIC_SENSE_TEXT
+
+        if sense == Sense.SIGHT:
+            return getattr(self, "examine_text", "") or self.description
+        if sense in self._senses:
+            return self._senses[sense] or GENERIC_SENSE_TEXT.get(sense, "")
+        return None
+
     def to_primitive(self):
         """
         Puts the main fields of this base class into a dictionary

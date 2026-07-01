@@ -383,8 +383,41 @@ class Examine(base.Action):
             return f" On it you see {listed}."
         return f" It contains {listed}."
 
+    def _too_dark(self, target) -> None:
+        """Examining something you can't see: fall back to the *passive* senses
+        (hearing, smell) it offers; touch needs the active `feel` probe, so if
+        it's only touch-perceptible, nudge toward feeling around."""
+        from .. import perception
+
+        parts = [
+            t
+            for s in (perception.Sense.HEARING, perception.Sense.SMELL)
+            if (t := target.sense_text(s))
+        ]
+        if parts:
+            self.parser.ok(" ".join(parts))
+            return
+        hint = (
+            " (Try feeling your way around.)"
+            if target.sense_text(perception.Sense.TOUCH)
+            else ""
+        )
+        self.parser.ok("It's too dark to make anything out." + hint)
+
     def apply_effects(self):
         """The player wants to examine an item or a character."""
+        # Perception gate: in pitch dark (or blind) you can't *see* to examine --
+        # fall back to what other senses reach (perception.py, Layer 2). DIM/CLEAR
+        # keep the normal visual examine, so lit games are unchanged.
+        from .. import perception
+
+        target = self.matched_item or self.matched_character
+        if target is not None:
+            sight, _ = perception.sight_for(self.character, self.character.location)
+            if sight == perception.Sight.NONE:
+                self._too_dark(target)
+                return
+
         if self.matched_item:
             base_text = self.matched_item.examine_text or self.matched_item.description
             text = base_text + self._contents_sentence(self.matched_item)
