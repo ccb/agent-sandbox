@@ -765,6 +765,17 @@ class Game:
             text = loc.description
         return perception.Scene(sight=sight, description=text)
 
+    def enable_senses(self):
+        """Register the feel / listen / smell probe verbs (perception Layer 2).
+
+        Opt-in: probes stay out of games that don't want them, keeping the verb
+        set (and HELP) lean. Call this in ``build_game`` for an adventure that
+        tags things ``perceptible_by`` touch/hearing/smell. Idempotent."""
+        from .actions.senses import Feel, Listen, Smell
+
+        for action in (Feel, Listen, Smell):
+            self.parser.add_action(action)
+
     def describe(self) -> str:
         """
         Describe the current game state by first describing the current

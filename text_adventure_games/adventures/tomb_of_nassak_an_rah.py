@@ -27,12 +27,13 @@ def _die(game, message):
 # LIGHT (the bats), sustained NOISE (the jackals), SPORES (the chimney), or
 # disturbing the coffin (the Horror) -- and every hazard warns before it kills.
 _QUIET = {"go", "sneak", "look", "examine", "describe", "inventory", "wait",
-          "get", "drop", "put", "talk", "open", "wear", "light", "douse"}
+          "get", "drop", "put", "talk", "open", "wear", "light", "douse",
+          "feel", "listen", "smell"}
 # To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
-# and working your own light are safe (so you can enter, see it, and back out --
-# but not loot it alive).
+# quietly sensing, and working your own light are safe (so you can enter, see it,
+# and back out -- but not loot it alive).
 _QUIET_SPHERE = {"go", "sneak", "look", "examine", "describe", "inventory",
-                 "light", "douse"}
+                 "light", "douse", "feel", "listen", "smell"}
 
 
 def _is_holding(character, name):
@@ -369,13 +370,25 @@ def build_game():
     _scenery(exterior, "tomb", "the Tomb of Nassak An-Rah",
              "Three faces in azure stone -- boy, warrior, and sky-gazing elder -- "
              "their mouths gaping as doors. Orange fungus mortars every seam.")
-    _scenery(youth, "statues", "blue statues of the boy-Autarch",
+    # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
+    # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
+    # them without a light (perception Layer 2). The ceiling's *visual* text is
+    # what you see once lit; its heard text is the dark clue.
+    statues = _scenery(youth, "statues", "blue statues of the boy-Autarch",
              "Nassak An-Rah as an infant, a child, a youth -- each rendered with "
              "unsettling tenderness in cold blue stone.")
-    _scenery(youth, "ceiling", "the dark ceiling",
-             "You peer up into the black. The whole vault is packed with roosting "
-             "bats, twitching and shifting. Bring a light among them -- or raise a "
-             "din -- and they'll come down in a screaming cloud. Go dark and quiet.")
+    statues.perceptible_by(perception.Sense.TOUCH,
+             "Your hands find cold, smooth stone -- a swaddled infant, then a "
+             "standing boy, larger than life. The boy-Autarch, unmistakably.")
+    ceiling = _scenery(youth, "ceiling", "the vaulted ceiling",
+             "Your light picks out the vault overhead: the whole ceiling seethes "
+             "with roosting bats -- thousands of them, twitching and shifting and "
+             "dropping toward the glow. Raise a din, or keep a light on them, and "
+             "they'll come down in a screaming cloud.")
+    ceiling.perceptible_by(perception.Sense.HEARING,
+             "You can't see a thing, but the vault overhead seethes -- a dry, "
+             "restless storm of leathery wings. Bats. A great many, and close. A "
+             "light among them, or a loud noise, would wake them.")
     _scenery(memory, "crystal lattice", "lattices of memory-crystal",
              "Lazulite crystals knit across the walls. One holds the Autarch's "
              "embalming: the baboon took his lungs, the human his liver, the mantis "
@@ -573,6 +586,9 @@ def build_game():
         custom_actions=[Sneak, BurnCorpse, PryCoffin],
     )
     game.max_score = 100
+    # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
+    # (the unseen bats overhead) is meant to be heard and felt, not just seen.
+    game.enable_senses()
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
@@ -593,7 +609,7 @@ def build_game():
     youth.obscure(perception.Darkness(
         blurb="Pitch dark. Leathery wings rustle and shift somewhere overhead -- "
         "something is roosting up there. Raise a light to see the way... but it may "
-        "wake them. (EXAMINE THE CEILING, or go dark and quiet.)"))
+        "wake them. (EXAMINE or LISTEN overhead, or FEEL your way in the dark.)"))
 
     # The bats: roused by carrying a LIT light into the Youth, or by a loud noise
     # there. Patient -- they warn, then swarm. Douse the light (or fall quiet) and

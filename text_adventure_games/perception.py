@@ -14,9 +14,30 @@ split are later layers; this module is deliberately just the sight gate.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 from .enums import Property
+
+
+class Sense(str, Enum):
+    """The senses perception can reach a thing through. Sight is the default
+    (everything is visible when lit); the others are opt-in per thing via
+    ``Thing.perceptible_by`` and surfaced by the feel/listen/smell probes or by
+    examining in the dark. See docs/design/perception.md (Layer 2)."""
+
+    SIGHT = "sight"
+    TOUCH = "touch"
+    HEARING = "hearing"
+    SMELL = "smell"
+
+
+#: Terse fallbacks when a thing is tagged perceptible by a sense but given no
+#: text of its own -- so ``feel``/``listen``/``smell`` always say *something*.
+GENERIC_SENSE_TEXT = {
+    Sense.TOUCH: "You feel its plain, ordinary surface -- nothing more.",
+    Sense.HEARING: "You hear nothing telling.",
+    Sense.SMELL: "It has no notable smell.",
+}
 
 
 class Sight(IntEnum):
