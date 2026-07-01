@@ -73,12 +73,14 @@ VAN_PELT = "Van Pelt Library"
 FISHER = "Fisher Fine Arts Library"  # the Furness building at 220 South 34th Street
 MEYERSON = "Meyerson Hall"
 HOUSTON = "Houston Hall"
+IRVINE = "Irvine Auditorium"
 COLLEGE = "College Hall"
 ROOM_SUBDIVIDE = {
     VAN_PELT,
     FISHER,
     MEYERSON,
     HOUSTON,
+    IRVINE,
     COLLEGE,
 }  # buildings split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
@@ -480,6 +482,22 @@ def load_houston_plan(tmj, W, H, interior):
     return rooms, wall_cells
 
 
+def load_irvine_plan(tmj, W, H, interior):
+    """(rooms, wall_cells) for Irvine from irvine_arenas. Uses the *grouped*
+    sections so numbered sub-boxes (Stage 1/2/3, the foyers) become single
+    arenas, matching the picture (no wall between sub-boxes). Wall cells come
+    from furnish_irvine.irvine_wall_cells, the same computation the picture uses."""
+    import furnish_irvine as fi
+
+    grouped = fi._grouped_sections(tmj)
+    if not grouped:
+        return [], set()
+    interior_idx = {y * W + x for (x, y) in interior}
+    rooms = [{"name": nm, "rect": list(rect)} for nm, rect in grouped.items()]
+    wall_cells = fi.irvine_wall_cells(tmj, interior_idx, W, H)
+    return rooms, wall_cells
+
+
 def load_college_hall_plan(tmj, W, H, interior):
     """(rooms, wall_cells) for College Hall from college_hall_arenas. Partitions
     are auto-enclosed (including the open Central/Great/Kitchen seams that are
@@ -721,6 +739,8 @@ def main():
                 plan = load_fisher_plan(tmj, W, interior)
             elif name == HOUSTON:
                 plan = load_houston_plan(tmj, W, H, interior)
+            elif name == IRVINE:
+                plan = load_irvine_plan(tmj, W, H, interior)
             elif name == COLLEGE:
                 plan = load_college_hall_plan(tmj, W, H, interior)
             else:
