@@ -107,7 +107,6 @@ UNNAMED = [
     # OSM left the Furness building untagged; we give it its real name (it's a
     # known landmark, not just an address) rather than the street-address fallback.
     {"name": "Fisher Fine Arts Library", "seed": (208, 150)},
-    {"name": "3537 Locust Walk", "seed": (19, 111)},
     {"name": "Locust Walk Annex", "seed": (29, 76)},
 ]
 
