@@ -398,7 +398,8 @@ def _room_layouts(sections):
                 gc = c0 + 3 + k * 5
                 add("music_stand", gc - 1, ir)   # stand holds the sheet music
                 add(inst, gc, ir)
-                add(chair, gc + 1, ir + 1)        # the player's chair beside it
+                # chair sits just past the instrument (harps are 2 wide)
+                add(chair, gc + (2 if inst.startswith("harp") else 1), ir + 1)
         elif name == "Auditorium":
             # dense rows of seats facing the stage: every other row (legroom),
             # a seat in every column, with the center aisle left for the runner
