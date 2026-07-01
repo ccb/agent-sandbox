@@ -14,17 +14,17 @@ env that has the engine installed)::
 
 import pytest
 
-from gen_agents import build_world, smallville_agents
-from gen_agents.build_world import PERSONAS
-from gen_agents.run_simulation import simulate
-from gen_agents.sim_config import (
+from backend import build_world, smallville_agents
+from backend.build_world import PERSONAS
+from backend.run_simulation import simulate
+from backend.sim_config import (
     CognitionConfig,
     RetrievalConfig,
     SimulationConfig,
     SimulationRuntimeConfig,
     SmallvilleConfig,
 )
-from gen_agents.world_map import WorldMap
+from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
 from text_adventure_games import memory
 from text_adventure_games.config import GameConfig
@@ -95,7 +95,7 @@ def test_retrieval_defaults_equal_memory_constants():
 
 
 def test_cognition_and_cast_defaults_match_module_constants():
-    # CognitionConfig and num_agents defaults must track the gen_agents module
+    # CognitionConfig and num_agents defaults must track the backend module
     # constants they mirror, so an unconfigured sim behaves exactly as before.
     cog = CognitionConfig()
     assert cog.vision_r == smallville_agents.SMALLVILLE_VISION_R

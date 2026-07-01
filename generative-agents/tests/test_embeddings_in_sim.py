@@ -5,7 +5,7 @@ Two port-side pieces sit on top of the engine's embedding seam (#76):
 * ``run_simulation.resolve_embedding_client`` -- turns the ``--embeddings`` flag
   (and the ``EMBEDDING_PROVIDER`` env var) into a client, degrading to ``None``
   (keyword overlap) so the default run stays free, offline, and CI-safe.
-* ``gen_agents.compare_retrieval`` -- the manual probe that accrues real resident
+* ``backend.compare_retrieval`` -- the manual probe that accrues real resident
   memories, then measures keyword-overlap vs semantic retrieval directly.
 
 Everything here uses the deterministic ``MockEmbeddingClient`` (or no client at
@@ -17,10 +17,10 @@ all), so it needs no model download, no network, and no maze assets. Run from
 
 import pytest
 
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.compare_retrieval import accrue_memories, compare, make_embedding_client
-from gen_agents.run_simulation import resolve_embedding_client
-from gen_agents.smallville_agents import attach_agents
+from backend.build_world import PERSONAS, build_world
+from backend.compare_retrieval import accrue_memories, compare, make_embedding_client
+from backend.run_simulation import resolve_embedding_client
+from backend.smallville_agents import attach_agents
 from text_adventure_games.embedding_client import MockEmbeddingClient
 
 # --------------------------------------------------------------------------

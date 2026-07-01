@@ -267,14 +267,14 @@ Implemented on a branch **stacked on PR #94**, which owns `memory.py`:
   invariant is preserved, and the free local default is model2vec.**
 
 **#76 shipped** (squash `beb062e0`). **Follow-up #102 — embeddings actually used in
-the Smallville sim:** `gen_agents/run_simulation.py` grew an
+the Smallville sim:** `backend/run_simulation.py` grew an
 `--embeddings [PROVIDER]` flag (else `EMBEDDING_PROVIDER`, via
 `resolve_embedding_client`) that threads a client into `simulate()`, degrading to
 keyword overlap when unset or uninstallable — so the default run stays free, offline,
 and CI-safe, and the exported replay is byte-identical (the mock brain ignores the
 retrieved block). Because the replay can't *show* the difference until a real LLM
 brain reasons over retrieved memories (NEXT-STEPS Phase A), the value is measured
-**directly** by `gen_agents/compare_retrieval.py`, which accrues a real per-resident
+**directly** by `backend/compare_retrieval.py`, which accrues a real per-resident
 memory stream and prints keyword-overlap vs semantic top-k side by side. To keep that
 comparison fair, `AgentMemory.retrieve()` gained a `touch=False` option for
 **read-only** retrieval (score what would surface without bumping recency), so the

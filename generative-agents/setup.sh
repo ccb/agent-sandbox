@@ -67,7 +67,7 @@ cat > "$DST/templates/landing/landing.html" <<'LANDING'
   </p>
   <p style="color:#666">
     Seeing a 404 or an empty map? Generate a simulation first:<br>
-    <code>uv run python -m gen_agents.run_simulation</code>
+    <code>uv run python -m backend.run_simulation</code>
   </p>
 </div>
 {% endblock content %}
@@ -96,7 +96,7 @@ echo "Frontend ready at: $DST"
 echo
 echo "Next steps:"
 echo "  1. Generate a simulation (runs the engine in the repo's uv project env):"
-echo "       uv run python -m gen_agents.run_simulation"
+echo "       uv run python -m backend.run_simulation"
 echo "  2. Run the frontend in its OWN Python 3.9 venv (Django 2.2 needs an older"
 echo "     interpreter than the engine's). uv fetches Python 3.9 for you:"
 echo "       uv venv --python 3.9 frontend-venv"

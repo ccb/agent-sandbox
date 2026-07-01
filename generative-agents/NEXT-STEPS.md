@@ -35,7 +35,7 @@ reflect** (plus **converse** on agent-to-agent contact). Here is each piece toda
 
 | Cognitive step | Today | Target |
 | --- | --- | --- |
-| **LLM** | None — `SmallvilleMockClient` is deterministic (`gen_agents/smallville_agents.py`) | Real model via `client_from_env()`; mock kept for tests |
+| **LLM** | None — `SmallvilleMockClient` is deterministic (`backend/smallville_agents.py`) | Real model via `client_from_env()`; mock kept for tests |
 | **Perceive** | ✅ Done (#80/#82) — `AgentMemory.perceive` writes nearby agents/objects/events to memory each turn, scoped by tile distance on the map | Vision-radius perception writes nearby agents/objects/events to memory |
 | **Retrieve** | ✅ Done (#75/#76) — recency × relevance × importance retrieval (keyword or embeddings) feeds every decision | Recency × relevance × importance retrieval feeds each decision |
 | **Plan** | Hardcoded — one destination + one activity per persona (`build_world.py`) | Generated daily plan, decomposed day → hourly → minute |
@@ -81,7 +81,7 @@ later phases build on a live model rather than the mock. Low risk, high momentum
   [`../docs/design/llm-cost-observability.md`](../docs/design/llm-cost-observability.md).
 - `[port] S` ✅ **Done (#74) — Make sim parameters configurable.** Start time
   (`--start`, ISO), duration (`--steps`), and `SEC_PER_STEP` (`--sec-per-step`) are now
-  CLI flags on `gen_agents/run_simulation.py`; the exporter derives `start_date` from the
+  CLI flags on `backend/run_simulation.py`; the exporter derives `start_date` from the
   passed `start_dt` so `meta.json` tracks the flag instead of a hardcoded constant.
 
 ---
@@ -100,7 +100,7 @@ all read and write memory, so nothing downstream is meaningful without it.
   A pluggable `EmbeddingClient` (model2vec default, offline) scores the relevance term;
   `recency_decay` is already a persona knob. Wired into the sim by **#102**:
   `run_simulation --embeddings [PROVIDER]` (else `EMBEDDING_PROVIDER`), with
-  `gen_agents/compare_retrieval.py` measuring keyword-vs-semantic retrieval directly (the
+  `backend/compare_retrieval.py` measuring keyword-vs-semantic retrieval directly (the
   mock brain ignores the block, so the replay is byte-identical until Phase A's real
   brain). ROADMAP flags a clean reference implementation of exactly this scoring in the
   "Generative Action Castle" prototype (ask Chris) — study it rather than reinventing.
@@ -112,7 +112,7 @@ all read and write memory, so nothing downstream is meaningful without it.
   `agent_history_init_n25.csv` relationships into each agent's memory stream and surfaces
   each persona's *partial* known-places tree (`spatial_memory.json`) as beliefs in the
   engine's `Knowledge` layer (rendered into the "What you know:" observation section). The
-  loaders live in `gen_agents/seed.py` and tolerate the git-ignored assets being absent, so a
+  loaders live in `backend/seed.py` and tolerate the git-ignored assets being absent, so a
   fresh checkout / CI seeds nothing and stays byte-identical. Anchor:
   [`../docs/design/agent-knowledge.md`](../docs/design/agent-knowledge.md).
 
@@ -133,8 +133,8 @@ memory, and the precondition for conversation.
   other characters, not just the player, so agents can act on each other — the precondition
   for social behavior.
 - `[port] M` ✅ **Done (#82) — Map Smallville proximity onto perception.** A `TiledGame`
-  (`gen_agents/tiled_game.py`) overrides `perceivable_locations` with map tile distance
-  (`WorldMap.tile_gap`, the `vision_r = 8` from `gen_agents/world_map.py`), and residents carry
+  (`backend/tiled_game.py`) overrides `perceivable_locations` with map tile distance
+  (`WorldMap.tile_gap`, the `vision_r = 8` from `backend/world_map.py`), and residents carry
   `vision_r = 8`, so co-location on the tile map becomes co-presence in the sim.
 
 ---
@@ -147,7 +147,7 @@ higher-level thoughts. This is the largest behavioral leap from today's demo.
 - `[engine/port] XL` **Daily planning, decomposed day → hourly → minute.** Generate a
   plan from identity + memory, then refine it down to concrete actions, revising as the
   day unfolds. Replaces the single hardcoded `destination` + `activity` per persona in
-  `gen_agents/build_world.py`. This is the change that makes the town feel alive. Anchor:
+  `backend/build_world.py`. This is the change that makes the town feel alive. Anchor:
   [`../docs/design/daily-planning.md`](../docs/design/daily-planning.md).
 - `[engine] L` ✅ **Done (#84) — Periodic reflection.** A new engine
   `text_adventure_games/reflection.py` synthesizes recent memories into higher-level
@@ -227,7 +227,7 @@ Not a phase — do these alongside the relevant phase.
   Phase 2/3). Anchor:
   [`../docs/design/output-and-trace-rendering.md`](../docs/design/output-and-trace-rendering.md).
 - `[engine/port] M` ✅ **Done — Global `SimulationConfig`.** A single config object for
-  the sim (`gen_agents/sim_config.py`), the generative-agents counterpart to the engine's
+  the sim (`backend/sim_config.py`), the generative-agents counterpart to the engine's
   `GameConfig`: it **composes** a `GameConfig` (the `game:` section) and adds the
   run-time knobs (start, steps, sec-per-step) and memory-retrieval knobs (recency ×
   relevance × importance weights, decay, limits), loadable from a YAML/JSON file
@@ -274,7 +274,7 @@ export. This is forward-looking guidance, not issues yet; roughly in dependency 
 > a mock, not wired to the export yet, but it proves the Godot-native tilemap + sprite path.
 
 - `[engine/port] M` **Freeze & document the export as the renderer-agnostic contract.**
-  `gen_agents/exporter.py` already emits everything a renderer needs — `reverie/meta.json`
+  `backend/exporter.py` already emits everything a renderer needs — `reverie/meta.json`
   (cast, step count, `sec_per_step`), `environment/0.json` (start tiles),
   `movement/<step>.json` (`[x, y]`, `pronunciatio`, `description`, `chat`, `reasoning`,
   retrieved `memories`), and `personas/<Name>/memory_stream.json`. Version + spec it so

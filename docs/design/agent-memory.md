@@ -6,7 +6,7 @@ future work. The append-only memory stream, deterministic retrieval, event
 perception, and action-outcome memories ship in `text_adventure_games/memory.py`
 and `text_adventure_games/npc.py`; the Smallville port now perceives co-located
 residents, remembers its own actions, and retrieves memories into each
-observation (`gen_agents/smallville_agents.py` +
+observation (`backend/smallville_agents.py` +
 `run_simulation.py`). The later stages — LLM importance scoring, reflection and
 plan *generation*, and save/load through `Character` — are not built yet. See
 **§12** for the per-stage status, and the **"As built"** notes (§4, §5, §9, §10)

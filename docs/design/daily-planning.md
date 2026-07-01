@@ -4,8 +4,8 @@
 data model + `Planner` protocol + pure helpers ship in
 `text_adventure_games/planning.py`; the Smallville `MockPlanner`/`LLMPlanner`, the
 `SimClock` time mapping, the revision seam (`maybe_revise_plan` + the
-`simulate()` trigger sites), and `gen_agents/compare_plans.py` ship in
-`gen_agents/`. The mock path keeps the replay byte-identical;
+`simulate()` trigger sites), and `backend/compare_plans.py` ship in
+`backend/`. The mock path keeps the replay byte-identical;
 `LLMPlanner` is written against the engine's `LlmClient` seam and tested with a
 fake client; **Phase A** (#78) has since landed, so a real `LLM_PROVIDER` now
 drives both the per-step decisions and `LLMPlanner` from one shared client (not yet
@@ -300,7 +300,7 @@ class Planner(Protocol):
 This mirrors exactly how `--embeddings` already works: a default-on cognitive
 upgrade that the mock brain ignores, leaving the replay identical, with a
 `compare_*` path to actually watch the two diverge. We add a small
-`gen_agents/compare_plans.py` (analogous to `compare_retrieval.py`) that prints a
+`backend/compare_plans.py` (analogous to `compare_retrieval.py`) that prints a
 mock schedule beside an LLM-generated one for the same persona, so the difference
 is inspectable offline-vs-online without needing the frontend.
 

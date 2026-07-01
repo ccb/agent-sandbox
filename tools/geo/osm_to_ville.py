@@ -2,7 +2,7 @@
 
 `osm_to_tiled.py` makes a *picture* (a Tiled tilemap). This makes the *world
 data* the agent backend needs: the same the_ville matrix format that
-`gen_agents/world_map.py` already loads — a folder of flat CSV
+`backend/world_map.py` already loads — a folder of flat CSV
 "maze" layers plus "block" lookup tables:
 
     matrix/
