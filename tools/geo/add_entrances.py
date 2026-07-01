@@ -74,7 +74,13 @@ FISHER = "Fisher Fine Arts Library"  # the Furness building at 220 South 34th St
 MEYERSON = "Meyerson Hall"
 HOUSTON = "Houston Hall"
 IRVINE = "Irvine Auditorium"
-ROOM_SUBDIVIDE = {VAN_PELT, FISHER, MEYERSON, HOUSTON, IRVINE}  # buildings split into rooms
+ROOM_SUBDIVIDE = {
+    VAN_PELT,
+    FISHER,
+    MEYERSON,
+    HOUSTON,
+    IRVINE,
+}  # buildings split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
 #                     opening end to end (a building may still have several doors)
