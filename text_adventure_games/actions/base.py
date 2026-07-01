@@ -1,10 +1,11 @@
 from __future__ import annotations
 from ..things import Thing, Character, Item, Location
+from ..reactions import GatedEffect
 from ..enums import ActionName
 import re
 
 
-class Action:
+class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a
     specific set of Actions that can do.  The Action class that checks
@@ -18,6 +19,12 @@ class Action:
     Every action must implement two functions:
       * check_preconditions()
       * apply_effects()
+
+    An Action is a command-triggered :class:`~text_adventure_games.reactions.GatedEffect`:
+    the parser builds it from a command, then calls it, which runs the
+    gate->effect contract inherited from ``GatedEffect``. A
+    :class:`~text_adventure_games.reactions.Reaction` is the same contract pulled
+    by the world rather than by a command.
     """
 
     ACTION_NAME: str | None = None
@@ -35,6 +42,13 @@ class Action:
     # existed. Subclasses set a positive integer to make the action cheaper.
     DURATION: int = None
 
+    # How many room-hops the *sound* of this action carries (issue #80 hearing).
+    # 0 (the default) means it's heard only in the room it happens in, so
+    # perception stays room-scoped until an action opts in -- a SHOUT/SCREAM
+    # might use 2, a crash 1. This is the action's physical volume, distinct from
+    # the contextual "does it disturb this creature" sets used by threat triggers.
+    AUDIBLE_RADIUS: int = 0
+
     def __init__(self, game, actor=None):
         self.game = game
         self.parser = game.parser
@@ -47,6 +61,15 @@ class Action:
         the default simply returns the declared ``DURATION``.
         """
         return self.DURATION
+
+    def audible_radius(self) -> int:
+        """Room-hops this action's sound carries (override for dynamic volume)."""
+        return self.AUDIBLE_RADIUS
+
+    def sound_description(self) -> str:
+        """How the sound reads to someone who hears it from another room (they
+        can't see what happened). Override for flavor (e.g. "a scream")."""
+        return "a commotion"
 
     def acting_character(self, command, **kwargs):
         """Resolve who performs this action: the explicit actor if one was
@@ -117,11 +140,7 @@ class Action:
         """
         return self.parser.ok("no effect")
 
-    def __call__(self):
-        self._preconditions_passed = False
-        if self.check_preconditions():
-            self._preconditions_passed = True
-            return self.apply_effects()
+    # __call__ (the gate->effect runner) is inherited from GatedEffect.
 
     def claimed_resource(self):
         """The single world resource this action reaches for — the thing two
@@ -342,6 +361,11 @@ class ActionSequence(Action):
         responses = []
         for cmd in self.command.split(","):
             cmd = cmd.strip()
+            if not cmd:
+                # Skip empty segments -- a trailing comma, a doubled comma, or
+                # stray whitespace shouldn't fire "I'm not sure what you want
+                # to do" on a blank command.
+                continue
             responses.append(self.parser.parse_command(cmd, actor=self.actor))
         return responses
 

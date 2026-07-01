@@ -22,6 +22,7 @@ from backend.sim_config import (
     RetrievalConfig,
     SimulationConfig,
     SimulationRuntimeConfig,
+    SmallvilleConfig,
 )
 from backend.world_map import WorldMap
 from synthetic_ville import build_synthetic_ville
@@ -61,14 +62,15 @@ def world_map(tmp_path_factory):
 
 def test_defaults_match_today():
     config = SimulationConfig()
-    # Run-time knobs mirror run_simulation's historical CLI defaults.
+    # Shared run-time knobs mirror run_simulation's historical CLI defaults.
     assert config.simulation.start == "2023-02-13 08:00:00"
     assert config.simulation.steps == 1080
     assert config.simulation.sec_per_step == 10
-    assert config.simulation.sim_code == "mock_the_ville_n25"
-    assert config.simulation.base_sim == "base_the_ville_n25"
-    assert config.simulation.num_agents == 5
     assert config.simulation.seed is None
+    # Smallville-only run-directory knobs live on the `smallville` sub-section.
+    assert config.smallville.sim_code == "mock_the_ville_n25"
+    assert config.smallville.base_sim == "base_the_ville_n25"
+    assert config.smallville.num_agents == 5
     # Cognition defaults mirror smallville_agents' module constants.
     assert config.cognition.vision_r == 8
     assert config.cognition.conversation_cooldown_steps == 90
@@ -103,7 +105,7 @@ def test_cognition_and_cast_defaults_match_module_constants():
     assert (
         cog.conversation_max_exchanges == smallville_agents.CONVERSATION_MAX_EXCHANGES
     )
-    assert SimulationRuntimeConfig().num_agents == build_world.MAX_ACTIVE_PERSONAS
+    assert SmallvilleConfig().num_agents == build_world.MAX_ACTIVE_PERSONAS
 
 
 # --------------------------------------------------------------------------
@@ -115,11 +117,19 @@ def test_to_dict_from_dict_round_trip():
     config = SimulationConfig(
         simulation=SimulationRuntimeConfig(steps=24, start="2023-02-13 18:00:00"),
         retrieval=RetrievalConfig(max_records=3, alpha_relevance=2.0),
+        smallville=SmallvilleConfig(sim_code="custom_run", num_agents=12),
         embedding=EmbeddingConfig(provider="mock"),
     )
     config.game.engine.turn_mode = "simultaneous"
     data = config.to_dict()
-    assert set(data) == {"game", "simulation", "retrieval", "cognition", "embedding"}
+    assert set(data) == {
+        "game",
+        "simulation",
+        "retrieval",
+        "cognition",
+        "smallville",
+        "embedding",
+    }
     # provider is stored as a plain string, not an enum, so the dict is JSON-able.
     assert data["embedding"]["provider"] == "mock"
     assert SimulationConfig.from_dict(data) == config
@@ -156,6 +166,20 @@ def test_from_dict_rejects_unknown_section():
 def test_from_dict_rejects_unknown_key():
     with pytest.raises(ValueError, match="Unknown key"):
         SimulationConfig.from_dict({"retrieval": {"not_a_field": 1}})
+
+
+def test_from_dict_loads_smallville_section():
+    # The Smallville-only run-directory knobs are their own section, parsed and
+    # validated like the rest (other sections keep their defaults).
+    config = SimulationConfig.from_dict(
+        {"smallville": {"sim_code": "my_run", "base_sim": "base_x", "num_agents": 9}}
+    )
+    assert config.smallville.sim_code == "my_run"
+    assert config.smallville.base_sim == "base_x"
+    assert config.smallville.num_agents == 9
+    # An unknown key inside the section is rejected by name.
+    with pytest.raises(ValueError, match="Unknown key"):
+        SimulationConfig.from_dict({"smallville": {"sim_codez": "oops"}})
 
 
 def test_from_dict_embedding_requires_provider():

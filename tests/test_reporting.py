@@ -207,7 +207,8 @@ def test_parser_emits_on_channels(tiny_game):
     tiny_game.parser.ok("a calm field")
     tiny_game.parser.fail("you can't go that way")
     tiny_game.parser.npc_ok("the troll shuffles")
-    assert cap.texts(Channel.NARRATION) == ["a calm field"]
+    # ok() capitalizes the first character of narration.
+    assert cap.texts(Channel.NARRATION) == ["A calm field"]
     assert cap.texts(Channel.BLOCKED) == ["you can't go that way"]
     assert cap.texts(Channel.NPC_NARRATION) == ["the troll shuffles"]
     # fail() still records the reason for the ReAct Reflect step.

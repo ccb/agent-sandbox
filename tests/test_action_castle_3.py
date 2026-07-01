@@ -620,6 +620,42 @@ def test_crying_baby_is_fatal_at_the_deep_ravine():
     assert _said(cap, "stirges")
 
 
+def test_carrying_the_crying_baby_emits_a_wail_sound():
+    # The wail is a real emitted sound now (physical-sound model), so perception
+    # hears it -- separate from the ambush trigger that still keys on the baby.
+    game, _ = _game()
+    _with_crying_baby(game)
+    _solo_to(game, "Crossroads")
+    game.do_command("west")  # -> Dark Forest (safe); the baby wails on entering
+    heard = game.sounds_audible_at(game.player.location)
+    assert any("baby's wailing" in s["description"] for s in heard)
+
+
+def test_a_loud_action_alerts_the_bandits():
+    # Noise of your own (not just the baby) gives you away.
+    game, cap = _game()
+    _solo_to(game, "Bandit Camp")
+    game.do_command("say hey you lot")  # yelling aloud
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "Your sudden racket alerts the bandits")
+
+
+def test_a_loud_action_alerts_the_stirges():
+    game, cap = _game()
+    _solo_to(game, "Deep Ravine")
+    game.do_command("say hello down there")
+    assert game.is_game_over() and not game.is_won()
+    assert _said(cap, "alerts the stirges")
+
+
+def test_quiet_actions_do_not_alert_the_bandits():
+    game, cap = _game()
+    _solo_to(game, "Bandit Camp")
+    game.do_command("examine bandits")  # quiet
+    game.do_command("look")
+    assert not game.is_game_over()
+
+
 def test_feeding_stew_quiets_the_baby_and_makes_it_safe():
     game, cap = _game()
     baby = _with_crying_baby(game)
@@ -821,7 +857,10 @@ def test_javelin_summons_the_demon():
 def test_dawdling_in_front_of_the_demon_is_fatal():
     game, cap = _game()
     _summon_demon(game)
-    game.do_command("south")  # trying to flee (or do anything) -> devoured
+    # The demon is on a clock: you may look once, but dawdle past the window
+    # instead of throwing the javelin and it devours you.
+    game.do_command("look")
+    game.do_command("south")  # still dithering -> devoured
     assert game.is_game_over() and not game.is_won()
     assert _said(cap, "nothing left to bury")
 
