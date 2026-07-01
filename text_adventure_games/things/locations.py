@@ -54,6 +54,18 @@ class Location(Thing):
         # player
         self.has_been_visited = False
 
+        # Optional perception veils (Darkness, Fog, ...) limiting how well an
+        # observer sees this location -- the perception counterpart to blocks.
+        # Empty by default, so perception is zero-cost until a game opts in via
+        # ``obscure()``. See text_adventure_games/perception.py.
+        self.veils = []
+
+    def obscure(self, veil):
+        """Attach a perception :class:`~text_adventure_games.perception.Veil`
+        (e.g. ``Darkness()``, ``Fog()``) to this location and return it."""
+        self.veils.append(veil)
+        return veil
+
     def to_primitive(self):
         """
         Converts this object into a dictionary of values the can be safely
