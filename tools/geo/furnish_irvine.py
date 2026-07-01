@@ -252,6 +252,21 @@ def _wall_data(tmj, interior, W, H):
         data[r * W + c] = WALL_BR if (v and h) else (WALL_R if v else WALL_B)
 
     removed = _enforce_max3_per_2x2(data, W, H)
+
+    # Carve the center aisle: the red carpet runs 3 wide (auditorium center) from
+    # the stage front through to the lobby, so clear any wall in those 3 columns
+    # where it crosses the stage and lobby partitions -- otherwise a partition
+    # cell sits in the carpet. Keeps picture + matrix in lock-step (aisle walkable).
+    grouped = _grouped_sections(tmj)
+    if "Auditorium" in grouped:
+        ac0, ar0, ac1, ar1 = grouped["Auditorium"]
+        acx = (ac0 + ac1) // 2
+        top = grouped["Stage"][3] if "Stage" in grouped else ar0
+        bot = grouped["Lobby"][1] if "Lobby" in grouped else ar1
+        for c in (acx - 1, acx, acx + 1):
+            for r in range(top, bot + 1):
+                if data[r * W + c] in WALL_SET:
+                    data[r * W + c] = 0
     return data, doors, removed
 
 
