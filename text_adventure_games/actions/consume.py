@@ -134,6 +134,7 @@ class Drink(base.Action):
 class Light(base.Action):
     ACTION_NAME = ActionName.LIGHT
     ACTION_DESCRIPTION = "Light something flammable like a lamp or a candle"
+    ACTION_ALIASES = ["turn on"]
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
@@ -190,7 +191,57 @@ class Light(base.Action):
         * Changes the state to lit
         """
         self.item.set_property(Property.IS_LIT, True)
-        description = "{name} lights the {item}. It glows.".format(
-            name=self.character.name, item=self.item.name
+        # Item-subject phrasing so it reads right for any actor -- "You lights the
+        # lamp" (player named "you") would be ungrammatical.
+        description = "The {item} flares alight and glows.".format(item=self.item.name)
+        self.parser.ok(description)
+
+
+class Douse(base.Action):
+    """Put out something you've lit -- the inverse of :class:`Light`. Turns a lit
+    lamp/torch/lantern back off, so a light source can be a toggle: light it to
+    see (or to satisfy a Darkness block/veil), douse it to go dark and quiet
+    again."""
+
+    ACTION_NAME = ActionName.DOUSE
+    ACTION_DESCRIPTION = "Put out something you've lit (a lamp, torch, or lantern)"
+    ACTION_ALIASES = ["extinguish", "put out", "turn off", "snuff", "snuff out"]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="dousing a light")
+        self.item = self.parser.match_item(
+            command, self.parser.get_items_in_scope(self.character), hint="lit light"
         )
+
+    def check_preconditions(self) -> bool:
+        """
+        Preconditions:
+        * There must be a matched item
+        * The item must be held (in hand, worn, wielded, or a carried container)
+        * The item must currently be lit
+        """
+        if not self.was_matched(
+            self.item, error_message="I don't know what you want to put out"
+        ):
+            return False
+        if not Light._is_held(self.character, self.item):
+            self.parser.fail(
+                "{name} does not have {item_name}".format(
+                    name=self.character.name.capitalize(), item_name=self.item.name
+                )
+            )
+            return False
+        if not self.item.get_property(Property.IS_LIT):
+            self.parser.fail("It isn't lit.")
+            return False
+        return True
+
+    def apply_effects(self):
+        """
+        Effects:
+        * Changes the state to not lit
+        """
+        self.item.set_property(Property.IS_LIT, False)
+        description = "The {item} goes dark.".format(item=self.item.name)
         self.parser.ok(description)

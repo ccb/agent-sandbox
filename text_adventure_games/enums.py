@@ -181,6 +181,7 @@ class ActionName(_StrEnum):
     EAT = "eat"
     DRINK = "drink"
     LIGHT = "light"
+    DOUSE = "douse"
 
     # Crafting: combine ingredients (optionally at a station/with a tool) into
     # a new item (see crafting.py). Games opt in by registering recipes.
