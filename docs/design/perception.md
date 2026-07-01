@@ -301,3 +301,27 @@ class UlfireSight(Veil):
    the default renderer, leaving the LLM narrator as a documented plugin point.
 
 Each its own PR, green before the next — the reactions playbook.
+
+---
+
+## 12. Status (implemented)
+
+- **Layer 1 — shipped** (`perception.py`): `Sight`, `Veil` + `Darkness`/`Fog`,
+  `blind`, `sight_for`, and a `Scene` (sight + description). `Game.perceive`
+  feeds both `describe` (human) and `describe_for` (agent), so they share one
+  perception; each stays its own renderer. Zero-cost proven against the suite.
+  Hall of Youth is the first consumer (`obscure(Darkness(...))`).
+- **Layer 2 — shipped**: `Sense` (sight/touch/hearing/smell); a thing declares
+  non-sight senses via `Thing.perceptible_by(sense, text)`. `Examine` gates on
+  sight — at `Sight.NONE` it falls back to the **passive** senses (hearing,
+  smell) a thing offers, else "too dark" (nudging toward `feel` if it's
+  touch-perceptible); `DIM`/`CLEAR` keep the normal visual examine, so lit games
+  are unchanged. The **active** touch probe `feel` (+ `listen`/`smell`) are
+  registered by `Game.enable_senses()` — **opt-in**, so the default verb set is
+  unchanged. Hall of Youth: the ceiling is HEARING (dark clue) / sight (lit),
+  the statues TOUCH.
+
+Resolved decisions (§9): probes are opt-in via `enable_senses`; `Examine` gates
+only at `Sight.NONE` (DIM still examines); passive = hearing/smell fold into
+examine-in-the-dark, touch is the active `feel` probe; the room-level
+passive-into-`look` fold-in and the LLM narrator (Layer 3) remain future work.
