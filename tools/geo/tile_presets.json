@@ -1,6 +1,6 @@
 {
   "_README": "Tile-usage presets: named subsets of furniture_catalog.json that say 'these are the tiles an LLM should use when furnishing/parsing the tilemap'. Created/edited in catalog_web.py and consumed by tile_presets.py (--menu prints the LLM-facing tile menu). 'active' names the default preset the LLM uses. Each preset: {description, tiles:[catalog names], notes:{name: hint}}.",
-  "active": "irvine",
+  "active": "general-beds",
   "presets": {
     "general-library": {
       "description": "Generally used for libraries",
@@ -67,6 +67,26 @@
         "armchair_green",
         "armchair_red",
         "armchair_pink"
+      ],
+      "notes": {}
+    },
+    "general-beds": {
+      "description": "Generally used for irvine",
+      "tiles": [
+        "lantern",
+        "teacher_desk",
+        "books_green",
+        "double_bed",
+        "double_bed_blue",
+        "bed_single_made",
+        "floor_tile_cream",
+        "armchair_green",
+        "rug_green",
+        "plant_large",
+        "inkwell",
+        "book_red",
+        "student_desk_open",
+        "wall_set_silver"
       ],
       "notes": {}
     }
