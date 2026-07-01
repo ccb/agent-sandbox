@@ -294,6 +294,22 @@ def simulate(
 
     frames: list[dict] = []
     for _step in range(num_steps):
+        # Cost kill-switch (issue #183): stop before starting a step we may not be
+        # able to afford. Checked once per step, so the actual spend can overshoot
+        # the ceiling by up to one step's worth of calls -- a guard against a
+        # runaway live run, not a precise cap. A no-op unless the ledger carries a
+        # ceiling (max_cost_usd); the free mock brain spends $0 and never trips it.
+        if ledger is not None and ledger.over_budget():
+            heartbeat.emit(
+                Message(
+                    Channel.SYSTEM,
+                    f"LLM cost ceiling ${ledger.max_cost_usd:.4f} reached "
+                    f"(${ledger.total_cost_usd():.4f} over {len(ledger.records)} "
+                    f"calls) -- stopping at step {_step}/{num_steps}. "
+                    "Writing the partial replay.",
+                )
+            )
+            break
         # Give per-agent memory a coherent time axis: the step index is the
         # "turn" memories are stamped and scored against (issue #75). The custom
         # loop never calls end_turn, so without this game.turn would stay 0 and
@@ -528,6 +544,16 @@ def main() -> None:
         help="include full prompts/responses in the usage log (default: numbers only)",
     )
     parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="hard LLM cost ceiling in USD: stop the run at the next step once "
+        "cumulative spend reaches it (issue #183) -- a kill-switch for unattended "
+        "or scaled live runs. Overrides observability.max_cost_usd / LLM_MAX_COST. "
+        "Off by default; the free mock brain never trips it.",
+    )
+    parser.add_argument(
         "--embeddings",
         nargs="?",
         const="local",
@@ -630,10 +656,25 @@ def main() -> None:
     provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
     model = os.environ.get("LLM_MODEL")
 
+    # Cost ceiling / kill-switch (issue #183): an explicit --max-cost wins, else
+    # the config's observability.max_cost_usd (settable via LLM_MAX_COST for
+    # unattended runs). None = no ceiling. simulate() polls ledger.over_budget()
+    # each step and stops before the next step's calls; the partial replay and the
+    # cost summary are still written. The free mock brain spends $0 and never trips.
+    max_cost = (
+        args.max_cost
+        if args.max_cost is not None
+        else sim.game.observability.max_cost_usd
+    )
+    if max_cost is not None and max_cost <= 0:
+        raise SystemExit(f"--max-cost must be positive (got {max_cost}).")
+
     # Shared usage ledger across all personas, streamed to the run's JSONL
     # artifact. With the mock brain every line is $0; a real brain records into
     # this same ledger (created with it below), so the cost summary stays accurate.
-    ledger = UsageLedger()
+    ledger = UsageLedger(max_cost_usd=max_cost)
+    if max_cost is not None:
+        print(f"LLM cost ceiling: ${max_cost:.4f} -- run stops if reached.")
     run_log = sim.game.build_run_log(
         provider=provider or "mock",
         model=model or "mock",

@@ -11,8 +11,9 @@ gap with:
 * :class:`Usage` -- one provider-agnostic token record per call.
 * :class:`CallRecord` -- a priced ``Usage`` plus enough context (actor, turn) to
   attribute it.
-* :class:`UsageLedger` -- an append-only log of records with running totals and a
-  per-actor rollup.
+* :class:`UsageLedger` -- an append-only log of records with running totals, a
+  per-actor rollup, and an optional cost ceiling (``over_budget()``) a driver
+  loop can poll as a kill-switch before a runaway live run (issue #183).
 * :data:`PRICES` + :func:`price` -- a plain ``$/1M`` token table; unknown models
   warn and cost ``$0`` rather than crashing a run.
 * :func:`record_call` -- the one helper the four adapter methods share, so the
@@ -177,10 +178,19 @@ class UsageLedger:
     persona) so the rollups cover the whole run. Querying the ledger
     (:meth:`summary`, :meth:`totals_by_actor`) is the in-memory path; attaching a
     :class:`RunLog` additionally streams each call to disk.
+
+    Pass ``max_cost_usd`` to arm a cost ceiling / kill-switch (issue #183): the
+    ledger never raises -- accounting stays a passive side channel (see
+    :func:`record_call`, which must never break a real call) -- so a driver loop
+    polls :meth:`over_budget` at a natural boundary (e.g. each sim step) and
+    stops before firing the next batch of calls.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_cost_usd: float | None = None) -> None:
         self.records: list[CallRecord] = []
+        # Hard cost ceiling in USD, or None (the default) for no ceiling, so
+        # existing runs are unchanged. See over_budget() for how it's used.
+        self.max_cost_usd = max_cost_usd
         # Optional streaming hook, installed by RunLog.attach(). Kept private so
         # ordinary callers just see record()/summary().
         self._on_record: OnRecord | None = None
@@ -199,6 +209,23 @@ class UsageLedger:
 
     def total_cost_usd(self) -> float:
         return sum(r.cost_usd for r in self.records)
+
+    def over_budget(self) -> bool:
+        """True once a ceiling is armed and cumulative spend has reached it
+        (issue #183). ``>=`` so the run halts the moment the ceiling is hit;
+        always False when ``max_cost_usd`` is None, so unbudgeted runs (and the
+        free mock brain, which spends $0) are unchanged."""
+        return (
+            self.max_cost_usd is not None and self.total_cost_usd() >= self.max_cost_usd
+        )
+
+    def remaining_budget_usd(self) -> float | None:
+        """USD left before the ceiling (clamped at 0), or None when no ceiling
+        is armed. A convenience for status lines; :meth:`over_budget` is the
+        actual gate."""
+        if self.max_cost_usd is None:
+            return None
+        return max(0.0, self.max_cost_usd - self.total_cost_usd())
 
     def totals_by_actor(self) -> dict[str, float]:
         """Total cost per actor (NPC). Unattributed calls land under a single
