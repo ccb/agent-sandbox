@@ -86,7 +86,14 @@
         "inkwell",
         "book_red",
         "student_desk_open",
-        "wall_set_silver"
+        "wall_set_silver",
+        "cushion",
+        "fireplace",
+        "sofa_orange_sectional",
+        "basket_fruit",
+        "food_sausage",
+        "food_ham",
+        "dining_table"
       ],
       "notes": {}
     }

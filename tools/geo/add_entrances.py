@@ -116,6 +116,15 @@ UNNAMED = [
 WILLIAMS = "Williams Hall"
 WILLIAMS_DOOR_X = (40, 41)
 
+# Extra entrances to open beyond the one(s) path-proximity finds, keyed by
+# building name -> list of door-cell sets (each set is one opening in the
+# perimeter wall). Use this to add an entrance on a side no campus path reaches.
+FORCED_DOORS = {
+    # A north-side entrance at the top-left of the (combined) Sweeten Alumni
+    # Building, mirroring the auto-placed east door at the top-right.
+    "Sweeten Alumni Building": [{(15, 97), (16, 97), (17, 97)}],
+}
+
 
 # --------------------------------------------------------------------------- #
 # Flat CSV maze layers: one ", "-joined row of width*height cell ids (the format
@@ -714,6 +723,7 @@ def main():
                         else {min(perimeter)}
                     )
                 ]
+        doors = doors + FORCED_DOORS.get(name, [])
         door_cells = set().union(*doors)
 
         # Collision: hollow the inside, keep the ring a wall, open every door.
