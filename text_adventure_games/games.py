@@ -116,6 +116,11 @@ class Game:
 
         # Event log (issue #6): append-only record of what happened each round
         self.events = []
+        # Index into `events` marking the start of the current round (set by
+        # do_command / run_simultaneous_round before the player acts). Lets a
+        # react-phase trigger ask "what happened *this round*" without relying on
+        # the turn counter, which increments mid-round (see disturbances_this_round).
+        self._round_event_start = 0
 
         # Triggers (issue #6): rules fired in the post-round react phase
         self.triggers = []
@@ -218,11 +223,29 @@ class Game:
 
             return run_simultaneous_round(self, command)
 
+        # A comma-separated list is a sequence: run each sub-command as its own
+        # full turn, so NPC turns and the react phase (triggers) fire *between*
+        # them -- behaving exactly as if the commands were typed one per line. A
+        # trigger keyed to a state you only pass through mid-sequence (e.g.
+        # visiting a room) still fires. Empty segments (a trailing/doubled comma)
+        # are skipped; a game-ending sub-command stops the rest.
+        if "," in command:
+            results = []
+            for part in command.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                if self.is_game_over():
+                    break
+                results.append(self.do_command(part))
+            return all(results) if results else False
+
         # The player is the subject of any command entered here, so pass them as
         # the explicit actor. This keeps the event log correct even when the
         # command names another character (e.g. "attack troll") — without it the
         # parser falls back to scanning the command for a name and would mis-log
         # the event under the named target instead of the player.
+        self._round_event_start = len(self.events)  # this command begins a round
         success = self.parser.parse_command(command, actor=self.player)
         if success:
             self.end_turn()
@@ -255,11 +278,200 @@ class Game:
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
 
+    def emit_sound(self, location, radius, description):
+        """Emit an ambient noise at *location* -- a sound that no actor's command
+        produced (a slamming door, a wailing baby, distant thunder).
+
+        Logs a ``EventKind.SOUND`` event whose payload matches a noisy action's
+        (``location``/``heard_radius``/``sound``), so perception and startle
+        reactions treat it exactly like the sound of an action: it is heard in its
+        origin room and carries ``radius`` hops outward. The source owns its
+        volume -- the door declares "I am loud," not whatever reacts to it.
+
+        ``radius`` is the number of room-hops the sound carries beyond its origin
+        (>= 1 for a noise meant to be heard). A player within earshot but in
+        another room overhears it narrated, mirroring a loud action."""
+        loc = location if hasattr(location, "name") else self.locations.get(location)
+        loc_name = getattr(loc, "name", location)
+        payload = {
+            "location": loc_name,
+            "dest": None,
+            "dir": None,
+            "heard_radius": radius,
+            "sound": description,
+        }
+        self.log_event(None, EventKind.SOUND, description, payload=payload)
+        # Let a player in earshot but elsewhere overhear it (same courtesy the
+        # parser extends to a loud action; the source room narrates it itself).
+        player = getattr(self, "player", None)
+        if radius > 0 and loc_name and player is not None and player.location is not None:
+            heard = self.audible_rooms(loc_name, radius)
+            if player.location.name in heard:
+                direction = heard[player.location.name]
+                where = f"the {direction}" if direction else "somewhere nearby"
+                self.parser.ok(f"From {where} you hear {description}.")
+
+    def disturbances_this_round(self, location_name):
+        """``(actor_name, action_name)`` for every action taken at
+        ``location_name`` during the current round (since the player's command
+        began this turn).
+
+        This is the multi-agent-safe way to ask "what just happened here." It
+        reads the round's logged events rather than the single global
+        ``parser.last_action`` -- so it sees *every* actor's move, not merely
+        whoever acted last, and keeps working once turns become per-agent (#25)."""
+        return [
+            (e.actor, e.action)
+            for e in self.events[self._round_event_start :]
+            if (e.payload or {}).get("location") == location_name
+        ]
+
+    def sounds_audible_at(self, location, exclude=None):
+        """The sounds heard at *location* this round, as a list of
+        ``{"description", "direction", "origin"}`` dicts.
+
+        A "sound" is any event with ``heard_radius > 0`` -- a noisy action or an
+        ``emit_sound`` ambient noise. It is audible in its origin room
+        (``direction`` None) and ``radius`` hops outward (``direction`` = the way
+        back toward the source, from :meth:`audible_rooms`). This is the
+        multi-agent-safe stimulus a startle reaction reads: "is there any sound
+        where I'm standing?" -- near or far, by the same hearing machinery
+        perception uses. ``exclude`` (an actor name) drops a thing's own sounds so
+        it never startles at itself."""
+        loc_name = getattr(location, "name", location)
+        sounds = []
+        for e in self.events[self._round_event_start :]:
+            payload = e.payload or {}
+            radius = payload.get("heard_radius") or 0
+            if radius <= 0:
+                continue
+            if exclude is not None and e.actor == exclude:
+                continue
+            origin = payload.get("location")
+            if not origin:
+                continue
+            description = payload.get("sound") or "a commotion"
+            if origin == loc_name:
+                sounds.append(
+                    {"description": description, "direction": None, "origin": origin}
+                )
+            else:
+                reach = self.audible_rooms(origin, radius)
+                if loc_name in reach:
+                    sounds.append(
+                        {
+                            "description": description,
+                            "direction": reach[loc_name],
+                            "origin": origin,
+                        }
+                    )
+        return sounds
+
+    def entered_this_round(self, thing, location):
+        """True if *thing* moved *into* *location* during the current round.
+
+        Reads the round's movement events (a successful move logs origin in
+        ``payload["location"]`` and destination in ``payload["dest"]``), so it is
+        multi-agent-safe and sees arrivals by any actor. This is the stimulus a
+        :class:`~text_adventure_games.reactions.Reaction` keys on when it should
+        fire the moment a particular creature is driven into a room -- e.g. the
+        poacher's countdown starting when the doe is cornered."""
+        thing_name = getattr(thing, "name", thing)
+        loc_name = getattr(location, "name", location)
+        for e in self.events[self._round_event_start :]:
+            if e.actor != thing_name:
+                continue
+            payload = e.payload or {}
+            if payload.get("dest") == loc_name and payload.get("location") != loc_name:
+                return True
+        return False
+
+    def add_disturbance_trigger(
+        self,
+        location,
+        reaction,
+        *,
+        loud=None,
+        safe=None,
+        extra=None,
+        present=None,
+        exclude=None,
+        name=None,
+    ):
+        """Register a trigger that fires when something disturbs ``location``
+        this round, calling ``reaction(game, cause)``.
+
+        A disturbance is, in order: whatever ``extra(game)`` reports -- a
+        scene-specific noise such as a slamming door or a wailing baby, returned
+        as a cause phrase (or None); or a *loud* action taken at the location by
+        a present actor (its name in ``loud``); or -- if ``safe`` is given
+        instead of ``loud`` -- any action there NOT in ``safe`` (the "anything
+        but X" framing a standoff uses). ``present(game)`` optionally gates the
+        whole thing on the threat still being active; ``exclude`` names an actor
+        whose own actions don't count.
+
+        Multi-agent-safe: it inspects the round's events (disturbances_this_round),
+        never ``parser.last_action``."""
+        loc_name = getattr(location, "name", location)
+
+        def _cause(g):
+            if extra is not None:
+                reported = extra(g)
+                if reported:
+                    return reported
+            for actor, act in g.disturbances_this_round(loc_name):
+                if actor == exclude:
+                    continue
+                disturbing = (
+                    act in loud
+                    if loud is not None
+                    else (safe is not None and act not in safe)
+                )
+                if disturbing:
+                    return (
+                        "your sudden racket"
+                        if actor == g.player.name
+                        else f"the {actor}'s racket"
+                    )
+            return None
+
+        self.add_trigger(
+            name or f"disturbance:{loc_name}",
+            lambda g: (present is None or present(g)) and _cause(g) is not None,
+            lambda g: reaction(g, _cause(g)),
+            repeatable=True,
+        )
+
     def add_trigger(self, name, condition, action, repeatable=False):
         """Register a Trigger evaluated in the post-round react phase (issue #6)."""
         trigger = Trigger(name, condition, action, repeatable)
         self.triggers.append(trigger)
         return trigger
+
+    def add_reaction(self, thing, reaction):
+        """Attach a :class:`~text_adventure_games.reactions.Reaction` to *thing*
+        and register it for the react phase.
+
+        Sets the reaction's ``owner`` and ``game``, appends it to
+        ``thing.reactions``, and wires it into the trigger driver so it is
+        evaluated each round after every actor has moved: the reaction's
+        ``check_preconditions`` becomes the trigger condition (it stashes
+        ``cause``) and its ``apply_effects`` the trigger action.
+        ``Reaction.REPEATABLE`` selects one-shot (the default -- flee/wake once)
+        vs. re-arming-every-round semantics.
+
+        Runtime-only, like ``behavior``: re-attach reactions in ``build_game``;
+        they are never serialized."""
+        reaction.owner = thing
+        reaction.game = self
+        thing.reactions.append(reaction)
+        self.add_trigger(
+            reaction.name,
+            lambda g, r=reaction: r.check_preconditions(),
+            lambda g, r=reaction: r.apply_effects(),
+            repeatable=reaction.REPEATABLE,
+        )
+        return reaction
 
     def add_recipe(self, recipe):
         """Register a crafting Recipe (see crafting.py). The Craft action and the
@@ -768,6 +980,40 @@ class Game:
             frontier = nxt
             if not frontier:
                 break  # radius exceeds the map; nothing more to reach
+        return result
+
+    def audible_rooms(self, origin, radius) -> dict:
+        """``{room_name: direction_back_toward_origin}`` for rooms within
+        ``radius`` hops of ``origin`` (a Location or its name), excluding the
+        origin itself (issue #80 hearing).
+
+        The hearing counterpart to :meth:`perceivable_locations`: a loud event's
+        sound reaches these rooms, and each value is the exit *in that room* that
+        points back toward the source -- so a listener can be told which way it
+        came from. ``radius <= 0`` reaches nowhere (the sound stays in its room).
+        """
+        loc = origin if hasattr(origin, "connections") else self.locations.get(origin)
+        if loc is None or radius <= 0:
+            return {}
+        result: dict = {}
+        seen = {id(loc)}
+        frontier = [loc]
+        for _ in range(radius):
+            nxt = []
+            for room in frontier:
+                for neighbor in room.connections.values():
+                    if id(neighbor) in seen:
+                        continue
+                    seen.add(id(neighbor))
+                    # the exit in `neighbor` that leads back toward the source
+                    back = next(
+                        (d for d, r in neighbor.connections.items() if r is room), None
+                    )
+                    result[neighbor.name] = back
+                    nxt.append(neighbor)
+            frontier = nxt
+            if not frontier:
+                break
         return result
 
     def set_parser(self, parser):

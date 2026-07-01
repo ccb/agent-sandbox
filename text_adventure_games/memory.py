@@ -409,26 +409,27 @@ class AgentMemory:
         return self._ingest_events(game, character, [character.location])
 
     def _ingest_events(self, game, character, locations) -> list[MemoryRecord]:
-        """Walk new ``game.events`` and store the ones visible from *locations*.
+        """Walk new ``game.events`` and store the ones this character perceives.
 
-        Walks the event log from :attr:`last_seen_event_index` forward, keeps the
-        events this character could perceive (see :meth:`_perceivable_in`), turns
-        each into one short sentence, and stores it as an observation. The index
-        then advances past everything examined, so a second call with no new
-        events is a no-op (perception is idempotent within a turn). The single
+        Walks the log from :attr:`last_seen_event_index` forward; for each event
+        :meth:`_perceive_event` returns either a ``(sentence, importance)`` pair
+        or ``None`` (not perceived). The index then advances past everything
+        examined, so a second call with no new events is a no-op. The single
         index advance lives here, so no caller can double-count.
         """
         new_events = game.events[self.last_seen_event_index :]
         added: list[MemoryRecord] = []
         for offset, event in enumerate(new_events):
             index = self.last_seen_event_index + offset
-            if not self._perceivable_in(event, game, character, locations):
+            perceived = self._perceive_event(event, game, character, locations)
+            if perceived is None:
                 continue
+            text, importance = perceived
             added.append(
                 self.add_observation(
-                    self._event_to_sentence(event),
+                    text,
                     turn=getattr(game, "turn", 0),
-                    importance=1.0,
+                    importance=importance,
                     actor=event.actor if isinstance(event.actor, str) else None,
                     source_event_ids=[index],
                 )
@@ -436,32 +437,69 @@ class AgentMemory:
         self.last_seen_event_index = len(game.events)
         return added
 
-    def _perceivable_in(self, event, game, character, locations) -> bool:
-        """Visibility rule (docs/design/agent-memory.md §5.A), scoped to a set of
-        rooms. The agent perceives an event when:
+    def _perceive_event(self, event, game, character, sight_rooms):
+        """How *character* perceives *event*: a ``(sentence, importance)`` pair,
+        or ``None`` if it's neither seen nor heard (docs/design/agent-memory.md).
 
-        * its actor is currently in one of the *locations* it can see, or
-        * the event's payload names the agent (it was about them).
-
-        With ``locations == [character.location]`` (the radius-0 default) this is
-        byte-identical to the original co-located rule; a wider vision radius
-        simply passes more rooms in.
-
-        The agent's *own* actions are deliberately skipped here -- they're
-        recorded more richly as success/failure outcomes by the ReAct loop
-        (stage 4), so ingesting them too would just duplicate and double-count
-        importance.
+        Visibility is keyed on *where the action happened* (its origin), not where
+        the actor is now -- so a departure (a GO whose origin you can see) and an
+        actor who acts in your room then moves on are both witnessed; an arrival
+        (its destination in view) still counts too. Failing sight, a *loud* event
+        (``heard_radius`` hops away) is heard, muffled and directional. The
+        agent's own actions are skipped -- the ReAct loop records them as richer
+        outcomes. Legacy events with no origin fall back to the actor's room.
         """
         actor = event.actor
         if actor == self.owner:  # own action -> recorded as an outcome instead
-            return False
-        if self.owner and self.owner in (str(v) for v in event.payload.values()):
-            return True
-        if isinstance(actor, str):
+            return None
+        payload = event.payload or {}
+        if self.owner and self.owner in (str(v) for v in payload.values()):
+            return (self._event_to_sentence(event), 1.0)
+
+        sight_names = {getattr(loc, "name", loc) for loc in sight_rooms}
+        origin = payload.get("location")
+        dest = payload.get("dest")
+
+        # SEEN: the action happened in -- or moved into -- a room in view.
+        seen = False
+        if origin is not None:
+            seen = origin in sight_names or (dest is not None and dest in sight_names)
+        if not seen and origin is None and isinstance(actor, str):
+            # Legacy event (no logged origin): fall back to the actor's room.
             other = game.characters.get(actor)
-            if other is not None and getattr(other, "location", None) in locations:
-                return True
-        return False
+            seen = other is not None and getattr(other, "location", None) in sight_rooms
+        if seen:
+            return (self._render_seen(event, character, origin, dest), 1.0)
+
+        # HEARD: a loud event from beyond sight -- muffled, directional, fainter.
+        radius = int(payload.get("heard_radius") or 0)
+        if radius > 0 and origin is not None and hasattr(game, "audible_rooms"):
+            here = getattr(getattr(character, "location", None), "name", None)
+            heard = game.audible_rooms(origin, radius)
+            if here in heard:
+                return (self._render_heard(event, heard[here]), 0.5)
+        return None
+
+    def _render_seen(self, event, character, origin, dest) -> str:
+        """A sentence for a fully-witnessed event. Movement (origin != dest) reads
+        as a departure or an arrival from the viewer's vantage; anything else
+        falls to :meth:`_event_to_sentence`."""
+        if origin is not None and dest is not None and dest != origin:
+            here = getattr(getattr(character, "location", None), "name", None)
+            direction = (event.payload or {}).get("dir")
+            if here == origin:
+                whither = f" to the {direction}" if direction else f" toward {dest}"
+                return f"{event.actor} left{whither}".strip()
+            if here == dest:
+                return f"{event.actor} arrived from {origin}".strip()
+        return self._event_to_sentence(event)
+
+    @staticmethod
+    def _render_heard(event, direction) -> str:
+        """A muffled, directional line for a sound from out of sight."""
+        where = f"the {direction}" if direction else "somewhere nearby"
+        sound = (event.payload or {}).get("sound") or "a commotion"
+        return f"From {where}: {sound}".strip()
 
     def _perceive_presence(self, character, locations, game) -> list[MemoryRecord]:
         """Notice the agents and objects standing in view, storing the new ones.
