@@ -37,7 +37,7 @@ No third-party dependencies — only the Python stdlib (`zlib` writes the PNGs).
 
 `osm_to_tiled.py` makes a *picture*; `osm_to_ville.py` makes the *world data* the
 generative-agents backend can actually walk. It emits the same `the_ville` matrix
-format that `gen_agents/world_map.py` already loads — collision +
+format that `backend/world_map.py` already loads — collision +
 sector/arena CSVs + block tables — derived from the same OSM features:
 
 ```bash
@@ -56,7 +56,7 @@ Output lands in the tracked `generative-agents/frontend_overrides/static_dirs/as
 (setup.sh rsyncs it into `frontend/`). Then run the existing sim on the real campus:
 
 ```bash
-cd generative-agents && uv run python -m gen_agents.run_upenn   # 3 personas walk Penn
+cd generative-agents && uv run python -m backend.run_upenn   # 3 personas walk Penn
 ```
 
 ## Themes (the tile art)
@@ -155,4 +155,4 @@ tight rectangle that still contains all four bounding streets).
   map data); OSM/Overpass is the open path. See #164 for the licensing rationale.
 - This is a stylized POC: solid-colour placeholder tiles, no building-name
   labels, no mapping yet onto the backend's collision/sector/arena CSVs
-  (`gen_agents/world_map.py`) — those are the natural next steps.
+  (`backend/world_map.py`) — those are the natural next steps.

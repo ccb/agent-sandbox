@@ -20,10 +20,10 @@ Run from ``generative-agents``::
 
 import pytest
 
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.run_simulation import simulate
-from gen_agents.smallville_agents import attach_agents
-from gen_agents.world_map import WorldMap
+from backend.build_world import PERSONAS, build_world
+from backend.run_simulation import simulate
+from backend.smallville_agents import attach_agents
+from backend.world_map import WorldMap
 
 from text_adventure_games.npc import maybe_reflect
 from text_adventure_games.reflection import (

@@ -21,7 +21,7 @@ seed plus record/replay.*
 |-------|--------|-------|
 | **1. Usage capture** — `Usage`, `CallRecord`, `UsageLedger`, `PRICES`, `price()`, `record_call()` | ✅ Shipped (PR #91) | `text_adventure_games/usage.py`; recorded in both `chat()` and `call_tool()` of every adapter in `llm_client.py` |
 | **3. Run artifacts** — `RunLog` JSONL (header / call / summary); `LLM_LOG` + `LLM_LOG_PROMPTS` | ✅ Shipped (PR #91) | `usage.py`; wired via `client_from_env(run_log=...)` and the generative-agents backend |
-| **Per-agent cost report** (build-order stage 7) | ✅ Shipped (PR #91) | `gen_agents/run_simulation.py` (`_print_cost_summary`, via `reporting.py`) |
+| **Per-agent cost report** (build-order stage 7) | ✅ Shipped (PR #91) | `backend/run_simulation.py` (`_print_cost_summary`, via `reporting.py`) |
 | **2. Prompt caching** | ⬜ Not built (out of scope for #73) | seam left: `AnthropicClient` still passes a plain-string `system`; `Usage` carries the cache fields and `price()` already applies the write/read multipliers |
 | **4. Deterministic runs** (seed + `ReplayClient`) | ⬜ Not built (out of scope for #73) | seam left: `CallRecord.prompt_sha256` + `attempt`, and the full transcript under `LLM_LOG_PROMPTS`, are the replay keys/record |
 

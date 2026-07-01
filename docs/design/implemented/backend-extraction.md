@@ -1,17 +1,17 @@
-# Shared `gen_agents` package + simulation config
+# Shared `backend` package + simulation config
 
 **Status:** **Shipped.** `generative-agents/backend/` was extracted to the
-top-level, pip-installed `gen_agents` package, and [PR #100](https://github.com/ccb/agent-sandbox/pull/100)
-(`SimulationConfig`) was folded in (now `gen_agents/sim_config.py`); #100 is closed
+top-level, pip-installed `backend` package, and [PR #100](https://github.com/ccb/agent-sandbox/pull/100)
+(`SimulationConfig`) was folded in (now `backend/sim_config.py`); #100 is closed
 in favor of this. Both frontends (Phaser replay + Godot replay) import the sim by
-the one canonical `gen_agents` path; the `sys.path.insert` hack in the Godot
+the one canonical `backend` path; the `sys.path.insert` hack in the Godot
 generator is gone. The plan below is kept as the historical record. (Originally a
 tracking note blocked on [#166](https://github.com/ccb/agent-sandbox/pull/166),
 which landed first.)
 
 This PR delivered **two** things:
 
-1. **Extract** `generative-agents/backend` into a shared top-level `gen_agents`
+1. **Extract** `generative-agents/backend` into a shared top-level `backend`
    package so both frontends import it by one canonical path.
 2. **Fold in [PR #100](https://github.com/ccb/agent-sandbox/pull/100)
    (`SimulationConfig`).** #100 adds `backend/sim_config.py` — a file that lives
@@ -51,17 +51,17 @@ inside `generative-agents/`.
 
 **Minimal, high-value version:**
 
-1. `git mv generative-agents/backend → gen_agents/` (top-level package).
+1. `git mv generative-agents/backend → backend/` (top-level package).
 2. Add it to the packaged set in the root `pyproject.toml` so it installs
    alongside `text_adventure_games` (no CWD assumptions, no `sys.path.insert`).
 3. Update imports: `generative-agents` tests/runners and
-   `godot-generative-agents/sim/generate_penn_replay.py` → `import gen_agents...`.
+   `godot-generative-agents/sim/generate_penn_replay.py` → `import backend...`.
 4. Update READMEs / `CLAUDE.md` references to the old `backend/` path.
 
 **Fold in #100 (`SimulationConfig`):**
 
 5. Rebase #100 onto the moved tree (or cherry-pick its single `feat` commit), so
-   `sim_config.py` lands as `gen_agents/sim_config.py` with the rest of the package.
+   `sim_config.py` lands as `backend/sim_config.py` with the rest of the package.
    `SimulationConfig` composes the engine's `GameConfig` and every field defaults to
    today's behavior, so this stays behavior-preserving like the move itself.
 6. Close #100 in favor of this PR once its commit is incorporated here.
@@ -78,6 +78,6 @@ cleanup above.
 
 - One canonical import path for the shared sim code; the `sys.path.insert` hack in
   the Godot generator is gone.
-- `SimulationConfig` (from #100) lives in the new package as `gen_agents/sim_config.py`.
+- `SimulationConfig` (from #100) lives in the new package as `backend/sim_config.py`.
 - All 50 generative-agents tests still pass; the_ville sim output unchanged.
 - Both frontends (Phaser replay + Godot replay) still run.

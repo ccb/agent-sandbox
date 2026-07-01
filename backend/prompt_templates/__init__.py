@@ -24,7 +24,7 @@ string is stored straight into the agent's memory/knowledge.
 
 Usage::
 
-    from gen_agents.prompt_templates import render
+    from backend.prompt_templates import render
 
     plan = render("plan_memory", destination="Hobbs Cafe", activity="tending the cafe counter")
     text = render("reflection", verb="travel", location="Hobbs Cafe")
@@ -40,7 +40,7 @@ import prompty
 from prompty.invoker import InvokerFactory
 
 # The .prompty files live alongside this module and are read straight from the
-# source tree at runtime (gen_agents/ is run as `python -m gen_agents.run_simulation`
+# source tree at runtime (backend/ is run as `python -m backend.run_simulation`
 # from generative-agents/, not installed as a wheel), so no package-data is
 # needed -- unlike the engine package, which ships its templates in a wheel.
 _PROMPTS_DIR = Path(__file__).parent

@@ -93,7 +93,7 @@ def write_simulation(
     ``plans`` (``{persona_name: DailyPlan.to_primitive()}``, from
     ``simulate(out_plans=...)``) is each agent's generated daily plan; we write it
     to ``personas/<Name>/daily_plan.json`` so the plan a run used is an inspectable
-    artifact (``gen_agents.compare_plans`` reads it back, no model calls). Returns the
+    artifact (``backend.compare_plans`` reads it back, no model calls). Returns the
     sim folder path.
     """
     sim_dir = os.path.join(storage_root, sim_code)

@@ -3,7 +3,7 @@
 The engine dialogue seam is covered in ``tests/test_conversation.py`` (one level
 up). These cover the *port-side* wiring:
 
-* :func:`~gen_agents.smallville_agents.maybe_converse` makes co-located, settled
+* :func:`~backend.smallville_agents.maybe_converse` makes co-located, settled
   residents talk, writes the dialogue into both memory streams, surfaces it on
   both replay cards as a list of ``[speaker, line]`` pairs, and throttles a pair
   with a cooldown; and
@@ -18,14 +18,14 @@ Run from ``generative-agents``::
 
 import pytest
 
-from gen_agents.build_world import PERSONAS, build_world
-from gen_agents.run_simulation import simulate
-from gen_agents.smallville_agents import (
+from backend.build_world import PERSONAS, build_world
+from backend.run_simulation import simulate
+from backend.smallville_agents import (
     CONVERSATION_COOLDOWN_STEPS,
     attach_agents,
     maybe_converse,
 )
-from gen_agents.world_map import WorldMap
+from backend.world_map import WorldMap
 
 from synthetic_ville import build_synthetic_ville
 

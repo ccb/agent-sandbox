@@ -2,7 +2,7 @@
 name: reflection
 description: >
   A persona's own successful action, recorded as a first-person observation
-  memory (gen_agents/smallville_agents.py, remember_outcome). The command verb
+  memory (backend/smallville_agents.py, remember_outcome). The command verb
   selects the phrasing: arriving somewhere, doing an activity, or a quoted
   fallback for any other command. The memory's importance is chosen in Python
   (it is data, not text), so only the wording lives here.

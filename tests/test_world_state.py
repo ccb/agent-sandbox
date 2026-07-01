@@ -90,6 +90,22 @@ def test_goals_and_properties_export():
     assert troll_state.properties.get("is_dead") is True
 
 
+def test_private_cognition_properties_never_leak():
+    # Issue #185: a character's private cognition must never reach the
+    # omniscient snapshot. knowledge/heard live as their own attributes today,
+    # but a future flag parked in Character.properties would otherwise leak --
+    # the pinned exclude set blocks it while ordinary author flags surface.
+    game, *_, troll = _two_room_game()
+    troll.set_property("knowledge", "the player is hiding in the forest")
+    troll.set_property("heard", "a scream from the north")
+    troll.set_property("is_dead", True)  # an ordinary author flag
+
+    troll_state = next(c for c in world_state(game).characters if c.name == "troll")
+    assert "knowledge" not in troll_state.properties
+    assert "heard" not in troll_state.properties
+    assert troll_state.properties.get("is_dead") is True  # still surfaced
+
+
 def test_clock_absent_then_present():
     game, *_ = _two_room_game()
     assert world_state(game).clock is None  # no time_config -> no clock
