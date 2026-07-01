@@ -16,9 +16,16 @@ def _run(tmp):
     tmap = os.path.join(tmp, "map.tmj")
     shutil.copy2(SRC_MAP, tmap)
     subprocess.run(
-        [sys.executable, os.path.join(HERE, "add_entrances.py"),
-         "--tmj", tmap, "--matrix", mdir],
-        check=True, cwd=HERE,
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
     )
     return mdir, tmap
 
@@ -98,7 +105,9 @@ def test_every_irvine_room_reachable_from_a_door(tmp_path):
                     seen[j] = True
                     q.append((nx, ny))
     for rid in ROOM_IDS:
-        assert str(rid) in reached, f"Irvine room arena {rid} unreachable through the door"
+        assert (
+            str(rid) in reached
+        ), f"Irvine room arena {rid} unreachable through the door"
 
 
 def test_other_buildings_unchanged_regression(tmp_path):
@@ -106,7 +115,9 @@ def test_other_buildings_unchanged_regression(tmp_path):
     rows = _arena_blocks(mdir)
 
     def count(name):
-        return len([r for r in rows if r[2] == name and r[3] not in ("grounds", "lobby")])
+        return len(
+            [r for r in rows if r[2] == name and r[3] not in ("grounds", "lobby")]
+        )
 
     assert count("Van Pelt Library") == 25
     assert count("Fisher Fine Arts Library") == 6
@@ -118,9 +129,16 @@ def test_idempotent(tmp_path):
     a = open(os.path.join(mdir, "maze", "arena_maze.csv")).read()
     c = open(os.path.join(mdir, "maze", "collision_maze.csv")).read()
     subprocess.run(
-        [sys.executable, os.path.join(HERE, "add_entrances.py"),
-         "--tmj", tmap, "--matrix", mdir],
-        check=True, cwd=HERE,
+        [
+            sys.executable,
+            os.path.join(HERE, "add_entrances.py"),
+            "--tmj",
+            tmap,
+            "--matrix",
+            mdir,
+        ],
+        check=True,
+        cwd=HERE,
     )
     assert open(os.path.join(mdir, "maze", "arena_maze.csv")).read() == a
     assert open(os.path.join(mdir, "maze", "collision_maze.csv")).read() == c

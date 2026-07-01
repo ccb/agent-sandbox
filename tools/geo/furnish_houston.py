@@ -324,8 +324,11 @@ def load_sprites(tmj):
     with open(os.path.join(here, "furniture_catalog.json")) as fh:
         cat = json.load(fh)
     file2fg = {t["image"]: t["firstgid"] for t in tmj["tilesets"] if "image" in t}
-    sheet_fg = {s: file2fg[meta["file"]] for s, meta in cat["sheets"].items()
-                if meta.get("file") in file2fg}
+    sheet_fg = {
+        s: file2fg[meta["file"]]
+        for s, meta in cat["sheets"].items()
+        if meta.get("file") in file2fg
+    }
     out = {}
     for name, v in cat["objects"].items():
         if not (isinstance(v, dict) and v.get("sheet") in sheet_fg):
