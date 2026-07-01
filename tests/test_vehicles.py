@@ -111,3 +111,58 @@ def test_on_foot_arrival_is_unchanged():
     player.location = woods
     game.parser.parse_command("east")
     assert _said(cap, "You moved to Field")
+
+
+def test_per_exit_move_verb_overrides_moved():
+    # An exit may name its own arrival verb ("climbs", "falls") in place of the
+    # default "moved" -- "X moved to Y" reads "X climbs to Y" for that exit only.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    woods.move_verbs["east"] = "climbs"  # only this exit; field->west is unset
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "You climbs to Field")
+    assert not _said(cap, "moved to Field")
+    # The default ("moved") for an unset exit is covered by
+    # test_on_foot_arrival_is_unchanged.
+
+
+def test_travel_description_can_be_a_callable():
+    # A travel description may be computed at traversal time -- e.g. text that
+    # depends on game state -- not just a fixed string.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    woods.travel_descriptions["east"] = lambda g: f"You stroll past the {horse.name}."
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "You stroll past the horse.")
+
+
+def test_character_gait_overrides_moved_on_foot():
+    # A condition can set the traveller's gait (a move_verb property): "limps",
+    # "staggers", etc. replace the default "moved" for that character on foot.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    player.set_property("move_verb", "limps")
+    player.location = woods
+    game.parser.parse_command("east")  # ungated, on foot
+    assert _said(cap, "You limps to Field")
+    assert not _said(cap, "moved to Field")
+
+
+def test_exit_verb_beats_character_gait():
+    # The exit's own verb is the specific act and wins over the gait.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    player.set_property("move_verb", "limps")
+    woods.move_verbs["east"] = "climbs"
+    player.location = woods
+    game.parser.parse_command("east")
+    assert _said(cap, "You climbs to Field")
+    assert not _said(cap, "limps")
+
+
+def test_riding_ignores_the_on_foot_gait():
+    # A mounted character shows the riding line, never their on-foot gait.
+    game, field, woods, horse, player, cap = _world(horse_ready=True)
+    player.set_property("move_verb", "limps")
+    game.parser.parse_command("ride horse")
+    game.parser.parse_command("west")
+    assert _said(cap, "rides the horse to Woods")
+    assert not _said(cap, "limps")

@@ -241,3 +241,62 @@ def test_describe_for_omits_affordance_brackets_for_plain_scenery():
     # Statue line should have no brackets at all.
     [line] = [l for l in obs.splitlines() if "statue" in l]
     assert "[" not in line
+
+
+# ----------------------------------------------------------------------
+# Inventory listing: carried, then worn, then wielded
+# ----------------------------------------------------------------------
+
+
+def _inventory_text(game):
+    from text_adventure_games.reporting import CaptureRenderer, Channel
+
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    game.parser.parse_command("inventory")
+    return cap.texts(Channel.NARRATION)[-1]
+
+
+def test_inventory_lists_carried_then_worn_then_wielded():
+    game = _one_char_game()
+    p = game.player
+    for it, wearable, wieldable in [
+        (things.Item("ring", "a plain ring"), False, False),
+        (things.Item("cloak", "a wool cloak"), True, False),
+        (things.Item("sword", "a short sword"), False, True),
+    ]:
+        if wearable:
+            it.set_property(Property.WEARABLE, True)
+        if wieldable:
+            it.set_property(Property.WIELDABLE, True)
+        p.add_to_inventory(it)
+    p.wear(p.inventory["cloak"])
+    p.wield(p.inventory["sword"])
+
+    text = _inventory_text(game)
+    assert "inventory contains:" in text and "a plain ring" in text
+    assert "Wearing:" in text and "a wool cloak" in text
+    assert "Wielding:" in text and "a short sword" in text
+    # Order: carried section, then Wearing, then Wielding.
+    assert text.index("contains:") < text.index("Wearing:") < text.index("Wielding:")
+    # The cloak/sword moved out of inventory, so they don't double-list there.
+    assert text.index("Wearing:") < text.index("a wool cloak")
+
+
+def test_inventory_shows_worn_even_with_empty_hands():
+    game = _one_char_game()
+    cloak = things.Item("cloak", "a wool cloak")
+    cloak.set_property(Property.WEARABLE, True)
+    game.player.add_to_inventory(cloak)
+    game.player.wear(cloak)
+
+    text = _inventory_text(game)
+    assert "is empty." in text  # nothing in hand
+    assert "Wearing:" in text and "a wool cloak" in text
+
+
+def test_inventory_truly_empty():
+    game = _one_char_game()
+    text = _inventory_text(game)
+    assert "is empty." in text
+    assert "Wearing:" not in text and "Wielding:" not in text
