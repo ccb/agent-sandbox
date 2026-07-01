@@ -178,6 +178,22 @@ def _arm_and_reach_canopic(game):
         game.do_command(cmd)
 
 
+def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")            # into the Youth carrying the UNLIT glowstone
+    dark = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "pitch dark" in dark
+    assert "statues" not in dark        # the veil hides the room's contents...
+    assert "exits:" not in dark         # ...and its exits
+    cap2 = _texts(game)
+    game.do_command("light glowstone")  # a light reveals the room
+    game.do_command("look")
+    lit = " ".join(cap2.texts(Channel.NARRATION)).lower()
+    assert "statues" in lit
+    assert "hall of memory" in lit      # exits now visible
+
+
 def test_walking_into_a_dark_hall_is_safe():
     game = _game()
     game.do_command("drop glowstone")  # go dark
@@ -187,11 +203,13 @@ def test_walking_into_a_dark_hall_is_safe():
 
 
 def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
-    game = _game()                      # starts holding the (lit) glowstone
-    game.do_command("north")            # into the Youth WITH light -> the bats stir...
-    assert not game.is_game_over()       # ...a warning first
+    game = _game()                      # starts holding an UNLIT glowstone
+    game.do_command("north")            # into the pitch-dark Youth -- carrying it unlit is safe
+    assert not game.is_game_over()
+    game.do_command("light glowstone")  # raising a light rouses the bats -- a warning first
+    assert not game.is_game_over()
     game.do_command("look")
-    game.do_command("look")             # keep lingering with light -> the swarm takes you
+    game.do_command("look")             # keep the light burning -> the swarm takes you
     assert game.is_game_over() and not game.is_won()
 
 

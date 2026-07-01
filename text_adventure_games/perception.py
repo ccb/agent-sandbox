@@ -65,13 +65,19 @@ class Veil:
 
 
 class Darkness(Veil):
-    """Pitch dark: nothing is seen unless the observer carries a lit light."""
+    """Pitch dark: nothing is seen unless the observer carries a lit light.
+
+    Pass ``blurb`` to give the room its own "can't see" line (e.g. one that hints
+    at what's heard in the dark); otherwise a generic one is used."""
+
+    def __init__(self, blurb: str | None = None):
+        self._blurb = blurb
 
     def sight(self, observer, location) -> Sight:
         return Sight.CLEAR if carries_light(observer) else Sight.NONE
 
     def blurb(self, location) -> str:
-        return "It's pitch dark -- you can see nothing without a light."
+        return self._blurb or "It's pitch dark -- you can see nothing without a light."
 
 
 class Fog(Veil):

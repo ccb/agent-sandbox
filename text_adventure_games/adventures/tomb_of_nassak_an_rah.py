@@ -11,7 +11,7 @@ a world you can walk and read.
     Run:  python -m text_adventure_games.adventures.tomb_of_nassak_an_rah [--walk]
 """
 
-from text_adventure_games import games, things, actions, blocks, reactions
+from text_adventure_games import games, things, actions, blocks, reactions, perception
 from text_adventure_games.enums import Property
 
 
@@ -27,10 +27,12 @@ def _die(game, message):
 # LIGHT (the bats), sustained NOISE (the jackals), SPORES (the chimney), or
 # disturbing the coffin (the Horror) -- and every hazard warns before it kills.
 _QUIET = {"go", "sneak", "look", "examine", "describe", "inventory", "wait",
-          "get", "drop", "put", "talk", "open", "wear"}
-# To the Fungal Horror, even rummaging is a disturbance: only moving and looking
-# are safe (so you can enter, see it, and back out -- but not loot it alive).
-_QUIET_SPHERE = {"go", "sneak", "look", "examine", "describe", "inventory"}
+          "get", "drop", "put", "talk", "open", "wear", "light", "douse"}
+# To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
+# and working your own light are safe (so you can enter, see it, and back out --
+# but not loot it alive).
+_QUIET_SPHERE = {"go", "sneak", "look", "examine", "describe", "inventory",
+                 "light", "douse"}
 
 
 def _is_holding(character, name):
@@ -275,9 +277,11 @@ def build_game():
     )
     youth = things.Location(
         "Hall of Youth",
-        "Sand-scoured walls glow a faint blue. Statues crowd the chamber, depicting "
-        "the birth and boyhood of Nassak An-Rah, swaddled and adored. Something "
-        "rustles, unseen, in the dark of the high ceiling.",
+        # The LIT view -- what you see once a light is raised. Pitch dark until
+        # then: the Darkness veil (set in build_game) supplies the dark blurb.
+        "Your light throws blue across sand-scoured walls; statues of the boy-Autarch "
+        "crowd the chamber, swaddled and adored. Overhead the whole ceiling seethes -- "
+        "thousands of bats, wheeling and dropping toward the light.",
     )
     memory = things.Location(
         "Hall of Memory",
@@ -549,10 +553,19 @@ def build_game():
         "a lone scavenger",
         "I comb the Blue Ruins for what the dead no longer need.",
     )
+    # The glowstone is a lantern: dark until you LIGHT it (turn on / light
+    # glowstone), and you can DOUSE it (turn off) to go dark again. FLAMMABLE is
+    # the engine's "can be lit" flag (see actions.Light). It starts UNLIT -- so
+    # carrying it is safe; it's *lighting* it in the Hall of Youth that wakes the
+    # bats.
     glowstone = things.Item(
         "glowstone", "a dim glowstone",
-        "A shard of cold blue glowstone, just bright enough to see by.",
+        "A shard of cold blue glowstone. LIGHT it and it glows bright enough to see "
+        "by; DOUSE it to go dark again.",
     )
+    glowstone.set_property(Property.FLAMMABLE, True)
+    glowstone.add_alias("stone")
+    glowstone.add_alias("lantern")
     player.add_to_inventory(glowstone)
 
     game = TombGame(
@@ -572,24 +585,21 @@ def build_game():
     # has a clear out. You may WALK anywhere freely -- only light, noise, spores, or
     # disturbing the dead are dangerous.
 
-    # The Hall of Youth is pitch dark; the description swaps to "lit" (and the bats
-    # rouse) the moment you carry a light in. Drop the glowstone to go dark.
-    def _youth_desc(g):
-        if _is_holding(g.player, "glowstone"):
-            return ("Sand-scoured walls, lit blue by your glowstone -- statues of the "
-                    "boy-Autarch crowd the chamber. Overhead the whole ceiling seethes: "
-                    "thousands of bats, wheeling and dropping at the light.")
-        return ("Pitch dark -- you can see almost nothing. Leathery wings rustle and "
-                "shift somewhere overhead. (Light, or a loud noise, would wake "
-                "whatever roosts up there. Best go dark and quiet.)")
-    game.add_trigger("youth_dark",
-                     lambda g: youth.description != _youth_desc(g),
-                     lambda g: setattr(youth, "description", _youth_desc(g)),
-                     repeatable=True)
+    # The Hall of Youth is pitch dark: the Darkness veil hides the room (its exits,
+    # its statues) until you raise a light, so a newcomer's instinct is to LIGHT
+    # the glowstone to find the way -- which is exactly what rouses the bats. A
+    # player who knows the layout can still creep through blind. (The perception
+    # veil only gates what's *seen*; movement stays free -- design/perception.md.)
+    youth.obscure(perception.Darkness(
+        blurb="Pitch dark. Leathery wings rustle and shift somewhere overhead -- "
+        "something is roosting up there. Raise a light to see the way... but it may "
+        "wake them. (EXAMINE THE CEILING, or go dark and quiet.)"))
 
-    # The bats: roused by LIGHT or a loud noise in the Hall of Youth.
+    # The bats: roused by carrying a LIT light into the Youth, or by a loud noise
+    # there. Patient -- they warn, then swarm. Douse the light (or fall quiet) and
+    # they settle.
     _hazard(game, youth,
-            danger=lambda g: _is_holding(g.player, "glowstone") or _player_was_loud_in(g, youth, _QUIET),
+            danger=lambda g: perception.carries_light(g.player) or _player_was_loud_in(g, youth, _QUIET),
             warn=lambda n: f"The bats seethe and drop, shrieking, batting at your face -- ({n}/3). Go dark and quiet, NOW.",
             kill="The bats boil down in a screaming cloud and tear you apart in the dark. THE END.")
 
@@ -668,8 +678,8 @@ def build_game():
 # don't enter the lethal Burial Sphere. Visits the seven survivable rooms.
 WALK = [
     "examine tomb", "up", "examine ossified corpse", "down",  # Summit and back (safe)
-    "drop glowstone",                                        # go dark for the bats
-    "north", "examine ceiling", "examine statues",           # -> Hall of Youth (dark, safe)
+    "north", "examine ceiling",                              # -> Hall of Youth (pitch dark; hear the bats)
+    "light glowstone", "examine statues", "douse glowstone",  # light to see (bats stir), then go dark again
     "north", "talk to silas", "examine crystal lattice",     # -> Hall of Memory
     "north", "take prismatic blade", "examine cylinders",    # -> Hall of Warriors
     "east", "examine tank",                                  # -> Hall of Hounds
@@ -681,7 +691,8 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    "drop glowstone",                                               # go dark -- the bats hate light
+    # (The glowstone starts unlit, so it's safe to carry -- never light it in the
+    # Hall of Youth. This route never needs to see in the dark.)
     "sneak east", "take blade", "take igniter", "take boots",       # Warriors: arm
     "sneak east", "take gel",                                       # Hounds: gel
     "sneak up",                                                     # -> Canopic
