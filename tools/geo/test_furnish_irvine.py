@@ -40,7 +40,10 @@ def test_layer_stack_order():
     names = [L.get("name") for L in tmj["layers"]]
     ef = names.index("entrance_floor")
     assert names[ef + 1 : ef + 5] == [
-        "irvine_floor", "irvine_walls", "irvine_rugs", "irvine_furniture",
+        "irvine_floor",
+        "irvine_walls",
+        "irvine_rugs",
+        "irvine_furniture",
     ]
 
 
@@ -70,8 +73,11 @@ def test_furniture_gids_resolve_no_red_x():
     fi.apply(tmj, MATRIX)
     fi.apply_walls(tmj, MATRIX)
     fi.apply_furniture(tmj, MATRIX)
-    ts = [(t["firstgid"], t["firstgid"] + t["tilecount"] - 1)
-          for t in tmj["tilesets"] if "tilecount" in t]
+    ts = [
+        (t["firstgid"], t["firstgid"] + t["tilecount"] - 1)
+        for t in tmj["tilesets"]
+        if "tilecount" in t
+    ]
 
     def covered(g):
         g &= 0x1FFFFFFF
@@ -102,9 +108,13 @@ def test_stamp_refuses_partial_sprite():
 
 def test_idempotent():
     a = _fresh()
-    fi.apply(a, MATRIX); fi.apply_walls(a, MATRIX); fi.apply_furniture(a, MATRIX)
+    fi.apply(a, MATRIX)
+    fi.apply_walls(a, MATRIX)
+    fi.apply_furniture(a, MATRIX)
     b = _fresh()
-    fi.apply(b, MATRIX); fi.apply_walls(b, MATRIX); fi.apply_furniture(b, MATRIX)
+    fi.apply(b, MATRIX)
+    fi.apply_walls(b, MATRIX)
+    fi.apply_furniture(b, MATRIX)
     layers = ("irvine_floor", "irvine_walls", "irvine_rugs", "irvine_furniture")
     da = {n: next(L["data"] for L in a["layers"] if L["name"] == n) for n in layers}
     db = {n: next(L["data"] for L in b["layers"] if L["name"] == n) for n in layers}
