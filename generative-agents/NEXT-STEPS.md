@@ -79,6 +79,9 @@ later phases build on a live model rather than the mock. Low risk, high momentum
   model calls; we need per-agent / per-step token and dollar accounting before scaling
   up. Anchor:
   [`../docs/design/llm-cost-observability.md`](../docs/design/llm-cost-observability.md).
+  Accounting (#73) and the cost ceiling / kill-switch (#183, `--max-cost` /
+  `LLM_MAX_COST` / `observability.max_cost_usd` → `UsageLedger.over_budget()`) are
+  now in place; a live cost dashboard is still open.
 - `[port] S` ✅ **Done (#74) — Make sim parameters configurable.** Start time
   (`--start`, ISO), duration (`--steps`), and `SEC_PER_STEP` (`--sec-per-step`) are now
   CLI flags on `backend/run_simulation.py`; the exporter derives `start_date` from the

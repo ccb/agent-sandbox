@@ -69,6 +69,7 @@ def test_defaults_match_historical_values():
     assert c.render.no_color is None
     assert c.observability.log_path is None  # no usage artifact by default
     assert c.observability.log_prompts is False
+    assert c.observability.max_cost_usd is None  # no cost ceiling by default
 
 
 def test_to_dict_from_dict_round_trip():
@@ -173,14 +174,21 @@ def test_build_llm_client_none_when_unset():
 
 def test_observability_round_trips_through_dict():
     c = GameConfig(
-        observability=ObservabilityConfig(log_path="runs/", log_prompts=True)
+        observability=ObservabilityConfig(
+            log_path="runs/", log_prompts=True, max_cost_usd=2.5
+        )
     )
     d = c.to_dict()
-    assert d["observability"] == {"log_path": "runs/", "log_prompts": True}
+    assert d["observability"] == {
+        "log_path": "runs/",
+        "log_prompts": True,
+        "max_cost_usd": 2.5,
+    }
 
     c2 = GameConfig.from_dict(d)
     assert c2.observability.log_path == "runs/"
     assert c2.observability.log_prompts is True
+    assert c2.observability.max_cost_usd == 2.5
 
 
 def test_from_dict_rejects_unknown_observability_key():
@@ -191,17 +199,21 @@ def test_from_dict_rejects_unknown_observability_key():
 def test_from_env_reads_observability(monkeypatch):
     monkeypatch.setenv("LLM_LOG", "runs/")
     monkeypatch.setenv("LLM_LOG_PROMPTS", "1")
+    monkeypatch.setenv("LLM_MAX_COST", "1.50")
     c = GameConfig.from_env()
     assert c.observability.log_path == "runs/"
     assert c.observability.log_prompts is True
+    assert c.observability.max_cost_usd == pytest.approx(1.50)
 
 
 def test_from_env_no_observability_means_off(monkeypatch):
     monkeypatch.delenv("LLM_LOG", raising=False)
     monkeypatch.delenv("LLM_LOG_PROMPTS", raising=False)
+    monkeypatch.delenv("LLM_MAX_COST", raising=False)
     c = GameConfig.from_env()
     assert c.observability.log_path is None
     assert c.observability.log_prompts is False
+    assert c.observability.max_cost_usd is None
 
 
 def test_build_run_log_none_when_logging_off():

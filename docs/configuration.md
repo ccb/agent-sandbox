@@ -125,7 +125,7 @@ From highest priority to lowest:
 2. **A value set in your `GameConfig`.**
 3. **An environment variable**, for the few knobs that have one: the `LLM_*` vars
    (see below), `OUTPUT_LEVEL` (`render.level`), `NO_COLOR` (`render.no_color`), and
-   `LLM_LOG` / `LLM_LOG_PROMPTS` (`observability.*`). These apply when the matching
+   `LLM_LOG` / `LLM_LOG_PROMPTS` / `LLM_MAX_COST` (`observability.*`). These apply when the matching
    config field is left at its "follow the environment" default (`None`/`False`).
 4. **The built-in default** (the engine's historical value).
 
@@ -166,6 +166,12 @@ setting `log_path` *also* streams a JSONL artifact — a `run` header, one `call
 line per LLM call, and a `summary` footer of per-actor token/cost totals. Set
 `log_prompts: true` to include the full prompts/responses too.
 
+Set `max_cost_usd` to arm a **cost ceiling / kill-switch** (issue #183): a driver
+loop polls `UsageLedger.over_budget()` and stops a runaway live run once cumulative
+spend reaches it. It's checked at the loop's natural boundary (e.g. each sim step),
+so it guards against runaway cost rather than capping to the cent. Off by default,
+and the free mock brain spends `$0` so it never trips.
+
 `GameConfig.build_run_log(...)` turns the section into a `RunLog` (or `None` when
 logging is off), mirroring `build_llm_client()`. A directory `log_path` becomes a
 timestamped `{ts}-{provider}.jsonl` file; a `*.jsonl`/`*.json` path is used as-is:
@@ -181,10 +187,11 @@ with run_log or nullcontext():           # no-op when logging is off
 # summary footer written on exit; ledger.summary() has the totals in memory
 ```
 
-`GameConfig.from_env()` reads `LLM_LOG` (the `log_path`) and `LLM_LOG_PROMPTS`. The
-Smallville backend (`backend/run_simulation.py`) wires this up:
-pass `--config my.yaml` (or set the env vars), and `--llm-log` / `--llm-log-prompts`
-override the config's `observability` section.
+`GameConfig.from_env()` reads `LLM_LOG` (the `log_path`), `LLM_LOG_PROMPTS`, and
+`LLM_MAX_COST` (the `max_cost_usd` ceiling). The Smallville backend
+(`backend/run_simulation.py`) wires this up: pass `--config my.yaml` (or set the env
+vars), and `--llm-log` / `--llm-log-prompts` / `--max-cost` override the config's
+`observability` section.
 
 !!! note "The Smallville `--config` is a `SimulationConfig`, not a bare `GameConfig`"
     The generative-agents sim wraps this `GameConfig` in a `SimulationConfig` (run-time
