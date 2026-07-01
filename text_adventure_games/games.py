@@ -2,7 +2,7 @@ from .things import Location, Character
 from .things.characters import DEFAULT_VISION_R
 from .clock import GameClock
 from .config import GameConfig
-from . import parsing, actions, blocks
+from . import parsing, actions, blocks, perception
 from .enums import EventKind, Property
 from .events import GameEvent
 from .triggers import Trigger, at_turn
@@ -741,19 +741,50 @@ class Game:
         # default for characters never added to a game).
         character.heard_max = self.config.engine.heard_max
 
+    def perceive(self, observer: Character) -> perception.Scene:
+        """Resolve how *observer* perceives their current location -- the single
+        shared perception step behind both :meth:`describe` (the human renderer)
+        and :meth:`describe_for` (the agent renderer), so the two always see the
+        same world (design: docs/design/perception.md).
+
+        Returns a :class:`~text_adventure_games.perception.Scene`: the sight
+        level plus the text to show in place of the room -- the room's own
+        description when it can be seen, a veil's blurb (e.g. "It's pitch dark")
+        when it can't. With no veils and a non-blind observer this resolves to
+        ``Sight.CLEAR`` with the room's own description, so rendering is
+        unchanged -- perception is zero-cost until a game opts in.
+        """
+        loc = observer.location
+        sight, blurb = perception.sight_for(observer, loc)
+        if sight == perception.Sight.NONE:
+            text = blurb
+        elif sight == perception.Sight.DIM:
+            # A game may supply softer text for a half-seen room; else its own.
+            text = getattr(loc, "dim_description", None) or loc.description
+        else:
+            text = loc.description
+        return perception.Scene(sight=sight, description=text)
+
     def describe(self) -> str:
         """
         Describe the current game state by first describing the current
         location, then listing any exits, and then describing any objects
         in the current location.
+
+        Facets are gated by how well the player perceives the room (perception.py):
+        in the dark you get only the "can't see" blurb; in a haze the room and
+        its exits but not its contents; in the clear (the default) everything.
         """
+        scene = self.perceive(self.player)
         description = self.player.location.name.upper() + "\n"
         if self.clock is not None:
             description += f"({self.current_time()})\n"
-        description += self.describe_current_location() + "\n"
-        description += self.describe_exits() + "\n"
-        description += self.describe_items() + "\n"
-        description += self.describe_characters() + "\n"
+        description += scene.description + "\n"
+        if scene.sight >= perception.Sight.DIM:
+            description += self.describe_exits() + "\n"
+        if scene.sight >= perception.Sight.CLEAR:
+            description += self.describe_items() + "\n"
+            description += self.describe_characters() + "\n"
         # self.parser.ok(description)
         return description
 
@@ -857,6 +888,7 @@ class Game:
         Used by NPC behaviors and the ReAct loop to observe their environment.
         """
         loc = character.location
+        scene = self.perceive(character)
         lines = []
 
         def _visible_to(thing) -> bool:
@@ -866,33 +898,39 @@ class Game:
             secret = thing.get_property("secret_topic")
             return not secret or character.knowledge.knows_about(secret)
 
-        # Location
+        # Location -- the room text is what this character perceives (its own
+        # description when seen, a veil's blurb in the dark), and exits/contents
+        # are gated by how well it sees (perception.py). This is the same shared
+        # perceive() the player's view uses, so agent and player never disagree
+        # about what darkness or fog hides.
         lines.append(loc.name.upper())
-        lines.append(loc.description)
+        lines.append(scene.description)
 
-        # Exits
-        if loc.connections:
-            lines.append("Exits:")
-            for direction, dest in loc.connections.items():
-                lines.append(f" * {direction.capitalize()} to {dest.name}")
+        if scene.sight >= perception.Sight.DIM:
+            # Exits
+            if loc.connections:
+                lines.append("Exits:")
+                for direction, dest in loc.connections.items():
+                    lines.append(f" * {direction.capitalize()} to {dest.name}")
 
-        # Items at location (hidden items are revealed only to those who know)
-        visible_items = [it for it in loc.items.values() if _visible_to(it)]
-        if visible_items:
-            lines.append("Items here:")
-            for item in visible_items:
-                lines.append(f" * {_format_item(item)}")
+        if scene.sight >= perception.Sight.CLEAR:
+            # Items at location (hidden items are revealed only to those who know)
+            visible_items = [it for it in loc.items.values() if _visible_to(it)]
+            if visible_items:
+                lines.append("Items here:")
+                for item in visible_items:
+                    lines.append(f" * {_format_item(item)}")
 
-        # Other characters present (hidden ones revealed only to those who know)
-        others = [
-            c
-            for name, c in loc.characters.items()
-            if name != character.name and _visible_to(c)
-        ]
-        if others:
-            lines.append("Characters here:")
-            for c in others:
-                lines.append(f" * {c.name} - {c.description}")
+            # Other characters present (hidden ones revealed only to those who know)
+            others = [
+                c
+                for name, c in loc.characters.items()
+                if name != character.name and _visible_to(c)
+            ]
+            if others:
+                lines.append("Characters here:")
+                for c in others:
+                    lines.append(f" * {c.name} - {c.description}")
 
         # Inventory
         if character.inventory:
