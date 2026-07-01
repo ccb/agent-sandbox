@@ -118,11 +118,29 @@ class Go(base.Action):
                 place=to_loc.name,
             )
         else:
-            description = "{character_name} moved to {place}".format(
-                character_name=self.character.name.capitalize(), place=to_loc.name
+            # On foot, the verb comes from (most specific first): the exit's own
+            # verb ("climbs", "falls"), then the traveller's condition/gait
+            # ("limps", "staggers"; a move_verb property set on the character),
+            # then the default "moved". (Riding is handled above, so a mounted
+            # character never shows their on-foot gait.)
+            verb = (
+                self.location.move_verbs.get(self.direction)
+                or self.character.get_property("move_verb")
+                or "moved"
             )
-        if self.location.travel_descriptions[self.direction]:
-            description += " " + self.location.travel_descriptions[self.direction]
+            description = "{character_name} {verb} to {place}".format(
+                character_name=self.character.name.capitalize(),
+                verb=verb,
+                place=to_loc.name,
+            )
+        # A travel description may be a plain string or a callable(game) -> str
+        # computed at traversal time (e.g. an outcome that depends on what the
+        # traveller is wearing). Either is appended after the arrival line.
+        travel = self.location.travel_descriptions[self.direction]
+        if callable(travel):
+            travel = travel(self.game)
+        if travel:
+            description += " " + travel
         self.parser.ok(description)
 
         # Some locations finish game

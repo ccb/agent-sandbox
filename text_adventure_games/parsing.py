@@ -92,10 +92,6 @@ class Parser:
         # Set by fail() so the ReAct loop can read the reason without side-effects
         self.last_fail_message: str | None = None
 
-        # The most recent action that passed its preconditions; the NPC turn
-        # loop reads its get_duration() to charge the per-turn budget (issue #24).
-        self.last_action = None
-
         # How output is shown. The engine builds Messages (by Channel) and hands
         # them to a Renderer; the default picks a colored terminal renderer when
         # one fits, else a plain fallback. Web mode passes a WebRenderer.
@@ -128,7 +124,12 @@ class Parser:
         )
 
     def ok(self, description: str):
-        """Report a successful action's world narration."""
+        """Report a successful action's world narration. The first character is
+        capitalized so narration always opens with a capital, even when it
+        starts with a lower-cased name ("princess got ..." -> "Princess got
+        ...")."""
+        if description:
+            description = description[0].upper() + description[1:]
         self._emit(Channel.NARRATION, description)
         self.add_description_to_history(description)
 
@@ -475,25 +476,80 @@ class Parser:
                 return self.parse_command(forwarded, actor=actor)
             self.fail("I'm not sure what you want to do.")
             return False
+        # Resolve the acting character and where they stand *before* the action
+        # runs. A GO moves them, but the action belongs (in the event log) to the
+        # place it was taken -- so "flee south" counts as a disturbance of the
+        # room you fled, not the one you arrived in. The actor is threaded in
+        # explicitly (the player via Game.do_command, an NPC via its behavior),
+        # falling back to scanning the command only when none was supplied.
+        acting = actor if actor is not None else self.get_character(command)
+        origin_loc = acting.location if acting is not None else None
+        origin = origin_loc.name if origin_loc is not None else None
         action()
         success = getattr(action, "_preconditions_passed", False)
         if success:
-            # Remember the action that just ran so the NPC turn loop can read
-            # its in-game duration when charging the per-turn budget (issue #24).
-            self.last_action = action
-            # Attribute the event to whoever is acting. The actor is threaded in
-            # explicitly — the player via Game.do_command, an NPC via its
-            # behavior — so we record the true subject of the command. Only fall
-            # back to scanning the command for a name when no actor was supplied,
-            # which keeps the field correct even for player commands that name
-            # another character (e.g. "attack troll").
+            # Remember the action that just ran *on the actor* -- not a single
+            # global field -- so the NPC turn loop can read its in-game duration
+            # when charging the per-turn budget (issue #24), correctly per
+            # character even when several act in one round.
+            if acting is not None:
+                acting.last_action = action
+            # Where it ended up, and (for a move) which way -- so perception can
+            # tell a departure from an arrival and name the direction.
+            dest_loc = acting.location if acting is not None else None
+            dest = dest_loc.name if dest_loc is not None else None
+            direction = None
+            if origin_loc is not None and dest_loc is not None and dest_loc is not origin_loc:
+                direction = next(
+                    (d for d, r in origin_loc.connections.items() if r is dest_loc),
+                    None,
+                )
+            radius = action.audible_radius() if hasattr(action, "audible_radius") else 0
+            # Log it with its actor, origin/destination, and how far the sound
+            # carries. Disturbance triggers (Game.disturbances_this_round) and
+            # agent perception read these per-round events rather than the single
+            # global last_action, so they see every actor's move and survive a
+            # switch to per-agent turns (#25).
             #
             # (An ActionSequence re-enters parse_command per sub-command, so one
             # comma-separated command logs each sub-command plus the wrapping
             # "sequence" action — a future event-log consumer (#9) should expect that.)
-            event_actor = actor if actor is not None else self.get_character(command)
-            self.game.log_event(event_actor.name, action.action_name(), command)
+            payload = {
+                "location": origin,
+                "dest": dest,
+                "dir": direction,
+                "heard_radius": radius,
+            }
+            if radius > 0:
+                # How the sound reads to someone who only hears it (no sight).
+                payload["sound"] = action.sound_description()
+            self.game.log_event(
+                acting.name if acting is not None else None,
+                action.action_name(),
+                command,
+                payload=payload,
+            )
+            # A loud action carries to nearby rooms -- let the player hear it
+            # from afar if they're within earshot but not where it happened.
+            if radius > 0:
+                self._player_overhears(action, origin, radius)
         return success
+
+    def _player_overhears(self, action, origin, radius):
+        """Narrate a loud action to the player when they're within its sound
+        radius but in a different room (so they can't see it)."""
+        game = self.game
+        player = getattr(game, "player", None)
+        if player is None or player.location is None or origin is None:
+            return
+        if not hasattr(game, "audible_rooms"):
+            return
+        heard = game.audible_rooms(origin, radius)
+        if player.location.name not in heard:
+            return  # at the source (sees it) or out of earshot
+        direction = heard[player.location.name]
+        where = f"the {direction}" if direction else "somewhere nearby"
+        self.ok(f"From {where} you hear {action.sound_description()}.")
 
     def get_character(
         self,
@@ -540,15 +596,19 @@ class Parser:
         command. If so, return Item, else return None.
         """
         matched_items = {}
+        match_len = {}  # how specific each match was -- length of the matched token
         for item_name in item_dict:
             item = item_dict[item_name]
             # the item matches if its name -- or any registered alias ("cot" for
             # "army cot") -- appears in the command, or it matches the hint
             names = [item_name, *getattr(item, "aliases", ())]
-            if any(n in command for n in names):
+            hits = [n for n in names if n in command]
+            if hits:
                 matched_items[item_name] = item
+                match_len[item_name] = max(len(n) for n in hits)
             if hint and (item_name in hint or hint in item_name):
                 matched_items[item_name] = item
+                match_len.setdefault(item_name, 0)
 
         if len(matched_items) == 0:
             return None
@@ -564,9 +624,11 @@ class Parser:
                 if hint in item_name or item_name in hint:
                     item = matched_items[item_name]
                     return item
-        for item_name in matched_items:
-            item = matched_items[item_name]
-            return item
+        # Otherwise prefer the most specific match: the longest name/alias that
+        # appeared in the command, so "rancher keys" beats "keys" and "army cot"
+        # beats "cot" rather than returning whichever was registered first.
+        best_name = max(matched_items, key=lambda n: match_len.get(n, 0))
+        return matched_items[best_name]
 
     def match_topic(self, command: str, topics: dict[str, str]) -> str | None:
         """Pick the conversation topic a command refers to, or None.
@@ -625,6 +687,14 @@ class Parser:
             items_in_scope[item_name] = item
         for item_name in character.inventory:
             items_in_scope[item_name] = character.inventory[item_name]
+        # What a character has on -- worn or wielded -- is in scope too: you can
+        # EXAMINE the gown you're wearing or the sword in your hand, unlock a
+        # door with a sheathed key, and so on. (GET/DROP/GIVE build their own
+        # scopes and guard the worn/wielded cases, so they're unaffected.)
+        for item_name in character.worn:
+            items_in_scope[item_name] = character.worn[item_name]
+        for item_name in character.wielded:
+            items_in_scope[item_name] = character.wielded[item_name]
         # Items inside an OPEN holder that is itself in scope are reachable too
         # -- a blanket in a boat, a candle on a table, an item in a carried bag
         # -- so they can be examined/referenced by name. One level deep.

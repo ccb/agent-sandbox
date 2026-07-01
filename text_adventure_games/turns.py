@@ -239,6 +239,7 @@ def run_simultaneous_round(game, player_command: str) -> bool:
     the accepted price of deciding against the turn-start snapshot.)
     """
     # 1. gather — before the player's command touches the world.
+    game._round_event_start = len(game.events)  # this round begins here
     intents = gather_intents(game)
 
     # 2. resolve — the player goes first (explicit actor, as in do_command).

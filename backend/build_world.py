@@ -123,7 +123,7 @@ _normalize_personas(_ALL_PERSONAS)
 # perceive and remember each other, while Wolfgang heads to the park alone.
 MAX_ACTIVE_PERSONAS = 5
 # The full normalized roster, exposed so the runner can honor a configured
-# ``num_agents`` (SimulationConfig) by slicing a different number of residents.
+# ``num_agents`` (SimulationConfig.smallville) by slicing a different number of residents.
 ALL_PERSONAS = _ALL_PERSONAS
 PERSONAS = _ALL_PERSONAS[:MAX_ACTIVE_PERSONAS]
 

@@ -175,6 +175,13 @@ class Break(base.Action):
     ACTION_DESCRIPTION = "Break something"
     ACTION_ALIASES = ["smash"]
 
+    # A crash carries two rooms (issue #80 hearing): loud enough to set off a
+    # startle reaction well beyond the room it happens in.
+    AUDIBLE_RADIUS = 2
+
+    def sound_description(self) -> str:
+        return "the crash of something breaking"
+
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to break something")
@@ -262,13 +269,20 @@ class Inventory(base.Action):
         return True
 
     def apply_effects(self):
-        if len(self.character.inventory) == 0:
-            description = f"{self.character.name}'s inventory is empty."
-            self.parser.ok(description)
-        else:
-            description = f"{self.character.name}'s inventory contains:\n"
-            for item_name in self.character.inventory:
-                item = self.character.inventory[item_name]
+        char = self.character
+        # Nothing carried, worn, or wielded -- a single empty line.
+        if not char.inventory and not char.worn and not char.wielded:
+            self.parser.ok(f"{char.name}'s inventory is empty.")
+            return
+
+        # Three sections in order: what's carried, then worn, then wielded.
+        # Only non-empty sections are shown (but "carried" always appears, as
+        # "empty", when something is worn/wielded but nothing is in hand).
+        sections = []
+        if char.inventory:
+            carried = f"{char.name}'s inventory contains:\n"
+            for item_name in char.inventory:
+                item = char.inventory[item_name]
                 if item.get_property("is_container"):
                     if item.capacity is None:
                         gauge = "({count})".format(count=item.current_count())
@@ -276,19 +290,35 @@ class Inventory(base.Action):
                         gauge = "({count}/{cap})".format(
                             count=item.current_count(), cap=item.capacity
                         )
-                    description += "* {item} {gauge}\n".format(
+                    carried += "* {item} {gauge}\n".format(
                         item=item.description, gauge=gauge
                     )
                     for inner_name in item.contents:
                         inner = item.contents[inner_name]
-                        description += "    - {item}{qty}\n".format(
+                        carried += "    - {item}{qty}\n".format(
                             item=inner.description, qty=_qty_suffix(inner)
                         )
                 else:
-                    description += "* {item}{qty}\n".format(
+                    carried += "* {item}{qty}\n".format(
                         item=item.description, qty=_qty_suffix(item)
                     )
-            self.parser.ok(description)
+            sections.append(carried.rstrip("\n"))
+        else:
+            sections.append(f"{char.name}'s inventory is empty.")
+
+        def _listing(title, slot):
+            body = "".join(
+                "* {item}{qty}\n".format(item=it.description, qty=_qty_suffix(it))
+                for it in slot.values()
+            )
+            return f"{title}\n{body}".rstrip("\n")
+
+        if char.worn:
+            sections.append(_listing("Wearing:", char.worn))
+        if char.wielded:
+            sections.append(_listing("Wielding:", char.wielded))
+
+        self.parser.ok("\n\n".join(sections))
 
 
 class Examine(base.Action):
@@ -357,7 +387,17 @@ class Examine(base.Action):
         """The player wants to examine an item or a character."""
         if self.matched_item:
             base_text = self.matched_item.examine_text or self.matched_item.description
-            self.parser.ok(base_text + self._contents_sentence(self.matched_item))
+            text = base_text + self._contents_sentence(self.matched_item)
+            # A mirror reflects whoever looks into it -- compose the examiner's
+            # live appearance (+ what they're wearing) rather than canned text
+            # that goes stale (e.g. after a haircut). See Character.reflection.
+            if self.matched_item.get_property("is_mirror"):
+                text += " " + self.character.reflection(
+                    include_room=bool(
+                        self.matched_item.get_property("mirror_reflects_room")
+                    )
+                )
+            self.parser.ok(text)
         elif self.matched_character is not None:
             other = self.matched_character
             # Characters may carry an optional richer ``examine_text``; otherwise
