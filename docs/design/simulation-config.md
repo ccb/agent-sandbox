@@ -52,11 +52,20 @@ sim's sections:
 SimulationConfig                      # backend/sim_config.py
 ├── game: GameConfig                  # the engine config, reused as-is (game: section)
 │   └── llm / agent / engine / clock / render / observability
-├── simulation: SimulationRuntimeConfig   # start, steps, sec_per_step, sim_code, num_agents, …
+├── simulation: SimulationRuntimeConfig   # start, steps, sec_per_step, seed (frontend-agnostic)
 ├── retrieval: RetrievalConfig            # recency × relevance × importance scoring
 ├── cognition: CognitionConfig            # perception radius + conversation pacing
+├── smallville: SmallvilleConfig          # Smallville/Phaser-only: sim_code, base_sim, num_agents
 └── embedding: EmbeddingConfig | None     # relevance backend; None = keyword overlap
 ```
+
+Most sections are **frontend-agnostic** — they tune the shared agent engine, so they
+apply whether the sim drives the Smallville/Phaser replay or the UPenn/Godot campus
+replay. A few knobs only one frontend reads live in their **own sub-section** so the
+shared sections stay clean: `smallville` holds the `the_ville`-specific run-directory
+knobs that only `run_simulation` reads (§3.4). There is **no `upenn` section yet** — the
+UPenn/Godot runners don't read `SimulationConfig` at all today, and per the "no dead
+config" rule (§1) a section appears only once a runner actually reads it.
 
 Construction mirrors `GameConfig`: `SimulationConfig()` (all defaults),
 `.from_file(path)` (YAML/JSON), `.from_dict(data)`, `.from_env()`, `.to_dict()`,
@@ -72,18 +81,17 @@ locally** in `sim_config.py` rather than imported from the engine's private
 
 ### 3.1 `simulation` — run-time (`SimulationRuntimeConfig`) — **implemented**
 
-How long the sim runs and how its clock maps to in-game time. These mirror
-`run_simulation`'s CLI flags (#74); the config gives them a declarative home. An
-explicit CLI flag still wins (see §4).
+How long the sim runs and how its clock maps to in-game time. **Frontend-agnostic** —
+any world (the_ville or the_upenn) honors these. They mirror `run_simulation`'s CLI
+flags (#74); the config gives them a declarative home. An explicit CLI flag still wins
+(see §4). The `the_ville`-only run-directory knobs (`sim_code` / `base_sim` /
+`num_agents`) used to live here too but moved to the `smallville` section (§3.4).
 
 | Field | Type | Default | Meaning | Status |
 |---|---|---|---|---|
 | `start` | ISO datetime str | `2023-02-13 08:00:00` | Sim start timestamp; parsed by the runner. `--start`. | implemented |
 | `steps` | int | `1080` | Steps to simulate (1080 × 10s = 3 hours). `--steps`. | implemented |
 | `sec_per_step` | int | `10` | In-game seconds advanced per step. `--sec-per-step`. | implemented |
-| `sim_code` | str | `mock_the_ville_n25` | Names the exported run directory. `--sim-code`. | implemented |
-| `base_sim` | str | `base_the_ville_n25` | Persona-memory source copied into the run. `--base-sim`. | implemented |
-| `num_agents` | int | `5` | How many residents actually run. The full `n25` roster always loads; the runner slices the first N (matches `build_world.MAX_ACTIVE_PERSONAS`). Raise up to 25 to run more of the town. | implemented |
 | `seed` | int \| None | `None` | Global RNG seed for reproducible runs. Carried for forward use; **not yet consumed** (pairs with future record/replay — [llm-cost-observability.md](llm-cost-observability.md) piece 4). | implemented (inert) |
 
 `ville_dir` / `storage` are intentionally **not** in the config — they're
@@ -131,7 +139,29 @@ reproduces today's behavior. A persona may still set its own `vision_r` per-entr
 These only bite with a real brain — perception widens co-presence, and conversation is
 a no-op under the deterministic mock — so the default mock replay stays byte-identical.
 
-### 3.4 `embedding` — relevance backend (`EmbeddingConfig | None`) — **implemented (reused)**
+### 3.4 `smallville` — Smallville/Phaser run-directory knobs (`SmallvilleConfig`) — **implemented**
+
+**Frontend-specific.** These knobs are read **only** by the Smallville/Phaser runner
+(`run_simulation`); they're all `the_ville`-flavored — they name the exported run
+directory and select the base sim whose persona memory is copied into it — so they
+don't belong in the frontend-agnostic `simulation` section. The UPenn/Godot runners
+ignore them entirely (they write a single `penn_replay.json` and load their own cast).
+Defaults reproduce today's behavior, so an unconfigured `SmallvilleConfig()` is a no-op.
+Mirror `run_simulation`'s `--sim-code` / `--base-sim` flags (an explicit flag still wins).
+
+| Field | Type | Default | Meaning | Status |
+|---|---|---|---|---|
+| `sim_code` | str | `mock_the_ville_n25` | Names the exported run directory. `--sim-code`. | implemented |
+| `base_sim` | str | `base_the_ville_n25` | Persona-memory source copied into the run. `--base-sim`. | implemented |
+| `num_agents` | int | `5` | How many residents actually run. The full `n25` roster always loads; the runner slices the first N (matches `build_world.MAX_ACTIVE_PERSONAS`). Raise up to 25 to run more of the town. | implemented |
+
+> **Why no `upenn` section?** The UPenn/Godot runners (`run_upenn`,
+> `generate_penn_replay`) don't read `SimulationConfig` yet — they take a `--steps`
+> flag and otherwise hardcode their world. Per the "no dead config" rule (§1), a
+> `upenn: UPennCampusConfig` section appears only once that runner actually reads one;
+> until then there are no UPenn-exclusive config variables to home.
+
+### 3.5 `embedding` — relevance backend (`EmbeddingConfig | None`) — **implemented (reused)**
 
 The embedding backend that scores the *relevance* term. This **reuses the engine's
 existing** [`EmbeddingConfig`](../../text_adventure_games/embedding_client.py)
@@ -153,7 +183,7 @@ installed), so the default run stays free, offline, and CI-safe. The determinist
 mock brain ignores the retrieved block, so the exported replay is **byte-identical**
 regardless of the relevance mode — `backend/compare_retrieval.py` shows the diff.
 
-### 3.5 Inherited from `GameConfig` (the `game:` section) — **not re-declared**
+### 3.6 Inherited from `GameConfig` (the `game:` section) — **not re-declared**
 
 These already exist and are documented in [`configuration.md`](../configuration.md);
 `SimulationConfig` reuses them through its embedded `game` field. Listed only for
@@ -168,14 +198,14 @@ completeness.
 | `render` | terminal output (`level`, `width`, `no_color`) |
 | `observability` | LLM cost/usage logging (`log_path`, `log_prompts`) |
 
-### 3.6 Deferred sections (land with their phase)
+### 3.7 Deferred sections (land with their phase)
 
 Not in the implemented dataclass — adding fields nothing reads would be dead config.
 Kept here as a forward-looking registry.
 
 | Future section | Knobs | Lands with |
 |---|---|---|
-| `memory` | memory-stream eviction / retention | when stream management lands. *(The reflection-importance threshold already lives on `GameConfig.agent.reflection_threshold` — see §3.5.)* |
+| `memory` | memory-stream eviction / retention | when stream management lands. *(The reflection-importance threshold already lives on `GameConfig.agent.reflection_threshold` — see §3.6.)* |
 | `planning` | daily-plan granularity, replan triggers | only generated by a live planner today (#83); a tuning section lands if/when the mock path needs it |
 | `persona` | per-agent cognition *overrides* (`recency_w`, `relevance_w`, `importance_w`, `recency_decay=0.995`, per-agent `vision_r`, …) merged from each `scratch.json` | when per-persona cognition is wired (NEXT-STEPS Phase C/D) |
 
@@ -192,10 +222,10 @@ Highest priority to lowest, as implemented in `run_simulation.main()`:
    defaults). For embedding, also `EMBEDDING_PROVIDER` (which `from_env` folds into
    the config) ranks here, ahead of a config-file `embedding:` section.
 3. **The built-in default** (today's value, on `SimulationRuntimeConfig` /
-   `RetrievalConfig`).
+   `RetrievalConfig` / `SmallvilleConfig`).
 
 Per-persona overrides from `scratch.json` (item between 1 and 2 in the original
-scaffold) are **future work** — see §3.5.
+scaffold) are **future work** — see §3.7.
 
 ## 5. Usage
 
@@ -210,6 +240,9 @@ simulation:                 # run-time knobs
 retrieval:                  # memory-retrieval scoring
   max_records: 4
   alpha_relevance: 2.0      # favor relevance over recency/importance
+smallville:                 # Smallville/Phaser-only run-directory knobs
+  sim_code: my_demo_run     # names the exported run directory
+  num_agents: 10            # run 10 of the n25 roster instead of the default 5
 embedding:                  # optional; omit for keyword-overlap relevance
   provider: mock
 ```

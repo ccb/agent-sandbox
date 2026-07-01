@@ -111,11 +111,13 @@ def test_parse_decision_clamps_absurd_duration():
 # ----------------------------------------------------------------------
 
 
-def test_parser_records_last_action_on_success(field_game):
+def test_actor_records_last_action_on_success(field_game):
+    # The executed action is remembered on the acting character (per-actor, not
+    # a single global parser field) so its duration can be charged to the budget.
     player = field_game.player
     assert field_game.parser.parse_command("go north", actor=player) is True
-    assert isinstance(field_game.parser.last_action, Go)
-    assert field_game.parser.last_action.get_duration() is None
+    assert isinstance(player.last_action, Go)
+    assert player.last_action.get_duration() is None
 
 
 # ----------------------------------------------------------------------

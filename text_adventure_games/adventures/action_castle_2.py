@@ -21,7 +21,7 @@ Run the walkthrough:  python action_castle_2.py --walk        (champion ending)
                       python action_castle_2.py --walk-marry  (marriage ending)
 """
 
-from text_adventure_games import games, things, actions, Prompt
+from text_adventure_games import games, things, actions, reactions, Prompt
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -245,6 +245,46 @@ def _wake_and_challenge(game, dragon, roar):
             speaker="dragon",
         )
     )
+
+
+class DragonLingers(reactions.Countdown):
+    """The sleeping dragon's menace is *presence*, not noise (Parsely: "any move
+    besides exiting the room will wake the dragon"). Stepping into the trove starts
+    a one-turn clock: it stirs as you arrive, and if you're still there next turn
+    it rears into the wits/steel challenge. Leave -- or never dawdle -- and you're
+    safe.
+
+    A thing-owned Countdown like the poacher and demon; its clock simply starts on
+    *your* arrival rather than a fleeing creature's, and "leaving" is the cancel.
+    Re-arming (``REPEATABLE``) so a later return is risky too. Deliberately rousing
+    it with WAKE DRAGON, or robbing the hoard, are handled by their own
+    action/trigger."""
+
+    DELAY = 1
+    REPEATABLE = True  # re-arm each time you step back in
+
+    def stimulus(self) -> bool:
+        # Arm the moment you enter the trove, while the dragon still sleeps.
+        return not self.owner.get_property("awake") and self.game.entered_this_round(
+            self.game.player, self.owner.location
+        )
+
+    def warning(self) -> str:
+        return "The dragon stirs in its sleep, one claw twitching. Best not linger."
+
+    def cancelled(self) -> bool:
+        # Safe if you've stepped back out (or it's already roused another way).
+        return bool(self.owner.get_property("awake")) or (
+            self.game.player.location is not self.owner.location
+        )
+
+    def consequence(self, game):
+        _wake_and_challenge(
+            game,
+            self.owner,
+            'The dragon wakes, eyes you hungrily and roars, "Another mortal dares '
+            'challenge me? Choose a weapon: wits or steel."',
+        )
 
 
 class WakeDragon(actions.Action):
@@ -1316,37 +1356,10 @@ def build_game() -> ActionCastle2:
     )
 
     # Lingering wakes the dragon (rulebook: "any other move besides exiting the
-    # room will wake the dragon"). One turn of grace: on arrival it merely stirs,
-    # so you can look and still leave safely; a second action while you're still
-    # here rouses it into the wits/steel challenge. (Theft is handled above;
-    # stealing kills you outright, so this skips when you're holding loot.)
-    def dragon_stirs(g):
-        if not dragon.get_property("stirring"):
-            dragon.set_property("stirring", True)
-            g.parser.ok(
-                "The dragon stirs in its sleep, one claw twitching. Best not linger."
-            )
-        else:
-            _wake_and_challenge(
-                g,
-                dragon,
-                'The dragon wakes, eyes you hungrily and roars, "Another mortal '
-                'dares challenge me? Choose a weapon: wits or steel."',
-            )
-
-    game_triggers.append(
-        (
-            "dragon_stirs",
-            lambda g: dragon is not None
-            and not dragon.get_property("awake")
-            and not dragon.get_property("reward_taken")
-            and not g.game_over
-            and g.player.location is trove
-            and not any(_is_holding(g.player, n) for n in ("gold", "sword", "ring")),
-            dragon_stirs,
-            True,
-        )
-    )
+    # room will wake the dragon"). It's a DragonLingers Countdown reaction attached
+    # after the game is built: one grace turn (it stirs as you arrive), then the
+    # challenge if you're still there. (Deliberate WAKE DRAGON and the theft-kill
+    # above are unchanged.)
 
     # Returning to the Moat carrying the gold is fatal (you sink and drown).
     def gold_drown(g):
@@ -1437,6 +1450,10 @@ def build_game() -> ActionCastle2:
 
     for name, cond, act, repeat in game_triggers:
         game.add_trigger(name, cond, act, repeatable=repeat)
+
+    # The dragon's linger reflex (thing-owned reaction, evaluated in the react
+    # phase): dawdle in the trove and it rouses into the challenge.
+    game.add_reaction(dragon, DragonLingers())
 
     # A block so the moat tunnel only opens after MOVE STONE.
     from text_adventure_games import blocks

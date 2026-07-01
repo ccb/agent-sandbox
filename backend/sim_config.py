@@ -6,9 +6,13 @@ This is the generative-agents counterpart to the engine's
 ``SimulationConfig`` gathers the *sim's* knobs and **composes** ``GameConfig`` rather
 than forking it:
 
+Most sections are **frontend-agnostic** -- they configure the shared agent engine, so
+they apply equally whether the sim drives the Smallville/Phaser replay or the UPenn/Godot
+campus replay:
+
 * ``game`` -- an embedded :class:`GameConfig` (everything the engine already configures).
-* ``simulation`` -- run-time knobs (start time, steps, seconds-per-step, ...), which
-  were previously only reachable as CLI flags on ``run_simulation``.
+* ``simulation`` -- run-time knobs (start time, steps, seconds-per-step, seed) that any
+  world honors; these were previously only reachable as CLI flags on ``run_simulation``.
 * ``retrieval`` -- the memory-retrieval scoring knobs (recency x relevance x importance
   weights, decay, how many memories to surface). These map onto
   :meth:`text_adventure_games.memory.AgentMemory.retrieve`'s parameters.
@@ -17,6 +21,17 @@ than forking it:
 * ``embedding`` -- which embedding backend scores the *relevance* term, reusing the
   engine's :class:`~text_adventure_games.embedding_client.EmbeddingConfig`. ``None``
   (the default) means keyword-overlap relevance, the free offline path.
+
+A few knobs are **frontend-specific** and live in their own sub-section so the shared
+sections stay clean:
+
+* ``smallville`` -- knobs only the Smallville/Phaser runner (``run_simulation``) reads:
+  the exported run directory name (``sim_code``), the base-sim whose persona memory it
+  copies (``base_sim``), and how many of the ``n25`` roster actually run (``num_agents``).
+  These are all ``the_ville``-flavored, so they don't belong in the shared ``simulation``
+  section. The UPenn/Godot runners don't read ``SimulationConfig`` yet, so there is no
+  ``upenn`` section -- following the "no dead config" rule below, one appears only once
+  the Penn runner actually reads it.
 
 As with ``GameConfig``, **every field defaults to today's behavior**, so an empty
 ``SimulationConfig()`` (or passing none) changes nothing. Build it in Python, load it
@@ -50,15 +65,35 @@ from text_adventure_games.llm_client import LlmClient
 class SimulationRuntimeConfig:
     """How long the sim runs and how its clock maps to in-game time.
 
-    These mirror ``run_simulation``'s CLI flags (``--start`` / ``--steps`` /
-    ``--sec-per-step`` / ``--sim-code`` / ``--base-sim``, made configurable in #74);
-    the config gives them a declarative home so a scenario can ship them in a file.
-    An explicit CLI flag still wins (see ``docs/design/simulation-config.md`` precedence).
+    Frontend-agnostic: any world (the_ville or the_upenn) honors these. They mirror
+    ``run_simulation``'s CLI flags (``--start`` / ``--steps`` / ``--sec-per-step``,
+    made configurable in #74); the config gives them a declarative home so a scenario
+    can ship them in a file. An explicit CLI flag still wins (see
+    ``docs/design/simulation-config.md`` precedence). The Smallville-only run-directory
+    knobs (``sim_code`` / ``base_sim`` / ``num_agents``) live on :class:`SmallvilleConfig`.
     """
 
     start: str = "2023-02-13 08:00:00"  # in-game start, ISO 8601 (parsed by the runner)
     steps: int = 1080  # number of steps to simulate (1080 x 10s = 3 hours)
     sec_per_step: int = 10  # seconds of in-game time advanced per step
+    seed: int | None = (
+        None  # global RNG seed; carried for reproducibility, not yet used
+    )
+
+
+@dataclass
+class SmallvilleConfig:
+    """Knobs only the Smallville/Phaser runner (``run_simulation``) reads.
+
+    These are ``the_ville``-specific: they name the exported run directory and select
+    the base sim whose persona memory is copied into it, so they don't belong in the
+    frontend-agnostic :class:`SimulationRuntimeConfig`. The UPenn/Godot runners ignore
+    them entirely (they write a single ``penn_replay.json`` and load their own cast).
+    Defaults reproduce today's behavior, so an unconfigured ``SmallvilleConfig()`` is
+    a no-op. Mirror ``run_simulation``'s ``--sim-code`` / ``--base-sim`` flags (an
+    explicit flag still wins).
+    """
+
     sim_code: str = "mock_the_ville_n25"  # names the exported run directory
     base_sim: str = "base_the_ville_n25"  # persona-memory source copied into the run
     # How many residents actually run. The full n25 roster always loads from
@@ -66,9 +101,6 @@ class SimulationRuntimeConfig:
     # readable. Default matches build_world.MAX_ACTIVE_PERSONAS (today's behavior);
     # raise it (up to 25) to run more of the town. The runner consumes this.
     num_agents: int = 5
-    seed: int | None = (
-        None  # global RNG seed; carried for reproducibility, not yet used
-    )
 
 
 @dataclass
@@ -125,6 +157,8 @@ class SimulationConfig:
     simulation: SimulationRuntimeConfig = field(default_factory=SimulationRuntimeConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     cognition: CognitionConfig = field(default_factory=CognitionConfig)
+    # Frontend-specific: the Smallville/Phaser runner's the_ville run-directory knobs.
+    smallville: SmallvilleConfig = field(default_factory=SmallvilleConfig)
     embedding: EmbeddingConfig | None = None  # None -> keyword-overlap relevance
 
     @classmethod
@@ -132,8 +166,9 @@ class SimulationConfig:
         """Load a config from a ``.yaml``/``.yml`` or ``.json`` file.
 
         Top-level keys are the section names (``game``, ``simulation``, ``retrieval``,
-        ``embedding``); the ``game`` section is itself a :class:`GameConfig` mapping
-        (``engine``, ``observability``, ...). Any section you omit keeps its defaults.
+        ``cognition``, ``smallville``, ``embedding``); the ``game`` section is itself a
+        :class:`GameConfig` mapping (``engine``, ``observability``, ...). Any section you
+        omit keeps its defaults.
         YAML needs ``pyyaml`` (ships with the engine); JSON needs nothing extra.
         """
         path = os.fspath(path)
@@ -169,12 +204,13 @@ class SimulationConfig:
             "simulation",
             "retrieval",
             "cognition",
+            "smallville",
             "embedding",
         }
         if unknown:
             raise ValueError(
-                f"Unknown config section(s): {sorted(unknown)}. "
-                "Valid sections: game, simulation, retrieval, cognition, embedding."
+                f"Unknown config section(s): {sorted(unknown)}. Valid sections: "
+                "game, simulation, retrieval, cognition, smallville, embedding."
             )
         # The `game` section is a full GameConfig mapping -- delegate so its own
         # per-section validation (unknown engine/observability keys, etc.) applies.
@@ -206,6 +242,9 @@ class SimulationConfig:
             ),
             retrieval=_build(RetrievalConfig, data.get("retrieval", {}), "retrieval"),
             cognition=_build(CognitionConfig, data.get("cognition", {}), "cognition"),
+            smallville=_build(
+                SmallvilleConfig, data.get("smallville", {}), "smallville"
+            ),
             embedding=embedding,
         )
 
@@ -239,6 +278,7 @@ class SimulationConfig:
             "simulation": _asdict(self.simulation),
             "retrieval": _asdict(self.retrieval),
             "cognition": _asdict(self.cognition),
+            "smallville": _asdict(self.smallville),
         }
         if self.embedding is not None:
             emb = _asdict(self.embedding)

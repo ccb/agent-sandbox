@@ -38,6 +38,7 @@ Run interactively:   python action_castle_3.py
 """
 
 from text_adventure_games import games, things, actions, blocks, Recipe
+from text_adventure_games import reactions
 from text_adventure_games.enums import Property
 
 # ---------------------------------------------------------------------------
@@ -1291,12 +1292,28 @@ class PushStatue(actions.Action):
 
 # Actions that don't count as "doing something" in front of the demon -- you may
 # look at it before you act, but anything else gets you devoured.
-_DEMON_SAFE_ACTIONS = {"examine", "describe", "inventory"}
-
 _DEMON_DEATH = (
     "The demon falls upon you with tooth, tusk and tentacle. When it is done, "
     "there is nothing left to bury. THE END."
 )
+
+
+class DemonDevours(reactions.Countdown):
+    """The summoned demon's clock (docs/design/reactions.md): once it claws up
+    from the pit you have a beat to THROW JAVELIN -- you may look once, but dawdle
+    past the window and it devours you. The throw sets ``banished_demon``, which
+    calls the strike off."""
+
+    DELAY = 2
+
+    def stimulus(self) -> bool:
+        return bool(self.game.locations["Chaos Chapel"].get_property("demon_present"))
+
+    def cancelled(self) -> bool:
+        return bool(self.game.player.get_property("banished_demon"))
+
+    def consequence(self, game):
+        _die(game, _DEMON_DEATH)
 
 
 class OpenDoor(actions.Action):
@@ -2228,43 +2245,55 @@ def build_game() -> ActionCastle3:
         repeatable=False,
     )
 
-    # The goblin baby. While it's crying it wails in each new room, and that
-    # wailing is fatal at the Bandit Camp (alerts the bandits) and the Deep
-    # Ravine (alerts the stirges). Feeding it mushroom stew quiets it.
+    # Noise gives you away at an ambush spot. Two sources: the goblin baby's
+    # wailing (it cries in each new room until fed mushroom stew), and any loud
+    # action of your own -- yelling aloud or smashing something (_NOISY_ACTIONS).
+    # Quiet moves are safe -- sneaking in, CASTing SLEEP on the bandits, taking
+    # the bow, even TALKing (they only jeer) -- which is the whole point of the
+    # stealth here. The Bandit Camp and the Deep Ravine (stirges) are the spots
+    # where a racket gets you killed.
+    _NOISY_ACTIONS = {"say", "break"}  # racket loud enough to give you away
+
     def _carrying_crying_baby(g):
         baby = _held_item(g.player, "baby goblin")
         return baby is not None and baby.get_property("crying")
 
-    def baby_alerts_bandits(g):
-        _die(
-            g,
-            "The baby's wailing alerts the bandits. They overwhelm you and drag you "
-            "off into the woods to be eaten by wild animals. THE END.",
-        )
+    def _baby_wailing(g):
+        return "the baby's wailing" if _carrying_crying_baby(g) else None
 
-    game.add_trigger(
-        "baby_alerts_bandits",
-        lambda g: _carrying_crying_baby(g)
-        and g.player.location is not None
+    def _ambush(g, cause, fate):
+        _die(g, f"{cause[0].upper()}{cause[1:]} alerts {fate}")
+
+    # Event-based (multi-agent-safe): at an ambush spot, the baby's wailing or any
+    # loud action of yours gives you away. Reads the round's events, not
+    # parser.last_action, so it survives a switch to per-agent turns.
+    game.add_disturbance_trigger(
+        "Bandit Camp",
+        lambda g, cause: _ambush(
+            g,
+            cause,
+            "the bandits. They overwhelm you and drag you off into the woods to be "
+            "eaten by wild animals. THE END.",
+        ),
+        loud=_NOISY_ACTIONS,
+        extra=_baby_wailing,
+        present=lambda g: g.player.location is not None
         and g.player.location.name == "Bandit Camp",
-        baby_alerts_bandits,
-        repeatable=False,
+        name="noise_alerts_bandits",
     )
-
-    def baby_alerts_stirges(g):
-        _die(
+    game.add_disturbance_trigger(
+        "Deep Ravine",
+        lambda g, cause: _ambush(
             g,
-            "The baby's wailing alerts the stirges. They swarm you, stabbing with "
-            "their needle beaks and draining your blood. THE END.",
-        )
-
-    game.add_trigger(
-        "baby_alerts_stirges",
-        lambda g: _carrying_crying_baby(g)
-        and g.player.location is not None
+            cause,
+            "the stirges. They swarm you, stabbing with their needle beaks and "
+            "draining your blood. THE END.",
+        ),
+        loud=_NOISY_ACTIONS,
+        extra=_baby_wailing,
+        present=lambda g: g.player.location is not None
         and g.player.location.name == "Deep Ravine",
-        baby_alerts_stirges,
-        repeatable=False,
+        name="noise_alerts_stirges",
     )
 
     # Flavor: the baby wails once each time you carry it into a new room (so the
@@ -2273,6 +2302,11 @@ def build_game() -> ActionCastle3:
         baby = _held_item(g.player, "baby goblin")
         baby.set_property("last_cry_loc", g.player.location.name)
         g.parser.ok("The goblin baby wails as you enter.")
+        # The wail is a real emitted sound (the source owns its volume): perception
+        # picks it up and it carries to the next room. The Bandit Camp / Deep Ravine
+        # ambush still keys on the crying baby through its own disturbance trigger;
+        # this just puts the noise into the world model.
+        g.emit_sound(g.player.location, 1, "the baby's wailing")
 
     game.add_trigger(
         "baby_wails",
@@ -2355,24 +2389,11 @@ def build_game() -> ActionCastle3:
         repeatable=True,
     )
 
-    # While the demon looms, anything but throwing the javelin (you may look at
-    # it first) gets you devoured.
-    def demon_devours(g):
-        _die(g, _DEMON_DEATH)
-
-    def _demon_will_devour(g):
-        if not chaos_chapel.get_property("demon_present"):
-            return False
-        if g.turn <= (chaos_chapel.get_property("demon_summoned_turn") or 0):
-            return False  # the turn it's summoned is a grace turn
-        last = g.parser.last_action
-        if last is None:
-            return False
-        return last.action_name() not in _DEMON_SAFE_ACTIONS
-
-    game.add_trigger(
-        "demon_devours", _demon_will_devour, demon_devours, repeatable=True
-    )
+    # The demon is a Countdown (see DemonDevours): its appearance starts a clock,
+    # and THROW JAVELIN cancels it. A thing-owned reaction on the demon, replacing
+    # the old location standoff. Registered after summon_demon so, in the same
+    # react phase, demon_present is set before the countdown reads it.
+    game.add_reaction(demon, DemonDevours())
 
     return game
 

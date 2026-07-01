@@ -279,7 +279,8 @@ def test_attacking_the_dragon_is_fatal():
 
 
 def test_lingering_wakes_the_dragon_but_leaving_is_safe():
-    # Arrival is a grace turn -- the dragon only stirs; a second action wakes it.
+    # Arrival is a grace turn -- the dragon only stirs; a second action while you
+    # linger wakes it. (DragonLingers Countdown.)
     game, cap = _at_trove()
     assert not game.characters["dragon"].get_property("awake")  # just arrived
     assert _said(cap, "stirs in its sleep")
@@ -325,10 +326,10 @@ def test_bare_answers_drive_the_whole_champion_dialogue():
 
 def test_lingering_wake_also_poses_the_wits_or_steel_prompt():
     # The dragon can wake two ways -- the WAKE DRAGON verb and lingering (the
-    # dragon_stirs trigger). Both must pose the choice, or a bare "wits" after a
+    # DragonLingers reaction). Both must pose the choice, or a bare "wits" after a
     # linger-wake fails ("I'm not sure what you want to do").
     game, cap = _at_trove()  # arrival: the dragon stirs
-    game.do_command("look")  # lingering rouses it via the trigger
+    game.do_command("look")  # lingering rouses it via the reaction
     assert game.characters["dragon"].get_property("awake")
     assert game.pending_prompt() is not None
     game.do_command("wits")  # the bare answer must work on this path too
