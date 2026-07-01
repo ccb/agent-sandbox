@@ -33,6 +33,12 @@ class Location(Thing):
         # that direction
         self.travel_descriptions = {}
 
+        # Dictionary mapping a direction to the verb used in the arrival line
+        # for that exit ("climbs", "falls", "swims"), replacing the default
+        # "moved" -- so "X moved to Y" can read "X climbs to Y". Parallel to
+        # travel_descriptions; read by the Go action.
+        self.move_verbs = {}
+
         # Dictionary mapping from a direction to a Block.
         self.blocks = {}
 
@@ -75,7 +81,13 @@ class Location(Thing):
             for k in self.connections:
                 thing_data["travel_descriptions"][k] = ""
 
-        thing_data["travel_descriptions"] = self.travel_descriptions
+        # A travel description may be a callable(game) -> str (dynamic, computed
+        # at traversal time); those can't be serialized, so save only the static
+        # string entries (a saved game loses the dynamic flavor, not its state).
+        thing_data["travel_descriptions"] = {
+            k: v for k, v in self.travel_descriptions.items() if isinstance(v, str)
+        }
+        thing_data["move_verbs"] = self.move_verbs
 
         items = {k: Item.to_primitive(v) for k, v in self.items.items()}
         thing_data["items"] = items
@@ -102,6 +114,7 @@ class Location(Thing):
         instance = cls(data["name"], data["description"])
         super().from_primitive(data, instance)
         instance.travel_descriptions = data["travel_descriptions"]
+        instance.move_verbs = data.get("move_verbs", {})
         instance.blocks = data["blocks"]  # skeleton doesnt instantiate blocks
         instance.connections = data["connections"]
         instance.items = {k: Item.from_primitive(v) for k, v in data["items"].items()}

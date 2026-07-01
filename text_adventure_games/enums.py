@@ -293,8 +293,10 @@ class EventKind(_StrEnum):
     """Engine-generated values for ``GameEvent.action``.
 
     Most events carry an action *name* (the parser logs the action's keyword
-    on success). ``TRIGGER`` is the one engine-internal kind today: events
-    written by the trigger system rather than by a player/NPC command.
+    on success). ``TRIGGER`` is written by the trigger system; ``SOUND`` is an
+    ambient noise emitted by a thing rather than by a command (Game.emit_sound) --
+    both are engine-internal kinds rather than player/NPC commands.
     """
 
     TRIGGER = "trigger"
+    SOUND = "sound"

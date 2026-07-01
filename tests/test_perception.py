@@ -158,3 +158,88 @@ def test_simultaneous_mode_feeds_retrieved_memory_into_the_prompt():
     assert seen, "the agent was never consulted during gather"
     assert "Relevant memories:" in seen[-1]
     assert "The player gave me a fish." in seen[-1]
+
+
+# ----------------------------------------------------------------------
+# C. Perceive by where it happened + loud events carry to adjacent rooms
+# ----------------------------------------------------------------------
+
+from text_adventure_games.actions import base  # noqa: E402
+from text_adventure_games.reporting import CaptureRenderer, Channel  # noqa: E402
+
+
+def _origin_world(npc_room):
+    field = things.Location("Field", "An open field.")
+    forest = things.Location("Forest", "A dark forest.")
+    field.add_connection("north", forest)  # also wires forest --south--> field
+    player = things.Character("player", "the player", "I explore.")
+    npc = things.Character("troll", "a troll", "I lurk.")
+    game = games.Game(field, player, characters=[npc])
+    {"Field": field, "Forest": forest}[npc_room].add_character(npc)
+    return game, player, npc, field, forest
+
+
+def test_departure_is_perceived_from_the_origin_room():
+    game, player, troll, field, forest = _origin_world("Field")
+    mem = AgentMemory(owner="troll")
+    game.do_command("north")  # the player leaves the Field
+    added = mem.ingest_events(game, troll)  # the troll is still in the Field
+    assert [r.text for r in added] == ["player left to the north"]
+
+
+def test_arrival_is_perceived_from_the_destination_room():
+    game, player, troll, field, forest = _origin_world("Forest")
+    mem = AgentMemory(owner="troll")
+    game.do_command("north")  # the player walks into the Forest, where the troll is
+    added = mem.ingest_events(game, troll)
+    assert [r.text for r in added] == ["player arrived from Field"]
+
+
+def test_audible_rooms_walks_the_graph_with_direction_back_to_source():
+    game, *_ = _origin_world("Field")
+    assert game.audible_rooms("Field", 1) == {"Forest": "south"}
+    assert game.audible_rooms("Field", 0) == {}  # silence stays in its room
+
+
+def test_npc_hears_a_loud_event_from_an_adjacent_room():
+    game, player, troll, field, forest = _origin_world("Forest")
+    mem = AgentMemory(owner="troll")
+    game.log_event(
+        "player",
+        "scream",
+        summary="scream",
+        payload={"location": "Field", "heard_radius": 1, "sound": "a scream"},
+    )
+    added = mem.ingest_events(game, troll)
+    assert [r.text for r in added] == ["From the south: a scream"]
+    assert added[0].importance == 0.5  # fainter than a witnessed event
+
+
+class _Scream(base.Action):
+    ACTION_NAME = "scream"
+    AUDIBLE_RADIUS = 2
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = actor or game.player
+
+    def check_preconditions(self):
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(f"{self.character.name} screams.")
+
+    def sound_description(self):
+        return "a scream"
+
+
+def test_player_overhears_a_loud_action_from_afar():
+    game, player, ranger, field, forest = _origin_world("Field")  # ranger in the Field
+    game.parser.add_action(_Scream)
+    player.location = forest  # the player is one room north
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    game.parser.parse_command("scream", actor=ranger)  # ranger screams in the Field
+    assert any(
+        "From the south you hear a scream" in t for t in cap.texts(Channel.NARRATION)
+    )
