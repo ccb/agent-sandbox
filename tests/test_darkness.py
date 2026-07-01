@@ -97,3 +97,22 @@ def test_cannot_enter_the_dark_until_the_lantern_is_lit():
     game.do_command("light lantern")
     game.do_command("go in")
     assert game.player.location.name == "Cave"  # now it's passable
+
+
+def test_douse_puts_the_lantern_back_out():
+    """DOUSE is the inverse of LIGHT -- a light source is a toggle."""
+    lamp = _lantern(lit=False)
+    game, cap = _build(player_items=[lamp])
+    game.do_command("light lantern")
+    assert lamp.get_property(Property.IS_LIT)
+    game.do_command("douse lantern")
+    assert not lamp.get_property(Property.IS_LIT)
+    # ...and with the light out, the dark exit blocks again.
+    assert game.start_at.is_blocked("in")
+
+
+def test_dousing_an_unlit_thing_is_refused():
+    lamp = _lantern(lit=False)
+    game, cap = _build(player_items=[lamp])
+    game.do_command("douse lantern")
+    assert _said(cap, "isn't lit")
