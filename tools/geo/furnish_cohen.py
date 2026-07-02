@@ -31,6 +31,7 @@ COHEN_LOBBY = "1007"  # INTERIOR_ARENA_BASE (1000) + sector 7
 FLOOR_LAYER = "cohen_floor"
 WALL_LAYER = "cohen_walls"
 COUNTER_LAYER = "cohen_counters"
+COUNTER_FOOD_LAYER = "cohen_counter_food"  # dishes laid out on the counter tops
 ARENA_LAYER = "cohen_arenas"  # object layer holding the cafeteria/kitchen boxes
 
 # floor_stone_hex: interior_franuka col 12, row 3 (the "grey hex stone floor").
@@ -102,9 +103,24 @@ DINING_CUSHIONS = [
 ]
 CUSHION_WH = (2, 2)
 
+# Serving spread laid along the kitchen counter tops -- fruit baskets recurring
+# among the menu items (ham, fish, sausage, bread, ...). Cycled along each
+# counter surface; ``None`` leaves a stretch of bare counter.
+COUNTER_ITEMS = [
+    _FRUIT, _HAM, _FISH, _FRUIT, _SAUSAGE, _BREAD, None,
+    _FRUIT, _SALAD, _POT, _HAM, _FRUIT, _FISH, None,
+]
+
 CAFETERIAS = ["Cafeteria 1", "Cafeteria 2", "Cafeteria 3"]
 
-OWN_LAYERS = [FLOOR_LAYER, WALL_LAYER, COUNTER_LAYER, FURN_LAYER, FOOD_LAYER]
+OWN_LAYERS = [
+    FLOOR_LAYER,
+    WALL_LAYER,
+    COUNTER_LAYER,
+    COUNTER_FOOD_LAYER,
+    FURN_LAYER,
+    FOOD_LAYER,
+]
 
 
 def read_flat(path):
@@ -224,7 +240,7 @@ def apply_kitchen(tmj):
     1 and 3). Inserts the cohen_walls + cohen_counters layers above the floor.
     Returns (wall_cells, counter_cells)."""
     W, H = tmj["width"], tmj["height"]
-    _strip(tmj, {WALL_LAYER, COUNTER_LAYER})
+    _strip(tmj, {WALL_LAYER, COUNTER_LAYER, COUNTER_FOOD_LAYER})
 
     boxes = cohen_boxes(tmj)
     kitchen = boxes.get("Kitchen 1", set()) | boxes.get("Kitchen 2", set())
@@ -262,6 +278,8 @@ def apply_kitchen(tmj):
     # east wall it turns the corner with a dedicated corner piece instead of the
     # straight unit.
     counter_n = 0
+    north_surface = []  # (x, y) of each north counter's top (serving) surface
+    south_surface = []  # (x, y) of each south counter's top (serving) surface
     for (x, y) in kitchen:
         on_wall = (x + 1, y) in caf2  # this cell is also the east wall seam
         if (x, y - 1) in caf1:  # north seam -> surface at y, cabinet at y+1
@@ -273,6 +291,7 @@ def apply_kitchen(tmj):
             counters[y * W + x] = gid(top)
             if (x, y + 1) in kitchen:
                 counters[(y + 1) * W + x] = gid(bot)
+            north_surface.append((x, y))
             counter_n += 1
         if (x, y + 1) in caf3:  # south seam -> surface at y-1, cabinet at y
             top, bot = (
@@ -283,24 +302,38 @@ def apply_kitchen(tmj):
             counters[y * W + x] = gid(bot)
             if (x, y - 1) in kitchen:
                 counters[(y - 1) * W + x] = gid(top)
+            south_surface.append((x, y - 1))
             counter_n += 1
+
+    # Lay a serving spread along the counter tops: fruit baskets and menu items
+    # cycled across the north-then-south surface cells (west to east).
+    counter_food = [0] * (W * H)
+    food_n = 0
+    surfaces = sorted(north_surface) + sorted(south_surface)
+    for i, (x, y) in enumerate(surfaces):
+        item = COUNTER_ITEMS[i % len(COUNTER_ITEMS)]
+        if item:
+            ic, ir = item
+            counter_food[y * W + x] = gid(ir * 32 + ic)
+            food_n += 1
 
     next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
     wall_layer = _new_layer(WALL_LAYER, walls, W, H, next_id)
     counter_layer = _new_layer(COUNTER_LAYER, counters, W, H, next_id + 1)
+    food_layer = _new_layer(COUNTER_FOOD_LAYER, counter_food, W, H, next_id + 2)
     if "nextlayerid" in tmj:
-        tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 2)
+        tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 3)
 
-    # Stack both just above the cohen_floor (walls under counters).
+    # Stack just above the cohen_floor: floor < walls < counters < counter_food.
     names = [L.get("name") for L in tmj["layers"]]
     at = (
         names.index(FLOOR_LAYER) + 1
         if FLOOR_LAYER in names
         else len(tmj["layers"])
     )
-    tmj["layers"][at:at] = [wall_layer, counter_layer]
+    tmj["layers"][at:at] = [wall_layer, counter_layer, food_layer]
     wall_n = sum(1 for v in walls if v)
-    return wall_n, counter_n
+    return wall_n, counter_n, food_n
 
 
 def _floor_cells(tmj):
@@ -424,9 +457,10 @@ def main():
     tmj = json.load(open(args.tmj))
     floored = apply(tmj, args.matrix)
     print(f"{FLOOR_LAYER}: painted {floored} interior cells (GID {floor_gid(tmj)})")
-    wall_n, counter_n = apply_kitchen(tmj)
+    wall_n, counter_n, counter_food_n = apply_kitchen(tmj)
     print(f"{WALL_LAYER}: {wall_n} east wall cells (vs Cafeteria 2)")
     print(f"{COUNTER_LAYER}: {counter_n} counter runs (N=Cafeteria 1, S=Cafeteria 3)")
+    print(f"{COUNTER_FOOD_LAYER}: {counter_food_n} items on the counter tops")
     tables, dishes, cushions = apply_dining(tmj)
     print(
         f"{FURN_LAYER}/{FOOD_LAYER}: {tables} tables, {cushions} cushions, "
