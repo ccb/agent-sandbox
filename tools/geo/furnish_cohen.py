@@ -32,7 +32,10 @@ FLOOR_LAYER = "cohen_floor"
 WALL_LAYER = "cohen_walls"
 COUNTER_LAYER = "cohen_counters"
 COUNTER_FOOD_LAYER = "cohen_counter_food"  # dishes laid out on the counter tops
+KITCHEN_PROPS_LAYER = "cohen_kitchen_props"  # crates/table in the Kitchen 2 alcove
 ARENA_LAYER = "cohen_arenas"  # object layer holding the cafeteria/kitchen boxes
+
+FLIP_V = 0x40000000  # Tiled vertical-flip flag
 
 # floor_stone_hex: interior_franuka col 12, row 3 (the "grey hex stone floor").
 # The franuka sheet is 32 tiles wide; the firstgid is read live from the .tmj
@@ -113,11 +116,44 @@ COUNTER_ITEMS = [
 
 CAFETERIAS = ["Cafeteria 1", "Cafeteria 2", "Cafeteria 3"]
 
+# Kitchen 2 (the narrow west prep alcove) -- filled with storage clutter and a
+# small staff table with chairs. Each entry is (dx, dy, (col, row, w, h),
+# flip_v), offset from the Kitchen 2 box's north-west corner.
+_K_CRATE, _K_BARREL, _K_CHEST = (23, 14, 1, 1), (26, 13, 1, 2), (25, 14, 1, 1)
+_K_POT, _K_BASKET, _K_CHAIR = (24, 14, 1, 1), (22, 14, 1, 1), (9, 17, 1, 1)
+_K_TABLE = (12, 23, 2, 3)
+KITCHEN2_PROPS = [
+    (0, 0, _K_CRATE, False),  # storage row against the north wall
+    (1, 0, _K_BARREL, False),
+    (2, 0, _K_CHEST, False),
+    (3, 0, _K_CRATE, False),
+    (0, 1, _K_POT, False),
+    (2, 1, _K_BASKET, False),
+    (3, 1, _K_POT, False),
+    (1, 2, _K_CHAIR, False),  # north chairs face the table (default facing)
+    (2, 2, _K_CHAIR, False),
+    (0, 3, _K_CRATE, False),  # a staff table flanked by storage
+    (1, 3, _K_TABLE, False),
+    (3, 4, _K_BARREL, False),
+    (0, 5, _K_CRATE, False),
+    (1, 6, _K_CHAIR, True),  # south chairs flipped to face the table
+    (2, 6, _K_CHAIR, True),
+    (0, 7, _K_BARREL, False),  # storage cluster at the south end
+    (1, 7, _K_CRATE, False),
+    (2, 7, _K_CHEST, False),
+    (3, 7, _K_CRATE, False),
+    (1, 8, _K_BASKET, False),
+    (2, 8, _K_POT, False),
+    (1, 9, _K_CRATE, False),
+    (3, 9, _K_CHEST, False),
+]
+
 OWN_LAYERS = [
     FLOOR_LAYER,
     WALL_LAYER,
     COUNTER_LAYER,
     COUNTER_FOOD_LAYER,
+    KITCHEN_PROPS_LAYER,
     FURN_LAYER,
     FOOD_LAYER,
 ]
@@ -336,6 +372,51 @@ def apply_kitchen(tmj):
     return wall_n, counter_n, food_n
 
 
+def apply_kitchen_props(tmj):
+    """Fill the Kitchen 2 alcove (the narrow west prep strip) with storage
+    clutter -- crates, barrels, chests, pots, baskets -- plus a small staff
+    table and chairs. Inserts the cohen_kitchen_props layer. Each prop is placed
+    only if its whole footprint lands on Kitchen 2 floor. Returns the prop count.
+    """
+    W, H = tmj["width"], tmj["height"]
+    _strip(tmj, {KITCHEN_PROPS_LAYER})
+
+    k2 = cohen_boxes(tmj).get("Kitchen 2", set())
+    floor = _floor_cells(tmj)
+    props = [0] * (W * H)
+    placed = 0
+    if k2:
+        fg = franuka_firstgid(tmj)
+        ox, oy = min(x for x, _ in k2), min(y for _, y in k2)
+        for dx, dy, (col, row, w, h), flip in KITCHEN2_PROPS:
+            cells = [
+                (ox + dx + ix, oy + dy + iy) for iy in range(h) for ix in range(w)
+            ]
+            if not all(c in k2 and c in floor for c in cells):
+                continue
+            for iy in range(h):
+                for ix in range(w):
+                    g = fg + (row + iy) * 32 + (col + ix)
+                    if flip:
+                        g |= FLIP_V
+                    props[(oy + dy + iy) * W + (ox + dx + ix)] = g
+            placed += 1
+
+    next_id = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
+    layer = _new_layer(KITCHEN_PROPS_LAYER, props, W, H, next_id)
+    if "nextlayerid" in tmj:
+        tmj["nextlayerid"] = max(tmj["nextlayerid"], next_id + 1)
+
+    names = [L.get("name") for L in tmj["layers"]]
+    at = (
+        names.index(COUNTER_LAYER) + 1
+        if COUNTER_LAYER in names
+        else len(tmj["layers"])
+    )
+    tmj["layers"][at:at] = [layer]
+    return placed
+
+
 def _floor_cells(tmj):
     """The walkable cohen floor as a set of (x, y) -- everything a table may
     stand on. Read from the painted cohen_floor layer."""
@@ -461,6 +542,8 @@ def main():
     print(f"{WALL_LAYER}: {wall_n} east wall cells (vs Cafeteria 2)")
     print(f"{COUNTER_LAYER}: {counter_n} counter runs (N=Cafeteria 1, S=Cafeteria 3)")
     print(f"{COUNTER_FOOD_LAYER}: {counter_food_n} items on the counter tops")
+    props_n = apply_kitchen_props(tmj)
+    print(f"{KITCHEN_PROPS_LAYER}: {props_n} props in the Kitchen 2 alcove")
     tables, dishes, cushions = apply_dining(tmj)
     print(
         f"{FURN_LAYER}/{FOOD_LAYER}: {tables} tables, {cushions} cushions, "
