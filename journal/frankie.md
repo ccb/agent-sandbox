@@ -1,3 +1,21 @@
+## 2026-07-01
+**Focus:** furnished more UPenn buildings via per-building `tools/geo` scripts — Cohen Hall's cafeterias, then the newly-combined Sweeten Alumni building's dorm suites.
+
+**Done today:**
+- Built **`furnish_cohen.py`**: Cohen Hall (sector 7) stone-hex floor, a kitchen walled off with serving counters, and three cafeterias holding 22 dining tables with food (**PR #295**, merged).
+- Combined **3537 Locust Walk into the Sweeten Alumni building** — bridged the 1-tile gap so both footprints share one sector/interior, regenerated the matrix, tiled the floor, and opened a north entrance via a new `add_entrances` `FORCED_DOORS` hook (**PR #293/#294**, merged).
+- Built **`furnish_alumni.py`** for the two dorm suites from a hand-drawn `alumni_arenas` layer: silver partition walls at box overlaps (kitchen/living/hallway left open-plan), hallway carpet, and franuka-style furniture across bedrooms, baths, eat-in kitchens, and lounges.
+
+**Blockers / questions:**
+- Editing the `.tmj` in Tiled/Godot re-saves it **pretty-printed** (a whole-file whitespace diff); the repo tracks the minified form the scripts write, so in-editor edits have to be re-minified or folded back through a script.
+- Verification is visual only (rendered PNGs / ASCII dumps) — nothing automated checks furniture stays on walkable floor, off walls, and clear of doorways.
+- Dorm rooms are still **sealed** (walls only where boxes overlap, no doorways carved yet), and one lounge's plant was dropped for lack of space.
+
+**Next:**
+- Carve doorways from the dorm bedrooms/baths into the hallways so the suites are actually navigable.
+- Add a small lint/render helper for furnishing scripts (footprint-on-floor, no-overlap, doorway-clear) instead of eyeballing.
+- Furnish the next building with the same floor → walls → furniture layer pattern.
+
 ## 2026-06-25
 **Focus:** working on issue #87 (surfacing chat end to end), testing a real LLM run, and working on game planning
 
