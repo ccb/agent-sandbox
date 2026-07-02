@@ -11,7 +11,12 @@ those overlaps are where a partition wall belongs, so:
                             3x3 frame) on every cell two boxes share, PLUS any
                             box named ``Wall`` filled solid. Two open-plan rooms
                             (kitchen / living room / hallway) never get a wall
-                            between them, so they stay one connected space.
+                            between them, so they stay one connected space. A
+                            centered doorway is carved in each wall between a
+                            bedroom/bath and the hallway, and those partitions
+                            are written into ``collision_maze.csv`` (walls block,
+                            doorways stay walkable) so the suites are navigable.
+                            Run this AFTER add_entrances, which resets collision.
   * ``alumni_rugs``      -- a carpet (``rug_green``, nine-sliced) down each
                             hallway corridor, plus an accent rug centered under
                             the kitchen / living-room furniture.
@@ -34,13 +39,14 @@ Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 """
 
 import argparse
+import collections
 import json
 import os
 import re
 import shutil
 
 from add_entrances import split_footprint
-from furnish_irvine import _fill_rug, _new_layer, _stamp, _strip, load_sprites
+from furnish_irvine import _fill_rug, _new_layer, _runs, _stamp, _strip, load_sprites
 
 ARENA_LAYER = "alumni_arenas"
 WALL_LAYER = "alumni_walls"
@@ -67,6 +73,9 @@ OPEN_KINDS = {"kitchen", "living", "hallway"}
 # A room whose clear interior is at least this wide counts as "big" and gets the
 # extra accessory (suite-2 rooms are 7-wide boxes -> 6 clear; suite-1 are 5).
 BIG_MIN_WIDTH = 6
+
+# Shift a specific room's furniture down N rows inside its box (by object name).
+FURNITURE_ROW_SHIFT = {"Room 1: BD 1": 1}
 
 
 def _room_furniture(kind, cx0, cy0, cx1, cy1):
@@ -221,6 +230,63 @@ def compute_walls(rooms, interior):
     return {cell for cell in walls if cell in interior}
 
 
+def carve_doors(walls, rooms, interior):
+    """Open one centered doorway in each wall segment that separates a private
+    room (bedroom/bathroom) from a hallway corridor, so every room is reachable
+    from the hallway. Room<->room and suite-divider walls stay solid. Returns
+    the set of door cells."""
+    hall, priv = set(), set()
+    for name, kind, c0, r0, c1, r1 in rooms:
+        # "Hallway 3" is an entrance vestibule: bedrooms get NO door onto it
+        # (they open only onto the main corridor), so it's not a door target.
+        if kind == "hallway" and "hallway 3" not in name.lower():
+            bucket = hall
+        elif kind in ("bedroom", "bathroom"):
+            bucket = priv
+        else:
+            continue
+        for x in range(c0, c1 + 1):
+            for y in range(r0, r1 + 1):
+                if (x, y) in interior and (x, y) not in walls:
+                    bucket.add((x, y))
+    # a door-eligible wall cell has a hallway floor on one side and this room's
+    # floor on the opposite side; group eligible cells into straight runs (one
+    # per room wall) and open the middle of each
+    vert, horiz = collections.defaultdict(list), collections.defaultdict(list)
+    for x, y in walls:
+        if ((x - 1, y) in hall and (x + 1, y) in priv) or (
+            (x + 1, y) in hall and (x - 1, y) in priv
+        ):
+            vert[x].append(y)
+        elif ((x, y - 1) in hall and (x, y + 1) in priv) or (
+            (x, y + 1) in hall and (x, y - 1) in priv
+        ):
+            horiz[y].append(x)
+    doors = set()
+    for x, ys in vert.items():
+        for s, e in _runs(ys):
+            doors.add((x, (s + e) // 2))
+    for y, xs in horiz.items():
+        for s, e in _runs(xs):
+            doors.add(((s + e) // 2, y))
+    return doors
+
+
+def write_collision(matrix_dir, interior, walls, W):
+    """Save the dorm partitions to the matrix: reset Sweeten's interior to
+    walkable, then block every wall cell (doors were already removed from
+    `walls`, so they stay open). Only interior cells are touched -- the
+    perimeter and its entrances keep whatever add_entrances set."""
+    path = os.path.join(matrix_dir, "maze", "collision_maze.csv")
+    cells = open(path).read().strip().split(", ")
+    for x, y in interior:
+        cells[y * W + x] = "0"
+    for x, y in walls:
+        cells[y * W + x] = "1"
+    with open(path, "w") as fh:
+        fh.write(", ".join(cells))
+
+
 def apply(tmj):
     """Paint alumni_walls (silver) + alumni_furniture. Returns (wall_cells,
     placed, skipped)."""
@@ -231,13 +297,33 @@ def apply(tmj):
     sprites = load_sprites(tmj)
     R, B, BR = silver_tiles(tmj)
 
-    # --- walls: silver strips on the wall cells ----------------------------
+    # --- walls: silver strips on the wall cells, with doorways carved ------
+    # `walls` stays the full partition set for layout (carpet + furniture keep
+    # off the doorways); `open_walls` drops the door cells for the wall tiles and
+    # the collision write, so the doorway is a real gap.
     walls = compute_walls(rooms, interior)
+    doors = carve_doors(walls, rooms, interior)
+    open_walls = walls - doors
     wdata = [0] * (W * H)
-    for x, y in walls:
-        horiz = (x - 1, y) in walls or (x + 1, y) in walls
-        vert = (x, y - 1) in walls or (x, y + 1) in walls
+    for x, y in open_walls:
+        horiz = (x - 1, y) in open_walls or (x + 1, y) in open_walls
+        vert = (x, y - 1) in open_walls or (x, y + 1) in open_walls
         wdata[y * W + x] = BR if (horiz and vert) else (R if vert else B)
+
+    # brick wall(s): close each cell marked by a "Brick Wall" object -- e.g. to
+    # shrink the east entrance from 3 tiles to 2 (the perimeter is brick, so the
+    # closed cell blends in). These block collision even on the perimeter.
+    brick_gid = sprites["wall_brick"][0] if "wall_brick" in sprites else 0
+    brick = {
+        (x, y)
+        for name, kind, c0, r0, c1, r1 in rooms
+        if "brick" in name.lower()
+        for x in range(c0, c1 + 1)
+        for y in range(r0, r1 + 1)
+    }
+    if brick_gid:
+        for x, y in brick:
+            wdata[y * W + x] = brick_gid
 
     # --- carpet: nine-slice a rug down each hallway corridor. By default the
     # --- runner is kept off the open edges where a hallway borders another room
@@ -322,9 +408,11 @@ def apply(tmj):
                     c for c in clear if b0 <= c[0] <= rbox[2] and d0 <= c[1] <= rbox[3]
                 }
                 carpeted += _fill_rug(rdata, sprites, RUG, rbox, region, W)
+        shift = FURNITURE_ROW_SHIFT.get(name, 0)
         for item, c, r in _room_furniture(kind, cx0, cy0, cx1, cy1):
             if item not in sprites:
                 continue
+            r += shift
             if _stamp(fdata, occ, sprites, item, c, r, clear, W):
                 placed += 1
             else:
@@ -341,7 +429,17 @@ def apply(tmj):
     if "nextlayerid" in tmj:
         tmj["nextlayerid"] = max(tmj["nextlayerid"], nid + 3)
     tmj["layers"][at:at] = [rug_layer, wall_layer, furn_layer]
-    return len(walls), carpeted, placed, skipped
+    block = open_walls | brick  # collision-blocking cells (walls + brick)
+    return (
+        len(open_walls),
+        len(doors),
+        len(brick),
+        carpeted,
+        placed,
+        skipped,
+        block,
+        interior,
+    )
 
 
 def main():
@@ -354,12 +452,18 @@ def main():
             repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
         ),
     )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true", help="report, do not write")
     args = ap.parse_args()
 
     tmj = json.load(open(args.tmj))
-    walls, carpeted, placed, skipped = apply(tmj)
-    print(f"{WALL_LAYER}: {walls} silver wall cells")
+    walls, doors, bricks, carpeted, placed, skipped, block, interior = apply(tmj)
+    print(f"{WALL_LAYER}: {walls} silver wall cells ({doors} doorways, {bricks} brick)")
     print(f"{RUG_LAYER}: {carpeted} carpet cells ({RUG})")
     print(f"{FURN_LAYER}: placed {placed} sprites ({skipped} skipped)")
 
@@ -369,6 +473,8 @@ def main():
     with open(args.tmj, "w") as fh:
         json.dump(tmj, fh, separators=(",", ":"))
     print(f"wrote {args.tmj} (backup {args.tmj}.bak)")
+    write_collision(args.matrix, interior, block, tmj["width"])
+    print(f"wrote collision_maze ({len(block)} cells blocked, {doors} doors open)")
 
 
 if __name__ == "__main__":
