@@ -1,3 +1,20 @@
+## 2026-07-02
+**Focus:** worked on fleshing out planning for game loop and agents architecture
+
+**Done today:**
+- opened issues #296-#302, along with a proper roadmap of how the game architecture should be devised
+- merged almost all furnished buildings to `godot-ga-main`
+     - currently, the game doesn't have the Jaffe and Alpha Phi Rho furnished or built. Those could be for parties (similar to the original `generative-agents`) and other tasks we might not have thought of
+
+**Blockers / questions:**
+- the game-loop + agents architecture (#296-#302) is still just a roadmap — the backend ⇄ Godot boundary and the LLM-modifiable inner loop need a prototype before the interfaces are trustworthy
+- the furnished buildings are only maps right now; how agents actually occupy and use them (schedules, per-building tasks) isn't wired into the cognitive loop yet
+
+**Next:**
+- turn the #296-#302 roadmap into a first buildable slice — likely the backend ⇄ Godot websocket loop
+- build/furnish the remaining shells (Jaffe, Alpha Phi Rho) and decide what they're for (party venues, etc.)
+- carve doorways into the Sweeten dorm suites so they're actually navigable (carried from 07-01)
+
 ## 2026-07-01
 **Focus:** furnished more UPenn buildings via per-building `tools/geo` scripts — Cohen Hall's cafeterias, then the newly-combined Sweeten Alumni building's dorm suites.
 
