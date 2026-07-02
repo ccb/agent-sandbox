@@ -110,8 +110,20 @@ CUSHION_WH = (2, 2)
 # among the menu items (ham, fish, sausage, bread, ...). Cycled along each
 # counter surface; ``None`` leaves a stretch of bare counter.
 COUNTER_ITEMS = [
-    _FRUIT, _HAM, _FISH, _FRUIT, _SAUSAGE, _BREAD, None,
-    _FRUIT, _SALAD, _POT, _HAM, _FRUIT, _FISH, None,
+    _FRUIT,
+    _HAM,
+    _FISH,
+    _FRUIT,
+    _SAUSAGE,
+    _BREAD,
+    None,
+    _FRUIT,
+    _SALAD,
+    _POT,
+    _HAM,
+    _FRUIT,
+    _FISH,
+    None,
 ]
 
 CAFETERIAS = ["Cafeteria 1", "Cafeteria 2", "Cafeteria 3"]
@@ -255,18 +267,14 @@ def cohen_boxes(tmj):
     Kitchen 1 + Kitchen 2 together are the continuous kitchen; Cafeteria 1/2/3
     together are the continuous cafeteria."""
     T = tmj.get("tilewidth", 16)
-    layer = next(
-        (L for L in tmj["layers"] if L.get("name") == ARENA_LAYER), None
-    )
+    layer = next((L for L in tmj["layers"] if L.get("name") == ARENA_LAYER), None)
     if layer is None:
         return {}
     out = {}
     for o in layer.get("objects", []):
         x0, y0 = round(o["x"] / T), round(o["y"] / T)
         x1, y1 = round((o["x"] + o["width"]) / T), round((o["y"] + o["height"]) / T)
-        out[o["name"]] = {
-            (x, y) for x in range(x0, x1) for y in range(y0, y1)
-        }
+        out[o["name"]] = {(x, y) for x in range(x0, x1) for y in range(y0, y1)}
     return out
 
 
@@ -298,14 +306,14 @@ def apply_kitchen(tmj):
     wall_col = sorted(
         ((x, y) for (x, y) in kitchen if (x + 1, y) in caf2), key=lambda p: p[1]
     )
-    for (x, y) in wall_col:
+    for x, y in wall_col:
         walls[y * W + x] = gid(WALL_VERT_OFF)
     if wall_col:
         (tx, ty), (bx, by) = wall_col[0], wall_col[-1]
         walls[ty * W + tx] = gid(WALL_TOP_OFF)  # north-east corner (transparent)
         walls[by * W + bx] = gid(WALL_BOT_OFF)  # south-east corner (transparent)
         # complete the south-east corner post as a 2x2 (all transparent tiles)
-        for (cx, cy) in ((bx + 1, by), (bx, by + 1), (bx + 1, by + 1)):
+        for cx, cy in ((bx + 1, by), (bx, by + 1), (bx + 1, by + 1)):
             walls[cy * W + cx] = gid(WALL_BOT_OFF)
 
     # Counters: a kitchen cell on the seam with Cafeteria 1 (north) or 3 (south)
@@ -316,7 +324,7 @@ def apply_kitchen(tmj):
     counter_n = 0
     north_surface = []  # (x, y) of each north counter's top (serving) surface
     south_surface = []  # (x, y) of each south counter's top (serving) surface
-    for (x, y) in kitchen:
+    for x, y in kitchen:
         on_wall = (x + 1, y) in caf2  # this cell is also the east wall seam
         if (x, y - 1) in caf1:  # north seam -> surface at y, cabinet at y+1
             top, bot = (
@@ -362,11 +370,7 @@ def apply_kitchen(tmj):
 
     # Stack just above the cohen_floor: floor < walls < counters < counter_food.
     names = [L.get("name") for L in tmj["layers"]]
-    at = (
-        names.index(FLOOR_LAYER) + 1
-        if FLOOR_LAYER in names
-        else len(tmj["layers"])
-    )
+    at = names.index(FLOOR_LAYER) + 1 if FLOOR_LAYER in names else len(tmj["layers"])
     tmj["layers"][at:at] = [wall_layer, counter_layer, food_layer]
     wall_n = sum(1 for v in walls if v)
     return wall_n, counter_n, food_n
@@ -389,9 +393,7 @@ def apply_kitchen_props(tmj):
         fg = franuka_firstgid(tmj)
         ox, oy = min(x for x, _ in k2), min(y for _, y in k2)
         for dx, dy, (col, row, w, h), flip in KITCHEN2_PROPS:
-            cells = [
-                (ox + dx + ix, oy + dy + iy) for iy in range(h) for ix in range(w)
-            ]
+            cells = [(ox + dx + ix, oy + dy + iy) for iy in range(h) for ix in range(w)]
             if not all(c in k2 and c in floor for c in cells):
                 continue
             for iy in range(h):
@@ -409,9 +411,7 @@ def apply_kitchen_props(tmj):
 
     names = [L.get("name") for L in tmj["layers"]]
     at = (
-        names.index(COUNTER_LAYER) + 1
-        if COUNTER_LAYER in names
-        else len(tmj["layers"])
+        names.index(COUNTER_LAYER) + 1 if COUNTER_LAYER in names else len(tmj["layers"])
     )
     tmj["layers"][at:at] = [layer]
     return placed
@@ -439,9 +439,7 @@ def table_anchors(box, floor, tw, th, pitch_x=6, pitch_y=6):
     while ay + th - 1 <= y1:
         ax = x0
         while ax + tw - 1 <= x1:
-            foot = [
-                (ax + dx, ay + dy) for dy in range(th) for dx in range(tw)
-            ]
+            foot = [(ax + dx, ay + dy) for dy in range(th) for dx in range(tw)]
             if all(c in box and c in floor for c in foot):
                 anchors.append((ax, ay))
             ax += pitch_x
@@ -472,7 +470,7 @@ def apply_dining(tmj):
         box = boxes.get(name, set())
         if not box:
             continue
-        for (ax, ay) in table_anchors(box, floor, tw, th):
+        for ax, ay in table_anchors(box, floor, tw, th):
             for dy in range(th):
                 for dx in range(tw):
                     furn[(ay + dy) * W + (ax + dx)] = (
@@ -508,9 +506,7 @@ def apply_dining(tmj):
     # Stack above the counters: floor < walls < counters < furniture < food.
     names = [L.get("name") for L in tmj["layers"]]
     at = (
-        names.index(COUNTER_LAYER) + 1
-        if COUNTER_LAYER in names
-        else len(tmj["layers"])
+        names.index(COUNTER_LAYER) + 1 if COUNTER_LAYER in names else len(tmj["layers"])
     )
     tmj["layers"][at:at] = [furn_layer, food_layer]
     return table_i, dish_n, cushion_n
