@@ -287,7 +287,7 @@ def build_game():
     # docs/design/vaarn-style-guide.md.)
     wreck = things.Location(
         "The Caravan Wreck",
-        "The Tomblands road, at the hour after the jackals. A trade caravan lies "
+        "The Tomblands road, at the hour after the Cacklemaw. A trade caravan lies "
         "heeled over in the blue sand -- wind-wagon ribs of pale wood, cargo "
         "strewn and already sanding under -- and the dead have been arranged by "
         "the wind into attitudes of sleep. It is said the road to Gnomon is "
@@ -319,7 +319,7 @@ def build_game():
              "sanded to the shoulder. By morning the road will have them wholly.")
     _scenery(hold, "crates", "lashed crates of saffron and dates",
              "Trade goods bound for the souks of Gnomon, worth a season's water. "
-             "Too much to carry, which the jackals also found.")
+             "Too much to carry, and the Cacklemaw do not trade.")
     ledger = _scenery(hold, "ledger", "the merchant's ledger",
              "A trade ledger bound in lizard-skin, closed around a ribbon "
              "marker at its final page.")
@@ -338,7 +338,7 @@ def build_game():
     pack = things.Item(
         "pack", "the merchant's half-buried pack",
         "Boiled leather, half-buried, the straps still buckled. Whatever the "
-        "jackals wanted, it was not this.",
+        "Cacklemaw came for, it was not this.",
     ).make_container()
     pack.set_property("is_closed", True)
     pack.add_command_hint("open pack")
@@ -349,23 +349,30 @@ def build_game():
     )
     wreck.add_item(pack)
 
+    # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
+    # walk like men", wear masks in imitation of the human face). She was the
+    # caravan's TEAMSTER, driving the zoxen; the zoxen pulled. Newbeasts are
+    # never beasts of burden -- canon reserves that for zoxen and iron mules.
     worry = things.Character(
-        "Worry", "a newbeast draught-mule",
-        "I am Worry. I pulled the wagon; now there is no wagon.",
+        "Worry", "a new-mule teamster",
+        "I am Worry. I drove the wagon; now there is no wagon.",
     )
     worry.examine_text = (
-        "A grey new-mule in a torn harness, dressed in the road's dust. Patient, "
-        "mournful, unhurt -- the jackals were thorough with everything that "
-        "could not run. A brass tag on her collar reads WORRY."
+        "A grey new-mule in a drover's long coat, upright on her hind hooves, "
+        "dressed in the road's dust. Patient, mournful, unhurt. A carved mask "
+        "in imitation of a human face hangs at her neck on a cord; there is no "
+        "one left on the road to wear it for. A brass pin on the coat reads "
+        "WORRY."
     )
     worry.talk_text = (
-        '"They came at moonset," Worry says. "Cautious. Clever. I ran, and the '
-        'merchant could not, and that is the whole story." She looks north, to '
-        'the faces in the azure stone. "Take what he no longer needs -- better '
-        "you than the sand. His ledger is in the hold; the dark in there is "
-        "ordinary, and yours is the only light left on this road. But mind the "
-        "tomb, scavenger. The caravans give its mouths a wide berth, and a "
-        'caravan is seldom wrong twice."'
+        '"They came at moonset," Worry says. "Laughing. I ran, and the merchant '
+        "could not, and that is the whole story. The Cacklemaw make no secret "
+        'of their coming; the secret is what good knowing does you." She looks '
+        'north, to the faces in the azure stone. "Take what he no longer needs '
+        "-- better you than the sand. His ledger is in the hold; the dark in "
+        "there is ordinary, and yours is the only light left on this road. But "
+        "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
+        'and a caravan is seldom wrong twice."'
     )
     wreck.add_character(worry)
 
