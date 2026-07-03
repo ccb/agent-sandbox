@@ -375,9 +375,8 @@ def build_game():
         "could not, and that is the whole story. The Cacklemaw make no secret "
         'of their coming; the secret is what good knowing does you." She looks '
         'north, to the faces in the azure stone. "Take what he no longer needs '
-        "-- better you than the sand. His ledger is in the hold, and the dark "
-        "in there is ordinary; he kept a glowstone in his pack, and it is the "
-        "only light left on this road. But "
+        "-- better you than the sand. He kept a glowstone in his pack. You can "
+        "take whatever you can carry from the hold. But "
         "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
         'and a caravan is seldom wrong twice."'
     )
