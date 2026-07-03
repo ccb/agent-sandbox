@@ -46,9 +46,9 @@ def test_a_plain_room_is_seen_clearly_and_fully():
     game, crypt, player, _ = _world()
     assert sight_for(player, crypt)[0] is Sight.CLEAR
     out = game.describe()
-    assert "jade idol" in out          # items shown
-    assert "Corridor" in out           # exits shown
-    assert "ghoul" in out              # characters shown
+    assert "jade idol" in out  # items shown
+    assert "Corridor" in out  # exits shown
+    assert "ghoul" in out  # characters shown
 
 
 # --- Darkness ----------------------------------------------------------------
@@ -59,9 +59,9 @@ def test_darkness_hides_the_whole_room_from_the_player():
     crypt.obscure(Darkness())
     out = game.describe()
     assert "pitch dark" in out.lower()
-    assert "jade idol" not in out      # contents hidden
-    assert "Exits:" not in out         # exits hidden
-    assert "ghoul" not in out          # characters hidden
+    assert "jade idol" not in out  # contents hidden
+    assert "Exits:" not in out  # exits hidden
+    assert "ghoul" not in out  # characters hidden
 
 
 def test_a_lit_light_reveals_a_dark_room():
@@ -95,8 +95,8 @@ def test_fog_shows_the_room_and_exits_but_not_its_contents():
     crypt.obscure(Fog())
     assert sight_for(player, crypt)[0] is Sight.DIM
     out = game.describe()
-    assert "Corridor" in out           # exits still shown at DIM
-    assert "jade idol" not in out      # contents hidden at DIM
+    assert "Corridor" in out  # exits still shown at DIM
+    assert "jade idol" not in out  # contents hidden at DIM
     assert "ghoul" not in out
 
 

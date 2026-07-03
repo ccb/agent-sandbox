@@ -177,7 +177,9 @@ def build_game():
     hollow.add_connection("down", shrine)  # auto-wires shrine --up--> hollow
 
     # The skittish bat (Item): bolts to the Hollow at any noise it hears.
-    bat = things.Item("bat", "a nervous bat", "A nervous little bat clings to the rock.")
+    bat = things.Item(
+        "bat", "a nervous bat", "A nervous little bat clings to the rock."
+    )
     bat.set_property("gettable", False)
     ledge.add_item(bat)
 
@@ -194,15 +196,21 @@ def build_game():
     ogre.examine_text = "A huge ogre, fast asleep and snoring like a sawmill."
     hollow.add_character(ogre)
 
-    gong = things.Item("gong", "a bronze gong", "A bronze gong on a beam. (Try RING GONG.)")
+    gong = things.Item(
+        "gong", "a bronze gong", "A bronze gong on a beam. (Try RING GONG.)"
+    )
     gong.set_property("gettable", False)
     hollow.add_item(gong)
 
     # The Shrine's fuse (Item, owns the Countdown) and the prize.
-    fuse = things.Item("fuse", "a fuse in the doorway", "A fuse threaded through the doorway.")
+    fuse = things.Item(
+        "fuse", "a fuse in the doorway", "A fuse threaded through the doorway."
+    )
     fuse.set_property("gettable", False)
     shrine.add_item(fuse)
-    gem = things.Item("gem", "a glittering gem", "A fat gemstone, yours for the taking.")
+    gem = things.Item(
+        "gem", "a glittering gem", "A fat gemstone, yours for the taking."
+    )
     gem.set_property("gettable", True)
     shrine.add_item(gem)
 
@@ -219,9 +227,7 @@ def build_game():
 
     # Win: get back to the Ledge holding the gem.
     def _escape(g):
-        g.parser.ok(
-            "You scramble up and out into the daylight, gem in hand. You win!"
-        )
+        g.parser.ok("You scramble up and out into the daylight, gem in hand. You win!")
         g.player.set_property("escaped", True)  # ReactionsDemo.is_won() reads this
         g.game_over = True
         g.game_over_description = "Escaped with the gem!"

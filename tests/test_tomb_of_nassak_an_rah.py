@@ -38,27 +38,31 @@ def test_all_nine_locations_exist():
 
 def test_three_entrances_off_the_exterior():
     game = _game()
-    assert _goes(game, "Tomb Exterior", "north", "Hall of Youth")        # child's mouth
-    assert _goes(game, "Tomb Exterior", "east", "Hall of Warriors")      # warrior's mouth
-    assert _goes(game, "Tomb Exterior", "up", "The Summit")              # the climb
-    assert _goes(game, "The Summit", "down", "Tomb Exterior")            # ...and back down
+    assert _goes(game, "Tomb Exterior", "north", "Hall of Youth")  # child's mouth
+    assert _goes(game, "Tomb Exterior", "east", "Hall of Warriors")  # warrior's mouth
+    assert _goes(game, "Tomb Exterior", "up", "The Summit")  # the climb
+    assert _goes(game, "The Summit", "down", "Tomb Exterior")  # ...and back down
 
 
 def test_lower_diamond_is_a_four_cycle():
     game = _game()
     # spec edges 1-2, 1-3, 4-2, 4-3
-    assert _goes(game, "Hall of Youth", "north", "Hall of Memory")       # 1-2
-    assert _goes(game, "Hall of Youth", "west", "Hall of Hounds")        # 1-3
-    assert _goes(game, "Hall of Memory", "north", "Hall of Warriors")    # 2-4
-    assert _goes(game, "Hall of Warriors", "east", "Hall of Hounds")     # 4-3
+    assert _goes(game, "Hall of Youth", "north", "Hall of Memory")  # 1-2
+    assert _goes(game, "Hall of Youth", "west", "Hall of Hounds")  # 1-3
+    assert _goes(game, "Hall of Memory", "north", "Hall of Warriors")  # 2-4
+    assert _goes(game, "Hall of Warriors", "east", "Hall of Hounds")  # 4-3
 
 
 def test_the_stairs_seal_and_chimney():
     game = _game()
     assert _goes(game, "Hall of Memory", "up", "Hall of the Canopic Jars")
     assert _goes(game, "Hall of the Canopic Jars", "down", "Hall of Memory")
-    assert _goes(game, "Hall of the Canopic Jars", "up", "Burial Sphere of Nassak An-Rah")
-    assert _goes(game, "Burial Sphere of Nassak An-Rah", "down", "Hall of the Canopic Jars")
+    assert _goes(
+        game, "Hall of the Canopic Jars", "up", "Burial Sphere of Nassak An-Rah"
+    )
+    assert _goes(
+        game, "Burial Sphere of Nassak An-Rah", "down", "Hall of the Canopic Jars"
+    )
     # the fungal chimney is a room between the summit and the sphere's crown
     assert _goes(game, "The Summit", "in", "The Fungal Chimney")
     assert _goes(game, "The Fungal Chimney", "down", "Burial Sphere of Nassak An-Rah")
@@ -130,15 +134,17 @@ def test_memory_crystals_give_the_head_to_organ_clue():
     game.do_command("sneak north")
     game.do_command("sneak north")
     game.do_command("examine crystal lattice")
-    assert "the jackal -- strangely -- his brain" in " ".join(cap.texts(Channel.NARRATION))
+    assert "the jackal -- strangely -- his brain" in " ".join(
+        cap.texts(Channel.NARRATION)
+    )
 
 
 def test_a_sealed_jar_reveals_its_organ_only_when_opened():
     game = _game()
     cap = _texts(game)
-    _bring_jars_to_canopic(game)              # hands the player the falcon jar
-    game.do_command("examine falcon jar")     # sealed -> says nothing of the organ
-    game.do_command("open falcon jar")        # now it reveals the intestines
+    _bring_jars_to_canopic(game)  # hands the player the falcon jar
+    game.do_command("examine falcon jar")  # sealed -> says nothing of the organ
+    game.do_command("open falcon jar")  # now it reveals the intestines
     texts = " ".join(cap.texts(Channel.NARRATION))
     assert "in it you see: a coil of cured intestines" in texts.lower()
 
@@ -181,23 +187,23 @@ def _arm_and_reach_canopic(game):
 def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
     game = _game()
     cap = _texts(game)
-    game.do_command("north")            # into the Youth carrying the UNLIT glowstone
+    game.do_command("north")  # into the Youth carrying the UNLIT glowstone
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "pitch dark" in dark
-    assert "statues" not in dark        # the veil hides the room's contents...
-    assert "exits:" not in dark         # ...and its exits
+    assert "statues" not in dark  # the veil hides the room's contents...
+    assert "exits:" not in dark  # ...and its exits
     cap2 = _texts(game)
     game.do_command("light glowstone")  # a light reveals the room
     game.do_command("look")
     lit = " ".join(cap2.texts(Channel.NARRATION)).lower()
     assert "statues" in lit
-    assert "hall of memory" in lit      # exits now visible
+    assert "hall of memory" in lit  # exits now visible
 
 
 def test_the_ceiling_is_heard_in_the_dark_and_seen_once_lit():
     game = _game()
     cap = _texts(game)
-    game.do_command("north")            # dark Youth
+    game.do_command("north")  # dark Youth
     game.do_command("examine ceiling")  # can't see -> hear the bats (the clue)
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "leathery wings" in dark
@@ -211,40 +217,42 @@ def test_the_ceiling_is_heard_in_the_dark_and_seen_once_lit():
 
 def test_you_can_feel_and_listen_in_the_dark_without_waking_the_bats():
     game = _game()
-    game.do_command("north")            # dark Youth, glowstone unlit
+    game.do_command("north")  # dark Youth, glowstone unlit
     for probe in ("feel", "listen", "examine ceiling", "feel statues"):
         game.do_command(probe)
-    assert not game.is_game_over()      # quiet senses don't rouse them
+    assert not game.is_game_over()  # quiet senses don't rouse them
     assert game.player.location.name == "Hall of Youth"
 
 
 def test_walking_into_a_dark_hall_is_safe():
     game = _game()
     game.do_command("drop glowstone")  # go dark
-    game.do_command("north")           # STRIDE into the Hall of Youth -- no longer fatal
+    game.do_command("north")  # STRIDE into the Hall of Youth -- no longer fatal
     assert not game.is_game_over()
     assert game.player.location.name == "Hall of Youth"
 
 
 def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
-    game = _game()                      # starts holding an UNLIT glowstone
-    game.do_command("north")            # into the pitch-dark Youth -- carrying it unlit is safe
+    game = _game()  # starts holding an UNLIT glowstone
+    game.do_command("north")  # into the pitch-dark Youth -- carrying it unlit is safe
     assert not game.is_game_over()
-    game.do_command("light glowstone")  # raising a light rouses the bats -- a warning first
+    game.do_command(
+        "light glowstone"
+    )  # raising a light rouses the bats -- a warning first
     assert not game.is_game_over()
     game.do_command("look")
-    game.do_command("look")             # keep the light burning -> the swarm takes you
+    game.do_command("look")  # keep the light burning -> the swarm takes you
     assert game.is_game_over() and not game.is_won()
 
 
 def test_sustained_noise_in_a_hall_kills_but_warns_first():
     game = _game()
     game.do_command("drop glowstone")
-    game.do_command("sneak east")       # -> Hall of Warriors (safe to enter)
-    game.do_command("say hey")          # one shout: a warning, not death
+    game.do_command("sneak east")  # -> Hall of Warriors (safe to enter)
+    game.do_command("say hey")  # one shout: a warning, not death
     assert not game.is_game_over()
     game.do_command("say hey")
-    game.do_command("say hey")          # keep it up -> the pthalo-jackals take you
+    game.do_command("say hey")  # keep it up -> the pthalo-jackals take you
     assert game.is_game_over() and not game.is_won()
 
 
@@ -253,12 +261,12 @@ def test_the_live_sphere_kills_only_when_you_disturb_it():
     _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on falcon plinth")
     game.do_command("put jackal jar on jackal plinth")
-    game.do_command("up")               # entering and looking is safe
+    game.do_command("up")  # entering and looking is safe
     assert not game.is_game_over()
     game.do_command("look")
     assert not game.is_game_over()
-    game.do_command("say boo")          # but any racket disturbs the live Horror...
-    game.do_command("say boo")          # ...and it erupts (limit 2)
+    game.do_command("say boo")  # but any racket disturbs the live Horror...
+    game.do_command("say boo")  # ...and it erupts (limit 2)
     assert game.is_game_over() and not game.is_won()
 
 
@@ -291,20 +299,28 @@ def test_felling_a_lured_spawn_drops_its_canopic_jar():
 
 def test_the_chimney_is_passable_but_chokes_without_a_mask():
     game = _game()
-    game.do_command("up")          # -> Summit
-    game.do_command("in")          # into the fungal chimney -- passable now, not blocked
+    game.do_command("up")  # -> Summit
+    game.do_command("in")  # into the fungal chimney -- passable now, not blocked
     assert game.player.location.name == "The Fungal Chimney"
     assert not game.is_game_over()  # one breath is survivable (a warning)
     game.do_command("look")
-    game.do_command("look")        # linger in the spores -> choke to death
+    game.do_command("look")  # linger in the spores -> choke to death
     assert game.is_game_over() and not game.is_won()
 
 
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     game = _game()
     # Arm with gel + igniter, creep out to the Exterior, climb up, burn the root.
-    for cmd in ["sneak east", "take igniter", "sneak east", "take gel",
-                "sneak east", "sneak south", "up", "burn corpse"]:
+    for cmd in [
+        "sneak east",
+        "take igniter",
+        "sneak east",
+        "take gel",
+        "sneak east",
+        "sneak south",
+        "up",
+        "burn corpse",
+    ]:
         game.do_command(cmd)
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     assert sphere.get_property("horror_dead")
@@ -314,9 +330,9 @@ def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
 def test_prying_the_coffin_needs_the_magnetic_boots():
     game = _game()
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
-    sphere.set_property("horror_dead", True)         # pretend it's cleansed
+    sphere.set_property("horror_dead", True)  # pretend it's cleansed
     game.relocate(game.player, sphere)
-    game.do_command("pry coffin")                    # no boots -> refused
+    game.do_command("pry coffin")  # no boots -> refused
     assert sphere.items["coffin"].get_property("pried") in (False, None)
     assert "synth-hunting dagger" not in sphere.items
     # with the boots worn, it works

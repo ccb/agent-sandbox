@@ -2271,9 +2271,7 @@ def build_game() -> ActionCastle4:
         "shack_door_bang",
         lambda g: g.player.location is old_woods
         and g.player.get_property("visited_shack"),
-        lambda g: g.emit_sound(
-            old_woods, 1, "the shack door bangs shut behind you"
-        ),
+        lambda g: g.emit_sound(old_woods, 1, "the shack door bangs shut behind you"),
         repeatable=False,  # bangs once
     )
 
