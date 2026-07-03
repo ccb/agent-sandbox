@@ -3,16 +3,23 @@
 A Zork / Action Castle homage set in the Blue Ruins of Vaarn. See the design spec
 at docs/design/tomb-of-nassak-an-rah.md.
 
-PHASE 1 (this file): the map + atmosphere only -- eight navigable, examinable
-locations, the nameless scavenger, a glowstone to see by. No puzzles, threats,
-reactions, scoring, or deaths yet; those arrive in later phases. The goal here is
-a world you can walk and read.
+The game opens at the Caravan Wreck -- a safe onboarding room on the Tomblands
+road that teaches the old-school verb+object language (EXAMINE / OPEN / TAKE /
+LIGHT / DOUSE / READ / TALK) before the tomb can kill you (design doc §16.2).
+The glowstone is found in the merchant's pack, not given. GO NORTH skips the
+tutorial entirely.
 
     Run:  python -m text_adventure_games.adventures.tomb_of_nassak_an_rah [--walk]
 """
 
+import random
+
 from text_adventure_games import games, things, actions, blocks, reactions, perception
 from text_adventure_games.enums import Property
+from text_adventure_games.slots import Wound, roll_wound
+
+# Wound rolls draw from a module RNG so tests can seed it.
+_RNG = random.Random()
 
 
 def _die(game, message):
@@ -45,6 +52,10 @@ _QUIET = {
     "feel",
     "listen",
     "smell",
+    "drink",
+    "eat",
+    "read",
+    "search",
 }
 # To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
 # quietly sensing, and working your own light are safe (so you can enter, see it,
@@ -61,6 +72,7 @@ _QUIET_SPHERE = {
     "feel",
     "listen",
     "smell",
+    "drink",
 }
 
 
@@ -74,22 +86,45 @@ def _player_was_loud_in(g, room, quiet):
     / pry. (Creatures' own actions don't count -- it's the player giving themselves
     away.)"""
     for e in g.events[g._round_event_start :]:
+        payload = e.payload or {}
         if (
             e.actor == g.player.name
             and e.action not in quiet
-            and (e.payload or {}).get("location") == room.name
+            and payload.get("location") == room.name
+        ):
+            return True
+        # An encumbered player's movement clatters (slots.py): the engine
+        # emits a real sound, and the tomb's listeners treat it as one.
+        if (
+            "overloaded pack" in (payload.get("sound") or "")
+            and payload.get("location") == room.name
         ):
             return True
     return False
 
 
-def _hazard(game, room, *, danger, warn, kill, limit=3, gate=None):
+def _hazard(
+    game,
+    room,
+    *,
+    danger,
+    warns,
+    kill=None,
+    limit=3,
+    gate=None,
+    harm=None,
+    harm_resets=False,
+):
     """A patient room hazard. Each round the player is in *room* and ``danger(g)``
-    holds (and ``gate`` allows), a counter escalates and ``warn(n)`` is narrated; at
-    ``limit`` it ``kill``s. The counter resets the instant the danger lifts -- you
-    douse the light, fall quiet, put on the mask, step out -- so a hazard always
-    warns first and there is always a way clear. (Replaces instant death-on-entry:
-    you can walk in, get a warning, and react.)"""
+    holds (and ``gate`` allows), a counter escalates and the next line of *warns*
+    is narrated; at ``limit`` it ``kill``s. The counter resets the instant the
+    danger lifts -- douse the light, fall quiet, mask up, step out -- so a hazard
+    always warns first and there is always a way clear.
+
+    *warns* is a tuple of escalating lines: **the fiction is the clock** (design
+    doc §16.1). The first warning is ambient; the last is unmistakably terminal.
+    No mechanics leak into the prose -- unless ``give_hints`` is on, in which
+    case a counter is appended as training wheels."""
     key = f"_hz:{room.name}"
 
     def tick(g):
@@ -100,9 +135,19 @@ def _hazard(game, room, *, danger, warn, kill, limit=3, gate=None):
         n = (room.get_property(key) or 0) + 1
         room.set_property(key, n)
         if n >= limit:
-            _die(g, kill)
+            if harm is not None:
+                # Wound-then-kill (design: slots share the harm gauge): the
+                # hazard maims rather than executes; death arrives when wounds
+                # fill the player's slots (or the wound roll is itself fatal).
+                if harm(g) and harm_resets:
+                    room.set_property(key, 0)
+            else:
+                _die(g, kill)
         else:
-            g.parser.ok(warn(n))
+            line = warns[min(n, len(warns)) - 1]
+            if g.give_hints:
+                line += f" ({n}/{limit})"
+            g.parser.ok(line)
 
     game.add_trigger(f"hazard:{room.name}", lambda g: True, tick, repeatable=True)
 
@@ -180,7 +225,9 @@ class BurnCorpse(actions.Action):
             and _is_holding(self.player, "plasma-igniter")
         ):
             self.parser.fail(
-                "You'd need something that burns and a flame to light it -- gel, and an igniter."
+                "Bone gone to stone does not take bare flame. It would want "
+                "dousing in something that burns, and a spark hot enough to "
+                "mean it."
             )
             return False
         return True
@@ -193,12 +240,22 @@ class BurnCorpse(actions.Action):
         self.game.locations["Burial Sphere of Nassak An-Rah"].set_property(
             "horror_dead", True
         )
-        self.parser.ok(
+        message = (
             "You splash the embalming gel over the ossified mystic and strike the "
             "igniter. Orange flame roars down the fungal chimney -- and far below, the "
             "whole rotten network shudders and dies. The Fungal Horror sloughs into "
             "ash. The tomb falls silent at last."
         )
+        # Whatever still nested in the mystic's hands burns with him -- take the
+        # Friend's Fungus BEFORE cleansing, or lose it.
+        corpse_item = self.player.location.items.get("ossified corpse")
+        if corpse_item is not None and "friend's fungus" in corpse_item.contents:
+            corpse_item.remove_item(corpse_item.contents["friend's fungus"])
+            message += (
+                " The pouch nested in his clasped hands goes up with him, sweet "
+                "on the wind for a moment."
+            )
+        self.parser.ok(message)
         self.game.award("cleanse", 30, None)
 
 
@@ -233,8 +290,9 @@ class PryCoffin(actions.Action):
             return False
         if "magnetic boots" not in self.player.worn:
             self.parser.fail(
-                "The coffin floats in the dead centre, out of reach -- you flail in "
-                "the zero gravity and get nowhere. You need purchase. (Magnetic boots?)"
+                "You reach the coffin and shove -- and it is you who drifts "
+                "away, slow as sediment. Nothing here holds you down, and "
+                "prying wants something to brace against."
             )
             return False
         return True
@@ -265,8 +323,10 @@ class CrystalSeal(blocks.Block):
     def __init__(self, canopic):
         super().__init__(
             "A seal of red crystal",
-            "The stair up is barred by a lattice of red crystal -- it will yield "
-            "only to the Autarch's missing jars, each on the plinth of its kind.",
+            "A seal of red crystal bars the stair, grown through the treads like "
+            "frost through cloth. Five beast-sigils are set in the arch above "
+            "it; two of them are dark. The crystal hums at a pitch just under "
+            "hearing, with the patience of a lock.",
         )
         self.canopic = canopic
 
@@ -305,66 +365,281 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
 
 
 def build_game():
+    # --- The onboarding: the Caravan Wreck (start) ---------------------------
+    # A safe sandbox one room south of the tomb that teaches the old-school
+    # verb+object language (EXAMINE / OPEN / TAKE / LIGHT / DOUSE / READ / TALK)
+    # before anything can kill you. GO NORTH works from turn one -- the tutorial
+    # is optional exploration, not a gate. (Design: tomb doc §16.2; register:
+    # docs/design/vaarn-style-guide.md.)
+    wreck = things.Location(
+        "The Caravan Wreck",
+        "The Tomblands road, at the hour after the Cacklemaw. A trade caravan lies "
+        "heeled over in the blue sand -- wind-wagon ribs of pale wood, cargo "
+        "strewn and already sanding under -- and the dead have been arranged by "
+        "the wind into attitudes of sleep. It is said the road to Gnomon is "
+        "walked only by the desperate; last night this was proven again. "
+        "Northward, three carved faces watch from a slab of azure stone.",
+    )
+    hold = things.Location(
+        "The Wagon's Hold",
+        # The LIT view; the Darkness veil below supplies the dark blurb. This is
+        # where LIGHT/DOUSE get learned in safety -- so the Hall of Youth can
+        # later subvert the lesson.
+        "Your light finds the hold intact where the wagon is not: crates of "
+        "saffron and dates still lashed tight, a folding desk, and the "
+        "merchant's ledger, closed around its ribbon marker.",
+    )
+    wreck.add_connection("in", hold)  # auto: hold out -> wreck
+
+    hold.obscure(
+        perception.Darkness(
+            blurb="Bruise-dark. The hold smells of saffron, lamp-oil, and the dry "
+            "sweetness of dates; you can make out crate-shapes, and on a desk "
+            "somewhere, a pale square of paper. The daylight is a grey rectangle "
+            "behind you."
+        )
+    )
+
+    _scenery(
+        wreck,
+        "wreck",
+        "the heeled-over wind-wagon",
+        "Pale ribs and torn sailcloth. Wind-wagons are built to outrun "
+        "anything on the Tomblands road, and this one nearly did.",
+    )
+    _scenery(
+        wreck,
+        "zoxen",
+        "two dead zoxen, half-sanded",
+        "The caravan's draught-zoxen, patient in death as in life, already "
+        "sanded to the shoulder. By morning the road will have them wholly.",
+    )
+    # The merchant himself -- Worry's "the merchant could not". Searching (or
+    # examining) him is the wreck's safe rehearsal of the corpse-searching habit
+    # that pays off at the Summit.
+    merchant = _scenery(
+        wreck,
+        "dead merchant",
+        "the merchant, dead where the road put him",
+        "He lies composed, as if the wind had tidied him for visitors. The "
+        "Cacklemaw did not linger over him; the sand has been more "
+        "attentive, already drifting into the folds of his coat.",
+    )
+    merchant.add_alias("merchant")
+    merchant.add_alias("body")
+    merchant.add_alias("corpse")
+    merchant.make_surface()
+    merchant.set_property("reveals_on_examine", True)
+    merchant.set_property(
+        "contents_relation", "In the sand-drifted folds of his coat you find"
+    )
+    tokens = things.Item(
+        "purse of water-debt tokens",
+        "a purse of water-debt tokens",
+        "Stamped brass tokens on a ring, each good for a measure of water in "
+        "Gnomon. The city's truest currency, and the desert's most honest joke.",
+    )
+    tokens.set_property("gettable", True)
+    tokens.add_alias("purse")
+    tokens.add_alias("tokens")
+    tokens.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(tokens)
+    crates = _scenery(
+        hold,
+        "crates",
+        "lashed crates of saffron and dates",
+        "Trade goods bound for the souks of Gnomon, worth a season's water "
+        "-- far too much to carry, though a bale or two might ride home "
+        "with somebody. The Cacklemaw do not trade.",
+    )
+    crates.make_container()
+    for _name, _desc, _ex, _slots in (
+        (
+            "bale of saffron",
+            "a bale of saffron",
+            "Crimson threads pressed into a bale, worth more than its weight in "
+            "water at the souks of Gnomon. Heavy, and it knows it.",
+            2,
+        ),
+        (
+            "crate of dates",
+            "a crate of dates",
+            "Dates from the southern oases, packed in palm fibre. Food for a "
+            "month, or a small fortune for whoever hauls it.",
+            2,
+        ),
+        (
+            "bolt of spider-silk",
+            "a bolt of spider-silk",
+            "Grey spider-silk, cool as water over the hands. Light -- the "
+            "merchant knew what was worth the wagon-space.",
+            1,
+        ),
+    ):
+        _good = things.Item(_name, _desc, _ex)
+        _good.set_property("gettable", True)
+        _good.set_property("slots", _slots)
+        _good.add_alias(_name.split()[0])  # bale / crate / bolt
+        _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
+        if "silk" in _name:
+            _good.add_alias("silk")
+        crates.add_item(_good)
+    ledger = _scenery(
+        hold,
+        "ledger",
+        "the merchant's ledger",
+        "A trade ledger bound in lizard-skin, closed around a ribbon "
+        "marker at its final page.",
+    )
+    # FEEL finds the ledger in the dark hold -- so an empty-handed player who
+    # gropes around is rewarded, and the probe is rehearsed before the Hall of
+    # Youth needs it.
+    ledger.perceptible_by(
+        perception.Sense.TOUCH,
+        "Your hands find a folding desk, and on it a book bound in "
+        "lizard-skin, closed around a ribbon. Too dark to read a word of it.",
+    )
+    ledger.set_property(
+        "read_text",
+        "The hand is neat until it is not. '...ninth day. Camped in the lee "
+        "of the tomb the guards call the Three Mouths. They will not pass "
+        "it after dark, and I have stopped teasing them for it. Kotesh "
+        "swears the boy's mouth is lightless within, and that what roosts "
+        "there hates a lamp worse than a shout. The halls, he says, "
+        "remember every footfall. And none of them, drunk or paid, will "
+        "speak of the old man's mouth, which weeps orange. Superstition -- "
+        "but I observe that my guards are paid to be brave, and are not. "
+        "Tomorrow, Gnomon.' The entry is the last.",
+    )
+    ledger.set_property("gettable", True)  # take it along; it reads anywhere
+    ledger.add_command_hint("read ledger")
+
+    pack = things.Item(
+        "pack",
+        "the merchant's half-buried pack",
+        "Boiled leather, half-buried, the straps still buckled. Whatever the "
+        "Cacklemaw came for, it was not this.",
+    ).make_container()
+    pack.set_property("is_closed", True)
+    pack.add_command_hint("open pack")
+    waterskin = things.Item(
+        "waterskin",
+        "a half-full waterskin",
+        "Half of the merchant's water survived the night. In Vaarn this is "
+        "called an inheritance.",
+    )
+    # Water is Vaarn's scarcest resource -- of course you can drink it.
+    waterskin.set_property(Property.DRINKABLE, True)
+    waterskin.set_property(
+        Property.TASTE,
+        "of warm leather and of luck. In Vaarn, wealth goes " "down the throat.",
+    )
+    waterskin.add_alias("water")
+    waterskin.add_alias("skin")
+    wreck.add_item(pack)
+
+    # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
+    # walk like men", wear masks in imitation of the human face). She was the
+    # caravan's TEAMSTER, driving the zoxen; the zoxen pulled. Newbeasts are
+    # never beasts of burden -- canon reserves that for zoxen and iron mules.
+    worry = things.Character(
+        "Worry",
+        "a new-mule teamster",
+        "I am Worry. I drove the wagon; now there is no wagon.",
+    )
+    worry.examine_text = (
+        "A grey new-mule in a drover's long coat, upright on her hind hooves, "
+        "dressed in the road's dust. Patient, mournful, unhurt. A carved mask "
+        "in imitation of a human face hangs at her neck on a cord; there is no "
+        "one left on the road to wear it for. A brass pin on the coat reads "
+        "WORRY."
+    )
+    worry.talk_text = (
+        '"They came at moonset, laughing," Worry says. "I ran, and the merchant '
+        "could not, and that is the whole story. The Cacklemaw make no secret "
+        'of their coming; the secret is what good knowing does you." She looks '
+        'north, to the faces in the azure stone. "Take what he no longer needs '
+        "-- better you than the sand. There is water in his pack, half a skin "
+        "of it, and a glowstone besides. You can take whatever you can carry "
+        "from the hold. But "
+        "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
+        'and a caravan is seldom wrong twice."'
+    )
+    wreck.add_character(worry)
+
     # --- The eight locations -------------------------------------------------
     exterior = things.Location(
         "Tomb Exterior",
-        "You stand in the phthalo sands beneath a dying red sun. Before you rises "
-        "the Tomb of Nassak An-Rah: a thirty-foot slab of azure stone, three carved "
-        "faces staring across the wastes, the whole edifice webbed in creeping "
-        "orange fungus. The western face is the dead Autarch as a young boy; the "
-        "eastern, a helmed warrior. Far up, a third face -- an old man -- turns to "
-        "the sky, orange tendrils weeping from its open mouth. Each mouth is a door.",
+        "A thirty-foot slab of azure stone rises from the phthalo sands, webbed "
+        "over every seam with creeping orange fungus. Three faces are carved in "
+        "it: westward, the dead Autarch as a young boy; eastward, a helmed "
+        "warrior; far up, an old man turned to the sky, orange tendrils weeping "
+        "from his open mouth. Each mouth is a door. The wind has been reading "
+        "these faces for aeons and keeps its findings to itself.",
     )
     youth = things.Location(
         "Hall of Youth",
         # The LIT view -- what you see once a light is raised. Pitch dark until
         # then: the Darkness veil (set in build_game) supplies the dark blurb.
-        "Your light throws blue across sand-scoured walls; statues of the boy-Autarch "
-        "crowd the chamber, swaddled and adored. Overhead the whole ceiling seethes -- "
-        "thousands of bats, wheeling and dropping toward the light.",
+        "Your light wakes the blue in the sand-scoured walls: statues of the "
+        "boy-Autarch crowd the chamber, swaddled and adored, rendered with an "
+        "unsettling tenderness. Overhead, the whole vault answers the glow -- it "
+        "seethes. Thousands of bats, wheeling lower with every pass.",
     )
     memory = things.Location(
         "Hall of Memory",
-        "Glinting lattices of crystal climb the walls -- the favoured memories of "
-        "the Autarch, frozen in lazulite. The light they throw is cold and slow.",
+        "Lattices of memory-crystal climb every wall, the favoured recollections "
+        "of the Autarch set in lazulite. The light inside them is not reflection; "
+        "it moves while you are still, slow and cold, like thought at the bottom "
+        "of a lake. One bank of crystal is worn smooth at hand-height, as if "
+        "often consulted.",
     )
     hounds = things.Location(
         "Hall of Hounds",
-        "A wall of thick plexiglas holds back a tank of luminous embalming gel. "
-        "Suspended in it: ten of An-Rah's hunting hounds, black and spindly, threaded "
-        "with cyborg augmentations, perfectly preserved.",
+        "A wall of plexiglas holds back a tank of embalming gel, luminous, the "
+        "green-gold of old honey. Ten of An-Rah's hunting hounds hang suspended "
+        "in it, black and spindly, threaded through with chrome, forever "
+        "mid-stride. They are perfectly preserved. Their eyes are open.",
     )
     warriors = things.Location(
         "Hall of Warriors",
-        "A dim, uneven floor. Four tall plexiglas cylinders stand here, each holding "
-        "a mummified guard in Autarchy armour -- and each laced through with veins of "
-        "orange fungus.",
+        "Four plexiglas cylinders stand on an uneven floor, each holding a "
+        "guard-mummy at attention in Autarchy armour. The fungus has found all "
+        "four; orange veins fan out under the glass like pressed flowers. Their "
+        "kit has outlasted them, as kit does.",
     )
     canopic = things.Location(
         "Hall of the Canopic Jars",
-        "Pentagonal walls of dressed stone. Five plinths ring a central staircase "
-        "that climbs into shadow -- but the stair is barred by a seal of red crystal. "
-        "Two of the plinths stand empty, lit from within by a crimson light.",
+        "Five plinths ring a central stair in a pentagon of dressed stone. Three "
+        "still bear their canopic jars; two stand empty, lit from within by a "
+        "crimson light that does not flicker. The stair climbs into shadow, "
+        "barred by a seal of red crystal. Something in this room is listening; "
+        "you can tell, the way one can.",
     )
     sphere = things.Location(
         "Burial Sphere of Nassak An-Rah",
-        "A great spherical chamber, its walls carved with funeral prayers. In the "
-        "dead centre floats the Autarch's coffin -- a glass anti-entropy sphere, now "
-        "clouded and invaded by a roiling orange mass. There is no gravity here; dust "
-        "and bone-chips drift in the still air.",
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: dust and bone-chips drift in the still "
+        "air, and your own weight forgot you at the threshold. In the dead "
+        "centre floats the Autarch's coffin, a glass anti-entropy sphere, "
+        "clouded now, and tenanted -- something orange coils inside it at the "
+        "pace of a slow breath. The prayers were carved to be read from every "
+        "direction at once.",
     )
     summit = things.Location(
         "The Summit",
-        "Windy and high, the desert spread out blue and endless below. An ossified "
-        "corpse sits here in the lotus position, mummified mid-meditation, orange "
-        "fungus fronding from its eyes and open mouth and down into the chimney that "
-        "drops through the tomb's crown.",
+        "High and wind-scoured, the blue desolation unrolled below to the "
+        "horizon's molten line. An ossified mystic sits here in the lotus "
+        "position, stone where he was flesh, orange fungus fronding from his "
+        "eyes and open mouth and down into the chimney that drops through the "
+        "tomb's crown. He has the look of a man interrupted mid-sentence, whose "
+        "sentence continues underground.",
     )
     chimney = things.Location(
         "The Fungal Chimney",
-        "A vertical shaft choked with orange fungus, dropping from the summit into "
-        "the burial sphere below. The air is thick with drifting spores -- every "
-        "breath sears. You shouldn't linger; the way down is below, the summit above.",
+        "A vertical throat choked with orange growth, dropping from the summit "
+        "toward a glow of carved prayers far below. The spores hang so thick the "
+        "air has texture. Down in the dark of it, the fungus is warm.",
     )
 
     # --- Connections (see spec §3) ------------------------------------------
@@ -374,6 +649,9 @@ def build_game():
     # (Only canonical directions -- n/s/e/w/up/down/in/out -- auto-route from a
     # bare word; the flavor verbs "climb"/"chimney" arrive with custom actions in a
     # later phase. The room prose names which mouth lies which way.)
+    wreck.add_connection(
+        "north", exterior
+    )  # the Tomblands road (auto: exterior south -> wreck)
     exterior.add_connection("north", youth)  # child's mouth (west face) -> Youth
     exterior.add_connection("east", warriors)  # warrior's mouth (east face) -> Warriors
     exterior.add_connection(
@@ -436,38 +714,39 @@ def build_game():
         "ceiling",
         "the vaulted ceiling",
         "Your light picks out the vault overhead: the whole ceiling seethes "
-        "with roosting bats -- thousands of them, twitching and shifting and "
-        "dropping toward the glow. Raise a din, or keep a light on them, and "
-        "they'll come down in a screaming cloud.",
+        "with roosting bats, packed wing to wing, thousands of them -- and "
+        "the nearest have already let go of the stone.",
     )
     ceiling.perceptible_by(
         perception.Sense.HEARING,
         "You can't see a thing, but the vault overhead seethes -- a dry, "
-        "restless storm of leathery wings. Bats. A great many, and close. A "
-        "light among them, or a loud noise, would wake them.",
+        "restless storm of leathery wings. A great many, and close. They "
+        "shift when you shift.",
     )
     _scenery(
         memory,
         "crystal lattice",
         "lattices of memory-crystal",
-        "Lazulite crystals knit across the walls. One holds the Autarch's "
-        "embalming: the baboon took his lungs, the human his liver, the mantis "
-        "his eyes; the falcon was given his intestines, and the jackal -- "
-        "strangely -- his brain.",
+        "Lazulite crystals knit across the walls, worn smooth at hand-height. "
+        "One bank replays the Autarch's embalming for no one: the baboon took "
+        "his lungs, the human his liver, the mantis his eyes; the falcon was "
+        "given his intestines, and the jackal -- strangely -- his brain.",
     )
     _scenery(
         hounds,
         "tank",
         "a plexiglas tank of embalming gel",
-        "Ten cyborg hounds hang in luminous, flammable gel behind thick "
-        "plexiglas. Collectors would pay in salt and water for these.",
+        "Ten hounds hang in the luminous gel, chrome-threaded, forever "
+        "mid-stride. Even through the seam the gel smells of lamp-oil and "
+        "honey. Collectors would pay in salt and water for any of this.",
     )
     _scenery(
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
-        "Each holds a guard-mummy in Autarchy armour, prismatic blade at rest, "
-        "the glass fogged from within by threads of orange fungus.",
+        "Each holds a guard-mummy in Autarchy armour, at an attention no "
+        "order will ever relieve, the glass fogged from within by threads "
+        "of orange fungus.",
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -503,15 +782,15 @@ def build_game():
     falcon_plinth = things.Item(
         "falcon plinth",
         "an empty plinth carved with a falcon",
-        "A plinth carved with a falcon's likeness, lit crimson and empty -- it waits "
-        "for the jar that holds the Autarch's intestines.",
+        "A plinth carved as a falcon, lit crimson and empty. The carving's "
+        "talons are cupped, curled around the shape of something it has lost.",
     ).make_surface(capacity=1)
     falcon_plinth.set_property("gettable", False)
     jackal_plinth = things.Item(
         "jackal plinth",
         "an empty plinth carved with a jackal",
-        "A plinth carved with a jackal's likeness, lit crimson and empty -- it waits "
-        "for the jar that holds the Autarch's brain.",
+        "A plinth carved as a jackal, lit crimson and empty. The stone jaws are "
+        "parted, holding their grip on an absence.",
     ).make_surface(capacity=1)
     jackal_plinth.set_property("gettable", False)
     canopic.add_item(falcon_plinth)
@@ -536,20 +815,56 @@ def build_game():
         "coffin",
         "the Autarch's anti-entropy coffin",
         "A clouded glass sphere at the chamber's heart, its field failing, its "
-        "interior a slow orange churn. The Autarch's bones -- and his Exotica -- "
-        "drift sealed within. You'd have to PRY it open.",
+        "interior a slow orange churn. Past the cloud, shapes drift and turn "
+        "like fish under ice: bone, and things that were buried to be kept. The "
+        "seam at its equator is fine as a hair -- made to be pried, never opened.",
     )
     coffin.make_container()
     coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
+    # The failing anti-entropy field still counts as a lock: SEARCH (which
+    # rummages open ordinary closed containers) must not bypass the pry puzzle.
+    coffin.set_property(Property.IS_LOCKED, True)
     coffin.add_item(dagger)
     coffin.add_item(manifold_box)
-    _scenery(
+    # The ossified corpse carries the source adventure's find: "Searching the
+    # corpse yields a pouch of Friend's Fungus." It's a surface (the pouch nests
+    # in its hands), the pouch hidden until SEARCH -- or EXAMINE, which opts in
+    # via reveals_on_examine (a close look at the hands is enough).
+    corpse = _scenery(
         summit,
         "ossified corpse",
         "an ossified mystic",
         "A corpse turned to stone mid-meditation, orange fungus weeping from its "
         "eyes and mouth -- the wellspring, it seems, of all the rot below.",
     )
+    corpse.add_alias("corpse")
+    corpse.add_alias("mystic")
+    corpse.make_surface()
+    corpse.set_property("reveals_on_examine", True)
+    corpse.set_property(
+        "contents_relation", "Nested in the hollow of its clasped hands you find"
+    )
+    fungus = things.Item(
+        "friend's fungus",
+        "a plastic pouch of pink fungus",
+        "A plastic pouch of pink fungus, soft and faintly warm. The Autarchy fed "
+        "it to guests of state: whoever ingests it becomes extremely agreeable, "
+        "and stays that way for hours. The mystic was holding it when he turned "
+        "to stone -- for himself, or for whatever came up the mountain.",
+    )
+    fungus.set_property("gettable", True)
+    fungus.set_property(Property.EDIBLE, True)
+    fungus.set_property(
+        Property.TASTE,
+        "sweet, chemical, and companionable. For the next while "
+        "you find yourself agreeing with everything -- the "
+        "tomb, the dark, the distant rustling. All quite "
+        "reasonable, really.",
+    )
+    fungus.add_alias("fungus")
+    fungus.add_alias("pouch")
+    fungus.set_property(Property.IS_HIDDEN, True)
+    corpse.add_item(fungus)
 
     # The two missing jars are WORN by the Spawn (each as a hat). Knock a Spawn out
     # (it needs a weapon -- the prismatic blade below) and it drops the jar.
@@ -574,8 +889,9 @@ def build_game():
         "I am what is left of the Autarch's appetites.",
     )
     spawn_guts.examine_text = (
-        "An octopus of orange fungus and grave-cured intestine, the falcon canopic "
-        "jar worn on top like a hat. It sways toward any sound."
+        "What could be described as an octopus of orange fungus and grave-cured "
+        "intestine -- though even that doesn't quite get it -- wearing the "
+        "falcon canopic jar on top like a hat. It sways toward any sound."
     )
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
@@ -584,8 +900,9 @@ def build_game():
         "I am what is left of the Autarch's thoughts.",
     )
     spawn_brain.examine_text = (
-        "A fungal brain that walks on two tiny legs, the jackal canopic jar worn as "
-        "a hat. It twitches toward every noise."
+        "A fungal brain that walks on two small legs, the jackal canopic jar "
+        "worn as a hat. It has no eyes and does not appear to want any; it "
+        "twitches toward every noise, precise as a metronome."
     )
     spawn_brain.add_to_inventory(jackal_jar)
     warriors.add_character(spawn_guts)
@@ -600,6 +917,7 @@ def build_game():
         "An Autarchy guard's blade, its edge fracturing the light into colours.",
     )
     blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
+    blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
     warriors.add_item(blade)
 
@@ -614,8 +932,8 @@ def build_game():
     boots = things.Item(
         "magnetic boots",
         "a pair of magnetic boots",
-        "Heavy Autarchy boots that clamp to metal -- the way to keep your footing "
-        "in a zero-gravity chamber.",
+        "Heavy Autarchy guard-boots, soled in dull magnet-metal. They clamp to "
+        "anything ferrous with a click that means it, and let go grudgingly.",
     )
     boots.set_property(Property.WEARABLE, True)
     boots.set_property("wear_slot", "feet")
@@ -649,16 +967,36 @@ def build_game():
         "I am Silas, of the Seekers of Eyeless Wisdom. I read the dead.",
     )
     silas.examine_text = (
-        "A gaunt synthetic in fuligin-yellow robes, fingertips tipped with cranial "
-        "bores, drawing memory from the lattice in slow bright threads. He does not "
-        "look up."
+        "A gaunt synth in fuligin-yellow robes, fingertips tipped with cranial "
+        "bores, drawing memory from the lattice in slow bright threads. Patient, "
+        "courteous, elsewhere. Now and then his lips move -- circular glyphs, "
+        "no sound."
     )
     silas.talk_text = (
-        "Silas speaks without turning. \"Scavenger. Two of the Autarch's organs walk "
-        "these halls -- his guts and his brain, sprouted on fungus and each wearing "
-        "the canopic jar it was sealed in. Take the jars; set each on the plinth of "
-        'its kind; the seal will yield. And step softly -- the dead here listen."'
+        'Silas speaks without turning. "Scavenger. You walk in a house of '
+        "memory; mind what you wake. Two of the Autarch's organs have got up and "
+        "walk these halls wearing their own jars -- his appetites and his "
+        "thoughts, if you follow me. I do not fight them; I read. The lattice "
+        "remembers his embalming, for those who trouble to look, and the plinths "
+        'above remember what they held." A pause; a brief run of clipped, '
+        'circular syllables, like a quotation. "The dead here listen. Step '
+        'softly."'
     )
+    # Silas keeps the Ulfire Lantern (Exotica; design doc §13). Ulfire is the
+    # ninth colour: its light shines THROUGH solid objects -- the "very specific
+    # angle" from which the Manifold Box's hypergeometric compartment can be
+    # seen. He parts with it only for the Friend's Fungus (the give-trigger
+    # below); prying it from him otherwise means fighting an INT-drinker.
+    ulfire_lantern = things.Item(
+        "ulfire lantern",
+        "a lantern of the ninth colour",
+        "A lantern worked in lead and glass, cold until lit. Ulfire is the "
+        "ninth colour; its light has the unusual property of shining through "
+        "solid objects, and is stopped only by lead.",
+    )
+    ulfire_lantern.set_property(Property.FLAMMABLE, True)
+    ulfire_lantern.add_alias("lantern")
+    silas.add_to_inventory(ulfire_lantern)
     memory.add_character(silas)
 
     # The crystal seal bars the stair up from the Canopic hall until both jars are
@@ -671,32 +1009,48 @@ def build_game():
         "a lone scavenger",
         "I comb the Blue Ruins for what the dead no longer need.",
     )
-    # The glowstone is a lantern: dark until you LIGHT it (turn on / light
-    # glowstone), and you can DOUSE it (turn off) to go dark again. FLAMMABLE is
-    # the engine's "can be lit" flag (see actions.Light). It starts UNLIT -- so
-    # carrying it is safe; it's *lighting* it in the Hall of Youth that wakes the
-    # bats.
+    # The glowstone is a lantern: dark until you LIGHT it, DOUSE to go dark
+    # again. FLAMMABLE is the engine's "can be lit" flag (see actions.Light). It
+    # starts UNLIT -- carrying it is safe; *lighting* it in the Hall of Youth is
+    # what wakes the bats. It is FOUND (in the merchant's pack at the wreck),
+    # not given: taking it is the tutorial's OPEN/TAKE beat.
     glowstone = things.Item(
         "glowstone",
         "a dim glowstone",
-        "A shard of cold blue glowstone. LIGHT it and it glows bright enough to see "
-        "by; DOUSE it to go dark again.",
+        "A shard of cold lazulite, dark until woken. Scavengers carry them "
+        "dark: light is dear, and attention dearer.",
     )
     glowstone.set_property(Property.FLAMMABLE, True)
-    glowstone.add_alias("stone")
-    glowstone.add_alias("lantern")
-    player.add_to_inventory(glowstone)
+    glowstone.add_alias(
+        "stone"
+    )  # no "lantern" alias: the Ulfire Lantern owns that word
+    glowstone.add_command_hint("light glowstone")
+    glowstone.add_command_hint("douse glowstone")
+    pack.add_item(glowstone)
+    pack.add_item(waterskin)
+
+    # Vaarn item slots (slots.py): ten -- gear and wounds share the gauge.
+    player.slot_capacity = 10
+    # The tomb's climbs: an encumbered scavenger cannot make them.
+    exterior.set_property("climb_exits", {"up"})
+    summit.set_property("climb_exits", {"down"})
+    chimney.set_property("climb_exits", {"out"})
 
     game = TombGame(
-        exterior,
+        wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain],
+        characters=[silas, spawn_guts, spawn_brain, worry],
         custom_actions=[Sneak, BurnCorpse, PryCoffin],
     )
     game.max_score = 100
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
     game.enable_senses()
+    # Register purity by default: no command-hint training wheels in the prose
+    # (design doc §16 -- danger telegraphs through fiction). Flip give_hints on
+    # for a hand-held demo/classroom run; the wreck's tutorial items carry
+    # their hints ("open pack", "light glowstone", "read ledger") for that mode.
+    game.give_hints = False
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
@@ -716,44 +1070,125 @@ def build_game():
     # veil only gates what's *seen*; movement stays free -- design/perception.md.)
     youth.obscure(
         perception.Darkness(
-            blurb="Pitch dark. Leathery wings rustle and shift somewhere overhead -- "
-            "something is roosting up there. Raise a light to see the way... but it may "
-            "wake them. (EXAMINE or LISTEN overhead, or FEEL your way in the dark.)"
+            blurb="Dark as the inside of a sealed jar. The air is chill and smells "
+            "of old guano; somewhere far above, leather rustles against leather, "
+            "patient and vast. The caravan-guards' word for the boy's mouth was "
+            "'lightless', and they meant it as advice."
         )
     )
 
     # The bats: roused by carrying a LIT light into the Youth, or by a loud noise
-    # there. Patient -- they warn, then swarm. Douse the light (or fall quiet) and
-    # they settle.
+    # there. Patient -- the escalation is the clock. Douse the light (or fall
+    # quiet) and they settle.
+    def _bat_maul(g):
+        """Dive-bombing bats deal a non-lethal wound each round the light (or
+        din) persists; death comes only if wounds fill the scavenger's slots."""
+        fatal, dropped = g.player.add_wound(
+            Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."), rng=_RNG
+        )
+        for it in dropped:
+            g.parser.ok(
+                f"The {it.name} is torn from your grip and spills into the dark."
+            )
+        if fatal:
+            _die(
+                g,
+                "The swarm takes you down among the statues, and the dark "
+                "closes over the light. THE END.",
+            )
+        else:
+            g.parser.ok(
+                "The bats drop in a wheeling rake of claws -- your scalp and "
+                "hands pay for the light. (You are mauled; douse it, or feed "
+                "them more of yourself.)"
+                if g.give_hints
+                else "The bats drop in a wheeling rake of claws; your scalp and "
+                "hands pay for the light."
+            )
+        return True
+
     _hazard(
         game,
         youth,
         danger=lambda g: perception.carries_light(g.player)
         or _player_was_loud_in(g, youth, _QUIET),
-        warn=lambda n: f"The bats seethe and drop, shrieking, batting at your face -- ({n}/3). Go dark and quiet, NOW.",
-        kill="The bats boil down in a screaming cloud and tear you apart in the dark. THE END.",
+        warns=(
+            "The rustle overhead deepens. Grit sifts down through your light; "
+            "the whole vault has begun, gently, to move.",
+        ),
+        limit=2,  # one warning -- the bats' patience is short
+        harm=_bat_maul,
     )
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
+    def _jackal_savage(g):
+        """The pack takes its due (a d20 wound-table roll) and withdraws --
+        continued noise invites it back. Death: a fatal roll, or slots full."""
+        g.parser.ok(
+            "The pack pours from the dark and takes its due before you can "
+            "raise an arm."
+        )
+        _, messages, fatal = roll_wound(g.player, rng=_RNG)
+        for m in messages:
+            g.parser.ok(m)
+        if fatal or g.player.get_property(Property.IS_DEAD):
+            _die(
+                g,
+                "The pthalo-jackals drag you down, and afterwards the tomb "
+                "goes back to listening. THE END.",
+            )
+        else:
+            g.parser.ok(
+                "As quickly as they came, the jackals melt back into "
+                "the dark, unhurried, patient for the next noise."
+            )
+        return True
+
     for hall in (memory, hounds, warriors):
         _hazard(
             game,
             hall,
             danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
-            warn=lambda n: f"Yellow eyes gather in the shadows; the pthalo-jackals are closing -- ({n}/3). Quiet, or get out.",
-            kill="The pack pours from the dark, drags you down, and feeds. THE END.",
+            warns=(
+                "Somewhere off in the halls, a yipping answers your noise -- "
+                "once, and then again, nearer.",
+                "Yellow eyes ring the doorways, unhurried. Pthalo-jackals: "
+                "cautious, clever, and done being cautious.",
+            ),
+            harm=_jackal_savage,
+            harm_resets=True,
         )
 
     # The chimney's spores: choke you each round you're in it without a respirator.
+    def _spore_sear(g):
+        fatal, dropped = g.player.add_wound(
+            Wound("Seared Lungs", 1, "Every breath is smaller than the last."), rng=_RNG
+        )
+        for it in dropped:
+            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
+        if fatal:
+            _die(g, "You breathe the tomb in, and it keeps you. THE END.")
+        else:
+            g.parser.ok(
+                "The spores get past your clenched teeth and burn going "
+                "down. Something in your chest will remember this."
+            )
+        return True
+
     _hazard(
         game,
         chimney,
         danger=lambda g: not (
             _is_holding(g.player, "respirator") or "respirator" in g.player.worn
         ),
-        warn=lambda n: f"The spores sear your lungs; you can barely breathe -- ({n}/3). Get out, or mask up.",
-        kill="The spores fill your lungs and you choke to death in the chimney. THE END.",
+        warns=(
+            "Each breath comes back smaller than it went out. The spores "
+            "settle on your lips and taste of orange rot.",
+            "Your lungs sear; the glow below swims and doubles. The chimney's "
+            "warmth has begun to feel like a mouth.",
+        ),
+        harm=_spore_sear,
     )
 
     # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
@@ -763,8 +1198,12 @@ def build_game():
         game,
         sphere,
         danger=lambda g: _player_was_loud_in(g, sphere, _QUIET_SPHERE),
-        warn=lambda n: f"The orange mass in the coffin shudders and reaches toward you -- ({n}/2). Don't disturb it -- it's still alive.",
-        kill="The Fungal Horror erupts from the coffin and drowns you in acid. THE END.",
+        warns=(
+            "The orange mass in the coffin turns -- all of it, at once -- "
+            "toward the sound. Against the inside of the glass, something "
+            "like a palm.",
+        ),
+        kill="The coffin does not so much open as give up. The Horror takes you in a single fold. THE END.",
         limit=2,
         gate=lambda g: not sphere.get_property("horror_dead"),
     )
@@ -787,6 +1226,87 @@ def build_game():
         g.award("seal", 20, None)
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
+
+    # --- The Friend's Fungus chain (design doc §13; optional, no score) ------
+    # fungus (corpse) -> GIVE to Silas -> the Ulfire Lantern -> LIGHT it while
+    # carrying the Manifold Box -> the hypergeometric compartment -> ego-core.
+
+    def _silas_dosed(g):
+        return "friend's fungus" in silas.inventory and not silas.get_property(
+            "mellowed"
+        )
+
+    def _silas_mellows(g):
+        silas.set_property("mellowed", True)
+        fun = silas.inventory.get("friend's fungus")
+        if fun is not None:
+            silas.remove_from_inventory(fun)
+        lamp = silas.inventory.get("ulfire lantern")
+        if lamp is not None:
+            silas.remove_from_inventory(lamp)
+            g.player.add_to_inventory(lamp)
+        silas.talk_text = (
+            '"A friend," Silas says, warmly and a little vaguely, and returns '
+            "to the lattice. The bright threads spool on."
+        )
+        g.parser.ok(
+            "Silas takes the pouch with unexpected delicacy and presses a pinch "
+            "of the pink fungus into a port beneath his jaw. The hum of his "
+            'work softens by a third. "You are," he decides, "a friend. Take '
+            "the lantern -- I have read it twice already, and light should be "
+            'for the unread." He hands you the ulfire lantern.'
+        )
+
+    game.add_trigger("silas_fungus", _silas_dosed, _silas_mellows, repeatable=False)
+
+    # Water mends (the canon short rest is "a quick sit-down, with a glug of
+    # water"): drinking the waterskin heals the most recent wound.
+    def _drank_water(g):
+        return g.player.wounds and any(
+            e.actor == g.player.name and e.action == "drink"
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _water_mends(g):
+        healed = g.player.heal_wound()
+        if healed is not None:
+            g.parser.ok(
+                f"The water does what water does in Vaarn. The {healed.name.lower()} "
+                "troubles you less; something knits."
+            )
+
+    game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
+
+    ego_core = things.Item(
+        "ego-core",
+        "An-Rah's ego-core",
+        "A spindle of smoke-grey memory-crystal, heavier than it looks and "
+        "warmer than it should be: Nassak An-Rah, or what he chose to keep of "
+        "himself. Silas would trade his robes for it.",
+    )
+    ego_core.add_alias("core")
+
+    def _box_viewed(g):
+        return (
+            ulfire_lantern.get_property(Property.IS_LIT)
+            and "ulfire lantern" in g.player.inventory
+            and "manifold box" in g.player.inventory
+            and not manifold_box.get_property("compartment_found")
+        )
+
+    def _reveal_core(g):
+        manifold_box.set_property("compartment_found", True)
+        g.player.add_to_inventory(ego_core)
+        g.parser.ok(
+            "The ulfire light soaks through the manifold box's gilded walls, "
+            "and its true interior opens to your eye: a compartment three "
+            "times larger than the box that holds it, empty except for a "
+            "spindle of grey crystal hanging in the middle of that impossible "
+            "room. You reach in along the angle of the light and draw out "
+            "An-Rah's ego-core."
+        )
+
+    game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
@@ -819,15 +1339,28 @@ def build_game():
 # A SAFE tour: the tomb is deadly now, so creep (sneak) through the halls and
 # don't enter the lethal Burial Sphere. Visits the seven survivable rooms.
 WALK = [
+    # The onboarding beats at the Caravan Wreck (the start): examine, talk,
+    # open/take, then light/douse/read in the safe dark of the hold.
+    "examine wreck",
+    "search merchant",
+    "talk to worry",
+    "open pack",
+    "take glowstone",
+    "in",
+    "light glowstone",
+    "read ledger",
+    "douse glowstone",
+    "out",
+    "north",  # -> Tomb Exterior
     "examine tomb",
     "up",
     "examine ossified corpse",
     "down",  # Summit and back (safe)
     "north",
-    "examine ceiling",  # -> Hall of Youth (pitch dark; hear the bats)
+    "examine ceiling",
+    "feel statues",  # -> Hall of Youth: dark-craft (hear, touch)
     "light glowstone",
-    "examine statues",
-    "douse glowstone",  # light to see (bats stir), then go dark again
+    "douse glowstone",  # one stolen glance -- the bats stir, then settle
     "north",
     "talk to silas",
     "examine crystal lattice",  # -> Hall of Memory
@@ -846,8 +1379,12 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # (The glowstone starts unlit, so it's safe to carry -- never light it in the
-    # Hall of Youth. This route never needs to see in the dark.)
+    # Loot the wreck, walk to the tomb. (The glowstone starts unlit, so it's
+    # safe to carry -- never light it in the Hall of Youth. This route never
+    # needs to see in the dark.)
+    "open pack",
+    "take glowstone",
+    "north",
     "sneak east",
     "take blade",
     "take igniter",

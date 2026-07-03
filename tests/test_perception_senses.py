@@ -73,14 +73,14 @@ def test_examine_a_touch_only_thing_in_the_dark_nudges_you_to_feel():
     game = _dark_world()
     out = _say(game, "examine statue")
     assert "too dark" in out
-    assert "feeling your way" in out  # touch is active -> use feel
+    assert "your hands might do" in out  # touch is active -> a diegetic nudge
 
 
 def test_examine_a_plain_thing_in_the_dark_is_just_too_dark():
     game = _dark_world()
     out = _say(game, "examine urn")
     assert "too dark" in out
-    assert "feeling your way" not in out  # no non-sight sense to offer
+    assert "your hands might do" not in out  # no non-sight sense to offer
 
 
 def test_examine_with_a_light_uses_the_visual_text():

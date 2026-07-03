@@ -574,7 +574,8 @@ discovery moves to the onboarding + item fiction ("pried", "wakes at a word").
 ### 16.2 The onboarding opening (observation 2)
 
 New starting room **before** the Tomb Exterior: **The Caravan Wreck** — the
-player's trade caravan, jackal-struck in the night; they are the survivor
+player's trade caravan, Cacklemaw-struck in the night (canon caravan raiders,
+Issue 1 bandit table); they are the survivor
 (canonical: the zine's Trade Caravans table, complication "All Dead"). A safe
 sandbox that teaches the verb curriculum diegetically:
 
@@ -583,7 +584,7 @@ sandbox that teaches the verb curriculum diegetically:
 | The wreck, described with one glinting detail | `EXAMINE` | examine wreck/camel → reveals the half-buried pack |
 | The pack | `OPEN`, `TAKE`, `INVENTORY` | open pack → take glowstone (+ waterskin flavor). The glowstone is *found*, not given |
 | The wagon's hold — dim, not deadly (a `Fog`/DIM veil) | `LIGHT`, `DOUSE`, `READ` | too dim to read the merchant's ledger → light glowstone → read ledger → douse. Teaches the toggle in *safety* so the Hall of Youth can subvert it (light = danger) |
-| A surviving newbeast draught-mule (talking animal, canon) | `TALK TO` | gives the goal + the *indirect* lore that replaces the leaks: "the mouths are doors… the boy's mouth is lightless, and the dead there sleep shallow… walk it the way the dead walk" |
+| Worry, a new-mule teamster (newbeasts are humanoid animal-people, never draught animals -- the dead zoxen pulled the wagon) | `TALK TO` | gives the goal + the *indirect* lore that replaces the leaks: "the mouths are doors… the boy's mouth is lightless, and the dead there sleep shallow… walk it the way the dead walk" |
 | The road north | `GO` | go north → Tomb Exterior; the game proper begins |
 
 The ledger + the mule carry the oblique versions of every hint we're deleting
@@ -600,12 +601,20 @@ zine register (style guide §§2–5). Rough order: Exterior → Youth → Memor
 Hounds → Warriors → Canopic → Sphere → Summit → Chimney → Wreck (new). Each
 rewrite honors §16.1 (no leaks) as it goes.
 
-### 16.4 Sequencing
+### 16.4 Sequencing + status
 
-1. **PR A — onboarding**: the Caravan Wreck room + moves (glowstone found, not
-   given), walkthrough + test updates.
-2. **PR B — honest hints**: the §16.1 table, hazard warn-line rework (fiction
-   escalation, no counters), Silas rewrite.
-3. **PR C — voice pass**: the full §16.3 rewrite (style guide complete by then).
+Revised after the style corpus landed: B and C are the *same strings*, so they
+merged into one room-by-room rewrite pass.
 
-Playtest after each; WIN walkthrough must stay 100/100 throughout.
+1. **PR A — onboarding (SHIPPED, #312)**: the Caravan Wreck + the Wagon's Hold,
+   glowstone found not given, Worry the new-mule, the ledger as the diegetic
+   hint-carrier, give_hints off by default. GO NORTH skips it.
+2. **PR B — the rewrite pass (SHIPPED)**: every room/item/character/hazard
+   re-voiced in the register (style guide §§2–7) with the §16.1 leaks fixed in
+   the same stroke. `_hazard` takes escalating `warns` tuples — the fiction is
+   the clock; the numeric counter appends only under `give_hints`. Silas points
+   at the lattice instead of reciting the seal solution; PryCoffin/BurnCorpse
+   failures describe the problem, not the shopping list.
+
+WIN walkthrough held at 100/100 throughout; smoke tour covers all nine safe
+rooms.
