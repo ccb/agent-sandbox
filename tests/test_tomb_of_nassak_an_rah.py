@@ -179,7 +179,11 @@ def test_silas_warns_about_the_spawn_and_the_seal():
     game.do_command("sneak north")  # -> Hall of Youth (creep past the bats)
     game.do_command("sneak north")  # -> Hall of Memory (Silas)
     game.do_command("talk to silas")
-    assert "plinth of its kind" in " ".join(cap.texts(Channel.NARRATION))
+    # Silas is oblique now (design doc §16.1): he points at the lattice and the
+    # plinths rather than reciting the seal solution.
+    said = " ".join(cap.texts(Channel.NARRATION))
+    assert "lattice remembers his embalming" in said
+    assert "Step softly" in said
 
 
 def test_memory_crystals_give_the_head_to_organ_clue():
@@ -244,7 +248,7 @@ def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
     cap = _texts(game)
     game.do_command("north")            # into the Youth carrying the UNLIT glowstone
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
-    assert "pitch dark" in dark
+    assert "dark as the inside of a sealed jar" in dark
     assert "statues" not in dark        # the veil hides the room's contents...
     assert "exits:" not in dark         # ...and its exits
     cap2 = _texts(game)
