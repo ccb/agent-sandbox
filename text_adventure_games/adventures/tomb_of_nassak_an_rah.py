@@ -371,7 +371,7 @@ def build_game():
         "WORRY."
     )
     worry.talk_text = (
-        '"They came at moonset," Worry says. "Laughing. I ran, and the merchant '
+        '"They came at moonset, laughing," Worry says. "I ran, and the merchant '
         "could not, and that is the whole story. The Cacklemaw make no secret "
         'of their coming; the secret is what good knowing does you." She looks '
         'north, to the faces in the azure stone. "Take what he no longer needs '
