@@ -136,7 +136,10 @@ class Search(base.Action):
                 if it.get_property(Property.IS_HIDDEN):
                     it.set_property(Property.IS_HIDDEN, False)
             if pool:
-                if self.target.get_property("is_container") and not self.target.is_open():
+                if (
+                    self.target.get_property("is_container")
+                    and not self.target.is_open()
+                ):
                     self.target.set_property("is_closed", False)
                 listed = _comma_list([it.description for it in pool.values()])
                 self.parser.ok(f"You search the {self.target.name} and find {listed}.")

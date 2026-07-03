@@ -83,7 +83,9 @@ class Feel(_Probe):
     ``feel <thing>`` reads that thing's touch text."""
 
     ACTION_NAME = "feel"
-    ACTION_DESCRIPTION = "Feel your way around, or feel a specific thing (works in the dark)"
+    ACTION_DESCRIPTION = (
+        "Feel your way around, or feel a specific thing (works in the dark)"
+    )
     ACTION_ALIASES = ["grope", "grope around", "feel around", "feel your way", "touch"]
     SENSE = Sense.TOUCH
 
@@ -94,7 +96,9 @@ class Feel(_Probe):
         found = [f"a way {d}" for d in loc.connections]
         for it in loc.items.values():
             if Sense.TOUCH in it.senses() and not it.get_property("is_hidden"):
-                found.append(it.description)  # the noun-phrase, not the full touch sentence
+                found.append(
+                    it.description
+                )  # the noun-phrase, not the full touch sentence
         if not found:
             return "You grope around but feel nothing -- no way out within reach, and nothing to touch."
         return "You feel your way around and find " + _join(found) + "."
@@ -113,7 +117,9 @@ class Listen(_Probe):
 
     def _probe_room(self, loc) -> str:
         heard = self._room_texts(loc)
-        return " ".join(heard) if heard else "You listen. Nothing but your own breathing."
+        return (
+            " ".join(heard) if heard else "You listen. Nothing but your own breathing."
+        )
 
 
 class Smell(_Probe):
@@ -129,4 +135,8 @@ class Smell(_Probe):
 
     def _probe_room(self, loc) -> str:
         smelled = self._room_texts(loc)
-        return " ".join(smelled) if smelled else "The air here smells of nothing in particular."
+        return (
+            " ".join(smelled)
+            if smelled
+            else "The air here smells of nothing in particular."
+        )

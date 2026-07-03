@@ -290,7 +290,7 @@ class Inventory(base.Action):
         whose = "Your" if char.name.lower() == "you" else f"{char.name}'s"
 
         def _slot_suffix(item):
-            """"(2 slots)" on multi-slot gear -- only when this character uses
+            """ "(2 slots)" on multi-slot gear -- only when this character uses
             the slot gauge, and only past the default cost of 1."""
             if char.slot_capacity is None:
                 return ""
@@ -300,7 +300,12 @@ class Inventory(base.Action):
             return f" ({cost} slots)" if cost > 1 else ""
 
         # Nothing carried, worn, wielded -- or suffered -- a single empty line.
-        if not char.inventory and not char.worn and not char.wielded and not char.wounds:
+        if (
+            not char.inventory
+            and not char.worn
+            and not char.wielded
+            and not char.wounds
+        ):
             self.parser.ok(f"{whose} inventory is empty.")
             return
 
@@ -329,7 +334,8 @@ class Inventory(base.Action):
                         )
                 else:
                     carried += "* {item}{qty}{slots}\n".format(
-                        item=item.description, qty=_qty_suffix(item),
+                        item=item.description,
+                        qty=_qty_suffix(item),
                         slots=_slot_suffix(item),
                     )
             sections.append(carried.rstrip("\n"))
@@ -339,7 +345,8 @@ class Inventory(base.Action):
         def _listing(title, slot):
             body = "".join(
                 "* {item}{qty}{slots}\n".format(
-                    item=it.description, qty=_qty_suffix(it), slots=_slot_suffix(it))
+                    item=it.description, qty=_qty_suffix(it), slots=_slot_suffix(it)
+                )
                 for it in slot.values()
             )
             return f"{title}\n{body}".rstrip("\n")
@@ -355,7 +362,11 @@ class Inventory(base.Action):
             wounds = "Wounds:\n" + "".join(
                 "* {name}{slots} - {desc}\n".format(
                     name=w.name,
-                    slots=f" ({w.slots} slot{'s' if w.slots != 1 else ''})" if w.slots else "",
+                    slots=(
+                        f" ({w.slots} slot{'s' if w.slots != 1 else ''})"
+                        if w.slots
+                        else ""
+                    ),
                     desc=w.description,
                 )
                 for w in char.wounds

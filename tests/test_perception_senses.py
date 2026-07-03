@@ -65,15 +65,15 @@ def _say(game, cmd):
 def test_examine_in_the_dark_falls_back_to_a_heard_thing():
     game = _dark_world()
     out = _say(game, "examine chime")
-    assert "silver chiming" in out       # heard, not seen
-    assert "wind-chime" not in out        # the visual examine_text is withheld
+    assert "silver chiming" in out  # heard, not seen
+    assert "wind-chime" not in out  # the visual examine_text is withheld
 
 
 def test_examine_a_touch_only_thing_in_the_dark_nudges_you_to_feel():
     game = _dark_world()
     out = _say(game, "examine statue")
     assert "too dark" in out
-    assert "your hands might do" in out   # touch is active -> a diegetic nudge
+    assert "your hands might do" in out  # touch is active -> a diegetic nudge
 
 
 def test_examine_a_plain_thing_in_the_dark_is_just_too_dark():
@@ -86,7 +86,7 @@ def test_examine_a_plain_thing_in_the_dark_is_just_too_dark():
 def test_examine_with_a_light_uses_the_visual_text():
     game = _dark_world(player_items=[_lit_torch()])
     out = _say(game, "examine statue")
-    assert "weathered stone figure" in out   # sight text, exactly as normal
+    assert "weathered stone figure" in out  # sight text, exactly as normal
     assert "too dark" not in out
 
 
@@ -110,8 +110,8 @@ def test_feel_reveals_a_touch_thing_regardless_of_light():
 def test_feel_around_reveals_exits_and_tactile_fixtures():
     game = _dark_world()
     out = _say(game, "feel")
-    assert "a way north" in out           # exits are always feel-able
-    assert "stone statue" in out          # the TOUCH fixture, by its noun-phrase
+    assert "a way north" in out  # exits are always feel-able
+    assert "stone statue" in out  # the TOUCH fixture, by its noun-phrase
 
 
 def test_listen_reveals_a_heard_thing():
