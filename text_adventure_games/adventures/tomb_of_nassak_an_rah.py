@@ -557,7 +557,7 @@ def build_game():
     worry.talk_text = (
         '"They came at moonset, laughing," Worry says. "I ran, and the merchant '
         "could not, and that is the whole story. The Cacklemaw make no secret "
-        'of their coming; the secret is what good knowing does you." She looks '
+        'of their coming." She looks '
         'north, to the faces in the azure stone. "Take what he no longer needs '
         "-- better you than the sand. There is water in his pack, half a skin "
         "of it, and a glowstone besides. You can take whatever you can carry "
