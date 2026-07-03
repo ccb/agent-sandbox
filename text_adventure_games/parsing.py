@@ -221,6 +221,10 @@ class Parser:
             # contain other command words), and this also handles the "speak"
             # alias, which is not auto-registered.
             return ActionName.SAY
+        elif command.split(" ", 1)[0] in ("throw", "hurl", "lob"):
+            # A throw names a direction ("throw purse north") or a target; the
+            # direction is the throw's argument, not a movement intent.
+            return "throw"
         elif command.startswith("adopt goal"):
             # Goal-management verbs are matched explicitly: "drop goal ..." must
             # win over the inventory "drop" verb below, and both must beat the
