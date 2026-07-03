@@ -336,8 +336,8 @@ class CrystalSeal(blocks.Block):
     def __init__(self, canopic):
         super().__init__(
             "A seal of red crystal",
-            "A seal of red crystal bars the stair, grown through the treads like "
-            "frost through cloth. Five beast-sigils are set in the arch above "
+            "A seal of red crystal bars the stair, risen through the treads as "
+            "salt rises through old stone. Five beast-sigils are set in the arch above "
             "it; two of them are dark. The crystal hums at a pitch just under "
             "hearing, with the patience of a lock.",
         )
