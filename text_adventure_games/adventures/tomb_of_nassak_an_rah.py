@@ -589,10 +589,9 @@ def build_game():
     memory = things.Location(
         "Hall of Memory",
         "Lattices of memory-crystal climb every wall, the favoured recollections "
-        "of the Autarch set in lazulite. The light inside them is not reflection; "
-        "it moves while you are still, slow and cold, like thought at the bottom "
-        "of a lake. One bank of crystal is worn smooth at hand-height, as if "
-        "often consulted.",
+        "of the Autarch set in lazulite. The glimmering moving on them is not "
+        "your reflection; it moves while you are still. One bank of crystal is "
+        "worn smooth at hand-height, as if often consulted.",
     )
     hounds = things.Location(
         "Hall of Hounds",
