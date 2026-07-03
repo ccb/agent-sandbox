@@ -353,6 +353,13 @@ def build_game():
         "Half of the merchant's water survived the night. In Vaarn this is "
         "called an inheritance.",
     )
+    # Water is Vaarn's scarcest resource -- of course you can drink it.
+    waterskin.set_property(Property.DRINKABLE, True)
+    waterskin.set_property(Property.TASTE,
+                           "of warm leather and of luck. In Vaarn, wealth goes "
+                           "down the throat.")
+    waterskin.add_alias("water")
+    waterskin.add_alias("skin")
     wreck.add_item(pack)
 
     # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
@@ -587,6 +594,9 @@ def build_game():
         "seam at its equator is fine as a hair -- made to be pried, never opened.")
     coffin.make_container()
     coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
+    # The failing anti-entropy field still counts as a lock: SEARCH (which
+    # rummages open ordinary closed containers) must not bypass the pry puzzle.
+    coffin.set_property(Property.IS_LOCKED, True)
     coffin.add_item(dagger)
     coffin.add_item(manifold_box)
     _scenery(summit, "ossified corpse", "an ossified mystic",
