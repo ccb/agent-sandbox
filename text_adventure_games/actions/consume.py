@@ -4,6 +4,12 @@ from ..enums import ActionName, Property
 # from ..things import Character  # , Item
 
 
+def _conj(character, second: str, third: str) -> str:
+    """Conjugate a verb for the actor: the player (named "you") gets second
+    person ("You eat"), everyone else third ("Troll eats")."""
+    return second if character.name.lower() == "you" else third
+
+
 class Eat(base.Action):
     ACTION_NAME = ActionName.EAT
     ACTION_DESCRIPTION = "Eat something"
@@ -46,8 +52,10 @@ class Eat(base.Action):
         """
         self.character.discard_item(self.item)
         self.character.set_property(Property.IS_HUNGRY, False)
-        description = "{name} eats the {food}.".format(
-            name=self.character.name.capitalize(), food=self.item.name
+        description = "{name} {verb} the {food}.".format(
+            name=self.character.name.capitalize(),
+            verb=_conj(self.character, "eat", "eats"),
+            food=self.item.name,
         )
 
         if self.item.get_property(Property.TASTE):
@@ -105,8 +113,10 @@ class Drink(base.Action):
         """
         self.character.discard_item(self.item)
         self.character.set_property(Property.IS_THIRSTY, False)
-        description = "{name} drinks the {drink}.".format(
-            name=self.character.name.capitalize(), drink=self.item.name
+        description = "{name} {verb} the {drink}.".format(
+            name=self.character.name.capitalize(),
+            verb=_conj(self.character, "drink", "drinks"),
+            drink=self.item.name,
         )
         self.parser.ok(description)
 
@@ -125,8 +135,10 @@ class Drink(base.Action):
 
         if self.item.get_property(Property.IS_ALCOHOL):
             self.character.set_property(Property.IS_DRUNK, True)
-            description = "{name} is now drunk from {drink}.".format(
-                drink=self.item.name, name=self.character.name.capitalize()
+            description = "{name} {verb} now drunk from {drink}.".format(
+                drink=self.item.name,
+                name=self.character.name.capitalize(),
+                verb=_conj(self.character, "are", "is"),
             )
             self.parser.ok(description)
 
