@@ -68,7 +68,11 @@ def test_lower_diamond_is_a_four_cycle():
 def test_the_stairs_seal_and_chimney():
     game = _game()
     assert _goes(game, "Hall of Memory", "up", "Hall of the Canopic Jars")
-    assert _goes(game, "Hall of the Canopic Jars", "down", "Hall of Memory")
+    assert _goes(game, "Hall of Hounds", "up", "Hall of the Canopic Jars")
+    # Two stairways down from the pentagon (source, room 5): left to Memory,
+    # right to Hounds.
+    assert _goes(game, "Hall of the Canopic Jars", "left stairs", "Hall of Memory")
+    assert _goes(game, "Hall of the Canopic Jars", "right stairs", "Hall of Hounds")
     assert _goes(
         game, "Hall of the Canopic Jars", "up", "Burial Sphere of Nassak An-Rah"
     )
@@ -623,6 +627,123 @@ def test_burning_the_corpse_consumes_an_unclaimed_fungus():
         game.do_command(cmd)
     corpse = game.locations["The Summit"].items["ossified corpse"]
     assert "friend's fungus" not in corpse.contents  # went up with him
+
+
+# --- Throw, the thrown-light gambit, and appetites ----------------------------
+
+
+def test_throw_lands_next_door_and_lures_the_sound_hunters():
+    game = _game()
+    cap = _texts(game)
+    for cmd in ("search merchant", "take purse", "north"):
+        game.do_command(cmd)
+    game.do_command("throw purse north")
+    assert "purse of water-debt tokens" in game.locations["Hall of Youth"].items
+    assert "a clatter from" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("wait")
+    game.do_command("wait")
+    # A spawn heard it land and went to see (whichever was closer).
+    assert any(
+        game.characters[n].location is game.locations["Hall of Youth"]
+        for n in ("spawn of guts", "spawn of brain")
+    )
+
+
+def test_the_thrown_light_gambit_kills_a_spawn_by_bats():
+    """CCB's puzzle: lure a spawn into the Youth with a thrown clatter, then
+    throw the LIT glowstone in after it -- the swarm mobs the light and rakes
+    the spawn dead, leaving its jar and a motionless body."""
+    game = _game()
+    for cmd in (
+        "open pack",
+        "take glowstone",
+        "search merchant",
+        "take purse",
+        "north",
+        "throw purse north",
+        "wait",
+        "wait",
+        "light glowstone",
+        "throw glowstone north",
+        "wait",
+        "wait",
+    ):
+        game.do_command(cmd)
+    youth = game.locations["Hall of Youth"]
+    dead = [
+        n
+        for n in ("spawn of guts", "spawn of brain")
+        if game.characters[n].get_property("is_dead")
+    ]
+    assert dead  # the swarm got one
+    assert any(j in youth.items for j in ("falcon jar", "jackal jar"))
+    assert "dead and motionless" in game.characters[dead[0]].description
+    assert not game.is_game_over()  # the player never entered
+
+
+def test_throwing_the_fungus_at_a_spawn_doses_it():
+    game = _game()
+    cap = _texts(game)
+    # Fetch the fungus, then find the spawn of guts and dose it.
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("search corpse")
+    game.do_command("take fungus")
+    guts = game.characters["spawn of guts"]
+    game.relocate(game.player, guts.location)
+    game.do_command("throw fungus at spawn of guts")
+    assert guts.get_property("dosed")
+    assert "extremely agreeable" in " ".join(cap.texts(Channel.NARRATION))
+    # Dosed, it no longer minds your noise.
+    game.do_command("say hello")
+    game.do_command("say hello")
+    game.do_command("say hello")
+    assert not any(w.name == "Acid-Lashed" for w in game.player.wounds)
+
+
+def test_silas_whispers_while_a_spawn_is_in_the_room():
+    game = _game()
+    cap = _texts(game)
+    silas = game.characters["Silas"]
+    game.relocate(game.characters["spawn of guts"], silas.location)
+    game.relocate(game.player, silas.location)
+    game.do_command("talk to silas")
+    assert "be silent, you fool" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_the_waterskin_holds_three_healing_rations():
+    game = _game()
+    from text_adventure_games.slots import Wound
+
+    game.do_command("open pack")
+    game.do_command("take waterskin")
+    game.player.add_wound(Wound("Bloody Gash", 1, "..."))
+    for expected in ("2 rations", "1 ration", "an empty waterskin"):
+        game.do_command("drink water")
+        assert expected in game.player.inventory["waterskin"].description
+    assert not game.player.wounds  # the first drink healed it
+    cap = _texts(game)
+    game.do_command("drink water")  # a fourth: refused
+    assert "is empty" in " ".join(cap.texts(Channel.BLOCKED)).lower()
+
+
+def test_organs_are_gettable_edible_and_regrettable():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
+    game.do_command("open baboon jar")
+    game.do_command("take lungs")
+    assert "lungs" in game.player.inventory
+    game.do_command("eat lungs")
+    assert any(w.name == "Grave-Sick" for w in game.player.wounds)
+
+
+def test_breaking_the_hound_tank_spills_the_cyborg_hounds():
+    game = _game()
+    cap = _texts(game)
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("break tank")
+    hall = game.locations["Hall of Hounds"]
+    assert "cyborg hound" in hall.items
+    assert "flood" in " ".join(cap.texts(Channel.NARRATION)).lower()
 
 
 # --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
