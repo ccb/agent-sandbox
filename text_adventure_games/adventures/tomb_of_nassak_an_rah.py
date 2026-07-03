@@ -1024,7 +1024,7 @@ def build_game():
     _cylinder(
         "cerulean",
         blade,
-        "A guard-mummy stands in gel the blue of deep sky, prismatic blade at "
+        "A guard-mummy floats in gel the blue of deep sky, prismatic blade at "
         "rest against its shoulder. The edge splits your light into colours, "
         "even through the glass.",
         "The glass gives all at once; cerulean gel sluices across the floor "
@@ -1034,9 +1034,9 @@ def build_game():
     _cylinder(
         "amber",
         respirator,
-        "A guard-mummy in gel like old honey, an Autarchy respirator still "
-        "strapped to its face. It did the guard no lasting good, but it has "
-        "kept its seal.",
+        "A guard-mummy floats in gel like old honey, an Autarchy respirator "
+        "still strapped to its face. It did the guard no lasting good, but it "
+        "has kept its seal.",
         "Amber gel bursts over your boots, sweet-smelling and old as the "
         "walls. The guard settles into the spill, and the respirator comes "
         "loose in the flood.",
@@ -1044,9 +1044,8 @@ def build_game():
     _cylinder(
         "viridian",
         boots,
-        "A guard-mummy in green-glass gel, magnet-booted, still at its post by "
-        "no will of its own. The boots' soles have kept their grip on the "
-        "plinth.",
+        "A guard-mummy in green-glass gel, still at its post by no will of "
+        "its own. The boots' soles have kept their grip on the plinth.",
         "The viridian gel goes everywhere. The guard stays standing a moment "
         "longer -- boots anchored -- then tips.",
     )
