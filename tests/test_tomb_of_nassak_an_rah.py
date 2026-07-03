@@ -1,8 +1,8 @@
 """The Tomb of Nassak An-Rah (Vaults of Vaarn adventure).
 
-PHASE 1: map + atmosphere scaffold only -- the world is navigable and examinable,
-the scavenger starts with a glowstone. Puzzles, threats, scoring, and deaths land
-in later phases (see docs/design/tomb-of-nassak-an-rah.md).
+The game opens at the Caravan Wreck (the onboarding sandbox, design doc §16.2);
+the tomb interior holds the puzzles, threats, scoring, and deaths (see
+docs/design/tomb-of-nassak-an-rah.md).
 """
 
 from text_adventure_games.adventures import tomb_of_nassak_an_rah as tomb
@@ -17,12 +17,24 @@ def _goes(game, room, direction, dest):
     return game.locations[room].connections.get(direction) is game.locations[dest]
 
 
+def _embark(game, *, glowstone=True):
+    """Play the wreck's opening beats and walk to the Tomb Exterior -- the
+    common preamble for tests of the tomb proper. With ``glowstone=False``,
+    leave the stone in the pack (some tests want an empty-handed scavenger)."""
+    if glowstone:
+        game.do_command("open pack")
+        game.do_command("take glowstone")
+    game.do_command("north")
+
+
 # --- the map -----------------------------------------------------------------
 
 
-def test_all_nine_locations_exist():
+def test_all_eleven_locations_exist():
     game = _game()
     expected = {
+        "The Caravan Wreck",
+        "The Wagon's Hold",
         "Tomb Exterior",
         "Hall of Youth",
         "Hall of Memory",
@@ -69,10 +81,55 @@ def test_the_stairs_seal_and_chimney():
 # --- start state + atmosphere ------------------------------------------------
 
 
-def test_scavenger_starts_in_the_sands_with_a_glowstone():
+def test_scavenger_starts_at_the_wreck_and_finds_the_glowstone():
     game = _game()
-    assert game.player.location.name == "Tomb Exterior"
+    assert game.player.location.name == "The Caravan Wreck"
+    assert "glowstone" not in game.player.inventory  # found, not given
+    game.do_command("open pack")
+    game.do_command("take glowstone")
     assert "glowstone" in game.player.inventory
+
+
+def test_go_north_skips_the_tutorial():
+    """The wreck is optional exploration, not a gate."""
+    game = _game()
+    game.do_command("north")
+    assert game.player.location.name == "Tomb Exterior"
+    assert not game.is_game_over()
+
+
+def test_the_wrecks_hold_teaches_light_in_safety():
+    """The hold is pitch dark (the ledger unlisted) until the glowstone is lit;
+    reading, lighting, and dousing there is harmless -- the safe rehearsal for
+    the Hall of Youth's deadly version of the same lesson."""
+    game = _game()
+    cap = _texts(game)
+    game.do_command("open pack")
+    game.do_command("take glowstone")
+    game.do_command("in")
+    dark = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "bruise-dark" in dark
+    assert "ledger" not in dark              # contents hidden until lit
+    cap2 = _texts(game)
+    game.do_command("light glowstone")
+    game.do_command("look")
+    game.do_command("read ledger")
+    lit = " ".join(cap2.texts(Channel.NARRATION)).lower()
+    assert "ledger" in lit                   # revealed by the light
+    assert "three mouths" in lit             # the merchant's last entries (the lore)
+    game.do_command("douse glowstone")
+    game.do_command("out")
+    assert not game.is_game_over()
+    assert game.player.location.name == "The Caravan Wreck"
+
+
+def test_worry_the_mule_tells_the_story():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("talk to worry")
+    said = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "they came at moonset" in said
+    assert "caravan is seldom wrong twice" in said
 
 
 def test_smoke_tour_traverses_every_room_cleanly():
@@ -83,8 +140,8 @@ def test_smoke_tour_traverses_every_room_cleanly():
     for cmd in tomb.WALK:
         game.do_command(cmd)
         visited.add(game.player.location.name)
-    # the safe tour reaches the seven survivable rooms (it avoids the lethal Sphere)
-    assert len(visited) == 7
+    # the safe tour reaches the nine survivable rooms (it avoids the lethal Sphere)
+    assert len(visited) == 9
     # ...with no failed move or unparsed/missing command, and survives (it creeps)
     texts = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "i'm not sure what you want to do" not in texts
@@ -117,6 +174,7 @@ def _bring_jars_to_canopic(game):
 
 def test_silas_warns_about_the_spawn_and_the_seal():
     game = _game()
+    _embark(game)
     cap = _texts(game)
     game.do_command("sneak north")  # -> Hall of Youth (creep past the bats)
     game.do_command("sneak north")  # -> Hall of Memory (Silas)
@@ -126,6 +184,7 @@ def test_silas_warns_about_the_spawn_and_the_seal():
 
 def test_memory_crystals_give_the_head_to_organ_clue():
     game = _game()
+    _embark(game)
     cap = _texts(game)
     game.do_command("sneak north")
     game.do_command("sneak north")
@@ -174,12 +233,14 @@ def test_matching_both_jars_opens_the_seal():
 def _arm_and_reach_canopic(game):
     """Sneak in, take the prismatic blade from the Hall of Warriors, and creep up
     to the Canopic hall -- armed and safe."""
+    _embark(game)
     for cmd in ["sneak east", "take prismatic blade", "sneak east", "sneak up"]:
         game.do_command(cmd)
 
 
 def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
     game = _game()
+    _embark(game)
     cap = _texts(game)
     game.do_command("north")            # into the Youth carrying the UNLIT glowstone
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
@@ -196,6 +257,7 @@ def test_the_hall_of_youth_is_pitch_dark_until_you_light_the_glowstone():
 
 def test_the_ceiling_is_heard_in_the_dark_and_seen_once_lit():
     game = _game()
+    _embark(game)
     cap = _texts(game)
     game.do_command("north")            # dark Youth
     game.do_command("examine ceiling")  # can't see -> hear the bats (the clue)
@@ -211,6 +273,7 @@ def test_the_ceiling_is_heard_in_the_dark_and_seen_once_lit():
 
 def test_you_can_feel_and_listen_in_the_dark_without_waking_the_bats():
     game = _game()
+    _embark(game)
     game.do_command("north")            # dark Youth, glowstone unlit
     for probe in ("feel", "listen", "examine ceiling", "feel statues"):
         game.do_command(probe)
@@ -220,14 +283,15 @@ def test_you_can_feel_and_listen_in_the_dark_without_waking_the_bats():
 
 def test_walking_into_a_dark_hall_is_safe():
     game = _game()
-    game.do_command("drop glowstone")  # go dark
+    _embark(game, glowstone=False)     # leave the stone in the pack
     game.do_command("north")           # STRIDE into the Hall of Youth -- no longer fatal
     assert not game.is_game_over()
     assert game.player.location.name == "Hall of Youth"
 
 
 def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
-    game = _game()                      # starts holding an UNLIT glowstone
+    game = _game()
+    _embark(game)                       # carrying the UNLIT glowstone
     game.do_command("north")            # into the pitch-dark Youth -- carrying it unlit is safe
     assert not game.is_game_over()
     game.do_command("light glowstone")  # raising a light rouses the bats -- a warning first
@@ -239,7 +303,7 @@ def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
 
 def test_sustained_noise_in_a_hall_kills_but_warns_first():
     game = _game()
-    game.do_command("drop glowstone")
+    _embark(game, glowstone=False)
     game.do_command("sneak east")       # -> Hall of Warriors (safe to enter)
     game.do_command("say hey")          # one shout: a warning, not death
     assert not game.is_game_over()
@@ -264,6 +328,7 @@ def test_the_live_sphere_kills_only_when_you_disturb_it():
 
 def test_the_mantis_song_lures_the_spawn_to_the_canopic_hall():
     game = _game()
+    _embark(game)
     for cmd in ["sneak north", "sneak north", "sneak up"]:  # -> Canopic, silently
         game.do_command(cmd)
     canopic = game.player.location
@@ -291,6 +356,7 @@ def test_felling_a_lured_spawn_drops_its_canopic_jar():
 
 def test_the_chimney_is_passable_but_chokes_without_a_mask():
     game = _game()
+    _embark(game)
     game.do_command("up")          # -> Summit
     game.do_command("in")          # into the fungal chimney -- passable now, not blocked
     assert game.player.location.name == "The Fungal Chimney"
@@ -302,6 +368,7 @@ def test_the_chimney_is_passable_but_chokes_without_a_mask():
 
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     game = _game()
+    _embark(game)
     # Arm with gel + igniter, creep out to the Exterior, climb up, burn the root.
     for cmd in ["sneak east", "take igniter", "sneak east", "take gel",
                 "sneak east", "sneak south", "up", "burn corpse"]:
