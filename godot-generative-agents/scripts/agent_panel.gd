@@ -25,9 +25,15 @@ signal seek_requested(step: int)
 signal speed_changed(multiplier: float)
 # The "Reset view" button was pressed.
 signal reset_requested
+# The Focus dropdown changed: spotlight only agents in this building ("" = All, no
+# filter). The viewer dims everyone elsewhere and glides the camera to the building.
+signal filter_changed(location: String)
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
+# Non-matching rows fade to this alpha while a location filter is active, so the
+# agents at the focused building stand out without the others vanishing entirely.
+const ROW_DIM_ALPHA := 0.4
 # Muted status line under each character's name — a soft brown that stays legible
 # on the Cute Fantasy theme's light parchment panel (plain grey would wash out).
 const STATUS_COLOR := Color(0.42, 0.32, 0.24)
@@ -42,6 +48,9 @@ var _updating_scrubber := false     # true while we set the scrubber from playba
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row, button, status: Label}
 var _active := ""                   # name of the tracked character, or "" when free
+var _filter_option: OptionButton    # the Focus (filter-by-location) dropdown
+var _filter_locations: Array = []   # item index -> building name ("" = All locations)
+var _dimmed := {}                   # names the filter has dimmed (set: name -> true)
 
 
 func _ready() -> void:
@@ -135,6 +144,25 @@ func _ready() -> void:
 	speed.item_selected.connect(func(i: int) -> void: speed_changed.emit(SPEEDS[i]))
 	speed_row.add_child(speed)
 
+	# Focus: spotlight only the agents currently in a chosen building (everyone else
+	# dims). The viewer fills the buildings via set_locations() after the replay loads;
+	# until then it just offers "All locations" (no filter).
+	var filter_row := HBoxContainer.new()
+	filter_row.add_theme_constant_override("separation", 6)
+	col.add_child(filter_row)
+
+	var filter_label := Label.new()
+	filter_label.text = "Focus"
+	filter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	filter_row.add_child(filter_label)
+
+	_filter_option = OptionButton.new()
+	_filter_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_filter_locations = [""]  # index 0 = "All locations" -> "" (no filter)
+	_filter_option.add_item("All locations", 0)
+	_filter_option.item_selected.connect(_on_filter_selected)
+	filter_row.add_child(_filter_option)
+
 	var title := Label.new()
 	title.text = "CHARACTERS"
 	# Sits on a Cute Fantasy ribbon banner (TitleRibbon variation in the theme),
@@ -206,6 +234,31 @@ func set_character_status(name: String, text: String) -> void:
 		_rows[name]["status"].text = text
 
 
+func set_locations(buildings: PackedStringArray) -> void:
+	# Populate the Focus dropdown: "All locations" (no filter) plus one entry per
+	# building the cast visits. Called once by the viewer after the replay loads.
+	_filter_option.clear()
+	_filter_locations = [""]
+	_filter_option.add_item("All locations", 0)
+	for b in buildings:
+		_filter_locations.append(b)
+		_filter_option.add_item(b, _filter_locations.size() - 1)
+	_filter_option.select(0)
+
+
+func set_dimmed_rows(dimmed: PackedStringArray) -> void:
+	# Which character rows the location filter has dimmed; rebuilt as a set each call
+	# (empty = no filter). _refresh() folds this into the row tint alongside tracking.
+	_dimmed.clear()
+	for n in dimmed:
+		_dimmed[n] = true
+	_refresh()
+
+
+func _on_filter_selected(idx: int) -> void:
+	filter_changed.emit(_filter_locations[idx] if idx < _filter_locations.size() else "")
+
+
 func set_playing(playing: bool) -> void:
 	_play.text = "Pause" if playing else "Play"
 
@@ -261,10 +314,15 @@ func _on_pressed(name: String) -> void:
 
 
 func _refresh() -> void:
-	# Reflect _active in every row: the tracked one is tinted and its button reads
-	# "Untrack" (press it to stop), the rest read "Track".
+	# Reflect _active + the location filter in every row (this is the single writer of
+	# row.modulate): the tracked one is tinted and its button reads "Untrack", the rest
+	# read "Track"; a row the filter dimmed fades out. Dim wins over the track tint, so a
+	# tracked agent who is filtered out still reads as "not in the focused building".
 	for n in _rows:
 		var r: Dictionary = _rows[n]
 		var is_active: bool = n == _active
 		r["button"].text = "Untrack" if is_active else "Track"
-		r["row"].modulate = ACTIVE_TINT if is_active else Color.WHITE
+		if _dimmed.has(n):
+			r["row"].modulate = Color(1.0, 1.0, 1.0, ROW_DIM_ALPHA)
+		else:
+			r["row"].modulate = ACTIVE_TINT if is_active else Color.WHITE

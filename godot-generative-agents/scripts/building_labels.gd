@@ -28,6 +28,9 @@ extends Node2D
 # The sibling camera whose zoom drives the fade, found in _ready.
 var _camera: Camera2D = null
 var _labels: Array[Label] = []
+# Building name -> its centre in world px, so other viewer code (e.g. the sidebar's
+# location filter) can glide the camera to a building. Filled as the labels are built.
+var _centers := {}
 # Last opacity pushed to the labels (-1 = none yet) so we only touch them on change.
 var _last_alpha := -1.0
 
@@ -78,6 +81,14 @@ func _add_label(name: String, tile_x: float, tile_y: float, tile_px: float) -> v
 	label.position = world - Vector2(label_width * 0.5, float(font_size) * 0.5)
 	add_child(label)
 	_labels.append(label)
+	_centers[name] = world
+
+
+func center_of(name: String) -> Vector2:
+	# The world-space centre of a building by name, or a non-finite Vector2 when the
+	# name is unknown (callers check `.is_finite()` and skip). Lets the location filter
+	# glide the camera to a building via the same move_to() path the minimap uses.
+	return _centers.get(name, Vector2(INF, INF))
 
 
 func _process(_delta: float) -> void:
