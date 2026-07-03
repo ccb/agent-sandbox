@@ -119,7 +119,8 @@ class Go(base.Action):
         # and you cannot creep.
         if self.character.is_encumbered():
             self.game.emit_sound(
-                to_loc, 1,
+                to_loc,
+                1,
                 f"the clatter of {self.character.name}'s overloaded pack",
             )
 
