@@ -1,9 +1,18 @@
 # Vaarn style guide — writing in Leo Hunt's register
 
 How to write game text for *Tomb of Nassak An-Rah* (and any Vaarn adventure) so
-it sounds like Vaults of Vaarn. Sources: *Vaults of Vaarn Issue 1* (the zine,
-re-read 2026-07-02) and two podcast interviews with Leo Hunt (transcripts +
-analysis in progress — §6 to be filled in from them).
+it sounds like Vaults of Vaarn.
+
+**Register hierarchy** (which source wins when they differ): our game text is
+*pre-written prose*, so the **zines are the target register** — above all the
+keyed location descriptions in Issues 2–4, which are the exact genre we're
+writing. The transcribed actual-plays (§6) are *improvised speech*: quarry them
+for technique (room structure, escalation, the wrong-detail ending, similes)
+but never for diction — spoken hedging ("kind of," "like") and conversational
+looseness have no place in written text.
+
+Sources: *Vaults of Vaarn* Issues 1–4 (Issue 1 re-read 2026-07-02; Issues 2–4
+survey in §7) and two transcribed Weekly Scroll episodes with Leo Hunt (§6).
 
 ## 1. The reference specimen
 
@@ -190,3 +199,132 @@ inventory a room; don't sever tech from fungus/flesh/divinity — they
 interpenetrate ("fungal crossbow," wire nests, "all parts of the mother"); no
 our-world post-apocalypse props, no golden-desert clichés (blue sand, red sun);
 treasure is never gold — exotica are singular, often domestic, ambiguous.
+
+## 7. The keyed-location register (Issues 2–4) — the primary template
+
+Issues 2–4 surveyed 2026-07-02 (agents' full reports in the session transcript).
+Issue 2 = the Gnomon city zine; Issue 3 = the Interior region toolkit; Issue 4
+in §7.6. **This section outranks §6**: these are Hunt's *pre-written* location
+descriptions — the exact genre of a text adventure's room key.
+
+### 7.1 The area-key arc (Issue 2's district keys)
+
+2–4 sentences, fixed shape:
+1. **Orientation** relative to the dominant landmark ("The south-western
+   district of Gnomon, unshaded by the Apex").
+2. **Two-adjective character verdict** ("pugnacious and seedy"; "the most
+   crooked and decrepit and distended with secrets").
+3. **One named landmark with a single strange fact** ("a ruin that was once a
+   library and is now a cobwebbed shell, left with each door open by ancient
+   custom").
+4. Optional **closing image of people/things in motion** ("Poets wander the
+   indigo streets at twilight…").
+
+Then prose *stops* and contents arrive as bullets — which maps beautifully onto
+our engine's description + "You see" split.
+
+### 7.2 Contents as still-life vignettes ("Sights" bullets)
+
+Noun + comma + present-participle fragment, activity caught mid-motion, at
+least one quietly wrong: "Pthalo-jackals, cautiously hunting." "A Harlequin
+Serpent, sunning itself upon a fallen monument." "A pair of Jak's ghouls,
+posing as mourners." → Our item/character one-liners should be these, not
+static inventory labels.
+
+### 7.3 Danger: the Warning Omen formula (Issue 3)
+
+His entire telegraphing method, in one column-shape: **concrete found object or
+sensation + one wrong detail, no interpretation.** "An Antelope, Limping, Leg
+Full of Quills." "Hear A Child's Voice, Which Echoes Oddly." "Single Sable Bee
+Crawls on Ground." "Electrical Taste in the Air, As If Before A Storm."
+Rotate the sense channel (sight/sound/taste/remains). Issue 2 adds three prose
+mechanisms: **reputation** ("Widely feared"), **rumor attribution** ("there are
+rumours of more dangerous creatures still"), and **visible countermeasures**
+(citizens with wax-stuffed ears, ringing bells against a language plague). He
+never says "beware." → This is the direct model for our hazard warn-lines and
+for every hint the §16.1 audit deletes.
+
+### 7.4 Sentence shapes to steal
+
+- **Appositive opener, delayed subject:** "Gaudy jewel of Vaarn's southern
+  badlands, the city of a thousand shaded bazaars…"
+- **Aphorism + pivot on *yet/but*:** "The land parches and withers beneath a
+  wine-red sun, yet even here one may glimpse fragments of paradise."
+- **Semicolon-aphorism closer:** "…Vaarn is old and the dead outnumber the
+  living."
+- **Mock-scholarly hedge:** "It is theorised that…", "None can predict…",
+  "Who can say what…", "or so it is written."
+- **Deadpan litotes for social danger:** "The dens of the Cacklemaw are not
+  difficult to locate — one must simply follow the sound of…"
+- **Adjective triads ending on the sting** (NPCs): "Erudite, patient, hungry."
+  "Bored, petty, rude."
+- **Catalog sentence ending on the most estranging item** + a vista clause:
+  "…and luminous panes of glass, which have been scavenged from the archaic
+  satellites that fall to Urth on summer nights."
+- **Uncanny table-cell adverbs:** "Somehow" and "Unnaturally" do the horror
+  work ("Banquet Table, Laid For A Hundred Guests. Somehow Never Ages").
+
+### 7.5 Canon that anchors OUR tomb (from Issues 2–3)
+
+- **The anti-entropy sphere is canon burial:** Issue 3's Grave table lists
+  "Held in Anti-Entropy Sphere" and, for an Autarch, "Frozen Outside
+  Time-stream"; also "Consumed by Fungus," "Synthetic Grave Keeper," "Coins
+  Left In Tribute," "Has Been Desecrated."
+- **The Tomblands** (Issue 2): burial forbidden within Gnomon's walls; a
+  charnel-district of "windowless abodes" for "silent ancestors" lines the
+  southern road — our tomb sits naturally at its far end, and the Wreck's
+  caravan was plying that road.
+- **Pthalo-jackals, cautiously hunting** — canonical phrasing for our pack.
+- **Seekers of Eyeless Wisdom are canon** (Issue 2): "Not all the blind
+  beggars… are sightless due to misfortune. Some chose the dark." Silas's
+  faction holds up.
+- **MNEMOSYM**, Titan of Memory, "the ARCHIVIST and the SCRIBE" (Issue 3) —
+  the natural devotion for a synth archivist in a hall of memory-crystals.
+- **LogLang** (Issue 2): synth speech in "mathematical propositions… circular
+  fractal glyphs… ultrasonic tones" — Silas should lapse into it.
+- **Memory-as-treasure precedent:** "even memories may be bought for the right
+  price"; ghouls read the dead by eating them.
+- **The wine-red / sick sun:** "the red and ailing star that squats, bloated
+  and weak like a sated tick."
+- Vocabulary reinforced: *charnel-district, devil-grass, souk, wind-barge,
+  monofilament, necrotech, ego-engine, logicphage, memory-crystal, argent,
+  dolorous, capricious, lurid, urthly; azure/lapis/mazarine/cobalt/glaucous/
+  ultramarine for the blues.*
+
+### 7.6 Issue 4 deltas (The Wall)
+
+- **The place-prose recipe, confirmed at gazetteer scale:** (1) naming clause
+  with stacked epithets ("known variously as the Great Wall of Vaarn, the
+  Weeping Wall, the Backbone of the Gods, the Titanspine, or the Impediment");
+  (2) **distance-then-close-up zoom** ("At a distance it appears… Up close the
+  Wall is more impressive still…"); (3) **one organic simile per paragraph**,
+  always comparing the vast to the small and gross, never the reverse:
+  "grown like a scab around a wound," "towns and keeps nestle like wasp hives
+  in the eaves of an abandoned granary," "like a rat inside a derelict subway
+  station during a monsoon."
+- **Fragments for facts, periods for atmosphere.** NPC dossiers are verbless
+  bullet triads ("Aged, frail, cunning. Presents himself as kindly and slightly
+  deaf. Neither is true."); place-prose is long periodic sentences. Never mix.
+- **Secrets laundered through attribution:** "It is whispered that…", "or so it
+  is claimed," "Supposedly taken from…", "nobody has ever proven anything,"
+  "for reasons obscure and likely inauspicious."
+- **The OMEN column again** (Lair table): "White Turds." "A Severed Limb."
+  "Shed Skin, Still Projecting Light." "Corpse, Sheared in Half." "Fractal
+  Hooting." — physical residue + animal behavior; and hazards foreshadowed by
+  ecology ("creatures seeking their own sanctums" before the flood). §7.3
+  confirmed as house style across all issues.
+- **Second person exists but is vocational:** "To be a Needlesman takes no
+  small courage. You must endure gruelling dives through an airless, lightless
+  labyrinth of pipes…" — role-inhabiting, sensory, cumulative, ending on
+  paradox. The license for our second-person room voice.
+- **Directions as in-world idiom**, quoted speech rather than compass keys
+  ("One day cragways, three days clamberwise. The village perches sandside.")
+  — a tomb could carry its own direction-words the same way.
+- **For our Burial Sphere:** the Voidmaw drifts "through the dark places behind
+  the sky in search of warm provender" — that phrase-shape ("the depths
+  above," "the dark places behind the sky") is the register for zero-g dread.
+  Nightmare-vision cells: "White-tiled Time Tombs," "Ocean Floods Memory
+  Crypts," "Fractal Screams Echo Eternally."
+- Vocabulary added: *ikor (pale/sable), ferrosteel, vertiginous, abhuman,
+  provender, edifice, polity, inauspicious, "the Long Ago," "the Machine
+  Gods."*
