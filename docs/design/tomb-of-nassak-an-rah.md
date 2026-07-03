@@ -534,3 +534,78 @@ With these locked, the build follows the reactions playbook: scaffold map + item
 then the canopic spine puzzle, then the reactions/threats (incl. `DrawnToSound` and
 the zero-g navigation), then scoring + the winning walkthrough as a test — each its
 own PR, green before the next.
+
+---
+
+## 16. v2 plan — voice, onboarding, and honest hints (2026-07-02)
+
+Three playtest observations from CCB drive v2:
+
+1. *The text gives away solutions directly rather than telegraphing.*
+2. *The opening should onboard a first-time parser player (verb+object, simple
+   puzzles first).*
+3. *The language isn't evocative of Vaults of Vaarn.*
+
+Style evidence: `docs/design/vaarn-style-guide.md` (zine re-read done; two Leo
+Hunt interview transcriptions in progress).
+
+### 16.1 The hint-leak audit (observation 1)
+
+Every place the current text states the answer instead of the situation:
+
+| Where | Current leak | Replace with |
+|---|---|---|
+| Youth dark blurb | "(EXAMINE or LISTEN overhead, or FEEL your way in the dark.)" | Pure telegraphing (see style guide §5 worked example); probe verbs get taught in the onboarding instead |
+| Bats warn line | "…batting at your face — (2/3). Go dark and quiet, NOW." | Escalating *fiction*, no counters: rustle deepens → first bats drop → swarm. The escalation is the clock |
+| Jackals warn | "(n/3). Quiet, or get out." | distant yipping answers your noise → yellow eyes ring the doorways → the pack |
+| Spores warn | "(n/3). Get out, or mask up." | each breath burns worse; your vision swims — the body says "leave" without the menu |
+| Horror warn | "(n/2). Don't disturb it — it's still alive." | the orange mass *tracks* you; the coffin-glass creaks. Alive is shown, not stated |
+| PryCoffin fail | "You need purchase. (Magnetic boots?)" | "You flail in the void and drift; nothing holds you down." The boots' own examine text already says *magnetic clamp* — the link is discoverable |
+| BurnCorpse fail | "You'd need something that burns and a flame to light it — gel, and an igniter." | "Bare flame won't take on stone; it would want dousing in something that burns." (The tank room's gel "reeks, and it burns" already) |
+| Silas | Recites the whole seal solution (take jars → each on its plinth → seal yields) | Silas is oblique and self-interested: points at the *crystal lattice* ("the lattice remembers his embalming, for those who can read it") and warns of the walking Spawn; the head→organ mapping stays in the crystals + openable jars, where it already lives |
+| Glowstone examine | "LIGHT it and it glows…; DOUSE it to go dark again." | In-fiction: "wakes at a word and sleeps at another; scavengers carry them dark — light is dear, and attention dearer." The verbs get taught in onboarding |
+| Coffin examine | "You'd have to PRY it open." | Keep the verb discoverable but in fiction: "a seam fine as a hair, made to be pried, never opened" |
+
+**Principle:** mechanics never leak ((n/3) counters, verb menus, parenthetical
+stage directions). Danger telegraphs through *escalating fiction* — the second
+warning is scarier than the first, and that's how you know time is short. Verb
+discovery moves to the onboarding + item fiction ("pried", "wakes at a word").
+
+### 16.2 The onboarding opening (observation 2)
+
+New starting room **before** the Tomb Exterior: **The Caravan Wreck** — the
+player's trade caravan, jackal-struck in the night; they are the survivor
+(canonical: the zine's Trade Caravans table, complication "All Dead"). A safe
+sandbox that teaches the verb curriculum diegetically:
+
+| Beat | Verbs taught | Puzzle |
+|---|---|---|
+| The wreck, described with one glinting detail | `EXAMINE` | examine wreck/camel → reveals the half-buried pack |
+| The pack | `OPEN`, `TAKE`, `INVENTORY` | open pack → take glowstone (+ waterskin flavor). The glowstone is *found*, not given |
+| The wagon's hold — dim, not deadly (a `Fog`/DIM veil) | `LIGHT`, `DOUSE`, `READ` | too dim to read the merchant's ledger → light glowstone → read ledger → douse. Teaches the toggle in *safety* so the Hall of Youth can subvert it (light = danger) |
+| A surviving newbeast draught-mule (talking animal, canon) | `TALK TO` | gives the goal + the *indirect* lore that replaces the leaks: "the mouths are doors… the boy's mouth is lightless, and the dead there sleep shallow… walk it the way the dead walk" |
+| The road north | `GO` | go north → Tomb Exterior; the game proper begins |
+
+The ledger + the mule carry the oblique versions of every hint we're deleting
+from the interior (dark hall, listening dead, the fungus and fire). ~5 minutes,
+zero deaths possible, full verb curriculum: examine/open/take/inventory/light/
+douse/read/talk/go — plus modeling `feel`/`listen` in the hold's narration.
+
+### 16.3 The voice pass (observation 3)
+
+After the interview transcripts land and the style guide §6 is filled in:
+rewrite **every** location description (lit + dark/dim variants), item
+examine text, character text, hazard warn/kill lines, and travel flavor in the
+zine register (style guide §§2–5). Rough order: Exterior → Youth → Memory →
+Hounds → Warriors → Canopic → Sphere → Summit → Chimney → Wreck (new). Each
+rewrite honors §16.1 (no leaks) as it goes.
+
+### 16.4 Sequencing
+
+1. **PR A — onboarding**: the Caravan Wreck room + moves (glowstone found, not
+   given), walkthrough + test updates.
+2. **PR B — honest hints**: the §16.1 table, hazard warn-line rework (fiction
+   escalation, no counters), Silas rewrite.
+3. **PR C — voice pass**: the full §16.3 rewrite (style guide complete by then).
+
+Playtest after each; WIN walkthrough must stay 100/100 throughout.
