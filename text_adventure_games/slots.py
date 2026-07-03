@@ -16,11 +16,13 @@ existing game is unchanged. A game opts in per character::
 
 Consequences the engine wires when capacity is set:
 
-- ``Get`` refuses past the hard maximum (``2 x capacity``) and warns on the
-  encumbered transition.
+- Capacity is a **hard limit**: ``Get`` refuses anything that would not fit,
+  and warns when the gauge fills (a FULL pack is Encumbered).
 - An encumbered character's movement emits a sound (the clatter of an
   overloaded pack) and cannot use exits the game marks as climbs
   (``location.set_property("climb_exits", {"up"})``).
+- A new wound always fits: it shoves random gear out of the pack to make room
+  (``add_wound`` returns what was displaced).
 - ``INVENTORY`` reports ``Slots: used/capacity`` and lists wounds.
 
 Wounds are added by games (a hazard's final tick, a lost fight) via
@@ -123,9 +125,13 @@ def roll_wound(character, roll=None, rng=None, game=None):
         messages.append(row.description)
         return wounds, messages, False
 
-    fatal = character.add_wound(Wound(row.name, row.slots, row.description))
+    fatal, dropped = character.add_wound(
+        Wound(row.name, row.slots, row.description), rng=rng
+    )
     wounds.append(row)
     messages.append(f"{row.name}: {row.description}")
+    for item in dropped:
+        messages.append(f"Your grip fails: the {item.name} spills from your pack.")
     if fatal:
         messages.append("Your body has no room left to be hurt in. You are dead.")
     return wounds, messages, fatal
