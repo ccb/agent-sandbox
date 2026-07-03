@@ -369,9 +369,7 @@ class Character(Thing):
     def is_encumbered(self) -> bool:
         """The gauge is FULL: movement clatters, and exits a game marks as
         climbs (``climb_exits``) are beyond you."""
-        return (
-            self.slot_capacity is not None and self.slots_used() >= self.slot_capacity
-        )
+        return self.slot_capacity is not None and self.slots_used() >= self.slot_capacity
 
     def has_slot_space(self, item) -> bool:
         """Whether *item* fits -- capacity is a hard limit. Unlimited when no
