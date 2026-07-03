@@ -108,6 +108,9 @@ var _trails: Node2D                 # parent of the per-agent breadcrumb Line2Ds
 # (-1 = none pushed yet) lets us call out only when the integer step changes.
 var _is_web := false
 var _last_step := -1
+# Heatmap pop-up: the last step pushed into it, so we only recompute the (live) heat
+# when the integer step actually changes while it's open (see _process).
+var _last_heat_step := -1
 
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
@@ -136,6 +139,7 @@ var _fog_mat: ShaderMaterial
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
+@onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
 
 
 func _ready() -> void:
@@ -172,6 +176,11 @@ func _ready() -> void:
 	_panel.seek_requested.connect(_on_seek)
 	_panel.speed_changed.connect(func(m: float) -> void: _speed = m)
 	_panel.set_playing(not _paused)
+
+	# Movement-heatmap pop-up: the sidebar button (or the H key) opens it; its own close
+	# button / a click outside / Esc closes it. It's fed the replay after load.
+	_panel.heatmap_requested.connect(_toggle_heatmap)
+	_heatmap.close_requested.connect(_close_heatmap)
 
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
@@ -275,6 +284,10 @@ func _load_replay_from_text(text: String) -> void:
 	_t = preview_step * step_seconds
 	_anim_t = 0.0
 	_update_clock()
+
+	# Hand the whole replay to the heatmap pop-up so it can build its campus picture now
+	# (avoiding a blank first-open frame) and tally dwell up to any step on demand.
+	_heatmap.set_replay(_frames, _names, _tile_px)
 	print("penn_replay: %d steps, %d personas" % [_frames.size(), _names.size()])
 
 
@@ -567,6 +580,51 @@ func _on_seek(step: int) -> void:
 	_anim_t = 0.0
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	# Keyboard shortcuts for the heatmap pop-up (this scene has no other key handling;
+	# camera_controls.gd owns zoom/pan keys). Same guard idiom as camera_controls.
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	match event.keycode:
+		KEY_H:
+			_toggle_heatmap()
+			get_viewport().set_input_as_handled()
+		KEY_ESCAPE:
+			if _heatmap.visible:
+				_close_heatmap()
+				get_viewport().set_input_as_handled()
+		KEY_LEFT, KEY_RIGHT:
+			# While the pop-up is open, LEFT/RIGHT cycle its view (camera keyboard-pan is
+			# suppressed meanwhile, so the arrows don't also scroll the map).
+			if _heatmap.visible:
+				_heatmap.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
+				get_viewport().set_input_as_handled()
+
+
+func _toggle_heatmap() -> void:
+	if _heatmap.visible:
+		_close_heatmap()
+	else:
+		_open_heatmap()
+
+
+func _open_heatmap() -> void:
+	# Show the heat accumulated up to the step on screen right now; playback keeps
+	# running behind the pop-up (it live-updates via _process). Suppress the camera's
+	# keyboard pan so the arrow keys switch views instead of scrolling the map.
+	var last := maxi(_frames.size() - 1, 0)
+	var i := mini(int(_t / step_seconds), last)
+	_last_heat_step = i
+	_heatmap.show_up_to(i)
+	_heatmap.visible = true
+	_camera.keyboard_enabled = false
+
+
+func _close_heatmap() -> void:
+	_heatmap.visible = false
+	_camera.keyboard_enabled = true
+
+
 func _process(delta: float) -> void:
 	if _frames.is_empty():
 		return
@@ -590,6 +648,12 @@ func _process(delta: float) -> void:
 	var frac: float = 0.0 if looped else fpos - float(i)
 	var j: int = i if looped else i + 1
 	_panel.set_progress(i, last)
+
+	# Keep the heatmap pop-up current: while it's open, re-tally the dwell up to the new
+	# step whenever the playhead crosses into it, so the heat grows live as the sim runs.
+	if _heatmap.visible and i != _last_heat_step:
+		_last_heat_step = i
+		_heatmap.show_up_to(i)
 
 	for name in _names:
 		var a: Dictionary = _frames[i][name]
