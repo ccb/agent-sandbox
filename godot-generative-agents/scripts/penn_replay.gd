@@ -94,8 +94,8 @@ const FOG_COLOR := Color(0.16, 0.17, 0.21, 0.72)
 # agent NOT currently in it fades out. The sprite (and its nameplate/bubble, which ride
 # its node.modulate) drop to this alpha; the trail (parented separately under _trails)
 # fades harder so it doesn't clutter the dimmed background.
-const SPOTLIGHT_DIM_ALPHA := 0.22
-const TRAIL_DIM_ALPHA := 0.10
+const SPOTLIGHT_DIM_ALPHA := 0.35
+const TRAIL_DIM_ALPHA := 0.18
 
 var _tile_px := 16
 var _sec_per_step := 10

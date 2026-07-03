@@ -187,8 +187,8 @@ func _draw() -> void:
 		var p := (node.global_position - _bounds.position) * s
 		var dim: bool = _dimmed.has(a["name"])
 		var tint: Color = a["tint"]
-		draw_circle(p, dot_radius + 1.5, Color(0.0, 0.0, 0.0, 0.2 if dim else 0.55))
-		draw_circle(p, dot_radius, Color(tint.r, tint.g, tint.b, 0.28) if dim else tint)
+		draw_circle(p, dot_radius + 1.5, Color(0.0, 0.0, 0.0, 0.32 if dim else 0.55))
+		draw_circle(p, dot_radius, Color(tint.r, tint.g, tint.b, 0.45) if dim else tint)
 
 	# 4. A frame around the whole minimap.
 	draw_rect(Rect2(Vector2.ZERO, size), border_color, false, 2.0)

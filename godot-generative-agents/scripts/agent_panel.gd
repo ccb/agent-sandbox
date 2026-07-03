@@ -33,7 +33,7 @@ signal filter_changed(location: String)
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
 # Non-matching rows fade to this alpha while a location filter is active, so the
 # agents at the focused building stand out without the others vanishing entirely.
-const ROW_DIM_ALPHA := 0.4
+const ROW_DIM_ALPHA := 0.55
 # Muted status line under each character's name — a soft brown that stays legible
 # on the Cute Fantasy theme's light parchment panel (plain grey would wash out).
 const STATUS_COLOR := Color(0.42, 0.32, 0.24)
