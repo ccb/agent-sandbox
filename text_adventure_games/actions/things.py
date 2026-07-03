@@ -397,8 +397,10 @@ class Examine(base.Action):
         if parts:
             self.parser.ok(" ".join(parts))
             return
+        # Diegetic nudge, not a stage direction: if the thing can be felt, say
+        # so through the fiction rather than a parenthetical instruction.
         hint = (
-            " (Try feeling your way around.)"
+            " Your hands might do what your eyes cannot."
             if target.sense_text(perception.Sense.TOUCH)
             else ""
         )

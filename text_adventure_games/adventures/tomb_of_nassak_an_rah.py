@@ -323,6 +323,12 @@ def build_game():
     ledger = _scenery(hold, "ledger", "the merchant's ledger",
              "A trade ledger bound in lizard-skin, closed around a ribbon "
              "marker at its final page.")
+    # FEEL finds the ledger in the dark hold -- so an empty-handed player who
+    # gropes around is rewarded, and the probe is rehearsed before the Hall of
+    # Youth needs it.
+    ledger.perceptible_by(perception.Sense.TOUCH,
+             "Your hands find a folding desk, and on it a book bound in "
+             "lizard-skin, closed around a ribbon. Too dark to read a word of it.")
     ledger.set_property("read_text",
              "The hand is neat until it is not. '...ninth day. Camped in the lee "
              "of the tomb the guards call the Three Mouths. They will not pass "
@@ -369,8 +375,9 @@ def build_game():
         "could not, and that is the whole story. The Cacklemaw make no secret "
         'of their coming; the secret is what good knowing does you." She looks '
         'north, to the faces in the azure stone. "Take what he no longer needs '
-        "-- better you than the sand. His ledger is in the hold; the dark in "
-        "there is ordinary, and yours is the only light left on this road. But "
+        "-- better you than the sand. His ledger is in the hold, and the dark "
+        "in there is ordinary; he kept a glowstone in his pack, and it is the "
+        "only light left on this road. But "
         "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
         'and a caravan is seldom wrong twice."'
     )
