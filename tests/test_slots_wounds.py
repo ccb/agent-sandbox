@@ -59,24 +59,22 @@ def test_without_capacity_everything_is_unlimited():
 # --- carrying ------------------------------------------------------------------
 
 
-def test_get_warns_at_the_encumbered_transition_and_refuses_at_the_hard_max():
-    game, cap = _world(capacity=4)              # hard max = 8
+def test_a_full_pack_is_encumbered_and_capacity_is_a_hard_limit():
+    game, cap = _world(capacity=4)
     game.do_command("take rock1")               # 2/4 -- fine
-    game.do_command("take rock2")               # 4/4 -- at capacity, fine
     assert not game.player.is_encumbered()
-    game.do_command("take rock3")               # 6/4 -- encumbered (warned)
+    game.do_command("take rock2")               # 4/4 -- FULL = encumbered (warned)
     assert game.player.is_encumbered()
-    assert "loaded past comfort" in _texts(cap)
-    game.do_command("take rock4")               # 8/4 -- at the hard max
-    game.do_command("take pebble")              # 9 > 8 -- refused
+    assert "full to the last slot" in _texts(cap)
+    game.do_command("take pebble")              # 5 > 4 -- refused outright
     assert "pebble" not in game.player.inventory
     assert "cannot carry another thing" in _texts(cap)
 
 
 def test_encumbered_cannot_climb_but_can_walk():
     game, cap = _world(capacity=4)
-    for i in (1, 2, 3):
-        game.do_command(f"take rock{i}")        # 6/4 -- encumbered
+    for i in (1, 2):
+        game.do_command(f"take rock{i}")        # 4/4 -- encumbered
     game.do_command("up")
     assert game.player.location.name == "Yard"  # the climb refused
     assert "climb is out of the question" in _texts(cap)
@@ -86,9 +84,9 @@ def test_encumbered_cannot_climb_but_can_walk():
 
 def test_dropping_below_capacity_clears_encumbrance_and_the_climb():
     game, cap = _world(capacity=4)
-    for i in (1, 2, 3):
-        game.do_command(f"take rock{i}")
-    game.do_command("drop rock3")               # back to 4/4
+    for i in (1, 2):
+        game.do_command(f"take rock{i}")        # 4/4
+    game.do_command("drop rock2")               # back to 2/4
     assert not game.player.is_encumbered()
     game.do_command("up")
     assert game.player.location.name == "Ledge"
@@ -96,8 +94,8 @@ def test_dropping_below_capacity_clears_encumbrance_and_the_climb():
 
 def test_encumbered_movement_emits_a_clatter():
     game, cap = _world(capacity=4)
-    for i in (1, 2, 3):
-        game.do_command(f"take rock{i}")
+    for i in (1, 2):
+        game.do_command(f"take rock{i}")        # 4/4 -- encumbered
     game.do_command("in")                       # encumbered walk -> a sound event
     assert any(
         "overloaded pack" in (e.payload or {}).get("sound", "") for e in game.events
@@ -112,14 +110,30 @@ def test_wounds_fill_the_same_slots_as_gear():
     game.do_command("take rock1")               # 2/4
     game.player.add_wound(Wound("Bloody Gash", 1, "It will scar."))
     assert game.player.slots_used() == 3
-    game.do_command("take rock2")               # 5/4 -- gear + wound = encumbered
+    game.do_command("take rock2")               # 5 > 4 -- the wound's slot is real
+    assert "rock2" not in game.player.inventory
+    game.do_command("take pebble")              # 4/4 -- full
     assert game.player.is_encumbered()
+
+
+def test_a_wound_displaces_random_gear_when_the_pack_is_full():
+    game, cap = _world(capacity=4)
+    for i in (1, 2):
+        game.do_command(f"take rock{i}")        # 4/4 -- full
+    fatal, dropped = game.player.add_wound(
+        Wound("Bloody Gash", 1, "It will scar."), rng=random.Random(0))
+    assert not fatal
+    assert len(dropped) == 1                    # one 2-slot rock shed -> 3/4
+    assert game.player.slots_used() == 3
+    assert dropped[0].name in game.player.location.items  # it fell here
 
 
 def test_wounds_alone_filling_capacity_kill():
     game, cap = _world(capacity=3)
-    assert not game.player.add_wound(Wound("Major Fracture", 2, "..."))
-    assert game.player.add_wound(Wound("Bloody Gash", 1, "..."))   # 3/3 -> fatal
+    fatal, _ = game.player.add_wound(Wound("Major Fracture", 2, "..."))
+    assert not fatal
+    fatal, _ = game.player.add_wound(Wound("Bloody Gash", 1, "..."))   # 3/3 -> fatal
+    assert fatal
     assert game.player.get_property("is_dead")
 
 
