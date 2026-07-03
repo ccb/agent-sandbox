@@ -304,7 +304,12 @@ class Game:
         # Let a player in earshot but elsewhere overhear it (same courtesy the
         # parser extends to a loud action; the source room narrates it itself).
         player = getattr(self, "player", None)
-        if radius > 0 and loc_name and player is not None and player.location is not None:
+        if (
+            radius > 0
+            and loc_name
+            and player is not None
+            and player.location is not None
+        ):
             heard = self.audible_rooms(loc_name, radius)
             if player.location.name in heard:
                 direction = heard[player.location.name]

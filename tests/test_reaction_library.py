@@ -142,7 +142,9 @@ def test_countdown_fires_its_consequence_after_the_delay():
     boom = _Boom(trigger_loc=b)
     game.add_reaction(b, boom)
 
-    game.do_command("go north")  # enter B -> countdown starts (turn 1), resolves at turn 3
+    game.do_command(
+        "go north"
+    )  # enter B -> countdown starts (turn 1), resolves at turn 3
     assert boom.boomed == []
     game.do_command("look")  # turn 2
     assert boom.boomed == []
@@ -173,9 +175,9 @@ def test_drawn_to_sound_advances_one_hop_toward_the_noise_each_round():
 
     # Player stays in A and blows the horn; the beast in C homes in, a hop a round.
     game.do_command("horn")
-    assert beast.location is b      # C -> B (one hop toward the source)
+    assert beast.location is b  # C -> B (one hop toward the source)
     game.do_command("horn")
-    assert beast.location is a      # B -> A (reaches the source)
+    assert beast.location is a  # B -> A (reaches the source)
 
 
 def test_drawn_to_sound_holds_still_in_silence():
@@ -183,14 +185,14 @@ def test_drawn_to_sound_holds_still_in_silence():
     beast = things.Character("beast", "a lured beast", "I hunt the noise.")
     c.add_character(beast)
     game.add_reaction(beast, reactions.DrawnToSound())
-    game.do_command("look")         # no noise
-    assert beast.location is c      # stays put
+    game.do_command("look")  # no noise
+    assert beast.location is c  # stays put
 
 
 def test_drawn_to_sound_does_not_overshoot_the_source():
     game, player, (a, b) = _line("A", "B")
     beast = things.Character("beast", "a lured beast", "I hunt the noise.")
-    a.add_character(beast)           # already in the room the noise comes from
+    a.add_character(beast)  # already in the room the noise comes from
     game.add_reaction(beast, reactions.DrawnToSound())
-    game.do_command("horn")          # noise originates in A, where the beast already is
-    assert beast.location is a       # doesn't wander off
+    game.do_command("horn")  # noise originates in A, where the beast already is
+    assert beast.location is a  # doesn't wander off

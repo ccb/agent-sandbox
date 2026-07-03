@@ -44,8 +44,8 @@ class Sight(IntEnum):
     """How well an observer sees a location. Ordered so "most restrictive wins":
     a resolver takes the minimum across all veils."""
 
-    NONE = 0   # can't see -- render only the "can't see" blurb
-    DIM = 1    # partial -- the room's gist + exits, but not items/characters
+    NONE = 0  # can't see -- render only the "can't see" blurb
+    DIM = 1  # partial -- the room's gist + exits, but not items/characters
     CLEAR = 2  # full: description + exits + items + characters
 
 
@@ -142,4 +142,3 @@ class Scene:
 
     sight: Sight
     description: str
-

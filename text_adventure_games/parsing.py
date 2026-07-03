@@ -499,7 +499,11 @@ class Parser:
             dest_loc = acting.location if acting is not None else None
             dest = dest_loc.name if dest_loc is not None else None
             direction = None
-            if origin_loc is not None and dest_loc is not None and dest_loc is not origin_loc:
+            if (
+                origin_loc is not None
+                and dest_loc is not None
+                and dest_loc is not origin_loc
+            ):
                 direction = next(
                     (d for d, r in origin_loc.connections.items() if r is dest_loc),
                     None,
