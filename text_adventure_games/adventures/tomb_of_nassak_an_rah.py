@@ -56,6 +56,13 @@ _QUIET = {
     "eat",
     "read",
     "search",
+    "give",
+    "close",
+    "take off",
+    "wield",
+    "unwield",
+    "help",
+    "quit",
 }
 # To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
 # quietly sensing, and working your own light are safe (so you can enter, see it,
@@ -73,6 +80,8 @@ _QUIET_SPHERE = {
     "listen",
     "smell",
     "drink",
+    "help",
+    "quit",
 }
 
 
@@ -130,7 +139,11 @@ def _hazard(
     def tick(g):
         active = g.player.location is room and (gate is None or gate(g)) and danger(g)
         if not active:
-            room.set_property(key, 0)
+            # Decay rather than reset: one quiet round steps the count back by
+            # one, so spaced-out noises still accumulate -- the second warning
+            # ("nearer") is reachable by intermittent racket, not only by
+            # sustained racket. Full calm still drains to zero.
+            room.set_property(key, max(0, (room.get_property(key) or 0) - 1))
             return
         n = (room.get_property(key) or 0) + 1
         room.set_property(key, n)
@@ -480,6 +493,8 @@ def build_game():
         _good.set_property("gettable", True)
         _good.set_property("slots", _slots)
         _good.add_alias(_name.split()[0])  # bale / crate / bolt
+        if "dates" in _name:
+            _good.set_property(Property.EDIBLE, True)
         _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
         if "silk" in _name:
             _good.add_alias("silk")
@@ -909,6 +924,27 @@ def build_game():
     warriors.add_character(spawn_guts)
     hounds.add_character(spawn_brain)
 
+    # The pthalo-jackals are an embodied pack (one Character), denned off-map
+    # (canon: "Pthalo-Jackals -- Shallow Dens -- Hear Howling on the Wind").
+    # Noise draws them in; food or water buys them off; nothing does not.
+    den = things.Location(
+        "Shallow Dens",
+        "Low scrapes in the blue sand, ripe with old bones and jackal-musk.",
+    )
+    jackal_pack = things.Character(
+        "jackal pack",
+        "a pack of pthalo-jackals",
+        "We are cautious. We are clever. We are owed.",
+    )
+    jackal_pack.examine_text = (
+        "Pthalo-jackals: cautious, clever, cerulean-coated pack hunters. Their "
+        "eyes do sums -- you, minus what you carry, minus what you bleed. It "
+        "is not you they want."
+    )
+    for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
+        jackal_pack.add_alias(_a)
+    den.add_character(jackal_pack)
+
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
     # you fight the Spawn.)
@@ -1040,7 +1076,7 @@ def build_game():
     game = TombGame(
         wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain, worry],
+        characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack],
         custom_actions=[Sneak, BurnCorpse, PryCoffin],
     )
     game.max_score = 100
@@ -1123,13 +1159,53 @@ def build_game():
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
-    def _jackal_savage(g):
-        """The pack takes its due (a d20 wound-table roll) and withdraws --
-        continued noise invites it back. Death: a fatal roll, or slots full."""
+    # The pthalo-jackals, embodied (CCB design): noise draws the pack IN. Two
+    # warnings, then they enter and growl -- one round of grace. GIVE them food
+    # or water and they leave with it; otherwise they maul you, round after
+    # round, until you feed them, flee, or fall. A blade also answers (they can
+    # be knocked out), and their examine text says what they want.
+    _halls = (memory, hounds, warriors)
+
+    def _pack_out(g):
+        return jackal_pack.get_property(
+            Property.IS_UNCONSCIOUS
+        ) or jackal_pack.get_property(Property.IS_DEAD)
+
+    def _jackal_feed_check(g):
+        return jackal_pack.inventory and not _pack_out(g)
+
+    def _jackal_feed(g):
+        fed = [
+            it
+            for it in jackal_pack.inventory.values()
+            if it.get_property(Property.EDIBLE) or it.get_property(Property.DRINKABLE)
+        ]
+        refused = [it for it in jackal_pack.inventory.values() if it not in fed]
+        for it in refused:
+            jackal_pack.remove_from_inventory(it)
+            if jackal_pack.location is not None:
+                jackal_pack.location.add_item(it)
+            g.parser.ok(
+                f"The pack noses the {it.name} and lets it fall. It is not "
+                "that kind of hunger."
+            )
+        if not fed:
+            return
+        for it in fed:
+            jackal_pack.remove_from_inventory(it)  # consumed
+        names = " and ".join(f"the {it.name}" for it in fed)
         g.parser.ok(
-            "The pack pours from the dark and takes its due before you can "
-            "raise an arm."
+            f"The pack closes over {names} with terrible courtesy and is gone "
+            "into the dark with it. The halls stay quiet a long while after."
         )
+        g.relocate(jackal_pack, den)
+        for h in _halls:
+            h.set_property(f"_jk:{h.name}", -4)  # a fed pack forgets you a while
+
+    game.add_trigger("jackal_feed", _jackal_feed_check, _jackal_feed, repeatable=True)
+
+    def _jackal_maul(g):
+        g.parser.ok("The pack takes its due before you can raise an arm.")
         _, messages, fatal = roll_wound(g.player, rng=_RNG)
         for m in messages:
             g.parser.ok(m)
@@ -1141,25 +1217,55 @@ def build_game():
             )
         else:
             g.parser.ok(
-                "As quickly as they came, the jackals melt back into "
-                "the dark, unhurried, patient for the next noise."
+                "They do not leave. They are waiting to see what else you have."
             )
-        return True
 
-    for hall in (memory, hounds, warriors):
-        _hazard(
-            game,
-            hall,
-            danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
-            warns=(
-                "Somewhere off in the halls, a yipping answers your noise -- "
-                "once, and then again, nearer.",
-                "Yellow eyes ring the doorways, unhurried. Pthalo-jackals: "
-                "cautious, clever, and done being cautious.",
-            ),
-            harm=_jackal_savage,
-            harm_resets=True,
-        )
+    def _jackal_tick(g):
+        if _pack_out(g):
+            return
+        here = g.player.location
+        for hall in _halls:
+            key = f"_jk:{hall.name}"
+            n = hall.get_property(key) or 0
+            if here is not hall:
+                # Player gone: the pack loses interest; the trail cools toward
+                # calm from either side (positive suspicion drains, post-feed
+                # grace wears off).
+                if jackal_pack.location is hall:
+                    g.relocate(jackal_pack, den)
+                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                continue
+            if jackal_pack.location is hall:
+                _jackal_maul(g)  # unfed, unfled: they collect
+                continue
+            if _player_was_loud_in(g, hall, _QUIET):
+                n += 1
+                hall.set_property(key, n)
+                if n == 1:
+                    g.parser.ok(
+                        "Somewhere off in the halls, a yipping answers your "
+                        "noise -- once, and then again, nearer."
+                    )
+                elif n == 2:
+                    g.parser.ok(
+                        "Yellow eyes ring the doorways, unhurried. "
+                        "Pthalo-jackals: cautious, clever, and done being "
+                        "cautious."
+                    )
+                elif n >= 3:
+                    g.relocate(jackal_pack, hall)
+                    g.parser.ok(
+                        "They come in low and unhurried, cerulean-coated, "
+                        "filling the doorways. The nearest growls -- a sound "
+                        "with arithmetic in it -- and the pack looks from you "
+                        "to your bag, and back."
+                    )
+                # n <= 0: a fed (or long-calmed) pack lets it go -- the noise
+                # only burns through their patience.
+            else:
+                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+
+    game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
