@@ -903,8 +903,10 @@ def build_game():
     def _bat_maul(g):
         """Dive-bombing bats deal a non-lethal wound each round the light (or
         din) persists; death comes only if wounds fill the scavenger's slots."""
-        fatal = g.player.add_wound(Wound(
-            "Bat-Mauled", 1, "Claw-rakes across your scalp and hands."))
+        fatal, dropped = g.player.add_wound(Wound(
+            "Bat-Mauled", 1, "Claw-rakes across your scalp and hands."), rng=_RNG)
+        for it in dropped:
+            g.parser.ok(f"The {it.name} is torn from your grip and spills into the dark.")
         if fatal:
             _die(g, "The swarm takes you down among the statues, and the dark "
                     "closes over the light. THE END.")
@@ -961,8 +963,10 @@ def build_game():
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
-        fatal = g.player.add_wound(Wound(
-            "Seared Lungs", 1, "Every breath is smaller than the last."))
+        fatal, dropped = g.player.add_wound(Wound(
+            "Seared Lungs", 1, "Every breath is smaller than the last."), rng=_RNG)
+        for it in dropped:
+            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the tomb in, and it keeps you. THE END.")
         else:

@@ -105,8 +105,8 @@ class Get(base.Action):
         # comfort, you move loudly and cannot climb.
         if self.character.is_encumbered() and not was_encumbered:
             description += (
-                " You are loaded past comfort now: you move with a clatter, "
-                "and climbing is out of the question."
+                " Your pack is full to the last slot: you move with a clatter "
+                "now, and climbing is out of the question."
             )
         self.parser.ok(description)
 
