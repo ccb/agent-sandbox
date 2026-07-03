@@ -123,6 +123,17 @@ def test_the_wrecks_hold_teaches_light_in_safety():
     assert game.player.location.name == "The Caravan Wreck"
 
 
+def test_the_merchants_body_can_be_searched_for_his_tokens():
+    """The wreck's safe rehearsal of the corpse-searching habit the Summit pays
+    off: search (or examine) the merchant, find his water-debt tokens."""
+    game = _game()
+    cap = _texts(game)
+    game.do_command("search merchant")
+    assert "water-debt tokens" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    game.do_command("take purse")
+    assert "purse of water-debt tokens" in game.player.inventory
+
+
 def test_worry_the_mule_tells_the_story():
     game = _game()
     cap = _texts(game)
