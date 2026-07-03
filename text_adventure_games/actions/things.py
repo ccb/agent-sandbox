@@ -286,9 +286,12 @@ class Inventory(base.Action):
 
     def apply_effects(self):
         char = self.character
+        # "Your inventory" for the player (named "you"); possessive for NPCs.
+        whose = "Your" if char.name.lower() == "you" else f"{char.name}'s"
+
         # Nothing carried, worn, wielded -- or suffered -- a single empty line.
         if not char.inventory and not char.worn and not char.wielded and not char.wounds:
-            self.parser.ok(f"{char.name}'s inventory is empty.")
+            self.parser.ok(f"{whose} inventory is empty.")
             return
 
         # Three sections in order: what's carried, then worn, then wielded.
@@ -296,7 +299,7 @@ class Inventory(base.Action):
         # "empty", when something is worn/wielded but nothing is in hand).
         sections = []
         if char.inventory:
-            carried = f"{char.name}'s inventory contains:\n"
+            carried = f"{whose} inventory contains:\n"
             for item_name in char.inventory:
                 item = char.inventory[item_name]
                 if item.get_property("is_container"):
@@ -320,7 +323,7 @@ class Inventory(base.Action):
                     )
             sections.append(carried.rstrip("\n"))
         else:
-            sections.append(f"{char.name}'s inventory is empty.")
+            sections.append(f"{whose} inventory is empty.")
 
         def _listing(title, slot):
             body = "".join(
