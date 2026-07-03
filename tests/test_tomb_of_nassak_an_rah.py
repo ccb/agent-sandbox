@@ -340,22 +340,74 @@ def test_enough_bat_wounds_kill():
     assert game.is_game_over() and not game.is_won()  # slots filled with wounds
 
 
-def test_sustained_noise_brings_the_jackals_who_take_their_due():
-    """Two warnings, then the pack savages you (a d20 wound-table roll) and
-    withdraws -- death comes from a fatal roll or wounds filling your slots."""
+def test_sustained_noise_brings_the_pack_who_growl_then_maul():
+    """Two warnings, then the pack ENTERS and growls (one round of grace);
+    unfed and unfled, they maul (a d20 wound-table roll) round after round."""
     tomb._RNG.seed(0)  # first roll: 13, Cracked Skull (2 slots)
     game = _game()
+    cap = _texts(game)
     _embark(game, glowstone=False)
     game.do_command("sneak east")  # -> Hall of Warriors (safe to enter)
-    game.do_command("say hey")  # one shout: a warning
-    assert not game.is_game_over()
-    game.do_command("say hey")  # the second warning
-    assert not game.is_game_over() and not game.player.wounds
-    game.do_command("say hey")  # the pack takes its due
-    assert not game.is_game_over()
+    game.do_command("say hey")  # warning one: distant yipping
+    game.do_command("say hey")  # warning two: yellow eyes
+    assert not game.player.wounds
+    game.do_command("say hey")  # the pack enters and growls
+    hall = game.locations["Hall of Warriors"]
+    assert "jackal pack" in hall.characters
+    assert "growls" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert not game.player.wounds  # the growl round is grace
+    game.do_command("wait")  # neither fed nor fled -> mauled
     assert game.player.wound_slots() == 2  # Cracked Skull
-    game.do_command("wait")  # quiet again -> the pack stays away
     assert not game.is_game_over()
+    assert "jackal pack" in hall.characters  # they wait for more
+
+
+def test_feeding_the_pack_buys_them_off():
+    game = _game()
+    cap = _texts(game)
+    # Bring the dates from the wreck, then make a racket in the hall.
+    for cmd in (
+        "in",
+        "take dates",
+        "out",
+        "north",
+        "east",
+        "say hey",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    hall = game.locations["Hall of Warriors"]
+    assert "jackal pack" in hall.characters
+    game.do_command("give dates to jackals")
+    assert "jackal pack" not in hall.characters  # gone with the goods
+    assert not game.player.wounds
+    out = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "terrible courtesy" in out
+    game.do_command("say hey")  # the fed pack forgets you a while
+    assert "jackal pack" not in hall.characters
+
+
+def test_the_pack_refuses_what_it_cannot_eat():
+    game = _game()
+    cap = _texts(game)
+    for cmd in (
+        "in",
+        "take bale",
+        "out",
+        "north",
+        "east",
+        "say hey",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    hall = game.locations["Hall of Warriors"]
+    tomb._RNG.seed(0)
+    game.do_command("give saffron to jackals")  # not that kind of hunger
+    assert "bale of saffron" in hall.items  # dropped at your feet
+    assert "jackal pack" in hall.characters  # and they are still here
+    assert "not that kind of hunger" in " ".join(cap.texts(Channel.NARRATION)).lower()
 
 
 def test_the_live_sphere_kills_only_when_you_disturb_it():

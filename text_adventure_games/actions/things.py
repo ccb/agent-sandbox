@@ -553,6 +553,12 @@ class Give(base.Action):
         """
         if not self.was_matched(self.item, "I don't see it."):
             return False
+        # An unmatched recipient falls back to the player (parser default),
+        # which for a player-issued give means giving to yourself. Refuse and
+        # ask instead of narrating "You gave the X to You."
+        if self.recipient is self.giver:
+            self.parser.fail("Give it to whom?")
+            return False
         if self.giver.is_worn(self.item):
             self.parser.fail(
                 f"{self.giver.name.capitalize()} is wearing the "
@@ -593,7 +599,7 @@ class Give(base.Action):
         """
         self.giver.discard_item(self.item)
         self.recipient.accept_item(self.item)
-        description = "{giver} gave the {item_name} to {recipient}".format(
+        description = "{giver} gave the {item_name} to {recipient}.".format(
             giver=self.giver.name.capitalize(),
             item_name=self.item.name,
             recipient=self.recipient.name.capitalize(),
