@@ -346,19 +346,28 @@ def test_enough_bat_wounds_kill():
     assert game.is_game_over() and not game.is_won()  # slots filled with wounds
 
 
+def _no_spawn(game):
+    """KO both Spawn so a test can isolate the jackal pack (the Spawn are
+    drawn to the same noises and would interleave attacks)."""
+    for name in ("spawn of guts", "spawn of brain"):
+        game.characters[name].set_property("is_unconscious", True)
+
+
 def test_sustained_noise_brings_the_pack_who_growl_then_maul():
     """Two warnings, then the pack ENTERS and growls (one round of grace);
     unfed and unfled, they maul (a d20 wound-table roll) round after round."""
     tomb._RNG.seed(0)  # first roll: 13, Cracked Skull (2 slots)
     game = _game()
     cap = _texts(game)
+    _no_spawn(game)
     _embark(game, glowstone=False)
-    game.do_command("sneak east")  # -> Hall of Warriors (safe to enter)
+    game.do_command("sneak north")  # -> Hall of Youth (dark, quiet)
+    game.do_command("sneak north")  # -> Hall of Memory (no Spawn here)
     game.do_command("say hey")  # warning one: distant yipping
     game.do_command("say hey")  # warning two: yellow eyes
     assert not game.player.wounds
     game.do_command("say hey")  # the pack enters and growls
-    hall = game.locations["Hall of Warriors"]
+    hall = game.locations["Hall of Memory"]
     assert "jackal pack" in hall.characters
     assert "growls" in " ".join(cap.texts(Channel.NARRATION)).lower()
     assert not game.player.wounds  # the growl round is grace
@@ -371,19 +380,21 @@ def test_sustained_noise_brings_the_pack_who_growl_then_maul():
 def test_feeding_the_pack_buys_them_off():
     game = _game()
     cap = _texts(game)
-    # Bring the dates from the wreck, then make a racket in the hall.
+    _no_spawn(game)
+    # Bring the dates from the wreck, then make a racket in Memory.
     for cmd in (
         "in",
         "take dates",
         "out",
         "north",
-        "east",
+        "north",
+        "north",
         "say hey",
         "say hey",
         "say hey",
     ):
         game.do_command(cmd)
-    hall = game.locations["Hall of Warriors"]
+    hall = game.locations["Hall of Memory"]
     assert "jackal pack" in hall.characters
     game.do_command("give dates to jackals")
     assert "jackal pack" not in hall.characters  # gone with the goods
@@ -397,18 +408,20 @@ def test_feeding_the_pack_buys_them_off():
 def test_the_pack_refuses_what_it_cannot_eat():
     game = _game()
     cap = _texts(game)
+    _no_spawn(game)
     for cmd in (
         "in",
         "take bale",
         "out",
         "north",
-        "east",
+        "north",
+        "north",
         "say hey",
         "say hey",
         "say hey",
     ):
         game.do_command(cmd)
-    hall = game.locations["Hall of Warriors"]
+    hall = game.locations["Hall of Memory"]
     tomb._RNG.seed(0)
     game.do_command("give saffron to jackals")  # not that kind of hunger
     assert "bale of saffron" in hall.items  # dropped at your feet
@@ -514,11 +527,49 @@ def test_ulfire_light_reveals_the_ego_core_in_the_manifold_box():
     )
 
 
+def test_the_spawn_ignores_a_sneaking_scavenger():
+    """The Spawn are blind -- they hunt footfalls. Creep and they never know."""
+    game = _game()
+    game.do_command("north")
+    game.do_command("sneak east")  # into the spawn's dark hall, silently
+    game.do_command("sneak west")  # and out again
+    assert not game.player.wounds
+
+
+def test_striding_in_earns_a_warning_then_a_lash():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")
+    game.do_command("east")  # footfalls: it swings toward you
+    assert "swings toward your footfalls" in " ".join(cap.texts(Channel.NARRATION))
+    assert not game.player.wounds  # the swing is the warning
+    game.do_command("say hello")  # loud again while it listens -> the lash
+    assert any(w.name == "Acid-Lashed" for w in game.player.wounds)
+    assert not game.is_game_over()
+
+
+def test_the_brain_spawn_opens_your_hands():
+    """Psychic domination: it makes you drop your wielded weapon."""
+    game = _game()
+    blade = things_blade = None
+    # arm the player directly and walk into the brain's hall wielding steel
+    cyl = game.locations["Hall of Warriors"].items["cerulean cylinder"]
+    blade = cyl.contents["prismatic blade"]
+    cyl.remove_item(blade)
+    game.player.add_to_inventory(blade)
+    game.do_command("wield blade")
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("say hello")  # warn
+    game.do_command("say hello")  # dominate: hands open
+    assert "prismatic blade" not in game.player.wielded
+    assert "prismatic blade" in game.locations["Hall of Hounds"].items
+
+
 def test_the_kit_is_sealed_until_the_glass_breaks():
     game = _game()
     cap = _texts(game)
     game.do_command("north")
-    game.do_command("east")  # Hall of Warriors
+    game.do_command("sneak east")  # Hall of Warriors -- creep: the Spawn hears
     game.do_command("take blade")  # sealed under glass -> unreachable
     assert "prismatic blade" not in game.player.inventory
     game.do_command("break cerulean cylinder")  # loud: the crash carries
@@ -530,7 +581,7 @@ def test_the_kit_is_sealed_until_the_glass_breaks():
 def test_venting_the_orange_cylinder_sears_unmasked_lungs():
     game = _game()
     game.do_command("north")
-    game.do_command("east")
+    game.do_command("sneak east")
     game.do_command("break orange cylinder")  # no respirator -> the bloom bites
     assert any(w.name == "Seared Lungs" for w in game.player.wounds)
     assert not game.is_game_over()
@@ -541,14 +592,15 @@ def test_a_respirator_makes_the_orange_cylinder_safe():
     cap = _texts(game)
     for cmd in (
         "north",
-        "east",
+        "sneak east",
         "break amber cylinder",
         "take respirator",
         "wear respirator",
         "break orange cylinder",
     ):
         game.do_command(cmd)
-    assert not game.player.wounds  # the seal holds
+    # The mask's job is the spores (the spawn may still have opinions).
+    assert not any(w.name == "Seared Lungs" for w in game.player.wounds)
     assert "disappointed" in " ".join(cap.texts(Channel.NARRATION)).lower()
     game.do_command("take igniter")
     assert "plasma-igniter" in game.player.inventory
@@ -627,7 +679,7 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     game.do_command("north")
     # load up past 10: smash out the blade and boots (takes between breaks
     # keep the pack's suspicion at one)
-    game.do_command("east")
+    game.do_command("sneak east")
     for cmd in (
         "break cerulean cylinder",
         "take blade",
