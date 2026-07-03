@@ -4,10 +4,8 @@ from ..enums import ActionName, Property
 # from ..things import Character  # , Item
 
 
-def _conj(character, second: str, third: str) -> str:
-    """Conjugate a verb for the actor: the player (named "you") gets second
-    person ("You eat"), everyone else third ("Troll eats")."""
-    return second if character.name.lower() == "you" else third
+# Shared with the other actions -- see base.conjugate.
+_conj = base.conjugate
 
 
 class Eat(base.Action):
