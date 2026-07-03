@@ -574,7 +574,8 @@ discovery moves to the onboarding + item fiction ("pried", "wakes at a word").
 ### 16.2 The onboarding opening (observation 2)
 
 New starting room **before** the Tomb Exterior: **The Caravan Wreck** — the
-player's trade caravan, jackal-struck in the night; they are the survivor
+player's trade caravan, Cacklemaw-struck in the night (canon caravan raiders,
+Issue 1 bandit table); they are the survivor
 (canonical: the zine's Trade Caravans table, complication "All Dead"). A safe
 sandbox that teaches the verb curriculum diegetically:
 
@@ -583,7 +584,7 @@ sandbox that teaches the verb curriculum diegetically:
 | The wreck, described with one glinting detail | `EXAMINE` | examine wreck/camel → reveals the half-buried pack |
 | The pack | `OPEN`, `TAKE`, `INVENTORY` | open pack → take glowstone (+ waterskin flavor). The glowstone is *found*, not given |
 | The wagon's hold — dim, not deadly (a `Fog`/DIM veil) | `LIGHT`, `DOUSE`, `READ` | too dim to read the merchant's ledger → light glowstone → read ledger → douse. Teaches the toggle in *safety* so the Hall of Youth can subvert it (light = danger) |
-| A surviving newbeast draught-mule (talking animal, canon) | `TALK TO` | gives the goal + the *indirect* lore that replaces the leaks: "the mouths are doors… the boy's mouth is lightless, and the dead there sleep shallow… walk it the way the dead walk" |
+| Worry, a new-mule teamster (newbeasts are humanoid animal-people, never draught animals -- the dead zoxen pulled the wagon) | `TALK TO` | gives the goal + the *indirect* lore that replaces the leaks: "the mouths are doors… the boy's mouth is lightless, and the dead there sleep shallow… walk it the way the dead walk" |
 | The road north | `GO` | go north → Tomb Exterior; the game proper begins |
 
 The ledger + the mule carry the oblique versions of every hint we're deleting
