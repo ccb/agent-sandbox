@@ -145,7 +145,10 @@ class Go(base.Action):
             # then the default "moved". (Riding is handled above, so a mounted
             # character never shows their on-foot gait.)
             verb = (
-                self.location.move_verbs.get(self.direction)
+                # An action subclass may declare its own verb (Sneak: "slip
+                # silently") -- it wins over the exit's and the character's.
+                getattr(self, "MOVE_VERB", None)
+                or self.location.move_verbs.get(self.direction)
                 or self.character.get_property("move_verb")
                 or "moved"
             )
