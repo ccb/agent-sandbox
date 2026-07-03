@@ -78,6 +78,14 @@ class Get(base.Action):
                 "Your hands are full and you have nothing with room to stow it."
             )
             return False
+        # Vaarn item slots (slots.py; only when the character opted in): past
+        # the hard maximum you simply cannot take more.
+        if not self.character.has_slot_space(self.item):
+            self.parser.fail(
+                "You cannot carry another thing -- something must be dropped, "
+                "or left."
+            )
+            return False
         return True
 
     def apply_effects(self):
@@ -86,12 +94,20 @@ class Get(base.Action):
         adds it to the character's inventory or, if their hands are full, a
         carried container with space.
         """
+        was_encumbered = self.character.is_encumbered()
         if self.source_holder is not None:
             self.source_holder.remove_item(self.item)
         self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
         )
+        # Warn once at the encumbered transition (slots.py): loaded past
+        # comfort, you move loudly and cannot climb.
+        if self.character.is_encumbered() and not was_encumbered:
+            description += (
+                " You are loaded past comfort now: you move with a clatter, "
+                "and climbing is out of the question."
+            )
         self.parser.ok(description)
 
 
@@ -270,8 +286,8 @@ class Inventory(base.Action):
 
     def apply_effects(self):
         char = self.character
-        # Nothing carried, worn, or wielded -- a single empty line.
-        if not char.inventory and not char.worn and not char.wielded:
+        # Nothing carried, worn, wielded -- or suffered -- a single empty line.
+        if not char.inventory and not char.worn and not char.wielded and not char.wounds:
             self.parser.ok(f"{char.name}'s inventory is empty.")
             return
 
@@ -317,6 +333,24 @@ class Inventory(base.Action):
             sections.append(_listing("Wearing:", char.worn))
         if char.wielded:
             sections.append(_listing("Wielding:", char.wielded))
+
+        # Vaarn item slots (slots.py): wounds fill the same gauge as gear; the
+        # slots line appears only for characters that opted in.
+        if char.wounds:
+            wounds = "Wounds:\n" + "".join(
+                "* {name}{slots} - {desc}\n".format(
+                    name=w.name,
+                    slots=f" ({w.slots} slot{'s' if w.slots != 1 else ''})" if w.slots else "",
+                    desc=w.description,
+                )
+                for w in char.wounds
+            )
+            sections.append(wounds.rstrip("\n"))
+        if char.slot_capacity is not None:
+            gauge = f"Slots: {char.slots_used()}/{char.slot_capacity}"
+            if char.is_encumbered():
+                gauge += " -- ENCUMBERED (you clatter when you move, and cannot climb)"
+            sections.append(gauge)
 
         self.parser.ok("\n\n".join(sections))
 
