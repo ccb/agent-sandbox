@@ -3,10 +3,11 @@
 A Zork / Action Castle homage set in the Blue Ruins of Vaarn. See the design spec
 at docs/design/tomb-of-nassak-an-rah.md.
 
-PHASE 1 (this file): the map + atmosphere only -- eight navigable, examinable
-locations, the nameless scavenger, a glowstone to see by. No puzzles, threats,
-reactions, scoring, or deaths yet; those arrive in later phases. The goal here is
-a world you can walk and read.
+The game opens at the Caravan Wreck -- a safe onboarding room on the Tomblands
+road that teaches the old-school verb+object language (EXAMINE / OPEN / TAKE /
+LIGHT / DOUSE / READ / TALK) before the tomb can kill you (design doc §16.2).
+The glowstone is found in the merchant's pack, not given. GO NORTH skips the
+tutorial entirely.
 
     Run:  python -m text_adventure_games.adventures.tomb_of_nassak_an_rah [--walk]
 """
@@ -266,6 +267,96 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
 
 
 def build_game():
+    # --- The onboarding: the Caravan Wreck (start) ---------------------------
+    # A safe sandbox one room south of the tomb that teaches the old-school
+    # verb+object language (EXAMINE / OPEN / TAKE / LIGHT / DOUSE / READ / TALK)
+    # before anything can kill you. GO NORTH works from turn one -- the tutorial
+    # is optional exploration, not a gate. (Design: tomb doc §16.2; register:
+    # docs/design/vaarn-style-guide.md.)
+    wreck = things.Location(
+        "The Caravan Wreck",
+        "The Tomblands road, at the hour after the jackals. A trade caravan lies "
+        "heeled over in the blue sand -- wind-wagon ribs of pale wood, cargo "
+        "strewn and already sanding under -- and the dead have been arranged by "
+        "the wind into attitudes of sleep. It is said the road to Gnomon is "
+        "walked only by the desperate; last night this was proven again. "
+        "Northward, three carved faces watch from a slab of azure stone.",
+    )
+    hold = things.Location(
+        "The Wagon's Hold",
+        # The LIT view; the Darkness veil below supplies the dark blurb. This is
+        # where LIGHT/DOUSE get learned in safety -- so the Hall of Youth can
+        # later subvert the lesson.
+        "Your light finds the hold intact where the wagon is not: crates of "
+        "saffron and dates still lashed tight, a folding desk, and the "
+        "merchant's ledger, closed around its ribbon marker.",
+    )
+    wreck.add_connection("in", hold)  # auto: hold out -> wreck
+
+    hold.obscure(perception.Darkness(
+        blurb="Bruise-dark. The hold smells of saffron, lamp-oil, and the dry "
+        "sweetness of dates; you can make out crate-shapes, and on a desk "
+        "somewhere, a pale square of paper. The daylight is a grey rectangle "
+        "behind you."))
+
+    _scenery(wreck, "wreck", "the heeled-over wind-wagon",
+             "Pale ribs and torn sailcloth. Wind-wagons are built to outrun "
+             "anything on the Tomblands road, and this one nearly did.")
+    _scenery(wreck, "zoxen", "two dead zoxen, half-sanded",
+             "The caravan's draught-zoxen, patient in death as in life, already "
+             "sanded to the shoulder. By morning the road will have them wholly.")
+    _scenery(hold, "crates", "lashed crates of saffron and dates",
+             "Trade goods bound for the souks of Gnomon, worth a season's water. "
+             "Too much to carry, which the jackals also found.")
+    ledger = _scenery(hold, "ledger", "the merchant's ledger",
+             "A trade ledger bound in lizard-skin, closed around a ribbon "
+             "marker at its final page.")
+    ledger.set_property("read_text",
+             "The hand is neat until it is not. '...ninth day. Camped in the lee "
+             "of the tomb the guards call the Three Mouths. They will not pass "
+             "it after dark, and I have stopped teasing them for it. Kotesh "
+             "swears the boy's mouth is lightless within, and that what roosts "
+             "there hates a lamp worse than a shout. The halls, he says, "
+             "remember every footfall. And none of them, drunk or paid, will "
+             "speak of the old man's mouth, which weeps orange. Superstition -- "
+             "but I observe that my guards are paid to be brave, and are not. "
+             "Tomorrow, Gnomon.' The entry is the last.")
+    ledger.add_command_hint("read ledger")
+
+    pack = things.Item(
+        "pack", "the merchant's half-buried pack",
+        "Boiled leather, half-buried, the straps still buckled. Whatever the "
+        "jackals wanted, it was not this.",
+    ).make_container()
+    pack.set_property("is_closed", True)
+    pack.add_command_hint("open pack")
+    waterskin = things.Item(
+        "waterskin", "a half-full waterskin",
+        "Half of the merchant's water survived the night. In Vaarn this is "
+        "called an inheritance.",
+    )
+    wreck.add_item(pack)
+
+    worry = things.Character(
+        "Worry", "a newbeast draught-mule",
+        "I am Worry. I pulled the wagon; now there is no wagon.",
+    )
+    worry.examine_text = (
+        "A grey new-mule in a torn harness, dressed in the road's dust. Patient, "
+        "mournful, unhurt -- the jackals were thorough with everything that "
+        "could not run. A brass tag on her collar reads WORRY."
+    )
+    worry.talk_text = (
+        '"They came at moonset," Worry says. "Cautious. Clever. I ran, and the '
+        'merchant could not, and that is the whole story." She looks north, to '
+        'the faces in the azure stone. "Take what he no longer needs -- better '
+        "you than the sand. His ledger is in the hold; the dark in there is "
+        "ordinary, and yours is the only light left on this road. But mind the "
+        "tomb, scavenger. The caravans give its mouths a wide berth, and a "
+        'caravan is seldom wrong twice."'
+    )
+    wreck.add_character(worry)
+
     # --- The eight locations -------------------------------------------------
     exterior = things.Location(
         "Tomb Exterior",
@@ -335,6 +426,7 @@ def build_game():
     # (Only canonical directions -- n/s/e/w/up/down/in/out -- auto-route from a
     # bare word; the flavor verbs "climb"/"chimney" arrive with custom actions in a
     # later phase. The room prose names which mouth lies which way.)
+    wreck.add_connection("north", exterior)       # the Tomblands road (auto: exterior south -> wreck)
     exterior.add_connection("north", youth)       # child's mouth (west face) -> Youth
     exterior.add_connection("east", warriors)     # warrior's mouth (east face) -> Warriors
     exterior.add_connection("up", summit)         # climb the exterior (auto: summit down -> exterior)
@@ -566,29 +658,37 @@ def build_game():
         "a lone scavenger",
         "I comb the Blue Ruins for what the dead no longer need.",
     )
-    # The glowstone is a lantern: dark until you LIGHT it (turn on / light
-    # glowstone), and you can DOUSE it (turn off) to go dark again. FLAMMABLE is
-    # the engine's "can be lit" flag (see actions.Light). It starts UNLIT -- so
-    # carrying it is safe; it's *lighting* it in the Hall of Youth that wakes the
-    # bats.
+    # The glowstone is a lantern: dark until you LIGHT it, DOUSE to go dark
+    # again. FLAMMABLE is the engine's "can be lit" flag (see actions.Light). It
+    # starts UNLIT -- carrying it is safe; *lighting* it in the Hall of Youth is
+    # what wakes the bats. It is FOUND (in the merchant's pack at the wreck),
+    # not given: taking it is the tutorial's OPEN/TAKE beat.
     glowstone = things.Item(
         "glowstone", "a dim glowstone",
-        "A shard of cold blue glowstone. LIGHT it and it glows bright enough to see "
-        "by; DOUSE it to go dark again.",
+        "A shard of cold lazulite, dark until woken. Scavengers carry them "
+        "dark: light is dear, and attention dearer.",
     )
     glowstone.set_property(Property.FLAMMABLE, True)
     glowstone.add_alias("stone")
     glowstone.add_alias("lantern")
-    player.add_to_inventory(glowstone)
+    glowstone.add_command_hint("light glowstone")
+    glowstone.add_command_hint("douse glowstone")
+    pack.add_item(glowstone)
+    pack.add_item(waterskin)
 
     game = TombGame(
-        exterior, player, characters=[silas, spawn_guts, spawn_brain],
+        wreck, player, characters=[silas, spawn_guts, spawn_brain, worry],
         custom_actions=[Sneak, BurnCorpse, PryCoffin],
     )
     game.max_score = 100
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
     game.enable_senses()
+    # Register purity by default: no command-hint training wheels in the prose
+    # (design doc §16 -- danger telegraphs through fiction). Flip give_hints on
+    # for a hand-held demo/classroom run; the wreck's tutorial items carry
+    # their hints ("open pack", "light glowstone", "read ledger") for that mode.
+    game.give_hints = False
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
@@ -693,6 +793,12 @@ def build_game():
 # A SAFE tour: the tomb is deadly now, so creep (sneak) through the halls and
 # don't enter the lethal Burial Sphere. Visits the seven survivable rooms.
 WALK = [
+    # The onboarding beats at the Caravan Wreck (the start): examine, talk,
+    # open/take, then light/douse/read in the safe dark of the hold.
+    "examine wreck", "talk to worry",
+    "open pack", "take glowstone",
+    "in", "light glowstone", "read ledger", "douse glowstone", "out",
+    "north",                                                 # -> Tomb Exterior
     "examine tomb", "up", "examine ossified corpse", "down",  # Summit and back (safe)
     "north", "examine ceiling",                              # -> Hall of Youth (pitch dark; hear the bats)
     "light glowstone", "examine statues", "douse glowstone",  # light to see (bats stir), then go dark again
@@ -707,8 +813,10 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # (The glowstone starts unlit, so it's safe to carry -- never light it in the
-    # Hall of Youth. This route never needs to see in the dark.)
+    # Loot the wreck, walk to the tomb. (The glowstone starts unlit, so it's
+    # safe to carry -- never light it in the Hall of Youth. This route never
+    # needs to see in the dark.)
+    "open pack", "take glowstone", "north",
     "sneak east", "take blade", "take igniter", "take boots",       # Warriors: arm
     "sneak east", "take gel",                                       # Hounds: gel
     "sneak up",                                                     # -> Canopic

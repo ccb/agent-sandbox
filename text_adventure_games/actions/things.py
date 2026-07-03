@@ -657,7 +657,9 @@ class Open(base.Action):
 
     def apply_effects(self):
         self.item.set_property("is_closed", False)
-        message = f"{self.character.name.capitalize()} opens the {self.item.name}."
+        # Item-subject phrasing reads right for any actor -- "You opens the
+        # pack" (player named "you") was ungrammatical. Same fix as Light/Douse.
+        message = f"The {self.item.name} is open."
         # Reveal what's inside so the player learns what they can take, rather
         # than having to guess (the contents are now reachable by GET).
         contents = [
@@ -696,9 +698,8 @@ class Close(base.Action):
 
     def apply_effects(self):
         self.item.set_property("is_closed", True)
-        self.parser.ok(
-            f"{self.character.name.capitalize()} closes the {self.item.name}."
-        )
+        # Item-subject phrasing, matching Open (and Light/Douse).
+        self.parser.ok(f"The {self.item.name} is closed.")
 
 
 class Unlock_Door(base.Action):
