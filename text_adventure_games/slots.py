@@ -102,9 +102,7 @@ def roll_wound(character, roll=None, rng=None, game=None):
         if pool:
             item = rng.choice(pool)
             character.remove_from_inventory(item)
-            messages.append(
-                f"The blow lands on your pack: the {item.name} is smashed beyond use."
-            )
+            messages.append(f"The blow lands on your pack: the {item.name} is smashed beyond use.")
         else:
             messages.append("The blow lands on your pack, which is mercifully empty.")
         return wounds, messages, False

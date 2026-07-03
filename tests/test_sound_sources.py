@@ -75,24 +75,15 @@ def test_sound_does_not_reach_beyond_its_radius():
 
 def test_silent_events_are_not_sounds():
     game, player, (a,) = _line("A")
-    game.log_event(
-        "you", "examine", "examine rock", payload={"location": "A", "heard_radius": 0}
-    )
+    game.log_event("you", "examine", "examine rock", payload={"location": "A", "heard_radius": 0})
     assert game.sounds_audible_at(a) == []
 
 
 def test_exclude_drops_a_things_own_sound():
     game, player, (a,) = _line("A")
-    game.log_event(
-        "deer",
-        "stomp",
-        "stomp",
-        payload={"location": "A", "heard_radius": 1, "sound": "stomping"},
-    )
+    game.log_event("deer", "stomp", "stomp", payload={"location": "A", "heard_radius": 1, "sound": "stomping"})
     assert game.sounds_audible_at(a)  # someone else would hear it
-    assert (
-        game.sounds_audible_at(a, exclude="deer") == []
-    )  # the deer doesn't startle itself
+    assert game.sounds_audible_at(a, exclude="deer") == []  # the deer doesn't startle itself
 
 
 # --- entered_this_round -----------------------------------------------------

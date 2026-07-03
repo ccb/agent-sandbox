@@ -304,12 +304,7 @@ class Game:
         # Let a player in earshot but elsewhere overhear it (same courtesy the
         # parser extends to a loud action; the source room narrates it itself).
         player = getattr(self, "player", None)
-        if (
-            radius > 0
-            and loc_name
-            and player is not None
-            and player.location is not None
-        ):
+        if radius > 0 and loc_name and player is not None and player.location is not None:
             heard = self.audible_rooms(loc_name, radius)
             if player.location.name in heard:
                 direction = heard[player.location.name]
@@ -902,11 +897,7 @@ class Game:
             if self.player.wounds:
                 inventory_description += "Wounds:\n"
                 for w in self.player.wounds:
-                    note = (
-                        f" ({w.slots} slot{'s' if w.slots != 1 else ''})"
-                        if w.slots
-                        else ""
-                    )
+                    note = f" ({w.slots} slot{'s' if w.slots != 1 else ''})" if w.slots else ""
                     inventory_description += f"* {w.name}{note} - {w.description}\n"
             if self.player.slot_capacity is not None:
                 inventory_description += (
@@ -983,8 +974,7 @@ class Game:
         # wounds, so a planner can reason about load and injury.
         if character.wounds:
             lines.append(
-                "Wounds: "
-                + ", ".join(f"{w.name} ({w.slots})" for w in character.wounds)
+                "Wounds: " + ", ".join(f"{w.name} ({w.slots})" for w in character.wounds)
             )
         if character.slot_capacity is not None:
             gauge = f"Slots: {character.slots_used()}/{character.slot_capacity}"
