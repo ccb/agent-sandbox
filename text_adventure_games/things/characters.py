@@ -85,6 +85,16 @@ class Character(Thing):
         # are unchanged. Container `contents` do not count against this; the
         # container item itself occupies one hand slot.
         self.carry_capacity = None
+        # Vaarn item slots (see slots.py) -- the shared carrying/harm gauge.
+        # None (default) = unlimited and wound-limitless, so existing games are
+        # unchanged; a game opts in per character (player.slot_capacity = 10).
+        # The hard maximum (past which GET refuses outright) defaults to twice
+        # capacity; between capacity and the maximum you are Encumbered.
+        # Wounds occupy the same slots; runtime-only (not serialized), like
+        # behavior/reactions.
+        self.slot_capacity = None
+        self.slot_hard_max = None
+        self.wounds: list = []
         self.location = None
         self.behavior = None
         self.agent = None
@@ -334,6 +344,63 @@ class Character(Thing):
         elif item.container is not None:
             item.container.remove_item(item)
             item.set_owner(None)
+
+    # --- Vaarn item slots (see slots.py; all no-ops until slot_capacity set) --
+
+    def item_slots_used(self) -> int:
+        """Slots occupied by carried gear: inventory + worn + wielded (each item
+        costs its ``slots`` property, default 1; a container's contents ride
+        free -- the container declares its own loaded cost if it matters)."""
+        from ..slots import item_slot_cost
+
+        seen = []
+        for slot in (self.inventory, self.worn, self.wielded):
+            for item in slot.values():
+                if item not in seen:
+                    seen.append(item)
+        return sum(item_slot_cost(it) for it in seen)
+
+    def wound_slots(self) -> int:
+        """Slots occupied by wounds."""
+        return sum(w.slots for w in self.wounds)
+
+    def slots_used(self) -> int:
+        return self.item_slots_used() + self.wound_slots()
+
+    def _hard_max(self):
+        if self.slot_capacity is None:
+            return None
+        return self.slot_hard_max or 2 * self.slot_capacity
+
+    def is_encumbered(self) -> bool:
+        """Over capacity (but under the hard max): movement clatters, and exits
+        a game marks as climbs (``climb_exits``) are beyond you."""
+        return self.slot_capacity is not None and self.slots_used() > self.slot_capacity
+
+    def has_slot_space(self, item) -> bool:
+        """Whether *item* can be picked up at all (within the hard maximum).
+        Unlimited when no capacity is set."""
+        if self.slot_capacity is None:
+            return True
+        from ..slots import item_slot_cost
+
+        return self.slots_used() + item_slot_cost(item) <= self._hard_max()
+
+    def add_wound(self, wound) -> bool:
+        """Add *wound*; returns True if it is fatal -- wounds alone filling
+        capacity kill (Vaarn: 'if a character fills [their] item slots with
+        Wounds they will die'). With no capacity set, wounds are tracked but
+        never fatal by accumulation."""
+        self.wounds.append(wound)
+        if self.slot_capacity is not None and self.wound_slots() >= self.slot_capacity:
+            self.set_property(Property.IS_DEAD, True)
+            return True
+        return False
+
+    def heal_wound(self):
+        """Remove and return the most recent wound (None if unhurt) -- the hook
+        a game's rest/water/medicine mechanic calls."""
+        return self.wounds.pop() if self.wounds else None
 
     def set_behavior(self, fn):
         """
