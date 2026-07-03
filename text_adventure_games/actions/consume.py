@@ -217,7 +217,8 @@ class Douse(base.Action):
 
     ACTION_NAME = ActionName.DOUSE
     ACTION_DESCRIPTION = "Put out something you've lit (a lamp, torch, or lantern)"
-    ACTION_ALIASES = ["extinguish", "put out", "turn off", "snuff", "snuff out"]
+    ACTION_ALIASES = ["extinguish", "put out", "turn off", "snuff", "snuff out",
+                      "dim", "darken"]
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
