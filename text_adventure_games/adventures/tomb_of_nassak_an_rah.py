@@ -618,9 +618,11 @@ def build_game():
     warriors = things.Location(
         "Hall of Warriors",
         "Four plexiglas cylinders stand on an uneven floor, each holding a "
-        "guard-mummy at attention in Autarchy armour. The fungus has found all "
-        "four; orange veins fan out under the glass like pressed flowers. Their "
-        "kit has outlasted them, as kit does.",
+        "guard-mummy at attention in Autarchy armour, each steeped in its own "
+        "embalming gel: cerulean, amber, viridian, orange. Fungus has found "
+        "one of the four; orange veins fan out under its glass like pressed "
+        "flowers. Their kit was sealed in with them, as if the dead might be "
+        "recalled to duty. It has outlasted them, as kit does.",
     )
     canopic = things.Location(
         "Hall of the Canopic Jars",
@@ -760,9 +762,10 @@ def build_game():
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
-        "Each holds a guard-mummy in Autarchy armour, at an attention no "
-        "order will ever relieve, the glass fogged from within by threads "
-        "of orange fungus.",
+        "Four guard-mummies at an attention no order will ever relieve, each "
+        "sealed under its own gel -- cerulean, amber, viridian, orange -- and "
+        "each armed as in life. Whatever they carried went under the glass "
+        "with them.",
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -956,7 +959,6 @@ def build_game():
     blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
     blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
-    warriors.add_item(blade)
 
     # Endgame gear: a plasma-igniter and magnetic boots (more guard kit), and a
     # flask of flammable embalming gel from the hound tank.
@@ -983,9 +985,65 @@ def build_game():
     respirator.set_property(Property.WEARABLE, True)
     respirator.set_property("wear_slot", "face")
     respirator.add_alias("mask")
-    warriors.add_item(igniter)
-    warriors.add_item(boots)
-    warriors.add_item(respirator)
+
+    # The four cylinders (CCB design): each guard's kit is sealed IN with him,
+    # gettable only once the glass is broken -- and breaking glass is LOUD
+    # (Break carries two rooms; the jackals keep the ledger). Each cylinder
+    # holds a different gel; the orange one is choked with fungus, and venting
+    # it sears unmasked lungs. The respirator sits in the AMBER one, so the
+    # careful order is: amber first, mask up, then the rest.
+    def _cylinder(colour, kit, examine, break_text):
+        cyl = things.Item(
+            f"{colour} cylinder",
+            f"the {colour} burial cylinder",
+            examine,
+        ).make_container()
+        cyl.set_property("gettable", False)
+        cyl.set_property("is_closed", True)  # sealed: no reaching through glass
+        cyl.set_property("is_breakable", True)  # the only way in
+        cyl.set_property("break_text", break_text)
+        cyl.add_alias(colour)
+        cyl.add_item(kit)
+        warriors.add_item(cyl)
+        return cyl
+
+    _cylinder(
+        "cerulean",
+        blade,
+        "A guard-mummy stands in gel the blue of deep sky, prismatic blade at "
+        "rest against its shoulder. The edge splits your light into colours, "
+        "even through the glass.",
+        "The glass gives all at once; cerulean gel sluices across the floor "
+        "and the guard folds out with it, weightless as kelp. Its blade rings "
+        "on the stone.",
+    )
+    _cylinder(
+        "amber",
+        respirator,
+        "A guard-mummy in gel like old honey, an Autarchy respirator still "
+        "strapped to its face. It did the guard no lasting good, but it has "
+        "kept its seal.",
+        "Amber gel bursts over your boots, sweet-smelling and old as the "
+        "walls. The guard settles into the spill, and the respirator comes "
+        "loose in the flood.",
+    )
+    _cylinder(
+        "viridian",
+        boots,
+        "A guard-mummy in green-glass gel, magnet-booted, still at its post by "
+        "no will of its own. The boots' soles have kept their grip on the "
+        "plinth.",
+        "The viridian gel goes everywhere. The guard stays standing a moment "
+        "longer -- boots anchored -- then tips.",
+    )
+    orange_cyl = _cylinder(
+        "orange",
+        igniter,
+        "Less a cylinder than a column of fungus now; the guard inside is a "
+        "shadow in the bloom. At its hip, the outline of a plasma-igniter. The "
+        "growth stirs against the glass, very slightly, in time with nothing.",
+        "The orange cylinder does not so much shatter as exhale.",
+    )
     gel = things.Item(
         "flask of gel",
         "a flask of embalming gel",
@@ -1203,6 +1261,42 @@ def build_game():
             h.set_property(f"_jk:{h.name}", -4)  # a fed pack forgets you a while
 
     game.add_trigger("jackal_feed", _jackal_feed_check, _jackal_feed, repeatable=True)
+
+    # Venting the orange cylinder (CCB design): breaking it exhales the bloom.
+    # Masked, you watch it settle; unmasked, it sears your lungs -- the same
+    # wound the chimney deals, because it is the same fungus.
+    def _orange_vented_check(g):
+        return "orange cylinder" not in warriors.items and not warriors.get_property(
+            "spores_vented"
+        )
+
+    def _orange_vent(g):
+        warriors.set_property("spores_vented", True)
+        if "respirator" in g.player.worn:
+            g.parser.ok(
+                "The bloom bursts outward in a dry orange cloud. The "
+                "respirator's seal holds; the spores settle over your "
+                "shoulders like ash, disappointed."
+            )
+            return
+        fatal, dropped = g.player.add_wound(
+            Wound("Seared Lungs", 1, "Every breath is smaller than the last."),
+            rng=_RNG,
+        )
+        for it in dropped:
+            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
+        if fatal:
+            _die(g, "You breathe the bloom in, and it keeps you. THE END.")
+        else:
+            g.parser.ok(
+                "The bloom bursts outward in a dry orange cloud and you take a "
+                "breath of it before you can help it. It burns going down; "
+                "something in your chest will remember this."
+            )
+
+    game.add_trigger(
+        "orange_vent", _orange_vented_check, _orange_vent, repeatable=False
+    )
 
     def _jackal_maul(g):
         g.parser.ok("The pack takes its due before you can raise an arm.")
@@ -1472,8 +1566,9 @@ WALK = [
     "talk to silas",
     "examine crystal lattice",  # -> Hall of Memory
     "north",
-    "take prismatic blade",
-    "examine cylinders",  # -> Hall of Warriors
+    "examine cylinders",  # -> Hall of Warriors: the kit is under glass
+    "break cerulean cylinder",
+    "take blade",  # loud -- one distant yip, then quiet again
     "east",
     "examine tank",  # -> Hall of Hounds
     "up",
@@ -1492,10 +1587,16 @@ WIN_WALKTHROUGH = [
     "open pack",
     "take glowstone",
     "north",
-    "sneak east",
+    "sneak east",  # Warriors: the kit is sealed in the cylinders
+    "break amber cylinder",
+    "take respirator",
+    "wear respirator",  # mask up FIRST --
+    "break orange cylinder",
+    "take igniter",  # -- so the bloom vents harmlessly
+    "break cerulean cylinder",
     "take blade",
-    "take igniter",
-    "take boots",  # Warriors: arm
+    "break viridian cylinder",
+    "take boots",
     "sneak east",
     "take gel",  # Hounds: gel
     "sneak up",  # -> Canopic

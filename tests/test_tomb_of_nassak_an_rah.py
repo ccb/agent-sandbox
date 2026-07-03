@@ -255,7 +255,13 @@ def _arm_and_reach_canopic(game):
     """Sneak in, take the prismatic blade from the Hall of Warriors, and creep up
     to the Canopic hall -- armed and safe."""
     _embark(game)
-    for cmd in ["sneak east", "take prismatic blade", "sneak east", "sneak up"]:
+    for cmd in [
+        "sneak east",
+        "break cerulean cylinder",
+        "take prismatic blade",
+        "sneak east",
+        "sneak up",
+    ]:
         game.do_command(cmd)
 
 
@@ -508,11 +514,52 @@ def test_ulfire_light_reveals_the_ego_core_in_the_manifold_box():
     )
 
 
+def test_the_kit_is_sealed_until_the_glass_breaks():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")
+    game.do_command("east")  # Hall of Warriors
+    game.do_command("take blade")  # sealed under glass -> unreachable
+    assert "prismatic blade" not in game.player.inventory
+    game.do_command("break cerulean cylinder")  # loud: the crash carries
+    game.do_command("take blade")
+    assert "prismatic blade" in game.player.inventory
+    assert "rings on the stone" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_venting_the_orange_cylinder_sears_unmasked_lungs():
+    game = _game()
+    game.do_command("north")
+    game.do_command("east")
+    game.do_command("break orange cylinder")  # no respirator -> the bloom bites
+    assert any(w.name == "Seared Lungs" for w in game.player.wounds)
+    assert not game.is_game_over()
+
+
+def test_a_respirator_makes_the_orange_cylinder_safe():
+    game = _game()
+    cap = _texts(game)
+    for cmd in (
+        "north",
+        "east",
+        "break amber cylinder",
+        "take respirator",
+        "wear respirator",
+        "break orange cylinder",
+    ):
+        game.do_command(cmd)
+    assert not game.player.wounds  # the seal holds
+    assert "disappointed" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    game.do_command("take igniter")
+    assert "plasma-igniter" in game.player.inventory
+
+
 def test_burning_the_corpse_consumes_an_unclaimed_fungus():
     game = _game()
     _embark(game)
     for cmd in [
         "sneak east",
+        "break orange cylinder",  # unmasked: costs a Seared Lungs wound
         "take igniter",
         "sneak east",
         "take gel",
@@ -578,9 +625,15 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     game.do_command("take waterskin")
     # blade would be next, but the cargo alone is 5 slots -- go check the climb
     game.do_command("north")
-    # load up past 10: add the blade and kit from the Hall of Warriors
+    # load up past 10: smash out the blade and boots (takes between breaks
+    # keep the pack's suspicion at one)
     game.do_command("east")
-    for cmd in ("take blade", "take igniter", "take boots", "take respirator"):
+    for cmd in (
+        "break cerulean cylinder",
+        "take blade",
+        "break viridian cylinder",
+        "take boots",
+    ):
         game.do_command(cmd)
     assert game.player.is_encumbered()
     game.do_command("west")
@@ -598,6 +651,7 @@ def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     # Arm with gel + igniter, creep out to the Exterior, climb up, burn the root.
     for cmd in [
         "sneak east",
+        "break orange cylinder",  # unmasked: costs a Seared Lungs wound
         "take igniter",
         "sneak east",
         "take gel",
@@ -621,8 +675,9 @@ def test_prying_the_coffin_needs_the_magnetic_boots():
     assert sphere.items["coffin"].get_property("pried") in (False, None)
     assert "synth-hunting dagger" not in sphere.items
     # with the boots worn, it works
-    boots = game.locations["Hall of Warriors"].items["magnetic boots"]
-    game.locations["Hall of Warriors"].remove_item(boots)
+    cyl = game.locations["Hall of Warriors"].items["viridian cylinder"]
+    boots = cyl.contents["magnetic boots"]
+    cyl.remove_item(boots)
     game.player.add_to_inventory(boots)
     game.do_command("wear boots")
     game.do_command("pry coffin")
