@@ -722,7 +722,7 @@ def build_game():
         "restless storm of leathery wings. A great many, and close. They "
         "shift when you shift.",
     )
-    _scenery(
+    lattice = _scenery(
         memory,
         "crystal lattice",
         "lattices of memory-crystal",
@@ -731,6 +731,8 @@ def build_game():
         "his lungs, the human his liver, the mantis his eyes; the falcon was "
         "given his intestines, and the jackal -- strangely -- his brain.",
     )
+    lattice.add_alias("lattice")
+    lattice.add_alias("crystals")
     _scenery(
         hounds,
         "tank",
