@@ -289,6 +289,16 @@ class Inventory(base.Action):
         # "Your inventory" for the player (named "you"); possessive for NPCs.
         whose = "Your" if char.name.lower() == "you" else f"{char.name}'s"
 
+        def _slot_suffix(item):
+            """"(2 slots)" on multi-slot gear -- only when this character uses
+            the slot gauge, and only past the default cost of 1."""
+            if char.slot_capacity is None:
+                return ""
+            from ..slots import item_slot_cost
+
+            cost = item_slot_cost(item)
+            return f" ({cost} slots)" if cost > 1 else ""
+
         # Nothing carried, worn, wielded -- or suffered -- a single empty line.
         if not char.inventory and not char.worn and not char.wielded and not char.wounds:
             self.parser.ok(f"{whose} inventory is empty.")
@@ -309,8 +319,8 @@ class Inventory(base.Action):
                         gauge = "({count}/{cap})".format(
                             count=item.current_count(), cap=item.capacity
                         )
-                    carried += "* {item} {gauge}\n".format(
-                        item=item.description, gauge=gauge
+                    carried += "* {item}{slots} {gauge}\n".format(
+                        item=item.description, slots=_slot_suffix(item), gauge=gauge
                     )
                     for inner_name in item.contents:
                         inner = item.contents[inner_name]
@@ -318,8 +328,9 @@ class Inventory(base.Action):
                             item=inner.description, qty=_qty_suffix(inner)
                         )
                 else:
-                    carried += "* {item}{qty}\n".format(
-                        item=item.description, qty=_qty_suffix(item)
+                    carried += "* {item}{qty}{slots}\n".format(
+                        item=item.description, qty=_qty_suffix(item),
+                        slots=_slot_suffix(item),
                     )
             sections.append(carried.rstrip("\n"))
         else:
@@ -327,7 +338,8 @@ class Inventory(base.Action):
 
         def _listing(title, slot):
             body = "".join(
-                "* {item}{qty}\n".format(item=it.description, qty=_qty_suffix(it))
+                "* {item}{qty}{slots}\n".format(
+                    item=it.description, qty=_qty_suffix(it), slots=_slot_suffix(it))
                 for it in slot.values()
             )
             return f"{title}\n{body}".rstrip("\n")
