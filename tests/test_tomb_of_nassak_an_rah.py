@@ -304,27 +304,52 @@ def test_walking_into_a_dark_hall_is_safe():
     assert game.player.location.name == "Hall of Youth"
 
 
-def test_light_in_the_hall_of_youth_rouses_the_bats_after_a_warning():
+def test_light_in_the_hall_of_youth_wounds_after_one_warning():
+    """The bats' patience is short (one warning), and their dive-bombing deals
+    a non-lethal wound per round -- death only when wounds fill your slots."""
     game = _game()
     _embark(game)                       # carrying the UNLIT glowstone
     game.do_command("north")            # into the pitch-dark Youth -- carrying it unlit is safe
     assert not game.is_game_over()
-    game.do_command("light glowstone")  # raising a light rouses the bats -- a warning first
+    game.do_command("light glowstone")  # raising a light rouses the bats -- ONE warning
+    assert not game.is_game_over() and not game.player.wounds
+    game.do_command("look")             # keep the light burning -> mauled, not killed
     assert not game.is_game_over()
+    assert any(w.name == "Bat-Mauled" for w in game.player.wounds)
+    game.do_command("douse glowstone")  # go dark -> they settle; the wound remains
     game.do_command("look")
-    game.do_command("look")             # keep the light burning -> the swarm takes you
-    assert game.is_game_over() and not game.is_won()
+    assert not game.is_game_over()
+    assert len(game.player.wounds) == 1
 
 
-def test_sustained_noise_in_a_hall_kills_but_warns_first():
+def test_enough_bat_wounds_kill():
+    game = _game()
+    _embark(game)
+    game.do_command("north")
+    game.do_command("light glowstone")
+    for _ in range(12):                 # stubbornly keep the light up
+        if game.is_game_over():
+            break
+        game.do_command("look")
+    assert game.is_game_over() and not game.is_won()  # slots filled with wounds
+
+
+def test_sustained_noise_brings_the_jackals_who_take_their_due():
+    """Two warnings, then the pack savages you (a d20 wound-table roll) and
+    withdraws -- death comes from a fatal roll or wounds filling your slots."""
+    tomb._RNG.seed(0)                   # first roll: 13, Cracked Skull (2 slots)
     game = _game()
     _embark(game, glowstone=False)
     game.do_command("sneak east")       # -> Hall of Warriors (safe to enter)
-    game.do_command("say hey")          # one shout: a warning, not death
+    game.do_command("say hey")          # one shout: a warning
     assert not game.is_game_over()
-    game.do_command("say hey")
-    game.do_command("say hey")          # keep it up -> the pthalo-jackals take you
-    assert game.is_game_over() and not game.is_won()
+    game.do_command("say hey")          # the second warning
+    assert not game.is_game_over() and not game.player.wounds
+    game.do_command("say hey")          # the pack takes its due
+    assert not game.is_game_over()
+    assert game.player.wound_slots() == 2  # Cracked Skull
+    game.do_command("wait")             # quiet again -> the pack stays away
+    assert not game.is_game_over()
 
 
 def test_the_live_sphere_kills_only_when_you_disturb_it():
@@ -431,16 +456,59 @@ def test_burning_the_corpse_consumes_an_unclaimed_fungus():
 # --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
 
 
-def test_the_chimney_is_passable_but_chokes_without_a_mask():
+def test_the_chimney_is_passable_but_the_spores_scar_your_lungs():
+    """Two warnings, then a Seared Lungs wound per round of lingering -- death
+    only when the wounds fill your slots."""
     game = _game()
     _embark(game)
     game.do_command("up")          # -> Summit
-    game.do_command("in")          # into the fungal chimney -- passable now, not blocked
+    game.do_command("in")          # into the fungal chimney -- passable, not blocked
     assert game.player.location.name == "The Fungal Chimney"
-    assert not game.is_game_over()  # one breath is survivable (a warning)
-    game.do_command("look")
-    game.do_command("look")        # linger in the spores -> choke to death
-    assert game.is_game_over() and not game.is_won()
+    assert not game.is_game_over()  # first breath: a warning
+    game.do_command("look")         # second warning
+    assert not game.is_game_over() and not game.player.wounds
+    game.do_command("look")         # now the spores wound
+    assert not game.is_game_over()
+    assert any(w.name == "Seared Lungs" for w in game.player.wounds)
+    game.do_command("out")          # leaving stops the harm
+    assert not game.is_game_over()
+
+
+def test_drinking_water_mends_a_wound():
+    game = _game()
+    game.do_command("open pack")
+    game.do_command("take glowstone")
+    game.do_command("take waterskin")
+    from text_adventure_games.slots import Wound
+    game.player.add_wound(Wound("Bloody Gash", 1, "..."))
+    cap = _texts(game)
+    game.do_command("drink water")
+    assert not game.player.wounds                 # the glug of water mends
+    assert "something knits" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_overloaded_scavenger_cannot_make_the_climb():
+    game = _game()
+    cap = _texts(game)
+    # Greed: haul all the cargo out of the hold, then try the tomb face.
+    for cmd in ("in", "take bale of saffron", "take crate of dates",
+                "take bolt of spider-silk", "out"):
+        game.do_command(cmd)
+    game.do_command("open pack")
+    game.do_command("take glowstone")
+    game.do_command("take waterskin")
+    # blade would be next, but the cargo alone is 5 slots -- go check the climb
+    game.do_command("north")
+    # load up past 10: add the blade and kit from the Hall of Warriors
+    game.do_command("east")
+    for cmd in ("take blade", "take igniter", "take boots", "take respirator"):
+        game.do_command(cmd)
+    assert game.player.is_encumbered()
+    game.do_command("west")
+    game.do_command("up")                         # the climb to the Summit
+    assert game.player.location.name == "Tomb Exterior"
+    assert "climb is out of the question" in " ".join(
+        cap.texts(Channel.NARRATION) + cap.texts(Channel.BLOCKED)).lower()
 
 
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():

@@ -12,8 +12,14 @@ tutorial entirely.
     Run:  python -m text_adventure_games.adventures.tomb_of_nassak_an_rah [--walk]
 """
 
+import random
+
 from text_adventure_games import games, things, actions, blocks, reactions, perception
 from text_adventure_games.enums import Property
+from text_adventure_games.slots import Wound, roll_wound
+
+# Wound rolls draw from a module RNG so tests can seed it.
+_RNG = random.Random()
 
 
 def _die(game, message):
@@ -29,12 +35,12 @@ def _die(game, message):
 # disturbing the coffin (the Horror) -- and every hazard warns before it kills.
 _QUIET = {"go", "sneak", "look", "examine", "describe", "inventory", "wait",
           "get", "drop", "put", "talk", "open", "wear", "light", "douse",
-          "feel", "listen", "smell"}
+          "feel", "listen", "smell", "drink", "eat", "read", "search"}
 # To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
 # quietly sensing, and working your own light are safe (so you can enter, see it,
 # and back out -- but not loot it alive).
 _QUIET_SPHERE = {"go", "sneak", "look", "examine", "describe", "inventory",
-                 "light", "douse", "feel", "listen", "smell"}
+                 "light", "douse", "feel", "listen", "smell", "drink"}
 
 
 def _is_holding(character, name):
@@ -47,16 +53,25 @@ def _player_was_loud_in(g, room, quiet):
     / pry. (Creatures' own actions don't count -- it's the player giving themselves
     away.)"""
     for e in g.events[g._round_event_start :]:
+        payload = e.payload or {}
         if (
             e.actor == g.player.name
             and e.action not in quiet
-            and (e.payload or {}).get("location") == room.name
+            and payload.get("location") == room.name
+        ):
+            return True
+        # An encumbered player's movement clatters (slots.py): the engine
+        # emits a real sound, and the tomb's listeners treat it as one.
+        if (
+            "overloaded pack" in (payload.get("sound") or "")
+            and payload.get("location") == room.name
         ):
             return True
     return False
 
 
-def _hazard(game, room, *, danger, warns, kill, limit=3, gate=None):
+def _hazard(game, room, *, danger, warns, kill=None, limit=3, gate=None,
+            harm=None, harm_resets=False):
     """A patient room hazard. Each round the player is in *room* and ``danger(g)``
     holds (and ``gate`` allows), a counter escalates and the next line of *warns*
     is narrated; at ``limit`` it ``kill``s. The counter resets the instant the
@@ -81,7 +96,14 @@ def _hazard(game, room, *, danger, warns, kill, limit=3, gate=None):
         n = (room.get_property(key) or 0) + 1
         room.set_property(key, n)
         if n >= limit:
-            _die(g, kill)
+            if harm is not None:
+                # Wound-then-kill (design: slots share the harm gauge): the
+                # hazard maims rather than executes; death arrives when wounds
+                # fill the player's slots (or the wound roll is itself fatal).
+                if harm(g) and harm_resets:
+                    room.set_property(key, 0)
+            else:
+                _die(g, kill)
         else:
             line = warns[min(n, len(warns)) - 1]
             if g.give_hints:
@@ -351,9 +373,30 @@ def build_game():
     tokens.add_alias("tokens")
     tokens.set_property(Property.IS_HIDDEN, True)
     merchant.add_item(tokens)
-    _scenery(hold, "crates", "lashed crates of saffron and dates",
-             "Trade goods bound for the souks of Gnomon, worth a season's water. "
-             "Too much to carry, and the Cacklemaw do not trade.")
+    crates = _scenery(hold, "crates", "lashed crates of saffron and dates",
+             "Trade goods bound for the souks of Gnomon, worth a season's water "
+             "-- far too much to carry, though a bale or two might ride home "
+             "with somebody. The Cacklemaw do not trade.")
+    crates.make_container()
+    for _name, _desc, _ex, _slots in (
+        ("bale of saffron", "a bale of saffron",
+         "Crimson threads pressed into a bale, worth more than its weight in "
+         "water at the souks of Gnomon. Heavy, and it knows it.", 2),
+        ("crate of dates", "a crate of dates",
+         "Dates from the southern oases, packed in palm fibre. Food for a "
+         "month, or a small fortune for whoever hauls it.", 2),
+        ("bolt of spider-silk", "a bolt of spider-silk",
+         "Grey spider-silk, cool as water over the hands. Light -- the "
+         "merchant knew what was worth the wagon-space.", 1),
+    ):
+        _good = things.Item(_name, _desc, _ex)
+        _good.set_property("gettable", True)
+        _good.set_property("slots", _slots)
+        _good.add_alias(_name.split()[0])          # bale / crate / bolt
+        _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
+        if "silk" in _name:
+            _good.add_alias("silk")
+        crates.add_item(_good)
     ledger = _scenery(hold, "ledger", "the merchant's ledger",
              "A trade ledger bound in lizard-skin, closed around a ribbon "
              "marker at its final page.")
@@ -373,6 +416,7 @@ def build_game():
              "speak of the old man's mouth, which weeps orange. Superstition -- "
              "but I observe that my guards are paid to be brave, and are not. "
              "Tomorrow, Gnomon.' The entry is the last.")
+    ledger.set_property("gettable", True)  # take it along; it reads anywhere
     ledger.add_command_hint("read ledger")
 
     pack = things.Item(
@@ -707,6 +751,7 @@ def build_game():
         "An Autarchy guard's blade, its edge fracturing the light into colours.",
     )
     blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
+    blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
     warriors.add_item(blade)
 
@@ -809,6 +854,13 @@ def build_game():
     pack.add_item(glowstone)
     pack.add_item(waterskin)
 
+    # Vaarn item slots (slots.py): ten -- gear and wounds share the gauge.
+    player.slot_capacity = 10
+    # The tomb's climbs: an encumbered scavenger cannot make them.
+    exterior.set_property("climb_exits", {"up"})
+    summit.set_property("climb_exits", {"down"})
+    chimney.set_property("climb_exits", {"out"})
+
     game = TombGame(
         wreck, player, characters=[silas, spawn_guts, spawn_brain, worry],
         custom_actions=[Sneak, BurnCorpse, PryCoffin],
@@ -848,19 +900,53 @@ def build_game():
     # The bats: roused by carrying a LIT light into the Youth, or by a loud noise
     # there. Patient -- the escalation is the clock. Douse the light (or fall
     # quiet) and they settle.
+    def _bat_maul(g):
+        """Dive-bombing bats deal a non-lethal wound each round the light (or
+        din) persists; death comes only if wounds fill the scavenger's slots."""
+        fatal = g.player.add_wound(Wound(
+            "Bat-Mauled", 1, "Claw-rakes across your scalp and hands."))
+        if fatal:
+            _die(g, "The swarm takes you down among the statues, and the dark "
+                    "closes over the light. THE END.")
+        else:
+            g.parser.ok(
+                "The bats drop in a wheeling rake of claws -- your scalp and "
+                "hands pay for the light. (You are mauled; douse it, or feed "
+                "them more of yourself.)" if g.give_hints else
+                "The bats drop in a wheeling rake of claws; your scalp and "
+                "hands pay for the light."
+            )
+        return True
+
     _hazard(game, youth,
             danger=lambda g: perception.carries_light(g.player) or _player_was_loud_in(g, youth, _QUIET),
             warns=(
                 "The rustle overhead deepens. Grit sifts down through your light; "
                 "the whole vault has begun, gently, to move.",
-                "The first bats drop -- wheeling through the glow, shrieking, near "
-                "enough to feel the wind off their wings. The vault above is one "
-                "turning wheel.",
             ),
-            kill="The vault empties all at once. The swarm takes the light, and then everything else. THE END.")
+            limit=2,  # one warning -- the bats' patience is short
+            harm=_bat_maul)
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
+    def _jackal_savage(g):
+        """The pack takes its due (a d20 wound-table roll) and withdraws --
+        continued noise invites it back. Death: a fatal roll, or slots full."""
+        g.parser.ok(
+            "The pack pours from the dark and takes its due before you can "
+            "raise an arm."
+        )
+        _, messages, fatal = roll_wound(g.player, rng=_RNG)
+        for m in messages:
+            g.parser.ok(m)
+        if fatal or g.player.get_property(Property.IS_DEAD):
+            _die(g, "The pthalo-jackals drag you down, and afterwards the tomb "
+                    "goes back to listening. THE END.")
+        else:
+            g.parser.ok("As quickly as they came, the jackals melt back into "
+                        "the dark, unhurried, patient for the next noise.")
+        return True
+
     for hall in (memory, hounds, warriors):
         _hazard(game, hall,
                 danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
@@ -870,9 +956,20 @@ def build_game():
                     "Yellow eyes ring the doorways, unhurried. Pthalo-jackals: "
                     "cautious, clever, and done being cautious.",
                 ),
-                kill="The pack pours from the dark, and afterwards the tomb goes back to listening. THE END.")
+                harm=_jackal_savage,
+                harm_resets=True)
 
     # The chimney's spores: choke you each round you're in it without a respirator.
+    def _spore_sear(g):
+        fatal = g.player.add_wound(Wound(
+            "Seared Lungs", 1, "Every breath is smaller than the last."))
+        if fatal:
+            _die(g, "You breathe the tomb in, and it keeps you. THE END.")
+        else:
+            g.parser.ok("The spores get past your clenched teeth and burn going "
+                        "down. Something in your chest will remember this.")
+        return True
+
     _hazard(game, chimney,
             danger=lambda g: not (_is_holding(g.player, "respirator") or "respirator" in g.player.worn),
             warns=(
@@ -881,7 +978,7 @@ def build_game():
                 "Your lungs sear; the glow below swims and doubles. The chimney's "
                 "warmth has begun to feel like a mouth.",
             ),
-            kill="You breathe the tomb in, and it keeps you. THE END.")
+            harm=_spore_sear)
 
     # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
     # wearing, any racket) makes it erupt. Looking is safe -- enter, see it, and
@@ -948,6 +1045,24 @@ def build_game():
         )
 
     game.add_trigger("silas_fungus", _silas_dosed, _silas_mellows, repeatable=False)
+
+    # Water mends (the canon short rest is "a quick sit-down, with a glug of
+    # water"): drinking the waterskin heals the most recent wound.
+    def _drank_water(g):
+        return g.player.wounds and any(
+            e.actor == g.player.name and e.action == "drink"
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _water_mends(g):
+        healed = g.player.heal_wound()
+        if healed is not None:
+            g.parser.ok(
+                f"The water does what water does in Vaarn. The {healed.name.lower()} "
+                "troubles you less; something knits."
+            )
+
+    game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
 
     ego_core = things.Item(
         "ego-core", "An-Rah's ego-core",
@@ -1017,8 +1132,8 @@ WALK = [
     "in", "light glowstone", "read ledger", "douse glowstone", "out",
     "north",                                                 # -> Tomb Exterior
     "examine tomb", "up", "examine ossified corpse", "down",  # Summit and back (safe)
-    "north", "examine ceiling",                              # -> Hall of Youth (pitch dark; hear the bats)
-    "light glowstone", "examine statues", "douse glowstone",  # light to see (bats stir), then go dark again
+    "north", "examine ceiling", "feel statues",              # -> Hall of Youth: dark-craft (hear, touch)
+    "light glowstone", "douse glowstone",                    # one stolen glance -- the bats stir, then settle
     "north", "talk to silas", "examine crystal lattice",     # -> Hall of Memory
     "north", "take prismatic blade", "examine cylinders",    # -> Hall of Warriors
     "east", "examine tank",                                  # -> Hall of Hounds
