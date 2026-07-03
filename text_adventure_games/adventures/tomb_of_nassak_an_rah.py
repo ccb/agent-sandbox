@@ -64,6 +64,11 @@ _QUIET = {
     "help",
     "quit",
 }
+# The Spawn hunt by SOUND alone (they wear jars for heads): everything quiet
+# to the halls is quiet to them EXCEPT plain walking -- footfalls carry, and
+# sneak exists for a reason. Light means nothing to them.
+_QUIET_SPAWN = _QUIET - {"go"}
+
 # To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
 # quietly sensing, and working your own light are safe (so you can enter, see it,
 # and back out -- but not loot it alive).
@@ -99,7 +104,13 @@ def _player_was_loud_in(g, room, quiet):
         if (
             e.actor == g.player.name
             and e.action not in quiet
-            and payload.get("location") == room.name
+            and (
+                payload.get("location") == room.name
+                # A movement event logs its origin; its footfalls land in the
+                # DESTINATION too (matters only where "go" itself is loud --
+                # the Spawn's rooms).
+                or payload.get("dest") == room.name
+            )
         ):
             return True
         # An encumbered player's movement clatters (slots.py): the engine
@@ -765,7 +776,8 @@ def build_game():
         "Four guard-mummies at an attention no order will ever relieve, each "
         "sealed under its own gel -- cerulean, amber, viridian, orange -- and "
         "each armed as in life. Whatever they carried went under the glass "
-        "with them.",
+        "with them. The plexiglas is crazed to milk at the corners; a firm "
+        "blow would finish what the centuries started.",
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -821,6 +833,7 @@ def build_game():
         "from its wielder.",
     )
     dagger.set_property("is_weapon", True)
+    dagger.set_property(Property.WIELDABLE, True)
     dagger.add_alias("dagger")
     manifold_box = things.Item(
         "manifold box",
@@ -904,7 +917,7 @@ def build_game():
 
     spawn_guts = things.Character(
         "spawn of guts",
-        "a fungal spawn wearing a falcon-headed jar",
+        "a fungal spawn, eyeless under its falcon-headed jar, swaying toward every sound",
         "I am what is left of the Autarch's appetites.",
     )
     spawn_guts.examine_text = (
@@ -915,7 +928,7 @@ def build_game():
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
         "spawn of brain",
-        "a fungal spawn wearing a jackal-headed jar",
+        "a fungal brain on two small legs, jackal jar for a head, listening",
         "I am what is left of the Autarch's thoughts.",
     )
     spawn_brain.examine_text = (
@@ -957,6 +970,7 @@ def build_game():
         "An Autarchy guard's blade, its edge fracturing the light into colours.",
     )
     blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
+    blade.set_property(Property.WIELDABLE, True)
     blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
 
@@ -1163,6 +1177,40 @@ def build_game():
     # the glowstone to find the way -- which is exactly what rouses the bats. A
     # player who knows the layout can still creep through blind. (The perception
     # veil only gates what's *seen*; movement stays free -- design/perception.md.)
+    # The tomb is dark wherever it doesn't light itself (CCB): Memory glows
+    # crystal-cold, Hounds by its tank, Canopic by its plinths -- but the Hall
+    # of Warriors is dark as duty, and the Sphere and Chimney live in the
+    # bloom's own rotten half-light.
+    warriors.obscure(
+        perception.Darkness(
+            blurb="Dark as a pocket. Your footsteps come back off plexiglas "
+            "somewhere close; the air smells of old gel and older duty. And "
+            "low down, near the floor, something breathes wetly, in no hurry."
+        )
+    )
+    sphere.obscure(
+        perception.Gloom(
+            blurb="A rotten half-light: the coffin's orange churn glows at the "
+            "chamber's heart, and the carved prayers read as texture, not words."
+        )
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless, lit only by the slow orange churn of "
+        "the coffin at its heart. Dust and bone-chips drift through the glow. "
+        "The prayers on the walls are legible only as texture."
+    )
+    chimney.obscure(
+        perception.Gloom(
+            blurb="The shaft is lit by the bloom itself, a dull orange "
+            "breathing; the way down is a deeper orange, the way up a paler one."
+        )
+    )
+    chimney.dim_description = (
+        "A vertical throat choked with orange growth, glowing faintly with its "
+        "own rot. The spores hang so thick the air has texture. Down in the "
+        "dark of it, the fungus is warm."
+    )
+
     youth.obscure(
         perception.Darkness(
             blurb="Dark as the inside of a sealed jar. The air is chill and smells "
@@ -1296,6 +1344,91 @@ def build_game():
 
     game.add_trigger(
         "orange_vent", _orange_vented_check, _orange_vent, repeatable=False
+    )
+
+    # The Spawn are blind, sound-hunting monsters (CCB: "shouldn't it attack?").
+    # Share a room with one and be HEARD -- stride in, shout, smash -- and it
+    # swings toward you (one warning), then attacks each loud round after.
+    # Creep and it never knows you were there.
+    def _spawn_menace(spawn, warn_text, attack):
+        key = f"_sp:{spawn.name}"
+
+        def tick(g):
+            if spawn.get_property(Property.IS_DEAD) or spawn.get_property(
+                Property.IS_UNCONSCIOUS
+            ):
+                return
+            loc = spawn.location
+            n = spawn.get_property(key) or 0
+            if loc is None or g.player.location is not loc:
+                spawn.set_property(key, max(0, n - 1))
+                return
+            if _player_was_loud_in(g, loc, _QUIET_SPAWN):
+                n += 1
+                spawn.set_property(key, n)
+                if n == 1:
+                    g.parser.ok(warn_text)
+                else:
+                    attack(g)
+            # No decay while you share its room: it heard you once, and it is
+            # still listening. Only distance (handled above) lets it settle.
+
+        game.add_trigger(f"menace:{spawn.name}", lambda g: True, tick, repeatable=True)
+
+    def _guts_lash(g):
+        fatal, dropped = g.player.add_wound(
+            Wound("Acid-Lashed", 1, "A welt across your back, acid where it touched."),
+            rng=_RNG,
+        )
+        for it in dropped:
+            g.parser.ok(f"The {it.name} spills from your pack.")
+        if fatal:
+            _die(g, "The spawn folds you into itself, patiently. THE END.")
+        else:
+            g.parser.ok(
+                "The spawn of guts lashes out at the sound of you -- a wet arm "
+                "of grave-cured muscle, acid where it touches."
+            )
+
+    def _brain_dominate(g):
+        # Psychic, not physical: it opens your hands, or handles your thoughts.
+        wielded = list(g.player.wielded.values())
+        if wielded:
+            it = wielded[0]
+            g.player.wielded.pop(it.name)
+            if g.player.location is not None:
+                g.player.location.add_item(it)
+            g.parser.ok(
+                f"The spawn of brain turns its jar toward your noise, and your "
+                f"hands open without your leave. The {it.name} clatters away."
+            )
+            return
+        fatal, dropped = g.player.add_wound(
+            Wound(
+                "Addled", 1, "Your thoughts arrive with someone else's fingerprints."
+            ),
+            rng=_RNG,
+        )
+        for it in dropped:
+            g.parser.ok(f"The {it.name} spills from your pack.")
+        if fatal:
+            _die(g, "Your mind is folded shut from the outside. THE END.")
+        else:
+            g.parser.ok(
+                "The spawn of brain turns its jar toward your noise, and "
+                "something walks through your thoughts on small, precise feet."
+            )
+
+    _spawn_menace(
+        spawn_guts,
+        "The spawn of guts swings toward your footfalls, arms rising from the "
+        "floor like kelp in a current.",
+        _guts_lash,
+    )
+    _spawn_menace(
+        spawn_brain,
+        "The spawn of brain goes very still, jar cocked toward the sound of you.",
+        _brain_dominate,
     )
 
     def _jackal_maul(g):
@@ -1565,10 +1698,11 @@ WALK = [
     "north",
     "talk to silas",
     "examine crystal lattice",  # -> Hall of Memory
-    "north",
-    "examine cylinders",  # -> Hall of Warriors: the kit is under glass
+    "sneak north",  # -> Hall of Warriors: dark, and something breathes in it
+    "light glowstone",  # no bats here -- light is safe, and the colours matter
+    "examine cylinders",
     "break cerulean cylinder",
-    "take blade",  # loud -- one distant yip, then quiet again
+    "take blade",  # loud -- a yip, a swaying spawn; then quiet again
     "east",
     "examine tank",  # -> Hall of Hounds
     "up",
@@ -1581,39 +1715,38 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # Loot the wreck, walk to the tomb. (The glowstone starts unlit, so it's
-    # safe to carry -- never light it in the Hall of Youth. This route never
-    # needs to see in the dark.)
+    # Loot the wreck (water heals; the glowstone lights the dark Warriors).
     "open pack",
     "take glowstone",
+    "take waterskin",
     "north",
-    "sneak east",  # Warriors: the kit is sealed in the cylinders
-    "break amber cylinder",
-    "take respirator",
-    "wear respirator",  # mask up FIRST --
-    "break orange cylinder",
-    "take igniter",  # -- so the bloom vents harmlessly
-    "break cerulean cylinder",
+    "sneak east",  # Warriors: pitch dark; the kit is sealed in the cylinders
+    "light glowstone",  # safe here -- no bats -- and the colours matter
+    "break amber cylinder",  # the eyeless spawn swings toward the crash --
+    "take respirator",  # -- and the crashes call its brother from next door
+    "wear respirator",
+    "break cerulean cylinder",  # second crash: the lash lands; take the blade
     "take blade",
+    "attack spawn of guts with blade",  # answer it: the falcon jar drops
+    "take falcon jar",
+    "attack spawn of brain with blade",  # its brother came to the noise: fell it too
+    "take jackal jar",
+    "drop blade",  # shed ballast: nothing left alive that a blade answers
+    "drink water",  # a glug of water; something knits
+    "break orange cylinder",  # the bloom vents against the mask, disappointed
+    "take igniter",
     "break viridian cylinder",
     "take boots",
+    "douse glowstone",
+    "drop glowstone",  # the halls ahead light themselves
     "sneak east",
     "take gel",  # Hounds: gel
-    "sneak up",  # -> Canopic
-    "say come",
-    "say come",
-    "say come",
-    "say come",
-    "say come",  # the mantis lures the Spawn
-    "attack spawn of guts with blade",
-    "attack spawn of brain with blade",
-    "take falcon jar",
-    "take jackal jar",
+    "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
     "put falcon jar on falcon plinth",
     "put jackal jar on jackal plinth",  # seal opens
     "sneak down",
     "sneak south",
-    "sneak south",  # Canopic -> Exterior
+    "sneak south",  # Canopic -> Exterior (dark and quiet through the Youth)
     "up",
     "burn corpse",  # Summit: cleanse the root
     "down",
