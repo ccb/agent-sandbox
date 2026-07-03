@@ -355,6 +355,68 @@ def test_felling_a_lured_spawn_drops_its_canopic_jar():
     assert not game.is_game_over()  # fighting in the (safe) Canopic hall is fine
 
 
+# --- The Friend's Fungus chain (optional; design doc §13) --------------------
+
+
+def test_search_and_examine_both_reveal_the_friends_fungus():
+    # SEARCH the corpse (the source adventure's route)...
+    game = _game()
+    cap = _texts(game)
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("search corpse")
+    assert "pink fungus" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    game.do_command("take fungus")
+    assert "friend's fungus" in game.player.inventory
+    # ...and EXAMINE works too (reveals_on_examine).
+    game2 = _game()
+    cap2 = _texts(game2)
+    game2.relocate(game2.player, game2.locations["The Summit"])
+    game2.do_command("x corpse")            # the short alias must match
+    out = " ".join(cap2.texts(Channel.NARRATION)).lower()
+    assert "clasped hands" in out and "pink fungus" in out
+
+
+def test_feeding_silas_the_fungus_earns_the_ulfire_lantern():
+    game = _game()
+    cap = _texts(game)
+    fungus = game.locations["The Summit"].items["ossified corpse"].contents["friend's fungus"]
+    fungus.set_property("is_hidden", False)
+    game.locations["The Summit"].items["ossified corpse"].remove_item(fungus)
+    game.player.add_to_inventory(fungus)
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    game.do_command("give fungus to silas")
+    assert "ulfire lantern" in game.player.inventory
+    assert "a friend" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_ulfire_light_reveals_the_ego_core_in_the_manifold_box():
+    game = _game()
+    cap = _texts(game)
+    # Shortcut: hand the player the lantern and the box directly.
+    silas = game.characters["Silas"]
+    lamp = silas.inventory["ulfire lantern"]
+    silas.remove_from_inventory(lamp)
+    game.player.add_to_inventory(lamp)
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    box = sphere.items["coffin"].contents["manifold box"]
+    sphere.items["coffin"].remove_item(box)
+    game.player.add_to_inventory(box)
+    assert "ego-core" not in game.player.inventory
+    game.do_command("light lantern")        # the very specific angle
+    assert "ego-core" in game.player.inventory
+    assert "compartment three times larger" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_burning_the_corpse_consumes_an_unclaimed_fungus():
+    game = _game()
+    _embark(game)
+    for cmd in ["sneak east", "take igniter", "sneak east", "take gel",
+                "sneak east", "sneak south", "up", "burn corpse"]:
+        game.do_command(cmd)
+    corpse = game.locations["The Summit"].items["ossified corpse"]
+    assert "friend's fungus" not in corpse.contents  # went up with him
+
+
 # --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
 
 

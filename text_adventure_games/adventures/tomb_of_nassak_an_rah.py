@@ -170,12 +170,22 @@ class BurnCorpse(actions.Action):
             self.player.remove_from_inventory(gel)
         self.player.location.set_property("cleansed", True)
         self.game.locations["Burial Sphere of Nassak An-Rah"].set_property("horror_dead", True)
-        self.parser.ok(
+        message = (
             "You splash the embalming gel over the ossified mystic and strike the "
             "igniter. Orange flame roars down the fungal chimney -- and far below, the "
             "whole rotten network shudders and dies. The Fungal Horror sloughs into "
             "ash. The tomb falls silent at last."
         )
+        # Whatever still nested in the mystic's hands burns with him -- take the
+        # Friend's Fungus BEFORE cleansing, or lose it.
+        corpse_item = self.player.location.items.get("ossified corpse")
+        if corpse_item is not None and "friend's fungus" in corpse_item.contents:
+            corpse_item.remove_item(corpse_item.contents["friend's fungus"])
+            message += (
+                " The pouch nested in his clasped hands goes up with him, sweet "
+                "on the wind for a moment."
+            )
+        self.parser.ok(message)
         self.game.award("cleanse", 30, None)
 
 
@@ -599,9 +609,37 @@ def build_game():
     coffin.set_property(Property.IS_LOCKED, True)
     coffin.add_item(dagger)
     coffin.add_item(manifold_box)
-    _scenery(summit, "ossified corpse", "an ossified mystic",
+    # The ossified corpse carries the source adventure's find: "Searching the
+    # corpse yields a pouch of Friend's Fungus." It's a surface (the pouch nests
+    # in its hands), the pouch hidden until SEARCH -- or EXAMINE, which opts in
+    # via reveals_on_examine (a close look at the hands is enough).
+    corpse = _scenery(summit, "ossified corpse", "an ossified mystic",
              "A corpse turned to stone mid-meditation, orange fungus weeping from its "
              "eyes and mouth -- the wellspring, it seems, of all the rot below.")
+    corpse.add_alias("corpse")
+    corpse.add_alias("mystic")
+    corpse.make_surface()
+    corpse.set_property("reveals_on_examine", True)
+    corpse.set_property("contents_relation",
+                        "Nested in the hollow of its clasped hands you find")
+    fungus = things.Item(
+        "friend's fungus", "a plastic pouch of pink fungus",
+        "A plastic pouch of pink fungus, soft and faintly warm. The Autarchy fed "
+        "it to guests of state: whoever ingests it becomes extremely agreeable, "
+        "and stays that way for hours. The mystic was holding it when he turned "
+        "to stone -- for himself, or for whatever came up the mountain.",
+    )
+    fungus.set_property("gettable", True)
+    fungus.set_property(Property.EDIBLE, True)
+    fungus.set_property(Property.TASTE,
+                        "sweet, chemical, and companionable. For the next while "
+                        "you find yourself agreeing with everything -- the "
+                        "tomb, the dark, the distant rustling. All quite "
+                        "reasonable, really.")
+    fungus.add_alias("fungus")
+    fungus.add_alias("pouch")
+    fungus.set_property(Property.IS_HIDDEN, True)
+    corpse.add_item(fungus)
 
     # The two missing jars are WORN by the Spawn (each as a hat). Knock a Spawn out
     # (it needs a weapon -- the prismatic blade below) and it drops the jar.
@@ -704,6 +742,20 @@ def build_game():
         'circular syllables, like a quotation. "The dead here listen. Step '
         'softly."'
     )
+    # Silas keeps the Ulfire Lantern (Exotica; design doc §13). Ulfire is the
+    # ninth colour: its light shines THROUGH solid objects -- the "very specific
+    # angle" from which the Manifold Box's hypergeometric compartment can be
+    # seen. He parts with it only for the Friend's Fungus (the give-trigger
+    # below); prying it from him otherwise means fighting an INT-drinker.
+    ulfire_lantern = things.Item(
+        "ulfire lantern", "a lantern of the ninth colour",
+        "A lantern worked in lead and glass, cold until lit. Ulfire is the "
+        "ninth colour; its light has the unusual property of shining through "
+        "solid objects, and is stopped only by lead.",
+    )
+    ulfire_lantern.set_property(Property.FLAMMABLE, True)
+    ulfire_lantern.add_alias("lantern")
+    silas.add_to_inventory(ulfire_lantern)
     memory.add_character(silas)
 
     # The crystal seal bars the stair up from the Canopic hall until both jars are
@@ -727,8 +779,7 @@ def build_game():
         "dark: light is dear, and attention dearer.",
     )
     glowstone.set_property(Property.FLAMMABLE, True)
-    glowstone.add_alias("stone")
-    glowstone.add_alias("lantern")
+    glowstone.add_alias("stone")  # no "lantern" alias: the Ulfire Lantern owns that word
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
     pack.add_item(glowstone)
@@ -840,6 +891,69 @@ def build_game():
         g.award("seal", 20, None)
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
+
+    # --- The Friend's Fungus chain (design doc §13; optional, no score) ------
+    # fungus (corpse) -> GIVE to Silas -> the Ulfire Lantern -> LIGHT it while
+    # carrying the Manifold Box -> the hypergeometric compartment -> ego-core.
+
+    def _silas_dosed(g):
+        return (
+            "friend's fungus" in silas.inventory
+            and not silas.get_property("mellowed")
+        )
+
+    def _silas_mellows(g):
+        silas.set_property("mellowed", True)
+        fun = silas.inventory.get("friend's fungus")
+        if fun is not None:
+            silas.remove_from_inventory(fun)
+        lamp = silas.inventory.get("ulfire lantern")
+        if lamp is not None:
+            silas.remove_from_inventory(lamp)
+            g.player.add_to_inventory(lamp)
+        silas.talk_text = (
+            '"A friend," Silas says, warmly and a little vaguely, and returns '
+            "to the lattice. The bright threads spool on."
+        )
+        g.parser.ok(
+            "Silas takes the pouch with unexpected delicacy and presses a pinch "
+            "of the pink fungus into a port beneath his jaw. The hum of his "
+            'work softens by a third. "You are," he decides, "a friend. Take '
+            "the lantern -- I have read it twice already, and light should be "
+            'for the unread." He hands you the ulfire lantern.'
+        )
+
+    game.add_trigger("silas_fungus", _silas_dosed, _silas_mellows, repeatable=False)
+
+    ego_core = things.Item(
+        "ego-core", "An-Rah's ego-core",
+        "A spindle of smoke-grey memory-crystal, heavier than it looks and "
+        "warmer than it should be: Nassak An-Rah, or what he chose to keep of "
+        "himself. Silas would trade his robes for it.",
+    )
+    ego_core.add_alias("core")
+
+    def _box_viewed(g):
+        return (
+            ulfire_lantern.get_property(Property.IS_LIT)
+            and "ulfire lantern" in g.player.inventory
+            and "manifold box" in g.player.inventory
+            and not manifold_box.get_property("compartment_found")
+        )
+
+    def _reveal_core(g):
+        manifold_box.set_property("compartment_found", True)
+        g.player.add_to_inventory(ego_core)
+        g.parser.ok(
+            "The ulfire light soaks through the manifold box's gilded walls, "
+            "and its true interior opens to your eye: a compartment three "
+            "times larger than the box that holds it, empty except for a "
+            "spindle of grey crystal hanging in the middle of that impossible "
+            "room. You reach in along the angle of the light and draw out "
+            "An-Rah's ego-core."
+        )
+
+    game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):

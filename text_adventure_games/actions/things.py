@@ -421,6 +421,14 @@ class Examine(base.Action):
                 return
 
         if self.matched_item:
+            # A holder may opt in to ``reveals_on_examine``: a close look also
+            # uncovers its hidden contents (a corpse's clasped hands, a niche) --
+            # so EXAMINE and SEARCH both yield the find. Secret compartments
+            # that should need a deliberate SEARCH simply don't set it.
+            if self.matched_item.get_property("reveals_on_examine"):
+                for inner in self.matched_item.contents.values():
+                    if inner.get_property("is_hidden"):
+                        inner.set_property("is_hidden", False)
             base_text = self.matched_item.examine_text or self.matched_item.description
             text = base_text + self._contents_sentence(self.matched_item)
             # A mirror reflects whoever looks into it -- compose the examiner's
