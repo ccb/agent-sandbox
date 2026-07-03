@@ -4,6 +4,132 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-02 — Dren onboarded
+
+New student: **Dren Zabeli** (@ZaDrMeister) joins the project. Invited him to the
+repo with write access, wrote a reusable [student onboarding
+guide](../docs/student-onboarding.md) (day-one checklist, reading list, the
+branch→PR→review workflow, and this journal habit), seeded `journal/dren.md`
+(#303), and DM'd him the onboarding + setup instructions on Slack.
+
+## 2026-07-01 — Student-PR backlog cleared; perception Layers 1–2 shipped
+
+### Cleared the student PR backlog (and learned two git lessons)
+Reviewed and merged Alistair's open PRs: #214 (branch-convention docs), #195
+(SmallvilleConfig refactor), #196 (unify the backend behind one FastAPI HTTP
+API). Two rakes stepped on, worth recording:
+- **GitHub's merge engine ≠ local git.** #196 renamed `gen_agents/` → `backend/`
+  while #195/#204 edited files inside it; local `git merge` auto-resolves via
+  rename detection, but GitHub reports a modify/delete conflict. Fix: merge
+  `main` into the PR branch (and make sure your local `origin/main` is fresh),
+  verify, push, then merge.
+- **Deleting a base branch auto-closes its stacked PRs — irreversibly.** Merging
+  #196 with `--delete-branch` closed #204/#213, which can't be reopened or
+  retargeted once the base is gone. Re-landed them from the same branches as
+  #288/#289. Lesson: land the base of a stack first, retarget the children,
+  *then* delete.
+
+### Perception: spec → Layer 1 → first consumer → Layer 2
+The design spec (#287) became working code in three PRs:
+- **Layer 1 (#290):** `Sight` (NONE/DIM/CLEAR), `Veil` + `Darkness`/`Fog`
+  (`location.obscure(...)`), observer `blind`, and `Game.perceive() → Scene`.
+  The key design question: should the player's `describe()` and the agents'
+  `describe_for()` stay two functions? Answer — **one perception, two
+  renderers**: they serve different audiences (human prose vs. structured agent
+  observation) but now share a single `perceive()`, so darkness hides the same
+  things from both. Zero-cost proven: no veils → the full pre-existing suite
+  renders byte-identical.
+- **Hall of Youth (#291):** the glowstone is now a lantern — new engine **Douse**
+  action (inverse of Light; a light source is a toggle), room pitch dark until
+  lit, and *lighting up* is what rouses the bats (a warn-then-kill timer). No
+  movement gate: a player who knows the layout can creep through blind.
+- **Layer 2 (#292):** `Sense` (touch/hearing/smell) + `Thing.perceptible_by`;
+  `Examine` is perception-gated (in the dark it falls back to what you can
+  *hear/smell*, else "too dark"); opt-in `feel`/`listen`/`smell` probes via
+  `game.enable_senses()`. The Youth's ceiling is now heard in the dark (the
+  clue) and seen once lit — and sensing quietly never wakes the bats.
+
+Suite at 1362 green. Next: Layer 3 (the `Scene`-anchored LLM narrator).
+
+## 2026-06-30 — Tomb of Nassak An-Rah: a full adventure in a day
+
+### Game-development guide + reactions demo (#275)
+Wrote the newcomer-facing guide to the engine's classes and primitives, plus a
+runnable reactions demo.
+
+### The Tomb (#276–#281)
+Converted the Vaults of Vaarn adventure *Tomb of Nassak An-Rah* into a
+Zork/Action-Castle-homage parser game for the summer game jam — spec-first
+([design doc](../docs/design/tomb-of-nassak-an-rah.md)), then five implementation
+phases: map + atmosphere scaffold; the canopic-seal puzzle + Silas the archivist;
+noise and the Spawn lure (the mantis jar's `FungalSong` amplifies any racket and
+the Spawn are `DrawnToSound` — the reactions library earning its keep); the
+endgame (burn the corpse at the Summit to kill the Fungal Horror, zero-g coffin
+pried with magnetic boots) — winnable at 100/100.
+
+Playtest verdict on my own first cut: instant-death rooms were **annoying**. #281
+replaced every death-on-entry with a patient `_hazard` timer — warn, escalate,
+kill only if you persist, reset the moment the danger lifts. Movement is never
+lethal; light, noise, spores, and disturbing the dead are. Much fairer game.
+
+## 2026-06-29 — The reactions system
+
+Built the thing the noise work was pointing at: **reactions** — thing-owned,
+stimulus-triggered reflexes (#228–#235, on the groundwork of #225/#227:
+event-based disturbances + cross-room sound perception).
+
+- **Design:** `GatedEffect` (check preconditions → apply effects) is the shared
+  shape; `Action` and `Reaction` both subclass it. A `Reaction` lives on a
+  `Thing` and is adapted into a `Trigger` by *composition*, not inheritance —
+  we talked through both alternatives (literal Trigger subclass? Trigger as
+  Action?) before settling here.
+- **Sound layer:** `Game.emit_sound(location, radius, description)`,
+  `sounds_audible_at`, `audible_rooms` — sounds are events with a radius.
+- **Library:** `Startle` → `FleesAtNoise` / `WakesAtNoise` / `DrawnToSound`
+  (homes toward the loudest sound), plus `Countdown`.
+- **Migrations as proof:** AC4's doe+poacher (the poacher shoots on the doe's
+  *arrival*, a timed reaction), AC3's demon (`Countdown`), AC2's dragon (first
+  `WakesAtNoise`, then corrected to a linger `Countdown` — #234), and AC3's
+  goblin baby now emits its wail as a real sound (#235).
+
+## 2026-06-28 — Big AC4 day + engine quality-of-life
+
+Engine: worn/wielded items are in EXAMINE scope (#207); INVENTORY lists
+carried → worn → wielded (#208); command sequences skip empty segments and run
+one turn per command (#209); narration is capitalized (#210).
+
+AC4, mostly playtest-driven: per-exit move verbs + a fall that reacts to what
+she's wearing (#202); a **working drawbridge** — guardroom winch, front-gate
+trap, sealed castle (#211); the deer as a fixture that flees the shack and gets
+chased (#212); room descriptions that track state — crossbow, poacher, horse,
+brawl, drawbridge (#215); the Breakpoint crowded with bikers and ranchers
+(#216); the ranchers' truck as a second getaway + a longest-match item fix
+(#218); table-4 alias, brawl drops only the biker's keys, "toss a drink"
+(#219–#221); the doe startled by *noise*, not just the shack door (#222). And
+the first cross-game noise spread: AC3's bandits and stirges alert on any noise,
+not only the crying baby (#223).
+
+## 2026-06-27 — Mirrors
+
+AC4 polish (wearable cloak, readable sign, Dalton + jukebox dialogue, #200) and
+a fun engine feature: **reflective mirrors** (#201) — examining a mirror
+composes the examiner's live appearance (including what they're wearing) instead
+of canned text that goes stale after a haircut.
+
+## 2026-06-26 — AC4 playtest fixes
+
+Pick rose works with flavor instead of "the rosebush is bare" (#188); watermelon
+vines gag in the Gardens (#190); tying the rope consumes it + talk to the prince
+about art (#191); mounted travel narrates "rides the <vehicle>" via `ride_verb`
+(#192); Deep Woods only enterable by FOLLOW DEER (#193); renamed a GA test file
+that broke root-level pytest collection (#194).
+
+## 2026-06-25 — The window escape, done right
+
+Finished what the 06-23 guard-trap discovery started: the tower escape is now the
+book's **two-step window escape** through a proper "Outside the Tower" room, with
+the hair left on the floor (#181). Plus single-word parser aliases.
+
 ## 2026-06-23 — AC4 playtest fixes: object aliases, the guard trap, guide finished
 
 A morning of playtest-driven fixes to AC4, plus finishing Frankie's conversion guide.
