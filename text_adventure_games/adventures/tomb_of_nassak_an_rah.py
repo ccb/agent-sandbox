@@ -327,6 +327,30 @@ def build_game():
     _scenery(wreck, "zoxen", "two dead zoxen, half-sanded",
              "The caravan's draught-zoxen, patient in death as in life, already "
              "sanded to the shoulder. By morning the road will have them wholly.")
+    # The merchant himself -- Worry's "the merchant could not". Searching (or
+    # examining) him is the wreck's safe rehearsal of the corpse-searching habit
+    # that pays off at the Summit.
+    merchant = _scenery(wreck, "dead merchant", "the merchant, dead where the road put him",
+             "He lies composed, as if the wind had tidied him for visitors. The "
+             "Cacklemaw did not linger over him; the sand has been more "
+             "attentive, already drifting into the folds of his coat.")
+    merchant.add_alias("merchant")
+    merchant.add_alias("body")
+    merchant.add_alias("corpse")
+    merchant.make_surface()
+    merchant.set_property("reveals_on_examine", True)
+    merchant.set_property("contents_relation",
+                          "In the sand-drifted folds of his coat you find")
+    tokens = things.Item(
+        "purse of water-debt tokens", "a purse of water-debt tokens",
+        "Stamped brass tokens on a ring, each good for a measure of water in "
+        "Gnomon. The city's truest currency, and the desert's most honest joke.",
+    )
+    tokens.set_property("gettable", True)
+    tokens.add_alias("purse")
+    tokens.add_alias("tokens")
+    tokens.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(tokens)
     _scenery(hold, "crates", "lashed crates of saffron and dates",
              "Trade goods bound for the souks of Gnomon, worth a season's water. "
              "Too much to carry, and the Cacklemaw do not trade.")
@@ -988,7 +1012,7 @@ def build_game():
 WALK = [
     # The onboarding beats at the Caravan Wreck (the start): examine, talk,
     # open/take, then light/douse/read in the safe dark of the hold.
-    "examine wreck", "talk to worry",
+    "examine wreck", "search merchant", "talk to worry",
     "open pack", "take glowstone",
     "in", "light glowstone", "read ledger", "douse glowstone", "out",
     "north",                                                 # -> Tomb Exterior
