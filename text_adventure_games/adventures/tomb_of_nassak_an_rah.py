@@ -56,13 +56,17 @@ def _player_was_loud_in(g, room, quiet):
     return False
 
 
-def _hazard(game, room, *, danger, warn, kill, limit=3, gate=None):
+def _hazard(game, room, *, danger, warns, kill, limit=3, gate=None):
     """A patient room hazard. Each round the player is in *room* and ``danger(g)``
-    holds (and ``gate`` allows), a counter escalates and ``warn(n)`` is narrated; at
-    ``limit`` it ``kill``s. The counter resets the instant the danger lifts -- you
-    douse the light, fall quiet, put on the mask, step out -- so a hazard always
-    warns first and there is always a way clear. (Replaces instant death-on-entry:
-    you can walk in, get a warning, and react.)"""
+    holds (and ``gate`` allows), a counter escalates and the next line of *warns*
+    is narrated; at ``limit`` it ``kill``s. The counter resets the instant the
+    danger lifts -- douse the light, fall quiet, mask up, step out -- so a hazard
+    always warns first and there is always a way clear.
+
+    *warns* is a tuple of escalating lines: **the fiction is the clock** (design
+    doc §16.1). The first warning is ambient; the last is unmistakably terminal.
+    No mechanics leak into the prose -- unless ``give_hints`` is on, in which
+    case a counter is appended as training wheels."""
     key = f"_hz:{room.name}"
 
     def tick(g):
@@ -79,7 +83,10 @@ def _hazard(game, room, *, danger, warn, kill, limit=3, gate=None):
         if n >= limit:
             _die(g, kill)
         else:
-            g.parser.ok(warn(n))
+            line = warns[min(n, len(warns)) - 1]
+            if g.give_hints:
+                line += f" ({n}/{limit})"
+            g.parser.ok(line)
 
     game.add_trigger(f"hazard:{room.name}", lambda g: True, tick, repeatable=True)
 
@@ -150,7 +157,9 @@ class BurnCorpse(actions.Action):
             return False
         if not (_is_holding(self.player, "flask of gel") and _is_holding(self.player, "plasma-igniter")):
             self.parser.fail(
-                "You'd need something that burns and a flame to light it -- gel, and an igniter."
+                "Bone gone to stone does not take bare flame. It would want "
+                "dousing in something that burns, and a spark hot enough to "
+                "mean it."
             )
             return False
         return True
@@ -196,8 +205,9 @@ class PryCoffin(actions.Action):
             return False
         if "magnetic boots" not in self.player.worn:
             self.parser.fail(
-                "The coffin floats in the dead centre, out of reach -- you flail in "
-                "the zero gravity and get nowhere. You need purchase. (Magnetic boots?)"
+                "You reach the coffin and shove -- and it is you who drifts "
+                "away, slow as sediment. Nothing here holds you down, and "
+                "prying wants something to brace against."
             )
             return False
         return True
@@ -227,8 +237,10 @@ class CrystalSeal(blocks.Block):
     def __init__(self, canopic):
         super().__init__(
             "A seal of red crystal",
-            "The stair up is barred by a lattice of red crystal -- it will yield "
-            "only to the Autarch's missing jars, each on the plinth of its kind.",
+            "A seal of red crystal bars the stair, grown through the treads like "
+            "frost through cloth. Five beast-sigils are set in the arch above "
+            "it; two of them are dark. The crystal hums at a pitch just under "
+            "hearing, with the patience of a lock.",
         )
         self.canopic = canopic
 
@@ -360,63 +372,76 @@ def build_game():
     # --- The eight locations -------------------------------------------------
     exterior = things.Location(
         "Tomb Exterior",
-        "You stand in the phthalo sands beneath a dying red sun. Before you rises "
-        "the Tomb of Nassak An-Rah: a thirty-foot slab of azure stone, three carved "
-        "faces staring across the wastes, the whole edifice webbed in creeping "
-        "orange fungus. The western face is the dead Autarch as a young boy; the "
-        "eastern, a helmed warrior. Far up, a third face -- an old man -- turns to "
-        "the sky, orange tendrils weeping from its open mouth. Each mouth is a door.",
+        "A thirty-foot slab of azure stone rises from the phthalo sands, webbed "
+        "over every seam with creeping orange fungus. Three faces are carved in "
+        "it: westward, the dead Autarch as a young boy; eastward, a helmed "
+        "warrior; far up, an old man turned to the sky, orange tendrils weeping "
+        "from his open mouth. Each mouth is a door. The wind has been reading "
+        "these faces for aeons and keeps its findings to itself.",
     )
     youth = things.Location(
         "Hall of Youth",
         # The LIT view -- what you see once a light is raised. Pitch dark until
         # then: the Darkness veil (set in build_game) supplies the dark blurb.
-        "Your light throws blue across sand-scoured walls; statues of the boy-Autarch "
-        "crowd the chamber, swaddled and adored. Overhead the whole ceiling seethes -- "
-        "thousands of bats, wheeling and dropping toward the light.",
+        "Your light wakes the blue in the sand-scoured walls: statues of the "
+        "boy-Autarch crowd the chamber, swaddled and adored, rendered with an "
+        "unsettling tenderness. Overhead, the whole vault answers the glow -- it "
+        "seethes. Thousands of bats, wheeling lower with every pass.",
     )
     memory = things.Location(
         "Hall of Memory",
-        "Glinting lattices of crystal climb the walls -- the favoured memories of "
-        "the Autarch, frozen in lazulite. The light they throw is cold and slow.",
+        "Lattices of memory-crystal climb every wall, the favoured recollections "
+        "of the Autarch set in lazulite. The light inside them is not reflection; "
+        "it moves while you are still, slow and cold, like thought at the bottom "
+        "of a lake. One bank of crystal is worn smooth at hand-height, as if "
+        "often consulted.",
     )
     hounds = things.Location(
         "Hall of Hounds",
-        "A wall of thick plexiglas holds back a tank of luminous embalming gel. "
-        "Suspended in it: ten of An-Rah's hunting hounds, black and spindly, threaded "
-        "with cyborg augmentations, perfectly preserved.",
+        "A wall of plexiglas holds back a tank of embalming gel, luminous, the "
+        "green-gold of old honey. Ten of An-Rah's hunting hounds hang suspended "
+        "in it, black and spindly, threaded through with chrome, forever "
+        "mid-stride. They are perfectly preserved. Their eyes are open.",
     )
     warriors = things.Location(
         "Hall of Warriors",
-        "A dim, uneven floor. Four tall plexiglas cylinders stand here, each holding "
-        "a mummified guard in Autarchy armour -- and each laced through with veins of "
-        "orange fungus.",
+        "Four plexiglas cylinders stand on an uneven floor, each holding a "
+        "guard-mummy at attention in Autarchy armour. The fungus has found all "
+        "four; orange veins fan out under the glass like pressed flowers. Their "
+        "kit has outlasted them, as kit does.",
     )
     canopic = things.Location(
         "Hall of the Canopic Jars",
-        "Pentagonal walls of dressed stone. Five plinths ring a central staircase "
-        "that climbs into shadow -- but the stair is barred by a seal of red crystal. "
-        "Two of the plinths stand empty, lit from within by a crimson light.",
+        "Five plinths ring a central stair in a pentagon of dressed stone. Three "
+        "still bear their canopic jars; two stand empty, lit from within by a "
+        "crimson light that does not flicker. The stair climbs into shadow, "
+        "barred by a seal of red crystal. Something in this room is listening; "
+        "you can tell, the way one can.",
     )
     sphere = things.Location(
         "Burial Sphere of Nassak An-Rah",
-        "A great spherical chamber, its walls carved with funeral prayers. In the "
-        "dead centre floats the Autarch's coffin -- a glass anti-entropy sphere, now "
-        "clouded and invaded by a roiling orange mass. There is no gravity here; dust "
-        "and bone-chips drift in the still air.",
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: dust and bone-chips drift in the still "
+        "air, and your own weight forgot you at the threshold. In the dead "
+        "centre floats the Autarch's coffin, a glass anti-entropy sphere, "
+        "clouded now, and tenanted -- something orange coils inside it at the "
+        "pace of a slow breath. The prayers were carved to be read from every "
+        "direction at once.",
     )
     summit = things.Location(
         "The Summit",
-        "Windy and high, the desert spread out blue and endless below. An ossified "
-        "corpse sits here in the lotus position, mummified mid-meditation, orange "
-        "fungus fronding from its eyes and open mouth and down into the chimney that "
-        "drops through the tomb's crown.",
+        "High and wind-scoured, the blue desolation unrolled below to the "
+        "horizon's molten line. An ossified mystic sits here in the lotus "
+        "position, stone where he was flesh, orange fungus fronding from his "
+        "eyes and open mouth and down into the chimney that drops through the "
+        "tomb's crown. He has the look of a man interrupted mid-sentence, whose "
+        "sentence continues underground.",
     )
     chimney = things.Location(
         "The Fungal Chimney",
-        "A vertical shaft choked with orange fungus, dropping from the summit into "
-        "the burial sphere below. The air is thick with drifting spores -- every "
-        "breath sears. You shouldn't linger; the way down is below, the summit above.",
+        "A vertical throat choked with orange growth, dropping from the summit "
+        "toward a glow of carved prayers far below. The spores hang so thick the "
+        "air has texture. Down in the dark of it, the fungus is warm.",
     )
 
     # --- Connections (see spec §3) ------------------------------------------
@@ -474,24 +499,25 @@ def build_game():
              "standing boy, larger than life. The boy-Autarch, unmistakably.")
     ceiling = _scenery(youth, "ceiling", "the vaulted ceiling",
              "Your light picks out the vault overhead: the whole ceiling seethes "
-             "with roosting bats -- thousands of them, twitching and shifting and "
-             "dropping toward the glow. Raise a din, or keep a light on them, and "
-             "they'll come down in a screaming cloud.")
+             "with roosting bats, packed wing to wing, thousands of them -- and "
+             "the nearest have already let go of the stone.")
     ceiling.perceptible_by(perception.Sense.HEARING,
              "You can't see a thing, but the vault overhead seethes -- a dry, "
-             "restless storm of leathery wings. Bats. A great many, and close. A "
-             "light among them, or a loud noise, would wake them.")
+             "restless storm of leathery wings. A great many, and close. They "
+             "shift when you shift.")
     _scenery(memory, "crystal lattice", "lattices of memory-crystal",
-             "Lazulite crystals knit across the walls. One holds the Autarch's "
-             "embalming: the baboon took his lungs, the human his liver, the mantis "
-             "his eyes; the falcon was given his intestines, and the jackal -- "
-             "strangely -- his brain.")
+             "Lazulite crystals knit across the walls, worn smooth at hand-height. "
+             "One bank replays the Autarch's embalming for no one: the baboon took "
+             "his lungs, the human his liver, the mantis his eyes; the falcon was "
+             "given his intestines, and the jackal -- strangely -- his brain.")
     _scenery(hounds, "tank", "a plexiglas tank of embalming gel",
-             "Ten cyborg hounds hang in luminous, flammable gel behind thick "
-             "plexiglas. Collectors would pay in salt and water for these.")
+             "Ten hounds hang in the luminous gel, chrome-threaded, forever "
+             "mid-stride. Even through the seam the gel smells of lamp-oil and "
+             "honey. Collectors would pay in salt and water for any of this.")
     _scenery(warriors, "cylinders", "four plexiglas burial cylinders",
-             "Each holds a guard-mummy in Autarchy armour, prismatic blade at rest, "
-             "the glass fogged from within by threads of orange fungus.")
+             "Each holds a guard-mummy in Autarchy armour, at an attention no "
+             "order will ever relieve, the glass fogged from within by threads "
+             "of orange fungus.")
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
     # top of the plinth carvings and the memory crystals).
@@ -516,14 +542,14 @@ def build_game():
     # carved with the head that belongs there.
     falcon_plinth = things.Item(
         "falcon plinth", "an empty plinth carved with a falcon",
-        "A plinth carved with a falcon's likeness, lit crimson and empty -- it waits "
-        "for the jar that holds the Autarch's intestines.",
+        "A plinth carved as a falcon, lit crimson and empty. The carving's "
+        "talons are cupped, curled around the shape of something it has lost.",
     ).make_surface(capacity=1)
     falcon_plinth.set_property("gettable", False)
     jackal_plinth = things.Item(
         "jackal plinth", "an empty plinth carved with a jackal",
-        "A plinth carved with a jackal's likeness, lit crimson and empty -- it waits "
-        "for the jar that holds the Autarch's brain.",
+        "A plinth carved as a jackal, lit crimson and empty. The stone jaws are "
+        "parted, holding their grip on an absence.",
     ).make_surface(capacity=1)
     jackal_plinth.set_property("gettable", False)
     canopic.add_item(falcon_plinth)
@@ -542,8 +568,9 @@ def build_game():
     coffin = _scenery(
         sphere, "coffin", "the Autarch's anti-entropy coffin",
         "A clouded glass sphere at the chamber's heart, its field failing, its "
-        "interior a slow orange churn. The Autarch's bones -- and his Exotica -- "
-        "drift sealed within. You'd have to PRY it open.")
+        "interior a slow orange churn. Past the cloud, shapes drift and turn "
+        "like fish under ice: bone, and things that were buried to be kept. The "
+        "seam at its equator is fine as a hair -- made to be pried, never opened.")
     coffin.make_container()
     coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
     coffin.add_item(dagger)
@@ -568,8 +595,9 @@ def build_game():
         "I am what is left of the Autarch's appetites.",
     )
     spawn_guts.examine_text = (
-        "An octopus of orange fungus and grave-cured intestine, the falcon canopic "
-        "jar worn on top like a hat. It sways toward any sound."
+        "What could be described as an octopus of orange fungus and grave-cured "
+        "intestine -- though even that doesn't quite get it -- wearing the "
+        "falcon canopic jar on top like a hat. It sways toward any sound."
     )
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
@@ -577,8 +605,9 @@ def build_game():
         "I am what is left of the Autarch's thoughts.",
     )
     spawn_brain.examine_text = (
-        "A fungal brain that walks on two tiny legs, the jackal canopic jar worn as "
-        "a hat. It twitches toward every noise."
+        "A fungal brain that walks on two small legs, the jackal canopic jar "
+        "worn as a hat. It has no eyes and does not appear to want any; it "
+        "twitches toward every noise, precise as a metronome."
     )
     spawn_brain.add_to_inventory(jackal_jar)
     warriors.add_character(spawn_guts)
@@ -604,8 +633,8 @@ def build_game():
     igniter.add_alias("igniter")
     boots = things.Item(
         "magnetic boots", "a pair of magnetic boots",
-        "Heavy Autarchy boots that clamp to metal -- the way to keep your footing "
-        "in a zero-gravity chamber.",
+        "Heavy Autarchy guard-boots, soled in dull magnet-metal. They clamp to "
+        "anything ferrous with a click that means it, and let go grudgingly.",
     )
     boots.set_property(Property.WEARABLE, True)
     boots.set_property("wear_slot", "feet")
@@ -636,15 +665,20 @@ def build_game():
         "I am Silas, of the Seekers of Eyeless Wisdom. I read the dead.",
     )
     silas.examine_text = (
-        "A gaunt synthetic in fuligin-yellow robes, fingertips tipped with cranial "
-        "bores, drawing memory from the lattice in slow bright threads. He does not "
-        "look up."
+        "A gaunt synth in fuligin-yellow robes, fingertips tipped with cranial "
+        "bores, drawing memory from the lattice in slow bright threads. Patient, "
+        "courteous, elsewhere. Now and then his lips move -- circular glyphs, "
+        "no sound."
     )
     silas.talk_text = (
-        'Silas speaks without turning. "Scavenger. Two of the Autarch\'s organs walk '
-        "these halls -- his guts and his brain, sprouted on fungus and each wearing "
-        "the canopic jar it was sealed in. Take the jars; set each on the plinth of "
-        'its kind; the seal will yield. And step softly -- the dead here listen."'
+        'Silas speaks without turning. "Scavenger. You walk in a house of '
+        "memory; mind what you wake. Two of the Autarch's organs have got up and "
+        "walk these halls wearing their own jars -- his appetites and his "
+        "thoughts, if you follow me. I do not fight them; I read. The lattice "
+        "remembers his embalming, for those who trouble to look, and the plinths "
+        'above remember what they held." A pause; a brief run of clipped, '
+        'circular syllables, like a quotation. "The dead here listen. Step '
+        'softly."'
     )
     memory.add_character(silas)
 
@@ -707,39 +741,60 @@ def build_game():
     # player who knows the layout can still creep through blind. (The perception
     # veil only gates what's *seen*; movement stays free -- design/perception.md.)
     youth.obscure(perception.Darkness(
-        blurb="Pitch dark. Leathery wings rustle and shift somewhere overhead -- "
-        "something is roosting up there. Raise a light to see the way... but it may "
-        "wake them. (EXAMINE or LISTEN overhead, or FEEL your way in the dark.)"))
+        blurb="Dark as the inside of a sealed jar. The air is chill and smells "
+        "of old guano; somewhere far above, leather rustles against leather, "
+        "patient and vast. The caravan-guards' word for the boy's mouth was "
+        "'lightless', and they meant it as advice."))
 
     # The bats: roused by carrying a LIT light into the Youth, or by a loud noise
-    # there. Patient -- they warn, then swarm. Douse the light (or fall quiet) and
-    # they settle.
+    # there. Patient -- the escalation is the clock. Douse the light (or fall
+    # quiet) and they settle.
     _hazard(game, youth,
             danger=lambda g: perception.carries_light(g.player) or _player_was_loud_in(g, youth, _QUIET),
-            warn=lambda n: f"The bats seethe and drop, shrieking, batting at your face -- ({n}/3). Go dark and quiet, NOW.",
-            kill="The bats boil down in a screaming cloud and tear you apart in the dark. THE END.")
+            warns=(
+                "The rustle overhead deepens. Grit sifts down through your light; "
+                "the whole vault has begun, gently, to move.",
+                "The first bats drop -- wheeling through the glow, shrieking, near "
+                "enough to feel the wind off their wings. The vault above is one "
+                "turning wheel.",
+            ),
+            kill="The vault empties all at once. The swarm takes the light, and then everything else. THE END.")
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
     for hall in (memory, hounds, warriors):
         _hazard(game, hall,
                 danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
-                warn=lambda n: f"Yellow eyes gather in the shadows; the pthalo-jackals are closing -- ({n}/3). Quiet, or get out.",
-                kill="The pack pours from the dark, drags you down, and feeds. THE END.")
+                warns=(
+                    "Somewhere off in the halls, a yipping answers your noise -- "
+                    "once, and then again, nearer.",
+                    "Yellow eyes ring the doorways, unhurried. Pthalo-jackals: "
+                    "cautious, clever, and done being cautious.",
+                ),
+                kill="The pack pours from the dark, and afterwards the tomb goes back to listening. THE END.")
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     _hazard(game, chimney,
             danger=lambda g: not (_is_holding(g.player, "respirator") or "respirator" in g.player.worn),
-            warn=lambda n: f"The spores sear your lungs; you can barely breathe -- ({n}/3). Get out, or mask up.",
-            kill="The spores fill your lungs and you choke to death in the chimney. THE END.")
+            warns=(
+                "Each breath comes back smaller than it went out. The spores "
+                "settle on your lips and taste of orange rot.",
+                "Your lungs sear; the glow below swims and doubles. The chimney's "
+                "warmth has begun to feel like a mouth.",
+            ),
+            kill="You breathe the tomb in, and it keeps you. THE END.")
 
     # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
     # wearing, any racket) makes it erupt. Looking is safe -- enter, see it, and
     # back out. Cleansing the corpse (Summit) kills it and lifts this.
     _hazard(game, sphere,
             danger=lambda g: _player_was_loud_in(g, sphere, _QUIET_SPHERE),
-            warn=lambda n: f"The orange mass in the coffin shudders and reaches toward you -- ({n}/2). Don't disturb it -- it's still alive.",
-            kill="The Fungal Horror erupts from the coffin and drowns you in acid. THE END.",
+            warns=(
+                "The orange mass in the coffin turns -- all of it, at once -- "
+                "toward the sound. Against the inside of the glass, something "
+                "like a palm.",
+            ),
+            kill="The coffin does not so much open as give up. The Horror takes you in a single fold. THE END.",
             limit=2,
             gate=lambda g: not sphere.get_property("horror_dead"))
 

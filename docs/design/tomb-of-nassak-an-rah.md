@@ -600,12 +600,20 @@ zine register (style guide §§2–5). Rough order: Exterior → Youth → Memor
 Hounds → Warriors → Canopic → Sphere → Summit → Chimney → Wreck (new). Each
 rewrite honors §16.1 (no leaks) as it goes.
 
-### 16.4 Sequencing
+### 16.4 Sequencing + status
 
-1. **PR A — onboarding**: the Caravan Wreck room + moves (glowstone found, not
-   given), walkthrough + test updates.
-2. **PR B — honest hints**: the §16.1 table, hazard warn-line rework (fiction
-   escalation, no counters), Silas rewrite.
-3. **PR C — voice pass**: the full §16.3 rewrite (style guide complete by then).
+Revised after the style corpus landed: B and C are the *same strings*, so they
+merged into one room-by-room rewrite pass.
 
-Playtest after each; WIN walkthrough must stay 100/100 throughout.
+1. **PR A — onboarding (SHIPPED, #312)**: the Caravan Wreck + the Wagon's Hold,
+   glowstone found not given, Worry the new-mule, the ledger as the diegetic
+   hint-carrier, give_hints off by default. GO NORTH skips it.
+2. **PR B — the rewrite pass (SHIPPED)**: every room/item/character/hazard
+   re-voiced in the register (style guide §§2–7) with the §16.1 leaks fixed in
+   the same stroke. `_hazard` takes escalating `warns` tuples — the fiction is
+   the clock; the numeric counter appends only under `give_hints`. Silas points
+   at the lattice instead of reciting the seal solution; PryCoffin/BurnCorpse
+   failures describe the problem, not the shopping list.
+
+WIN walkthrough held at 100/100 throughout; smoke tour covers all nine safe
+rooms.
