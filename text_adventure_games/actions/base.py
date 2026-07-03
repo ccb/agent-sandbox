@@ -5,6 +5,13 @@ from ..enums import ActionName
 import re
 
 
+def conjugate(character, second: str, third: str) -> str:
+    """Pick the verb form for *character*: second person for the player (named
+    "you"), third person for everyone else -- so messages read "You don't have
+    a weapon" and "Troll doesn't have a weapon" from the same template."""
+    return second if character.name.lower() == "you" else third
+
+
 class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a
