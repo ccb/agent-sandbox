@@ -85,6 +85,15 @@ class Character(Thing):
         # are unchanged. Container `contents` do not count against this; the
         # container item itself occupies one hand slot.
         self.carry_capacity = None
+        # Vaarn item slots (see slots.py) -- the shared carrying/harm gauge.
+        # None (default) = unlimited and wound-limitless, so existing games are
+        # unchanged; a game opts in per character (player.slot_capacity = 10).
+        # Capacity is a hard limit: GET refuses past it, a FULL gauge is
+        # Encumbered (you clatter; you cannot climb), a new wound shoves random
+        # gear out of the pack to make room, and wounds alone filling capacity
+        # kill. Runtime-only (not serialized), like behavior/reactions.
+        self.slot_capacity = None
+        self.wounds: list = []
         self.location = None
         self.behavior = None
         self.agent = None
@@ -334,6 +343,88 @@ class Character(Thing):
         elif item.container is not None:
             item.container.remove_item(item)
             item.set_owner(None)
+
+    # --- Vaarn item slots (see slots.py; all no-ops until slot_capacity set) --
+
+    def item_slots_used(self) -> int:
+        """Slots occupied by carried gear: inventory + worn + wielded (each item
+        costs its ``slots`` property, default 1; a container's contents ride
+        free -- the container declares its own loaded cost if it matters)."""
+        from ..slots import item_slot_cost
+
+        seen = []
+        for slot in (self.inventory, self.worn, self.wielded):
+            for item in slot.values():
+                if item not in seen:
+                    seen.append(item)
+        return sum(item_slot_cost(it) for it in seen)
+
+    def wound_slots(self) -> int:
+        """Slots occupied by wounds."""
+        return sum(w.slots for w in self.wounds)
+
+    def slots_used(self) -> int:
+        return self.item_slots_used() + self.wound_slots()
+
+    def is_encumbered(self) -> bool:
+        """The gauge is FULL: movement clatters, and exits a game marks as
+        climbs (``climb_exits``) are beyond you."""
+        return (
+            self.slot_capacity is not None and self.slots_used() >= self.slot_capacity
+        )
+
+    def has_slot_space(self, item) -> bool:
+        """Whether *item* fits -- capacity is a hard limit. Unlimited when no
+        capacity is set."""
+        if self.slot_capacity is None:
+            return True
+        from ..slots import item_slot_cost
+
+        return self.slots_used() + item_slot_cost(item) <= self.slot_capacity
+
+    def add_wound(self, wound, rng=None):
+        """Add *wound*. Returns ``(fatal, dropped)``:
+
+        - *fatal*: wounds alone fill capacity (Vaarn: 'if a character fills
+          [their] item slots with Wounds they will die') -- IS_DEAD is set.
+        - *dropped*: gear the wound displaced. A wound always fits: while the
+          gauge overflows, random non-wound items are shed to the character's
+          location (inventory first, then worn, then wielded).
+
+        With no capacity set, wounds are tracked but displace nothing and are
+        never fatal by accumulation."""
+        import random as _random
+
+        self.wounds.append(wound)
+        dropped = []
+        if self.slot_capacity is None:
+            return False, dropped
+        if self.wound_slots() >= self.slot_capacity:
+            self.set_property(Property.IS_DEAD, True)
+            return True, dropped
+        rng = rng or _random
+        while self.slots_used() > self.slot_capacity:
+            pool = (
+                list(self.inventory.values())
+                or list(self.worn.values())
+                or list(self.wielded.values())
+            )
+            if not pool:
+                break
+            item = rng.choice(pool)
+            for slot in (self.inventory, self.worn, self.wielded):
+                if slot.get(item.name) is item:
+                    slot.pop(item.name)
+                    break
+            if self.location is not None:
+                self.location.add_item(item)
+            dropped.append(item)
+        return False, dropped
+
+    def heal_wound(self):
+        """Remove and return the most recent wound (None if unhurt) -- the hook
+        a game's rest/water/medicine mechanic calls."""
+        return self.wounds.pop() if self.wounds else None
 
     def set_behavior(self, fn):
         """

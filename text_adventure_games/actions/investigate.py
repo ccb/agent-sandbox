@@ -123,14 +123,30 @@ class Search(base.Action):
 
     def apply_effects(self):
         if self.target is not None:
+            # Searching a specific holder is the act of looking inside it: it
+            # reveals hidden contents AND reports what's plainly there -- a full
+            # pack should never answer "nothing of interest". Rummaging also
+            # opens a closed (unlocked) container, so what you found is
+            # reachable by GET.
+            if self.target.get_property(Property.IS_LOCKED):
+                self.parser.ok(f"The {self.target.name} is locked.")
+                return
             pool = self.target.contents
-            where = f"the {self.target.name}"
-        elif self.location is not None:
-            pool = self.location.items
-            where = "around"
-        else:
-            pool = {}
-            where = "around"
+            for it in pool.values():
+                if it.get_property(Property.IS_HIDDEN):
+                    it.set_property(Property.IS_HIDDEN, False)
+            if pool:
+                if (
+                    self.target.get_property("is_container")
+                    and not self.target.is_open()
+                ):
+                    self.target.set_property("is_closed", False)
+                listed = _comma_list([it.description for it in pool.values()])
+                self.parser.ok(f"You search the {self.target.name} and find {listed}.")
+            else:
+                self.parser.ok("You search but find nothing of interest.")
+            return
+        pool = self.location.items if self.location is not None else {}
         found = [it for it in pool.values() if it.get_property(Property.IS_HIDDEN)]
         if not found:
             self.parser.ok("You search but find nothing of interest.")
@@ -138,4 +154,4 @@ class Search(base.Action):
         for it in found:
             it.set_property(Property.IS_HIDDEN, False)
         listed = _comma_list([it.description for it in found])
-        self.parser.ok(f"You search {where} and find {listed}.")
+        self.parser.ok(f"You search around and find {listed}.")

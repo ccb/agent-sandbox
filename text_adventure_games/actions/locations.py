@@ -87,6 +87,16 @@ class Go(base.Action):
             self.parser.fail(description)
             return False
 
+        # Vaarn item slots (slots.py): an encumbered character cannot use exits
+        # the game marks as climbs (location.set_property("climb_exits", {...})).
+        climbs = self.location.get_property("climb_exits")
+        if climbs and self.direction in climbs and self.character.is_encumbered():
+            self.parser.fail(
+                "Loaded as you are, the climb is out of the question. Something "
+                "must be left behind."
+            )
+            return False
+
         return True
 
     def apply_effects(self):
@@ -102,6 +112,17 @@ class Go(base.Action):
         self.game.relocate(self.character, to_loc)
         if is_main_player:
             self.has_been_visited = True
+
+        # An encumbered mover clatters (slots.py): their movement is a real
+        # sound, heard here and one room out -- listeners, reactions, and any
+        # noise-keyed hazard treat it like any other noise. Overload yourself
+        # and you cannot creep.
+        if self.character.is_encumbered():
+            self.game.emit_sound(
+                to_loc,
+                1,
+                f"the clatter of {self.character.name}'s overloaded pack",
+            )
 
         # The arrival line. "X moved to PLACE" by default; when the mover is
         # riding a vehicle, the verb comes from the vehicle ("rides" by default,

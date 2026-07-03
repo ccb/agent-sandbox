@@ -78,6 +78,14 @@ class Get(base.Action):
                 "Your hands are full and you have nothing with room to stow it."
             )
             return False
+        # Vaarn item slots (slots.py; only when the character opted in): past
+        # the hard maximum you simply cannot take more.
+        if not self.character.has_slot_space(self.item):
+            self.parser.fail(
+                "You cannot carry another thing -- something must be dropped, "
+                "or left."
+            )
+            return False
         return True
 
     def apply_effects(self):
@@ -86,12 +94,20 @@ class Get(base.Action):
         adds it to the character's inventory or, if their hands are full, a
         carried container with space.
         """
+        was_encumbered = self.character.is_encumbered()
         if self.source_holder is not None:
             self.source_holder.remove_item(self.item)
         self.character.accept_item(self.item)
         description = "{character_name} got the {item_name}.".format(
             character_name=self.character.name, item_name=self.item.name
         )
+        # Warn once at the encumbered transition (slots.py): loaded past
+        # comfort, you move loudly and cannot climb.
+        if self.character.is_encumbered() and not was_encumbered:
+            description += (
+                " Your pack is full to the last slot: you move with a clatter "
+                "now, and climbing is out of the question."
+            )
         self.parser.ok(description)
 
 
@@ -270,9 +286,27 @@ class Inventory(base.Action):
 
     def apply_effects(self):
         char = self.character
-        # Nothing carried, worn, or wielded -- a single empty line.
-        if not char.inventory and not char.worn and not char.wielded:
-            self.parser.ok(f"{char.name}'s inventory is empty.")
+        # "Your inventory" for the player (named "you"); possessive for NPCs.
+        whose = "Your" if char.name.lower() == "you" else f"{char.name}'s"
+
+        def _slot_suffix(item):
+            """ "(2 slots)" on multi-slot gear -- only when this character uses
+            the slot gauge, and only past the default cost of 1."""
+            if char.slot_capacity is None:
+                return ""
+            from ..slots import item_slot_cost
+
+            cost = item_slot_cost(item)
+            return f" ({cost} slots)" if cost > 1 else ""
+
+        # Nothing carried, worn, wielded -- or suffered -- a single empty line.
+        if (
+            not char.inventory
+            and not char.worn
+            and not char.wielded
+            and not char.wounds
+        ):
+            self.parser.ok(f"{whose} inventory is empty.")
             return
 
         # Three sections in order: what's carried, then worn, then wielded.
@@ -280,7 +314,7 @@ class Inventory(base.Action):
         # "empty", when something is worn/wielded but nothing is in hand).
         sections = []
         if char.inventory:
-            carried = f"{char.name}'s inventory contains:\n"
+            carried = f"{whose} inventory contains:\n"
             for item_name in char.inventory:
                 item = char.inventory[item_name]
                 if item.get_property("is_container"):
@@ -290,8 +324,8 @@ class Inventory(base.Action):
                         gauge = "({count}/{cap})".format(
                             count=item.current_count(), cap=item.capacity
                         )
-                    carried += "* {item} {gauge}\n".format(
-                        item=item.description, gauge=gauge
+                    carried += "* {item}{slots} {gauge}\n".format(
+                        item=item.description, slots=_slot_suffix(item), gauge=gauge
                     )
                     for inner_name in item.contents:
                         inner = item.contents[inner_name]
@@ -299,16 +333,20 @@ class Inventory(base.Action):
                             item=inner.description, qty=_qty_suffix(inner)
                         )
                 else:
-                    carried += "* {item}{qty}\n".format(
-                        item=item.description, qty=_qty_suffix(item)
+                    carried += "* {item}{qty}{slots}\n".format(
+                        item=item.description,
+                        qty=_qty_suffix(item),
+                        slots=_slot_suffix(item),
                     )
             sections.append(carried.rstrip("\n"))
         else:
-            sections.append(f"{char.name}'s inventory is empty.")
+            sections.append(f"{whose} inventory is empty.")
 
         def _listing(title, slot):
             body = "".join(
-                "* {item}{qty}\n".format(item=it.description, qty=_qty_suffix(it))
+                "* {item}{qty}{slots}\n".format(
+                    item=it.description, qty=_qty_suffix(it), slots=_slot_suffix(it)
+                )
                 for it in slot.values()
             )
             return f"{title}\n{body}".rstrip("\n")
@@ -317,6 +355,28 @@ class Inventory(base.Action):
             sections.append(_listing("Wearing:", char.worn))
         if char.wielded:
             sections.append(_listing("Wielding:", char.wielded))
+
+        # Vaarn item slots (slots.py): wounds fill the same gauge as gear; the
+        # slots line appears only for characters that opted in.
+        if char.wounds:
+            wounds = "Wounds:\n" + "".join(
+                "* {name}{slots} - {desc}\n".format(
+                    name=w.name,
+                    slots=(
+                        f" ({w.slots} slot{'s' if w.slots != 1 else ''})"
+                        if w.slots
+                        else ""
+                    ),
+                    desc=w.description,
+                )
+                for w in char.wounds
+            )
+            sections.append(wounds.rstrip("\n"))
+        if char.slot_capacity is not None:
+            gauge = f"Slots: {char.slots_used()}/{char.slot_capacity}"
+            if char.is_encumbered():
+                gauge += " -- ENCUMBERED (you clatter when you move, and cannot climb)"
+            sections.append(gauge)
 
         self.parser.ok("\n\n".join(sections))
 
@@ -397,8 +457,10 @@ class Examine(base.Action):
         if parts:
             self.parser.ok(" ".join(parts))
             return
+        # Diegetic nudge, not a stage direction: if the thing can be felt, say
+        # so through the fiction rather than a parenthetical instruction.
         hint = (
-            " (Try feeling your way around.)"
+            " Your hands might do what your eyes cannot."
             if target.sense_text(perception.Sense.TOUCH)
             else ""
         )
@@ -419,6 +481,14 @@ class Examine(base.Action):
                 return
 
         if self.matched_item:
+            # A holder may opt in to ``reveals_on_examine``: a close look also
+            # uncovers its hidden contents (a corpse's clasped hands, a niche) --
+            # so EXAMINE and SEARCH both yield the find. Secret compartments
+            # that should need a deliberate SEARCH simply don't set it.
+            if self.matched_item.get_property("reveals_on_examine"):
+                for inner in self.matched_item.contents.values():
+                    if inner.get_property("is_hidden"):
+                        inner.set_property("is_hidden", False)
             base_text = self.matched_item.examine_text or self.matched_item.description
             text = base_text + self._contents_sentence(self.matched_item)
             # A mirror reflects whoever looks into it -- compose the examiner's
@@ -657,7 +727,9 @@ class Open(base.Action):
 
     def apply_effects(self):
         self.item.set_property("is_closed", False)
-        message = f"{self.character.name.capitalize()} opens the {self.item.name}."
+        # Item-subject phrasing reads right for any actor -- "You opens the
+        # pack" (player named "you") was ungrammatical. Same fix as Light/Douse.
+        message = f"The {self.item.name} is open."
         # Reveal what's inside so the player learns what they can take, rather
         # than having to guess (the contents are now reachable by GET).
         contents = [
@@ -696,9 +768,8 @@ class Close(base.Action):
 
     def apply_effects(self):
         self.item.set_property("is_closed", True)
-        self.parser.ok(
-            f"{self.character.name.capitalize()} closes the {self.item.name}."
-        )
+        # Item-subject phrasing, matching Open (and Light/Douse).
+        self.parser.ok(f"The {self.item.name} is closed.")
 
 
 class Unlock_Door(base.Action):

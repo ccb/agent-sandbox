@@ -884,7 +884,7 @@ class Game:
         """
         Describes the player's inventory.
         """
-        if len(self.player.inventory) == 0:
+        if len(self.player.inventory) == 0 and not self.player.wounds:
             empty_inventory = "You don't have anything."
             self.ok(empty_inventory, [], "Describe the player's inventory.")
         else:
@@ -896,6 +896,25 @@ class Game:
                 inventory_description += d.format(
                     item=item_name, item_description=item.description
                 )
+            # Vaarn item slots (slots.py): wounds fill the same gauge as gear,
+            # so they list here; the slots line appears only for games that
+            # opted a character in (slot_capacity set).
+            if self.player.wounds:
+                inventory_description += "Wounds:\n"
+                for w in self.player.wounds:
+                    note = (
+                        f" ({w.slots} slot{'s' if w.slots != 1 else ''})"
+                        if w.slots
+                        else ""
+                    )
+                    inventory_description += f"* {w.name}{note} - {w.description}\n"
+            if self.player.slot_capacity is not None:
+                inventory_description += (
+                    f"Slots: {self.player.slots_used()}/{self.player.slot_capacity}"
+                )
+                if self.player.is_encumbered():
+                    inventory_description += " -- ENCUMBERED"
+                inventory_description += "\n"
             self.ok(inventory_description)
 
     def describe_for(self, character: Character) -> str:
@@ -960,6 +979,18 @@ class Game:
             lines.append(f"Worn: {', '.join(character.worn)}")
         if character.wielded:
             lines.append(f"Wielded: {', '.join(character.wielded)}")
+        # Vaarn item slots (slots.py): agents that opted in see their gauge and
+        # wounds, so a planner can reason about load and injury.
+        if character.wounds:
+            lines.append(
+                "Wounds: "
+                + ", ".join(f"{w.name} ({w.slots})" for w in character.wounds)
+            )
+        if character.slot_capacity is not None:
+            gauge = f"Slots: {character.slots_used()}/{character.slot_capacity}"
+            if character.is_encumbered():
+                gauge += " (ENCUMBERED: you clatter when you move, and cannot climb)"
+            lines.append(gauge)
 
         # Available actions
         action_names = sorted(self.parser.actions.keys())
