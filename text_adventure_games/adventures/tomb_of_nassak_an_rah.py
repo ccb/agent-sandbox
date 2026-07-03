@@ -186,6 +186,7 @@ class Sneak(actions.Go):
 
     ACTION_NAME = "sneak"
     ACTION_DESCRIPTION = "Move quietly in a direction (don't wake the tomb)"
+    MOVE_VERB = "slip silently"  # "You slip silently to Hall of Memory."
     ACTION_ALIASES = [
         f"{verb} {direction}"
         for verb in ("sneak", "creep", "tiptoe")
@@ -711,6 +712,25 @@ def build_game():
     # round you linger (the hazard, below); dash through, or wear a respirator.
     summit.add_connection("in", chimney)  # auto: chimney out -> summit
     chimney.add_connection("down", sphere)  # auto: sphere up -> chimney
+
+    # Inside the tomb, plain walking SOUNDS like something: the arrival line
+    # says so ("You walk, footfalls carrying, to ...") -- the standing hint
+    # that sneak exists. The Sphere drifts (zero-g); the climbs climb.
+    for _room, _verb in (
+        (youth, "walk, footfalls carrying,"),
+        (memory, "walk, footfalls carrying,"),
+        (hounds, "walk, footfalls carrying,"),
+        (warriors, "walk, footfalls carrying,"),
+        (canopic, "walk, footfalls carrying,"),
+        (sphere, "drift, weightless,"),
+        (chimney, "climb, spores swirling,"),
+    ):
+        for _d in _room.connections:
+            _room.move_verbs.setdefault(_d, _verb)
+    exterior.move_verbs.setdefault("north", "walk, footfalls carrying,")
+    exterior.move_verbs.setdefault("east", "walk, footfalls carrying,")
+    exterior.move_verbs.setdefault("up", "climb")
+    summit.move_verbs.setdefault("down", "climb down")
 
     # --- Atmosphere: examinable scenery (hooks for later phases) -------------
     _scenery(
