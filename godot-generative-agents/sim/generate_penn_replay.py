@@ -48,7 +48,7 @@ OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 # Diego's gallery circuit). The viewer's playback speed is independent of this.
 DEFAULT_STEPS = 1200
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
-SIM_START = "2023-02-13 08:00:00"  # matches gen_agents.sim_config default
+SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 
 # How the Godot viewer (scripts/penn_replay.gd) plays a `chat` transcript back:
 # ~DIALOGUE_LINE_STEPS replay steps per line, with the last line fading over
