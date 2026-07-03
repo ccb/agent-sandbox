@@ -587,6 +587,14 @@ class Parser:
                 if exclude is not None and candidate is exclude:
                     continue
                 return candidate
+        # A character's aliases match too -- "give dates to jackals" finds the
+        # "jackal pack" (same substring rule as names).
+        for candidate in self.game.characters.values():
+            if exclude is not None and candidate is exclude:
+                continue
+            for alias in getattr(candidate, "aliases", ()):
+                if alias in command:
+                    return candidate
         return self.game.player
 
     def get_character_location(self, character: Character) -> Location:
