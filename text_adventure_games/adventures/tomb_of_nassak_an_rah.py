@@ -70,25 +70,9 @@ _QUIET = {
 # sneak exists for a reason. Light means nothing to them.
 _QUIET_SPAWN = _QUIET - {"go", "talk"}
 
-# To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
-# quietly sensing, and working your own light are safe (so you can enter, see it,
-# and back out -- but not loot it alive).
-_QUIET_SPHERE = {
-    "go",
-    "sneak",
-    "look",
-    "examine",
-    "describe",
-    "inventory",
-    "light",
-    "douse",
-    "feel",
-    "listen",
-    "smell",
-    "drink",
-    "help",
-    "quit",
-}
+# The sphere has NO noise hazard (CCB: noise reactions are covered
+# elsewhere) -- enter, look, even shout. The Horror wakes on the deliberate
+# act alone: prying its coffin (the boss fight, below).
 
 
 def _wound_player(g, name, slots_n, desc):
@@ -250,71 +234,225 @@ class FungalSong(reactions.Startle):
         self.game.emit_sound(loc, 6, "a tuneless fungal song")
 
 
-class BurnCorpse(actions.Action):
-    """Burn the ossified corpse at the Summit -- the root of the fungus. With the
-    gel and the igniter it goes up in flame, and the whole network (the Fungal
-    Horror included, far below) dies with it. The elegant boss solution: it makes
-    the Burial Sphere safe to enter without ever fighting the Horror."""
+def _has_spark(player):
+    """Any carried ignition source (the plasma-igniter, or a hound's servo)."""
+    return any(
+        it.get_property("ignition_source") for it in player.carried_items().values()
+    )
 
-    ACTION_NAME = "burn corpse"
-    ACTION_DESCRIPTION = "Set the ossified corpse alight (needs gel and a flame)"
+
+def _gel_dose(g):
+    """Consume one dose of gel from the player's flask (relabelling it);
+    returns False if they carry no dose."""
+    flask = g.player.carried_items().get("flask of gel")
+    if flask is None:
+        return False
+    n = int(flask.get_property("portions") or 0)
+    if n <= 0:
+        return False
+    flask.set_property("portions", n - 1)
+    n -= 1
+    flask.description = (
+        f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+        if n
+        else "an empty flask"
+    )
+    return True
+
+
+class Burn(actions.Action):
+    """BURN, generalized (design doc §17.2): one gel dose + any spark, aimed at
+    what the fungus holds. The ossified corpse (the cleanse -- kills the whole
+    network); the chimney growth (burns the shaft clean, a local fix); or the
+    Fungal Horror itself (sets it ABLAZE: no regrowth while it burns)."""
+
+    ACTION_NAME = "burn"
+    ACTION_DESCRIPTION = "Set something alight (a gel dose, and a spark)"
     ACTION_ALIASES = [
+        "burn corpse",
         "burn ossified corpse",
         "burn the corpse",
         "ignite corpse",
         "torch corpse",
         "burn mystic",
         "burn the ossified corpse",
+        "burn growth",
+        "burn fungus",
+        "burn the fungus",
+        "burn chimney",
+        "ignite fungus",
+        "burn horror",
+        "burn the horror",
+        "ignite horror",
+        "torch horror",
+        "set horror ablaze",
+        "ignite",
+        "torch",
+        "set ablaze",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+
+    def _target(self):
+        loc = self.player.location
+        if loc is None:
+            return None
+        if loc.name == "The Summit" and (
+            "corpse" in self.command
+            or "mystic" in self.command
+            or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
+        ):
+            return "corpse"
+        if loc.name == "The Fungal Chimney" and not loc.get_property("burned"):
+            return "chimney"
+        if loc.name == "Burial Sphere of Nassak An-Rah" and (
+            "horror" in self.command
+            or "mass" in self.command
+            or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
+        ):
+            return "horror"
+        return None
+
+    def check_preconditions(self) -> bool:
+        target = self._target()
+        if target is None:
+            self.parser.fail("There's nothing here that wants burning.")
+            return False
+        if target == "corpse" and self.player.location.get_property("cleansed"):
+            self.parser.fail("The corpse is already ash; the fungus is dead.")
+            return False
+        if target == "horror":
+            horror = self.game.characters.get("fungal horror")
+            if horror is None or horror.location is not self.player.location:
+                self.parser.fail(
+                    "The mass is sealed behind the glass; burn what feeds it, or open its door."
+                )
+                return False
+            if horror.get_property("is_dead"):
+                self.parser.fail("It is already still, and past burning's help.")
+                return False
+        if not _has_spark(self.player):
+            self.parser.fail(
+                "You have nothing that makes a spark hot enough to mean it."
+            )
+            return False
+        flask = self.player.carried_items().get("flask of gel")
+        if flask is None or int(flask.get_property("portions") or 0) <= 0:
+            self.parser.fail(
+                "Bare flame won't take here. It would want dousing in "
+                "something that burns -- a dose of the embalming gel."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        target = self._target()
+        _gel_dose(self.game)
+        loc = self.player.location
+        if target == "corpse":
+            loc.set_property("cleansed", True)
+            self.game.locations["Burial Sphere of Nassak An-Rah"].set_property(
+                "horror_dead", True
+            )
+            message = (
+                "You splash the embalming gel over the ossified mystic and strike "
+                "your spark. Orange flame roars down the fungal chimney -- and far "
+                "below, the whole rotten network shudders and dies. The Fungal "
+                "Horror sloughs into ash. The tomb falls silent at last."
+            )
+            corpse_item = loc.items.get("ossified corpse")
+            if corpse_item is not None and "friend's fungus" in corpse_item.contents:
+                corpse_item.remove_item(corpse_item.contents["friend's fungus"])
+                message += (
+                    " The pouch nested in his clasped hands goes up with him, "
+                    "sweet on the wind for a moment."
+                )
+            # If the Horror is out and fighting, the root's death is its death.
+            horror = self.game.characters.get("fungal horror")
+            if horror is not None and not horror.get_property("is_dead"):
+                horror.set_property("is_dead", True)
+                message += (
+                    " Far below, the coil collapses mid-motion, every thread of "
+                    "it gone slack at once."
+                )
+            self.parser.ok(message)
+            self.game.award("cleanse", 30, None)
+        elif target == "chimney":
+            loc.set_property("burned", True)
+            self.parser.ok(
+                "The gel catches and the shaft goes up like a struck match, "
+                "flame crawling the growth from throat to crown. When it gutters "
+                "out, the chimney is black, bare, and breathable -- a local "
+                "victory. Somewhere below, the root of it all is untouched."
+            )
+        else:  # the Horror
+            horror = self.game.characters["fungal horror"]
+            horror.set_property("ablaze", 3)
+            self.parser.ok(
+                "You sling the gel across the coil and strike your spark. The "
+                "Horror goes up with a sound like a held breath released -- "
+                "burning, it cannot knit itself; whatever you cut now stays cut."
+            )
+
+
+class Refill(actions.Action):
+    """Refill the gel flask wherever embalming gel pools: the Hall of Hounds
+    (the tank, intact or flooded), or the Hall of Warriors once any cylinder
+    has been broken open."""
+
+    ACTION_NAME = "fill flask"
+    ACTION_DESCRIPTION = "Refill the gel flask from a tank or a spill"
+    ACTION_ALIASES = [
+        "refill flask",
+        "fill the flask",
+        "refill the flask",
+        "fill flask with gel",
+        "refill gel",
+        "fill gel",
     ]
 
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         self.player = self.game.player
 
-    def check_preconditions(self) -> bool:
-        if self.player.location is None or self.player.location.name != "The Summit":
-            self.parser.fail("There's nothing here to burn.")
+    def _source_here(self):
+        loc = self.player.location
+        if loc is None:
             return False
-        if self.player.location.get_property("cleansed"):
-            self.parser.fail("The corpse is already ash; the fungus is dead.")
-            return False
-        if not (
-            _is_holding(self.player, "flask of gel")
-            and _is_holding(self.player, "plasma-igniter")
-        ):
-            self.parser.fail(
-                "Bone gone to stone does not take bare flame. It would want "
-                "dousing in something that burns, and a spark hot enough to "
-                "mean it."
+        if loc.name == "Hall of Hounds":
+            return True  # the tank holds it, broken or whole
+        if loc.name == "Hall of Warriors":
+            # any shattered cylinder has spilled its gel
+            return any(
+                f"{c} cylinder" not in loc.items
+                for c in ("cerulean", "amber", "viridian", "orange")
             )
+        return False
+
+    def check_preconditions(self) -> bool:
+        flask = self.player.carried_items().get("flask of gel")
+        if flask is None:
+            self.parser.fail("You have nothing to fill.")
+            return False
+        if int(flask.get_property("portions") or 0) >= 3:
+            self.parser.fail("The flask is full.")
+            return False
+        if not self._source_here():
+            self.parser.fail("There's no gel pooled here to draw from.")
             return False
         return True
 
     def apply_effects(self):
-        gel = self.player.inventory.get("flask of gel")
-        if gel is not None:
-            self.player.remove_from_inventory(gel)
-        self.player.location.set_property("cleansed", True)
-        self.game.locations["Burial Sphere of Nassak An-Rah"].set_property(
-            "horror_dead", True
+        flask = self.player.carried_items()["flask of gel"]
+        flask.set_property("portions", 3)
+        flask.description = "a flask of gel with 3 doses"
+        self.parser.ok(
+            "You draw the flask through the gel until it runs over -- luminous, "
+            "green-gold, reeking faithfully of lamp-oil. Three doses."
         )
-        message = (
-            "You splash the embalming gel over the ossified mystic and strike the "
-            "igniter. Orange flame roars down the fungal chimney -- and far below, the "
-            "whole rotten network shudders and dies. The Fungal Horror sloughs into "
-            "ash. The tomb falls silent at last."
-        )
-        # Whatever still nested in the mystic's hands burns with him -- take the
-        # Friend's Fungus BEFORE cleansing, or lose it.
-        corpse_item = self.player.location.items.get("ossified corpse")
-        if corpse_item is not None and "friend's fungus" in corpse_item.contents:
-            corpse_item.remove_item(corpse_item.contents["friend's fungus"])
-            message += (
-                " The pouch nested in his clasped hands goes up with him, sweet "
-                "on the wind for a moment."
-            )
-        self.parser.ok(message)
-        self.game.award("cleanse", 30, None)
 
 
 class TieSilk(actions.Action):
@@ -421,13 +559,19 @@ class PryCoffin(actions.Action):
         loc = self.player.location
         coffin = loc.items["coffin"]
         if not loc.get_property("horror_dead"):
-            # The coffin is the thing's HOUSE. Opening it while it lives is not
-            # a disturbance; it is an invitation.
-            _die(
-                self.game,
-                "You work the blade into the seam and the seam parts -- and "
-                "the Horror has been waiting at it, pressed to the glass like "
-                "a palm. It takes you in a single fold. THE END.",
+            # The coffin is the thing's HOUSE. Opening it while it lives wakes
+            # the boss (design doc §17.3) -- the eruption interrupts the pry,
+            # so the blade survives for the fight it just started.
+            horror = self.game.characters["fungal horror"]
+            if horror.location is not loc:
+                self.game.relocate(horror, loc)
+            coffin.set_property("pried", True)
+            self.parser.ok(
+                "You work the blade into the seam and the seam BULGES -- the "
+                "glass parts around a body coming out. The Horror unwinds from "
+                "the Autarch's bones into the weightless air, orange and vast "
+                "and patient, and keeps the bones in its coil. Where you cut "
+                "it, it will remember. Where it burns, it will not."
             )
             return
         coffin.set_property("pried", True)
@@ -461,8 +605,9 @@ class CrystalSeal(blocks.Block):
     def __init__(self, canopic):
         super().__init__(
             "A seal of red crystal",
-            "A seal of red crystal bars the stair, risen through the treads as "
-            "salt rises through old stone. Five beast-sigils are set in the arch above "
+            "A seal of red crystal bars the stair, cut and fitted to the "
+            "treads so exactly that the joins read as one stone -- tombwright "
+            "work, made to open for one thing only. Five beast-sigils are set in the arch above "
             "it; two of them are dark. The crystal hums at a pitch just under "
             "hearing, with the patience of a lock.",
         )
@@ -938,10 +1083,24 @@ def build_game():
         "the rest of it dog. Heavy as a rolled carpet, and worth a season of "
         "water to the right collector in Gnomon.",
     )
+    hound_pile.make_container()
     hound_pile.set_property("gettable", True)
     hound_pile.set_property("slots", 3)
     hound_pile.add_alias("hound")
     hound_pile.add_alias("dog")
+    # SEARCH the hound and its chest gives up a second fire-starter (design
+    # doc §17.1) -- the corpse-searching habit pays out a third time.
+    servo = things.Item(
+        "sparking servo",
+        "a sparking servo",
+        "A fist-sized actuator out of the hound's chest, still holding charge. "
+        "Strike its leads together and it spits fat blue sparks.",
+    )
+    servo.set_property("gettable", True)
+    servo.set_property("ignition_source", True)
+    servo.set_property(Property.IS_HIDDEN, True)
+    servo.add_alias("servo")
+    hound_pile.add_item(servo)
     tank.add_item(hound_pile)
     _scenery(
         warriors,
@@ -1137,6 +1296,28 @@ def build_game():
         jackal_pack.add_alias(_a)
     den.add_character(jackal_pack)
 
+    # The Fungal Horror -- the boss (design doc §17.3). It lives coiled in the
+    # coffin (narrative) until an alive-pry brings it out as a real Character.
+    horror = things.Character(
+        "fungal horror",
+        "the Fungal Horror, a coil of orange around a king's bones",
+        "We keep him. We are keeping him still.",
+    )
+    horror.examine_text = (
+        "A single muscle of fungus the size of a river-snake, wound around "
+        "what is left of Nassak An-Rah. Where you cut it, it remembers; "
+        "where it burns, it does not."
+    )
+    for _a in ("horror", "the horror", "mass", "fungal mass"):
+        horror.add_alias(_a)
+    horror.set_property("vigor", 5)
+    horror.set_property(
+        "ko_text",
+        "The blow lands true, and the mass folds around the blade's path "
+        "without falling.",
+    )
+    den.add_character(horror)
+
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
     # you fight the Spawn.)
@@ -1158,6 +1339,7 @@ def build_game():
         "A guard's plasma-igniter -- a thumb-flame hot enough to light anything.",
     )
     igniter.add_alias("igniter")
+    igniter.set_property("ignition_source", True)
     boots = things.Item(
         "magnetic boots",
         "a pair of magnetic boots",
@@ -1235,9 +1417,16 @@ def build_game():
     )
     gel = things.Item(
         "flask of gel",
-        "a flask of embalming gel",
-        "A flask of luminous embalming gel scooped from the hound tank. It reeks, "
-        "and it burns.",
+        "a flask of gel with 3 doses",
+        "A flask of luminous embalming gel scooped from the hound tank. It "
+        "reeks, and it burns -- three doses' worth, and refillable wherever "
+        "the gel pools. Do not drink it.",
+    )
+    gel.set_property("portions", 3)
+    gel.set_property(Property.DRINKABLE, True)  # regrettably (see the trigger)
+    gel.set_property(
+        Property.TASTE,
+        "of lamp-oil, honey, and four thousand years. It was never water.",
     )
     gel.add_alias("gel")
     gel.add_alias("flask")
@@ -1344,8 +1533,8 @@ def build_game():
     game = TombGame(
         wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack],
-        custom_actions=[Sneak, BurnCorpse, PryCoffin, TieSilk],
+        characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack, horror],
+        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
     )
     game.max_score = 100
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
@@ -1801,12 +1990,22 @@ def build_game():
             )
         return True
 
+    _scenery(
+        chimney,
+        "orange growth",
+        "the orange growth choking the shaft",
+        "The fungus fills the chimney the way a wick fills a lamp: packed, "
+        "fibrous, faintly warm, and -- like everything the gel has ever "
+        "touched -- ready to burn.",
+    ).add_alias("growth")
+
     _hazard(
         game,
         chimney,
         danger=lambda g: not (
             _is_holding(g.player, "respirator") or "respirator" in g.player.worn
         ),
+        gate=lambda g: not chimney.get_property("burned"),
         warns=(
             "Each breath comes back smaller than it went out. The spores "
             "settle on your lips and taste of orange rot.",
@@ -1816,22 +2015,9 @@ def build_game():
         harm=_spore_sear,
     )
 
-    # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
-    # wearing, any racket) makes it erupt. Looking is safe -- enter, see it, and
-    # back out. Cleansing the corpse (Summit) kills it and lifts this.
-    _hazard(
-        game,
-        sphere,
-        danger=lambda g: _player_was_loud_in(g, sphere, _QUIET_SPHERE),
-        warns=(
-            "The orange mass in the coffin turns -- all of it, at once -- "
-            "toward the sound. Against the inside of the glass, something "
-            "like a palm.",
-        ),
-        kill="The coffin does not so much open as give up. The Horror takes you in a single fold. THE END.",
-        limit=2,
-        gate=lambda g: not sphere.get_property("horror_dead"),
-    )
+    # The sphere has NO noise hazard (CCB: noise reactions are covered
+    # elsewhere) -- enter, look, even shout. The Horror wakes on the deliberate
+    # act alone: prying its coffin (the boss fight, below).
 
     # Placement trigger: both missing jars on their matching plinths -> the seal
     # opens. Fires once.
@@ -1888,7 +2074,9 @@ def build_game():
     # water"): drinking the waterskin heals the most recent wound.
     def _drank_water(g):
         return any(
-            e.actor == g.player.name and e.action == "drink"
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "water" in (e.summary or "").lower()
             for e in g.events[g._round_event_start :]
         )
 
@@ -1908,6 +2096,132 @@ def build_game():
             )
 
     game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
+
+    # Drinking the GEL is legal and inadvisable (design doc §17.1).
+    def _drank_gel(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "gel" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _gel_gut(g):
+        n = int(gel.get_property("portions") or 0)
+        gel.description = (
+            f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+            if n
+            else "an empty flask"
+        )
+        fatal = _wound_player(
+            g, "Gel-Gut", 1, "Embalming fluid, doing what it was made to do."
+        )
+        if fatal:
+            _die(g, "You are preserved from the inside out. THE END.")
+        else:
+            g.parser.ok("It is not water. It was never water.")
+
+    game.add_trigger("gel_gut", _drank_gel, _gel_gut, repeatable=True)
+
+    # --- The boss loop (design doc §17.3) ------------------------------------
+    # Each round the Horror is out, alive, and facing you: it regenerates
+    # (visibly) unless ablaze, burns down if it IS ablaze, and sprays acid.
+    def _horror_fighting(g):
+        return (
+            horror.location is sphere
+            and not horror.get_property("is_dead")
+            and g.player.location is sphere
+        )
+
+    def _horror_turn(g):
+        vigor = int(horror.get_property("vigor") or 0)
+        ablaze = int(horror.get_property("ablaze") or 0)
+        if ablaze > 0:
+            horror.set_property("ablaze", ablaze - 1)
+            vigor -= 1
+            horror.set_property("vigor", vigor)
+            if vigor <= 0:
+                _horror_dies(g, burned=True)
+                return
+            g.parser.ok(
+                "The fire walks the coil and the coil thrashes; charred lengths "
+                "of it drift loose. Nothing knits. It is smaller than it was."
+            )
+        elif vigor < 5:
+            horror.set_property("vigor", vigor + 1)
+            g.parser.ok(
+                "The rents you have cut knit closed before your eyes, new "
+                "threads lacing across them, pale and then orange. It is "
+                "mending faster than you are."
+            )
+        # And its answer: acid, flung weightless.
+        fatal = _wound_player(
+            g, "Acid-Burned", 1, "A rope of acid caught you across the shoulder."
+        )
+        if fatal:
+            _die(
+                g,
+                "The acid takes the last of you, and the coil folds you in "
+                "among the bones it keeps. THE END.",
+            )
+
+    def _horror_dies(g, burned=False):
+        horror.set_property("is_dead", True)
+        horror.description = (
+            "the Fungal Horror, charred and still"
+            if burned
+            else ("the Fungal Horror, cut apart and still")
+        )
+        horror.examine_text = (
+            "Still at last. The coil lies slack around nothing; the bones it "
+            "kept drift free."
+        )
+        # The coil unclenches: the coffin's keeping is over.
+        coffin_item = sphere.items.get("coffin")
+        released = []
+        if coffin_item is not None:
+            for it in list(coffin_item.contents.values()):
+                coffin_item.remove_item(it)
+                sphere.add_item(it)
+                released.append(it.name)
+        sphere.set_property("horror_dead", True)
+        msg = "The Horror comes apart and does not close again."
+        if released:
+            msg += (
+                " The coil unclenches from the Autarch's bones, and what he "
+                "was buried with drifts free: " + ", ".join(released) + "."
+            )
+        g.parser.ok(msg)
+
+    # Striking the Horror: a weapon hit costs it one vigor, visibly.
+    def _struck_horror(g):
+        # The event summary is the raw command ("attack horror with blade"),
+        # so match any of the thing's names.
+        return any(
+            e.actor == g.player.name
+            and e.action == "attack"
+            and any(
+                a in (e.summary or "").lower()
+                for a in ("fungal horror", "horror", "mass")
+            )
+            for e in g.events[g._round_event_start :]
+        ) and not horror.get_property("is_dead")
+
+    def _horror_struck(g):
+        # Undo the engine's one-hit KO; convert it into a point of vigor.
+        horror.set_property("is_unconscious", False)
+        vigor = int(horror.get_property("vigor") or 0) - 1
+        horror.set_property("vigor", vigor)
+        if vigor <= 0:
+            _horror_dies(g)
+            return
+        g.parser.ok(
+            "The blade opens a rent in the orange mass; it seethes, and does "
+            "not fall."
+        )
+
+    game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
+    game.add_trigger("horror_turn", _horror_fighting, _horror_turn, repeatable=True)
 
     # Eating the Autarch's preserved organs (CCB: "gross, but should be
     # gettable... edible, with horrible effects"). Four thousand years of
@@ -2072,15 +2386,16 @@ WIN_WALKTHROUGH = [
     "take falcon jar",
     "attack spawn of brain with blade",  # its brother came to the noise: fell it too
     "take jackal jar",
-    "drink water",  # a glug of water; something knits (keep the blade: the coffin wants it)
+    "drink water",  # a glug; something knits (keep the blade: the coffin wants it)
+    "drink water",  # another -- the brain got its thoughts in
+    "drink water",  # the last ration; the skin runs dry
+    "drop waterskin",  # travel light; the climbs refuse a full pack
     "break orange cylinder",  # the bloom vents against the mask, disappointed
     "take igniter",
-    "drink water",  # a second glug -- the brain got two thoughts in
     "break viridian cylinder",
     "take boots",
     "douse glowstone",
     "drop glowstone",  # the halls ahead light themselves
-    "drop waterskin",  # travel light; the climbs refuse a full pack
     "sneak east",
     "take gel",  # Hounds: gel
     "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
