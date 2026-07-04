@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/penn_replay.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -8,6 +8,7 @@
 [ext_resource type="Theme" path="res://theme/cute_fantasy_ui.tres" id="6_theme"]
 [ext_resource type="Script" path="res://scripts/building_labels.gd" id="7_buildings"]
 [ext_resource type="Script" path="res://scripts/minimap.gd" id="8_minimap"]
+[ext_resource type="Script" path="res://scripts/heatmap_panel.gd" id="9_heatmap"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -54,3 +55,16 @@ script = ExtResource("5_panel")
 ; feeds it the camera + agents after load; sits over the campus in the bottom-right.
 [node name="Minimap" type="Control" parent="UI"]
 script = ExtResource("8_minimap")
+
+; Movement-heatmap pop-up (heatmap_panel.gd), on its OWN CanvasLayer above the UI layer
+; (10) so, when shown, its full-screen dim reliably covers the sidebar + minimap + world
+; and it reads as a modal window (the same own-CanvasLayer trick the fog uses for
+; predictable layering). Hidden until opened (H key / the sidebar "Heatmap" button);
+; penn_replay.gd feeds it the replay after load and pushes the current step so the heat
+; accumulates live.
+[node name="HeatmapLayer" type="CanvasLayer" parent="."]
+layer = 11
+
+[node name="HeatmapPanel" type="Control" parent="HeatmapLayer"]
+visible = false
+script = ExtResource("9_heatmap")

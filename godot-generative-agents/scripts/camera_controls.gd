@@ -75,6 +75,9 @@ var _have_bounds := false
 # UNCOVERED part of the window so the bar never permanently hides campus you
 # can't pan to. 0 = no sidebar. Set by penn_replay.gd via set_left_inset().
 var _left_inset := 0.0
+# When false, the arrow/WASD keyboard pan is ignored (mouse drag/zoom still work). The
+# heatmap pop-up sets this while open so LEFT/RIGHT switch its view instead of panning.
+var keyboard_enabled := true
 
 
 func _ready() -> void:
@@ -139,14 +142,15 @@ func _process(delta: float) -> void:
 	# Arrow keys / WASD pan, at a constant on-screen speed (divide by zoom so a
 	# key-press moves the same number of screen pixels however far you're zoomed).
 	var dir := Vector2.ZERO
-	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
-		dir.x -= 1.0
-	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
-		dir.x += 1.0
-	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
-		dir.y -= 1.0
-	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
-		dir.y += 1.0
+	if keyboard_enabled:
+		if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
+			dir.x -= 1.0
+		if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
+			dir.x += 1.0
+		if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+			dir.y -= 1.0
+		if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
+			dir.y += 1.0
 	if dir != Vector2.ZERO:
 		stop_following()  # arrow / WASD pan takes manual control back
 		_pan_active = false  # ...and cancels any minimap glide
