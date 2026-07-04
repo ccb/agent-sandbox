@@ -88,6 +88,10 @@ Important distinction:
 - **Agent memory:** private records derived from what a specific agent perceived,
   inferred, or planned.
 
+As built, the stream is also readable live over HTTP, one persona at a time:
+`GET /agents/{name}/memory` (#298) — see `backend/README.md`, "The memory
+stream", for the wire shape (a lean projection of §4's record).
+
 ---
 
 ## 4. Data model
