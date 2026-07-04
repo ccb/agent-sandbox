@@ -897,6 +897,21 @@ def _boss_setup(game):
     return sphere
 
 
+def test_checking_inventory_is_a_free_action():
+    """The list is for the player, not the character: INVENTORY reports
+    without advancing the round -- no boss turn, no acid, no turn tick."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")  # the fight is on
+    wounds, turn = game.player.wound_slots(), game.turn
+    for _ in range(5):
+        game.do_command("i")  # read your own ledger freely
+    assert game.player.wound_slots() == wounds
+    assert game.turn == turn
+    game.do_command("wait")  # but a real action still bleeds
+    assert game.player.wound_slots() == wounds + 1
+
+
 def test_prying_the_live_coffin_wakes_the_boss():
     game = _game()
     sphere = _boss_setup(game)

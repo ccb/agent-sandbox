@@ -269,6 +269,9 @@ class Inventory(base.Action):
     ACTION_DESCRIPTION = "Check the character's inventory"
     ACTION_ALIASES = ["i"]
     DURATION = 1  # a quick glance in one's pockets (issue #24)
+    # The list is for the player, not the character: free by default (see
+    # config.engine.meta_actions_cost_turns).
+    FREE_ACTION = True
 
     def __init__(
         self,
