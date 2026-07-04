@@ -277,3 +277,25 @@ def test_arena_layer_resolved_flags_orphan_objects(tmp_path):
     w = make_world(tmp_path, edit)
     codes = {f.code for f in v.Checker(w).run().findings}
     assert "arena_layer_unresolved" in codes
+
+
+def test_collision_check_is_warn_only(tmp_path):
+    def edit(tmj, mf):
+        # knock a big hole: mark the whole footprint walkable though it's wall-drawn
+        for i in range(len(mf["maze/collision_maze.csv"])):
+            mf["maze/collision_maze.csv"][i] = "0"
+
+    w = make_world(tmp_path, edit)
+    findings = v.Checker(w).run().findings
+    coll = [
+        f for f in findings if f.code in ("collision_wall_gap", "collision_walls_ok")
+    ]
+    assert coll, "collision check produced no finding"
+    assert all(f.severity != "error" for f in coll)
+
+
+def test_collision_never_errors_on_real_data():
+    c = v.Checker(real_world()).run()
+    assert all(
+        f.severity != "error" for f in c.findings if f.code == "collision_wall_gap"
+    )

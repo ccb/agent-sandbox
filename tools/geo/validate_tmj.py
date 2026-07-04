@@ -511,6 +511,46 @@ class Checker:
                 f"(dominant sector {o['dominant']})",
             )
 
+    COLLISION_TOLERANCE = 0.60  # share of wall-drawn cells left walkable before we warn
+
+    def check_collision_vs_walls(self):
+        buildings = self.w.tile_layers.get("buildings", {}).get(
+            "data", [0] * len(self.w.collision)
+        )
+        names = sector_name_by_id(self.w)
+        drawn = walkable = 0
+        per_sector = defaultdict(lambda: [0, 0])  # sid -> [drawn, walkable]
+        for i, tile in enumerate(buildings):
+            if not tile:
+                continue
+            drawn += 1
+            sid = self.w.sector[i]
+            per_sector[sid][0] += 1
+            if self.w.collision[i] == "0":
+                walkable += 1
+                per_sector[sid][1] += 1
+        warned = False
+        for sid, (d, wk) in sorted(per_sector.items()):
+            if d and wk / d > self.COLLISION_TOLERANCE:
+                self.add(
+                    "warn",
+                    "MATRIX_TMJ",
+                    names.get(sid, f"sector {sid}"),
+                    "collision_wall_gap",
+                    f"{wk}/{d} wall-drawn cells are walkable in collision_maze "
+                    f"({wk/d:.0%}) — verify walls/doors",
+                )
+                warned = True
+        if not warned:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "collision_walls_ok",
+                f"wall-drawn cells largely stay solid in collision_maze "
+                f"({walkable}/{drawn} walkable overall)",
+            )
+
     def run(self):
         self.check_orphan_block_rows()
         self.check_orphan_paint()
@@ -522,4 +562,5 @@ class Checker:
         self.check_referential_integrity()
         self.check_drawn_vs_present()
         self.check_arena_layer_resolved()
+        self.check_collision_vs_walls()
         return self
