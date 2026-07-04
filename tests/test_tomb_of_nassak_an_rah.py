@@ -990,10 +990,11 @@ def test_the_pack_pursues_by_sight_and_scent():
     game.do_command("sneak east")  # keep moving to Hounds
     assert pack.location.name == "Hall of Warriors"  # one room behind
     wounds = game.player.wound_slots()
-    game.do_command("wait")  # stop: the lope closes
-    game.do_command("wait")
+    game.do_command("wait")  # stop: they rest...
+    game.do_command("wait")  # ...close...
+    game.do_command("wait")  # ...and collect
     assert pack.location.name == "Hall of Hounds"
-    assert game.player.wound_slots() > wounds  # and they collect
+    assert game.player.wound_slots() > wounds
 
 
 def test_the_youth_is_a_refuge_from_the_pack():
