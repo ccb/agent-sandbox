@@ -367,8 +367,9 @@ def test_sustained_noise_brings_the_pack_who_growl_then_maul():
     _embark(game, glowstone=False)
     game.do_command("sneak north")  # -> Hall of Youth (dark, quiet)
     game.do_command("sneak north")  # -> Hall of Memory (no Spawn here)
-    game.do_command("say hey")  # warning one: distant yipping
-    game.do_command("say hey")  # warning two: yellow eyes
+    game.do_command("say hey")  # yipping, distant
+    game.do_command("say hey")  # yipping, nearer
+    game.do_command("say hey")  # yellow eyes
     assert not game.player.wounds
     game.do_command("say hey")  # the pack enters and growls
     hall = game.locations["Hall of Memory"]
@@ -396,6 +397,7 @@ def test_feeding_the_pack_buys_them_off():
         "say hey",
         "say hey",
         "say hey",
+        "say hey",
     ):
         game.do_command(cmd)
     hall = game.locations["Hall of Memory"]
@@ -420,6 +422,7 @@ def test_the_pack_refuses_what_it_cannot_eat():
         "north",
         "north",
         "north",
+        "say hey",
         "say hey",
         "say hey",
         "say hey",
@@ -755,6 +758,7 @@ def test_the_chimney_is_passable_but_the_spores_scar_your_lungs():
     only when the wounds fill your slots."""
     game = _game()
     _embark(game)
+    game.characters["glass centipede"].set_property("is_unconscious", True)
     game.do_command("up")  # -> Summit
     game.do_command("in")  # into the fungal chimney -- passable, not blocked
     assert game.player.location.name == "The Fungal Chimney"
@@ -955,6 +959,56 @@ def test_burning_the_root_mid_fight_fells_the_horror():
     game.do_command("burn corpse")
     assert game.characters["fungal horror"].get_property("is_dead")
     assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_the_dead_dont_sway_in_the_listings():
+    """A felled creature's one-liner goes still (CCB): state-aware
+    visible_description replaces the lively text."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    for cmd in ("open pack", "take glowstone", "light glowstone"):
+        game.do_command(cmd)
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("attack spawn of guts with blade")
+    cap = _texts(game)
+    game.do_command("look")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "collapsed in a heap" in out
+    assert "swaying toward every sound" not in out
+
+
+def test_the_glass_centipede_ambushes_in_the_chimney():
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    cap = _texts(game)
+    game.do_command("in")  # the ambush springs
+    assert any(w.name == "Centipede Venom" for w in game.player.wounds)
+    assert "glass centipede" in game.locations["The Fungal Chimney"].characters
+    assert "uncoils" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("out")  # fleeing works
+    assert game.player.location.name == "The Summit"
+
+
+def test_a_blade_answers_the_centipede():
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # bitten on entry
+    game.do_command("attack centipede with blade")
+    assert game.characters["glass centipede"].get_property("is_unconscious")
+    game.do_command("look")  # no further bites
+    assert sum(1 for w in game.player.wounds if w.name == "Centipede Venom") == 1
+
+
+def test_fire_scours_the_centipede_with_the_growth():
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Fungal Chimney"])
+    game.do_command("burn growth")
+    assert game.characters["glass centipede"].get_property("is_dead")
 
 
 def test_burning_the_chimney_growth_clears_the_spores():
