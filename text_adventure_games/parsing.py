@@ -133,6 +133,12 @@ class Parser:
         self._emit(Channel.NARRATION, description)
         self.add_description_to_history(description)
 
+    def damage(self, description: str):
+        """Report a wound landing on its own channel, so harm always arrives
+        in one consistent voice: "Acid-Lashed - A welt across your back."."""
+        self._emit(Channel.DAMAGE, description)
+        self.add_description_to_history(description)
+
     def fail(self, description: str):
         """Report an action blocked by its preconditions. ``last_fail_message``
         is set so the ReAct Reflect step can read the reason."""

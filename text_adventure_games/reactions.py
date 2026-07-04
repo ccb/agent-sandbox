@@ -148,6 +148,13 @@ class Startle(Reaction):
         loc = getattr(self.owner, "location", None)
         if loc is None or not self.ready():
             return False
+        # Dead, unconscious, or pacified things don't answer sounds.
+        if (
+            self.owner.get_property("is_dead")
+            or self.owner.get_property("is_unconscious")
+            or self.owner.get_property("dosed")
+        ):
+            return False
         sounds = self.game.sounds_audible_at(
             loc, exclude=getattr(self.owner, "name", None)
         )

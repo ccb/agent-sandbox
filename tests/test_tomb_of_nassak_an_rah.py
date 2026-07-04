@@ -839,23 +839,60 @@ def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     assert game.locations["The Summit"].get_property("cleansed")
 
 
-def test_prying_the_coffin_needs_the_magnetic_boots():
+def _hand(game, room, cylinder, item_name):
+    cyl = game.locations[room].items[cylinder]
+    it = cyl.contents[item_name]
+    cyl.remove_item(it)
+    game.player.add_to_inventory(it)
+    return it
+
+
+def test_prying_the_coffin_needs_an_anchor_and_a_blade_it_will_lose():
     game = _game()
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     sphere.set_property("horror_dead", True)  # pretend it's cleansed
     game.relocate(game.player, sphere)
-    game.do_command("pry coffin")  # no boots -> refused
+    game.do_command("pry coffin")  # no anchor -> you drift
     assert sphere.items["coffin"].get_property("pried") in (False, None)
-    assert "synth-hunting dagger" not in sphere.items
-    # with the boots worn, it works
-    cyl = game.locations["Hall of Warriors"].items["viridian cylinder"]
-    boots = cyl.contents["magnetic boots"]
-    cyl.remove_item(boots)
-    game.player.add_to_inventory(boots)
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
     game.do_command("wear boots")
-    game.do_command("pry coffin")
+    game.do_command("pry coffin")  # anchored but no lever -> refused
+    assert sphere.items["coffin"].get_property("pried") in (False, None)
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("pry coffin")  # anchored + blade -> it gives; the blade snaps
     assert sphere.items["coffin"].get_property("pried")
     assert "synth-hunting dagger" in sphere.items
+    assert "prismatic blade" not in game.player.carried_items()
+
+
+def test_the_spider_silk_tether_is_the_bootless_anchor():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("in")
+    game.do_command("take silk")
+    game.do_command("out")
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("tie silk to coffin")
+    assert sphere.items["coffin"].get_property("tethered")
+    assert "holds like law" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("pry coffin")  # tethered, no boots
+    assert sphere.items["coffin"].get_property("pried")
+
+
+def test_prying_the_living_horrors_coffin_is_an_invitation():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, sphere)
+    game.do_command("wear boots")
+    cap = _texts(game)
+    game.do_command("pry coffin")  # the Horror lives: it has been waiting
+    assert game.is_game_over() and not game.is_won()
+    assert "waiting at it" in " ".join(cap.texts(Channel.NARRATION))
 
 
 def test_the_full_winning_run_scores_100():

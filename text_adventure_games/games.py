@@ -313,7 +313,12 @@ class Game:
             heard = self.audible_rooms(loc_name, radius)
             if player.location.name in heard:
                 direction = heard[player.location.name]
-                where = f"the {direction}" if direction else "somewhere nearby"
+                where = {
+                    "up": "above",
+                    "down": "below",
+                }.get(
+                    direction, f"the {direction}" if direction else "somewhere nearby"
+                )
                 self.parser.ok(f"From {where} you hear {description}.")
 
     def disturbances_this_round(self, location_name):
