@@ -14,9 +14,10 @@ and any LLM stay server-side; the frontend just reads JSON.
 > page exists so you can read the whole API end-to-end without first starting it.
 
 It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
-**snapshot + change-feed contract** — plus the on-demand agent memory read
-(issue #298). See [Not yet implemented](#not-yet-implemented) for what is
-deliberately deferred.
+**snapshot + change-feed contract** — plus the on-demand reads of an agent's
+private cognition: its memory stream (issue #298) and its belief set (issue
+#348). See [Not yet implemented](#not-yet-implemented) for what is deliberately
+deferred.
 
 > [!WARNING]
 > The API is **unauthenticated and bound to loopback by default** — safe for local
@@ -30,11 +31,13 @@ deliberately deferred.
   - [`GET /health`](#get-health)
   - [`GET /world_state`](#get-world_state)
   - [`GET /agents/{name}/memory`](#get-agentsnamememory)
+  - [`GET /agents/{name}/knowledge`](#get-agentsnameknowledge)
   - [`POST /command`](#post-command)
 - [Status codes](#status-codes)
 - [The `world_state` snapshot](#the-world_state-snapshot)
 - [The `events` change feed](#the-events-change-feed)
 - [The memory stream](#the-memory-stream)
+- [The belief set](#the-belief-set)
 - [Authentication & security](#authentication--security)
 - [CORS](#cors)
 - [Quick start (a full curl walkthrough)](#quick-start-a-full-curl-walkthrough)
@@ -84,15 +87,16 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Four endpoints. `GET`s are read-only; `POST /command` advances the game by
+Five endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn).
 
-| Method | Path                    | Purpose                                            |
-| ------ | ----------------------- | -------------------------------------------------- |
-| `GET`  | `/health`               | Liveness + the current turn (cheap poll)           |
-| `GET`  | `/world_state`          | The full, typed world snapshot                     |
-| `GET`  | `/agents/{name}/memory` | One agent's memory stream, formed so far (#298)    |
-| `POST` | `/command`              | Run one command → events + new snapshot            |
+| Method | Path                       | Purpose                                            |
+| ------ | -------------------------- | -------------------------------------------------- |
+| `GET`  | `/health`                  | Liveness + the current turn (cheap poll)           |
+| `GET`  | `/world_state`             | The full, typed world snapshot                     |
+| `GET`  | `/agents/{name}/memory`    | One agent's memory stream, formed so far (#298)    |
+| `GET`  | `/agents/{name}/knowledge` | One agent's belief set (world-model) (#348)        |
+| `POST` | `/command`                 | Run one command → events + new snapshot            |
 
 ### `GET /health`
 
@@ -220,6 +224,69 @@ memories yet returns `200` with `"memories": []`.
 curl -s http://127.0.0.1:8080/agents/gardener/memory
 ```
 
+### `GET /agents/{name}/knowledge`
+
+Returns the named agent's **belief set** — what it *thinks is true about the
+world* (issue #348). This is the sibling of the memory read: **memory is the
+episodic log** of what an agent saw or did; **knowledge is its current
+world-model.** The set holds the seeded spatial priors (#79 — the places and
+areas this persona knows exist) plus anything learned during play. Like the
+memory stream it is private cognition the `world_state` snapshot deliberately
+omits (#185), so this scoped per-persona route is the sanctioned way to read it.
+See [The belief set](#the-belief-set) for the data model.
+
+Beliefs are **context, not authority**: the world graph stays the single source
+of truth. A belief may be incomplete (an agent that doesn't know the Biopond
+exists simply has no belief about it) or even wrong; it shapes what the agent
+reasons about (and, via a matching `topic`, what it can perceive), but never
+mutates the world.
+
+`{name}` is the character's exact name — **case-sensitive**, no fuzzy matching —
+URL-encoded as usual (`/agents/Maya%20Chen/knowledge`). An optional **`?topic=`**
+query narrows the response to beliefs carrying that exact perception key, for
+when a belief set grows large.
+
+**Response** `200 OK` — `KnowledgeResponse` (from the demo world's gardener):
+
+```json
+{
+  "persona": "gardener",
+  "turn": 0,
+  "count": 2,
+  "beliefs": [
+    { "text": "The field lies just south of a dense forest.", "topic": "forest", "learned_turn": null },
+    { "text": "The north path is overgrown with tall grass.", "topic": null, "learned_turn": 1 }
+  ]
+}
+```
+
+`turn` is the engine turn the belief set was snapshotted at (the same counter
+`GET /health` reports), so two reads with no turn between them are identical.
+`count == len(beliefs)`. Each belief's `learned_turn` is `null` for a prior known
+up front (the way #79 seeds spatial knowledge) and the turn number for one
+learned during play. An agent whose knowledge was never seeded (the fresh
+checkout where #79 seeding no-ops) returns `200` with `"beliefs": []` — absent,
+not an error.
+
+**Errors** — two distinct `404`s, matching the memory route so the
+`/agents/{name}/...` family stays consistent:
+
+| Case                                             | `detail`                                              |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| No character by that name                        | `unknown character: 'nobody'`                         |
+| Character exists but has **no agent** bound (the player, a scripted-behavior NPC) | `character 'player' has no agent (and so no mind to read)` |
+
+> **Why 404 a character with no agent, when every character *has* a
+> `knowledge`?** Because this route family reads a *mind*. The player and
+> scripted-behavior NPCs aren't agents to inspect here; gating on the agent
+> keeps the memory and knowledge routes behaving identically. (Player/NPC belief
+> inspection, if ever wanted, would be a separate, deliberately-named surface.)
+
+```bash
+curl -s http://127.0.0.1:8080/agents/gardener/knowledge
+curl -s 'http://127.0.0.1:8080/agents/gardener/knowledge?topic=forest'
+```
+
 ### `POST /command`
 
 Runs exactly one command and returns what happened, the new world, and whether
@@ -273,7 +340,7 @@ curl -s -X POST http://127.0.0.1:8080/command \
 | ------ | ------------------------------------------------------------------------------------- |
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
-| `404`  | Unknown path; on `/agents/{name}/memory`, an unknown character or one with no agent   |
+| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge}`, an unknown character or one with no agent |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |
 | `500`  | The engine raised while running the command (`{"detail": "engine error: ..."}`); the game's renderer is restored regardless |
@@ -398,6 +465,49 @@ id (`/runs/{run_id}/agents/{name}/memory`). Today it reads the in-process
 `AgentMemory` under the same lock `POST /command` mutates under, so `turn` and
 `memories` are one atomic snapshot.
 
+## The belief set
+
+The data model behind [`GET /agents/{name}/knowledge`](#get-agentsnameknowledge).
+Each entry in `beliefs` is one `Belief` — **the exact shape
+`Knowledge.to_primitive()` emits** (`text_adventure_games/knowledge.py`; design
+doc `docs/design/implemented/agent-knowledge.md`), so the wire *is* the save-file
+shape and there is no second schema to drift:
+
+| Field          | Type            | Meaning                                                                    |
+| -------------- | --------------- | -------------------------------------------------------------------------- |
+| `text`         | `str`           | The belief in plain language, first person                                 |
+| `topic`        | `str` \| `null` | Optional lookup key; a belief whose `topic` matches a Thing's `secret_topic` unlocks perception of that hidden Thing |
+| `learned_turn` | `int` \| `null` | `null` for a prior known up front; the turn number for one learned during play |
+
+There is deliberately **no `confidence` or `source`** field: the "uncertain or
+wrong" axis lives in the `text` itself. Beliefs are a flat list, in the order the
+agent acquired them.
+
+**Memory vs. knowledge.** These are the two halves of an agent's private
+cognition, and the two `/agents/{name}/...` reads mirror them exactly:
+
+| | Memory (#298) | Knowledge (#348) |
+| --- | --- | --- |
+| What it is | the episodic *log* — what was seen or done | the current *world-model* — what's believed true now |
+| Lives on | `agent.memory` (`memory.py`) | `character.knowledge` (`knowledge.py`) |
+| Grows via | the sim loop appending records | seeded priors (#79) + `Knowledge.learn()` during play |
+| Authority | — | context only; the world graph stays the source of truth |
+
+**How a belief set fills up.** Seeded once at t0 from the persona's *partial*
+spatial tree (`backend/seed.py::seed_spatial_knowledge`, #79 — one belief per
+known place, `learned_turn=null`), then extended during play whenever the agent
+learns something (`Knowledge.learn(text, turn)` stamps `learned_turn`). Knowledge
+is **partial by design**: an agent only believes in the places its own tree
+lists, which is exactly the partial-knowledge story the Penn sim trades on — a
+viewer can now answer "does this agent even know that place exists?". On a fresh
+checkout the ~38 MB upstream assets are absent and seeding no-ops, so the set is
+legitimately empty (`"beliefs": []`), not an error.
+
+**Forward pointers.** Same trajectory as the memory read: a persistent store
+(#304) and run-scoping (`/runs/{run_id}/agents/{name}/knowledge`, #306) come
+later. Today it reads the in-process `Knowledge` under the same lock
+`POST /command` mutates under, so `turn` and `beliefs` are one atomic snapshot.
+
 ## Authentication & security
 
 Issue #186. The defaults are tuned for **local development**:
@@ -423,7 +533,7 @@ Issue #186. The defaults are tuned for **local development**:
   ```
 
   A missing or wrong header gets `401 {"detail": "invalid or missing token"}`. The
-  gate applies to **all four** endpoints.
+  gate applies to **all five** endpoints.
 
 - **Request-body cap.** A request whose declared `Content-Length` exceeds
   `max_body_bytes` (**64 KiB** by default) is rejected with `413` *before the body
@@ -479,7 +589,13 @@ curl -s http://127.0.0.1:8080/agents/gardener/memory
 curl -s http://127.0.0.1:8080/agents/nobody/memory      # 404: unknown character
 curl -s http://127.0.0.1:8080/agents/player/memory      # 404: no agent bound
 
-# 7. with auth (only needed when SIM_API_TOKEN is set / non-loopback bind)
+# 7. the same agent's belief set -- its world-model (#348); the demo gardener
+#    ships with a prior (learned_turn null) and one learned mid-run
+curl -s http://127.0.0.1:8080/agents/gardener/knowledge
+# {"persona":"gardener","turn":0,"count":2,"beliefs":[{"text":"The field lies ...","topic":"forest","learned_turn":null},...]}
+curl -s 'http://127.0.0.1:8080/agents/gardener/knowledge?topic=forest'  # narrow by topic
+
+# 8. with auth (only needed when SIM_API_TOKEN is set / non-loopback bind)
 curl -s http://127.0.0.1:8080/health -H "Authorization: Bearer $SIM_API_TOKEN"
 ```
 
@@ -493,9 +609,10 @@ Deferred to the live-game tranche (don't expect these yet):
 - a self-stepping autonomous loop and a pull poll (`/agent_act` / `next`,
   `/events?since=`) — #261/#262;
 - run control (`/pause`, `/resume`, `/reset`) — #262;
-- a persistent store behind the memory read, and run-scoping
-  (`/runs/{run_id}/agents/{name}/memory`) — #304/#306; today
-  `/agents/{name}/memory` reads the live in-process `AgentMemory`;
+- a persistent store behind the private-cognition reads, and run-scoping
+  (`/runs/{run_id}/agents/{name}/{memory,knowledge}`) — #304/#306; today
+  `/agents/{name}/memory` and `/agents/{name}/knowledge` read the live in-process
+  `AgentMemory` / `Knowledge`;
 - migrating the Flask webapp, the web companion, and Godot from file-based replay
   to thin clients of this API.
 

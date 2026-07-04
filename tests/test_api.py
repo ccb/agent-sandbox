@@ -235,6 +235,144 @@ def test_demo_game_serves_a_memory_stream():
     assert {m["kind"] for m in payload["memories"]} == {"observation", "plan"}
 
 
+# --- GET /agents/{name}/knowledge (#348) -----------------------------------
+
+
+def _seed_beliefs(npc):
+    """Seed *npc* with a prior, a learned belief, and a topic-carrying one.
+
+    Mirrors how ``backend/seed.py`` seeds knowledge: priors up front
+    (``learned_turn`` None, the way #79 seeds spatial knowledge) plus beliefs
+    learned during play (stamped with the turn). Returns *npc* for chaining."""
+    npc.add_belief("The tower to the north is locked.")  # a prior
+    npc.add_belief("There are strange runes on the door.", topic="runes")  # + topic
+    npc.knowledge.learn("The gate opened at dawn.", turn=3)  # learned mid-run
+    return npc
+
+
+def test_knowledge_endpoint_returns_seeded_beliefs():
+    game, npc = _with_agent()
+    _seed_beliefs(npc)
+    payload = _client(game).get("/agents/gardener/knowledge").json()
+    assert set(payload) == {"persona", "turn", "count", "beliefs"}
+    assert payload["persona"] == "gardener"
+    assert payload["turn"] == 0
+    assert payload["count"] == len(payload["beliefs"]) == 3
+    for belief in payload["beliefs"]:
+        assert set(belief) == {"text", "topic", "learned_turn"}
+    # Priors (learned_turn None) and a learned belief (learned_turn set) coexist.
+    learned = [b["learned_turn"] for b in payload["beliefs"]]
+    assert learned == [None, None, 3]
+
+
+def test_knowledge_beliefs_match_to_primitive():
+    # The endpoint emits the save-file belief shape verbatim -- Knowledge's own
+    # serializer -- so a wire read and a save file can never drift apart.
+    game, npc = _with_agent()
+    _seed_beliefs(npc)
+    payload = _client(game).get("/agents/gardener/knowledge").json()
+    assert payload["beliefs"] == npc.knowledge.to_primitive()["beliefs"]
+
+
+def test_knowledge_reflects_beliefs_learned_mid_run():
+    # The acceptance test for #348: beliefs learned DURING a run are visible,
+    # stamped with learned_turn, alongside the untouched priors.
+    game, npc = _with_agent()
+    npc.add_belief("The field lies south of the forest.")  # a prior
+    client = _client(game)
+    before = client.get("/agents/gardener/knowledge").json()
+    npc.knowledge.learn("A stranger camped by the north path.", turn=2)
+    after = client.get("/agents/gardener/knowledge").json()
+    assert after["count"] == before["count"] + 1
+    assert after["beliefs"][-1]["text"] == "A stranger camped by the north path."
+    assert after["beliefs"][-1]["learned_turn"] == 2
+    assert after["beliefs"][: before["count"]] == before["beliefs"]
+
+
+def test_knowledge_empty_belief_set_is_200_not_error():
+    # A persona whose knowledge was never seeded (the fresh-checkout case where
+    # #79 seeding no-ops) is an empty belief set, not an error.
+    game, _npc = _with_agent()
+    payload = _client(game).get("/agents/gardener/knowledge").json()
+    assert payload["count"] == 0
+    assert payload["beliefs"] == []
+
+
+def test_knowledge_topic_filter():
+    game, npc = _with_agent()
+    _seed_beliefs(npc)
+    client = _client(game)
+    # ?topic= narrows to beliefs carrying that exact perception key.
+    runes = client.get("/agents/gardener/knowledge", params={"topic": "runes"}).json()
+    assert runes["count"] == 1
+    assert runes["beliefs"][0]["topic"] == "runes"
+    # An unmatched topic is an empty set, not a 404 (the character exists).
+    none = client.get("/agents/gardener/knowledge", params={"topic": "nope"}).json()
+    assert none["count"] == 0
+    assert none["beliefs"] == []
+
+
+def test_knowledge_unknown_character_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/nobody/knowledge")
+    assert resp.status_code == 404
+    assert "unknown" in resp.json()["detail"]
+
+
+def test_knowledge_character_without_agent_is_404():
+    # Knowledge lives on every character, but the /agents/ family reads a *mind*:
+    # the player has no agent bound, so it 404s like the memory sibling does.
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/player/knowledge")
+    assert resp.status_code == 404
+    assert "no agent" in resp.json()["detail"]
+
+
+def test_knowledge_requires_auth_when_token_configured():
+    game, npc = _with_agent()
+    _seed_beliefs(npc)
+    client = _client(game, auth_token="s3cret")
+    assert client.get("/agents/gardener/knowledge").status_code == 401
+    ok = client.get(
+        "/agents/gardener/knowledge", headers={"Authorization": "Bearer s3cret"}
+    )
+    assert ok.status_code == 200
+
+
+def test_knowledge_get_is_read_only():
+    # Two reads with no turn between them are identical, and reading never
+    # advances the game or mutates the belief set.
+    game, npc = _with_agent()
+    _seed_beliefs(npc)
+    client = _client(game)
+    a = client.get("/agents/gardener/knowledge").json()
+    b = client.get("/agents/gardener/knowledge").json()
+    assert a == b
+    assert game.turn == 0
+    assert len(npc.knowledge.beliefs) == 3
+
+
+def test_knowledge_persona_name_with_space():
+    game, npc = _with_agent(name="Maya Chen")
+    _seed_beliefs(npc)
+    client = _client(game)
+    payload = client.get("/agents/Maya%20Chen/knowledge").json()
+    assert payload["persona"] == "Maya Chen"
+    assert client.get("/agents/maya%20chen/knowledge").status_code == 404
+
+
+def test_demo_game_serves_a_belief_set():
+    # Protects the README curl walkthrough: the stock demo gardener ships with a
+    # prior (learned_turn null) and a learned belief (learned_turn set).
+    payload = (
+        TestClient(create_app(_demo_game())).get("/agents/gardener/knowledge").json()
+    )
+    assert payload["count"] >= 2
+    learned = [b["learned_turn"] for b in payload["beliefs"]]
+    assert None in learned  # a prior known up front
+    assert any(t is not None for t in learned)  # and one learned mid-run
+
+
 # --- #186 security posture ------------------------------------------------
 
 
