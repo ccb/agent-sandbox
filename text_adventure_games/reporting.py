@@ -45,6 +45,7 @@ class Channel(Enum):
     NARRATION = "narration"  # world / action result (Parser.ok)
     NPC_NARRATION = "npc_narration"  # an NPC's action result (Parser.npc_ok)
     BLOCKED = "blocked"  # an action failed a precondition (Parser.fail)
+    DAMAGE = "damage"  # the player took a wound (Parser.damage)
     CONFLICT = "conflict"  # two characters contended for one thing (Parser.conflict)
     COMMAND = "command"  # the actor's echoed command
     AGENT_OBSERVATION = "agent_observation"  # ReAct "Observe"
@@ -97,6 +98,7 @@ _BASE = {
     Channel.NARRATION,
     Channel.NPC_NARRATION,
     Channel.BLOCKED,
+    Channel.DAMAGE,
     Channel.CONFLICT,
     Channel.COMMAND,
     Channel.SYSTEM,
@@ -226,6 +228,7 @@ class RichTerminalRenderer(Renderer):
         Channel.NARRATION: ("»", "[narration]", "green"),
         Channel.NPC_NARRATION: ("»", "[npc]", "magenta"),
         Channel.BLOCKED: ("✗", "[blocked]", "red"),
+        Channel.DAMAGE: ("♥", "[damage]", "bold red"),
         Channel.CONFLICT: ("⚔", "[conflict]", "bold yellow"),
         Channel.SYSTEM: ("·", "[system]", "dim"),
     }
