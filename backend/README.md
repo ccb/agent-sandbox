@@ -3,7 +3,7 @@
 The `backend` package is **agent-sandbox's one canonical backend seam**: a small
 [FastAPI](https://fastapi.tiangolo.com/) app (`backend/api.py`) that serves *any*
 engine `Game` over HTTP. Every out-of-process frontend — a Godot/2D renderer, the
-Smallville/Phaser viewer, the web inspection companion — polls the **same** three
+Smallville/Phaser viewer, the web inspection companion — polls the **same**
 endpoints here instead of embedding Python or baking its own data dump. The engine
 and any LLM stay server-side; the frontend just reads JSON.
 
@@ -13,9 +13,10 @@ and any LLM stay server-side; the frontend just reads JSON.
 > GDScript (Godot) and TS/JS (Phaser, companion) clients generate against. This
 > page exists so you can read the whole API end-to-end without first starting it.
 
-It documents the API as shipped in PR #196 (issues #179, #186, #185): the
-**snapshot + change-feed contract**. See [Not yet implemented](#not-yet-implemented)
-for what is deliberately deferred.
+It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
+**snapshot + change-feed contract** — plus the on-demand agent memory read
+(issue #298). See [Not yet implemented](#not-yet-implemented) for what is
+deliberately deferred.
 
 > [!WARNING]
 > The API is **unauthenticated and bound to loopback by default** — safe for local
@@ -28,10 +29,12 @@ for what is deliberately deferred.
 - [Endpoint reference](#endpoint-reference)
   - [`GET /health`](#get-health)
   - [`GET /world_state`](#get-world_state)
+  - [`GET /agents/{name}/memory`](#get-agentsnamememory)
   - [`POST /command`](#post-command)
 - [Status codes](#status-codes)
 - [The `world_state` snapshot](#the-world_state-snapshot)
 - [The `events` change feed](#the-events-change-feed)
+- [The memory stream](#the-memory-stream)
 - [Authentication & security](#authentication--security)
 - [CORS](#cors)
 - [Quick start (a full curl walkthrough)](#quick-start-a-full-curl-walkthrough)
@@ -81,14 +84,15 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Three endpoints. `GET`s are read-only; `POST /command` advances the game by
+Four endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn).
 
-| Method | Path           | Purpose                                            |
-| ------ | -------------- | -------------------------------------------------- |
-| `GET`  | `/health`      | Liveness + the current turn (cheap poll)           |
-| `GET`  | `/world_state` | The full, typed world snapshot                     |
-| `POST` | `/command`     | Run one command → events + new snapshot            |
+| Method | Path                    | Purpose                                            |
+| ------ | ----------------------- | -------------------------------------------------- |
+| `GET`  | `/health`               | Liveness + the current turn (cheap poll)           |
+| `GET`  | `/world_state`          | The full, typed world snapshot                     |
+| `GET`  | `/agents/{name}/memory` | One agent's memory stream, formed so far (#298)    |
+| `POST` | `/command`              | Run one command → events + new snapshot            |
 
 ### `GET /health`
 
@@ -140,7 +144,7 @@ for the full shape.
           "contents": []
         }
       ],
-      "characters": ["player"],
+      "characters": ["gardener", "player"],
       "properties": {}
     }
   ],
@@ -164,6 +168,56 @@ for the full shape.
 
 ```bash
 curl -s http://127.0.0.1:8080/world_state
+```
+
+### `GET /agents/{name}/memory`
+
+Returns the memory stream the named agent has formed **so far** (issue #298) —
+readable mid-run, without waiting for any end-of-run export. This is the live
+counterpart of the `memory_streams` block a baked replay file carries: the
+`memories` list is produced by the same formatter
+(`backend/smallville_agents.py::memory_stream_for_persona`), so a live fetch and
+a bake of the same run can never drift apart. See
+[The memory stream](#the-memory-stream) for the data model.
+
+Pull-only: the sim never pushes streams to anyone. A client fetches one when a
+user opens an agent's panel — user-initiated, occasional, potentially large —
+while the tiny per-decision `reasoning`/`memories` shorthand already rides
+inside every frame.
+
+`{name}` is the character's exact name — **case-sensitive**, no fuzzy matching —
+URL-encoded as usual (`/agents/Maya%20Chen/memory` for `"Maya Chen"`).
+
+**Response** `200 OK` — `MemoryStreamResponse` (from the demo world's gardener):
+
+```json
+{
+  "persona": "gardener",
+  "turn": 0,
+  "count": 3,
+  "memories": [
+    { "kind": "observation", "importance": 3.0, "text": "The flowers by the north path bloomed overnight.", "created_turn": 0 },
+    { "kind": "observation", "importance": 2.0, "text": "A stranger wandered into the field.", "created_turn": 0 },
+    { "kind": "plan", "importance": 5.0, "text": "Water the tall grass before midday.", "created_turn": 0 }
+  ]
+}
+```
+
+`turn` is the engine turn the stream was snapshotted at — the same counter
+`GET /health` reports and the axis each record's `created_turn` is measured on —
+so a client can align the stream with the feed. `count == len(memories)`. The
+list is chronological (append order); an agent that simply hasn't formed
+memories yet returns `200` with `"memories": []`.
+
+**Errors** — two distinct `404`s:
+
+| Case                                             | `detail`                                              |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| No character by that name                        | `unknown character: 'nobody'`                         |
+| Character exists but has **no agent** bound (the player, a scripted-behavior NPC) | `character 'player' has no agent (and so no memory stream)` |
+
+```bash
+curl -s http://127.0.0.1:8080/agents/gardener/memory
 ```
 
 ### `POST /command`
@@ -219,7 +273,7 @@ curl -s -X POST http://127.0.0.1:8080/command \
 | ------ | ------------------------------------------------------------------------------------- |
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
-| `404`  | Unknown path                                                                          |
+| `404`  | Unknown path; on `/agents/{name}/memory`, an unknown character or one with no agent   |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |
 | `500`  | The engine raised while running the command (`{"detail": "engine error: ..."}`); the game's renderer is restored regardless |
@@ -263,7 +317,9 @@ private agent cognition (a character's `knowledge` / `heard` / memory / beliefs 
 exporting them into a shared, all-seeing snapshot would leak one agent's mind;
 the exclude set is pinned per #185); runtime-only callables (behavior / agent /
 triggers / recipes); and an exit's *unlock condition* (an exit reports only a
-`blocked` boolean, never *why*).
+`blocked` boolean, never *why*). Memory is instead read through the **scoped,
+per-persona** [`GET /agents/{name}/memory`](#get-agentsnamememory) (#298) — one
+agent's mind at a time, on request — and stays out of the omniscient snapshot.
 
 > **Two different `events`.** The snapshot's `events` is the world's *recent
 > history* — each is `{turn, actor, action, summary, payload}`. The
@@ -294,6 +350,54 @@ A turn boundary appears as a leaner record:
 `channel`: a `blocked` channel record is how an engine-rejected command shows up
 (the request itself is still `200` — see [`POST /command`](#post-command)).
 
+## The memory stream
+
+The data model behind [`GET /agents/{name}/memory`](#get-agentsnamememory).
+Each entry in `memories` is one formed memory (`MemoryEntry`):
+
+| Field          | Type    | Meaning                                                             |
+| -------------- | ------- | ------------------------------------------------------------------- |
+| `kind`         | `str`   | `observation` \| `reflection` \| `plan` \| `chat` — panels colour-code it |
+| `importance`   | `float` | The paper's 1–10 "poignancy" (1 = mundane, 10 = momentous), 1 decimal |
+| `text`         | `str`   | The memory itself, first person                                     |
+| `created_turn` | `int`   | The turn it was formed — the same axis as the response's `turn`     |
+
+This one shape appears, byte-identical, in three places — the wire stays in
+lock-step because all three come from the same formatter
+(`backend/smallville_agents.py::memories_for_frame`):
+
+1. **this endpoint's** `memories` list (live, mid-run);
+2. a baked replay's **`memory_streams[name]`** block
+   (`godot-generative-agents/sim/generate_penn_replay.py`) and per-frame
+   `memories` shorthand;
+3. the frontend type **`MemoryRecord`**
+   (`godot-generative-agents/web/src/types/replay.ts`).
+
+**It is a lean projection, not the whole record.** The engine's canonical
+`MemoryRecord` (`text_adventure_games/memory.py`, spec:
+`docs/design/agent-memory.md` §4) also carries `id`, `last_accessed_turn`
+(recency decay), `actor`, `source_event_ids` (provenance), `tags`, `embedding`
+(semantic retrieval, #76), and `metadata`. Those stay server-side: they power
+retrieval scoring (recency × importance × relevance), not rendering. The planned
+persistence layer (#304) stores rows as
+`memories(id, run_id, agent, kind, text, importance, created_turn, embedding)` —
+the four wire fields map 1:1 onto its queryable columns, and the richer fields
+surface there if a frontend ever needs them.
+
+**How a stream fills up.** Memories are written by the sim loop (not by the LLM
+provider directly), so the shape is identical whether the brain is the mock or a
+real model: seeded relationship observations at turn 0 (`backend/seed.py`,
+importance 3.0), the day's plan (5.0), perceived events and presence sightings
+("I see X nearby.", 1.0), the agent's own action outcomes (2.0), and — with a
+real LLM — reflections (5.0) and conversation lines (`chat`, 4.0). A brand-new
+agent legitimately returns `"memories": []` until the loop writes something.
+
+**Forward pointers.** #305 pins this shape as the versioned wire contract; #304
+backs the read with a store instead of live objects; #306 scopes it under a run
+id (`/runs/{run_id}/agents/{name}/memory`). Today it reads the in-process
+`AgentMemory` under the same lock `POST /command` mutates under, so `turn` and
+`memories` are one atomic snapshot.
+
 ## Authentication & security
 
 Issue #186. The defaults are tuned for **local development**:
@@ -319,7 +423,7 @@ Issue #186. The defaults are tuned for **local development**:
   ```
 
   A missing or wrong header gets `401 {"detail": "invalid or missing token"}`. The
-  gate applies to **all three** endpoints.
+  gate applies to **all four** endpoints.
 
 - **Request-body cap.** A request whose declared `Content-Length` exceeds
   `max_body_bytes` (**64 KiB** by default) is rejected with `413` *before the body
@@ -368,7 +472,14 @@ curl -s -X POST http://127.0.0.1:8080/command \
   -d '{"command": "go east"}'
 # -> {"events":[{"channel":"blocked","text":"Field does not have an exit 'east'",...}],...}
 
-# 6. with auth (only needed when SIM_API_TOKEN is set / non-loopback bind)
+# 6. one agent's memory stream so far (#298) -- the demo gardener ships with
+#    three seeded memories; "turn" tells you when the stream was snapshotted
+curl -s http://127.0.0.1:8080/agents/gardener/memory
+# {"persona":"gardener","turn":2,"count":3,"memories":[{"kind":"observation",...}]}
+curl -s http://127.0.0.1:8080/agents/nobody/memory      # 404: unknown character
+curl -s http://127.0.0.1:8080/agents/player/memory      # 404: no agent bound
+
+# 7. with auth (only needed when SIM_API_TOKEN is set / non-loopback bind)
 curl -s http://127.0.0.1:8080/health -H "Authorization: Bearer $SIM_API_TOKEN"
 ```
 
@@ -377,12 +488,14 @@ Swagger UI generated from the same code.
 
 ## Not yet implemented
 
-This PR ships the **snapshot + change-feed contract** only. Deferred to the
-live-game tranche (don't expect these yet):
+Deferred to the live-game tranche (don't expect these yet):
 
 - a self-stepping autonomous loop and a pull poll (`/agent_act` / `next`,
-  `/events?since=`);
-- run control (`/pause`, `/resume`, `/reset`);
+  `/events?since=`) — #261/#262;
+- run control (`/pause`, `/resume`, `/reset`) — #262;
+- a persistent store behind the memory read, and run-scoping
+  (`/runs/{run_id}/agents/{name}/memory`) — #304/#306; today
+  `/agents/{name}/memory` reads the live in-process `AgentMemory`;
 - migrating the Flask webapp, the web companion, and Godot from file-based replay
   to thin clients of this API.
 

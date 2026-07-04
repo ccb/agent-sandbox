@@ -12,8 +12,10 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from backend.api import create_app, run, run_command  # noqa: E402
+from backend.api import _demo_game, create_app, run, run_command  # noqa: E402
+from backend.smallville_agents import memory_stream_for_persona  # noqa: E402
 from text_adventure_games import games, things  # noqa: E402
+from text_adventure_games.npc import ScriptedAgent  # noqa: E402
 
 
 def _tiny():
@@ -22,6 +24,27 @@ def _tiny():
     field.add_connection("north", forest)
     player = things.Character("player", "you", "I explore.")
     return games.Game(field, player, characters=[])
+
+
+def _with_agent(name="gardener"):
+    """A tiny world plus one NPC whose agent carries two seeded memories.
+
+    Mirrors ``_demo_game``'s pattern: a do-nothing ``ScriptedAgent`` (never
+    acts) holding a real ``AgentMemory``, seeded the way ``backend/seed.py``
+    seeds personas (observations at turn 0). Returns ``(game, npc)`` so tests
+    can also reach the agent directly."""
+    field = things.Location("Field", "An open field.")
+    forest = things.Location("Forest", "A wood.")
+    field.add_connection("north", forest)
+    player = things.Character("player", "you", "I explore.")
+    npc = things.Character(name, "a quiet resident", "I live here.")
+    field.add_character(npc)
+    agent = ScriptedAgent(lambda observation: None, persona=npc.persona)
+    agent.memory.owner = npc.name
+    agent.memory.add_observation("I saw the sun rise.", turn=0, importance=3.0)
+    agent.memory.add_plan("Walk to the forest.", turn=0)
+    npc.set_agent(agent)
+    return games.Game(field, player, characters=[npc]), npc
 
 
 def _client(game=None, **kwargs):
@@ -118,6 +141,98 @@ def test_engine_exception_returns_500_and_restores_renderer():
     resp = _client(game).post("/command", json={"command": "x"})
     assert resp.status_code == 500
     assert game.parser.renderer is original  # restored despite the engine error
+
+
+# --- GET /agents/{name}/memory (#298) --------------------------------------
+
+
+def test_memory_endpoint_returns_seeded_stream():
+    game, _npc = _with_agent()
+    payload = _client(game).get("/agents/gardener/memory").json()
+    assert set(payload) == {"persona", "turn", "count", "memories"}
+    assert payload["persona"] == "gardener"
+    assert payload["turn"] == 0
+    assert payload["count"] == len(payload["memories"]) == 2
+    for entry in payload["memories"]:
+        assert set(entry) == {"kind", "importance", "text", "created_turn"}
+    # Chronological append order, exactly as seeded.
+    assert [m["kind"] for m in payload["memories"]] == ["observation", "plan"]
+
+
+def test_memory_matches_memory_stream_for_persona():
+    # The endpoint and the replay bake must emit the same stream: both go
+    # through memory_stream_for_persona, so a baked memory_streams block and a
+    # live fetch of the same agent can never drift apart.
+    game, npc = _with_agent()
+    payload = _client(game).get("/agents/gardener/memory").json()
+    assert payload["memories"] == memory_stream_for_persona(npc.agent)
+
+
+def test_memory_grows_mid_run():
+    # The acceptance test for #298: memories formed DURING a run are visible
+    # without waiting for any end-of-run export.
+    game, npc = _with_agent()
+    client = _client(game)
+    before = client.get("/agents/gardener/memory").json()
+    npc.agent.memory.add_observation("The player walked past me.", turn=1)
+    after = client.get("/agents/gardener/memory").json()
+    assert after["count"] == before["count"] + 1
+    assert after["memories"][-1]["text"] == "The player walked past me."
+    assert after["memories"][-1]["created_turn"] == 1
+    assert after["memories"][: before["count"]] == before["memories"]
+
+
+def test_memory_unknown_character_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/nobody/memory")
+    assert resp.status_code == 404
+    assert "unknown" in resp.json()["detail"]
+
+
+def test_memory_character_without_agent_is_404():
+    # The player exists but has no agent bound -- there is no stream to read,
+    # which is a different failure from an unknown name (distinct detail).
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/player/memory")
+    assert resp.status_code == 404
+    assert "no agent" in resp.json()["detail"]
+
+
+def test_memory_requires_auth_when_token_configured():
+    game, _npc = _with_agent()
+    client = _client(game, auth_token="s3cret")
+    assert client.get("/agents/gardener/memory").status_code == 401
+    ok = client.get(
+        "/agents/gardener/memory", headers={"Authorization": "Bearer s3cret"}
+    )
+    assert ok.status_code == 200
+
+
+def test_memory_get_is_read_only():
+    game, npc = _with_agent()
+    client = _client(game)
+    a = client.get("/agents/gardener/memory").json()
+    b = client.get("/agents/gardener/memory").json()
+    assert a == b
+    assert game.turn == 0  # never advanced the game
+    assert len(npc.agent.memory.records) == 2  # never wrote a memory
+
+
+def test_memory_persona_name_with_space():
+    # Real casts use full names ("Maya Chen"); the client URL-encodes the
+    # space. Names are exact-match and case-sensitive -- no fuzzy matching.
+    game, _npc = _with_agent(name="Maya Chen")
+    client = _client(game)
+    assert client.get("/agents/Maya%20Chen/memory").json()["persona"] == "Maya Chen"
+    assert client.get("/agents/maya%20chen/memory").status_code == 404
+
+
+def test_demo_game_serves_a_memory_stream():
+    # Protects the README curl walkthrough: the stock demo world must expose
+    # the gardener's seeded stream with no LLM or API key.
+    payload = TestClient(create_app(_demo_game())).get("/agents/gardener/memory").json()
+    assert payload["count"] >= 1
+    assert {m["kind"] for m in payload["memories"]} == {"observation", "plan"}
 
 
 # --- #186 security posture ------------------------------------------------

@@ -13,6 +13,8 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 
 * ``GET  /health``       -> ``{"ok": true, "turn": N}``
 * ``GET  /world_state``  -> the typed ``WorldState`` snapshot
+* ``GET  /agents/{name}/memory`` -> the memory stream *name* has formed so far
+  (issue #298) -- the live counterpart of the replay file's ``memory_streams``.
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
   change-feed ``events``, the new ``world_state`` snapshot, and ``game_over``.
 
@@ -45,6 +47,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from text_adventure_games.reporting import JSONRenderer
 
+from .smallville_agents import memory_stream_for_persona
+
 # Hosts that never need auth: a server bound here is only reachable from the
 # same machine, so the loopback-only default is safe without a token (#186).
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -71,6 +75,40 @@ class CommandResponse(BaseModel):
     events: list[dict]
     world_state: dict
     game_over: bool
+
+
+class MemoryEntry(BaseModel):
+    """One formed memory, in the exact wire shape the replay bake emits.
+
+    This is ``smallville_agents.memories_for_frame``'s dict -- the same four
+    fields that ``penn_replay.json``'s ``memory_streams`` block and the
+    frontend's ``replay.ts`` ``MemoryRecord`` carry. It is a lean projection of
+    the engine's fuller ``MemoryRecord`` (``text_adventure_games/memory.py``);
+    see ``backend/README.md`` ("The memory stream") for the full field mapping.
+    Issue #305 will pin this as a versioned contract; #304 will back it with a
+    persistent store."""
+
+    kind: str = Field(..., description="observation | reflection | plan | chat")
+    importance: float = Field(
+        ..., description="the paper's 1-10 poignancy, rounded to 1 decimal"
+    )
+    text: str = Field(..., description="the memory itself, first person")
+    created_turn: int = Field(..., description="the turn the memory was formed")
+
+
+class MemoryStreamResponse(BaseModel):
+    """``GET /agents/{name}/memory``: everything *name* remembers so far.
+
+    ``memories`` is chronological (append order), byte-identical to the baked
+    ``memory_streams[name]`` for the same run. ``turn`` is the engine turn the
+    stream was snapshotted at -- the same counter ``GET /health`` reports and
+    the axis ``created_turn`` is measured on -- so a client can align the
+    stream with the change feed."""
+
+    persona: str
+    turn: int
+    count: int = Field(..., description="== len(memories)")
+    memories: list[MemoryEntry]
 
 
 def run_command(game, command: str, lock: threading.Lock | None = None) -> dict:
@@ -178,6 +216,42 @@ def create_app(
         with lock:
             return game.to_world_state().to_jsonable()
 
+    @app.get("/agents/{name}/memory", response_model=MemoryStreamResponse)
+    def agent_memory(name: str, _: None = Depends(require_auth)):
+        """The memory stream *name* has formed *so far*, read mid-run (#298).
+
+        Pull-only: the sim never pushes streams anywhere; a client fetches one
+        when a user opens the agent's panel. The ``world_state`` snapshot
+        deliberately omits private cognition (#185) -- this per-persona route is
+        the one sanctioned way to read a single agent's mind. Unknown character
+        names 404; so does a character with no agent bound (the player, a
+        scripted-behavior NPC) -- such a character will never have a stream,
+        which is different from an agent that simply hasn't formed memories yet
+        (a 200 with ``memories: []``). Everything is read under the shared lock
+        so ``turn`` and ``memories`` are one atomic snapshot. Once a persistent
+        store exists this becomes a store-backed query scoped under a run id
+        (#304/#306)."""
+        with lock:
+            char = game.characters.get(name)
+            if char is None:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown character: {name!r}"
+                )
+            if char.agent is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"character {name!r} has no agent (and so no memory stream)",
+                )
+            # response_model drops any field not in MemoryEntry, so if the
+            # formatter ever grows a field the wire contract stays frozen (#305).
+            memories = memory_stream_for_persona(char.agent)
+            return {
+                "persona": name,
+                "turn": game.turn,
+                "count": len(memories),
+                "memories": memories,
+            }
+
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
         """Run exactly one command and return events + the new snapshot.
@@ -220,15 +294,38 @@ def run(
 def _demo_game():
     """A tiny two-room world so ``python -m backend.api`` is runnable with no
     assets -- enough to exercise the contract and ``/docs``. Real worlds (the
-    Penn/Smallville sim) are served by passing your own ``Game`` to :func:`run`."""
+    Penn/Smallville sim) are served by passing your own ``Game`` to :func:`run`.
+
+    The gardener NPC carries three hand-seeded memories (the same
+    ``AgentMemory`` a live LLM agent accrues into) so
+    ``GET /agents/gardener/memory`` (#298) has something to show without any
+    provider key. In a real sim the loop writes the stream instead -- seeded
+    plans, perceived events, action outcomes, reflections."""
     from text_adventure_games import games, things
+    from text_adventure_games.npc import ScriptedAgent
 
     field = things.Location("Field", "An open field full of tall grass.")
     forest = things.Location("Forest", "A dense, dark wood.")
     field.add_connection("north", forest)
     field.add_item(things.Item("flower", "a red flower", "It smells sweet."))
     player = things.Character("player", "you", "I explore the world.")
-    return games.Game(field, player, characters=[])
+
+    gardener = things.Character("gardener", "a wizened gardener", "I tend this field.")
+    field.add_character(gardener)
+    # A do-nothing agent whose *memory* is real: the rule always returns None,
+    # so the gardener never acts, but the stream reads back over HTTP.
+    agent = ScriptedAgent(lambda observation: None, persona=gardener.persona)
+    agent.memory.owner = gardener.name
+    agent.memory.add_observation(
+        "The flowers by the north path bloomed overnight.", turn=0, importance=3.0
+    )
+    agent.memory.add_observation(
+        "A stranger wandered into the field.", turn=0, importance=2.0
+    )
+    agent.memory.add_plan("Water the tall grass before midday.", turn=0)
+    gardener.set_agent(agent)
+
+    return games.Game(field, player, characters=[gardener])
 
 
 if __name__ == "__main__":
