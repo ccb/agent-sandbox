@@ -1331,6 +1331,22 @@ def build_game():
     )
     den.add_character(horror)
 
+    # The glass centipede (source: "lying in ambush in the fungal chimney" --
+    # "four-foot centipede with translucent carapace"). Unseen until it
+    # strikes; one solid blow answers it; fire scours it out with the growth.
+    centipede = things.Character(
+        "glass centipede",
+        "a glass centipede, four feet of translucent patience",
+        "I wait. Everything comes down the chimney eventually.",
+    )
+    centipede.examine_text = (
+        "Four feet of centipede in a carapace like poured glass -- you see it "
+        "mostly by what bends behind it. It does not move while you watch."
+    )
+    for _a in ("centipede", "glass"):
+        centipede.add_alias(_a)
+    den.add_character(centipede)
+
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
     # you fight the Spawn.)
@@ -1536,6 +1552,31 @@ def build_game():
     pack.add_item(glowstone)
     pack.add_item(waterskin)
 
+    # The dead don't sway (CCB): state-aware one-liners for the creatures.
+    spawn_guts.set_property(
+        "unconscious_description",
+        "the spawn of guts, collapsed in a heap, its falcon jar askew",
+    )
+    spawn_guts.set_property(
+        "dead_description", "the spawn of guts, dead and motionless"
+    )
+    spawn_brain.set_property(
+        "unconscious_description",
+        "the spawn of brain, felled mid-step, jar rolled to its side",
+    )
+    spawn_brain.set_property(
+        "dead_description", "the spawn of brain, dead and motionless"
+    )
+    jackal_pack.set_property(
+        "unconscious_description", "the jackal pack, sprawled senseless where they fell"
+    )
+    centipede.set_property(
+        "unconscious_description", "the glass centipede, cracked and still"
+    )
+    centipede.set_property(
+        "dead_description", "the glass centipede, shattered along its length"
+    )
+
     # Vaarn item slots (slots.py): ten -- gear and wounds share the gauge.
     player.slot_capacity = 10
     # The tomb's climbs: an encumbered scavenger cannot make them.
@@ -1546,7 +1587,15 @@ def build_game():
     game = TombGame(
         wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack, horror],
+        characters=[
+            silas,
+            spawn_guts,
+            spawn_brain,
+            worry,
+            jackal_pack,
+            horror,
+            centipede,
+        ],
         custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
     )
     game.max_score = 100
@@ -1976,20 +2025,27 @@ def build_game():
                 _jackal_maul(g)  # unfed, unfled: they collect
                 continue
             if _player_was_loud_in(g, hall, _QUIET):
-                n += 1
+                # A crash carries: breaking things counts double on the ledger.
+                crashed = any(
+                    e.actor == g.player.name
+                    and e.action == "break"
+                    and (e.payload or {}).get("location") == hall.name
+                    for e in g.events[g._round_event_start :]
+                )
+                n += 2 if crashed else 1
                 hall.set_property(key, n)
-                if n == 1:
+                if n <= 2:
                     g.parser.ok(
                         "Somewhere off in the halls, a yipping answers your "
                         "noise -- once, and then again, nearer."
                     )
-                elif n == 2:
+                elif n == 3:
                     g.parser.ok(
                         "Yellow eyes ring the doorways, unhurried. "
                         "Pthalo-jackals: cautious, clever, and done being "
                         "cautious."
                     )
-                elif n >= 3:
+                elif n >= 4:
                     g.relocate(jackal_pack, hall)
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
@@ -2265,6 +2321,65 @@ def build_game():
         )
 
     game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
+
+    # --- The glass centipede's ambush -----------------------------------------
+    def _centipede_lurks(g):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and g.player.location is chimney
+        )
+
+    def _centipede_bites(g):
+        if chimney.get_property("burned") and centipede.location is not chimney:
+            return  # scoured out before it ever sprang
+        if centipede.location is not chimney:
+            g.relocate(centipede, chimney)
+            g.parser.ok(
+                "The growth beside you bends wrong -- and four feet of glass "
+                "uncoils out of it, faster than the eye wants to allow."
+            )
+        fatal = _wound_player(
+            g,
+            "Centipede Venom",
+            1,
+            (
+                "Twin punctures in the calf; the venom goes in cold.",
+                "It takes you through the boot-seam; the leg answers slowly after.",
+                "A bite at the wrist as you shield your face; the arm hums.",
+            ),
+        )
+        if fatal:
+            _die(
+                g,
+                "The venom finishes what the tomb began; the shaft keeps you. "
+                "THE END.",
+            )
+
+    game.add_trigger(
+        "centipede_ambush", _centipede_lurks, _centipede_bites, repeatable=True
+    )
+
+    # Fire scours the shaft: the centipede goes with the growth.
+    def _centipede_scoured(g):
+        return chimney.get_property("burned") and not centipede.get_property("is_dead")
+
+    def _scour(g):
+        centipede.set_property("is_dead", True)
+        if centipede.location is chimney:
+            g.parser.ok(
+                "Something four feet long and glassy boils out of the burning "
+                "growth, seizes once, and is still."
+            )
+        else:
+            g.relocate(centipede, chimney)
+            centipede.set_property("is_hidden", True)
+            g.parser.ok(
+                "In the flames, something glassy spasms out of the growth and "
+                "drops away down the shaft."
+            )
+
+    game.add_trigger("centipede_scoured", _centipede_scoured, _scour, repeatable=False)
     game.add_trigger("horror_turn", _horror_fighting, _horror_turn, repeatable=True)
 
     # Eating the Autarch's preserved organs (CCB: "gross, but should be
