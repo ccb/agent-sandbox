@@ -570,8 +570,7 @@ class PryCoffin(actions.Action):
                 "You work the blade into the seam and the seam BULGES -- the "
                 "glass parts around a body coming out. The Horror unwinds from "
                 "the Autarch's bones into the weightless air, orange and vast "
-                "and patient, and keeps the bones in its coil. Where you cut "
-                "it, it will remember. Where it burns, it will not."
+                "and patient, and keeps the bones in its coil."
             )
             return
         coffin.set_property("pried", True)
