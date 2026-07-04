@@ -177,3 +177,61 @@ def test_real_data_has_no_integrity_errors():
         f for f in c.findings if f.category == "INTEGRITY" and f.severity == "error"
     ]
     assert errs == [], "\n".join(f"{f.building}: {f.message}" for f in errs)
+
+
+def test_orphan_block_row_flagged(tmp_path):
+    def edit(tmj, mf):
+        # declare an arena that is never painted into arena_maze
+        mf["special_blocks/arena_blocks.csv"].append(
+            ["11", "UPenn", "Test Hall", "lobby"]
+        )
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_block_unpainted" in codes
+
+
+def test_orphan_paint_flagged(tmp_path):
+    def edit(tmj, mf):
+        mf["maze/arena_maze.csv"][0] = "777"  # painted id with no block row
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_paint_unknown" in codes
+
+
+def test_id_scheme_violation_flagged(tmp_path):
+    def edit(tmj, mf):
+        # a "room" arena (>=10000) whose id does not match 10000 + sector*100 + idx
+        mf["special_blocks/arena_blocks.csv"].append(
+            ["19999", "UPenn", "Test Hall", "Parlor"]
+        )
+        mf["maze/arena_maze.csv"][7] = "19999"  # paint it inside the footprint
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_id_scheme" in codes
+
+
+def test_region_containment_flagged(tmp_path):
+    def edit(tmj, mf):
+        # paint Test Hall's grounds id (1) onto a cell outside sector 1
+        mf["maze/arena_maze.csv"][0] = "1"  # cell (0,0), sector "0"
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_region_outside_sector" in codes
+
+
+def test_real_data_structural_consistency():
+    c = v.Checker(real_world()).run()
+    codes = {f.code for f in c.findings}
+    # these structural checks should be clean on committed data
+    for bad in (
+        "arena_block_unpainted",
+        "arena_paint_unknown",
+        "arena_id_scheme",
+        "arena_region_outside_sector",
+    ):
+        offenders = [f for f in c.findings if f.code == bad and f.severity == "error"]
+        assert offenders == [], f"{bad}: " + "; ".join(o.message for o in offenders)

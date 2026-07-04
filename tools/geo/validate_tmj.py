@@ -306,7 +306,141 @@ class Checker:
                 "arena/sector/world block tables are internally consistent",
             )
 
+    def _painted_arena_ids(self):
+        return {a for a in self.w.arena if a != "0"}
+
+    def _arena_row_by_id(self):
+        return {r[0]: r for r in self.w.arena_blocks if len(r) >= 4}
+
+    def check_orphan_block_rows(self):
+        painted = self._painted_arena_ids()
+        bad = [r for r in self.w.arena_blocks if len(r) >= 4 and r[0] not in painted]
+        for r in bad:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                r[2],
+                "arena_block_unpainted",
+                f"arena '{r[3]}' (id {r[0]}) declared but never painted in arena_maze",
+            )
+        if not bad:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "arena_blocks_painted",
+                "every arena_blocks row is painted in arena_maze",
+            )
+
+    def check_orphan_paint(self):
+        known = {r[0] for r in self.w.arena_blocks if r}
+        unknown = sorted(self._painted_arena_ids() - known, key=lambda s: int(s))
+        for aid in unknown:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "arena_paint_unknown",
+                f"arena id {aid} painted in arena_maze but absent from arena_blocks",
+            )
+        # sectors too
+        known_s = {r[0] for r in self.w.sector_blocks if r}
+        for sid in sorted(
+            {s for s in self.w.sector if s != "0"} - known_s, key=lambda s: int(s)
+        ):
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "sector_paint_unknown",
+                f"sector id {sid} painted but absent from sector_blocks",
+            )
+        if not unknown:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "arena_paint_known",
+                "every painted arena id has a block row",
+            )
+
+    def check_id_scheme(self):
+        sids = sector_id_by_name(self.w)
+        bad = False
+        for r in self.w.arena_blocks:
+            if len(r) < 4:
+                continue
+            aid, sector, arena = int(r[0]), r[2], r[3]
+            sid = sids.get(sector)
+            if sid is None:
+                continue  # referential check reports the missing sector
+            sid = int(sid)
+            if arena == "grounds":
+                expect_ok = aid == sid
+            elif arena == "lobby":
+                expect_ok = aid == INTERIOR_ARENA_BASE + sid
+            else:  # room
+                base = ROOM_ARENA_BASE + sid * 100
+                expect_ok = base <= aid < base + 100
+            if not expect_ok:
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    sector,
+                    "arena_id_scheme",
+                    f"'{arena}' id {aid} breaks the id scheme for sector {sid}",
+                )
+                bad = True
+        if not bad:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "arena_id_scheme_ok",
+                "all arena ids follow grounds/lobby/room scheme",
+            )
+
+    def check_region_containment(self):
+        names = sector_name_by_id(self.w)
+        rows = self._arena_row_by_id()
+        by_arena = defaultdict(list)
+        for i, aid in enumerate(self.w.arena):
+            if aid != "0":
+                by_arena[aid].append(i)
+        bad = False
+        for aid, idxs in by_arena.items():
+            row = rows.get(aid)
+            if not row:
+                continue  # orphan-paint check owns this
+            sid = sector_id_by_name(self.w).get(row[2])
+            if sid is None:
+                continue
+            stray = [i for i in idxs if self.w.sector[i] != sid]
+            if stray:
+                x, y = stray[0] % self.w.W, stray[0] // self.w.W
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    row[2],
+                    "arena_region_outside_sector",
+                    f"'{row[3]}' (id {aid}) paints {len(stray)} cell(s) off sector "
+                    f"{sid}, e.g. ({x},{y})",
+                )
+                bad = True
+        if not bad:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "arena_region_contained",
+                "room/lobby arenas stay within their sector",
+            )
+
     def run(self):
+        self.check_orphan_block_rows()
+        self.check_orphan_paint()
+        self.check_id_scheme()
+        self.check_region_containment()
         self.check_gids_resolve()
         self.check_dimensions()
         self.check_arena_rects_and_names()
