@@ -1,3 +1,21 @@
+## 2026-07-03
+**Focus:** primarily focused on research symposium planning and code review
+
+**Done today:**
+- Unstuck **PR #311** (black-format CI fix): merged `main` in, took main's side of the Tomb/test conflicts, re-blacked those plus the 7 newer slots/wounds files — PR is mergeable again, 1068 tests + format gate green.
+- **Synced `godot-ga-main` onto today's `main`** — an 89-commit rebase with ~20 conflicts (the `gen_agents`→`backend` rename, reordered picks, and 9 rounds on the baked `.tmj`/maze CSVs, resolved with layer-level and cell-level three-way merge scripts). Force-pushed as `29719b7` after tests + the Godot smoke test passed.
+- A final diff against the pre-rebase tip caught a real regression the merges had snuck in (`trees`/`plants` left `visible:false`) — fixed by restoring the original tip's `.tmj` verbatim; pinged @aking526 on PRs #314/#308 with the `rebase --onto` recovery command.
+
+**Blockers / questions:**
+- Post-mortem: `git merge-tree` shows the two tips merged **conflict-free** — every rebase conflict was self-inflicted by replaying pre-rename history. Do we want linear history on `godot-ga-main` badly enough to keep paying that, or should the sync convention be a plain merge (as 21ff6be did)?
+- #314/#308 sit on the old history and can't merge until @aking526 rebases them forward.
+- The tmj/CSV three-way merge helpers that made the rebase tractable live in `/tmp` — gone with the next reboot.
+
+**Next:**
+- Merge PR #311 once CI confirms, so `main`'s format gate goes green.
+- Promote the tmj layer-merge + maze cell-merge scripts into `tools/geo/` (with the "diff the final result against the pre-rebase tip" check that caught the visibility bug).
+- Write the sync decision (merge vs rebase) into the `godot-ga-main` section of CLAUDE.md so the next sync doesn't relearn it.
+
 ## 2026-07-02
 **Focus:** worked on fleshing out planning for game loop and agents architecture
 
