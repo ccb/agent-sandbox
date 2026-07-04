@@ -316,6 +316,14 @@ def test_gate_green_against_baseline():
     assert v.main([]) == 0
 
 
+def test_main_exit_code_1_when_error_unbaselined(tmp_path):
+    """Without a baseline, the real Cohen/Alumni errors are un-baselined -> exit 1."""
+    # Point --baseline at a nonexistent path so _load_baseline returns an empty set.
+    # Do NOT pass --tmj/--matrix so the real default map is used.
+    nonexistent = str(tmp_path / "no_baseline.json")
+    assert v.main(["--baseline", nonexistent]) == 1
+
+
 def test_baseline_only_lists_real_current_errors():
     """Every baseline entry must correspond to an error the checker still emits,
     so the baseline can't silently rot."""
@@ -334,7 +342,6 @@ def test_baseline_only_lists_real_current_errors():
 
 
 def test_main_exit_code_and_json(tmp_path, capsys):
-    w_dir = tmp_path  # reuse make_world's writer via a real build
     world = make_world(tmp_path)  # clean synthetic world -> no errors
     code = v.main(
         [

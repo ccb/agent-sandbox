@@ -19,12 +19,13 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from add_entrances import read_blocks, read_flat
-from add_entrances import (  # noqa: E402  (grouped with other geo imports)
+from add_entrances import (
     INTERIOR_ARENA_BASE,
     ROOM_ARENA_BASE,
     ROOM_SUBDIVIDE,
     VAN_PELT,
+    read_blocks,
+    read_flat,
 )
 
 GID_MASK = 0x1FFFFFFF  # strip Tiled's flip flags before range checks
@@ -43,7 +44,8 @@ class World:
     """Everything both sides declare, loaded once."""
 
     def __init__(self, tmj_path: str, matrix_path: str):
-        self.tmj = json.load(open(tmj_path))
+        with open(tmj_path) as _f:
+            self.tmj = json.load(_f)
         self.W = self.tmj["width"]
         self.H = self.tmj["height"]
         self.tile_layers = {
@@ -61,7 +63,8 @@ class World:
         self.arena_blocks = read_blocks(os.path.join(blocks, "arena_blocks.csv"))
         self.sector_blocks = read_blocks(os.path.join(blocks, "sector_blocks.csv"))
         self.world_blocks = read_blocks(os.path.join(blocks, "world_blocks.csv"))
-        self.meta = json.load(open(os.path.join(matrix_path, "maze_meta_info.json")))
+        with open(os.path.join(matrix_path, "maze_meta_info.json")) as _f:
+            self.meta = json.load(_f)
 
     def idx(self, x: int, y: int) -> int:
         return y * self.W + x
@@ -402,6 +405,7 @@ class Checker:
 
     def check_region_containment(self):
         names = sector_name_by_id(self.w)
+        sids = sector_id_by_name(self.w)
         rows = self._arena_row_by_id()
         by_arena = defaultdict(list)
         for i, aid in enumerate(self.w.arena):
@@ -412,7 +416,7 @@ class Checker:
             row = rows.get(aid)
             if not row:
                 continue  # orphan-paint check owns this
-            sid = sector_id_by_name(self.w).get(row[2])
+            sid = sids.get(row[2])
             if sid is None:
                 continue
             stray = [i for i in idxs if self.w.sector[i] != sid]
@@ -513,6 +517,10 @@ class Checker:
 
     COLLISION_TOLERANCE = 0.60  # share of wall-drawn cells left walkable before we warn
 
+    # NOTE: this check reads from the `buildings` layer, which add_entrances zeroes
+    # out over every opened/furnished building.  On a fully-processed map `drawn`
+    # will be 0 and the check is a no-op.  A version that reads individual
+    # `*_walls` layers instead is a possible future refinement.
     def check_collision_vs_walls(self):
         buildings = self.w.tile_layers.get("buildings", {}).get(
             "data", [0] * len(self.w.collision)
@@ -529,6 +537,17 @@ class Checker:
             if self.w.collision[i] == "0":
                 walkable += 1
                 per_sector[sid][1] += 1
+        if drawn == 0:
+            self.add(
+                "info",
+                "MATRIX_TMJ",
+                "",
+                "collision_walls_ok",
+                "no roofed cells in the `buildings` layer to check "
+                "(buildings are opened; walls live in per-building `*_walls` layers) "
+                "— collision check was a no-op",
+            )
+            return
         warned = False
         for sid, (d, wk) in sorted(per_sector.items()):
             if d and wk / d > self.COLLISION_TOLERANCE:
@@ -577,7 +596,7 @@ def format_report(findings: list[Finding]) -> str:
             continue
         lines.append(f"== {cat} ==")
         for f in sorted(
-            group, key=lambda f: (_SEV_ORDER[f.severity], f.building, f.code)
+            group, key=lambda f: (_SEV_ORDER.get(f.severity, 99), f.building, f.code)
         ):
             who = f" {f.building}:" if f.building else ""
             lines.append(f"  [{f.severity:>5}]{who} {f.message}")
@@ -592,7 +611,8 @@ def format_report(findings: list[Finding]) -> str:
 
 def _load_baseline(path):
     if path and os.path.exists(path):
-        return {tuple(e) for e in json.load(open(path))}
+        with open(path) as _f:
+            return {tuple(e) for e in json.load(_f)}
     return set()
 
 
