@@ -257,9 +257,42 @@ URL-encoded as usual (`/agents/Maya%20Chen/memory` for `"Maya Chen"`).
 
 `turn` is the engine turn the stream was snapshotted at — the same counter
 `GET /health` reports and the axis each record's `created_turn` is measured on —
-so a client can align the stream with the feed. `count == len(memories)`. The
-list is chronological (append order); an agent that simply hasn't formed
-memories yet returns `200` with `"memories": []`.
+so a client can align the stream with the feed. `count == len(memories)` — how
+many entries *this response* carries. The list is chronological (append order);
+an agent that simply hasn't formed memories yet returns `200` with
+`"memories": []`.
+
+**Query parameters (issue #345)** — three optional selectors let a client fetch
+a *slice* instead of the whole stream. They compose, and each defaults to
+"everything", so a **no-argument request is byte-identical to the above**.
+
+| Param        | Effect                                                                 |
+| ------------ | ---------------------------------------------------------------------- |
+| `since_turn` | only memories with `created_turn > N` — the incremental poll (below)   |
+| `kind`       | only one `MemoryKind`: `observation` \| `reflection` \| `plan` \| `chat` |
+| `limit`      | only the newest `K` (≥ 1), after the other filters — a bounded first paint |
+
+They apply in the order `since_turn` → `kind` → `limit` (the newest `K` of what
+survives) — the natural "plans since turn T, newest 20" reading, which also maps
+straight onto a future `WHERE created_turn > ? AND kind = ? … LIMIT ?` store
+query (#304). Whenever **any** selector is set, the response gains a `total`
+field — the *unfiltered* stream size — so a UI can render "showing `count` of
+`total`":
+
+```json
+{ "persona": "gardener", "turn": 0, "count": 2, "total": 3, "memories": [ … ] }
+```
+
+The incremental-poll loop: read `turn` (from `/health` or a prior stream fetch),
+then re-fetch with `since_turn=<that turn>` to get exactly what formed since —
+an already-caught-up poller gets a prompt `200` with `"memories": []`. An
+unrecognised `kind` is a `422` (validation error), never a silently-empty list;
+`limit` below `1` is likewise a `422`.
+
+```bash
+curl -s 'http://127.0.0.1:8080/agents/gardener/memory?kind=plan&limit=20'
+curl -s 'http://127.0.0.1:8080/agents/gardener/memory?since_turn=42'   # only newer
+```
 
 **Errors** — two distinct `404`s:
 
@@ -634,6 +667,9 @@ curl -s -X POST http://127.0.0.1:8080/command \
 #    three seeded memories; "turn" tells you when the stream was snapshotted
 curl -s http://127.0.0.1:8080/agents/gardener/memory
 # {"persona":"gardener","turn":2,"count":3,"memories":[{"kind":"observation",...}]}
+curl -s 'http://127.0.0.1:8080/agents/gardener/memory?kind=plan&limit=20'  # a slice (#345)
+curl -s 'http://127.0.0.1:8080/agents/gardener/memory?since_turn=1'        # only what's new
+# -> adds "total":3 alongside "count" so a UI can show "showing count of total"
 curl -s http://127.0.0.1:8080/agents/nobody/memory      # 404: unknown character
 curl -s http://127.0.0.1:8080/agents/player/memory      # 404: no agent bound
 
