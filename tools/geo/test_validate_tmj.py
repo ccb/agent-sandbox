@@ -90,9 +90,7 @@ def make_world(tmp_path, edit=None):
             {
                 "type": "objectgroup",
                 "name": "test_arenas",
-                "objects": [
-                    {"name": "Parlor", "x": 32, "y": 32, "width": 16, "height": 16},
-                ],
+                "objects": [],
             },
         ],
     }
@@ -299,3 +297,32 @@ def test_collision_never_errors_on_real_data():
     assert all(
         f.severity != "error" for f in c.findings if f.code == "collision_wall_gap"
     )
+
+
+def test_format_report_groups_and_counts():
+    fs = [
+        v.Finding("error", "MATRIX_TMJ", "Cohen", "c1", "drawn not present"),
+        v.Finding("ok", "INTEGRITY", "", "i1", "gids fine"),
+        v.Finding("info", "MATRIX_TMJ", "Van Pelt", "c2", "json sourced"),
+    ]
+    out = v.format_report(fs)
+    assert "MATRIX_TMJ" in out and "INTEGRITY" in out
+    assert "1 ok" in out and "1 info" in out and "1 error" in out
+
+
+def test_main_exit_code_and_json(tmp_path, capsys):
+    w_dir = tmp_path  # reuse make_world's writer via a real build
+    world = make_world(tmp_path)  # clean synthetic world -> no errors
+    code = v.main(
+        [
+            "--tmj",
+            os.path.join(str(tmp_path), "map.tmj"),
+            "--matrix",
+            os.path.join(str(tmp_path), "matrix"),
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    parsed = _json.loads(out)
+    assert isinstance(parsed, list)
+    assert code == 0

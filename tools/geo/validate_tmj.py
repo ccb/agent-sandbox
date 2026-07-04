@@ -564,3 +564,73 @@ class Checker:
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
         return self
+
+
+_SEV_ORDER = {"error": 0, "warn": 1, "info": 2, "ok": 3}
+
+
+def format_report(findings: list[Finding]) -> str:
+    lines = []
+    for cat in ("MATRIX_TMJ", "INTEGRITY"):
+        group = [f for f in findings if f.category == cat]
+        if not group:
+            continue
+        lines.append(f"== {cat} ==")
+        for f in sorted(
+            group, key=lambda f: (_SEV_ORDER[f.severity], f.building, f.code)
+        ):
+            who = f" {f.building}:" if f.building else ""
+            lines.append(f"  [{f.severity:>5}]{who} {f.message}")
+    counts = Counter(f.severity for f in findings)
+    summary = " · ".join(
+        f"{counts.get(s, 0)} {s}" for s in ("ok", "info", "warn", "error")
+    )
+    lines.append("")
+    lines.append(summary)
+    return "\n".join(lines)
+
+
+def _load_baseline(path):
+    if path and os.path.exists(path):
+        return {tuple(e) for e in json.load(open(path))}
+    return set()
+
+
+def main(argv=None) -> int:
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.dirname(os.path.dirname(here))
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    ap.add_argument(
+        "--matrix",
+        default=os.path.join(
+            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+        ),
+    )
+    ap.add_argument(
+        "--baseline", default=os.path.join(here, "validate_tmj_baseline.json")
+    )
+    ap.add_argument("--json", action="store_true", help="emit findings as JSON")
+    args = ap.parse_args(argv)
+
+    checker = Checker(World(args.tmj, args.matrix)).run()
+    if args.json:
+        print(json.dumps([f.__dict__ for f in checker.findings], indent=2))
+    else:
+        print(format_report(checker.findings))
+    baseline = _load_baseline(args.baseline)
+    new_errors = [
+        f for f in checker.errors() if (f.category, f.building, f.code) not in baseline
+    ]
+    return 1 if new_errors else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
