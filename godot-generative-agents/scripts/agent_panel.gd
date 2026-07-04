@@ -25,6 +25,9 @@ signal seek_requested(step: int)
 signal speed_changed(multiplier: float)
 # The "Reset view" button was pressed.
 signal reset_requested
+# The "Heatmap" button was pressed (open/close the movement-heatmap pop-up). The viewer
+# owns the pop-up's visibility; this is just a request to toggle it (H does the same).
+signal heatmap_requested
 # The Focus dropdown changed: spotlight only agents in this building ("" = All, no
 # filter). The viewer dims everyone elsewhere and glides the camera to the building.
 signal filter_changed(location: String)
@@ -106,6 +109,12 @@ func _ready() -> void:
 	reset.tooltip_text = "Frame the whole campus (R / Home)"
 	reset.pressed.connect(func() -> void: reset_requested.emit())
 	col.add_child(reset)
+
+	var heatmap := Button.new()
+	heatmap.text = "Heatmap"
+	heatmap.tooltip_text = "Where agents spend their time, up to now (H)"
+	heatmap.pressed.connect(func() -> void: heatmap_requested.emit())
+	col.add_child(heatmap)
 
 	# Playback controls: pause/resume, a seekable timeline, and a speed picker.
 	_play = Button.new()
