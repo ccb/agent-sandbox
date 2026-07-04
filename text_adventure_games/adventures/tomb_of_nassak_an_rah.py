@@ -289,6 +289,11 @@ class Burn(actions.Action):
         "ignite",
         "torch",
         "set ablaze",
+        "burn gel",
+        "light gel",
+        "ignite gel",
+        "burn flask",
+        "light flask",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -317,6 +322,12 @@ class Burn(actions.Action):
         return None
 
     def check_preconditions(self) -> bool:
+        if "gel" in self.command.split() or "flask" in self.command.split():
+            self.parser.fail(
+                "The gel burns where you pour it, not in your hand. Douse a "
+                "thing, and burn THAT."
+            )
+            return False
         target = self._target()
         if target is None:
             self.parser.fail("There's nothing here that wants burning.")
