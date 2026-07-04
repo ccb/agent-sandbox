@@ -29,6 +29,7 @@ deliberately deferred.
 - [Endpoint reference](#endpoint-reference)
   - [`GET /health`](#get-health)
   - [`GET /world_state`](#get-world_state)
+  - [`GET /agents`](#get-agents)
   - [`GET /agents/{name}/memory`](#get-agentsnamememory)
   - [`POST /command`](#post-command)
 - [Status codes](#status-codes)
@@ -84,13 +85,14 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Four endpoints. `GET`s are read-only; `POST /command` advances the game by
+Five endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn).
 
 | Method | Path                    | Purpose                                            |
 | ------ | ----------------------- | -------------------------------------------------- |
 | `GET`  | `/health`               | Liveness + the current turn (cheap poll)           |
 | `GET`  | `/world_state`          | The full, typed world snapshot                     |
+| `GET`  | `/agents`               | Roster of agent-bound characters + a summary (#344)|
 | `GET`  | `/agents/{name}/memory` | One agent's memory stream, formed so far (#298)    |
 | `POST` | `/command`              | Run one command → events + new snapshot            |
 
@@ -168,6 +170,52 @@ for the full shape.
 
 ```bash
 curl -s http://127.0.0.1:8080/world_state
+```
+
+### `GET /agents`
+
+The **roster** of characters that have an agent (a mind) bound (issue #344) —
+the discovery companion to [`GET /agents/{name}/memory`](#get-agentsnamememory).
+Without it a client would have to hard-code the cast or scrape `/world_state`'s
+omniscient `characters` list, which doesn't say *which* characters have a mind;
+this returns just those, each with enough summary to drive a sidebar or panel
+list without an extra fetch per agent. Read-only and pull-only, sorted by name;
+`turn` matches [`GET /health`](#get-health) so a client can align it with the
+feed.
+
+The `/world_state` snapshot deliberately omits private cognition (#185), and
+this roster keeps that line: it exposes only per-kind memory **counts** (plus
+`persona`/`location`, which are already public in `world_state`), never the
+memory **text** — that stays behind the per-persona
+[`GET /agents/{name}/memory`](#get-agentsnamememory) route.
+
+**Response** `200 OK` — `AgentRosterResponse` (from the demo world):
+
+```json
+{
+  "turn": 0,
+  "agents": [
+    {
+      "name": "gardener",
+      "persona": "I tend this field.",
+      "location": "Field",
+      "memory_count": 3,
+      "kind_counts": { "observation": 2, "plan": 1 }
+    }
+  ]
+}
+```
+
+Each entry's `name` is the exact, case-sensitive URL key for that agent's
+memory route — spaces and all, URL-encoded (`Maya Chen` →
+`/agents/Maya%20Chen/memory`). `location` is the location's name, or `null` for
+an unplaced character. `memory_count == sum(kind_counts.values())`, and the
+counts are tallied over the very stream `/agents/{name}/memory` returns, so a
+list badge and the opened panel never disagree. A world with no agent-bound
+characters returns `{"turn": N, "agents": []}` — an empty list, not an error.
+
+```bash
+curl -s http://127.0.0.1:8080/agents
 ```
 
 ### `GET /agents/{name}/memory`
