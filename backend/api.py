@@ -16,7 +16,8 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 * ``GET  /agents``       -> the roster of agent-bound characters, with a cheap
   memory summary each (issue #344) -- the discovery companion to the route below.
 * ``GET  /agents/{name}/memory`` -> the memory stream *name* has formed so far
-  (issue #298) -- the live counterpart of the replay file's ``memory_streams``.
+  (issue #298) -- the live counterpart of the replay file's ``memory_streams``;
+  optional ``?since_turn=`` / ``?kind=`` / ``?limit=`` select a slice (issue #345).
 * ``GET  /agents/{name}/knowledge`` -> what *name* *believes about the world*
   (issue #348) -- the seeded priors + anything learned since, the sibling read
   to memory (memory is the episodic log; knowledge is the current world-model).
@@ -50,6 +51,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from text_adventure_games.memory import MemoryKind
 from text_adventure_games.reporting import JSONRenderer
 
 from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
@@ -102,17 +104,31 @@ class MemoryEntry(BaseModel):
 
 
 class MemoryStreamResponse(BaseModel):
-    """``GET /agents/{name}/memory``: everything *name* remembers so far.
+    """``GET /agents/{name}/memory``: the slice of *name*'s stream the request
+    asked for (the whole stream when unfiltered).
 
-    ``memories`` is chronological (append order), byte-identical to the baked
-    ``memory_streams[name]`` for the same run. ``turn`` is the engine turn the
-    stream was snapshotted at -- the same counter ``GET /health`` reports and
-    the axis ``created_turn`` is measured on -- so a client can align the
-    stream with the change feed."""
+    ``memories`` is chronological (append order); unfiltered it is
+    byte-identical to the baked ``memory_streams[name]`` for the same run.
+    ``turn`` is the engine turn the stream was snapshotted at -- the same
+    counter ``GET /health`` reports and the axis ``created_turn`` is measured on
+    -- so a client can align the stream (and the ``since_turn`` cursor) with the
+    change feed. The optional ``since_turn`` / ``kind`` / ``limit`` selectors
+    (#345) never change an entry's shape, only *which* entries come back."""
 
     persona: str
     turn: int
-    count: int = Field(..., description="== len(memories)")
+    count: int = Field(
+        ..., description="== len(memories), i.e. how many entries this response carries"
+    )
+    total: int | None = Field(
+        default=None,
+        description=(
+            "the unfiltered stream size, for rendering 'showing count of total'; "
+            "present only when a since_turn/kind/limit selector was applied "
+            "(omitted entirely on an unfiltered read, which stays byte-identical "
+            "to #298)"
+        ),
+    )
     memories: list[MemoryEntry]
 
 
@@ -318,9 +334,33 @@ def create_app(
             ]
             return {"turn": game.turn, "agents": roster}
 
-    @app.get("/agents/{name}/memory", response_model=MemoryStreamResponse)
-    def agent_memory(name: str, _: None = Depends(require_auth)):
-        """The memory stream *name* has formed *so far*, read mid-run (#298).
+    @app.get(
+        "/agents/{name}/memory",
+        response_model=MemoryStreamResponse,
+        response_model_exclude_none=True,
+    )
+    def agent_memory(
+        name: str,
+        since_turn: int | None = Query(
+            default=None,
+            description="only memories with created_turn > this (the incremental "
+            "poll: pass back the turn a prior read reported)",
+        ),
+        kind: MemoryKind | None = Query(
+            default=None,
+            description="only memories of this kind (observation | reflection | "
+            "plan | chat); an unknown value is a 422, not an empty list",
+        ),
+        limit: int | None = Query(
+            default=None,
+            ge=1,
+            description="return only the newest this-many memories (after the "
+            "other filters), for a bounded first paint of a long stream",
+        ),
+        _: None = Depends(require_auth),
+    ):
+        """The memory stream *name* has formed *so far*, read mid-run (#298),
+        optionally sliced by ``since_turn`` / ``kind`` / ``limit`` (#345).
 
         Pull-only: the sim never pushes streams anywhere; a client fetches one
         when a user opens the agent's panel. The ``world_state`` snapshot
@@ -332,7 +372,17 @@ def create_app(
         (a 200 with ``memories: []``). Everything is read under the shared lock
         so ``turn`` and ``memories`` are one atomic snapshot. Once a persistent
         store exists this becomes a store-backed query scoped under a run id
-        (#304/#306)."""
+        (#304/#306).
+
+        The three selectors compose and each defaults to "everything", so a
+        no-argument read is byte-identical to #298. They apply in the order
+        ``since_turn`` (created_turn > cursor) -> ``kind`` -> ``limit`` (newest
+        K of what survives), which is the natural "plans since turn T, newest
+        20" reading and maps directly onto a future
+        ``WHERE created_turn > ? AND kind = ? ... LIMIT ?`` store query (#304).
+        Whenever any selector is set the response also carries ``total`` (the
+        unfiltered stream size) so a client can render "showing count of total";
+        an unfiltered read omits it and stays byte-identical."""
         with lock:
             char = game.characters.get(name)
             if char is None:
@@ -347,12 +397,23 @@ def create_app(
             # response_model drops any field not in MemoryEntry, so if the
             # formatter ever grows a field the wire contract stays frozen (#305).
             memories = memory_stream_for_persona(char.agent)
-            return {
+            total = len(memories)
+            filtered = since_turn is not None or kind is not None or limit is not None
+            if since_turn is not None:
+                memories = [m for m in memories if m["created_turn"] > since_turn]
+            if kind is not None:
+                memories = [m for m in memories if m["kind"] == kind.value]
+            if limit is not None:
+                memories = memories[-limit:]  # newest K; stream is oldest-first
+            response = {
                 "persona": name,
                 "turn": game.turn,
                 "count": len(memories),
                 "memories": memories,
             }
+            if filtered:
+                response["total"] = total
+            return response
 
     @app.get("/agents/{name}/knowledge", response_model=KnowledgeResponse)
     def agent_knowledge(

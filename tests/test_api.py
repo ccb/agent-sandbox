@@ -238,6 +238,129 @@ def test_demo_game_serves_a_memory_stream():
     assert {m["kind"] for m in payload["memories"]} == {"observation", "plan"}
 
 
+# --- GET /agents/{name}/memory filters: since_turn / kind / limit (#345) ---
+
+
+def _rich_stream(name="gardener"):
+    """A world whose one agent carries a known 5-memory stream spanning three
+    turns and three kinds, so the #345 selectors have something to slice.
+
+    Append order (== chronological):
+        t0 observation, t0 plan, t1 observation, t2 reflection, t2 observation
+    """
+    field = things.Location("Field", "An open field.")
+    player = things.Character("player", "you", "I explore.")
+    npc = things.Character(name, "a quiet resident", "I live here.")
+    field.add_character(npc)
+    agent = ScriptedAgent(lambda observation: None, persona=npc.persona)
+    agent.memory.owner = npc.name
+    agent.memory.add_observation("The sun rose.", turn=0, importance=3.0)
+    agent.memory.add_plan("Tend the field.", turn=0)
+    agent.memory.add_observation("A stranger passed.", turn=1)
+    agent.memory.add_reflection("The field is calm.", turn=2, importance=4.0)
+    agent.memory.add_observation("Dusk settled.", turn=2)
+    npc.set_agent(agent)
+    return games.Game(field, player, characters=[npc]), npc
+
+
+def test_memory_no_filter_omits_total_and_is_unchanged():
+    # The #345 headline: a no-argument read is byte-identical to #298 -- no
+    # `total` key, the whole stream, same shape.
+    game, _npc = _rich_stream()
+    payload = _client(game).get("/agents/gardener/memory").json()
+    assert set(payload) == {"persona", "turn", "count", "memories"}  # no `total`
+    assert payload["count"] == len(payload["memories"]) == 5
+
+
+def test_memory_since_turn_returns_only_newer_records():
+    game, _npc = _rich_stream()
+    payload = (
+        _client(game).get("/agents/gardener/memory", params={"since_turn": 1}).json()
+    )
+    assert payload["count"] == 2  # the two turn-2 records
+    assert payload["total"] == 5  # "showing 2 of 5"
+    assert all(m["created_turn"] > 1 for m in payload["memories"])
+
+
+def test_memory_since_turn_empty_tail_is_a_prompt_200():
+    # Acceptance: once a poller is caught up, the incremental fetch returns an
+    # empty list promptly -- not a 404, not an error.
+    game, _npc = _rich_stream()
+    payload = (
+        _client(game).get("/agents/gardener/memory", params={"since_turn": 2}).json()
+    )
+    assert payload["memories"] == []
+    assert payload["count"] == 0
+    assert payload["total"] == 5
+
+
+def test_memory_kind_filter_selects_one_kind():
+    game, _npc = _rich_stream()
+    client = _client(game)
+    obs = client.get("/agents/gardener/memory", params={"kind": "observation"}).json()
+    assert obs["count"] == 3
+    assert {m["kind"] for m in obs["memories"]} == {"observation"}
+    assert obs["total"] == 5
+    assert (
+        client.get("/agents/gardener/memory", params={"kind": "plan"}).json()["count"]
+        == 1
+    )
+
+
+def test_memory_unknown_kind_is_422_not_empty():
+    # An unrecognised kind is a validation error, never a silently-empty stream.
+    game, _npc = _rich_stream()
+    resp = _client(game).get("/agents/gardener/memory", params={"kind": "banana"})
+    assert resp.status_code == 422
+
+
+def test_memory_limit_returns_newest_k_in_order():
+    # limit keeps the tail (newest) of the stream, still chronological.
+    game, npc = _rich_stream()
+    full = memory_stream_for_persona(npc.agent)
+    payload = _client(game).get("/agents/gardener/memory", params={"limit": 2}).json()
+    assert payload["count"] == 2
+    assert payload["memories"] == full[-2:]
+    assert payload["total"] == 5
+
+
+def test_memory_limit_must_be_positive():
+    game, _npc = _rich_stream()
+    resp = _client(game).get("/agents/gardener/memory", params={"limit": 0})
+    assert resp.status_code == 422
+
+
+def test_memory_filters_compose():
+    # "newest observation formed after turn 0" -- all three selectors at once,
+    # applied since_turn -> kind -> limit.
+    game, _npc = _rich_stream()
+    payload = (
+        _client(game)
+        .get(
+            "/agents/gardener/memory",
+            params={"since_turn": 0, "kind": "observation", "limit": 1},
+        )
+        .json()
+    )
+    assert payload["count"] == 1
+    assert payload["total"] == 5
+    only = payload["memories"][0]
+    assert only["kind"] == "observation"
+    assert only["created_turn"] == 2  # the newest observation after turn 0
+    assert only["text"] == "Dusk settled."
+
+
+def test_memory_since_turn_aligns_with_the_reported_cursor():
+    # The intended incremental-poll loop: take the `turn` a read reports, then
+    # re-fetch with since_turn=that turn to get exactly what formed after it.
+    game, _npc = _rich_stream()
+    client = _client(game)
+    cursor = client.get("/health").json()["turn"]  # 0
+    fresh = client.get("/agents/gardener/memory", params={"since_turn": cursor}).json()
+    assert fresh["count"] == 3  # the turn-1 and turn-2 records
+    assert all(m["created_turn"] > cursor for m in fresh["memories"])
+
+
 # --- GET /agents roster (#344) ---------------------------------------------
 
 
