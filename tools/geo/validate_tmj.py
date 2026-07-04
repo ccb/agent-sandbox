@@ -436,6 +436,81 @@ class Checker:
                 "room/lobby arenas stay within their sector",
             )
 
+    def check_drawn_vs_present(self):
+        tmj = tmj_arenas_by_building(self.w)
+        mtx = matrix_rooms_by_building(self.w)
+        buildings = set(tmj) | set(mtx)
+        for b in sorted(x for x in buildings if x):  # skip "" (unresolved)
+            drawn = tmj.get(b, [])
+            rooms = mtx.get(b, [])
+            if drawn and not rooms:
+                layer = drawn[0]["layer"]
+                wired = b in ROOM_SUBDIVIDE
+                extra = "" if wired else " — not in add_entrances.ROOM_SUBDIVIDE"
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    b,
+                    "arena_drawn_not_in_matrix",
+                    f"{len(drawn)} arena objects in tmj ({layer}) but 0 room "
+                    f"arenas in matrix{extra}",
+                )
+            elif rooms and not drawn:
+                if b == VAN_PELT:
+                    self.add(
+                        "info",
+                        "MATRIX_TMJ",
+                        b,
+                        "arena_matrix_no_tmj_layer",
+                        f"{len(rooms)} matrix rooms, no tmj arena layer "
+                        f"(sourced from van_pelt_interior.json)",
+                    )
+                else:
+                    self.add(
+                        "error",
+                        "MATRIX_TMJ",
+                        b,
+                        "arena_matrix_no_tmj_layer",
+                        f"{len(rooms)} matrix rooms but no tmj arena layer",
+                    )
+            elif drawn and rooms:
+                room_names = [r["name"] for r in rooms]
+                uncovered = [
+                    o["name"]
+                    for o in drawn
+                    if not any(base_covered(o["name"], rn) for rn in room_names)
+                ]
+                if uncovered:
+                    self.add(
+                        "warn",
+                        "MATRIX_TMJ",
+                        b,
+                        "arena_name_uncovered",
+                        f"{len(uncovered)} tmj arena name(s) match no matrix room: "
+                        f"{', '.join(sorted(uncovered)[:5])}",
+                    )
+                else:
+                    self.add(
+                        "ok",
+                        "MATRIX_TMJ",
+                        b,
+                        "arena_names_match",
+                        f"{len(rooms)} matrix rooms all backed by a tmj arena object",
+                    )
+
+    def check_arena_layer_resolved(self):
+        tmj = tmj_arenas_by_building(self.w)
+        orphans = tmj.get("", [])
+        for o in orphans:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "arena_layer_unresolved",
+                f"arena object '{o['name']}' ({o['layer']}) sits over no building "
+                f"(dominant sector {o['dominant']})",
+            )
+
     def run(self):
         self.check_orphan_block_rows()
         self.check_orphan_paint()
@@ -445,4 +520,6 @@ class Checker:
         self.check_dimensions()
         self.check_arena_rects_and_names()
         self.check_referential_integrity()
+        self.check_drawn_vs_present()
+        self.check_arena_layer_resolved()
         return self

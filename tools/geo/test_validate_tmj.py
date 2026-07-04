@@ -235,3 +235,45 @@ def test_real_data_structural_consistency():
     ):
         offenders = [f for f in c.findings if f.code == bad and f.severity == "error"]
         assert offenders == [], f"{bad}: " + "; ".join(o.message for o in offenders)
+
+
+def test_drawn_vs_present_real_data():
+    c = v.Checker(real_world()).run()
+
+    def has(code, building):
+        return any(f.code == code and f.building == building for f in c.findings)
+
+    # Cohen & Alumni drawn but not bridged -> error
+    assert has("arena_drawn_not_in_matrix", "Claudia Cohen Hall")
+    assert has("arena_drawn_not_in_matrix", "Sweeten Alumni Building")
+    # Van Pelt in matrix, no tmj layer, json-sourced -> info (expected)
+    assert has("arena_matrix_no_tmj_layer", "Van Pelt Library")
+    vp = [
+        f
+        for f in c.findings
+        if f.code == "arena_matrix_no_tmj_layer" and f.building == "Van Pelt Library"
+    ][0]
+    assert vp.severity == "info"
+
+
+def test_unwired_error_mentions_room_subdivide():
+    c = v.Checker(real_world()).run()
+    cohen = [
+        f
+        for f in c.findings
+        if f.code == "arena_drawn_not_in_matrix" and f.building == "Claudia Cohen Hall"
+    ][0]
+    assert cohen.severity == "error"
+    assert "ROOM_SUBDIVIDE" in cohen.message
+
+
+def test_arena_layer_resolved_flags_orphan_objects(tmp_path):
+    def edit(tmj, mf):
+        # an arena object floating over sector 0 (no building underneath)
+        tmj["layers"][1]["objects"].append(
+            {"name": "Nowhere Room", "x": 0, "y": 0, "width": 16, "height": 16}
+        )
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_layer_unresolved" in codes
