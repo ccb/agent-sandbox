@@ -129,6 +129,178 @@ def resolve_embedding_client(provider: str | None):
         return None
 
 
+def step(
+    game,
+    chars: dict,
+    state: dict,
+    step_idx: int,
+    *,
+    order: list,
+    world_map: WorldMap,
+    emoji: dict,
+    retrieval=None,
+    clock: SimClock | None = None,
+    conversation_enabled: bool = False,
+    conversation_cooldowns: dict | None = None,
+    cog: CognitionConfig | None = None,
+) -> tuple[dict, int]:
+    """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
+
+    This is the one-tick seam extracted from :func:`simulate` (issue #296):
+    schedule advance -> decision point (observe -> decide -> precondition gate ->
+    remember/reflect) -> one tile of walking -> frame assembly, then
+    ``maybe_converse`` for co-located residents. ``simulate`` is now a thin loop
+    over this function, and a live backend (#349) drives it tick-by-tick so it can
+    ship each frame the moment it exists.
+
+    Self-contained by design: no file I/O, no globals, no sleeping. It mutates
+    ``state``, ``conversation_cooldowns`` and ``game.turn`` in place and returns
+    the movement frame for this step plus how many conversations fired (the
+    latter only for :func:`simulate`'s stdout heartbeat; the frame is the
+    byte-identical artifact the determinism tests and the Penn bake pin).
+
+    ``conversation_cooldowns`` defaults to a throwaway dict and ``cog`` to
+    ``CognitionConfig()`` so a caller can drive a bare tick without threading
+    every knob; :func:`simulate` always passes the run-level ones it owns.
+    """
+    conversation_cooldowns = (
+        conversation_cooldowns if conversation_cooldowns is not None else {}
+    )
+    cog = cog if cog is not None else CognitionConfig()
+
+    # Give per-agent memory a coherent time axis: the step index is the "turn"
+    # memories are stamped and scored against (issue #75). The custom loop never
+    # calls end_turn, so without this game.turn would stay 0 and recency could
+    # never tell memories apart.
+    game.turn = step_idx
+    frame = {}
+    for name in order:
+        char = chars[name]
+        st = state[name]
+
+        # Behind-schedule trigger (design doc §8): a new in-game hour began and
+        # this agent is still walking, not yet at its planned stop. Offer its
+        # planner a chance to re-plan the tail. Clock-gated, so tests that pass no
+        # clock skip it; the mock's revise is a no-op regardless.
+        if (
+            clock is not None
+            and step_idx > 0
+            and st["path"]
+            and clock.hour_at(step_idx) != clock.hour_at(step_idx - 1)
+        ):
+            maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, step_idx), clock)
+
+        # Has the current activity run its course? Un-latch and point the brain
+        # at the next scheduled stop, so the agent becomes idle below and walks
+        # on. When the schedule is exhausted, just stop the timer and let it
+        # settle into this last activity for the rest of the run.
+        if (
+            st["performing"]
+            and st["perform_until"] is not None
+            and step_idx >= st["perform_until"]
+        ):
+            if char.agent.schedule.advance():
+                st["performing"] = False
+            st["perform_until"] = None
+
+        # Decision point: idle and not yet settled into an activity.
+        if not st["path"] and not st["performing"]:
+            # Attribute this LLM call to the persona and step (usage.py).
+            ctx = getattr(char.agent.llm_client, "context", None)
+            if ctx is not None:
+                ctx.update({"actor": name, "turn": step_idx, "attempt": 0})
+            # Observe (perceive + retrieve memories) -> decide -> remember the
+            # outcome, the same shape react_behavior gives engine NPCs. The usage
+            # context above is set first so the decide() call inside
+            # observe_and_decide is attributed to this persona/step.
+            command = observe_and_decide(game, char, step_idx, retrieval=retrieval)
+            # Capture the thinking behind this decision for the replay card: the
+            # reasoning the agent produced and the memories it retrieved (stashed
+            # on the agent by observe_and_decide). They persist on st until the
+            # agent's next decision.
+            st["reasoning"] = (
+                getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
+            )
+            st["memories"] = memories_for_frame(
+                getattr(char.agent, "last_retrieved", None)
+            )
+            if command and game.parser.parse_command(command, actor=char):
+                remember_outcome(char, command, step_idx)
+                # Periodic memory synthesis (issue #84): now that this step's
+                # outcome is in memory, reflect if enough importance has accrued.
+                # A no-op unless a reflector was wired on (real provider only), so
+                # the mock replay stays byte-identical.
+                maybe_reflect(char.agent, game)
+                if command.startswith("travel"):
+                    dest = char.location
+                    address = getattr(dest, "tile_address", None)
+                    st["path"] = (
+                        world_map.walk_path(st["tile"], address) if address else []
+                    )
+                    st["pron"] = WALK_EMOJI
+                    st["desc"] = f"walking to {dest.name} @ {address}"
+                elif command.startswith("perform"):
+                    st["performing"] = True
+                    # Per-stop emoji (the schedule may vary it from the persona's
+                    # default), falling back to the persona's.
+                    st["pron"] = char.agent.schedule.emoji or emoji[name]
+                    activity = char.get_property("activity") or "spending time"
+                    st["desc"] = f"{activity} @ {char.location.tile_address}"
+                    # Schedule the move on to the next stop. None steps means
+                    # "stay" -- the agent settles here for the rest of the run.
+                    duration = char.agent.schedule.steps
+                    st["perform_until"] = (
+                        step_idx + duration if duration is not None else None
+                    )
+            elif command:
+                # The agent chose a command but it failed the precondition gate.
+                # Offer its planner a chance to re-plan around the blocked action
+                # (design doc §8). The mock never lands here -- its travel/perform
+                # are always legal -- so this stays byte-identical; it's the seam a
+                # real planner needs.
+                reason = getattr(game.parser, "last_fail_message", "") or command
+                maybe_revise_plan(
+                    char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
+                )
+
+        # Advance one tile along any active walk.
+        if st["path"]:
+            st["tile"] = st["path"].pop(0)
+
+        frame[name] = {
+            "movement": [int(st["tile"][0]), int(st["tile"][1])],
+            "pronunciatio": st["pron"],
+            "description": st["desc"],
+            # The agent's latest dialogue line (issue #86), or None. Updated below
+            # by maybe_converse for any pair that talks this step.
+            "chat": st["chat"],
+            # Reasoning + retrieved memories for this agent's card (the exporter
+            # writes the frame verbatim, so these flow straight into
+            # movement/<step>.json for the replay to render).
+            "reasoning": st["reasoning"],
+            "memories": st["memories"],
+        }
+
+    # Conversation (issue #86): after everyone has moved, let co-located, settled
+    # residents talk. Each meeting writes dialogue into both agents' memory
+    # streams and updates their cards' chat line. Gated + a no-op for the mock
+    # brain, so the default replay is unchanged.
+    chats_this_step = 0
+    if conversation_enabled:
+        chats_this_step = maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step_idx,
+            conversation_cooldowns,
+            order,
+            cooldown_steps=cog.conversation_cooldown_steps,
+            max_exchanges=cog.conversation_max_exchanges,
+        )
+    return frame, chats_this_step
+
+
 def simulate(
     world_map: WorldMap,
     num_steps: int,
@@ -310,136 +482,25 @@ def simulate(
                 )
             )
             break
-        # Give per-agent memory a coherent time axis: the step index is the
-        # "turn" memories are stamped and scored against (issue #75). The custom
-        # loop never calls end_turn, so without this game.turn would stay 0 and
-        # recency could never tell memories apart.
-        game.turn = _step
-        frame = {}
-        for name in order:
-            char = chars[name]
-            st = state[name]
-
-            # Behind-schedule trigger (design doc §8): a new in-game hour began
-            # and this agent is still walking, not yet at its planned stop. Offer
-            # its planner a chance to re-plan the tail. Clock-gated, so tests that
-            # pass no clock skip it; the mock's revise is a no-op regardless.
-            if (
-                clock is not None
-                and _step > 0
-                and st["path"]
-                and clock.hour_at(_step) != clock.hour_at(_step - 1)
-            ):
-                maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, _step), clock)
-
-            # Has the current activity run its course? Un-latch and point the brain
-            # at the next scheduled stop, so the agent becomes idle below and walks
-            # on. When the schedule is exhausted, just stop the timer and let it
-            # settle into this last activity for the rest of the run.
-            if (
-                st["performing"]
-                and st["perform_until"] is not None
-                and _step >= st["perform_until"]
-            ):
-                if char.agent.schedule.advance():
-                    st["performing"] = False
-                st["perform_until"] = None
-
-            # Decision point: idle and not yet settled into an activity.
-            if not st["path"] and not st["performing"]:
-                # Attribute this LLM call to the persona and step (usage.py).
-                ctx = getattr(char.agent.llm_client, "context", None)
-                if ctx is not None:
-                    ctx.update({"actor": name, "turn": _step, "attempt": 0})
-                # Observe (perceive + retrieve memories) -> decide -> remember
-                # the outcome, the same shape react_behavior gives engine NPCs.
-                # The usage context above is set first so the decide() call
-                # inside observe_and_decide is attributed to this persona/step.
-                command = observe_and_decide(game, char, _step, retrieval=retrieval)
-                # Capture the thinking behind this decision for the replay card:
-                # the reasoning the agent produced and the memories it retrieved
-                # (stashed on the agent by observe_and_decide). They persist on
-                # st until the agent's next decision.
-                st["reasoning"] = (
-                    getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
-                )
-                st["memories"] = memories_for_frame(
-                    getattr(char.agent, "last_retrieved", None)
-                )
-                if command and game.parser.parse_command(command, actor=char):
-                    remember_outcome(char, command, _step)
-                    # Periodic memory synthesis (issue #84): now that this step's
-                    # outcome is in memory, reflect if enough importance has
-                    # accrued. A no-op unless a reflector was wired on (real
-                    # provider only), so the mock replay stays byte-identical.
-                    maybe_reflect(char.agent, game)
-                    if command.startswith("travel"):
-                        dest = char.location
-                        address = getattr(dest, "tile_address", None)
-                        st["path"] = (
-                            world_map.walk_path(st["tile"], address) if address else []
-                        )
-                        st["pron"] = WALK_EMOJI
-                        st["desc"] = f"walking to {dest.name} @ {address}"
-                    elif command.startswith("perform"):
-                        st["performing"] = True
-                        # Per-stop emoji (the schedule may vary it from the
-                        # persona's default), falling back to the persona's.
-                        st["pron"] = char.agent.schedule.emoji or emoji[name]
-                        activity = char.get_property("activity") or "spending time"
-                        st["desc"] = f"{activity} @ {char.location.tile_address}"
-                        # Schedule the move on to the next stop. None steps means
-                        # "stay" -- the agent settles here for the rest of the run.
-                        duration = char.agent.schedule.steps
-                        st["perform_until"] = (
-                            _step + duration if duration is not None else None
-                        )
-                elif command:
-                    # The agent chose a command but it failed the precondition
-                    # gate. Offer its planner a chance to re-plan around the
-                    # blocked action (design doc §8). The mock never lands here --
-                    # its travel/perform are always legal -- so this stays
-                    # byte-identical; it's the seam a real planner needs.
-                    reason = getattr(game.parser, "last_fail_message", "") or command
-                    maybe_revise_plan(
-                        char, RevisionTrigger(ACTION_FAILED, _step, reason), clock
-                    )
-
-            # Advance one tile along any active walk.
-            if st["path"]:
-                st["tile"] = st["path"].pop(0)
-
-            frame[name] = {
-                "movement": [int(st["tile"][0]), int(st["tile"][1])],
-                "pronunciatio": st["pron"],
-                "description": st["desc"],
-                # The agent's latest dialogue line (issue #86), or None. Updated
-                # below by maybe_converse for any pair that talks this step.
-                "chat": st["chat"],
-                # Reasoning + retrieved memories for this agent's card (the
-                # exporter writes the frame verbatim, so these flow straight into
-                # movement/<step>.json for the replay to render).
-                "reasoning": st["reasoning"],
-                "memories": st["memories"],
-            }
-
-        # Conversation (issue #86): after everyone has moved, let co-located,
-        # settled residents talk. Each meeting writes dialogue into both agents'
-        # memory streams and updates their cards' chat line. Gated + a no-op for
-        # the mock brain, so the default replay is unchanged.
-        chats_this_step = 0
-        if conversation_enabled:
-            chats_this_step = maybe_converse(
-                game,
-                chars,
-                state,
-                frame,
-                _step,
-                conversation_cooldowns,
-                order,
-                cooldown_steps=cog.conversation_cooldown_steps,
-                max_exchanges=cog.conversation_max_exchanges,
-            )
+        # One 10-second tick, extracted to step() (#296) so a live backend can
+        # drive the sim between frames. simulate() stays the thin loop: it owns
+        # run-level concerns (the budget gate above, the heartbeat below, the
+        # final memory-stream fill) and hands each tick to step(). The frame is
+        # byte-identical to the inline loop; chats_this_step feeds the heartbeat.
+        frame, chats_this_step = step(
+            game,
+            chars,
+            state,
+            _step,
+            order=order,
+            world_map=world_map,
+            emoji=emoji,
+            retrieval=retrieval,
+            clock=clock,
+            conversation_enabled=conversation_enabled,
+            conversation_cooldowns=conversation_cooldowns,
+            cog=cog,
+        )
         frames.append(frame)
 
         # Per-turn heartbeat: stdout only, so it never touches the exported
