@@ -5,6 +5,9 @@ the pure ``run_command`` helper. Offline; requires the ``server`` extra (fastapi
 uvicorn) and ``httpx`` (TestClient) -- skipped cleanly if they're absent.
 """
 
+import urllib.parse
+from collections import Counter
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -233,6 +236,98 @@ def test_demo_game_serves_a_memory_stream():
     payload = TestClient(create_app(_demo_game())).get("/agents/gardener/memory").json()
     assert payload["count"] >= 1
     assert {m["kind"] for m in payload["memories"]} == {"observation", "plan"}
+
+
+# --- GET /agents roster (#344) ---------------------------------------------
+
+
+def test_agents_roster_lists_only_agent_bound_characters():
+    # The roster is the discovery list for /agents/{name}/memory: only
+    # characters with a mind bound appear. The player (no agent) is absent.
+    game, _npc = _with_agent()
+    payload = _client(game).get("/agents").json()
+    assert set(payload) == {"turn", "agents"}
+    assert payload["turn"] == 0
+    assert [a["name"] for a in payload["agents"]] == ["gardener"]
+
+
+def test_agents_roster_entry_shape():
+    game, _npc = _with_agent()
+    (entry,) = _client(game).get("/agents").json()["agents"]
+    assert set(entry) == {"name", "persona", "location", "memory_count", "kind_counts"}
+    assert entry["name"] == "gardener"
+    assert entry["persona"] == "I live here."  # Character(name, description, persona)
+    assert entry["location"] == "Field"
+    assert entry["memory_count"] == 2
+    assert entry["kind_counts"] == {"observation": 1, "plan": 1}
+
+
+def test_agents_roster_empty_world_is_not_an_error():
+    # A world with no agent-bound characters (just the player) is well-formed,
+    # not a 404/500: an empty list, so a client renders "no agents".
+    payload = _client(_tiny()).get("/agents").json()
+    assert payload == {"turn": 0, "agents": []}
+
+
+def test_agents_roster_names_round_trip_to_memory_route():
+    # Acceptance: every name the roster returns works verbatim (URL-encoded)
+    # against /agents/{name}/memory -- including a full name with a space.
+    game, _npc = _with_agent(name="Maya Chen")
+    client = _client(game)
+    roster = client.get("/agents").json()["agents"]
+    assert [a["name"] for a in roster] == ["Maya Chen"]
+    for entry in roster:
+        encoded = urllib.parse.quote(entry["name"])
+        assert client.get(f"/agents/{encoded}/memory").status_code == 200
+
+
+def test_agents_roster_counts_match_the_memory_stream():
+    # The roster tally must agree with the stream the memory route then serves,
+    # so a sidebar badge and the opened panel can never disagree. Checked
+    # against an independent Counter, not the helper the endpoint uses.
+    game, npc = _with_agent()
+    (entry,) = _client(game).get("/agents").json()["agents"]
+    stream = memory_stream_for_persona(npc.agent)
+    assert entry["memory_count"] == len(stream)
+    assert entry["kind_counts"] == dict(Counter(m["kind"] for m in stream))
+
+
+def test_agents_roster_reflects_mid_run_growth():
+    # Like the memory route, the roster reads live objects: a memory formed
+    # during the run bumps the count with no end-of-run export.
+    game, npc = _with_agent()
+    client = _client(game)
+    before = client.get("/agents").json()["agents"][0]
+    npc.agent.memory.add_reflection("The field is peaceful.", turn=1, importance=4.0)
+    after = client.get("/agents").json()["agents"][0]
+    assert after["memory_count"] == before["memory_count"] + 1
+    assert after["kind_counts"]["reflection"] == 1
+
+
+def test_agents_roster_requires_auth_when_token_configured():
+    game, _npc = _with_agent()
+    client = _client(game, auth_token="s3cret")
+    assert client.get("/agents").status_code == 401
+    ok = client.get("/agents", headers={"Authorization": "Bearer s3cret"})
+    assert ok.status_code == 200
+
+
+def test_agents_roster_get_is_read_only():
+    game, npc = _with_agent()
+    client = _client(game)
+    a = client.get("/agents").json()
+    b = client.get("/agents").json()
+    assert a == b
+    assert game.turn == 0  # never advanced the game
+    assert len(npc.agent.memory.records) == 2  # never wrote a memory
+
+
+def test_demo_game_lists_exactly_the_gardener():
+    # #344 acceptance on the stock demo world: exactly one entry (the gardener),
+    # the player absent -- runnable with no LLM or API key.
+    payload = TestClient(create_app(_demo_game())).get("/agents").json()
+    assert [a["name"] for a in payload["agents"]] == ["gardener"]
+    assert payload["agents"][0]["memory_count"] == 3
 
 
 # --- #186 security posture ------------------------------------------------

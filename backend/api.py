@@ -13,6 +13,8 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 
 * ``GET  /health``       -> ``{"ok": true, "turn": N}``
 * ``GET  /world_state``  -> the typed ``WorldState`` snapshot
+* ``GET  /agents``       -> the roster of agent-bound characters, with a cheap
+  memory summary each (issue #344) -- the discovery companion to the route below.
 * ``GET  /agents/{name}/memory`` -> the memory stream *name* has formed so far
   (issue #298) -- the live counterpart of the replay file's ``memory_streams``.
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
@@ -47,7 +49,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from text_adventure_games.reporting import JSONRenderer
 
-from .smallville_agents import memory_stream_for_persona
+from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
 
 # Hosts that never need auth: a server bound here is only reachable from the
 # same machine, so the loopback-only default is safe without a token (#186).
@@ -109,6 +111,38 @@ class MemoryStreamResponse(BaseModel):
     turn: int
     count: int = Field(..., description="== len(memories)")
     memories: list[MemoryEntry]
+
+
+class AgentSummary(BaseModel):
+    """One agent-bound character in the roster (``GET /agents``, #344).
+
+    ``name`` is the exact, case-sensitive URL key for ``/agents/{name}/memory``
+    (spaces and all). ``location`` is the location's name, or ``null`` for an
+    unplaced character -- the same projection ``world_state`` uses.
+    ``kind_counts``/``memory_count`` are a *cheap* activity summary so a list
+    view needs no per-agent follow-up fetch; the full stream (with the memory
+    *text*) stays behind the per-persona ``/agents/{name}/memory`` route, never
+    the omniscient snapshot (#185)."""
+
+    name: str
+    persona: str
+    location: str | None
+    memory_count: int = Field(..., description="== sum(kind_counts.values())")
+    kind_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="memories tallied by kind: observation | reflection | plan | chat",
+    )
+
+
+class AgentRosterResponse(BaseModel):
+    """``GET /agents``: the characters that have a mind bound.
+
+    ``turn`` is the engine turn the roster was snapshotted at -- the same
+    counter ``GET /health`` reports and each memory stream's ``turn`` -- so a
+    client can align the roster with the feed. ``agents`` is sorted by name."""
+
+    turn: int
+    agents: list[AgentSummary]
 
 
 def run_command(game, command: str, lock: threading.Lock | None = None) -> dict:
@@ -215,6 +249,34 @@ def create_app(
         """The typed, deterministic snapshot of the whole world (#90)."""
         with lock:
             return game.to_world_state().to_jsonable()
+
+    @app.get("/agents", response_model=AgentRosterResponse)
+    def agents(_: None = Depends(require_auth)):
+        """The roster of agent-bound characters, read mid-run (#344).
+
+        The discovery companion to ``GET /agents/{name}/memory``: one small list
+        of the characters that have a mind bound -- the same ``char.agent is not
+        None`` seam the memory route filters on -- so a client learns which names
+        are addressable without probing each and eating 404s. A character with no
+        agent (the player, a scripted-behavior NPC) is absent here, exactly as it
+        would 404 on the memory route. Read-only and pull-only; ``turn`` matches
+        ``/health`` for feed alignment; the list is sorted by name for
+        determinism. Read under the shared lock so ``turn`` and every entry are
+        one atomic snapshot. Once a persistent store exists this becomes a
+        store-backed query scoped under a run id (#304/#306)."""
+        with lock:
+            roster = [
+                {
+                    "name": name,
+                    "persona": getattr(char, "persona", ""),
+                    "location": char.location.name if char.location else None,
+                    "kind_counts": kind_counts_for_persona(char.agent),
+                    "memory_count": len(memory_stream_for_persona(char.agent)),
+                }
+                for name, char in sorted(game.characters.items())
+                if char.agent is not None
+            ]
+            return {"turn": game.turn, "agents": roster}
 
     @app.get("/agents/{name}/memory", response_model=MemoryStreamResponse)
     def agent_memory(name: str, _: None = Depends(require_auth)):
