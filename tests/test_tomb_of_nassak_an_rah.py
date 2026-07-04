@@ -961,6 +961,51 @@ def test_burning_the_root_mid_fight_fells_the_horror():
     assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
 
 
+def _summon_pack(game):
+    """Quietly reach Memory, then shout the pack into the room."""
+    _no_spawn(game)
+    _embark(game, glowstone=False)
+    for cmd in (
+        "sneak north",
+        "sneak north",
+        "say hey",
+        "say hey",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    assert game.characters["jackal pack"].location.name == "Hall of Memory"
+
+
+def test_the_pack_pursues_by_sight_and_scent():
+    """Sneaking means nothing to scent: once out, the pack tracks you through
+    its territory at a lope-and-rest rhythm -- keep moving and you hold your
+    lead; stop, and they collect."""
+    tomb._RNG.seed(0)
+    game = _game()
+    _summon_pack(game)
+    pack = game.characters["jackal pack"]
+    game.do_command("sneak north")  # flee (silently!) to Warriors
+    assert pack.location.name == "Hall of Memory"  # first beat: hang back
+    game.do_command("sneak east")  # keep moving to Hounds
+    assert pack.location.name == "Hall of Warriors"  # one room behind
+    wounds = game.player.wound_slots()
+    game.do_command("wait")  # stop: the lope closes
+    game.do_command("wait")
+    assert pack.location.name == "Hall of Hounds"
+    assert game.player.wound_slots() > wounds  # and they collect
+
+
+def test_the_youth_is_a_refuge_from_the_pack():
+    game = _game()
+    _summon_pack(game)
+    cap = _texts(game)
+    game.do_command("south")  # into the Hall of Youth
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "comes no further" in out
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
 def test_the_dead_dont_sway_in_the_listings():
     """A felled creature's one-liner goes still (CCB): state-aware
     visible_description replaces the lively text."""

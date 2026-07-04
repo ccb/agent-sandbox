@@ -2014,11 +2014,9 @@ def build_game():
             key = f"_jk:{hall.name}"
             n = hall.get_property(key) or 0
             if here is not hall:
-                # Player gone: the pack loses interest; the trail cools toward
-                # calm from either side (positive suspicion drains, post-feed
-                # grace wears off).
-                if jackal_pack.location is hall:
-                    g.relocate(jackal_pack, den)
+                # The trail cools toward calm from either side (suspicion
+                # drains, post-feed grace wears off). The pack itself, once
+                # out, PURSUES -- handled below, not here.
                 hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
                 continue
             if jackal_pack.location is hall:
@@ -2047,6 +2045,7 @@ def build_game():
                     )
                 elif n >= 4:
                     g.relocate(jackal_pack, hall)
+                    jackal_pack.set_property("_stride", True)  # first beat: hang back
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
                         "filling the doorways. The nearest growls -- a sound "
@@ -2059,6 +2058,81 @@ def build_game():
                 hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
 
     game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
+
+    # THE PACK PURSUES (CCB design): unlike the blind Spawn, jackals see and
+    # smell -- once out, they track you through their territory (the three
+    # ground halls), one hall per round. Sneaking means nothing to scent. The
+    # answers are distance (keep moving), the Youth (they will not follow into
+    # the bat vault), the stairs and the open sand (leave their ground long
+    # enough and they give you up), tribute, or steel.
+    _territory = (memory, hounds, warriors)
+
+    def _hop_toward(start, goal):
+        """One step from *start* toward *goal* through territory rooms."""
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, None)])
+        while queue:
+            room, first = queue.popleft()
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return first or nxt
+                if nxt in _territory and nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, first or nxt))
+        return None
+
+    def _pack_pursues(g):
+        return jackal_pack.location in _territory and not _pack_out(g)
+
+    def _pursue(g):
+        here = g.player.location
+        if here is jackal_pack.location:
+            return  # co-located: the main tick handles the mauling
+        if here in _territory:
+            jackal_pack.set_property("_lost", 0)
+            # A lope-and-rest rhythm: the pack closes every OTHER round, so a
+            # player who keeps moving holds their lead -- and one who stops to
+            # rummage is caught. Cautious, clever, patient.
+            if jackal_pack.get_property("_stride"):
+                jackal_pack.set_property("_stride", False)
+                g.parser.ok("The yipping hangs back a room, in no hurry at all.")
+                return
+            jackal_pack.set_property("_stride", True)
+            step = _hop_toward(jackal_pack.location, here)
+            if step is not None:
+                g.relocate(jackal_pack, step)
+                if step is here:
+                    g.parser.ok(
+                        "The pack comes through the doorway at a lope, "
+                        "unhurried, sure of you."
+                    )
+                else:
+                    g.parser.ok(
+                        "Behind you, the yipping keeps your pace. They are "
+                        "not following your noise. They are following you."
+                    )
+        elif here is youth:
+            g.parser.ok(
+                "The yipping stops at the lightless mouth of the Hall of "
+                "Youth and comes no further. Something about the dark above "
+                "is theirs to respect."
+            )
+            g.relocate(jackal_pack, den)
+        else:
+            lost = int(jackal_pack.get_property("_lost") or 0) + 1
+            jackal_pack.set_property("_lost", lost)
+            if lost >= 3:
+                jackal_pack.set_property("_lost", 0)
+                g.relocate(jackal_pack, den)
+                for h in _halls:
+                    h.set_property(f"_jk:{h.name}", 0)
+                g.parser.ok(
+                    "Somewhere below, the yipping circles twice, and gives " "you up."
+                )
+
+    game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
