@@ -19,11 +19,189 @@ import os
 import re
 import json
 import time
+import random
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable, Union
 
 from .enums import LlmProvider
 from .usage import RunLog, UsageLedger, record_call
+
+# ---------------------------------------------------------------------------
+# Resilience: retry with exponential backoff (issue #260)
+# ---------------------------------------------------------------------------
+#
+# A real-LLM run is call-heavy -- a Penn day is thousands of provider calls -- so
+# a transient 429 / 5xx / dropped connection must not abort the whole run. The
+# provider SDKs retry internally, but those retries are invisible to the
+# UsageLedger. So we set each SDK's own ``max_retries`` to 0 and own the loop
+# here, recording every attempt (see the adapters) so retries stay observable in
+# the ledger. The SDK's per-call ``timeout`` still guards against a hung socket.
+
+# HTTP statuses worth retrying: request timeout, conflict, and rate limit, plus
+# any 5xx server error. Matches the provider SDKs' own retryable set.
+_RETRYABLE_STATUS = {408, 409, 429}
+
+# Substrings of provider-SDK exception class names that signal a transient
+# failure carrying no HTTP status (connection resets, socket timeouts). Matched
+# on the class name so this module needs neither SDK installed -- and so tests
+# can raise a lightweight stand-in exception.
+_RETRYABLE_NAME_HINTS = (
+    "ratelimit",
+    "timeout",
+    "apiconnection",
+    "connection",
+    "internalserver",
+    "serviceunavailable",
+    "overloaded",
+)
+
+# Backoff schedule (seconds): delay grows as base * 2**attempt, capped, with
+# jitter so 25 agents don't retry in lockstep (a thundering herd).
+_RETRY_BASE_DELAY = 0.5
+_RETRY_MAX_DELAY = 30.0
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True if *exc* looks like a transient provider error worth retrying.
+
+    Duck-typed so it works without either SDK installed: prefers an HTTP
+    ``status_code`` when present (429/408/409 or any 5xx), else matches the
+    exception class name against known transient-error types. A plain
+    ``RuntimeError`` / ``ValueError`` is treated as non-retryable.
+    """
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and (status in _RETRYABLE_STATUS or status >= 500):
+        return True
+    name = type(exc).__name__.lower()
+    return any(hint in name for hint in _RETRYABLE_NAME_HINTS)
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Read a ``Retry-After`` header (seconds) off *exc* if the SDK attached one.
+
+    Honors the server's own backoff hint over our computed delay when present.
+    Returns None when unavailable or unparseable.
+    """
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if not headers:
+        return None
+    try:
+        value = headers.get("retry-after")
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _backoff_delay(
+    attempt: int,
+    base: float = _RETRY_BASE_DELAY,
+    cap: float = _RETRY_MAX_DELAY,
+    retry_after: float | None = None,
+) -> float:
+    """Delay before retry *attempt* (0-based): the server's hint if given, else
+    exponential backoff (base * 2**attempt) with full jitter, capped at *cap*."""
+    if retry_after is not None:
+        return min(retry_after, cap)
+    return min(base * (2**attempt) + random.uniform(0, base), cap)
+
+
+def _retry_with_backoff(fn, *, max_retries: int, sleep=time.sleep, on_retry=None):
+    """Call *fn* with up to ``max_retries`` retries on transient errors.
+
+    Runs ``max_retries + 1`` attempts total. On a retryable exception with
+    attempts remaining, invokes ``on_retry(attempt, exc)`` (used to record the
+    failed attempt), sleeps for a backoff delay, then retries. Non-retryable
+    errors and the final failure re-raise -- callers keep their existing
+    ``except Exception -> None`` graceful-fallback contract.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            if attempt >= max_retries or not _is_retryable(exc):
+                raise
+            if on_retry is not None:
+                on_retry(attempt, exc)
+            sleep(_backoff_delay(attempt, retry_after=_retry_after(exc)))
+    # Unreachable: the final attempt (attempt == max_retries) either returns its
+    # result or re-raises above. Kept explicit so callers get fn()'s type back
+    # (not `... | None`) and the loop can't silently fall through to None.
+    raise RuntimeError("retry loop exhausted without returning or raising")
+
+
+def _resilient_create(client, create_fn, *, provider: str, messages: list[dict]):
+    """Run *create_fn* (one provider SDK call) with observable retries.
+
+    Wraps only the network call, not the surrounding response parsing (a parse
+    error is a bug, not a transient failure). Each failed-then-retried attempt is
+    written to the ledger as a zero-cost :class:`~text_adventure_games.usage.CallRecord`
+    with its ``attempt`` index set, so ``summary()["calls"]`` counts retries.
+    Returns ``(response, latency_ms)`` for the successful attempt; re-raises on
+    the final failure or a non-retryable error so the adapter's ``except`` turns
+    it into ``None``.
+    """
+    timing: dict = {}
+    attempts = {"n": 0}
+
+    def _do():
+        t0 = time.perf_counter()
+        response = create_fn()
+        timing["latency_ms"] = (time.perf_counter() - t0) * 1000.0
+        return response
+
+    def _on_retry(attempt: int, exc: Exception):
+        ctx = getattr(client, "context", None)
+        if ctx is not None:
+            ctx["attempt"] = attempt
+        record_call(
+            getattr(client, "ledger", None),
+            ctx,
+            provider,
+            getattr(client, "_model", provider),
+            None,  # raw_usage: a rejected call bills nothing -> zero-cost record
+            messages,
+            None,
+        )
+        attempts["n"] = attempt + 1
+        if getattr(client, "_verbose", False):
+            print(f"{provider} call failed (attempt {attempt + 1}); retrying: {exc}")
+
+    response = _retry_with_backoff(
+        _do,
+        max_retries=getattr(client, "_max_retries", 2),
+        sleep=getattr(client, "_sleep", time.sleep),
+        on_retry=_on_retry,
+    )
+    # Stamp the successful record with the attempt it landed on (0 = first try).
+    ctx = getattr(client, "context", None)
+    if ctx is not None:
+        ctx["attempt"] = attempts["n"]
+    return response, timing["latency_ms"]
+
+
+def _preflight_key(client, provider: str, key_env: str, live_probe) -> None:
+    """Shared key preflight: fail fast up front rather than deep in the loop.
+
+    Always (offline, free): raise a clear ``ValueError`` when no API key is
+    resolvable for a real provider. When ``LLM_PREFLIGHT`` is truthy, also run
+    *live_probe* -- one cheap authenticated call -- and raise a clear
+    ``ValueError`` if it fails, catching a bad/expired key before the run. The
+    live check is opt-in so the default path stays offline and spends nothing.
+    """
+    if not getattr(client, "_api_key", None):
+        raise ValueError(
+            f"No API key for provider '{provider}'. Set {key_env} or LLM_API_KEY."
+        )
+    if os.environ.get("LLM_PREFLIGHT", "").lower() in ("1", "true"):
+        try:
+            live_probe()
+        except Exception as e:
+            raise ValueError(
+                f"{provider} preflight failed -- the API key may be invalid or "
+                f"the service unreachable: {e}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Protocol
@@ -57,6 +235,14 @@ class LlmClient(Protocol):
 
     def count_tokens(self, text: str) -> int:
         """Estimate the number of tokens in *text*."""
+        ...
+
+    def preflight(self) -> None:
+        """Validate configuration before the run so failures surface up front.
+
+        Real adapters raise a clear ``ValueError`` when no API key is resolvable
+        (and, if ``LLM_PREFLIGHT`` is set, on a failed cheap live call). The mock
+        is a no-op -- it needs no key and stays offline."""
         ...
 
 
@@ -129,6 +315,10 @@ class LlmConfig:
     max_context_tokens: int = 8000
     base_url: str | None = None  # e.g. Helicone proxy
     verbose: bool = False
+    # Resilience (issue #260): retries on transient errors and a per-call socket
+    # timeout, both wired into the provider SDK. Defaults suit an unattended bake.
+    max_retries: int = 2
+    timeout_sec: float = 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -149,12 +339,23 @@ class OpenAIClient:
                 "The openai package is required. Install with: pip install openai"
             )
         api_key = config.api_key or os.environ.get("OPENAI_API_KEY")
-        kwargs: dict = {"api_key": api_key}
+        self._api_key = api_key
+        # Per-call socket timeout so a hung request can't block simulate()
+        # forever; max_retries=0 hands retry control to _retry_with_backoff so
+        # retries stay observable in the ledger (issue #260).
+        kwargs: dict = {
+            "api_key": api_key,
+            "timeout": config.timeout_sec,
+            "max_retries": 0,
+        }
         if config.base_url:
             kwargs["base_url"] = config.base_url
         self._client = openai.OpenAI(**kwargs)
         self._model = config.model or _DEFAULT_OPENAI_MODEL
         self._verbose = config.verbose
+        self._max_retries = config.max_retries
+        self._timeout = config.timeout_sec
+        self._sleep = time.sleep  # injectable in tests to skip real backoff
         # Lazy tokenizer
         self._tokenizer = None
         # Usage accounting (side channel; see usage.py). Defaults to a private
@@ -183,17 +384,20 @@ class OpenAIClient:
         try:
             if self._verbose:
                 print(json.dumps(messages, indent=2))
-            t0 = time.perf_counter()
-            response = self._client.chat.completions.create(
-                model=self._model,
+            response, latency_ms = _resilient_create(
+                self,
+                lambda: self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=0,
+                    frequency_penalty=0,
+                    presence_penalty=0,
+                ),
+                provider="openai",
                 messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=0,
-                frequency_penalty=0,
-                presence_penalty=0,
             )
-            latency_ms = (time.perf_counter() - t0) * 1000.0
             text = response.choices[0].message.content
             record_call(
                 getattr(self, "ledger", None),
@@ -221,19 +425,22 @@ class OpenAIClient:
         try:
             if self._verbose:
                 print(json.dumps(messages, indent=2))
-            t0 = time.perf_counter()
-            response = self._client.chat.completions.create(
-                model=self._model,
+            response, latency_ms = _resilient_create(
+                self,
+                lambda: self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=[_to_openai_tool(tool)],
+                    tool_choice={
+                        "type": "function",
+                        "function": {"name": tool["name"]},
+                    },
+                ),
+                provider="openai",
                 messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=[_to_openai_tool(tool)],
-                tool_choice={
-                    "type": "function",
-                    "function": {"name": tool["name"]},
-                },
             )
-            latency_ms = (time.perf_counter() - t0) * 1000.0
             tool_calls = response.choices[0].message.tool_calls
             args_text = tool_calls[0].function.arguments if tool_calls else None
             record_call(
@@ -261,6 +468,14 @@ class OpenAIClient:
         # Fallback heuristic
         return len(text) // 4
 
+    def preflight(self) -> None:
+        _preflight_key(
+            self,
+            "openai",
+            "OPENAI_API_KEY",
+            live_probe=lambda: self._client.models.list(),
+        )
+
 
 # ---------------------------------------------------------------------------
 # Anthropic adapter
@@ -284,9 +499,20 @@ class AnthropicClient:
                 "The anthropic package is required. Install with: pip install anthropic"
             )
         api_key = config.api_key or os.environ.get("ANTHROPIC_API_KEY")
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._api_key = api_key
+        # Per-call socket timeout so a hung request can't block simulate()
+        # forever; max_retries=0 hands retry control to _retry_with_backoff so
+        # retries stay observable in the ledger (issue #260).
+        self._client = anthropic.Anthropic(
+            api_key=api_key,
+            timeout=config.timeout_sec,
+            max_retries=0,
+        )
         self._model = config.model or _DEFAULT_ANTHROPIC_MODEL
         self._verbose = config.verbose
+        self._max_retries = config.max_retries
+        self._timeout = config.timeout_sec
+        self._sleep = time.sleep  # injectable in tests to skip real backoff
         # Usage accounting (side channel; see usage.py and OpenAIClient.__init__).
         self.ledger = ledger or UsageLedger()
         self.context: dict = {}
@@ -323,9 +549,12 @@ class AnthropicClient:
             if system_text:
                 kwargs["system"] = system_text
 
-            t0 = time.perf_counter()
-            response = self._client.messages.create(**kwargs)
-            latency_ms = (time.perf_counter() - t0) * 1000.0
+            response, latency_ms = _resilient_create(
+                self,
+                lambda: self._client.messages.create(**kwargs),
+                provider="anthropic",
+                messages=messages,
+            )
             text = response.content[0].text
             record_call(
                 getattr(self, "ledger", None),
@@ -377,9 +606,12 @@ class AnthropicClient:
             if system_text:
                 kwargs["system"] = system_text
 
-            t0 = time.perf_counter()
-            response = self._client.messages.create(**kwargs)
-            latency_ms = (time.perf_counter() - t0) * 1000.0
+            response, latency_ms = _resilient_create(
+                self,
+                lambda: self._client.messages.create(**kwargs),
+                provider="anthropic",
+                messages=messages,
+            )
             args = None
             for block in response.content:
                 if getattr(block, "type", None) == "tool_use":
@@ -404,6 +636,14 @@ class AnthropicClient:
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token
         return len(text) // 4
+
+    def preflight(self) -> None:
+        _preflight_key(
+            self,
+            "anthropic",
+            "ANTHROPIC_API_KEY",
+            live_probe=lambda: self._client.models.list(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -551,6 +791,10 @@ class MockLlmClient:
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token (matches the Anthropic adapter).
         return len(text) // 4
+
+    def preflight(self) -> None:
+        # The mock needs no key and never touches the network -- nothing to check.
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -858,9 +1102,15 @@ def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
 
     Reads ``LLM_PROVIDER`` ("anthropic", "openai", or "mock" -- the free,
     offline stand-in), plus optional ``LLM_API_KEY``, ``LLM_MODEL``,
-    ``LLM_BASE_URL``, and ``LLM_VERBOSE``. Returns ``None`` when no provider
-    is set or the client can't be created, so callers can fall back to their
-    non-LLM path.
+    ``LLM_BASE_URL``, ``LLM_VERBOSE``, and the resilience knobs
+    ``LLM_MAX_RETRIES`` (int, default 2) and ``LLM_API_TIMEOUT_SEC`` (float,
+    default 60). Returns ``None`` when no provider is set or the client can't be
+    created, so callers can fall back to their non-LLM path.
+
+    Before returning, the client is preflighted: a real provider with no
+    resolvable API key fails fast here (returning ``None`` with a clear warning)
+    rather than deep inside the run. Set ``LLM_PREFLIGHT=1`` to additionally
+    validate the key with one cheap live call.
 
     When a :class:`~text_adventure_games.usage.RunLog` is passed, the client's
     usage ledger is attached to it so every call streams to the artifact and the
@@ -876,9 +1126,15 @@ def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
             model=os.environ.get("LLM_MODEL"),
             base_url=os.environ.get("LLM_BASE_URL"),
             verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+            max_retries=int(os.environ.get("LLM_MAX_RETRIES", LlmConfig.max_retries)),
+            timeout_sec=float(
+                os.environ.get("LLM_API_TIMEOUT_SEC", LlmConfig.timeout_sec)
+            ),
         )
         ledger = UsageLedger()
         client = create_llm_client(config, ledger=ledger)
+        # Surface a missing/bad key up front instead of deep in the loop.
+        client.preflight()
         if run_log is not None:
             run_log.attach(ledger)
         return client
