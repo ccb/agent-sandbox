@@ -17,6 +17,9 @@ Endpoints (composing the engine's world-state export #90 + change feed):
   memory summary each (issue #344) -- the discovery companion to the route below.
 * ``GET  /agents/{name}/memory`` -> the memory stream *name* has formed so far
   (issue #298) -- the live counterpart of the replay file's ``memory_streams``.
+* ``GET  /agents/{name}/knowledge`` -> what *name* *believes about the world*
+  (issue #348) -- the seeded priors + anything learned since, the sibling read
+  to memory (memory is the episodic log; knowledge is the current world-model).
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
   change-feed ``events``, the new ``world_state`` snapshot, and ``game_over``.
 
@@ -41,7 +44,7 @@ from __future__ import annotations
 import os
 import threading
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -143,6 +146,43 @@ class AgentRosterResponse(BaseModel):
 
     turn: int
     agents: list[AgentSummary]
+
+
+class BeliefEntry(BaseModel):
+    """One belief, in the exact shape ``Knowledge.to_primitive()`` emits.
+
+    These three fields *are* the save-file belief shape
+    (``text_adventure_games/knowledge.py::Belief``) -- there is no second schema.
+    A belief is what the character *thinks is true*; it may be incomplete or even
+    wrong (the world graph stays the single source of truth). Deliberately no
+    ``confidence`` / ``source``: the "uncertain or wrong" axis lives in ``text``."""
+
+    text: str = Field(..., description="the belief in plain language, first person")
+    topic: str | None = Field(
+        None,
+        description="optional lookup key; a belief whose topic matches a Thing's "
+        "secret_topic unlocks perception of that hidden Thing",
+    )
+    learned_turn: int | None = Field(
+        None,
+        description="None for a prior known up front; else the turn it was learned",
+    )
+
+
+class KnowledgeResponse(BaseModel):
+    """``GET /agents/{name}/knowledge``: everything *name* believes so far (#348).
+
+    The belief-set sibling of :class:`MemoryStreamResponse`. ``beliefs`` is the
+    verbatim ``Knowledge.to_primitive()['beliefs']`` list -- the seeded spatial
+    priors (#79, ``learned_turn`` null) alongside anything learned during play
+    (``learned_turn`` set). ``turn`` is the engine turn the belief set was
+    snapshotted at (same counter ``GET /health`` reports), so two reads with no
+    turn between them are identical."""
+
+    persona: str
+    turn: int
+    count: int = Field(..., description="== len(beliefs)")
+    beliefs: list[BeliefEntry]
 
 
 def run_command(game, command: str, lock: threading.Lock | None = None) -> dict:
@@ -314,6 +354,60 @@ def create_app(
                 "memories": memories,
             }
 
+    @app.get("/agents/{name}/knowledge", response_model=KnowledgeResponse)
+    def agent_knowledge(
+        name: str,
+        topic: str | None = Query(
+            default=None,
+            description="if set, return only beliefs carrying this exact topic",
+        ),
+        _: None = Depends(require_auth),
+    ):
+        """What *name* *believes about the world*, read mid-run (#348).
+
+        The sibling of :func:`agent_memory`: memory is the episodic *log*;
+        knowledge is the current *world-model* -- the seeded spatial priors
+        (#79) plus anything learned during play. Like ``world_state``, the
+        snapshot omits private cognition (#185), so this scoped per-persona
+        route is the sanctioned way to read one agent's beliefs.
+
+        **The 404 story is deliberate.** Unlike memory, ``knowledge`` lives on
+        the *character*, not on ``agent.memory`` -- every character has a
+        (possibly empty) belief set. We still 404 a character with no agent
+        bound, keeping the ``/agents/{name}/...`` family consistent: it reads a
+        *mind*, and the player / a scripted-behavior NPC is not one to inspect
+        here. An agent that simply hasn't been seeded returns 200 with
+        ``beliefs: []`` (absent, not an error -- the fresh-checkout case where
+        #79 seeding no-ops). Optional ``?topic=`` filters to beliefs carrying
+        that exact perception key when the set grows large.
+
+        Read under the shared lock, so ``turn`` and ``beliefs`` are one atomic
+        snapshot and two reads with no turn between them are identical. The
+        belief shape is ``Knowledge.to_primitive()`` verbatim -- the save-file
+        shape, so there is no second schema to drift."""
+        with lock:
+            char = game.characters.get(name)
+            if char is None:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown character: {name!r}"
+                )
+            if char.agent is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"character {name!r} has no agent (and so no mind to read)",
+                )
+            # to_primitive() is the save-file belief shape; response_model keeps
+            # the wire frozen if the serializer ever grows a field.
+            beliefs = char.knowledge.to_primitive()["beliefs"]
+            if topic is not None:
+                beliefs = [b for b in beliefs if b["topic"] == topic]
+            return {
+                "persona": name,
+                "turn": game.turn,
+                "count": len(beliefs),
+                "beliefs": beliefs,
+            }
+
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
         """Run exactly one command and return events + the new snapshot.
@@ -362,7 +456,11 @@ def _demo_game():
     ``AgentMemory`` a live LLM agent accrues into) so
     ``GET /agents/gardener/memory`` (#298) has something to show without any
     provider key. In a real sim the loop writes the stream instead -- seeded
-    plans, perceived events, action outcomes, reflections."""
+    plans, perceived events, action outcomes, reflections.
+
+    Its ``knowledge`` is seeded too, so ``GET /agents/gardener/knowledge``
+    (#348) shows both a prior (``learned_turn`` null, the way #79 seeds spatial
+    knowledge) and a belief learned during play (``learned_turn`` set)."""
     from text_adventure_games import games, things
     from text_adventure_games.npc import ScriptedAgent
 
@@ -386,6 +484,13 @@ def _demo_game():
     )
     agent.memory.add_plan("Water the tall grass before midday.", turn=0)
     gardener.set_agent(agent)
+
+    # Beliefs (the current world-model, #348) -- distinct from the log above. A
+    # prior known up front (learned_turn stays None, the way #79 seeds spatial
+    # knowledge) and one learned mid-run (stamped with the turn), so the route
+    # shows both. The ``forest`` topic doubles as a perception key.
+    gardener.add_belief("The field lies just south of a dense forest.", topic="forest")
+    gardener.knowledge.learn("The north path is overgrown with tall grass.", turn=1)
 
     return games.Game(field, player, characters=[gardener])
 

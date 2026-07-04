@@ -249,6 +249,12 @@ Knowledge serializes through the existing character save path, mirroring `goals`
 "learned_turn"}, ...]}`. Runtime-only fields (the agent, its LLM client) remain
 unserialized, exactly as before.
 
+That same `beliefs` list is also readable live over HTTP, one persona at a time:
+`GET /agents/{name}/knowledge` (#348) wraps it in a `{persona, turn, count,
+beliefs}` envelope — the sibling of the memory read (#298) — so the wire shape
+*is* the save-file shape, with no second schema. See `backend/README.md`, "The
+belief set", for the endpoint.
+
 ---
 
 ## 10. Testing
