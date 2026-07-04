@@ -90,6 +90,13 @@ const FOG_FALLBACK_VISION_R := 8
 const FOG_FEATHER_PX := 64.0
 const FOG_COLOR := Color(0.16, 0.17, 0.21, 0.72)
 
+# Location spotlight (sidebar "Focus" dropdown, issue #250): pick a building and every
+# agent NOT currently in it fades out. The sprite (and its nameplate/bubble, which ride
+# its node.modulate) drop to this alpha; the trail (parented separately under _trails)
+# fades harder so it doesn't clutter the dimmed background.
+const SPOTLIGHT_DIM_ALPHA := 0.35
+const TRAIL_DIM_ALPHA := 0.18
+
 var _tile_px := 16
 var _sec_per_step := 10
 var _start_unix := 0
@@ -101,6 +108,12 @@ var _anim_t := 0.0
 var _paused := false
 var _speed := 1.0
 var _last_status_step := -1         # last frame index pushed to the sidebar rows
+# Location spotlight (see SPOTLIGHT_DIM_ALPHA). `_filter_location` is the building the
+# sidebar Focus dropdown selected ("" = All, no filter); `_agent_location` caches each
+# agent's building for the current step (parsed from its `act`), so the spotlight and
+# the dropdown agree on where everyone is.
+var _filter_location := ""
+var _agent_location := {}           # name -> building this step
 var _sky: CanvasModulate            # clock-driven day-night tint over the campus
 var _trails: Node2D                 # parent of the per-agent breadcrumb Line2Ds
 # Web only: push the current step to the page so the React companion panel can
@@ -136,6 +149,7 @@ var _fog_mat: ShaderMaterial
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
+@onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
 func _ready() -> void:
@@ -172,6 +186,11 @@ func _ready() -> void:
 	_panel.seek_requested.connect(_on_seek)
 	_panel.speed_changed.connect(func(m: float) -> void: _speed = m)
 	_panel.set_playing(not _paused)
+
+	# Location spotlight: the sidebar's Focus dropdown picks a building; we dim everyone
+	# not there and glide the view to it. The dropdown's building list is filled after
+	# the replay loads (see _load_replay_from_text).
+	_panel.filter_changed.connect(_on_filter_changed)
 
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
@@ -266,6 +285,19 @@ func _load_replay_from_text(text: String) -> void:
 		# three views of each character all agree at a glance.
 		_panel.add_character(pname, thumb, tint)
 		_minimap.add_agent(pname, _agents[pname]["node"], tint)
+
+	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
+	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
+	# sim plays. The building is the middle segment of each `act` address (see _building_of).
+	var buildings := {}  # used as a set
+	for frame in _frames:
+		for name in _names:
+			var b := _building_of(String((frame[name] as Dictionary)["act"]))
+			if b != "":
+				buildings[b] = true
+	var sorted_buildings := buildings.keys()
+	sorted_buildings.sort()
+	_panel.set_locations(PackedStringArray(sorted_buildings))
 
 	# Size the timeline to the replay (frames are 0..last) and seed the readout.
 	var last := maxi(_frames.size() - 1, 0)
@@ -456,6 +488,17 @@ func _tile_to_world(x: int, y: int) -> Vector2:
 	return Vector2((x + 0.5) * _tile_px, (y + 0.5) * _tile_px)
 
 
+func _building_of(act: String) -> String:
+	# The building an agent is in, from its `act` string. `act` is
+	# "<activity> @ UPenn:<Building>:<area>"; we want the middle "<Building>" segment.
+	# Returns "" if the address is missing or malformed.
+	var halves := act.split(" @ ")
+	if halves.size() < 2:
+		return ""
+	var addr := halves[1].split(":")
+	return addr[1] if addr.size() > 1 else ""
+
+
 func _update_trail(trail: Line2D, name: String, step: int, head: Vector2) -> void:
 	# Rebuild the breadcrumb as the tile centres for the last TRAIL_LEN steps up to
 	# `step`, tipped with the sprite's live eased position so the head stays glued to
@@ -567,6 +610,40 @@ func _on_seek(step: int) -> void:
 	_anim_t = 0.0
 
 
+func _on_filter_changed(location: String) -> void:
+	# The sidebar Focus dropdown picked a building ("" = All). Store it, force the
+	# spotlight to re-apply next frame (works while paused — _process always runs), and
+	# glide the view to that building so its agents are actually on screen.
+	_filter_location = location
+	_last_status_step = -1  # make the per-step block (which calls _apply_spotlight) re-run
+	if location != "":
+		var c: Vector2 = _building_labels.center_of(location)
+		if c.is_finite():
+			_camera.move_to(c)  # same gentle pan the minimap click uses (keeps zoom)
+
+
+func _apply_spotlight() -> void:
+	# Fade every agent NOT in the focused building; when no filter is set everyone is
+	# restored to full. Drives all three views (world sprite via node.modulate, the
+	# trail, the sidebar row, and the minimap dot) so they stay in agreement.
+	var dimmed := PackedStringArray()
+	for name in _names:
+		var agent: Dictionary = _agents[name]
+		var matches: bool = (
+			_filter_location == "" or _agent_location.get(name, "") == _filter_location
+		)
+		agent["node"].modulate = (
+			Color.WHITE if matches else Color(1.0, 1.0, 1.0, SPOTLIGHT_DIM_ALPHA)
+		)
+		agent["trail"].modulate = (
+			Color.WHITE if matches else Color(1.0, 1.0, 1.0, TRAIL_DIM_ALPHA)
+		)
+		if not matches:
+			dimmed.append(name)
+	_panel.set_dimmed_rows(dimmed)
+	_minimap.set_dimmed(dimmed)
+
+
 func _process(delta: float) -> void:
 	if _frames.is_empty():
 		return
@@ -613,10 +690,14 @@ func _process(delta: float) -> void:
 		_last_status_step = i
 		for name in _names:
 			var a: Dictionary = _frames[i][name]
-			# The current activity shows in the sidebar row (not as a map bubble).
-			var act := String(a["act"]).split(" @ ")[0]
-			_panel.set_character_status(name, "%s %s" % [a["e"], act])
+			# The current activity shows in the sidebar row (not as a map bubble); the
+			# location half of the same string feeds the Focus spotlight below.
+			var full := String(a["act"])
+			_panel.set_character_status(name, "%s %s" % [a["e"], full.split(" @ ")[0]])
+			_agent_location[name] = _building_of(full)
 			_update_agent_speech(name, a, i)
+		# Re-evaluate the location spotlight now that everyone's building is up to date.
+		_apply_spotlight()
 
 	# Bubbles + links refresh every frame (not just on a step change) so the
 	# turn-taking + fade play out smoothly as the playhead advances within a step.
