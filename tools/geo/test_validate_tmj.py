@@ -310,6 +310,29 @@ def test_format_report_groups_and_counts():
     assert "1 ok" in out and "1 info" in out and "1 error" in out
 
 
+def test_gate_green_against_baseline():
+    """With the committed baseline, main() must exit 0 — i.e. no NEW error drift.
+    Fixing Cohen/Alumni later means deleting their baseline entries."""
+    assert v.main([]) == 0
+
+
+def test_baseline_only_lists_real_current_errors():
+    """Every baseline entry must correspond to an error the checker still emits,
+    so the baseline can't silently rot."""
+    import json as _j
+
+    here = os.path.dirname(os.path.abspath(v.__file__))
+    baseline = {
+        tuple(e)
+        for e in _j.load(open(os.path.join(here, "validate_tmj_baseline.json")))
+    }
+    live = {
+        (f.category, f.building, f.code) for f in v.Checker(real_world()).run().errors()
+    }
+    stale = baseline - live
+    assert not stale, f"baseline lists errors no longer present: {stale}"
+
+
 def test_main_exit_code_and_json(tmp_path, capsys):
     w_dir = tmp_path  # reuse make_world's writer via a real build
     world = make_world(tmp_path)  # clean synthetic world -> no errors
