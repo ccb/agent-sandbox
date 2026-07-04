@@ -423,6 +423,7 @@ class Help(Action):
     a player (the comma-sequence wrapper) are hidden."""
 
     ACTION_NAME = ActionName.HELP
+    FREE_ACTION = True  # pure UI: costs no turn (see meta_actions_cost_turns)
     ACTION_DESCRIPTION = "List the commands you can use"
     ACTION_ALIASES = ["h", "commands", "?"]
 

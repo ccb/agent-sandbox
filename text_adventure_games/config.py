@@ -85,6 +85,11 @@ class EngineConfig:
     phases: bool | dict = False
     # Print each item's special commands as hints (helpful for novices).
     give_hints: bool = True
+    # Whether meta commands (INVENTORY, HELP -- actions flagged FREE_ACTION)
+    # consume a game turn. False (default): they report without advancing the
+    # round, so checking your pack mid-fight is not an opening for the boss.
+    # True restores the classic everything-costs-time behavior.
+    meta_actions_cost_turns: bool = False
     # Hard cap on actions one NPC may take in a single turn, regardless of the
     # time budget. Was things.characters.MAX_ACTIONS_PER_TURN.
     max_actions_per_turn: int = 100
