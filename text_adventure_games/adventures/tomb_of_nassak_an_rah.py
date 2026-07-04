@@ -77,7 +77,10 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 
 def _wound_player(g, name, slots_n, desc):
     """Wound the player: the standard [damage] line, any displaced-gear spill,
-    and the fatal verdict back to the caller."""
+    and the fatal verdict back to the caller. *desc* may be a tuple of
+    variants -- one is drawn, so a body hurt eight times reads eight ways."""
+    if isinstance(desc, (list, tuple)):
+        desc = _RNG.choice(desc)
     fatal, dropped = g.player.add_wound(Wound(name, slots_n, desc), rng=_RNG)
     g.parser.damage(f"{name} - {desc}")
     for it in dropped:
@@ -1621,13 +1624,16 @@ def build_game():
     def _bat_maul(g):
         """Dive-bombing bats deal a non-lethal wound each round the light (or
         din) persists; death comes only if wounds fill the scavenger's slots."""
-        fatal, dropped = g.player.add_wound(
-            Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Bat-Mauled",
+            1,
+            (
+                "Claw-rakes across your scalp and hands.",
+                "A wing's elbow takes your ear; claws find the nape of your neck.",
+                "They come through your raised arms; your knuckles come away gloved in blood.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(
-                f"The {it.name} is torn from your grip and spills into the dark."
-            )
         if fatal:
             _die(
                 g,
@@ -1722,12 +1728,16 @@ def build_game():
                 "shoulders like ash, disappointed."
             )
             return
-        fatal, dropped = g.player.add_wound(
-            Wound("Seared Lungs", 1, "Every breath is smaller than the last."),
-            rng=_RNG,
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the bloom in, and it keeps you. THE END.")
         else:
@@ -1773,12 +1783,16 @@ def build_game():
         game.add_trigger(f"menace:{spawn.name}", lambda g: True, tick, repeatable=True)
 
     def _guts_lash(g):
-        fatal, dropped = g.player.add_wound(
-            Wound("Acid-Lashed", 1, "A welt across your back, acid where it touched."),
-            rng=_RNG,
+        fatal = _wound_player(
+            g,
+            "Acid-Lashed",
+            1,
+            (
+                "A welt across your back, acid where it touched.",
+                "The lash takes your calf; the acid keeps its own count.",
+                "A wet arm cracks across your ribs and leaves its burn behind.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"The {it.name} spills from your pack.")
         if fatal:
             _die(g, "The spawn folds you into itself, patiently. THE END.")
         else:
@@ -1800,14 +1814,16 @@ def build_game():
                 f"hands open without your leave. The {it.name} clatters away."
             )
             return
-        fatal, dropped = g.player.add_wound(
-            Wound(
-                "Addled", 1, "Your thoughts arrive with someone else's fingerprints."
+        fatal = _wound_player(
+            g,
+            "Addled",
+            1,
+            (
+                "Your thoughts arrive with someone else's fingerprints.",
+                "A minute goes missing; you are somewhere in it.",
+                "Your own name takes a moment too long to answer.",
             ),
-            rng=_RNG,
         )
-        for it in dropped:
-            g.parser.ok(f"The {it.name} spills from your pack.")
         if fatal:
             _die(g, "Your mind is folded shut from the outside. THE END.")
         else:
@@ -1910,12 +1926,16 @@ def build_game():
                     )
         # The player, if fool enough to stand in the mobbing, is raked too.
         if g.player.location is youth:
-            fatal, dropped = g.player.add_wound(
-                Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."),
-                rng=_RNG,
+            fatal = _wound_player(
+                g,
+                "Bat-Mauled",
+                1,
+                (
+                    "Claw-rakes across your scalp and hands.",
+                    "A wing's elbow takes your ear; claws find the nape of your neck.",
+                    "They come through your raised arms; your knuckles come away gloved in blood.",
+                ),
             )
-            for it in dropped:
-                g.parser.ok(f"The {it.name} is torn from your grip.")
             if fatal:
                 _die(g, "The swarm takes you down beside the light. THE END.")
 
@@ -1986,11 +2006,16 @@ def build_game():
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
-        fatal, dropped = g.player.add_wound(
-            Wound("Seared Lungs", 1, "Every breath is smaller than the last."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the tomb in, and it keeps you. THE END.")
         else:
@@ -2166,7 +2191,16 @@ def build_game():
             )
         # And its answer: acid, flung weightless.
         fatal = _wound_player(
-            g, "Acid-Burned", 1, "A rope of acid caught you across the shoulder."
+            g,
+            "Acid-Burned",
+            1,
+            (
+                "A rope of acid caught you across the shoulder.",
+                "A rope of acid took the forearm you raised in time.",
+                "Acid spatters your scalp and goes on burning after you wipe it.",
+                "A whip of acid opens the back of your hand to the tendons.",
+                "Acid across the hip; the cloth of your coat gives up first.",
+            ),
         )
         if fatal:
             _die(
