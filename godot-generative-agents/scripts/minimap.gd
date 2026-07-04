@@ -49,6 +49,9 @@ var _bounds := Rect2()
 var _subviewport: SubViewport = null
 # One {node, tint} per agent; the dots track each node's live position.
 var _agents: Array = []
+# Names the location filter has dimmed (a set: name -> true). Their dots draw faint so
+# the spotlit agents stand out; empty when no filter is active. See set_dimmed().
+var _dimmed := {}
 
 
 func configure(camera: Camera2D) -> void:
@@ -69,6 +72,14 @@ func add_agent(name: String, node: Node2D, tint: Color) -> void:
 	# Register an agent to draw as a dot. We hold the node (not a copy of its
 	# position) so the dot tracks it as the viewer walks it each frame.
 	_agents.append({"name": name, "node": node, "tint": tint})
+
+
+func set_dimmed(names: PackedStringArray) -> void:
+	# Which agents the location filter has dimmed; their dots draw faint. Rebuilt as a
+	# set each call (empty = no filter). _process already redraws every frame.
+	_dimmed.clear()
+	for n in names:
+		_dimmed[n] = true
 
 
 func _build_overview() -> void:
@@ -168,13 +179,16 @@ func _draw() -> void:
 			draw_rect(box, frustum_color, false, 2.0)
 
 	# 3. One dot per agent, with a dark backing so light dots stay visible on the map.
+	# Filtered-out agents (dimmed) draw faint so the spotlit ones read at a glance.
 	for a in _agents:
 		var node: Node2D = a["node"]
 		if not is_instance_valid(node):
 			continue
 		var p := (node.global_position - _bounds.position) * s
-		draw_circle(p, dot_radius + 1.5, Color(0.0, 0.0, 0.0, 0.55))
-		draw_circle(p, dot_radius, a["tint"])
+		var dim: bool = _dimmed.has(a["name"])
+		var tint: Color = a["tint"]
+		draw_circle(p, dot_radius + 1.5, Color(0.0, 0.0, 0.0, 0.32 if dim else 0.55))
+		draw_circle(p, dot_radius, Color(tint.r, tint.g, tint.b, 0.45) if dim else tint)
 
 	# 4. A frame around the whole minimap.
 	draw_rect(Rect2(Vector2.ZERO, size), border_color, false, 2.0)
