@@ -433,18 +433,19 @@ def test_the_pack_refuses_what_it_cannot_eat():
     assert "not that kind of hunger" in " ".join(cap.texts(Channel.NARRATION)).lower()
 
 
-def test_the_live_sphere_kills_only_when_you_disturb_it():
+def test_the_sphere_is_safe_until_you_pry():
+    """The sphere has no noise hazard (design doc §17.3): enter, look, even
+    shout. Only the deliberate act -- prying the live coffin -- wakes the boss."""
     game = _game()
     _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on falcon plinth")
     game.do_command("put jackal jar on jackal plinth")
-    game.do_command("up")  # entering and looking is safe
-    assert not game.is_game_over()
+    game.do_command("up")
     game.do_command("look")
+    game.do_command("say boo")
+    game.do_command("say boo")
     assert not game.is_game_over()
-    game.do_command("say boo")  # but any racket disturbs the live Horror...
-    game.do_command("say boo")  # ...and it erupts (limit 2)
-    assert game.is_game_over() and not game.is_won()
+    assert "fungal horror" not in game.player.location.characters
 
 
 def test_the_mantis_song_lures_the_spawn_to_the_canopic_hall():
@@ -882,17 +883,100 @@ def test_the_spider_silk_tether_is_the_bootless_anchor():
     assert sphere.items["coffin"].get_property("pried")
 
 
-def test_prying_the_living_horrors_coffin_is_an_invitation():
-    game = _game()
+def _boss_setup(game):
+    """Anchor, blade, gel, and spark -- straight to the sphere."""
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
     game.relocate(game.player, sphere)
     game.do_command("wear boots")
+    return sphere
+
+
+def test_prying_the_live_coffin_wakes_the_boss():
+    game = _game()
+    sphere = _boss_setup(game)
     cap = _texts(game)
-    game.do_command("pry coffin")  # the Horror lives: it has been waiting
-    assert game.is_game_over() and not game.is_won()
-    assert "waiting at it" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("pry coffin")  # the eruption -- not a death
+    assert not game.is_game_over()
+    assert "fungal horror" in sphere.characters
+    assert "prismatic blade" in game.player.carried_items()  # the blade survives
+    assert "synth-hunting dagger" not in sphere.items  # kept in its coil
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "unwinds from the Autarch's bones" in out
+
+
+def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
+    """The boss lesson (design doc §17.3): a hit costs 1 vigor, its turn knits
+    1 back -- until it burns."""
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    horror = game.characters["fungal horror"]
+    game.do_command("attack horror with blade")
+    assert horror.get_property("vigor") == 5  # -1 hit, +1 knit: nowhere
+    cap = _texts(game)
+    game.do_command("burn horror")  # ablaze: nothing knits
+    assert "cannot knit itself" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("attack horror with blade")  # -1 hit, -1 burn
+    game.do_command("attack horror with blade")  # -1 hit, -1 burn -> 0
+    assert horror.get_property("is_dead")
+    assert "synth-hunting dagger" in sphere.items  # the coil unclenches
+    assert not game.is_game_over()  # hurt, but standing
+    assert game.player.wound_slots() >= 3  # the acid kept the ledger
+
+
+def test_burning_the_root_mid_fight_fells_the_horror():
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    # Flee the fight and burn the corpse at the Summit instead.
+    game.relocate(game.player, game.locations["The Summit"])
+    cap = _texts(game)
+    game.do_command("burn corpse")
+    assert game.characters["fungal horror"].get_property("is_dead")
+    assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_burning_the_chimney_growth_clears_the_spores():
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Fungal Chimney"])
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    for _ in range(4):  # linger unmasked: the spores are gone
+        game.do_command("look")
+    assert not any(w.name == "Seared Lungs" for w in game.player.wounds)
+
+
+def test_the_gel_economy_refills_and_regrets():
+    game = _game()
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("drink gel")  # legal, inadvisable
+    assert any(w.name == "Gel-Gut" for w in game.player.wounds)
+    assert "2 doses" in gel.description
+    game.do_command("fill flask")  # topped back up at the tank
+    assert "3 doses" in gel.description
+
+
+def test_the_hound_gives_up_a_sparking_servo():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("break tank")
+    game.do_command("search hound")
+    game.do_command("take servo")
+    assert "sparking servo" in game.player.inventory
+    assert game.player.inventory["sparking servo"].get_property("ignition_source")
 
 
 def test_the_full_winning_run_scores_100():
