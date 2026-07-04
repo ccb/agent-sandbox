@@ -140,3 +140,175 @@ def matrix_rooms_by_building(world: World) -> dict:
             continue
         out[sector].append({"id": aid, "name": arena})
     return dict(out)
+
+
+class Checker:
+    def __init__(self, world: World):
+        self.w = world
+        self.findings: list[Finding] = []
+
+    def add(self, severity, category, building, code, message):
+        self.findings.append(Finding(severity, category, building, code, message))
+
+    def errors(self):
+        return [f for f in self.findings if f.severity == "error"]
+
+    # ---- tmj internal integrity -------------------------------------------- #
+    def _gid_ranges(self):
+        return [
+            (ts["firstgid"], ts["firstgid"] + ts.get("tilecount", 0))
+            for ts in self.w.tilesets
+            if "tilecount" in ts
+        ]
+
+    def check_gids_resolve(self):
+        ranges = self._gid_ranges()
+        bad = 0
+        total = 0
+        for layer in self.w.tile_layers.values():
+            for raw in layer.get("data", []):
+                gid = raw & GID_MASK
+                if gid == 0:
+                    continue
+                total += 1
+                if not any(lo <= gid < hi for lo, hi in ranges):
+                    bad += 1
+        if bad:
+            self.add(
+                "error",
+                "INTEGRITY",
+                "",
+                "gid_out_of_range",
+                f"{bad} tile gids resolve to no tileset",
+            )
+        else:
+            self.add(
+                "ok",
+                "INTEGRITY",
+                "",
+                "gids_resolve",
+                f"all {total} non-empty tiles resolve to a tileset",
+            )
+
+    def check_dimensions(self):
+        W, H, N = self.w.W, self.w.H, self.w.W * self.w.H
+        bad = False
+        for name, layer in self.w.tile_layers.items():
+            if len(layer.get("data", [])) != N:
+                self.add(
+                    "error",
+                    "INTEGRITY",
+                    "",
+                    "layer_dim_mismatch",
+                    f"tile layer '{name}' has {len(layer['data'])} cells, want {N}",
+                )
+                bad = True
+        for name, arr in (
+            ("collision", self.w.collision),
+            ("arena", self.w.arena),
+            ("sector", self.w.sector),
+        ):
+            if len(arr) != N:
+                self.add(
+                    "error",
+                    "INTEGRITY",
+                    "",
+                    "maze_len_mismatch",
+                    f"{name}_maze has {len(arr)} cells, want {N}",
+                )
+                bad = True
+        if self.w.meta.get("maze_width") != W or self.w.meta.get("maze_height") != H:
+            self.add(
+                "error",
+                "INTEGRITY",
+                "",
+                "meta_dim_mismatch",
+                f"meta {self.w.meta.get('maze_width')}x{self.w.meta.get('maze_height')} "
+                f"!= tmj {W}x{H}",
+            )
+            bad = True
+        if not bad:
+            self.add(
+                "ok",
+                "INTEGRITY",
+                "",
+                "dimensions",
+                f"all layers & maze arrays are {N} cells; meta matches {W}x{H}",
+            )
+
+    def check_arena_rects_and_names(self):
+        names = sector_name_by_id(self.w)
+        for layer_name, group in self.w.object_groups.items():
+            if not layer_name.endswith("_arenas"):
+                continue
+            seen = defaultdict(int)
+            for obj in group.get("objects", []):
+                nm = obj.get("name", "")
+                if is_decoy(nm):
+                    continue
+                cells = object_cells(obj, self.w.W, self.w.H)
+                sid = dominant_sector(cells, self.w)
+                # any cell landing on a different, non-zero sector = bleed
+                bleed = {
+                    self.w.sector[self.w.idx(x, y)]
+                    for (x, y) in cells
+                    if self.w.sector[self.w.idx(x, y)] not in ("0", sid)
+                }
+                if bleed:
+                    self.add(
+                        "error",
+                        "INTEGRITY",
+                        names.get(sid, layer_name),
+                        "arena_rect_out_of_footprint",
+                        f"'{nm}' ({layer_name}) spills into sector(s) {sorted(bleed)}",
+                    )
+                seen[nm] += 1
+            for nm, n in seen.items():
+                if n > 1:
+                    self.add(
+                        "warn",
+                        "INTEGRITY",
+                        layer_name,
+                        "arena_name_duplicate",
+                        f"'{nm}' appears {n}x in {layer_name}",
+                    )
+
+    def check_referential_integrity(self):
+        sectors = {r[-1] for r in self.w.sector_blocks if len(r) >= 3}
+        worlds = {r[-1] for r in self.w.world_blocks if len(r) >= 2}
+        ok = True
+        for r in self.w.arena_blocks:
+            if len(r) >= 4 and r[2] not in sectors:
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    r[2],
+                    "arena_sector_unknown",
+                    f"arena_blocks row {r[0]} names sector '{r[2]}' absent from sector_blocks",
+                )
+                ok = False
+        for r in self.w.sector_blocks:
+            if len(r) >= 3 and r[1] not in worlds:
+                self.add(
+                    "error",
+                    "INTEGRITY",
+                    r[-1],
+                    "sector_world_unknown",
+                    f"sector_blocks row {r[0]} names world '{r[1]}' absent from world_blocks",
+                )
+                ok = False
+        if ok:
+            self.add(
+                "ok",
+                "INTEGRITY",
+                "",
+                "referential_integrity",
+                "arena/sector/world block tables are internally consistent",
+            )
+
+    def run(self):
+        self.check_gids_resolve()
+        self.check_dimensions()
+        self.check_arena_rects_and_names()
+        self.check_referential_integrity()
+        return self

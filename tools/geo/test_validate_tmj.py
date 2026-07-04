@@ -58,3 +58,122 @@ def test_inventories_capture_the_known_drift():
     # Decoys excluded: Fisher's "Rug*" objects are not counted as arenas.
     fisher_names = {o["name"] for o in tmj["Fisher Fine Arts Library"]}
     assert not any("Rug" in n for n in fisher_names)
+
+
+import json as _json
+
+
+def make_world(tmp_path, edit=None):
+    """Minimal 5x4 world with one building 'Test Hall' (sector 1).
+    `edit(tmj, matrix_files)` may mutate the structures before they're written."""
+    W, H = 5, 4
+    N = W * H
+    # footprint = the 2x2 block at (1,1),(2,1),(1,2),(2,2); interior (2,2) opened
+    foot = {(1, 1), (2, 1), (1, 2), (2, 2)}
+    buildings = [0] * N
+    for x, y in foot:
+        buildings[y * W + x] = 1  # any valid gid
+    tmj = {
+        "width": W,
+        "height": H,
+        "tilewidth": 16,
+        "tileheight": 16,
+        "tilesets": [{"firstgid": 1, "name": "t", "tilecount": 10, "columns": 5}],
+        "layers": [
+            {
+                "type": "tilelayer",
+                "name": "buildings",
+                "width": W,
+                "height": H,
+                "data": buildings,
+            },
+            {
+                "type": "objectgroup",
+                "name": "test_arenas",
+                "objects": [
+                    {"name": "Parlor", "x": 32, "y": 32, "width": 16, "height": 16},
+                ],
+            },
+        ],
+    }
+    sector = ["0"] * N
+    arena = ["0"] * N
+    collision = ["0"] * N
+    for x, y in foot:
+        sector[y * W + x] = "1"
+        arena[y * W + x] = "1"  # grounds
+        collision[y * W + x] = "1"
+    matrix_files = {
+        "maze/collision_maze.csv": collision,
+        "maze/arena_maze.csv": arena,
+        "maze/sector_maze.csv": sector,
+        "special_blocks/arena_blocks.csv": [["1", "UPenn", "Test Hall", "grounds"]],
+        "special_blocks/sector_blocks.csv": [["1", "UPenn", "Test Hall"]],
+        "special_blocks/world_blocks.csv": [["1", "UPenn"]],
+        "maze_meta_info.json": {
+            "world_name": "UPenn",
+            "maze_width": W,
+            "maze_height": H,
+            "sq_tile_size": 16,
+            "special_constraint": "",
+        },
+    }
+    if edit:
+        edit(tmj, matrix_files)
+    tdir = tmp_path / "matrix"
+    (tdir / "maze").mkdir(parents=True)
+    (tdir / "special_blocks").mkdir(parents=True)
+    tmj_path = tmp_path / "map.tmj"
+    tmj_path.write_text(_json.dumps(tmj))
+    for rel, content in matrix_files.items():
+        p = tdir / rel
+        if rel.endswith(".json"):
+            p.write_text(_json.dumps(content))
+        elif "special_blocks" in rel:
+            p.write_text("".join(", ".join(r) + "\n" for r in content))
+        else:
+            p.write_text(", ".join(content))
+    return v.World(str(tmj_path), str(tdir))
+
+
+def test_integrity_clean_on_synthetic(tmp_path):
+    w = make_world(tmp_path)
+    c = v.Checker(w).run()
+    assert [
+        f for f in c.findings if f.category == "INTEGRITY" and f.severity == "error"
+    ] == []
+
+
+def test_gid_out_of_range_flagged(tmp_path):
+    def edit(tmj, mf):
+        tmj["layers"][0]["data"][6] = 9999  # no tileset covers gid 9999
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "gid_out_of_range" in codes
+
+
+def test_bad_dimensions_flagged(tmp_path):
+    def edit(tmj, mf):
+        mf["maze_meta_info.json"]["maze_width"] = 999
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "meta_dim_mismatch" in codes
+
+
+def test_referential_integrity_flagged(tmp_path):
+    def edit(tmj, mf):
+        mf["special_blocks/arena_blocks.csv"][0][2] = "Ghost Hall"  # not in sectors
+
+    w = make_world(tmp_path, edit)
+    codes = {f.code for f in v.Checker(w).run().findings}
+    assert "arena_sector_unknown" in codes
+
+
+def test_real_data_has_no_integrity_errors():
+    c = v.Checker(real_world()).run()
+    errs = [
+        f for f in c.findings if f.category == "INTEGRITY" and f.severity == "error"
+    ]
+    assert errs == [], "\n".join(f"{f.building}: {f.message}" for f in errs)
