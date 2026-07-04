@@ -111,9 +111,13 @@ class Attack(base.Action):
         else:
             # the victim is knocked unconscious
             self.victim.set_property(Property.IS_UNCONSCIOUS, True)
-            description = "{name} {verb} knocked unconscious.".format(
-                name=self.victim.name.capitalize(),
-                verb=base.conjugate(self.victim, "were", "was"),
+            # A victim may supply its own knockout line (a boss that shrugs
+            # off the blow reads wrong as "knocked unconscious").
+            description = self.victim.get_property("ko_text") or (
+                "{name} {verb} knocked unconscious.".format(
+                    name=self.victim.name.capitalize(),
+                    verb=base.conjugate(self.victim, "were", "was"),
+                )
             )
             self.parser.ok(description)
 
