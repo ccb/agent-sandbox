@@ -91,6 +91,16 @@ _QUIET_SPHERE = {
 }
 
 
+def _wound_player(g, name, slots_n, desc):
+    """Wound the player: the standard [damage] line, any displaced-gear spill,
+    and the fatal verdict back to the caller."""
+    fatal, dropped = g.player.add_wound(Wound(name, slots_n, desc), rng=_RNG)
+    g.parser.damage(f"{name} - {desc}")
+    for it in dropped:
+        g.parser.ok(f"The {it.name} spills from your pack.")
+    return fatal
+
+
 def _is_holding(character, name):
     return name in character.inventory
 
@@ -230,10 +240,13 @@ class FungalSong(reactions.Startle):
             loc = getattr(holder, "location", None)
         if loc is None:
             return
-        self.game.parser.ok(
-            "The mantis-headed jar splits wider and SINGS -- a tuneless, carrying "
-            "wail that fills the tomb."
-        )
+        # The close-up is only for someone in the room; everyone else gets the
+        # heard version via the sound system ("From the south you hear...").
+        if self.game.player.location is loc:
+            self.game.parser.ok(
+                "The mantis-headed jar splits wider and SINGS -- a tuneless, "
+                "carrying wail that fills the tomb."
+            )
         self.game.emit_sound(loc, 6, "a tuneless fungal song")
 
 
@@ -304,13 +317,63 @@ class BurnCorpse(actions.Action):
         self.game.award("cleanse", 30, None)
 
 
+class TieSilk(actions.Action):
+    """Lash the drifting coffin fast with the merchant's spider-silk (CCB
+    design) -- the bootless anchor. Cobweb-thin, and it holds like law."""
+
+    ACTION_NAME = "tie coffin"
+    ACTION_DESCRIPTION = "Tie the coffin down with spider-silk"
+    ACTION_ALIASES = [
+        "tie spider-silk to coffin",
+        "tie silk to coffin",
+        "tie coffin with spider-silk",
+        "tie coffin with silk",
+        "tether coffin",
+        "lash coffin",
+        "tie spider-silk",
+        "tie silk",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "coffin" not in loc.items:
+            self.parser.fail("There's no coffin here to tie.")
+            return False
+        if loc.items["coffin"].get_property("tethered"):
+            self.parser.fail("The coffin is already lashed fast.")
+            return False
+        if "bolt of spider-silk" not in self.player.carried_items():
+            self.parser.fail(
+                "You'd want something long, light, and stronger than it looks."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        silk = self.player.carried_items()["bolt of spider-silk"]
+        self.player.discard_item(silk)
+        loc.items["coffin"].set_property("tethered", True)
+        self.parser.ok(
+            "You pay the spider-silk out through the wall-rings and lash the "
+            "coffin fast -- cobweb-thin, and it holds like law. The coffin "
+            "stops its slow turning."
+        )
+
+
 class PryCoffin(actions.Action):
     """Pry open the Autarch's anti-entropy coffin in the zero-g Burial Sphere to
-    claim the Exotica. The coffin floats off the wall; you can only get the
-    purchase to force it open while anchored by the magnetic boots."""
+    claim the Exotica. Prying wants two things: an ANCHOR (the magnetic boots
+    worn, or the coffin lashed down with spider-silk) and a LEVER -- the
+    prismatic blade, which snaps at the hilt as the coffin gives (CCB design).
+    """
 
     ACTION_NAME = "pry coffin"
-    ACTION_DESCRIPTION = "Pry open the floating coffin (needs the magnetic boots)"
+    ACTION_DESCRIPTION = "Pry open the floating coffin (an anchor, and a blade to lose)"
     ACTION_ALIASES = [
         "open coffin",
         "open the coffin",
@@ -319,6 +382,8 @@ class PryCoffin(actions.Action):
         "loot coffin",
         "loot the coffin",
         "pry open the coffin",
+        "pry coffin open with blade",
+        "pry coffin with blade",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -330,14 +395,24 @@ class PryCoffin(actions.Action):
         if loc is None or "coffin" not in loc.items:
             self.parser.fail("There's no coffin here.")
             return False
-        if loc.items["coffin"].get_property("pried"):
+        coffin = loc.items["coffin"]
+        if coffin.get_property("pried"):
             self.parser.fail("The coffin is already open.")
             return False
-        if "magnetic boots" not in self.player.worn:
+        anchored = "magnetic boots" in self.player.worn or coffin.get_property(
+            "tethered"
+        )
+        if not anchored:
             self.parser.fail(
                 "You reach the coffin and shove -- and it is you who drifts "
-                "away, slow as sediment. Nothing here holds you down, and "
-                "prying wants something to brace against."
+                "away, floating and unmoored from gravity. Nothing here holds "
+                "you down, and prying wants something to brace against."
+            )
+            return False
+        if "prismatic blade" not in self.player.carried_items():
+            self.parser.fail(
+                "The seam is fine as a hair; fingers will not part it. It "
+                "wants a blade's edge -- and a fool willing to lose one."
             )
             return False
         return True
@@ -345,17 +420,35 @@ class PryCoffin(actions.Action):
     def apply_effects(self):
         loc = self.player.location
         coffin = loc.items["coffin"]
+        if not loc.get_property("horror_dead"):
+            # The coffin is the thing's HOUSE. Opening it while it lives is not
+            # a disturbance; it is an invitation.
+            _die(
+                self.game,
+                "You work the blade into the seam and the seam parts -- and "
+                "the Horror has been waiting at it, pressed to the glass like "
+                "a palm. It takes you in a single fold. THE END.",
+            )
+            return
         coffin.set_property("pried", True)
+        blade = self.player.carried_items()["prismatic blade"]
+        self.player.discard_item(blade)
+        anchor = (
+            "Anchored by the magnetic boots"
+            if "magnetic boots" in self.player.worn
+            else "Braced against the silk-lashed coffin"
+        )
         taken = []
         for item in list(coffin.contents.values()):
             coffin.remove_item(item)
             loc.add_item(item)
             taken.append(item.name)
         self.parser.ok(
-            "Anchored by the magnetic boots, you brace against the coffin and force "
-            "the glass apart. Among the Autarch's drifting bones you find: "
+            f"{anchor}, you work the prismatic blade into the hairline seam. "
+            "The edge bends light, bends -- and snaps at the hilt as the "
+            "coffin gives. Among the Autarch's drifting bones you find: "
             + ", ".join(taken)
-            + "."
+            + ". The blade is done."
         )
         self.game.award("exotica", 30, None)
 
@@ -1147,6 +1240,7 @@ def build_game():
         "and it burns.",
     )
     gel.add_alias("gel")
+    gel.add_alias("flask")
     hounds.add_item(gel)
 
     # Silas -- the synthetic archivist (the hint NPC). His combat / pacify / rob
@@ -1251,7 +1345,7 @@ def build_game():
         wreck,
         player,
         characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack],
-        custom_actions=[Sneak, BurnCorpse, PryCoffin],
+        custom_actions=[Sneak, BurnCorpse, PryCoffin, TieSilk],
     )
     game.max_score = 100
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
@@ -1836,25 +1930,21 @@ def build_game():
             for e in g.events[g._round_event_start :]
         )
         if ate_eyes:
-            fatal, dropped = g.player.add_wound(
-                Wound("Spore-Gut", 2, "Something has taken root where food goes."),
-                rng=_RNG,
+            fatal = _wound_player(
+                g, "Spore-Gut", 2, "Something has taken root where food goes."
             )
             msg = (
                 "The eyes go down like oysters and begin, at once, to garden. "
                 "Something has taken root where food goes."
             )
         else:
-            fatal, dropped = g.player.add_wound(
-                Wound("Grave-Sick", 1, "The Autarch's preservatives at work in you."),
-                rng=_RNG,
+            fatal = _wound_player(
+                g, "Grave-Sick", 1, "The Autarch's preservatives at work in you."
             )
             msg = (
                 "It goes down. The Autarchy embalmed to last, and the "
                 "preservatives set to work at once on the living."
             )
-        for it in dropped:
-            g.parser.ok(f"A retching fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You are preserved from the inside out. THE END.")
         else:
@@ -1982,14 +2072,15 @@ WIN_WALKTHROUGH = [
     "take falcon jar",
     "attack spawn of brain with blade",  # its brother came to the noise: fell it too
     "take jackal jar",
-    "drop blade",  # shed ballast: nothing left alive that a blade answers
-    "drink water",  # a glug of water; something knits
+    "drink water",  # a glug of water; something knits (keep the blade: the coffin wants it)
     "break orange cylinder",  # the bloom vents against the mask, disappointed
     "take igniter",
+    "drink water",  # a second glug -- the brain got two thoughts in
     "break viridian cylinder",
     "take boots",
     "douse glowstone",
     "drop glowstone",  # the halls ahead light themselves
+    "drop waterskin",  # travel light; the climbs refuse a full pack
     "sneak east",
     "take gel",  # Hounds: gel
     "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
