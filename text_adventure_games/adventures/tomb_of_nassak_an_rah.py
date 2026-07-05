@@ -2884,8 +2884,8 @@ def build_game():
                 "eyes catch up.",
                 "Something arched and chitinous snaps across your knuckles; "
                 "the cut is clean as scissors.",
-                "The head takes the web of your thumb -- it does not chew, "
-                "it measures.",
+                "The head takes the web of your thumb and lets go at once "
+                "-- a warning, not a meal.",
             ),
         )
         if fatal:
