@@ -16,8 +16,11 @@ and any LLM stay server-side; the frontend just reads JSON.
 It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
 **snapshot + change-feed contract** — plus the on-demand reads of an agent's
 private cognition: its memory stream (issue #298) and its belief set (issue
-#348). See [Not yet implemented](#not-yet-implemented) for what is deliberately
-deferred.
+#348), plus **live mode** (issues #349, #262): an opt-in self-stepping loop that
+advances the sim on its own and publishes each step to a cursor-addressed change
+feed a viewer follows over `WS /ws` (with `GET /events?since=` as the catch-up
+door), controlled by `POST /pause|/resume|/reset`. See
+[Not yet implemented](#not-yet-implemented) for what is deliberately deferred.
 
 > [!WARNING]
 > The API is **unauthenticated and bound to loopback by default** — safe for local
@@ -34,6 +37,12 @@ deferred.
   - [`GET /agents/{name}/memory`](#get-agentsnamememory)
   - [`GET /agents/{name}/knowledge`](#get-agentsnameknowledge)
   - [`POST /command`](#post-command)
+- [Live mode: the loop, the feed, run control (#349/#262)](#live-mode-the-loop-the-feed-run-control-349262)
+  - [`GET /live`](#get-live)
+  - [`GET /events`](#get-events)
+  - [`WS /ws`](#ws-ws)
+  - [`POST /pause`, `/resume`, `/reset`](#post-pause-resume-reset)
+  - [`GET /usage`](#get-usage)
 - [Status codes](#status-codes)
 - [The `world_state` snapshot](#the-world_state-snapshot)
 - [The `events` change feed](#the-events-change-feed)
@@ -50,7 +59,8 @@ FastAPI is an **optional** dependency. Install it (and `uvicorn`) with the
 `server` extra:
 
 ```bash
-uv sync --extra server          # adds fastapi + uvicorn (pydantic rides along)
+uv sync --extra server   # fastapi + uvicorn + websockets (pydantic rides along;
+                         # websockets lets uvicorn serve the live feed's WS /ws)
 ```
 
 **Run a demo world** — a tiny two-room map, enough to exercise the contract and
@@ -88,8 +98,9 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Six endpoints. `GET`s are read-only; `POST /command` advances the game by
-exactly one command (one turn).
+Thirteen endpoints. `GET`s are read-only; `POST /command` advances the game by
+exactly one command (one turn); the live routes observe and steer the
+self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed-run-control-349262)).
 
 | Method | Path                       | Purpose                                            |
 | ------ | -------------------------- | -------------------------------------------------- |
@@ -99,6 +110,11 @@ exactly one command (one turn).
 | `GET`  | `/agents/{name}/memory`    | One agent's memory stream, formed so far (#298)    |
 | `GET`  | `/agents/{name}/knowledge` | One agent's belief set (world-model) (#348)        |
 | `POST` | `/command`                 | Run one command → events + new snapshot            |
+| `GET`  | `/live`                    | Live-mode handshake: loop state + world `meta` (#262) |
+| `GET`  | `/events`                  | Change-feed catch-up: records after `?since=` (#262) |
+| `WS`   | `/ws`                      | Change-feed push: every record as it lands (#262)  |
+| `POST` | `/pause` `/resume` `/reset`| Run control over the loop (#349/#262)              |
+| `GET`  | `/usage`                   | `UsageLedger` summary (tokens/cost) for the HUD (#264) |
 
 ### `GET /health`
 
@@ -415,6 +431,144 @@ curl -s -X POST http://127.0.0.1:8080/command \
 > that the command was disallowed. Clients should inspect the `events` channels to
 > learn whether a command actually succeeded — never the HTTP status alone.
 
+## Live mode: the loop, the feed, run control (#349/#262)
+
+Everything above is **command-driven**: the world only advances when a client
+POSTs `/command`. Live mode adds the other shape a viewer needs — the sim
+advancing **on its own** while frontends follow along:
+
+- **The loop (#349).** Pass a *stepper* to enable it:
+  `create_app(game, stepper=..., tick_seconds=0.1)` (or the same kwargs on
+  `run()`). A stepper is any object implementing the small
+  `backend.live.SimStepper` protocol — `step`, `meta()`, `tick()`, `reset()` —
+  and the loop is deliberately **brain-agnostic**: a scripted stepper
+  (`backend.live.ScriptedStepper`, free and offline), the Penn generative-agents
+  tick, or a real-LLM brain later (#261) all drive the same loop and routes.
+  Each `tick_seconds` the loop advances the stepper once **under the same lock
+  every route uses**, then publishes at the tick boundary. With no stepper the
+  app is byte-identical to the command-driven API above — the loop is opt-in.
+  Try it with zero assets and zero keys:
+
+  ```bash
+  SIM_LIVE=1 SIM_TICK_SECONDS=0.5 uv run python -m backend.api
+  ```
+
+- **The feed: one log, two doors (#262).** Every published record lands in one
+  append-only log with a **monotonic 1-based cursor** that never resets — not on
+  `/reset`, not on eviction. `GET /events?since=N` is the stateless catch-up
+  door; `WS /ws` is the push door. Same records, same cursor, which is what
+  makes the reconnect recipe gap-free and duplicate-free:
+
+  1. socket drops → remember the last `cursor` you applied;
+  2. `GET /events?since=<last>` (or just reconnect `WS /ws?since=<last>`);
+  3. re-attach — nothing missed, nothing doubled.
+
+  The log is capped (`max_log_records`, default 10 000). Eviction never renumbers,
+  so a too-stale client *detects* the gap — the first record returned has
+  `cursor > since + 1` — and should re-sync from `GET /live` + `/world_state`.
+
+  Record shapes (passed through as plain JSON; `kind` is the discriminator):
+
+  ```json
+  { "cursor": 12, "kind": "frame",  "step": 11, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
+  { "cursor": 13, "kind": "status", "reason": "paused", "running": true, "paused": true, "step": 12 }
+  { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
+  ```
+
+  `frame` is one sim step in the **replay frame schema** — the same per-agent
+  dict a baked `penn_replay.json` carries, so live and baked viewers share one
+  contract. `status` marks run-state changes
+  (`started|paused|resumed|reset|finished|stopped`). `engine` wraps a
+  [change-feed record](#the-events-change-feed) the stepper drained from the
+  engine during that tick (steppers opt in by implementing `drain_events()`).
+
+### `GET /live`
+
+The handshake a live client reads once before following the feed:
+
+```json
+{ "enabled": true, "running": true, "paused": false, "step": 42, "cursor": 87,
+  "tick_seconds": 0.1, "meta": { "tile_px": 32, "width": 245, "height": 279,
+  "sec_per_step": 10, "start": "2023-02-13 08:00:00", "vision_r": 8,
+  "personas": [ { "name": "Maya Chen", "emoji": "📚" } ] } }
+```
+
+`meta` is the stepper's own `meta()` blob, passed through opaquely — for the
+Penn/Smallville worlds it is the replay-meta shape, so a live viewer spawns its
+agents exactly the way the baked-replay loader does. Always answers: with no
+stepper it reports `enabled: false` (and `meta: null`), so a frontend can
+cheaply probe whether live mode exists.
+
+### `GET /events`
+
+`GET /events?since=N` returns the retained records with `cursor > N`, oldest
+first (`since` defaults to 0 = everything retained). An empty tail returns `[]`
+immediately — this door never blocks; the socket is the door that waits.
+
+```json
+{ "latest_cursor": 87, "oldest_cursor": 1, "events": [ { "cursor": 86, "kind": "frame", "...": "..." } ] }
+```
+
+### `WS /ws`
+
+The push door: after an optional `?since=N` replay of retained history, every
+new record is pushed as one JSON text message the moment the loop appends it.
+
+- **Auth** mirrors the HTTP routes: send `Authorization: Bearer <token>` in the
+  handshake (Godot's `WebSocketPeer` can set handshake headers) **or** — because
+  a browser `WebSocket` cannot set headers — pass `?token=<token>`. A bad token
+  is refused with close code `1008` before the handshake completes.
+- **Close codes**: `1008` bad token · `1009` inbound message over the body cap
+  (the 64 KiB rule is enforced in-handler here, since the HTTP middleware never
+  sees WebSocket traffic) · `1011` you fell behind the log's retention — re-sync
+  via `GET /live` + `/events` and reconnect.
+- Each client just tails the shared log at its own cursor, so a slow reader
+  backpressures only itself.
+
+### `POST /pause`, `/resume`, `/reset`
+
+Run control over the loop. All three are deliberately **plain stateless HTTP**,
+not socket messages — an emergency stop (#264) must work even when the socket is
+wedged. Each is idempotent, appends a `status` record to the feed (so followers
+learn about it like any other event), and returns the state after the change:
+
+```json
+{ "running": true, "paused": true, "step": 42, "cursor": 88 }
+```
+
+- `/pause` stops ticking; the loop task stays alive and every read keeps working.
+- `/resume` starts ticking again.
+- `/reset` rebuilds the sim to t0: `step` restarts at 0 but **the cursor keeps
+  climbing** — a follower keys off the `status` record with `reason: "reset"`,
+  never a cursor rewind.
+- Without a stepper all three are `409` — there is no loop to control.
+- A stepper may also declare its run **finished** (its `tick()` returns `None`,
+  e.g. a fixed-length sim reached its last step): the loop auto-pauses and
+  publishes `status(reason: "finished")`.
+
+While the loop is enabled, running, and not paused, `POST /command` is refused
+with `409` — a manual command would interleave with ticks mid-run. Pause first,
+command, then resume (the #349 "decide and document" rule: pause-to-command
+rather than silent interleaving).
+
+### `GET /usage`
+
+The stepper's `UsageLedger.summary()` — tokens and dollars — for the viewer's
+run-monitor HUD (#264). Under the mock brain this reads ~0; real numbers arrive
+when #261 swaps a live LLM into the loop.
+
+```json
+{ "kind": "summary", "available": true, "calls": 12, "total_cost_usd": 0.0031,
+  "by_actor": { "Maya Chen": 0.0011 }, "input_tokens": 5210, "output_tokens": 340,
+  "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+  "over_budget": false, "max_cost_usd": 5.0, "remaining_budget_usd": 4.9969 }
+```
+
+`available: false` (with the same shape zeroed) when the stepper carries no
+ledger, so a HUD renders $0.00 instead of erroring. `max_cost_usd` /
+`remaining_budget_usd` appear only when the ledger was armed with a cost
+ceiling (#183); `over_budget` flips when the kill-switch trips.
+
 ## Status codes
 
 | Status | When                                                                                  |
@@ -422,6 +576,7 @@ curl -s -X POST http://127.0.0.1:8080/command \
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
 | `404`  | Unknown path; on `/agents/{name}/{memory,knowledge}`, an unknown character or one with no agent |
+| `409`  | Run control without a loop enabled; or `POST /command` while the loop is actively stepping (pause first) |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |
 | `500`  | The engine raised while running the command (`{"detail": "engine error: ..."}`); the game's renderer is restored regardless |
@@ -681,6 +836,24 @@ curl -s 'http://127.0.0.1:8080/agents/gardener/knowledge?topic=forest'  # narrow
 
 # 8. with auth (only needed when SIM_API_TOKEN is set / non-loopback bind)
 curl -s http://127.0.0.1:8080/health -H "Authorization: Bearer $SIM_API_TOKEN"
+
+# --- live mode (#349/#262): restart the demo with the loop on ---
+SIM_LIVE=1 SIM_TICK_SECONDS=0.5 uv run python -m backend.api
+
+# 9. the handshake, then the feed so far
+curl -s http://127.0.0.1:8080/live
+curl -s 'http://127.0.0.1:8080/events?since=0'
+
+# 10. follow the push door (any WS client; python -m websockets ships with the
+#     server extra), then pause/resume/reset from another shell
+uv run python -m websockets ws://127.0.0.1:8080/ws
+curl -s -X POST http://127.0.0.1:8080/pause
+curl -s -X POST http://127.0.0.1:8080/resume
+curl -s http://127.0.0.1:8080/usage
+
+# 11. watch the world advance with no one POSTing commands: /health's turn
+#     climbs, and the gardener's memory stream grows on its own (#349)
+curl -s http://127.0.0.1:8080/agents/gardener/memory | head -c 200
 ```
 
 Prefer to click around? Open **http://127.0.0.1:8080/docs** for the interactive
@@ -688,17 +861,17 @@ Swagger UI generated from the same code.
 
 ## Not yet implemented
 
-Deferred to the live-game tranche (don't expect these yet):
+Deferred (don't expect these yet):
 
-- a self-stepping autonomous loop and a pull poll (`/agent_act` / `next`,
-  `/events?since=`) — #261/#262;
-- run control (`/pause`, `/resume`, `/reset`) — #262;
+- a **real-LLM brain** inside the live loop — #261; today's steppers are
+  scripted/mock (that's the point: the whole live surface works offline);
 - a persistent store behind the private-cognition reads, and run-scoping
   (`/runs/{run_id}/agents/{name}/{memory,knowledge}`) — #304/#306; today
   `/agents/{name}/memory` and `/agents/{name}/knowledge` read the live in-process
   `AgentMemory` / `Knowledge`;
-- migrating the Flask webapp, the web companion, and Godot from file-based replay
-  to thin clients of this API.
+- migrating the Flask webapp and the web companion from file-based replay to
+  thin clients of this API (the Godot viewer's live client is #263, built on
+  this feed).
 
 ---
 
