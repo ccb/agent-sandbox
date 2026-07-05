@@ -211,10 +211,11 @@ class Sneak(actions.Go):
         super().__init__(game, command, actor=actor)
 
 
-class FungalSong(reactions.Startle):
-    """The Canopic hall's mantis-headed jar -- split and fungal -- SINGS whenever it
-    hears a noise, and the wail carries across the whole tomb, luring the Spawn
-    (which are :class:`DrawnToSound`) to the singer. Re-arms each round."""
+class MantisSong(reactions.Startle):
+    """The Canopic hall's mantis-headed jar -- split and fungal -- SINGS whenever
+    it hears a noise, in an INSECT'S voice (CCB): a stridulation, wing-cases and
+    rubbed legs, carrying across the whole tomb and luring the Spawn (which are
+    :class:`DrawnToSound`) to the singer. Re-arms each round."""
 
     REPEATABLE = True
 
@@ -232,9 +233,10 @@ class FungalSong(reactions.Startle):
         if self.game.player.location is loc:
             self.game.parser.ok(
                 "The mantis-headed jar splits wider and SINGS -- a tuneless, "
-                "carrying wail that fills the tomb."
+                "carrying stridulation, as of a thousand wing-cases rubbed "
+                "to one note, and it fills the tomb."
             )
-        self.game.emit_sound(loc, 6, "a tuneless fungal song")
+        self.game.emit_sound(loc, 6, "a tuneless insect song")
 
 
 def _has_spark(player):
@@ -1240,7 +1242,8 @@ def build_game():
         "mantis jar",
         "a mantis-headed canopic jar",
         "A split, fungal jar with a mantis's head, a misshapen orange growth budding "
-        "from the crack. It stirs at the faintest sound, as if listening.",
+        "from the crack. It stirs at the faintest sound with a dry, chitinous "
+        "rasp, as if listening.",
         "fungal eyes",
         "a clutch of fungus-clotted eyes",
     )
@@ -1706,7 +1709,7 @@ def build_game():
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
     # Spawn come to you -- the safe place to fight them (the halls are deadly).
-    game.add_reaction(mantis_jar, FungalSong())
+    game.add_reaction(mantis_jar, MantisSong())
     game.add_reaction(spawn_guts, reactions.DrawnToSound())
     game.add_reaction(spawn_brain, reactions.DrawnToSound())
 
