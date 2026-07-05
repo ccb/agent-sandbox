@@ -704,10 +704,11 @@ class PryCoffin(actions.Action):
             self.parser.ok(
                 "You work the blade into the seam and the glass FRACTURES -- "
                 "cracks racing from the blade's edge until the coffin gives "
-                "all at once, shards drifting slow and glittering in the "
-                "weightless air. From among the shattered glass the Fungal "
-                "Horror emerges, unwinding from the Autarch's bones -- orange "
-                "and vast and patient -- and it keeps the bones in its coil."
+                "all at once. From among the shattered glass the Fungal "
+                "Horror emerges: a mass of animate orange fungus coiled "
+                "around the bones of the Autarch, moving his dead limbs like "
+                "its own. It strikes at you with a speed no gravity "
+                "encumbers, sending the coffin shards spinning outward."
             )
             _sphere_erupted(self.game)
             return
@@ -1562,13 +1563,14 @@ def build_game():
     # coffin (narrative) until an alive-pry brings it out as a real Character.
     horror = things.Character(
         "fungal horror",
-        "the Fungal Horror, a coil of orange around a king's bones",
+        "the Fungal Horror, a mass of animate orange fungus coiled around "
+        "the Autarch's bones",
         "We keep him. We are keeping him still.",
     )
     horror.examine_text = (
-        "A single muscle of fungus the size of a river-snake, wound around "
-        "what is left of Nassak An-Rah. Where you cut it, it remembers; "
-        "where it burns, it does not."
+        "A single muscle of orange fungus the size of a river-snake, coiled "
+        "around what is left of Nassak An-Rah and moving his dead limbs like "
+        "its own. Where you cut it, it remembers; where it burns, it does not."
     )
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
@@ -1833,6 +1835,9 @@ def build_game():
     exterior.set_property("climb_exits", {"up"})
     summit.set_property("climb_exits", {"down"})
     chimney.set_property("climb_exits", {"out"})
+    # Weightless or not, hauling yourself up into the chimney's throat is a
+    # climb (CCB) -- the way DOWN is a drift, and stays free.
+    sphere.set_property("climb_exits", {"up"})
 
     game = TombGame(
         wreck,
