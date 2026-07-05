@@ -378,13 +378,13 @@ class Burn(actions.Action):
             return False
         if target == "horror":
             horror = self.game.characters.get("fungal horror")
+            if horror is not None and horror.get_property("is_dead"):
+                self.parser.fail("It is already still, and past burning's help.")
+                return False
             if horror is None or horror.location is not self.player.location:
                 self.parser.fail(
                     "The mass is sealed behind the glass; burn what feeds it, or open its door."
                 )
-                return False
-            if horror.get_property("is_dead"):
-                self.parser.fail("It is already still, and past burning's help.")
                 return False
         if not _has_spark(self.player):
             self.parser.fail(
@@ -433,26 +433,28 @@ class Burn(actions.Action):
                 )
             # If the Horror is out and fighting, the root's death is its death
             # -- and the coil's keeping ends with it: the coffin's contents it
-            # held since the eruption drift free in the sphere.
+            # held since the eruption drift free in the sphere, its remains
+            # hang there as ash, and the room's descriptions follow (CCB).
             horror = self.game.characters.get("fungal horror")
             if horror is not None and not horror.get_property("is_dead"):
                 horror.set_property("is_dead", True)
-                message += (
-                    " Far below, the coil collapses mid-motion, every thread of "
-                    "it gone slack at once."
-                )
                 sphere_loc = self.game.locations["Burial Sphere of Nassak An-Rah"]
                 if horror.location is sphere_loc:
-                    horror.description = "the Fungal Horror, charred and still"
-                    horror.examine_text = (
-                        "Still at last. The coil lies slack around nothing; "
-                        "the bones it kept drift free."
+                    message += (
+                        " Far below, its coil collapses mid-motion, every "
+                        "thread of it gone slack at once."
                     )
                     coffin_item = sphere_loc.items.get("coffin")
                     if coffin_item is not None:
                         for it in list(coffin_item.contents.values()):
                             coffin_item.remove_item(it)
                             sphere_loc.add_item(it)
+                    sphere_loc.remove_character(horror)
+                    _sphere_aftermath(self.game, ash=True)
+                else:
+                    # Never erupted: the thing in the coffin dies unseen, and
+                    # the slow churn behind the glass goes still.
+                    _sphere_quieted(self.game)
             self.parser.ok(message)
             self.game.award("cleanse", 30, None)
         elif target == "chimney":
@@ -707,6 +709,7 @@ class PryCoffin(actions.Action):
                 "Horror emerges, unwinding from the Autarch's bones -- orange "
                 "and vast and patient -- and it keeps the bones in its coil."
             )
+            _sphere_erupted(self.game)
             return
         coffin.set_property("pried", True)
         blade = self.player.carried_items()["prismatic blade"]
@@ -728,6 +731,7 @@ class PryCoffin(actions.Action):
             + ", ".join(taken)
             + ". The blade is done."
         )
+        _sphere_aftermath(self.game, ash=False)
         self.game.award("exotica", 30, None)
 
 
@@ -767,6 +771,129 @@ def _scenery(location, name, description, examine_text):
     it.set_property("gettable", False)
     location.add_item(it)
     return it
+
+
+def _sphere_gloom_blurb(g, text):
+    """Re-voice the Burial Sphere's half-light to match its current state."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    for veil in sphere.veils:
+        if isinstance(veil, perception.Gloom):
+            veil._blurb = text
+
+
+def _sphere_erupted(g):
+    """The eruption's mark on the room (CCB: the description must keep up):
+    the coffin is a drift of shards now, and the light is the Horror itself."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None:
+        coffin.description = "the burst remains of the anti-entropy coffin"
+        coffin.examine_text = (
+            "A slow orbit of glass shards around the point where the coffin "
+            "hung, edges catching the orange light. The field is dead; "
+            "whatever it kept, the Horror keeps now."
+        )
+    sphere.description = (
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: glass shards from the burst coffin "
+        "drift in slow orbits around the empty centre where it hung. The "
+        "chamber's light is the Fungal Horror itself, orange and luminous. "
+        "The prayers were carved to be read from every direction at once."
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless, lit by the Fungal Horror's own "
+        "orange glow. Glass shards turn slowly through it."
+    )
+    _sphere_gloom_blurb(
+        g,
+        "A rotten half-light: the Fungal Horror's glow fills the chamber, "
+        "and the carved prayers read as texture, not words.",
+    )
+
+
+def _sphere_aftermath(g, ash):
+    """After the keeping ends -- the Horror dead in the sphere, or the coffin
+    pried once nothing lives to mind it. The room becomes the fight's record
+    (CCB): shattered glass, the Autarch's bones adrift, and (if it died here)
+    the ash of the thing that held them."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None:
+        coffin.description = "the shattered remains of the anti-entropy coffin"
+        coffin.examine_text = (
+            "A slow orbit of glass shards around empty air. The field is "
+            "dead, and the keeping is over."
+        )
+    if "Autarch's bones" not in sphere.items:
+        bones = _scenery(
+            sphere,
+            "Autarch's bones",
+            "the bones of Nassak An-Rah, drifting free of their keeping",
+            "The Autarch, at last: a king reduced to drifting articulation, "
+            "gold wire at the joints, the skull tipped as if listening. "
+            "Vaarn has taken everything else.",
+        )
+        bones.add_alias("bones")
+        bones.add_alias("skeleton")
+        bones.add_alias("autarch")
+    if ash and "drift of ash" not in sphere.items:
+        ash_item = _scenery(
+            sphere,
+            "drift of ash",
+            "the ash of the Fungal Horror, hanging weightless in the air",
+            "Fine grey ash shot through with dull orange, still faintly warm, "
+            "hanging where the Horror burned. Nothing in it mends.",
+        )
+        ash_item.add_alias("ash")
+    sphere.description = (
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: glass shards from the shattered "
+        "coffin turn in slow orbits, and the chamber is quiet in a way it has "
+        "not been for a thousand years. The prayers were carved to be read "
+        "from every direction at once."
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless and quiet. Glass and pale bone "
+        "drift in the half-dark; the prayers are texture only."
+    )
+    _sphere_gloom_blurb(
+        g,
+        "A settling half-light: drifting shapes, and nothing in the chamber "
+        "moves on its own.",
+    )
+
+
+def _sphere_quieted(g):
+    """The root burned before the coffin was ever opened: the churn inside
+    the glass goes still, and every description that leaned on it follows."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None and not coffin.get_property("pried"):
+        coffin.examine_text = (
+            "A clouded glass sphere at the chamber's heart, its field "
+            "failing. Past the cloud, nothing moves any more; the slow "
+            "churn has stopped. The seam at its equator is fine as a hair "
+            "-- made to be pried, never opened."
+        )
+        sphere.description = (
+            "A spherical chamber carved over every inch with funeral "
+            "prayers, and nothing in it obeys the ground: dust and "
+            "bone-chips drift in the still air, and your own weight forgot "
+            "you at the threshold. In the dead centre floats the Autarch's "
+            "coffin, a glass anti-entropy sphere, clouded and still now -- "
+            "whatever moved inside it moves no more. The prayers were "
+            "carved to be read from every direction at once."
+        )
+        sphere.dim_description = (
+            "A spherical chamber, weightless, lit only by the fading orange "
+            "glow of the coffin at its heart -- still now. Dust and "
+            "bone-chips drift through it."
+        )
+        _sphere_gloom_blurb(
+            g,
+            "A rotten half-light, dimming: the coffin's glow no longer "
+            "stirs, and the carved prayers read as texture, not words.",
+        )
 
 
 def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
@@ -2482,15 +2609,6 @@ def build_game():
 
     def _horror_dies(g, burned=False):
         horror.set_property("is_dead", True)
-        horror.description = (
-            "the Fungal Horror, charred and still"
-            if burned
-            else ("the Fungal Horror, cut apart and still")
-        )
-        horror.examine_text = (
-            "Still at last. The coil lies slack around nothing; the bones it "
-            "kept drift free."
-        )
         # The coil unclenches: the coffin's keeping is over.
         coffin_item = sphere.items.get("coffin")
         released = []
@@ -2500,6 +2618,12 @@ def build_game():
                 sphere.add_item(it)
                 released.append(it.name)
         sphere.set_property("horror_dead", True)
+        # Every death here is a burning one (steel alone is a treadmill): the
+        # remains are ASH, an object in the room, not a listed combatant --
+        # and the room itself becomes the fight's record (CCB).
+        if horror.location is sphere:
+            sphere.remove_character(horror)
+        _sphere_aftermath(g, ash=True)
         if g.player.location is not sphere:
             # Burned to death with no one watching: heard, not seen.
             g.parser.ok(
@@ -2507,10 +2631,13 @@ def build_game():
                 "at all -- not even the sound of something mending."
             )
             return
-        msg = "The Horror comes apart and does not close again."
+        msg = (
+            "The Horror comes apart and does not close again -- what the fire "
+            "leaves of it hangs in the air as a drift of ash."
+        )
         if released:
             msg += (
-                " The coil unclenches from the Autarch's bones, and what he "
+                " Its coil unclenches from the Autarch's bones, and what he "
                 "was buried with drifts free: " + ", ".join(released) + "."
             )
         g.parser.ok(msg)
