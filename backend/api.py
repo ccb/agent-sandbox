@@ -24,10 +24,25 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
   change-feed ``events``, the new ``world_state`` snapshot, and ``game_over``.
 
+When a :class:`~backend.live.SimStepper` is injected (``create_app(stepper=...)``),
+the app also runs the **self-stepping live loop** (#349) and serves the live
+surface (#262) a following viewer needs:
+
+* ``GET  /live``         -> the handshake: loop state + the stepper's ``meta()``.
+* ``GET  /events?since=N`` -> the change-feed records after cursor ``N`` -- the
+  HTTP catch-up door (reconnect/backfill, curl, tests).
+* ``WS   /ws``           -> the push door: every record the loop appends, the
+  moment it lands. Same records, same cursor, so a client that loses the socket
+  backfills ``?since=<last seen>`` and re-attaches with no gap and no duplicate.
+* ``POST /pause`` / ``/resume`` / ``/reset`` -> run control over the loop.
+* ``GET  /usage``        -> the stepper's ``UsageLedger`` summary (tokens/cost)
+  for the viewer's run-monitor HUD (#264) -- ~0 under the mock brain.
+
 ``GET`` requests are read-only; ``POST /command`` advances the game by exactly
-one command. The interactive OpenAPI contract is served at ``/docs`` -- that is
-the single source of truth GDScript (Godot) and TS/JS (Phaser, companion)
-clients generate against.
+one command (and is refused with ``409`` while the live loop is actively
+stepping -- pause first). The interactive OpenAPI contract is served at
+``/docs`` -- that is the single source of truth GDScript (Godot) and TS/JS
+(Phaser, companion) clients generate against.
 
 Security posture (issue #186). The API is **unauthenticated and bound to
 loopback (127.0.0.1) by default** -- safe for local development only. Before it
@@ -42,10 +57,22 @@ FastAPI is an optional dependency: install it with ``uv sync --extra server``.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
 import os
 import threading
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -54,6 +81,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from text_adventure_games.memory import MemoryKind
 from text_adventure_games.reporting import JSONRenderer
 
+from .live import EventLog, LiveRunController, SimStepper, run_loop
 from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
 
 # Hosts that never need auth: a server bound here is only reachable from the
@@ -201,6 +229,62 @@ class KnowledgeResponse(BaseModel):
     beliefs: list[BeliefEntry]
 
 
+class LiveStatusResponse(BaseModel):
+    """``GET /live``: the handshake a live client reads once before following
+    the feed (#262/#263).
+
+    ``meta`` is the stepper's own ``meta()`` blob, passed through opaquely --
+    for the Penn/Smallville worlds it is the replay-meta shape (``tile_px``,
+    ``width``/``height``, ``personas`` with emoji, ...), so a live viewer
+    spawns its agents exactly the way the baked-replay loader does. ``cursor``
+    is the newest change-feed cursor; a client that starts its backfill at
+    ``GET /events?since=0`` (or attaches ``WS /ws?since=0``) replays history,
+    while ``?since=<this cursor>`` starts at "now". With no stepper injected
+    the route still answers (``enabled: false``, ``meta: null``) so a frontend
+    can probe whether live mode exists at all."""
+
+    enabled: bool
+    running: bool
+    paused: bool
+    step: int | None = Field(
+        None, description="completed sim steps (null when the loop is disabled)"
+    )
+    cursor: int = Field(..., description="the newest change-feed cursor (0 = none yet)")
+    tick_seconds: float | None
+    meta: dict | None
+
+
+class EventsResponse(BaseModel):
+    """``GET /events?since=N``: the HTTP catch-up door of the change feed (#262).
+
+    ``events`` are the retained records with ``cursor > N``, oldest first --
+    the same objects ``WS /ws`` pushes, passed through as plain JSON (shapes:
+    ``kind: "frame" | "status" | "engine"``; see ``backend/README.md``). The
+    log is capped, so a very stale ``since`` may point at evicted history:
+    the client detects that gap by ``events[0].cursor > since + 1`` (or by
+    ``oldest_cursor``) and should re-sync from ``GET /live`` + ``/world_state``
+    instead of trusting the tail."""
+
+    latest_cursor: int
+    oldest_cursor: int | None = Field(
+        None, description="cursor of the oldest retained record (null = empty log)"
+    )
+    events: list[dict]
+
+
+class RunControlResponse(BaseModel):
+    """``POST /pause | /resume | /reset``: the loop state after the change.
+
+    Each control also appends a ``status`` record to the change feed (its
+    cursor is echoed here), so followers on ``/ws`` learn about the change the
+    same way they learn about frames -- no side channel to poll."""
+
+    running: bool
+    paused: bool
+    step: int
+    cursor: int = Field(..., description="cursor of the status record this appended")
+
+
 def run_command(game, command: str, lock: threading.Lock | None = None) -> dict:
     """Advance *game* by one command and return the :class:`CommandResponse` dict.
 
@@ -260,6 +344,9 @@ def create_app(
     *,
     auth_token: str | None = None,
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+    stepper: SimStepper | None = None,
+    tick_seconds: float = 1.0,
+    max_log_records: int = 10_000,
 ) -> FastAPI:
     """Build the FastAPI app serving *game*.
 
@@ -268,12 +355,41 @@ def create_app(
     is the seam for every world. If *auth_token* is set, every request must carry
     ``Authorization: Bearer <token>``; left ``None`` (the loopback-only default)
     the API is open. Access to *game* is serialized with a lock, since FastAPI
-    runs the sync handlers in a thread pool and ``do_command`` mutates state."""
+    runs the sync handlers in a thread pool and ``do_command`` mutates state.
+
+    Pass *stepper* (a :class:`~backend.live.SimStepper`) to turn on the
+    **self-stepping live loop** (#349): a background task advances the sim every
+    *tick_seconds* under the same lock the routes use, publishing each step to
+    the change feed (capped at *max_log_records*; cursors stay monotonic across
+    eviction). Left ``None`` -- the default -- the app is byte-identical to the
+    command-driven API. The loop rides the app's lifespan, so it only runs
+    inside a server (or a ``with TestClient(app):`` block -- a bare
+    ``TestClient(app)`` never starts it)."""
+    lock = threading.Lock()
+    log = EventLog(max_log_records)
+    controller = LiveRunController(stepper, lock) if stepper is not None else None
+    ledger = getattr(stepper, "ledger", None)
+
+    lifespan = None
+    if controller is not None:
+
+        @contextlib.asynccontextmanager
+        async def _live_lifespan(_app):
+            task = asyncio.create_task(run_loop(controller, log, tick_seconds))
+            try:
+                yield
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+        lifespan = _live_lifespan
+
     app = FastAPI(
         title="agent-sandbox backend",
         summary="Headless HTTP seam over a text-adventure Game (issue #179).",
+        lifespan=lifespan,
     )
-    lock = threading.Lock()
 
     # Body-size cap first (#186b), then CORS. CORS is scoped to localhost origins
     # so the local Godot/Phaser/companion frontends can call us from a browser
@@ -469,6 +585,207 @@ def create_app(
                 "beliefs": beliefs,
             }
 
+    @app.get("/live", response_model=LiveStatusResponse)
+    def live(_: None = Depends(require_auth)):
+        """The live-loop handshake (#262/#263): loop state + the world's meta.
+
+        A live client calls this once -- to learn the world's shape (``meta``:
+        tile size, dimensions, personas) and where the feed currently stands
+        (``cursor``, ``step``) -- then follows ``WS /ws`` with ``GET /events``
+        as its backfill. Always answers: with no stepper injected it reports
+        ``enabled: false`` so a frontend can cheaply probe for live mode."""
+        if controller is None or stepper is None:
+            return {
+                "enabled": False,
+                "running": False,
+                "paused": False,
+                "step": None,
+                "cursor": log.latest_cursor(),
+                "tick_seconds": None,
+                "meta": None,
+            }
+        with lock:
+            return {
+                "enabled": True,
+                "running": controller.running,
+                "paused": controller.paused,
+                "step": stepper.step,
+                "cursor": log.latest_cursor(),
+                "tick_seconds": tick_seconds,
+                "meta": stepper.meta(),
+            }
+
+    @app.get("/events", response_model=EventsResponse)
+    def events(
+        since: int = Query(
+            default=0,
+            ge=0,
+            description="return only records with cursor > this; pass the last "
+            "cursor you saw to catch up after a dropped socket (0 = everything "
+            "retained)",
+        ),
+        _: None = Depends(require_auth),
+    ):
+        """The HTTP catch-up door of the change feed (#262).
+
+        The same records ``WS /ws`` pushes, addressed by the same monotonic
+        cursor -- so "reconnect, then ``GET /events?since=<last seen>``, then
+        re-attach the socket at ``?since=<new last>``" yields no gap and no
+        duplicate. An empty tail returns ``[]`` immediately (this door never
+        blocks; the socket is the door that waits). Reads only the log, not the
+        game, so it doesn't contend with a tick in progress."""
+        records = log.since(since)
+        return {
+            "latest_cursor": records[-1]["cursor"] if records else log.latest_cursor(),
+            "oldest_cursor": log.oldest_cursor(),
+            "events": records,
+        }
+
+    async def _drain_inbound(websocket: WebSocket) -> None:
+        """Consume (and ignore) client->server messages so disconnects surface.
+
+        The feed is server-push; the only inbound policing is the body-size cap:
+        ``_BodySizeLimitMiddleware`` never sees WebSocket scopes, so the 64 KiB
+        rule (#186) is enforced here by hand -- an oversized message closes the
+        socket with 1009 ("message too big")."""
+        try:
+            while True:
+                message = await websocket.receive_text()
+                if len(message.encode("utf-8")) > max_body_bytes:
+                    await websocket.close(code=1009)
+                    return
+        except (WebSocketDisconnect, RuntimeError):
+            return
+
+    @app.websocket("/ws")
+    async def ws_feed(
+        websocket: WebSocket,
+        since: int | None = Query(default=None, ge=0),
+        token: str | None = Query(default=None),
+    ):
+        """The push door of the change feed (#262): every record, as it lands.
+
+        Auth mirrors the HTTP routes: send ``Authorization: Bearer <token>`` in
+        the handshake (Godot's ``WebSocketPeer`` can), or -- because a browser
+        ``WebSocket`` cannot set headers -- pass ``?token=<token>``. A bad
+        token is refused with close code 1008 before the handshake completes.
+
+        ``?since=N`` replays the retained records after cursor ``N`` before
+        tailing (omit it to start at "now"). Each client just tails the shared
+        log at its own cursor, so a slow reader backpressures only itself; one
+        that falls behind the log's retention is closed with 1011 and must
+        re-sync (``GET /live`` + ``/events``)."""
+        if auth_token is not None:
+            offered = websocket.headers.get("authorization")
+            if offered != f"Bearer {auth_token}" and token != auth_token:
+                await websocket.close(code=1008)  # policy violation: bad token
+                return
+        await websocket.accept()
+        cursor = log.latest_cursor() if since is None else since
+        # A gap in the *first* batch after an explicit ?since= is the client's
+        # to judge (same contract as GET /events); after that, a gap means this
+        # client was slower than the log's retention -- force a re-sync.
+        caught_up = since is None
+        waiter = log.subscribe()
+        inbound = asyncio.create_task(_drain_inbound(websocket))
+        try:
+            while True:
+                waiter.clear()  # clear BEFORE reading: a racing append re-sets it
+                batch = log.since(cursor)
+                if batch:
+                    if caught_up and batch[0]["cursor"] > cursor + 1:
+                        await websocket.close(
+                            code=1011, reason="events evicted; re-sync and reconnect"
+                        )
+                        return
+                    for record in batch:
+                        await websocket.send_text(json.dumps(record))
+                        cursor = record["cursor"]
+                    caught_up = True
+                    continue
+                caught_up = True
+                wake = asyncio.ensure_future(waiter.wait())
+                done, _ = await asyncio.wait(
+                    {inbound, wake}, return_when=asyncio.FIRST_COMPLETED
+                )
+                wake.cancel()
+                if inbound in done:
+                    return  # client went away (or sent an oversized message)
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # client dropped mid-send; nothing to clean up beyond finally
+        finally:
+            inbound.cancel()
+            log.unsubscribe(waiter)
+
+    def _require_loop() -> LiveRunController:
+        """Run control without a loop is a conflict (409), not a crash."""
+        if controller is None:
+            raise HTTPException(
+                status_code=409,
+                detail="live loop not enabled; serve with create_app(stepper=...)",
+            )
+        return controller
+
+    @app.post("/pause", response_model=RunControlResponse)
+    async def pause(_: None = Depends(require_auth)):
+        """Stop ticking (idempotent). The loop task stays alive and every read
+        keeps working; this is also the viewer's emergency stop (#264), which is
+        why it is plain stateless HTTP rather than a socket message -- it must
+        work even when the socket is wedged."""
+        ctl = _require_loop()
+        ctl.pause()
+        record = log.append("status", reason="paused", **ctl.status())
+        return {**ctl.status(), "cursor": record["cursor"]}
+
+    @app.post("/resume", response_model=RunControlResponse)
+    async def resume(_: None = Depends(require_auth)):
+        """Start ticking again (idempotent; also un-does a ``finished`` pause,
+        which simply re-checks the stepper -- a finished run pauses again)."""
+        ctl = _require_loop()
+        ctl.resume()
+        record = log.append("status", reason="resumed", **ctl.status())
+        return {**ctl.status(), "cursor": record["cursor"]}
+
+    @app.post("/reset", response_model=RunControlResponse)
+    async def reset(_: None = Depends(require_auth)):
+        """Rebuild the sim to t0. ``step`` restarts at 0 but the change-feed
+        cursor keeps climbing (a follower keys off the ``status`` record with
+        ``reason: "reset"`` rather than a cursor rewind). Runs the stepper's
+        rebuild in a worker thread -- it takes the app lock and may be slow."""
+        ctl = _require_loop()
+        await asyncio.get_running_loop().run_in_executor(None, ctl.reset)
+        record = log.append("status", reason="reset", **ctl.status())
+        return {**ctl.status(), "cursor": record["cursor"]}
+
+    @app.get("/usage")
+    def usage(_: None = Depends(require_auth)) -> dict:
+        """The stepper's ``UsageLedger.summary()`` -- tokens and dollars -- for
+        the run-monitor HUD (#264). ``available: false`` (with a zeroed summary
+        in the same shape) when no ledger is wired, so the HUD renders $0.00
+        instead of erroring; under the mock brain a real ledger also reads ~0.
+        Real numbers arrive when #261 swaps a live LLM into the loop."""
+        with lock:
+            if ledger is None:
+                return {
+                    "kind": "summary",
+                    "available": False,
+                    "calls": 0,
+                    "total_cost_usd": 0.0,
+                    "by_actor": {},
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "over_budget": False,
+                }
+            summary = ledger.summary()
+            summary["available"] = True
+            summary["over_budget"] = ledger.over_budget()
+            if ledger.max_cost_usd is not None:
+                summary["max_cost_usd"] = ledger.max_cost_usd
+                summary["remaining_budget_usd"] = ledger.remaining_budget_usd()
+            return summary
+
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
         """Run exactly one command and return events + the new snapshot.
@@ -476,7 +793,17 @@ def create_app(
         A command the *engine* rejects (a failed precondition) is still a
         successful request: 200, with the rejection surfaced as a ``blocked``
         event. A 4xx means a bad *request* (malformed/empty body), not a rejected
-        *command*."""
+        *command*.
+
+        While the live loop is actively stepping, a command would interleave
+        with ticks mid-run, so it is refused with ``409`` -- ``POST /pause``
+        first, command, then ``/resume`` (the #349 "decide and document" rule:
+        pause-to-command rather than silent interleaving)."""
+        if controller is not None and controller.running and not controller.paused:
+            raise HTTPException(
+                status_code=409,
+                detail="sim loop is running; POST /pause before issuing commands",
+            )
         try:
             return run_command(game, req.command.strip(), lock)
         except Exception as exc:  # an engine bug shouldn't drop the connection
@@ -490,13 +817,18 @@ def run(
     host: str = "127.0.0.1",
     port: int = 8080,
     auth_token: str | None = None,
+    *,
+    stepper: SimStepper | None = None,
+    tick_seconds: float = 1.0,
 ) -> None:
     """Serve *game* over HTTP until interrupted (Ctrl-C).
 
     Defaults to loopback with no auth (local dev). Binding a non-loopback host
     requires a token -- passed here or via the ``SIM_API_TOKEN`` env var -- or
     this refuses to start, so the API is never silently exposed unauthenticated
-    (issue #186c)."""
+    (issue #186c). Pass *stepper* to run the self-stepping live loop (#349);
+    note that serving ``WS /ws`` needs the ``websockets`` package, which the
+    ``server`` extra installs alongside uvicorn."""
     import uvicorn
 
     auth_token = auth_token or os.environ.get("SIM_API_TOKEN")
@@ -505,7 +837,13 @@ def run(
             f"refusing to bind non-loopback host {host!r} without an auth token; "
             "set SIM_API_TOKEN (or pass auth_token=...) first -- see issue #186"
         )
-    uvicorn.run(create_app(game, auth_token=auth_token), host=host, port=port)
+    uvicorn.run(
+        create_app(
+            game, auth_token=auth_token, stepper=stepper, tick_seconds=tick_seconds
+        ),
+        host=host,
+        port=port,
+    )
 
 
 def _demo_game():
@@ -556,8 +894,77 @@ def _demo_game():
     return games.Game(field, player, characters=[gardener])
 
 
+def _demo_stepper(game):
+    """A :class:`~backend.live.ScriptedStepper` over the demo world, so
+    ``SIM_LIVE=1 python -m backend.api`` exercises the whole live surface --
+    loop, feed, ``/ws``, run control -- with no assets and no key.
+
+    Each tick runs one real command through *game* (cycling north/south, so
+    ``/world_state`` and ``game.turn`` genuinely advance) and appends one
+    observation to the gardener's memory (so ``GET /agents/gardener/memory``
+    visibly grows over time -- the #349 acceptance check). The frame maps the
+    two rooms onto a toy 4x4 grid; real worlds (the Penn sim) implement their
+    own :class:`~backend.live.SimStepper` instead."""
+    from .live import ScriptedStepper
+
+    positions = {"Field": (1, 2), "Forest": (1, 1)}
+    commands = ["go north", "go south"]
+    gardener = game.characters["gardener"]
+
+    def do_tick(step: int) -> list[dict]:
+        # The loop already holds the app lock around tick(), so run the command
+        # WITHOUT passing the lock here -- taking it again would deadlock.
+        result = run_command(game, commands[step % len(commands)])
+        gardener.agent.memory.add_observation(
+            f"Step {step}: I watched over the field.", turn=game.turn, importance=1.0
+        )
+        return result["events"]
+
+    def snapshot(step: int) -> dict:
+        x, y = positions.get(game.player.location.name, (0, 0))
+        here = game.player.location.name
+        return {
+            "player": {"x": x, "y": y, "act": f"wandering @ demo:{here}", "e": "🧍"},
+            "gardener": {
+                "x": 2,
+                "y": 2,
+                "act": "tending the grass @ demo:Field",
+                "e": "🌱",
+            },
+        }
+
+    def go_home() -> None:
+        # Demo-grade reset: walk the player back rather than rebuilding the
+        # world (the routes close over *game*, so it must be the same object).
+        if game.player.location.name != "Field":
+            run_command(game, "go south")
+
+    meta = {
+        "tile_px": 32,
+        "width": 4,
+        "height": 4,
+        "sec_per_step": 1,
+        "start": "2026-01-01 08:00:00",
+        "vision_r": 2,
+        "personas": [
+            {"name": "player", "emoji": "🧍"},
+            {"name": "gardener", "emoji": "🌱"},
+        ],
+    }
+    return ScriptedStepper(snapshot, meta=meta, on_tick=do_tick, on_reset=go_home)
+
+
 if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8080"))
+    game = _demo_game()
+    stepper = None
+    tick_seconds = float(os.environ.get("SIM_TICK_SECONDS", "1.0"))
+    if os.environ.get("SIM_LIVE"):  # default OFF: command-driven, as always
+        stepper = _demo_stepper(game)
+        print(
+            f"live loop ON (tick every {tick_seconds}s): "
+            f"GET /live, GET /events?since=0, ws://{host}:{port}/ws"
+        )
     print(f"serving demo world on http://{host}:{port}  (OpenAPI at /docs)")
-    run(_demo_game(), host=host, port=port)
+    run(game, host=host, port=port, stepper=stepper, tick_seconds=tick_seconds)
