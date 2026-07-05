@@ -926,7 +926,7 @@ def test_prying_the_live_coffin_wakes_the_boss():
     assert "prismatic blade" in game.player.carried_items()  # the blade survives
     assert "synth-hunting dagger" not in sphere.items  # kept in its coil
     out = " ".join(cap.texts(Channel.NARRATION))
-    assert "unwinds from the Autarch's bones" in out
+    assert "From among the shattered glass" in out  # glass fractures; no bulging
 
 
 def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
@@ -940,7 +940,12 @@ def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
     assert horror.get_property("vigor") == 5  # -1 hit, +1 knit: nowhere
     cap = _texts(game)
     game.do_command("burn horror")  # ablaze: nothing knits
-    assert "cannot knit itself" in " ".join(cap.texts(Channel.NARRATION))
+    out = " ".join(cap.texts(Channel.NARRATION))
+    # Concrete narration: the liquid, the target, the tool in hand (CCB).
+    assert "embalming gel" in out
+    assert "plasma-igniter" in out
+    # The player watched it mend, so the fire's meaning is earned knowledge.
+    assert "the mending stops" in out
     game.do_command("attack horror with blade")  # -1 hit, -1 burn
     game.do_command("attack horror with blade")  # -1 hit, -1 burn -> 0
     assert horror.get_property("is_dead")
@@ -1001,7 +1006,21 @@ def test_the_fire_guttering_out_is_announced_to_your_face():
     game.do_command("wait")  # third and last ablaze round
     out = " ".join(cap.texts(Channel.NARRATION))
     assert "fire gutters out" in out
-    assert "What is cut can knit again" in out
+    assert "What is cut can mend again" in out
+
+
+def test_the_fires_meaning_is_only_told_to_those_who_saw_it_mend():
+    """Burn the Horror before ever watching it knit and the narration keeps
+    its counsel -- no unearned "the mending stops" (CCB: no hints like that).
+    The regeneration lesson must be learned by watching, not from the fire."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    cap = _texts(game)
+    game.do_command("burn horror")  # first act: it has never knit in view
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "embalming gel" in out and "plasma-igniter" in out
+    assert "the mending stops" not in out
 
 
 def test_burning_the_root_mid_fight_fells_the_horror():

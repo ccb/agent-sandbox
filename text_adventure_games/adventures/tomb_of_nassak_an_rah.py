@@ -246,6 +246,15 @@ def _has_spark(player):
     )
 
 
+def _spark_name(player):
+    """The NAME of the carried thing that makes the spark, so the burn
+    narrations can be concrete about the tool in hand (CCB)."""
+    for it in player.carried_items().values():
+        if it.get_property("ignition_source"):
+            return it.name
+    return "spark"
+
+
 def _gel_dose(g):
     """Consume one dose of gel from the player's flask (relabelling it);
     returns False if they carry no dose."""
@@ -409,10 +418,11 @@ class Burn(actions.Action):
                 "horror_dead", True
             )
             message = (
-                "You splash the embalming gel over the ossified mystic and strike "
-                "your spark. Orange flame roars down the fungal chimney -- and far "
-                "below, the whole rotten network shudders and dies. The Fungal "
-                "Horror sloughs into ash. The tomb falls silent at last."
+                "You splash a dose of embalming gel over the ossified mystic "
+                f"and put a spark from the {_spark_name(self.player)} to it. Orange "
+                "flame roars down the fungal chimney -- and far below, the "
+                "whole rotten network shudders and dies. The Fungal Horror "
+                "sloughs into ash. The tomb falls silent at last."
             )
             corpse_item = loc.items.get("ossified corpse")
             if corpse_item is not None and "friend's fungus" in corpse_item.contents:
@@ -452,9 +462,11 @@ class Burn(actions.Action):
                 # Lit from INSIDE the shaft: it works, and it costs you --
                 # you are standing in the thing you just made a flue.
                 self.parser.ok(
-                    "The gel catches and the shaft goes up like a struck match, "
-                    "flame crawling the growth from throat to crown -- with you "
-                    "in its throat. When it gutters out, the chimney is black, "
+                    "You sling a dose of embalming gel across the orange "
+                    f"growth and put a spark from the {_spark_name(self.player)} "
+                    "to it. The shaft goes up like a struck match, flame "
+                    "crawling the growth from throat to crown -- with you in "
+                    "its throat. When it gutters out, the chimney is black, "
                     "bare, and breathable -- a local victory. Somewhere below, "
                     "the root of it all is untouched."
                 )
@@ -480,32 +492,43 @@ class Burn(actions.Action):
             else:
                 # Lit from the Summit's lip: the smart way to light a chimney.
                 self.parser.ok(
-                    "You douse a knot of the growth at the chimney's mouth, "
-                    "strike your spark, and step back. The shaft takes it like "
-                    "a struck match, flame crawling the growth from throat to "
-                    "crown while you watch from open air. When it gutters out, "
-                    "the chimney is black, bare, and breathable. Somewhere "
-                    "below, the root of it all is untouched."
+                    "You douse a knot of the growth at the chimney's mouth "
+                    "with a dose of embalming gel, strike the "
+                    f"{_spark_name(self.player)} over it, and step back. The "
+                    "shaft takes it like a struck match, flame crawling the "
+                    "growth from throat to crown while you watch from open "
+                    "air. When it gutters out, the chimney is black, bare, "
+                    "and breathable. Somewhere below, the root of it all is "
+                    "untouched."
                 )
         else:  # the Horror
             horror = self.game.characters["fungal horror"]
             was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
             horror.set_property("gel_doused", False)
-            self.parser.ok(
-                (
-                    "You strike your spark, and the dose already sheeting the "
-                    "coil takes all at once. The Horror goes up with a sound "
-                    "like a held breath released -- burning, it cannot knit "
-                    "itself; whatever you cut now stays cut."
+            tool = _spark_name(self.player)
+            if was_doused:
+                message = (
+                    f"You strike a spark from the {tool}, and the dose of "
+                    "embalming gel already sheeting the Fungal Horror takes "
+                    "all at once. It goes up with a sound like a held breath "
+                    "released."
                 )
-                if was_doused
-                else (
-                    "You sling the gel across the coil and strike your spark. The "
-                    "Horror goes up with a sound like a held breath released -- "
-                    "burning, it cannot knit itself; whatever you cut now stays cut."
+            else:
+                message = (
+                    "You sling a dose of embalming gel from your flask across "
+                    f"the Fungal Horror and put a spark from the {tool} to it. It "
+                    "goes up with a sound like a held breath released."
                 )
-            )
+            # Say what the fire MEANS only to someone who has watched the
+            # thing mend (CCB: no unearned hints) -- and say it as a fact of
+            # the body, not a rule of the game.
+            if horror.get_property("knit_seen"):
+                message += (
+                    " And in the flames, the mending stops: the rents you "
+                    "cut gape, and go on gaping."
+                )
+            self.parser.ok(message)
 
 
 class Refill(actions.Action):
@@ -677,10 +700,12 @@ class PryCoffin(actions.Action):
                 self.game.relocate(horror, loc)
             coffin.set_property("pried", True)
             self.parser.ok(
-                "You work the blade into the seam and the seam BULGES -- the "
-                "glass parts around a body coming out. The Horror unwinds from "
-                "the Autarch's bones into the weightless air, orange and vast "
-                "and patient, and keeps the bones in its coil."
+                "You work the blade into the seam and the glass FRACTURES -- "
+                "cracks racing from the blade's edge until the coffin gives "
+                "all at once, shards drifting slow and glittering in the "
+                "weightless air. From among the shattered glass the Fungal "
+                "Horror emerges, unwinding from the Autarch's bones -- orange "
+                "and vast and patient -- and it keeps the bones in its coil."
             )
             return
         coffin.set_property("pried", True)
@@ -2409,14 +2434,15 @@ def build_game():
                 return
             if watching:
                 g.parser.ok(
-                    "The fire walks the coil and the coil thrashes; charred lengths "
-                    "of it drift loose. Nothing knits. It is smaller than it was."
+                    "The fire walks the length of the Fungal Horror and it "
+                    "thrashes; charred ropes of fungus drift loose. Nothing "
+                    "mends. It is smaller than it was."
                 )
             if ablaze - 1 == 0:
                 # The window closes AUDIBLY -- never silently back to knitting.
                 g.parser.ok(
-                    "The fire gutters out against the wet of the coil. "
-                    "What is cut can knit again."
+                    "The fire gutters out against the wet of the Fungal "
+                    "Horror's flesh. What is cut can mend again."
                     if watching
                     else "From the Burial Sphere, the roar of fire dies away "
                     "to nothing."
@@ -2424,10 +2450,13 @@ def build_game():
         elif vigor < 5:
             horror.set_property("vigor", vigor + 1)
             if watching:
+                # The player has now SEEN the mending -- the burn narration
+                # may speak of stopping it without giving an unearned hint.
+                horror.set_property("knit_seen", True)
                 g.parser.ok(
-                    "The rents you have cut knit closed before your eyes, new "
-                    "threads lacing across them, pale and then orange. It is "
-                    "mending faster than you are."
+                    "The rents you have cut in the Fungal Horror knit closed "
+                    "before your eyes, new threads lacing across them, pale "
+                    "and then orange. It is mending faster than you are."
                 )
         if not watching:
             return  # the acid needs a target
@@ -2447,8 +2476,8 @@ def build_game():
         if fatal:
             _die(
                 g,
-                "The acid takes the last of you, and the coil folds you in "
-                "among the bones it keeps. THE END.",
+                "The acid takes the last of you, and the Fungal Horror folds "
+                "you in among the bones it keeps. THE END.",
             )
 
     def _horror_dies(g, burned=False):
@@ -2550,8 +2579,9 @@ def build_game():
         )
         horror.set_property("gel_doused", True)
         g.parser.ok(
-            "The flask bursts against the coil and a dose of gel sheets "
-            "across the orange, luminous, clinging. It wants only a spark."
+            "The flask bursts against the Fungal Horror and a dose of "
+            "embalming gel sheets across the orange, luminous, clinging. "
+            "It wants only a spark."
         )
 
     game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
