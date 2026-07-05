@@ -959,7 +959,7 @@ def test_thrown_gel_douses_the_horror_for_a_spark_alone():
     game.do_command("throw gel at horror")  # the short alias works too
     assert horror.get_property("gel_doused")
     assert "flask of gel" in sphere.items  # deflected, not caught
-    game.do_command("burn horror")  # spark alone: it was doused
+    game.do_command("light gel")  # the dose is ON it: identical to burn horror
     assert int(horror.get_property("ablaze") or 0) > 0
     game.do_command("attack horror with blade")
     game.do_command("attack horror with blade")
