@@ -117,6 +117,27 @@ Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path 
 sim chose, with a name + activity label above each sprite. (`sim/` carries a
 `.gdignore` so Godot leaves the Python alone.)
 
+### The run monitor (top-right)
+
+A live real-LLM run spends money every step and can stall on the provider, so the
+viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
+backend health, and a one-click **Emergency stop**. The `-`/`+` button in its header
+collapses it to just the title bar (the health dot stays visible); the meter keeps
+counting underneath. Its data feed is pluggable (`scripts/hud_source.gd`):
+
+- **Baked replay (the default):** no backend exists, so the monitor shows clearly
+  labeled **simulated** usage that accrues while the replay plays
+  (`scripts/hud_source_replay.gd`) — realistic numbers, zero dollars at risk. The
+  stop button freezes playback and trips a mock budget gate; Play lifts it.
+- **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
+  the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
+  environment, no editor needed — and the same monitor polls the real `GET /usage` +
+  `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
+  `SIM_API_TOKEN` as a bearer token when set.
+
+Both feeds emit the engine's `UsageLedger.summary()` shape (what `GET /usage`
+serves), which is what makes the mock → real-LLM switch a pure configuration change.
+
 ## Where this fits — the full-port proposals
 
 This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
