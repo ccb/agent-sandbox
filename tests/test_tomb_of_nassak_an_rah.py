@@ -966,6 +966,44 @@ def test_thrown_gel_douses_the_horror_for_a_spark_alone():
     assert horror.get_property("is_dead")
 
 
+def test_the_fire_burns_whether_or_not_you_watch():
+    """CCB's playtest: he lit the Horror, then spent the window shuttling gear
+    two rooms away -- and the fire politely waited for him. It must not: douse,
+    light, and RUN is a legitimate tactic. And when the window closes, it
+    closes audibly, never silently back to knitting."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    horror = game.characters["fungal horror"]
+    game.do_command("burn horror")  # lit: one burn tick already taken
+    burned_to = horror.get_property("vigor")
+    game.do_command("down")  # flee -- the fire keeps working
+    assert horror.get_property("vigor") == burned_to - 1
+    cap = _texts(game)
+    game.do_command("wait")  # the last ablaze round, spent elsewhere
+    assert horror.get_property("vigor") == burned_to - 2
+    assert int(horror.get_property("ablaze") or 0) == 0
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "roar of fire dies away" in out  # the window closes audibly
+    game.do_command("wait")  # and with the fire out, the knitting resumes
+    assert horror.get_property("vigor") == burned_to - 1
+
+
+def test_the_fire_guttering_out_is_announced_to_your_face():
+    """Standing in the sphere when ablaze expires, you are told plainly that
+    the window has shut -- the knit/burn state change is never silent."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    game.do_command("burn horror")
+    cap = _texts(game)
+    game.do_command("attack horror with blade")
+    game.do_command("wait")  # third and last ablaze round
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "fire gutters out" in out
+    assert "What is cut can knit again" in out
+
+
 def test_burning_the_root_mid_fight_fells_the_horror():
     game = _game()
     sphere = _boss_setup(game)
@@ -976,6 +1014,10 @@ def test_burning_the_root_mid_fight_fells_the_horror():
     game.do_command("burn corpse")
     assert game.characters["fungal horror"].get_property("is_dead")
     assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
+    # The coil's keeping ends with it: the loot it held since the eruption
+    # is in the sphere, not sealed forever inside the coffin item.
+    assert "synth-hunting dagger" in sphere.items
+    assert "manifold box" in sphere.items
 
 
 def _summon_pack(game):
