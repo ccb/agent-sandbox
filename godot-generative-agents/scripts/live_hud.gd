@@ -114,6 +114,11 @@ func _ready() -> void:
 	_collapse = Button.new()
 	_collapse.text = "-"
 	_collapse.tooltip_text = "Collapse the run monitor"
+	# A fixed footprint (clip_text makes the minimum width exactly this box):
+	# "-" and "+" have different glyph widths, and without this the swap would
+	# nudge the header's minimum width — visibly shifting the whole panel.
+	_collapse.custom_minimum_size = Vector2(40, 0)
+	_collapse.clip_text = true
 	_collapse.pressed.connect(_on_collapse_pressed)
 	header.add_child(_collapse)
 
