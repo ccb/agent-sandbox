@@ -24,6 +24,16 @@ extends Node2D
 ## Draw a short breadcrumb trail behind each agent so you can see where they just
 ## came from. Set false to hide every trail.
 @export var show_trail: bool = true
+## Run-monitor HUD (issue #264): base URL of a RUNNING backend (backend/api.py),
+## e.g. "http://127.0.0.1:8000". Empty (the default) = baked-replay mode, where
+## the top-right monitor shows clearly-labeled SIMULATED usage so the HUD is
+## demoable without spending money. Set a URL (or the SIM_API_URL env var, which
+## needs no editor visit) and the same HUD polls the real GET /usage + /health
+## and drives POST /pause — nothing else changes when real LLMs arrive.
+@export var live_backend_url: String = ""
+## Bearer token for the live backend (its SIM_API_TOKEN, issue #186); falls back
+## to the SIM_API_TOKEN env var when empty. Ignored in baked-replay mode.
+@export var live_api_token: String = ""
 
 # The Cute Fantasy player sheet is a 6x10 grid; row 0 is a 6-frame walk cycle.
 const SHEET_HFRAMES := 6
@@ -149,9 +159,20 @@ var _fog: CanvasLayer
 var _fog_rect: ColorRect
 var _fog_mat: ShaderMaterial
 
+# Run-monitor HUD (issue #264): `_hud_source` feeds the top-right monitor —
+# hud_source_replay.gd (simulated spend) in baked-replay mode, hud_source_live.gd
+# (real GET /usage + /health polls) when live_backend_url points at a backend.
+# `_run_halted` mirrors the source's halted state (Emergency Stop pressed);
+# `_hud_running` is the last is-playback-advancing value pushed to the source,
+# so the simulated meter only accrues while the replay actually plays.
+var _hud_source: Node
+var _run_halted := false
+var _hud_running := false
+
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
+@onready var _hud = $UI/LiveHud  # live_hud.gd top-right run monitor
 @onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
@@ -201,6 +222,9 @@ func _ready() -> void:
 	# the replay loads (see _load_replay_from_text).
 	_panel.filter_changed.connect(_on_filter_changed)
 
+	# The top-right run monitor and its data source (simulated or live).
+	_setup_hud()
+
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
 	_sky = CanvasModulate.new()
@@ -236,6 +260,49 @@ func _ready() -> void:
 		_load_replay_web()
 	else:
 		_load_replay_desktop()
+
+
+func _setup_hud() -> void:
+	# Pick the run monitor's data feed (issue #264). Both sources speak the same
+	# contract (hud_source.gd), so this is the ONLY place that knows which mode
+	# we're in — the HUD and the wiring below are identical either way, which is
+	# what makes the switch to a real-LLM backend a one-line configuration.
+	var url := live_backend_url
+	if url == "":
+		url = OS.get_environment("SIM_API_URL")
+	if url != "":
+		_hud_source = preload("res://scripts/hud_source_live.gd").new()
+		_hud.set_source_label("live: %s" % url)
+	else:
+		_hud_source = preload("res://scripts/hud_source_replay.gd").new()
+		_hud.set_source_label("simulated (baked replay)")
+
+	# Connect BEFORE add_child: a source seeds the HUD (initial health + zeroed
+	# meter) from its _ready, which runs inside add_child — connect after and
+	# those first emissions are lost, leaving the status row blank.
+	_hud_source.usage_updated.connect(_hud.set_usage)
+	_hud_source.health_changed.connect(_hud.set_health)
+	_hud_source.halted_changed.connect(_on_run_halted)
+	_hud.stop_requested.connect(_hud_source.request_stop)
+	add_child(_hud_source)
+
+	if url != "":
+		var token := live_api_token
+		if token == "":
+			token = OS.get_environment("SIM_API_TOKEN")
+		_hud_source.configure(url, token)
+
+
+func _on_run_halted(halted: bool) -> void:
+	# The source confirmed an Emergency Stop (or a resume) — reflect it in the
+	# HUD, and freeze the replay playback too so the whole scene reads as halted
+	# (in live mode the backend loop is what actually paused; stopping the local
+	# playback as well keeps the picture consistent).
+	_run_halted = halted
+	_hud.set_halted(halted)
+	if halted and not _paused:
+		_paused = true
+		_panel.set_playing(false)
 
 
 func _load_replay_desktop() -> void:
@@ -320,6 +387,10 @@ func _load_replay_from_text(text: String) -> void:
 	# Hand the whole replay to the heatmap pop-up so it can build its campus picture now
 	# (avoiding a blank first-open frame) and tally dwell up to any step on demand.
 	_heatmap.set_replay(_frames, _names, _tile_px)
+
+	# Tell the run monitor's source who the cast is, so its per-actor spend
+	# attribution matches the real ledger's by_actor rollup.
+	_hud_source.set_cast(_names)
 	print("penn_replay: %d steps, %d personas" % [_frames.size(), _names.size()])
 
 
@@ -614,6 +685,11 @@ func _update_fog() -> void:
 func _on_play_pause() -> void:
 	_paused = not _paused
 	_panel.set_playing(not _paused)
+	# Pressing Play after an Emergency Stop also lifts the halt: the source
+	# un-trips (replay mode) or POSTs /resume (live mode) and confirms back
+	# through halted_changed -> _on_run_halted.
+	if not _paused and _run_halted:
+		_hud_source.request_resume()
 
 
 func _on_seek(step: int) -> void:
@@ -725,6 +801,15 @@ func _process(delta: float) -> void:
 	var frac: float = 0.0 if looped else fpos - float(i)
 	var j: int = i if looped else i + 1
 	_panel.set_progress(i, last)
+
+	# Keep the run monitor honest about whether the "run" is advancing: the
+	# simulated meter accrues spend only while the replay actually plays (not
+	# paused, not halted, not pinned at the final frame). Pushed only on change;
+	# the live source ignores it (a real backend spends on its own clock).
+	var advancing := not _paused and not looped
+	if advancing != _hud_running:
+		_hud_running = advancing
+		_hud_source.set_running(advancing)
 
 	# Keep the heatmap pop-up current: while it's open, re-tally the dwell up to the new
 	# step whenever the playhead crosses into it, so the heat grows live as the sim runs.
