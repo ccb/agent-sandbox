@@ -1170,6 +1170,23 @@ def test_the_dead_dont_sway_in_the_listings():
     assert "swaying toward every sound" not in out
 
 
+def test_the_mantis_jar_snaps_once_at_the_hand_that_opens_it():
+    """CCB: a one-time defensive snap -- the alarm has teeth, but it is not
+    a combatant. First open costs a Mantis-Bitten wound; after that, the
+    jar has made its point."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
+    cap = _texts(game)
+    game.do_command("open mantis jar")
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+    assert "mantis head STRIKES" in " ".join(cap.texts(Channel.NARRATION))
+    # A second violation draws nothing: the snap is one-time.
+    game.do_command("close mantis jar")
+    game.do_command("open mantis jar")
+    game.do_command("take fungal eyes")
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+
+
 def test_the_glass_centipede_ambushes_in_the_chimney():
     game = _game()
     game.relocate(game.player, game.locations["The Summit"])
