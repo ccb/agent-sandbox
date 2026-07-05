@@ -100,6 +100,13 @@ class Action(GatedEffect):
             other = loc.characters[name]
             if other is not looker and name.lower() in cmd:
                 return other
+        # Aliases match too ("throw gel at horror" finds the fungal horror).
+        for other in loc.characters.values():
+            if other is looker:
+                continue
+            for alias in getattr(other, "aliases", ()):
+                if alias in cmd:
+                    return other
         return None
 
     def target_character(self, command, exclude=None, **kwargs):
