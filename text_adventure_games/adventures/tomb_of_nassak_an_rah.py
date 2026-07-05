@@ -314,7 +314,20 @@ class Burn(actions.Action):
             or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
         ):
             return "corpse"
-        if loc.name == "The Fungal Chimney" and not loc.get_property("burned"):
+        chimney_loc = self.game.locations.get("The Fungal Chimney")
+        if (
+            chimney_loc is not None
+            and not chimney_loc.get_property("burned")
+            and (
+                loc is chimney_loc
+                # From the Summit you stand at the chimney's mouth: light it
+                # like a chimney is lit -- from open air, not from inside.
+                or (
+                    loc.name == "The Summit"
+                    and any(w in self.command for w in ("growth", "fungus", "chimney"))
+                )
+            )
+        ):
             return "chimney"
         if loc.name == "Burial Sphere of Nassak An-Rah" and (
             "horror" in self.command
@@ -431,13 +444,47 @@ class Burn(actions.Action):
             self.parser.ok(message)
             self.game.award("cleanse", 30, None)
         elif target == "chimney":
-            loc.set_property("burned", True)
-            self.parser.ok(
-                "The gel catches and the shaft goes up like a struck match, "
-                "flame crawling the growth from throat to crown. When it gutters "
-                "out, the chimney is black, bare, and breathable -- a local "
-                "victory. Somewhere below, the root of it all is untouched."
-            )
+            chimney_loc = self.game.locations["The Fungal Chimney"]
+            chimney_loc.set_property("burned", True)
+            if loc is chimney_loc:
+                # Lit from INSIDE the shaft: it works, and it costs you --
+                # you are standing in the thing you just made a flue.
+                self.parser.ok(
+                    "The gel catches and the shaft goes up like a struck match, "
+                    "flame crawling the growth from throat to crown -- with you "
+                    "in its throat. When it gutters out, the chimney is black, "
+                    "bare, and breathable -- a local victory. Somewhere below, "
+                    "the root of it all is untouched."
+                )
+                fatal = _wound_player(
+                    self.game,
+                    "Scorched",
+                    1,
+                    (
+                        "The fire takes your eyebrows and the hair on the back "
+                        "of your neck as you scramble clear.",
+                        "A sheet of flame runs up your sleeve; the skin beneath "
+                        "keeps the shape of it.",
+                        "The first breath of the blaze crisps your cheek before "
+                        "you can turn from it.",
+                    ),
+                )
+                if fatal:
+                    _die(
+                        self.game,
+                        "The shaft becomes a flue, and you are what it burns. "
+                        "THE END.",
+                    )
+            else:
+                # Lit from the Summit's lip: the smart way to light a chimney.
+                self.parser.ok(
+                    "You douse a knot of the growth at the chimney's mouth, "
+                    "strike your spark, and step back. The shaft takes it like "
+                    "a struck match, flame crawling the growth from throat to "
+                    "crown while you watch from open air. When it gutters out, "
+                    "the chimney is black, bare, and breathable. Somewhere "
+                    "below, the root of it all is untouched."
+                )
         else:  # the Horror
             horror = self.game.characters["fungal horror"]
             was_doused = horror.get_property("gel_doused")
@@ -2549,11 +2596,17 @@ def build_game():
         return chimney.get_property("burned") and not centipede.get_property("is_dead")
 
     def _scour(g):
+        was_senseless = centipede.get_property("is_unconscious")
         centipede.set_property("is_dead", True)
         if centipede.location is chimney:
+            # A senseless thing does not boil out of anything (CCB playtest:
+            # the "cracked and still" centipede seemed to die twice).
             g.parser.ok(
-                "Something four feet long and glassy boils out of the burning "
-                "growth, seizes once, and is still."
+                "The fire finds the cracked thing where it lies; it seizes "
+                "once in the flame, and is still."
+                if was_senseless
+                else "Something four feet long and glassy boils out of the "
+                "burning growth, seizes once, and is still."
             )
         else:
             g.relocate(centipede, chimney)
