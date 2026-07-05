@@ -1116,6 +1116,59 @@ def test_fire_scours_the_centipede_with_the_growth():
     assert game.characters["glass centipede"].get_property("is_dead")
 
 
+def test_fire_finds_a_senseless_centipede_where_it_lies():
+    """CCB playtest: a KO'd centipede ("cracked and still") seemed to die
+    twice -- the scour line had it "boil out" of the growth. A senseless
+    thing does not boil out of anything; the fire finds it where it lies."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # bitten on entry
+    game.do_command("attack centipede with blade")  # cracked and still
+    cap = _texts(game)
+    game.do_command("burn growth")
+    assert game.characters["glass centipede"].get_property("is_dead")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "finds the cracked thing where it lies" in out
+    assert "boils out" not in out
+
+
+def test_burning_the_shaft_from_inside_costs_a_scorched_wound():
+    """You can light the chimney while standing in its throat -- it works,
+    and the flue you just made takes its due (CCB: a wound, not a death)."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Fungal Chimney"])
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    assert any(w.name == "Scorched" for w in game.player.wounds)
+
+
+def test_burning_the_shaft_from_the_summit_is_free():
+    """The smart play: light a chimney the way chimneys are lit -- from the
+    mouth, standing in open air. Same cleanse, no wound."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    cap = _texts(game)
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    assert not any(w.name == "Scorched" for w in game.player.wounds)
+    assert "from open air" in " ".join(cap.texts(Channel.NARRATION))
+    # And the bare verbs at the Summit still mean the corpse, not the shaft.
+    assert not game.locations["The Summit"].get_property("cleansed")
+
+
 def test_burning_the_chimney_growth_clears_the_spores():
     game = _game()
     _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
