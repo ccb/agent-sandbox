@@ -823,6 +823,29 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     )
 
 
+def test_the_climb_out_of_the_sphere_refuses_a_full_pack():
+    """CCB playtest: an encumbered player floated freely from the sphere UP
+    into the chimney, only to be refused at the chimney's own climb. The
+    hauling starts at the sphere's crown -- the gate belongs there too."""
+    from text_adventure_games.slots import Wound
+
+    game = _game()
+    sphere = _boss_setup(game)  # boots worn; blade, igniter, gel carried
+    assert not game.player.is_encumbered()
+    game.do_command("up")  # unencumbered: the climb is fine
+    assert game.player.location.name == "The Fungal Chimney"
+    game.do_command("down")
+    while not game.player.is_encumbered():
+        game.player.add_wound(Wound("Test-Weight", 2, "ballast"), rng=None)
+    cap = _texts(game)
+    game.do_command("up")
+    assert game.player.location is sphere  # refused at the crown
+    assert (
+        "climb is out of the question"
+        in " ".join(cap.texts(Channel.NARRATION) + cap.texts(Channel.BLOCKED)).lower()
+    )
+
+
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     game = _game()
     _embark(game)
