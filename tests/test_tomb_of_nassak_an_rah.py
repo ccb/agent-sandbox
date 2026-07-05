@@ -949,6 +949,23 @@ def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
     assert game.player.wound_slots() >= 3  # the acid kept the ledger
 
 
+def test_thrown_gel_douses_the_horror_for_a_spark_alone():
+    """CCB's instinctive sequence, legitimized: throw gel at horror (it has no
+    hands -- the flask bursts and drifts free), then burn with the spark alone."""
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    horror = game.characters["fungal horror"]
+    game.do_command("throw gel at horror")  # the short alias works too
+    assert horror.get_property("gel_doused")
+    assert "flask of gel" in sphere.items  # deflected, not caught
+    game.do_command("burn horror")  # spark alone: it was doused
+    assert int(horror.get_property("ablaze") or 0) > 0
+    game.do_command("attack horror with blade")
+    game.do_command("attack horror with blade")
+    assert horror.get_property("is_dead")
+
+
 def test_burning_the_root_mid_fight_fells_the_horror():
     game = _game()
     sphere = _boss_setup(game)
