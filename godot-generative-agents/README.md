@@ -117,6 +117,43 @@ Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path 
 sim chose, with a name + activity label above each sprite. (`sim/` carries a
 `.gdignore` so Godot leaves the Python alone.)
 
+### Live mode — follow a running sim (issue #263)
+
+The same scene can **follow a live simulation over real HTTP + WebSocket**
+instead of loading a baked file. `sim/serve_penn.py` steps the *same* configured
+Penn world (`sim/penn_world.py`, shared with the bake so the two can't drift —
+issue #297) inside the backend's self-stepping live loop (#349/#262), and the
+viewer becomes a thin client of `backend/api.py`:
+
+```bash
+# 1. Serve the live Penn sim (mock brain: real requests, zero keys, zero spend).
+#    From the repo root; needs the server extra (uv sync --extra server):
+uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
+
+# 2. Point the viewer at it (the same switch the run monitor uses):
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+```
+
+On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
+one `GET /events?since=0` backfill (history so far → jump to the live head),
+then opens a WebSocket to `/ws` and applies each pushed frame as it lands —
+bubbles, conversation links, trails, minimap, heatmap and fog all work
+unchanged, because live frames use the exact replay schema. A red **LIVE**
+badge joins the clock and the timeline locks into a read-only progress bar
+(you can't seek a live stream); the Pause button stays a *local* view-pause,
+while the run monitor's Emergency stop is what actually pauses the backend.
+
+The mock brain never speaks, so `serve_penn.py` also ports the bake's scripted
+`meetings:` injector to run on the fly: a meeting's authored dialogue fires the
+moment every participant is genuinely settled at its venue within perception
+range — watch Maya and Priya's study session light up in the Moelis Reading
+Room a couple of minutes into the default run.
+
+If the backend disappears the viewer holds the last pose, shows
+"reconnecting…", and retries with backoff; on reconnect the socket re-attaches
+with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
+/reset` on the server starts a fresh day (reload the viewer to re-handshake).
+
 ### The run monitor (top-right)
 
 A live real-LLM run spends money every step and can stall on the provider, so the
