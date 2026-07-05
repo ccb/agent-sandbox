@@ -406,7 +406,9 @@ class Burn(actions.Action):
                     " The pouch nested in his clasped hands goes up with him, "
                     "sweet on the wind for a moment."
                 )
-            # If the Horror is out and fighting, the root's death is its death.
+            # If the Horror is out and fighting, the root's death is its death
+            # -- and the coil's keeping ends with it: the coffin's contents it
+            # held since the eruption drift free in the sphere.
             horror = self.game.characters.get("fungal horror")
             if horror is not None and not horror.get_property("is_dead"):
                 horror.set_property("is_dead", True)
@@ -414,6 +416,18 @@ class Burn(actions.Action):
                     " Far below, the coil collapses mid-motion, every thread of "
                     "it gone slack at once."
                 )
+                sphere_loc = self.game.locations["Burial Sphere of Nassak An-Rah"]
+                if horror.location is sphere_loc:
+                    horror.description = "the Fungal Horror, charred and still"
+                    horror.examine_text = (
+                        "Still at last. The coil lies slack around nothing; "
+                        "the bones it kept drift free."
+                    )
+                    coffin_item = sphere_loc.items.get("coffin")
+                    if coffin_item is not None:
+                        for it in list(coffin_item.contents.values()):
+                            coffin_item.remove_item(it)
+                            sphere_loc.add_item(it)
             self.parser.ok(message)
             self.game.award("cleanse", 30, None)
         elif target == "chimney":
@@ -2326,13 +2340,14 @@ def build_game():
     # Each round the Horror is out, alive, and facing you: it regenerates
     # (visibly) unless ablaze, burns down if it IS ablaze, and sprays acid.
     def _horror_fighting(g):
-        return (
-            horror.location is sphere
-            and not horror.get_property("is_dead")
-            and g.player.location is sphere
-        )
+        # The Horror's turn runs whenever it is out and alive: FIRE does not
+        # care whether you are watching (CCB: douse, light, and run is a
+        # legitimate tactic), and it knits while you are away too. Only the
+        # acid needs you present.
+        return horror.location is sphere and not horror.get_property("is_dead")
 
     def _horror_turn(g):
+        watching = g.player.location is sphere
         vigor = int(horror.get_property("vigor") or 0)
         ablaze = int(horror.get_property("ablaze") or 0)
         if ablaze > 0:
@@ -2342,17 +2357,30 @@ def build_game():
             if vigor <= 0:
                 _horror_dies(g, burned=True)
                 return
-            g.parser.ok(
-                "The fire walks the coil and the coil thrashes; charred lengths "
-                "of it drift loose. Nothing knits. It is smaller than it was."
-            )
+            if watching:
+                g.parser.ok(
+                    "The fire walks the coil and the coil thrashes; charred lengths "
+                    "of it drift loose. Nothing knits. It is smaller than it was."
+                )
+            if ablaze - 1 == 0:
+                # The window closes AUDIBLY -- never silently back to knitting.
+                g.parser.ok(
+                    "The fire gutters out against the wet of the coil. "
+                    "What is cut can knit again."
+                    if watching
+                    else "From the Burial Sphere, the roar of fire dies away "
+                    "to nothing."
+                )
         elif vigor < 5:
             horror.set_property("vigor", vigor + 1)
-            g.parser.ok(
-                "The rents you have cut knit closed before your eyes, new "
-                "threads lacing across them, pale and then orange. It is "
-                "mending faster than you are."
-            )
+            if watching:
+                g.parser.ok(
+                    "The rents you have cut knit closed before your eyes, new "
+                    "threads lacing across them, pale and then orange. It is "
+                    "mending faster than you are."
+                )
+        if not watching:
+            return  # the acid needs a target
         # And its answer: acid, flung weightless.
         fatal = _wound_player(
             g,
@@ -2393,6 +2421,13 @@ def build_game():
                 sphere.add_item(it)
                 released.append(it.name)
         sphere.set_property("horror_dead", True)
+        if g.player.location is not sphere:
+            # Burned to death with no one watching: heard, not seen.
+            g.parser.ok(
+                "From the Burial Sphere, a long wet shriek, and then nothing "
+                "at all -- not even the sound of something mending."
+            )
+            return
         msg = "The Horror comes apart and does not close again."
         if released:
             msg += (
