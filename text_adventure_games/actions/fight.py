@@ -49,14 +49,17 @@ class Attack(base.Action):
             return False
         if not self.was_matched(
             self.weapon,
-            error_message="{name} doesn't have a weapon.".format(
-                name=self.attacker.name
+            error_message="{name} {verb} have a weapon.".format(
+                name=self.attacker.name.capitalize(),
+                verb=base.conjugate(self.attacker, "don't", "doesn't"),
             ),
         ):
             return False
         if not self.attacker.is_in_inventory(self.weapon):
-            description = "{name} doesn't have the {weapon}.".format(
-                name=self.attacker.name, weapon=self.weapon.name
+            description = "{name} {verb} have the {weapon}.".format(
+                name=self.attacker.name.capitalize(),
+                verb=base.conjugate(self.attacker, "don't", "doesn't"),
+                weapon=self.weapon.name,
             )
             self.parser.fail(description)
             return False
@@ -65,11 +68,17 @@ class Attack(base.Action):
             self.parser.fail(description)
             return False
         if self.victim.get_property(Property.IS_UNCONSCIOUS):
-            description = "{name} is already unconscious".format(name=self.victim.name)
+            description = "{name} {verb} already unconscious".format(
+                name=self.victim.name.capitalize(),
+                verb=base.conjugate(self.victim, "are", "is"),
+            )
             self.parser.fail(description)
             return False
         if self.victim.get_property(Property.IS_DEAD):
-            description = "{name} is already dead".format(name=self.victim.name)
+            description = "{name} {verb} already dead".format(
+                name=self.victim.name.capitalize(),
+                verb=base.conjugate(self.victim, "are", "is"),
+            )
             self.parser.fail(description)
             return False
         return True
@@ -102,8 +111,13 @@ class Attack(base.Action):
         else:
             # the victim is knocked unconscious
             self.victim.set_property(Property.IS_UNCONSCIOUS, True)
-            description = "{name} was knocked unconscious.".format(
-                name=self.victim.name.capitalize()
+            # A victim may supply its own knockout line (a boss that shrugs
+            # off the blow reads wrong as "knocked unconscious").
+            description = self.victim.get_property("ko_text") or (
+                "{name} {verb} knocked unconscious.".format(
+                    name=self.victim.name.capitalize(),
+                    verb=base.conjugate(self.victim, "were", "was"),
+                )
             )
             self.parser.ok(description)
 

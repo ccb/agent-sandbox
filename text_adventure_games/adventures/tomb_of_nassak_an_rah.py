@@ -56,24 +56,36 @@ _QUIET = {
     "eat",
     "read",
     "search",
+    "give",
+    "throw",
+    "close",
+    "take off",
+    "wield",
+    "unwield",
+    "help",
+    "quit",
 }
-# To the Fungal Horror, even rummaging is a disturbance: only moving, looking,
-# quietly sensing, and working your own light are safe (so you can enter, see it,
-# and back out -- but not loot it alive).
-_QUIET_SPHERE = {
-    "go",
-    "sneak",
-    "look",
-    "examine",
-    "describe",
-    "inventory",
-    "light",
-    "douse",
-    "feel",
-    "listen",
-    "smell",
-    "drink",
-}
+# The Spawn hunt by SOUND alone (they wear jars for heads): everything quiet
+# to the halls is quiet to them EXCEPT plain walking -- footfalls carry, and
+# sneak exists for a reason. Light means nothing to them.
+_QUIET_SPAWN = _QUIET - {"go", "talk"}
+
+# The sphere has NO noise hazard (CCB: noise reactions are covered
+# elsewhere) -- enter, look, even shout. The Horror wakes on the deliberate
+# act alone: prying its coffin (the boss fight, below).
+
+
+def _wound_player(g, name, slots_n, desc):
+    """Wound the player: the standard [damage] line, any displaced-gear spill,
+    and the fatal verdict back to the caller. *desc* may be a tuple of
+    variants -- one is drawn, so a body hurt eight times reads eight ways."""
+    if isinstance(desc, (list, tuple)):
+        desc = _RNG.choice(desc)
+    fatal, dropped = g.player.add_wound(Wound(name, slots_n, desc), rng=_RNG)
+    g.parser.damage(f"{name} - {desc}")
+    for it in dropped:
+        g.parser.ok(f"The {it.name} spills from your pack.")
+    return fatal
 
 
 def _is_holding(character, name):
@@ -90,7 +102,13 @@ def _player_was_loud_in(g, room, quiet):
         if (
             e.actor == g.player.name
             and e.action not in quiet
-            and payload.get("location") == room.name
+            and (
+                payload.get("location") == room.name
+                # A movement event logs its origin; its footfalls land in the
+                # DESTINATION too (matters only where "go" itself is loud --
+                # the Spawn's rooms).
+                or payload.get("dest") == room.name
+            )
         ):
             return True
         # An encumbered player's movement clatters (slots.py): the engine
@@ -130,7 +148,11 @@ def _hazard(
     def tick(g):
         active = g.player.location is room and (gate is None or gate(g)) and danger(g)
         if not active:
-            room.set_property(key, 0)
+            # Decay rather than reset: one quiet round steps the count back by
+            # one, so spaced-out noises still accumulate -- the second warning
+            # ("nearer") is reachable by intermittent racket, not only by
+            # sustained racket. Full calm still drains to zero.
+            room.set_property(key, max(0, (room.get_property(key) or 0) - 1))
             return
         n = (room.get_property(key) or 0) + 1
         room.set_property(key, n)
@@ -162,10 +184,22 @@ class Sneak(actions.Go):
 
     ACTION_NAME = "sneak"
     ACTION_DESCRIPTION = "Move quietly in a direction (don't wake the tomb)"
+    MOVE_VERB = "slip silently"  # "You slip silently to Hall of Memory."
     ACTION_ALIASES = [
         f"{verb} {direction}"
         for verb in ("sneak", "creep", "tiptoe")
-        for direction in ("north", "south", "east", "west", "up", "down", "in", "out")
+        for direction in (
+            "north",
+            "south",
+            "east",
+            "west",
+            "up",
+            "down",
+            "in",
+            "out",
+            "left stairs",
+            "right stairs",
+        )
     ]
 
     def __init__(self, game, command, actor=None):
@@ -185,28 +219,304 @@ class FungalSong(reactions.Startle):
     REPEATABLE = True
 
     def apply_effects(self):
-        self.game.parser.ok(
-            "The mantis-headed jar splits wider and SINGS -- a tuneless, carrying "
-            "wail that fills the tomb."
-        )
-        self.game.emit_sound(self.owner.location, 6, "a tuneless fungal song")
+        # The jar may be carried (it is gettable, at the carrier's peril): sing
+        # from wherever it is -- its own location, or its holder's.
+        loc = self.owner.location
+        if loc is None:
+            holder = getattr(self.owner, "owner", None)
+            loc = getattr(holder, "location", None)
+        if loc is None:
+            return
+        # The close-up is only for someone in the room; everyone else gets the
+        # heard version via the sound system ("From the south you hear...").
+        if self.game.player.location is loc:
+            self.game.parser.ok(
+                "The mantis-headed jar splits wider and SINGS -- a tuneless, "
+                "carrying wail that fills the tomb."
+            )
+        self.game.emit_sound(loc, 6, "a tuneless fungal song")
 
 
-class BurnCorpse(actions.Action):
-    """Burn the ossified corpse at the Summit -- the root of the fungus. With the
-    gel and the igniter it goes up in flame, and the whole network (the Fungal
-    Horror included, far below) dies with it. The elegant boss solution: it makes
-    the Burial Sphere safe to enter without ever fighting the Horror."""
+def _has_spark(player):
+    """Any carried ignition source (the plasma-igniter, or a hound's servo)."""
+    return any(
+        it.get_property("ignition_source") for it in player.carried_items().values()
+    )
 
-    ACTION_NAME = "burn corpse"
-    ACTION_DESCRIPTION = "Set the ossified corpse alight (needs gel and a flame)"
+
+def _gel_dose(g):
+    """Consume one dose of gel from the player's flask (relabelling it);
+    returns False if they carry no dose."""
+    flask = g.player.carried_items().get("flask of gel")
+    if flask is None:
+        return False
+    n = int(flask.get_property("portions") or 0)
+    if n <= 0:
+        return False
+    flask.set_property("portions", n - 1)
+    n -= 1
+    flask.description = (
+        f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+        if n
+        else "an empty flask"
+    )
+    return True
+
+
+class Burn(actions.Action):
+    """BURN, generalized (design doc §17.2): one gel dose + any spark, aimed at
+    what the fungus holds. The ossified corpse (the cleanse -- kills the whole
+    network); the chimney growth (burns the shaft clean, a local fix); or the
+    Fungal Horror itself (sets it ABLAZE: no regrowth while it burns)."""
+
+    ACTION_NAME = "burn"
+    ACTION_DESCRIPTION = "Set something alight (a gel dose, and a spark)"
     ACTION_ALIASES = [
+        "burn corpse",
         "burn ossified corpse",
         "burn the corpse",
         "ignite corpse",
         "torch corpse",
         "burn mystic",
         "burn the ossified corpse",
+        "burn growth",
+        "burn fungus",
+        "burn the fungus",
+        "burn chimney",
+        "ignite fungus",
+        "burn horror",
+        "burn the horror",
+        "ignite horror",
+        "torch horror",
+        "set horror ablaze",
+        "ignite",
+        "torch",
+        "set ablaze",
+        "burn gel",
+        "light gel",
+        "ignite gel",
+        "burn flask",
+        "light flask",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+
+    def _target(self):
+        loc = self.player.location
+        if loc is None:
+            return None
+        if loc.name == "The Summit" and (
+            "corpse" in self.command
+            or "mystic" in self.command
+            or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
+        ):
+            return "corpse"
+        if loc.name == "The Fungal Chimney" and not loc.get_property("burned"):
+            return "chimney"
+        if loc.name == "Burial Sphere of Nassak An-Rah" and (
+            "horror" in self.command
+            or "mass" in self.command
+            or "gel" in self.command
+            and self._doused_horror_here()
+            or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
+        ):
+            return "horror"
+        return None
+
+    def _doused_horror_here(self):
+        horror = self.game.characters.get("fungal horror")
+        return (
+            horror is not None
+            and horror.location is self.player.location
+            and horror.get_property("gel_doused")
+            and not horror.get_property("is_dead")
+        )
+
+    def check_preconditions(self) -> bool:
+        if "gel" in self.command.split() or "flask" in self.command.split():
+            # Once the dose is ON something, lighting "the gel" IS lighting
+            # that something (CCB: throw gel at horror, then light gel).
+            if not self._doused_horror_here():
+                self.parser.fail(
+                    "The gel burns where you pour it, not in your hand. Douse "
+                    "a thing, and burn THAT."
+                )
+                return False
+        target = self._target()
+        if target is None:
+            self.parser.fail("There's nothing here that wants burning.")
+            return False
+        if target == "corpse" and self.player.location.get_property("cleansed"):
+            self.parser.fail("The corpse is already ash; the fungus is dead.")
+            return False
+        if target == "horror":
+            horror = self.game.characters.get("fungal horror")
+            if horror is None or horror.location is not self.player.location:
+                self.parser.fail(
+                    "The mass is sealed behind the glass; burn what feeds it, or open its door."
+                )
+                return False
+            if horror.get_property("is_dead"):
+                self.parser.fail("It is already still, and past burning's help.")
+                return False
+        if not _has_spark(self.player):
+            self.parser.fail(
+                "You have nothing that makes a spark hot enough to mean it."
+            )
+            return False
+        if target == "horror" and self.game.characters["fungal horror"].get_property(
+            "gel_doused"
+        ):
+            return True  # already dripping with a thrown dose: spark alone
+        flask = self.player.carried_items().get("flask of gel")
+        if flask is None or int(flask.get_property("portions") or 0) <= 0:
+            self.parser.fail(
+                "Bare flame won't take here. It would want dousing in "
+                "something that burns -- a dose of the embalming gel."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        target = self._target()
+        if not (
+            target == "horror"
+            and self.game.characters["fungal horror"].get_property("gel_doused")
+        ):
+            _gel_dose(self.game)
+        loc = self.player.location
+        if target == "corpse":
+            loc.set_property("cleansed", True)
+            self.game.locations["Burial Sphere of Nassak An-Rah"].set_property(
+                "horror_dead", True
+            )
+            message = (
+                "You splash the embalming gel over the ossified mystic and strike "
+                "your spark. Orange flame roars down the fungal chimney -- and far "
+                "below, the whole rotten network shudders and dies. The Fungal "
+                "Horror sloughs into ash. The tomb falls silent at last."
+            )
+            corpse_item = loc.items.get("ossified corpse")
+            if corpse_item is not None and "friend's fungus" in corpse_item.contents:
+                corpse_item.remove_item(corpse_item.contents["friend's fungus"])
+                message += (
+                    " The pouch nested in his clasped hands goes up with him, "
+                    "sweet on the wind for a moment."
+                )
+            # If the Horror is out and fighting, the root's death is its death.
+            horror = self.game.characters.get("fungal horror")
+            if horror is not None and not horror.get_property("is_dead"):
+                horror.set_property("is_dead", True)
+                message += (
+                    " Far below, the coil collapses mid-motion, every thread of "
+                    "it gone slack at once."
+                )
+            self.parser.ok(message)
+            self.game.award("cleanse", 30, None)
+        elif target == "chimney":
+            loc.set_property("burned", True)
+            self.parser.ok(
+                "The gel catches and the shaft goes up like a struck match, "
+                "flame crawling the growth from throat to crown. When it gutters "
+                "out, the chimney is black, bare, and breathable -- a local "
+                "victory. Somewhere below, the root of it all is untouched."
+            )
+        else:  # the Horror
+            horror = self.game.characters["fungal horror"]
+            was_doused = horror.get_property("gel_doused")
+            horror.set_property("ablaze", 3)
+            horror.set_property("gel_doused", False)
+            self.parser.ok(
+                (
+                    "You strike your spark, and the dose already sheeting the "
+                    "coil takes all at once. The Horror goes up with a sound "
+                    "like a held breath released -- burning, it cannot knit "
+                    "itself; whatever you cut now stays cut."
+                )
+                if was_doused
+                else (
+                    "You sling the gel across the coil and strike your spark. The "
+                    "Horror goes up with a sound like a held breath released -- "
+                    "burning, it cannot knit itself; whatever you cut now stays cut."
+                )
+            )
+
+
+class Refill(actions.Action):
+    """Refill the gel flask wherever embalming gel pools: the Hall of Hounds
+    (the tank, intact or flooded), or the Hall of Warriors once any cylinder
+    has been broken open."""
+
+    ACTION_NAME = "fill flask"
+    ACTION_DESCRIPTION = "Refill the gel flask from a tank or a spill"
+    ACTION_ALIASES = [
+        "refill flask",
+        "fill the flask",
+        "refill the flask",
+        "fill flask with gel",
+        "refill gel",
+        "fill gel",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def _source_here(self):
+        loc = self.player.location
+        if loc is None:
+            return False
+        if loc.name == "Hall of Hounds":
+            return True  # the tank holds it, broken or whole
+        if loc.name == "Hall of Warriors":
+            # any shattered cylinder has spilled its gel
+            return any(
+                f"{c} cylinder" not in loc.items
+                for c in ("cerulean", "amber", "viridian", "orange")
+            )
+        return False
+
+    def check_preconditions(self) -> bool:
+        flask = self.player.carried_items().get("flask of gel")
+        if flask is None:
+            self.parser.fail("You have nothing to fill.")
+            return False
+        if int(flask.get_property("portions") or 0) >= 3:
+            self.parser.fail("The flask is full.")
+            return False
+        if not self._source_here():
+            self.parser.fail("There's no gel pooled here to draw from.")
+            return False
+        return True
+
+    def apply_effects(self):
+        flask = self.player.carried_items()["flask of gel"]
+        flask.set_property("portions", 3)
+        flask.description = "a flask of gel with 3 doses"
+        self.parser.ok(
+            "You draw the flask through the gel until it runs over -- luminous, "
+            "green-gold, reeking faithfully of lamp-oil. Three doses."
+        )
+
+
+class TieSilk(actions.Action):
+    """Lash the drifting coffin fast with the merchant's spider-silk (CCB
+    design) -- the bootless anchor. Cobweb-thin, and it holds like law."""
+
+    ACTION_NAME = "tie coffin"
+    ACTION_DESCRIPTION = "Tie the coffin down with spider-silk"
+    ACTION_ALIASES = [
+        "tie spider-silk to coffin",
+        "tie silk to coffin",
+        "tie coffin with spider-silk",
+        "tie coffin with silk",
+        "tether coffin",
+        "lash coffin",
+        "tie spider-silk",
+        "tie silk",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -214,58 +524,41 @@ class BurnCorpse(actions.Action):
         self.player = self.game.player
 
     def check_preconditions(self) -> bool:
-        if self.player.location is None or self.player.location.name != "The Summit":
-            self.parser.fail("There's nothing here to burn.")
+        loc = self.player.location
+        if loc is None or "coffin" not in loc.items:
+            self.parser.fail("There's no coffin here to tie.")
             return False
-        if self.player.location.get_property("cleansed"):
-            self.parser.fail("The corpse is already ash; the fungus is dead.")
+        if loc.items["coffin"].get_property("tethered"):
+            self.parser.fail("The coffin is already lashed fast.")
             return False
-        if not (
-            _is_holding(self.player, "flask of gel")
-            and _is_holding(self.player, "plasma-igniter")
-        ):
+        if "bolt of spider-silk" not in self.player.carried_items():
             self.parser.fail(
-                "Bone gone to stone does not take bare flame. It would want "
-                "dousing in something that burns, and a spark hot enough to "
-                "mean it."
+                "You'd want something long, light, and stronger than it looks."
             )
             return False
         return True
 
     def apply_effects(self):
-        gel = self.player.inventory.get("flask of gel")
-        if gel is not None:
-            self.player.remove_from_inventory(gel)
-        self.player.location.set_property("cleansed", True)
-        self.game.locations["Burial Sphere of Nassak An-Rah"].set_property(
-            "horror_dead", True
+        loc = self.player.location
+        silk = self.player.carried_items()["bolt of spider-silk"]
+        self.player.discard_item(silk)
+        loc.items["coffin"].set_property("tethered", True)
+        self.parser.ok(
+            "You pay the spider-silk out through the wall-rings and lash the "
+            "coffin fast -- cobweb-thin, and it holds like law. The coffin "
+            "stops its slow turning."
         )
-        message = (
-            "You splash the embalming gel over the ossified mystic and strike the "
-            "igniter. Orange flame roars down the fungal chimney -- and far below, the "
-            "whole rotten network shudders and dies. The Fungal Horror sloughs into "
-            "ash. The tomb falls silent at last."
-        )
-        # Whatever still nested in the mystic's hands burns with him -- take the
-        # Friend's Fungus BEFORE cleansing, or lose it.
-        corpse_item = self.player.location.items.get("ossified corpse")
-        if corpse_item is not None and "friend's fungus" in corpse_item.contents:
-            corpse_item.remove_item(corpse_item.contents["friend's fungus"])
-            message += (
-                " The pouch nested in his clasped hands goes up with him, sweet "
-                "on the wind for a moment."
-            )
-        self.parser.ok(message)
-        self.game.award("cleanse", 30, None)
 
 
 class PryCoffin(actions.Action):
     """Pry open the Autarch's anti-entropy coffin in the zero-g Burial Sphere to
-    claim the Exotica. The coffin floats off the wall; you can only get the
-    purchase to force it open while anchored by the magnetic boots."""
+    claim the Exotica. Prying wants two things: an ANCHOR (the magnetic boots
+    worn, or the coffin lashed down with spider-silk) and a LEVER -- the
+    prismatic blade, which snaps at the hilt as the coffin gives (CCB design).
+    """
 
     ACTION_NAME = "pry coffin"
-    ACTION_DESCRIPTION = "Pry open the floating coffin (needs the magnetic boots)"
+    ACTION_DESCRIPTION = "Pry open the floating coffin (an anchor, and a blade to lose)"
     ACTION_ALIASES = [
         "open coffin",
         "open the coffin",
@@ -274,6 +567,8 @@ class PryCoffin(actions.Action):
         "loot coffin",
         "loot the coffin",
         "pry open the coffin",
+        "pry coffin open with blade",
+        "pry coffin with blade",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -285,14 +580,24 @@ class PryCoffin(actions.Action):
         if loc is None or "coffin" not in loc.items:
             self.parser.fail("There's no coffin here.")
             return False
-        if loc.items["coffin"].get_property("pried"):
+        coffin = loc.items["coffin"]
+        if coffin.get_property("pried"):
             self.parser.fail("The coffin is already open.")
             return False
-        if "magnetic boots" not in self.player.worn:
+        anchored = "magnetic boots" in self.player.worn or coffin.get_property(
+            "tethered"
+        )
+        if not anchored:
             self.parser.fail(
                 "You reach the coffin and shove -- and it is you who drifts "
-                "away, slow as sediment. Nothing here holds you down, and "
-                "prying wants something to brace against."
+                "away, floating and unmoored from gravity. Nothing here holds "
+                "you down, and prying wants something to brace against."
+            )
+            return False
+        if "prismatic blade" not in self.player.carried_items():
+            self.parser.fail(
+                "The seam is fine as a hair; fingers will not part it. It "
+                "wants a blade's edge -- and a fool willing to lose one."
             )
             return False
         return True
@@ -300,17 +605,40 @@ class PryCoffin(actions.Action):
     def apply_effects(self):
         loc = self.player.location
         coffin = loc.items["coffin"]
+        if not loc.get_property("horror_dead"):
+            # The coffin is the thing's HOUSE. Opening it while it lives wakes
+            # the boss (design doc §17.3) -- the eruption interrupts the pry,
+            # so the blade survives for the fight it just started.
+            horror = self.game.characters["fungal horror"]
+            if horror.location is not loc:
+                self.game.relocate(horror, loc)
+            coffin.set_property("pried", True)
+            self.parser.ok(
+                "You work the blade into the seam and the seam BULGES -- the "
+                "glass parts around a body coming out. The Horror unwinds from "
+                "the Autarch's bones into the weightless air, orange and vast "
+                "and patient, and keeps the bones in its coil."
+            )
+            return
         coffin.set_property("pried", True)
+        blade = self.player.carried_items()["prismatic blade"]
+        self.player.discard_item(blade)
+        anchor = (
+            "Anchored by the magnetic boots"
+            if "magnetic boots" in self.player.worn
+            else "Braced against the silk-lashed coffin"
+        )
         taken = []
         for item in list(coffin.contents.values()):
             coffin.remove_item(item)
             loc.add_item(item)
             taken.append(item.name)
         self.parser.ok(
-            "Anchored by the magnetic boots, you brace against the coffin and force "
-            "the glass apart. Among the Autarch's drifting bones you find: "
+            f"{anchor}, you work the prismatic blade into the hairline seam. "
+            "The edge bends light, bends -- and snaps at the hilt as the "
+            "coffin gives. Among the Autarch's drifting bones you find: "
             + ", ".join(taken)
-            + "."
+            + ". The blade is done."
         )
         self.game.award("exotica", 30, None)
 
@@ -323,8 +651,9 @@ class CrystalSeal(blocks.Block):
     def __init__(self, canopic):
         super().__init__(
             "A seal of red crystal",
-            "A seal of red crystal bars the stair, grown through the treads like "
-            "frost through cloth. Five beast-sigils are set in the arch above "
+            "A seal of red crystal bars the stair, cut and fitted to the "
+            "treads so exactly that the joins read as one stone -- tombwright "
+            "work, made to open for one thing only. Five beast-sigils are set in the arch above "
             "it; two of them are dark. The crystal hums at a pitch just under "
             "hearing, with the patience of a lock.",
         )
@@ -355,11 +684,19 @@ def _scenery(location, name, description, examine_text):
 def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     """A sealed canopic jar: a closed container holding the Autarch's preserved
     organ. The organ is revealed only when the jar is OPENED (examining the sealed
-    jar tells you nothing of what's inside)."""
+    jar tells you nothing of what's inside). Jar and organ are both gettable --
+    and the organ is edible, God help you, or feedable to things that eat."""
     jar = things.Item(name, description, examine_text).make_container()
     jar.set_property("is_closed", True)
     organ = things.Item(organ_name, organ_desc, organ_desc)
-    organ.set_property("gettable", False)
+    organ.set_property("gettable", True)
+    organ.set_property(Property.EDIBLE, True)
+    organ.set_property(
+        Property.TASTE,
+        "of four thousand years of preservative, and beneath that, of exactly "
+        "what it is.",
+    )
+    organ.set_property("is_organ", True)  # the grave-sick trigger keys on this
     jar.add_item(organ)
     return jar
 
@@ -480,6 +817,8 @@ def build_game():
         _good.set_property("gettable", True)
         _good.set_property("slots", _slots)
         _good.add_alias(_name.split()[0])  # bale / crate / bolt
+        if "dates" in _name:
+            _good.set_property(Property.EDIBLE, True)
         _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
         if "silk" in _name:
             _good.add_alias("silk")
@@ -524,11 +863,14 @@ def build_game():
     pack.add_command_hint("open pack")
     waterskin = things.Item(
         "waterskin",
-        "a half-full waterskin",
-        "Half of the merchant's water survived the night. In Vaarn this is "
-        "called an inheritance.",
+        "a waterskin with 3 rations",
+        "Three rations of the merchant's water survived the night. In Vaarn "
+        "this is called an inheritance. Each swallow mends what it can.",
     )
-    # Water is Vaarn's scarcest resource -- of course you can drink it.
+    # Water is Vaarn's scarcest resource -- of course you can drink it. Three
+    # rations (CCB design): each drink heals a wound and takes a ration; the
+    # empty skin stays with you, honestly labelled.
+    waterskin.set_property("portions", 3)
     waterskin.set_property(Property.DRINKABLE, True)
     waterskin.set_property(
         Property.TASTE,
@@ -559,7 +901,7 @@ def build_game():
         "could not, and that is the whole story. The Cacklemaw make no secret "
         'of their coming." She looks '
         'north, to the faces in the azure stone. "Take what he no longer needs '
-        "-- better you than the sand. There is water in his pack, half a skin "
+        "-- better you than the sand. There is water in his pack, three rations "
         "of it, and a glowstone besides. You can take whatever you can carry "
         "from the hold. But "
         "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
@@ -597,15 +939,18 @@ def build_game():
         "Hall of Hounds",
         "A wall of plexiglas holds back a tank of embalming gel, luminous, the "
         "green-gold of old honey. Ten of An-Rah's hunting hounds hang suspended "
-        "in it, black and spindly, threaded through with chrome, forever "
-        "mid-stride. They are perfectly preserved. Their eyes are open.",
+        "in it, black and spindly, more machine than dog below the shoulder -- "
+        "servo-hocks, chrome ribs, lenses where a dog keeps its eyes. They are "
+        "perfectly preserved. The lenses are open.",
     )
     warriors = things.Location(
         "Hall of Warriors",
         "Four plexiglas cylinders stand on an uneven floor, each holding a "
-        "guard-mummy at attention in Autarchy armour. The fungus has found all "
-        "four; orange veins fan out under the glass like pressed flowers. Their "
-        "kit has outlasted them, as kit does.",
+        "guard-mummy at attention in Autarchy armour, each steeped in its own "
+        "embalming gel: cerulean, amber, viridian, orange. Fungus has found "
+        "one of the four; orange veins fan out under its glass like pressed "
+        "flowers. Their kit was sealed in with them, as if the dead might be "
+        "recalled to duty. It has outlasted them, as kit does.",
     )
     canopic = things.Location(
         "Hall of the Canopic Jars",
@@ -664,15 +1009,21 @@ def build_game():
     memory.add_connection("north", warriors)  # 2-4
     warriors.add_connection("east", hounds)  # 4-3
 
-    # Stairs up to the Canopic hall from both Memory and Hounds. memory's "up"
-    # auto-wires canopic "down" -> memory; hounds' up is set manually so it does
-    # not clobber that single "down".
-    memory.add_connection("up", canopic)  # canopic.down -> memory
+    # Stairs up to the Canopic hall from both Memory and Hounds; from above,
+    # the pentagon offers TWO stairways down (source, room 5): the left stairs
+    # descend to Memory, the right stairs to Hounds.
+    memory.add_connection("up", canopic)  # canopic.down -> memory (renamed below)
     # Hounds also has a stair up; set it by hand (with its travel description) so it
     # doesn't clobber canopic's single "down" (-> memory). The halls interconnect,
     # so from the Canopic hall you descend to Memory and reach the rest from there.
     hounds.connections["up"] = canopic
     hounds.travel_descriptions["up"] = ""
+    # Rename the auto-wired "down" into the two named stairways.
+    del canopic.connections["down"]
+    canopic.travel_descriptions.pop("down", None)
+    for _stairs, _dest in (("left stairs", memory), ("right stairs", hounds)):
+        canopic.connections[_stairs] = _dest
+        canopic.travel_descriptions[_stairs] = ""
 
     # Canopic stair up to the Burial Sphere (Phase 2 bars this with the crystal
     # seal Block; open for now so the scaffold is fully walkable).
@@ -683,6 +1034,25 @@ def build_game():
     # round you linger (the hazard, below); dash through, or wear a respirator.
     summit.add_connection("in", chimney)  # auto: chimney out -> summit
     chimney.add_connection("down", sphere)  # auto: sphere up -> chimney
+
+    # Inside the tomb, plain walking SOUNDS like something: the arrival line
+    # says so ("You walk, footfalls carrying, to ...") -- the standing hint
+    # that sneak exists. The Sphere drifts (zero-g); the climbs climb.
+    for _room, _verb in (
+        (youth, "walk, footfalls carrying,"),
+        (memory, "walk, footfalls carrying,"),
+        (hounds, "walk, footfalls carrying,"),
+        (warriors, "walk, footfalls carrying,"),
+        (canopic, "walk, footfalls carrying,"),
+        (sphere, "drift, weightless,"),
+        (chimney, "climb, spores swirling,"),
+    ):
+        for _d in _room.connections:
+            _room.move_verbs.setdefault(_d, _verb)
+    exterior.move_verbs.setdefault("north", "walk, footfalls carrying,")
+    exterior.move_verbs.setdefault("east", "walk, footfalls carrying,")
+    exterior.move_verbs.setdefault("up", "climb")
+    summit.move_verbs.setdefault("down", "climb down")
 
     # --- Atmosphere: examinable scenery (hooks for later phases) -------------
     _scenery(
@@ -733,21 +1103,60 @@ def build_game():
     )
     lattice.add_alias("lattice")
     lattice.add_alias("crystals")
-    _scenery(
+    tank = _scenery(
         hounds,
         "tank",
         "a plexiglas tank of embalming gel",
-        "Ten hounds hang in the luminous gel, chrome-threaded, forever "
-        "mid-stride. Even through the seam the gel smells of lamp-oil and "
-        "honey. Collectors would pay in salt and water for any of this.",
+        "Ten hounds hang in the luminous gel, forever mid-stride: cyborg "
+        "coursers of the old Autarchy, servo-hocked and chrome-ribbed, bred "
+        "half in a kennel and half on a bench. Even through the seam the gel "
+        "smells of lamp-oil and honey. Collectors would pay in salt and water "
+        "for any of this -- and the plexiglas is one good blow from agreeing.",
     )
+    tank.make_container()
+    tank.set_property("is_closed", True)
+    tank.set_property("is_breakable", True)
+    tank.set_property(
+        "break_text",
+        "The plexiglas gives all at once and the wall of gel comes with it -- "
+        "a luminous green-gold flood, reeking of lamp-oil, that carries the "
+        "hounds out across the floor in a clatter of chrome and bone.",
+    )
+    hound_pile = things.Item(
+        "cyborg hound",
+        "a cyborg hound, gel-slick and perfectly preserved",
+        "One of An-Rah's coursers: servo-hocks, chrome ribs, glass lenses, "
+        "the rest of it dog. Heavy as a rolled carpet, and worth a season of "
+        "water to the right collector in Gnomon.",
+    )
+    hound_pile.make_container()
+    hound_pile.set_property("gettable", True)
+    hound_pile.set_property("slots", 3)
+    hound_pile.add_alias("hound")
+    hound_pile.add_alias("dog")
+    # SEARCH the hound and its chest gives up a second fire-starter (design
+    # doc §17.1) -- the corpse-searching habit pays out a third time.
+    servo = things.Item(
+        "sparking servo",
+        "a sparking servo",
+        "A fist-sized actuator out of the hound's chest, still holding charge. "
+        "Strike its leads together and it spits fat blue sparks.",
+    )
+    servo.set_property("gettable", True)
+    servo.set_property("ignition_source", True)
+    servo.set_property(Property.IS_HIDDEN, True)
+    servo.add_alias("servo")
+    hound_pile.add_item(servo)
+    tank.add_item(hound_pile)
     _scenery(
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
-        "Each holds a guard-mummy in Autarchy armour, at an attention no "
-        "order will ever relieve, the glass fogged from within by threads "
-        "of orange fungus.",
+        "Four guard-mummies at an attention no order will ever relieve, each "
+        "sealed under its own gel -- cerulean, amber, viridian, orange -- and "
+        "each armed as in life. Whatever they carried went under the glass "
+        "with them. The plexiglas is crazed to milk at the corners; a firm "
+        "blow would finish what the centuries started.",
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -774,8 +1183,10 @@ def build_game():
         "fungal eyes",
         "a clutch of fungus-clotted eyes",
     )
+    mantis_jar.contents["fungal eyes"].add_alias("eyes")
+    baboon_jar.contents["lungs"].add_alias("lung")
     for j in (baboon_jar, human_jar, mantis_jar):
-        j.set_property("gettable", False)
+        j.set_property("gettable", True)
         canopic.add_item(j)
 
     # The two empty plinths are surfaces you set the missing jars ON; each is
@@ -803,6 +1214,7 @@ def build_game():
         "from its wielder.",
     )
     dagger.set_property("is_weapon", True)
+    dagger.set_property(Property.WIELDABLE, True)
     dagger.add_alias("dagger")
     manifold_box = things.Item(
         "manifold box",
@@ -886,7 +1298,7 @@ def build_game():
 
     spawn_guts = things.Character(
         "spawn of guts",
-        "a fungal spawn wearing a falcon-headed jar",
+        "a fungal spawn, eyeless under its falcon-headed jar, swaying toward every sound",
         "I am what is left of the Autarch's appetites.",
     )
     spawn_guts.examine_text = (
@@ -897,7 +1309,7 @@ def build_game():
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
         "spawn of brain",
-        "a fungal spawn wearing a jackal-headed jar",
+        "a fungal brain on two small legs, jackal jar for a head, listening",
         "I am what is left of the Autarch's thoughts.",
     )
     spawn_brain.examine_text = (
@@ -909,6 +1321,66 @@ def build_game():
     warriors.add_character(spawn_guts)
     hounds.add_character(spawn_brain)
 
+    # The pthalo-jackals are an embodied pack (one Character), denned off-map
+    # (canon: "Pthalo-Jackals -- Shallow Dens -- Hear Howling on the Wind").
+    # Noise draws them in; food or water buys them off; nothing does not.
+    den = things.Location(
+        "Shallow Dens",
+        "Low scrapes in the blue sand, ripe with old bones and jackal-musk.",
+    )
+    jackal_pack = things.Character(
+        "jackal pack",
+        "a pack of pthalo-jackals",
+        "We are cautious. We are clever. We are owed.",
+    )
+    jackal_pack.examine_text = (
+        "Pthalo-jackals: cautious, clever, cerulean-coated pack hunters. Their "
+        "eyes do sums -- you, minus what you carry, minus what you bleed. It "
+        "is not you they want."
+    )
+    for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
+        jackal_pack.add_alias(_a)
+    den.add_character(jackal_pack)
+
+    # The Fungal Horror -- the boss (design doc §17.3). It lives coiled in the
+    # coffin (narrative) until an alive-pry brings it out as a real Character.
+    horror = things.Character(
+        "fungal horror",
+        "the Fungal Horror, a coil of orange around a king's bones",
+        "We keep him. We are keeping him still.",
+    )
+    horror.examine_text = (
+        "A single muscle of fungus the size of a river-snake, wound around "
+        "what is left of Nassak An-Rah. Where you cut it, it remembers; "
+        "where it burns, it does not."
+    )
+    for _a in ("horror", "the horror", "mass", "fungal mass"):
+        horror.add_alias(_a)
+    horror.set_property("vigor", 5)
+    horror.set_property("no_catch", True)  # a coil has no hands
+    horror.set_property(
+        "ko_text",
+        "The blow lands true, and the mass folds around the blade's path "
+        "without falling.",
+    )
+    den.add_character(horror)
+
+    # The glass centipede (source: "lying in ambush in the fungal chimney" --
+    # "four-foot centipede with translucent carapace"). Unseen until it
+    # strikes; one solid blow answers it; fire scours it out with the growth.
+    centipede = things.Character(
+        "glass centipede",
+        "a glass centipede, four feet of translucent patience",
+        "I wait. Everything comes down the chimney eventually.",
+    )
+    centipede.examine_text = (
+        "Four feet of centipede in a carapace like poured glass -- you see it "
+        "mostly by what bends behind it. It does not move while you watch."
+    )
+    for _a in ("centipede", "glass"):
+        centipede.add_alias(_a)
+    den.add_character(centipede)
+
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
     # you fight the Spawn.)
@@ -918,9 +1390,9 @@ def build_game():
         "An Autarchy guard's blade, its edge fracturing the light into colours.",
     )
     blade.set_property("is_weapon", True)  # Property.IS_WEAPON == "is_weapon"
+    blade.set_property(Property.WIELDABLE, True)
     blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
-    warriors.add_item(blade)
 
     # Endgame gear: a plasma-igniter and magnetic boots (more guard kit), and a
     # flask of flammable embalming gel from the hound tank.
@@ -930,6 +1402,7 @@ def build_game():
         "A guard's plasma-igniter -- a thumb-flame hot enough to light anything.",
     )
     igniter.add_alias("igniter")
+    igniter.set_property("ignition_source", True)
     boots = things.Item(
         "magnetic boots",
         "a pair of magnetic boots",
@@ -947,16 +1420,79 @@ def build_game():
     respirator.set_property(Property.WEARABLE, True)
     respirator.set_property("wear_slot", "face")
     respirator.add_alias("mask")
-    warriors.add_item(igniter)
-    warriors.add_item(boots)
-    warriors.add_item(respirator)
+
+    # The four cylinders (CCB design): each guard's kit is sealed IN with him,
+    # gettable only once the glass is broken -- and breaking glass is LOUD
+    # (Break carries two rooms; the jackals keep the ledger). Each cylinder
+    # holds a different gel; the orange one is choked with fungus, and venting
+    # it sears unmasked lungs. The respirator sits in the AMBER one, so the
+    # careful order is: amber first, mask up, then the rest.
+    def _cylinder(colour, kit, examine, break_text):
+        cyl = things.Item(
+            f"{colour} cylinder",
+            f"the {colour} burial cylinder",
+            examine,
+        ).make_container()
+        cyl.set_property("gettable", False)
+        cyl.set_property("is_closed", True)  # sealed: no reaching through glass
+        cyl.set_property("is_breakable", True)  # the only way in
+        cyl.set_property("break_text", break_text)
+        cyl.add_alias(colour)
+        cyl.add_item(kit)
+        warriors.add_item(cyl)
+        return cyl
+
+    _cylinder(
+        "cerulean",
+        blade,
+        "A guard-mummy floats in gel the blue of deep sky, prismatic blade at "
+        "rest against its shoulder. The edge splits your light into colours, "
+        "even through the glass.",
+        "The glass gives all at once; cerulean gel sluices across the floor "
+        "and the guard folds out with it, weightless as kelp. Its blade rings "
+        "on the stone.",
+    )
+    _cylinder(
+        "amber",
+        respirator,
+        "A guard-mummy floats in gel like old honey, an Autarchy respirator "
+        "still strapped to its face. It did the guard no lasting good, but it "
+        "has kept its seal.",
+        "Amber gel bursts over your boots, sweet-smelling and old as the "
+        "walls. The guard settles into the spill, and the respirator comes "
+        "loose in the flood.",
+    )
+    _cylinder(
+        "viridian",
+        boots,
+        "A guard-mummy in green-glass gel, still at its post by no will of "
+        "its own. The boots' soles have kept their grip on the plinth.",
+        "The viridian gel goes everywhere. The guard stays standing a moment "
+        "longer -- boots anchored -- then tips.",
+    )
+    orange_cyl = _cylinder(
+        "orange",
+        igniter,
+        "Less a cylinder than a column of fungus now; the guard inside is a "
+        "shadow in the bloom. At its hip, the outline of a plasma-igniter. The "
+        "growth stirs against the glass, very slightly, in time with nothing.",
+        "The orange cylinder does not so much shatter as exhale.",
+    )
     gel = things.Item(
         "flask of gel",
-        "a flask of embalming gel",
-        "A flask of luminous embalming gel scooped from the hound tank. It reeks, "
-        "and it burns.",
+        "a flask of gel with 3 doses",
+        "A flask of luminous embalming gel scooped from the hound tank. It "
+        "reeks, and it burns -- three doses' worth, and refillable wherever "
+        "the gel pools. Do not drink it.",
+    )
+    gel.set_property("portions", 3)
+    gel.set_property(Property.DRINKABLE, True)  # regrettably (see the trigger)
+    gel.set_property(
+        Property.TASTE,
+        "of lamp-oil, honey, and four thousand years. It was never water.",
     )
     gel.add_alias("gel")
+    gel.add_alias("flask")
     hounds.add_item(gel)
 
     # Silas -- the synthetic archivist (the hint NPC). His combat / pacify / rob
@@ -973,7 +1509,7 @@ def build_game():
         "courteous, elsewhere. Now and then his lips move -- circular glyphs, "
         "no sound."
     )
-    silas.talk_text = (
+    _silas_speech = (
         'Silas speaks without turning. "Scavenger. You walk in a house of '
         "memory; mind what you wake. Two of the Autarch's organs have got up and "
         "walk these halls wearing their own jars -- his appetites and his "
@@ -983,6 +1519,26 @@ def build_game():
         'circular syllables, like a quotation. "The dead here listen. Step '
         'softly."'
     )
+
+    def _silas_talk(g):
+        # With a living spawn in earshot, Silas will not perform the lecture.
+        for name in ("spawn of guts", "spawn of brain"):
+            sp = g.characters.get(name)
+            if (
+                sp is not None
+                and sp.location is silas.location
+                and not sp.get_property(Property.IS_DEAD)
+                and not sp.get_property(Property.IS_UNCONSCIOUS)
+                and not sp.get_property("dosed")
+            ):
+                return (
+                    '"Be silent, you fool," Silas whispers, without turning, '
+                    "and one bare finger indicates the thing swaying in the "
+                    "doorway."
+                )
+        return _silas_speech
+
+    silas.talk_text = _silas_talk
     # Silas keeps the Ulfire Lantern (Exotica; design doc §13). Ulfire is the
     # ninth colour: its light shines THROUGH solid objects -- the "very specific
     # angle" from which the Manifold Box's hypergeometric compartment can be
@@ -1030,6 +1586,31 @@ def build_game():
     pack.add_item(glowstone)
     pack.add_item(waterskin)
 
+    # The dead don't sway (CCB): state-aware one-liners for the creatures.
+    spawn_guts.set_property(
+        "unconscious_description",
+        "the spawn of guts, collapsed in a heap, its falcon jar askew",
+    )
+    spawn_guts.set_property(
+        "dead_description", "the spawn of guts, dead and motionless"
+    )
+    spawn_brain.set_property(
+        "unconscious_description",
+        "the spawn of brain, felled mid-step, jar rolled to its side",
+    )
+    spawn_brain.set_property(
+        "dead_description", "the spawn of brain, dead and motionless"
+    )
+    jackal_pack.set_property(
+        "unconscious_description", "the jackal pack, sprawled senseless where they fell"
+    )
+    centipede.set_property(
+        "unconscious_description", "the glass centipede, cracked and still"
+    )
+    centipede.set_property(
+        "dead_description", "the glass centipede, shattered along its length"
+    )
+
     # Vaarn item slots (slots.py): ten -- gear and wounds share the gauge.
     player.slot_capacity = 10
     # The tomb's climbs: an encumbered scavenger cannot make them.
@@ -1040,8 +1621,16 @@ def build_game():
     game = TombGame(
         wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain, worry],
-        custom_actions=[Sneak, BurnCorpse, PryCoffin],
+        characters=[
+            silas,
+            spawn_guts,
+            spawn_brain,
+            worry,
+            jackal_pack,
+            horror,
+            centipede,
+        ],
+        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
     )
     game.max_score = 100
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
@@ -1069,6 +1658,40 @@ def build_game():
     # the glowstone to find the way -- which is exactly what rouses the bats. A
     # player who knows the layout can still creep through blind. (The perception
     # veil only gates what's *seen*; movement stays free -- design/perception.md.)
+    # The tomb is dark wherever it doesn't light itself (CCB): Memory glows
+    # crystal-cold, Hounds by its tank, Canopic by its plinths -- but the Hall
+    # of Warriors is dark as duty, and the Sphere and Chimney live in the
+    # bloom's own rotten half-light.
+    warriors.obscure(
+        perception.Darkness(
+            blurb="Dark as a pocket. Your footsteps come back off plexiglas "
+            "somewhere close; the air smells of old gel and older duty. And "
+            "low down, near the floor, something breathes wetly, in no hurry."
+        )
+    )
+    sphere.obscure(
+        perception.Gloom(
+            blurb="A rotten half-light: the coffin's orange churn glows at the "
+            "chamber's heart, and the carved prayers read as texture, not words."
+        )
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless, lit only by the slow orange churn of "
+        "the coffin at its heart. Dust and bone-chips drift through the glow. "
+        "The prayers on the walls are legible only as texture."
+    )
+    chimney.obscure(
+        perception.Gloom(
+            blurb="The shaft is lit by the bloom itself, a dull orange "
+            "breathing; the way down is a deeper orange, the way up a paler one."
+        )
+    )
+    chimney.dim_description = (
+        "A vertical throat choked with orange growth, glowing faintly with its "
+        "own rot. The spores hang so thick the air has texture. Down in the "
+        "dark of it, the fungus is warm."
+    )
+
     youth.obscure(
         perception.Darkness(
             blurb="Dark as the inside of a sealed jar. The air is chill and smells "
@@ -1084,13 +1707,16 @@ def build_game():
     def _bat_maul(g):
         """Dive-bombing bats deal a non-lethal wound each round the light (or
         din) persists; death comes only if wounds fill the scavenger's slots."""
-        fatal, dropped = g.player.add_wound(
-            Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Bat-Mauled",
+            1,
+            (
+                "Claw-rakes across your scalp and hands.",
+                "A wing's elbow takes your ear; claws find the nape of your neck.",
+                "They come through your raised arms; your knuckles come away gloved in blood.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(
-                f"The {it.name} is torn from your grip and spills into the dark."
-            )
         if fatal:
             _die(
                 g,
@@ -1123,14 +1749,284 @@ def build_game():
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
-    def _jackal_savage(g):
-        """The pack takes its due (a d20 wound-table roll) and withdraws --
-        continued noise invites it back. Death: a fatal roll, or slots full."""
+    # The pthalo-jackals, embodied (CCB design): noise draws the pack IN. Two
+    # warnings, then they enter and growl -- one round of grace. GIVE them food
+    # or water and they leave with it; otherwise they maul you, round after
+    # round, until you feed them, flee, or fall. A blade also answers (they can
+    # be knocked out), and their examine text says what they want.
+    _halls = (memory, hounds, warriors)
+
+    def _pack_out(g):
+        return jackal_pack.get_property(
+            Property.IS_UNCONSCIOUS
+        ) or jackal_pack.get_property(Property.IS_DEAD)
+
+    def _jackal_feed_check(g):
+        return jackal_pack.inventory and not _pack_out(g)
+
+    def _jackal_feed(g):
+        fed = [
+            it
+            for it in jackal_pack.inventory.values()
+            if it.get_property(Property.EDIBLE) or it.get_property(Property.DRINKABLE)
+        ]
+        refused = [it for it in jackal_pack.inventory.values() if it not in fed]
+        for it in refused:
+            jackal_pack.remove_from_inventory(it)
+            if jackal_pack.location is not None:
+                jackal_pack.location.add_item(it)
+            g.parser.ok(
+                f"The pack noses the {it.name} and lets it fall. It is not "
+                "that kind of hunger."
+            )
+        if not fed:
+            return
+        for it in fed:
+            jackal_pack.remove_from_inventory(it)  # consumed
+        names = " and ".join(f"the {it.name}" for it in fed)
         g.parser.ok(
-            "The pack pours from the dark and takes its due before you can "
-            "raise an arm."
+            f"The pack closes over {names} with terrible courtesy and is gone "
+            "into the dark with it. The halls stay quiet a long while after."
         )
-        _, messages, fatal = roll_wound(g.player, rng=_RNG)
+        g.relocate(jackal_pack, den)
+        for h in _halls:
+            h.set_property(f"_jk:{h.name}", -4)  # a fed pack forgets you a while
+
+    game.add_trigger("jackal_feed", _jackal_feed_check, _jackal_feed, repeatable=True)
+
+    # Venting the orange cylinder (CCB design): breaking it exhales the bloom.
+    # Masked, you watch it settle; unmasked, it sears your lungs -- the same
+    # wound the chimney deals, because it is the same fungus.
+    def _orange_vented_check(g):
+        return "orange cylinder" not in warriors.items and not warriors.get_property(
+            "spores_vented"
+        )
+
+    def _orange_vent(g):
+        warriors.set_property("spores_vented", True)
+        if "respirator" in g.player.worn:
+            g.parser.ok(
+                "The bloom bursts outward in a dry orange cloud. The "
+                "respirator's seal holds; the spores settle over your "
+                "shoulders like ash, disappointed."
+            )
+            return
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
+        )
+        if fatal:
+            _die(g, "You breathe the bloom in, and it keeps you. THE END.")
+        else:
+            g.parser.ok(
+                "The bloom bursts outward in a dry orange cloud and you take a "
+                "breath of it before you can help it. It burns going down; "
+                "something in your chest will remember this."
+            )
+
+    game.add_trigger(
+        "orange_vent", _orange_vented_check, _orange_vent, repeatable=False
+    )
+
+    # The Spawn are blind, sound-hunting monsters (CCB: "shouldn't it attack?").
+    # Share a room with one and be HEARD -- stride in, shout, smash -- and it
+    # swings toward you (one warning), then attacks each loud round after.
+    # Creep and it never knows you were there.
+    def _spawn_menace(spawn, warn_text, attack):
+        key = f"_sp:{spawn.name}"
+
+        def tick(g):
+            if (
+                spawn.get_property(Property.IS_DEAD)
+                or spawn.get_property(Property.IS_UNCONSCIOUS)
+                or spawn.get_property("dosed")
+            ):
+                return
+            loc = spawn.location
+            n = spawn.get_property(key) or 0
+            if loc is None or g.player.location is not loc:
+                spawn.set_property(key, max(0, n - 1))
+                return
+            if _player_was_loud_in(g, loc, _QUIET_SPAWN):
+                n += 1
+                spawn.set_property(key, n)
+                if n == 1:
+                    g.parser.ok(warn_text)
+                else:
+                    attack(g)
+            # No decay while you share its room: it heard you once, and it is
+            # still listening. Only distance (handled above) lets it settle.
+
+        game.add_trigger(f"menace:{spawn.name}", lambda g: True, tick, repeatable=True)
+
+    def _guts_lash(g):
+        fatal = _wound_player(
+            g,
+            "Acid-Lashed",
+            1,
+            (
+                "A welt across your back, acid where it touched.",
+                "The lash takes your calf; the acid keeps its own count.",
+                "A wet arm cracks across your ribs and leaves its burn behind.",
+            ),
+        )
+        if fatal:
+            _die(g, "The spawn folds you into itself, patiently. THE END.")
+        else:
+            g.parser.ok(
+                "The spawn of guts lashes out at the sound of you -- a wet arm "
+                "of grave-cured muscle, acid where it touches."
+            )
+
+    def _brain_dominate(g):
+        # Psychic, not physical: it opens your hands, or handles your thoughts.
+        wielded = list(g.player.wielded.values())
+        if wielded:
+            it = wielded[0]
+            g.player.wielded.pop(it.name)
+            if g.player.location is not None:
+                g.player.location.add_item(it)
+            g.parser.ok(
+                f"The spawn of brain turns its jar toward your noise, and your "
+                f"hands open without your leave. The {it.name} clatters away."
+            )
+            return
+        fatal = _wound_player(
+            g,
+            "Mind-Handled",
+            1,
+            (
+                "Your thoughts arrive with someone else's fingerprints.",
+                "A minute goes missing; you are somewhere in it.",
+                "Your own name takes a moment too long to answer.",
+            ),
+        )
+        if fatal:
+            _die(g, "Your mind is folded shut from the outside. THE END.")
+        else:
+            g.parser.ok(
+                "The spawn of brain turns its jar toward your noise, and "
+                "something walks through your thoughts on small, precise feet."
+            )
+
+    _spawn_menace(
+        spawn_guts,
+        "The spawn of guts swings toward your footfalls, arms rising from the "
+        "floor like kelp in a current.",
+        _guts_lash,
+    )
+    _spawn_menace(
+        spawn_brain,
+        "The spawn of brain goes very still, jar cocked toward the sound of you.",
+        _brain_dominate,
+    )
+
+    # The Spawn are HUNGRY (CCB): throw (or give) something edible and they eat
+    # it. Friend's Fungus doses them agreeable -- a pacifist answer to both.
+    def _spawn_eats_check(g):
+        return any(
+            sp.inventory
+            and not sp.get_property(Property.IS_DEAD)
+            and not sp.get_property(Property.IS_UNCONSCIOUS)
+            for sp in (spawn_guts, spawn_brain)
+        )
+
+    def _spawn_eats(g):
+        for sp in (spawn_guts, spawn_brain):
+            if sp.get_property(Property.IS_DEAD) or sp.get_property(
+                Property.IS_UNCONSCIOUS
+            ):
+                continue
+            for it in list(sp.inventory.values()):
+                # It keeps its own jar; anything ELSE edible goes down.
+                if it.name in ("falcon jar", "jackal jar"):
+                    continue
+                if it.get_property(Property.EDIBLE):
+                    sp.remove_from_inventory(it)
+                    if it.name == "friend's fungus":
+                        sp.set_property("dosed", True)
+                        sp.description = f"{sp.name}, swaying dreamily, at peace"
+                        g.parser.ok(
+                            f"The {sp.name} folds the pouch into itself, and "
+                            "the change is immediate: the swaying softens, the "
+                            "menace drains out of it. It is extremely agreeable "
+                            "now, and will be for hours."
+                        )
+                    else:
+                        g.parser.ok(
+                            f"The {sp.name} folds the {it.name} into itself, "
+                            "unhurried."
+                        )
+
+    game.add_trigger("spawn_eats", _spawn_eats_check, _spawn_eats, repeatable=True)
+
+    # The thrown-light gambit (CCB's puzzle): a LIT light lying on the Youth's
+    # floor draws the swarm down onto it -- and onto anything on the floor
+    # beside it. Two rounds of mobbing kill a spawn, leaving its jar and a
+    # dead, motionless body. (Lure the spawn in with one thrown clatter, then
+    # throw the lit glowstone in after it.)
+    def _floor_light(g):
+        return any(it.get_property(Property.IS_LIT) for it in youth.items.values())
+
+    def _bat_mobbing(g):
+        if not _floor_light(g):
+            youth.set_property("_mob", 0)
+            return
+        (
+            g.parser.ok(
+                "In the Hall of Youth, the swarm pours down onto the light where "
+                "it lies, a screaming wheel around a still point."
+            )
+            if g.player.location in (youth, exterior, memory, hounds)
+            else None
+        )
+        youth.set_property("_mob", (youth.get_property("_mob") or 0) + 1)
+        # Anything on the floor beside the light takes the swarm.
+        for sp in (spawn_guts, spawn_brain):
+            if sp.location is youth and not sp.get_property(Property.IS_DEAD):
+                hits = (sp.get_property("_bat_hits") or 0) + 1
+                sp.set_property("_bat_hits", hits)
+                if hits >= 2:
+                    sp.set_property(Property.IS_DEAD, True)
+                    for it in list(sp.inventory.values()):
+                        sp.remove_from_inventory(it)
+                        youth.add_item(it)
+                    sp.description = f"the {sp.name}, dead and motionless"
+                    sp.examine_text = (
+                        "Raked to stillness by the swarm. The fungus no longer "
+                        "sways; whatever was listening in it has stopped."
+                    )
+                    g.parser.ok(
+                        f"The swarm finds the {sp.name} beside the light and "
+                        "rakes it, pass after pass, until it stops moving. "
+                        "Something rolls free of the body."
+                    )
+        # The player, if fool enough to stand in the mobbing, is raked too.
+        if g.player.location is youth:
+            fatal = _wound_player(
+                g,
+                "Bat-Mauled",
+                1,
+                (
+                    "Claw-rakes across your scalp and hands.",
+                    "A wing's elbow takes your ear; claws find the nape of your neck.",
+                    "They come through your raised arms; your knuckles come away gloved in blood.",
+                ),
+            )
+            if fatal:
+                _die(g, "The swarm takes you down beside the light. THE END.")
+
+    game.add_trigger("bat_mobbing", lambda g: True, _bat_mobbing, repeatable=True)
+
+    def _jackal_maul(g):
+        g.parser.ok("The pack takes its due before you can raise an arm.")
+        _, messages, fatal = roll_wound(g.player, rng=_RNG, game=g)
         for m in messages:
             g.parser.ok(m)
         if fatal or g.player.get_property(Property.IS_DEAD):
@@ -1141,33 +2037,149 @@ def build_game():
             )
         else:
             g.parser.ok(
-                "As quickly as they came, the jackals melt back into "
-                "the dark, unhurried, patient for the next noise."
+                "They do not leave. They are waiting to see what else you have."
             )
-        return True
 
-    for hall in (memory, hounds, warriors):
-        _hazard(
-            game,
-            hall,
-            danger=lambda g, h=hall: _player_was_loud_in(g, h, _QUIET),
-            warns=(
-                "Somewhere off in the halls, a yipping answers your noise -- "
-                "once, and then again, nearer.",
-                "Yellow eyes ring the doorways, unhurried. Pthalo-jackals: "
-                "cautious, clever, and done being cautious.",
-            ),
-            harm=_jackal_savage,
-            harm_resets=True,
-        )
+    def _jackal_tick(g):
+        if _pack_out(g):
+            return
+        here = g.player.location
+        for hall in _halls:
+            key = f"_jk:{hall.name}"
+            n = hall.get_property(key) or 0
+            if here is not hall:
+                # The trail cools toward calm from either side (suspicion
+                # drains, post-feed grace wears off). The pack itself, once
+                # out, PURSUES -- handled below, not here.
+                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                continue
+            if jackal_pack.location is hall:
+                _jackal_maul(g)  # unfed, unfled: they collect
+                continue
+            if _player_was_loud_in(g, hall, _QUIET):
+                # A crash carries: breaking things counts double on the ledger.
+                crashed = any(
+                    e.actor == g.player.name
+                    and e.action == "break"
+                    and (e.payload or {}).get("location") == hall.name
+                    for e in g.events[g._round_event_start :]
+                )
+                n += 2 if crashed else 1
+                hall.set_property(key, n)
+                if n <= 2:
+                    g.parser.ok(
+                        "Somewhere off in the halls, a yipping answers your "
+                        "noise -- once, and then again, nearer."
+                    )
+                elif n == 3:
+                    g.parser.ok(
+                        "Yellow eyes ring the doorways, unhurried. "
+                        "Pthalo-jackals: cautious, clever, and done being "
+                        "cautious."
+                    )
+                elif n >= 4:
+                    g.relocate(jackal_pack, hall)
+                    jackal_pack.set_property("_stride", True)  # first beat: hang back
+                    g.parser.ok(
+                        "They come in low and unhurried, cerulean-coated, "
+                        "filling the doorways. The nearest growls -- a sound "
+                        "with arithmetic in it -- and the pack looks from you "
+                        "to your bag, and back."
+                    )
+                # n <= 0: a fed (or long-calmed) pack lets it go -- the noise
+                # only burns through their patience.
+            else:
+                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+
+    game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
+
+    # THE PACK PURSUES (CCB design): unlike the blind Spawn, jackals see and
+    # smell -- once out, they track you through their territory (the three
+    # ground halls), one hall per round. Sneaking means nothing to scent. The
+    # answers are distance (keep moving), the Youth (they will not follow into
+    # the bat vault), the stairs and the open sand (leave their ground long
+    # enough and they give you up), tribute, or steel.
+    _territory = (memory, hounds, warriors)
+
+    def _hop_toward(start, goal):
+        """One step from *start* toward *goal* through territory rooms."""
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, None)])
+        while queue:
+            room, first = queue.popleft()
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return first or nxt
+                if nxt in _territory and nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, first or nxt))
+        return None
+
+    def _pack_pursues(g):
+        return jackal_pack.location in _territory and not _pack_out(g)
+
+    def _pursue(g):
+        here = g.player.location
+        if here is jackal_pack.location:
+            return  # co-located: the main tick handles the mauling
+        if here in _territory:
+            jackal_pack.set_property("_lost", 0)
+            # A lope-and-rest rhythm: the pack closes every OTHER round, so a
+            # player who keeps moving holds their lead -- and one who stops to
+            # rummage is caught. Cautious, clever, patient.
+            if jackal_pack.get_property("_stride"):
+                jackal_pack.set_property("_stride", False)
+                g.parser.ok("The yipping hangs back a room, in no hurry at all.")
+                return
+            jackal_pack.set_property("_stride", True)
+            step = _hop_toward(jackal_pack.location, here)
+            if step is not None:
+                g.relocate(jackal_pack, step)
+                if step is here:
+                    g.parser.ok(
+                        "The pack comes through the doorway at a lope, "
+                        "unhurried, sure of you."
+                    )
+                else:
+                    g.parser.ok(
+                        "Behind you, the yipping keeps your pace. They are "
+                        "not following your noise. They are following you."
+                    )
+        elif here is youth:
+            g.parser.ok(
+                "The yipping stops at the lightless mouth of the Hall of "
+                "Youth and comes no further. Something about the dark above "
+                "is theirs to respect."
+            )
+            g.relocate(jackal_pack, den)
+        else:
+            lost = int(jackal_pack.get_property("_lost") or 0) + 1
+            jackal_pack.set_property("_lost", lost)
+            if lost >= 3:
+                jackal_pack.set_property("_lost", 0)
+                g.relocate(jackal_pack, den)
+                for h in _halls:
+                    h.set_property(f"_jk:{h.name}", 0)
+                g.parser.ok(
+                    "Somewhere below, the yipping circles twice, and gives " "you up."
+                )
+
+    game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
-        fatal, dropped = g.player.add_wound(
-            Wound("Seared Lungs", 1, "Every breath is smaller than the last."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the tomb in, and it keeps you. THE END.")
         else:
@@ -1177,12 +2189,22 @@ def build_game():
             )
         return True
 
+    _scenery(
+        chimney,
+        "orange growth",
+        "the orange growth choking the shaft",
+        "The fungus fills the chimney the way a wick fills a lamp: packed, "
+        "fibrous, faintly warm, and -- like everything the gel has ever "
+        "touched -- ready to burn.",
+    ).add_alias("growth")
+
     _hazard(
         game,
         chimney,
         danger=lambda g: not (
             _is_holding(g.player, "respirator") or "respirator" in g.player.worn
         ),
+        gate=lambda g: not chimney.get_property("burned"),
         warns=(
             "Each breath comes back smaller than it went out. The spores "
             "settle on your lips and taste of orange rot.",
@@ -1192,22 +2214,9 @@ def build_game():
         harm=_spore_sear,
     )
 
-    # The Fungal Horror: while it lives, disturbing the coffin (taking, prying,
-    # wearing, any racket) makes it erupt. Looking is safe -- enter, see it, and
-    # back out. Cleansing the corpse (Summit) kills it and lifts this.
-    _hazard(
-        game,
-        sphere,
-        danger=lambda g: _player_was_loud_in(g, sphere, _QUIET_SPHERE),
-        warns=(
-            "The orange mass in the coffin turns -- all of it, at once -- "
-            "toward the sound. Against the inside of the glass, something "
-            "like a palm.",
-        ),
-        kill="The coffin does not so much open as give up. The Horror takes you in a single fold. THE END.",
-        limit=2,
-        gate=lambda g: not sphere.get_property("horror_dead"),
-    )
+    # The sphere has NO noise hazard (CCB: noise reactions are covered
+    # elsewhere) -- enter, look, even shout. The Horror wakes on the deliberate
+    # act alone: prying its coffin (the boss fight, below).
 
     # Placement trigger: both missing jars on their matching plinths -> the seal
     # opens. Fires once.
@@ -1263,20 +2272,307 @@ def build_game():
     # Water mends (the canon short rest is "a quick sit-down, with a glug of
     # water"): drinking the waterskin heals the most recent wound.
     def _drank_water(g):
-        return g.player.wounds and any(
-            e.actor == g.player.name and e.action == "drink"
+        return any(
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "water" in (e.summary or "").lower()
             for e in g.events[g._round_event_start :]
         )
 
     def _water_mends(g):
-        healed = g.player.heal_wound()
-        if healed is not None:
+        if g.player.wounds:
+            healed = g.player.heal_wound()
             g.parser.ok(
                 f"The water does what water does in Vaarn. The {healed.name.lower()} "
                 "troubles you less; something knits."
             )
+        n = int(waterskin.get_property("portions") or 0)
+        if n <= 0:
+            waterskin.description = "an empty waterskin"
+        else:
+            waterskin.description = (
+                f"a waterskin with {n} ration{'s' if n != 1 else ''}"
+            )
 
     game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
+
+    # Drinking the GEL is legal and inadvisable (design doc §17.1).
+    def _drank_gel(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "gel" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _gel_gut(g):
+        n = int(gel.get_property("portions") or 0)
+        gel.description = (
+            f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+            if n
+            else "an empty flask"
+        )
+        fatal = _wound_player(
+            g, "Gel-Gut", 1, "Embalming fluid, doing what it was made to do."
+        )
+        if fatal:
+            _die(g, "You are preserved from the inside out. THE END.")
+        else:
+            g.parser.ok("It is not water. It was never water.")
+
+    game.add_trigger("gel_gut", _drank_gel, _gel_gut, repeatable=True)
+
+    # --- The boss loop (design doc §17.3) ------------------------------------
+    # Each round the Horror is out, alive, and facing you: it regenerates
+    # (visibly) unless ablaze, burns down if it IS ablaze, and sprays acid.
+    def _horror_fighting(g):
+        return (
+            horror.location is sphere
+            and not horror.get_property("is_dead")
+            and g.player.location is sphere
+        )
+
+    def _horror_turn(g):
+        vigor = int(horror.get_property("vigor") or 0)
+        ablaze = int(horror.get_property("ablaze") or 0)
+        if ablaze > 0:
+            horror.set_property("ablaze", ablaze - 1)
+            vigor -= 1
+            horror.set_property("vigor", vigor)
+            if vigor <= 0:
+                _horror_dies(g, burned=True)
+                return
+            g.parser.ok(
+                "The fire walks the coil and the coil thrashes; charred lengths "
+                "of it drift loose. Nothing knits. It is smaller than it was."
+            )
+        elif vigor < 5:
+            horror.set_property("vigor", vigor + 1)
+            g.parser.ok(
+                "The rents you have cut knit closed before your eyes, new "
+                "threads lacing across them, pale and then orange. It is "
+                "mending faster than you are."
+            )
+        # And its answer: acid, flung weightless.
+        fatal = _wound_player(
+            g,
+            "Acid-Burned",
+            1,
+            (
+                "A rope of acid caught you across the shoulder.",
+                "A rope of acid took the forearm you raised in time.",
+                "Acid spatters your scalp and goes on burning after you wipe it.",
+                "A whip of acid opens the back of your hand to the tendons.",
+                "Acid across the hip; the cloth of your coat gives up first.",
+            ),
+        )
+        if fatal:
+            _die(
+                g,
+                "The acid takes the last of you, and the coil folds you in "
+                "among the bones it keeps. THE END.",
+            )
+
+    def _horror_dies(g, burned=False):
+        horror.set_property("is_dead", True)
+        horror.description = (
+            "the Fungal Horror, charred and still"
+            if burned
+            else ("the Fungal Horror, cut apart and still")
+        )
+        horror.examine_text = (
+            "Still at last. The coil lies slack around nothing; the bones it "
+            "kept drift free."
+        )
+        # The coil unclenches: the coffin's keeping is over.
+        coffin_item = sphere.items.get("coffin")
+        released = []
+        if coffin_item is not None:
+            for it in list(coffin_item.contents.values()):
+                coffin_item.remove_item(it)
+                sphere.add_item(it)
+                released.append(it.name)
+        sphere.set_property("horror_dead", True)
+        msg = "The Horror comes apart and does not close again."
+        if released:
+            msg += (
+                " The coil unclenches from the Autarch's bones, and what he "
+                "was buried with drifts free: " + ", ".join(released) + "."
+            )
+        g.parser.ok(msg)
+
+    # Striking the Horror: a weapon hit costs it one vigor, visibly.
+    def _struck_horror(g):
+        # The event summary is the raw command ("attack horror with blade"),
+        # so match any of the thing's names.
+        return any(
+            e.actor == g.player.name
+            and e.action == "attack"
+            and any(
+                a in (e.summary or "").lower()
+                for a in ("fungal horror", "horror", "mass")
+            )
+            for e in g.events[g._round_event_start :]
+        ) and not horror.get_property("is_dead")
+
+    def _horror_struck(g):
+        # Undo the engine's one-hit KO; convert it into a point of vigor.
+        horror.set_property("is_unconscious", False)
+        vigor = int(horror.get_property("vigor") or 0) - 1
+        horror.set_property("vigor", vigor)
+        if vigor <= 0:
+            _horror_dies(g)
+            return
+        g.parser.ok(
+            "The blade opens a rent in the orange mass; it seethes, and does "
+            "not fall."
+        )
+
+    game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
+
+    # Throwing the gel AT the Horror douses it (CCB's instinctive sequence):
+    # the flask bursts a dose across the coil, and the next spark needs no
+    # pour of its own.
+    def _gel_thrown_at_horror(g):
+        return (
+            not horror.get_property("is_dead")
+            and not horror.get_property("gel_doused")
+            and any(
+                e.actor == g.player.name
+                and e.action == "throw"
+                and "gel" in (e.summary or "").lower()
+                and any(
+                    a in (e.summary or "").lower() for a in ("horror", "mass", "fungal")
+                )
+                for e in g.events[g._round_event_start :]
+            )
+        )
+
+    def _gel_splash(g):
+        flask = None
+        for holder in (g.player.carried_items(), sphere.items):
+            if "flask of gel" in holder:
+                flask = holder["flask of gel"]
+                break
+        if flask is None or int(flask.get_property("portions") or 0) <= 0:
+            return
+        n = int(flask.get_property("portions")) - 1
+        flask.set_property("portions", n)
+        flask.description = (
+            f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+            if n
+            else "an empty flask"
+        )
+        horror.set_property("gel_doused", True)
+        g.parser.ok(
+            "The flask bursts against the coil and a dose of gel sheets "
+            "across the orange, luminous, clinging. It wants only a spark."
+        )
+
+    game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
+
+    # --- The glass centipede's ambush -----------------------------------------
+    def _centipede_lurks(g):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and g.player.location is chimney
+        )
+
+    def _centipede_bites(g):
+        if chimney.get_property("burned") and centipede.location is not chimney:
+            return  # scoured out before it ever sprang
+        if centipede.location is not chimney:
+            g.relocate(centipede, chimney)
+            g.parser.ok(
+                "The growth beside you bends wrong -- and four feet of glass "
+                "uncoils out of it, faster than the eye wants to allow."
+            )
+        fatal = _wound_player(
+            g,
+            "Centipede Venom",
+            1,
+            (
+                "Twin punctures in the calf; the venom goes in cold.",
+                "It takes you through the boot-seam; the leg answers slowly after.",
+                "A bite at the wrist as you shield your face; the arm hums.",
+            ),
+        )
+        if fatal:
+            _die(
+                g,
+                "The venom finishes what the tomb began; the shaft keeps you. "
+                "THE END.",
+            )
+
+    game.add_trigger(
+        "centipede_ambush", _centipede_lurks, _centipede_bites, repeatable=True
+    )
+
+    # Fire scours the shaft: the centipede goes with the growth.
+    def _centipede_scoured(g):
+        return chimney.get_property("burned") and not centipede.get_property("is_dead")
+
+    def _scour(g):
+        centipede.set_property("is_dead", True)
+        if centipede.location is chimney:
+            g.parser.ok(
+                "Something four feet long and glassy boils out of the burning "
+                "growth, seizes once, and is still."
+            )
+        else:
+            g.relocate(centipede, chimney)
+            centipede.set_property("is_hidden", True)
+            g.parser.ok(
+                "In the flames, something glassy spasms out of the growth and "
+                "drops away down the shaft."
+            )
+
+    game.add_trigger("centipede_scoured", _centipede_scoured, _scour, repeatable=False)
+    game.add_trigger("horror_turn", _horror_fighting, _horror_turn, repeatable=True)
+
+    # Eating the Autarch's preserved organs (CCB: "gross, but should be
+    # gettable... edible, with horrible effects"). Four thousand years of
+    # preservative disagree with the living; the fungal eyes disagree worse.
+    _ORGANS = {"lungs", "liver", "intestines", "brain", "fungal eyes"}
+
+    def _ate_organ(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "eat"
+            and any(o in (e.summary or "").lower() for o in _ORGANS)
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _grave_sick(g):
+        ate_eyes = any(
+            e.actor == g.player.name
+            and e.action == "eat"
+            and "eyes" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+        if ate_eyes:
+            fatal = _wound_player(
+                g, "Spore-Gut", 2, "Something has taken root where food goes."
+            )
+            msg = (
+                "The eyes go down like oysters and begin, at once, to garden. "
+                "Something has taken root where food goes."
+            )
+        else:
+            fatal = _wound_player(
+                g, "Grave-Sick", 1, "The Autarch's preservatives at work in you."
+            )
+            msg = (
+                "It goes down. The Autarchy embalmed to last, and the "
+                "preservatives set to work at once on the living."
+            )
+        if fatal:
+            _die(g, "You are preserved from the inside out. THE END.")
+        else:
+            g.parser.ok(msg)
+
+    game.add_trigger("grave_sick", _ate_organ, _grave_sick, repeatable=True)
 
     ego_core = things.Item(
         "ego-core",
@@ -1365,9 +2661,11 @@ WALK = [
     "north",
     "talk to silas",
     "examine crystal lattice",  # -> Hall of Memory
-    "north",
-    "take prismatic blade",
-    "examine cylinders",  # -> Hall of Warriors
+    "sneak north",  # -> Hall of Warriors: dark, and something breathes in it
+    "light glowstone",  # no bats here -- light is safe, and the colours matter
+    "examine cylinders",
+    "break cerulean cylinder",
+    "take blade",  # loud -- a yip, a swaying spawn; then quiet again
     "east",
     "examine tank",  # -> Hall of Hounds
     "up",
@@ -1380,33 +2678,40 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # Loot the wreck, walk to the tomb. (The glowstone starts unlit, so it's
-    # safe to carry -- never light it in the Hall of Youth. This route never
-    # needs to see in the dark.)
+    # Loot the wreck (water heals; the glowstone lights the dark Warriors).
     "open pack",
     "take glowstone",
+    "take waterskin",
     "north",
-    "sneak east",
+    "sneak east",  # Warriors: pitch dark; the kit is sealed in the cylinders
+    "light glowstone",  # safe here -- no bats -- and the colours matter
+    "break amber cylinder",  # the eyeless spawn swings toward the crash --
+    "take respirator",  # -- and the crashes call its brother from next door
+    "wear respirator",
+    "break cerulean cylinder",  # second crash: the lash lands; take the blade
     "take blade",
+    "attack spawn of guts with blade",  # answer it: the falcon jar drops
+    "take falcon jar",
+    "attack spawn of brain with blade",  # its brother came to the noise: fell it too
+    "take jackal jar",
+    "drink water",  # a glug; something knits (keep the blade: the coffin wants it)
+    "drink water",  # another -- the brain got its thoughts in
+    "drink water",  # the last ration; the skin runs dry
+    "drop waterskin",  # travel light; the climbs refuse a full pack
+    "break orange cylinder",  # the bloom vents against the mask, disappointed
     "take igniter",
-    "take boots",  # Warriors: arm
+    "break viridian cylinder",
+    "take boots",
+    "douse glowstone",
+    "drop glowstone",  # the halls ahead light themselves
     "sneak east",
     "take gel",  # Hounds: gel
-    "sneak up",  # -> Canopic
-    "say come",
-    "say come",
-    "say come",
-    "say come",
-    "say come",  # the mantis lures the Spawn
-    "attack spawn of guts with blade",
-    "attack spawn of brain with blade",
-    "take falcon jar",
-    "take jackal jar",
+    "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
     "put falcon jar on falcon plinth",
     "put jackal jar on jackal plinth",  # seal opens
-    "sneak down",
+    "sneak left stairs",  # the left stairs descend to Memory
     "sneak south",
-    "sneak south",  # Canopic -> Exterior
+    "sneak south",  # Canopic -> Exterior (dark and quiet through the Youth)
     "up",
     "burn corpse",  # Summit: cleanse the root
     "down",
@@ -1418,8 +2723,8 @@ WIN_WALKTHROUGH = [
     "pry coffin",  # Sphere: loot
     "take dagger",
     "take manifold box",
-    "sneak down",
-    "sneak down",
+    "sneak down",  # Sphere -> Canopic
+    "sneak left stairs",  # -> Memory
     "sneak south",
     "sneak south",  # escape -> WIN
 ]
