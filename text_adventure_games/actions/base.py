@@ -5,6 +5,13 @@ from ..enums import ActionName
 import re
 
 
+def conjugate(character, second: str, third: str) -> str:
+    """Pick the verb form for *character*: second person for the player (named
+    "you"), third person for everyone else -- so messages read "You don't have
+    a weapon" and "Troll doesn't have a weapon" from the same template."""
+    return second if character.name.lower() == "you" else third
+
+
 class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a
@@ -93,6 +100,13 @@ class Action(GatedEffect):
             other = loc.characters[name]
             if other is not looker and name.lower() in cmd:
                 return other
+        # Aliases match too ("throw gel at horror" finds the fungal horror).
+        for other in loc.characters.values():
+            if other is looker:
+                continue
+            for alias in getattr(other, "aliases", ()):
+                if alias in cmd:
+                    return other
         return None
 
     def target_character(self, command, exclude=None, **kwargs):
@@ -416,6 +430,7 @@ class Help(Action):
     a player (the comma-sequence wrapper) are hidden."""
 
     ACTION_NAME = ActionName.HELP
+    FREE_ACTION = True  # pure UI: costs no turn (see meta_actions_cost_turns)
     ACTION_DESCRIPTION = "List the commands you can use"
     ACTION_ALIASES = ["h", "commands", "?"]
 

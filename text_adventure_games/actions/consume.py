@@ -4,10 +4,8 @@ from ..enums import ActionName, Property
 # from ..things import Character  # , Item
 
 
-def _conj(character, second: str, third: str) -> str:
-    """Conjugate a verb for the actor: the player (named "you") gets second
-    person ("You eat"), everyone else third ("Troll eats")."""
-    return second if character.name.lower() == "you" else third
+# Shared with the other actions -- see base.conjugate.
+_conj = base.conjugate
 
 
 class Eat(base.Action):
@@ -97,6 +95,13 @@ class Drink(base.Action):
             description = "That's not drinkable."
             self.parser.fail(description)
             return False
+        elif (
+            not isinstance(self.item.get_property("portions"), bool)
+            and self.item.get_property("portions") is not None
+            and int(self.item.get_property("portions")) <= 0
+        ):
+            self.parser.fail(f"The {self.item.name} is empty.")
+            return False
         elif self.item.name not in self.character.carried_items():
             description = "You don't have it."
             self.parser.fail(description)
@@ -111,11 +116,20 @@ class Drink(base.Action):
         * Describes the taste (if the "taste" property is set)
         * If the drink is poisoned, it causes the character to die.
         """
-        self.character.discard_item(self.item)
+        portions = self.item.get_property("portions")
+        if portions is not None and not isinstance(portions, bool):
+            # A multi-portion vessel (a waterskin of rations): drinking takes
+            # one portion; the vessel stays with you, empty or not.
+            self.item.set_property("portions", int(portions) - 1)
+            verb_phrase = "from the"
+        else:
+            self.character.discard_item(self.item)
+            verb_phrase = "the"
         self.character.set_property(Property.IS_THIRSTY, False)
-        description = "{name} {verb} the {drink}.".format(
+        description = "{name} {verb} {phrase} {drink}.".format(
             name=self.character.name.capitalize(),
             verb=_conj(self.character, "drink", "drinks"),
+            phrase=verb_phrase,
             drink=self.item.name,
         )
         self.parser.ok(description)

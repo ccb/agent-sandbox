@@ -131,7 +131,12 @@ def roll_wound(character, roll=None, rng=None, game=None):
         Wound(row.name, row.slots, row.description), rng=rng
     )
     wounds.append(row)
-    messages.append(f"{row.name}: {row.description}")
+    if game is not None:
+        # The standard damage line, on its own channel ("[damage] Cracked
+        # Skull - Your thoughts walk with a limp.").
+        game.parser.damage(f"{row.name} - {row.description}")
+    else:
+        messages.append(f"{row.name}: {row.description}")
     for item in dropped:
         messages.append(f"Your grip fails: the {item.name} spills from your pack.")
     if fatal:

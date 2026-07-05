@@ -101,6 +101,23 @@ class Darkness(Veil):
         return self._blurb or "It's pitch dark -- you can see nothing without a light."
 
 
+class Gloom(Veil):
+    """A half-light (bioluminescence, embers, a distant glow): the room's shape
+    and exits show without a light, but its contents need one. DIM unless the
+    observer carries a lit light -- the middle ground between Darkness (NONE
+    without light) and Fog (DIM regardless). Give the location a
+    ``dim_description`` for its half-lit text."""
+
+    def __init__(self, blurb: str | None = None):
+        self._blurb = blurb
+
+    def sight(self, observer, location) -> Sight:
+        return Sight.CLEAR if carries_light(observer) else Sight.DIM
+
+    def blurb(self, location) -> str:
+        return self._blurb or "A gloom hangs here; shapes, but no detail."
+
+
 class Fog(Veil):
     """A dim haze: the room's shape and exits show, but not its contents."""
 

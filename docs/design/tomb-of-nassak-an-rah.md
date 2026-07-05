@@ -618,3 +618,56 @@ merged into one room-by-room rewrite pass.
 
 WIN walkthrough held at 100/100 throughout; smoke tour covers all nine safe
 rooms.
+
+---
+
+## 17. v3 — Fire, the gel economy, and the Horror as a boss (2026-07-03)
+
+CCB designs, unified: the flask of gel becomes a real resource, fire becomes a
+general verb, and the Fungal Horror becomes the game's boss fight instead of an
+instant death.
+
+### 17.1 The gel economy
+- **The flask holds 3 doses** ("a flask of gel with 3 doses" → "an empty
+  flask"), like the waterskin's rations.
+- **Refillable** (`fill flask`) wherever embalming gel pools: the Hall of
+  Hounds (the tank, intact or flooded) and the Hall of Warriors once any
+  cylinder is broken.
+- **Drinkable, regrettably**: a dose down the throat is a Gel-Gut wound. "It
+  is not water. It was never water."
+- **Ignition sources**: the plasma-igniter, and a second, discoverable one --
+  SEARCH the spilled cyborg hound for its **sparking servo** (the
+  corpse-searching habit pays out a third time).
+
+### 17.2 BURN, generalized
+`burn <target>` = one gel dose + any ignition source. Targets:
+- **The ossified corpse** (Summit) -- the existing cleanse, unchanged: kills
+  the whole network, the elegant ending.
+- **The chimney growth** -- burns the shaft clean: the spore hazard ends
+  (a local solution that does NOT kill the Horror; the root is elsewhere).
+- **The Fungal Horror itself** -- sets it ABLAZE (§17.3): no regeneration for
+  3 rounds, and the fire eats a point of vigor per round.
+- *Stretch, deferred*: igniting a gel-flooded Hall of Hounds (the tank flood
+  is canonically flammable) as a room-scale trap; Silas's cranial bores as a
+  memory-key that opens the coffin bloodlessly.
+
+### 17.3 The Horror, fought (source: HD 5, regenerates unless ablaze)
+The sphere's noise-hazard is REMOVED (CCB: noise reactions are covered
+elsewhere) -- the sphere is safe to enter, look, even shout. The boss wakes on
+the deliberate act alone:
+- **Eruption**: prying the LIVE coffin brings the Horror out of the glass
+  (the blade survives -- the eruption interrupts before the lever commits).
+  The coffin's contents stay in its coil until it dies.
+- **Vigor 5.** A weapon hit costs 1 vigor, narrated as visible damage ("the
+  blade opens a rent in the orange mass").
+- **Its turn, every round**: it regenerates 1 vigor -- *visibly*: "the rent
+  you cut knits closed before your eyes" -- and sprays acid (an Acid-Burned
+  wound). Steel alone is a treadmill: 1 damage vs 1 regen, while your slots
+  fill with wounds. **The fight teaches its own solution.**
+- **Ablaze** (burn horror): 3 rounds of no regeneration plus 1 burn damage per
+  round -- now blade hits stick, and vigor falls.
+- **Escape routes preserved**: flee down the aperture (it keeps to the
+  sphere and re-coils); or burn the corpse at the Summit even mid-fight --
+  "far above, the root burns, and the coil collapses mid-lunge."
+- **Economy of the fight**: ~2 wounds per round of melee, 3 gel doses a
+  flask, refills two rooms away, water heals -- high stakes, several answers.

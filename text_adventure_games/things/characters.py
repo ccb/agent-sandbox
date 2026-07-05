@@ -323,6 +323,19 @@ class Character(Thing):
             return True
         return False
 
+    def visible_description(self) -> str:
+        """The one-liner shown in room listings, honoring state: a dead or
+        unconscious character shouldn't still read as swaying and listening.
+        Games may author ``dead_description`` / ``unconscious_description``;
+        otherwise a plain flat default is derived from the name."""
+        if self.get_property("is_dead"):
+            return self.get_property("dead_description") or f"{self.name}, dead"
+        if self.get_property("is_unconscious"):
+            return (
+                self.get_property("unconscious_description") or f"{self.name}, out cold"
+            )
+        return self.description
+
     def carried_items(self):
         """A flat name->Item view of everything carried: top-level inventory
         plus the contents of any carried containers. Used for matching items
