@@ -2858,6 +2858,41 @@ def build_game():
 
     game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
 
+    # The mantis jar has teeth (CCB): a ONE-TIME defensive snap at the first
+    # hand that opens it. It stays an alarm, not a combatant -- the bite
+    # teaches respect; the song it sings at noise delivers the sentence.
+    def _jar_violated(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "open"
+            and "mantis" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _mantis_snaps(g):
+        g.parser.ok(
+            "The split in the jar widens and the mantis head STRIKES -- one "
+            "motion, out and back, quicker than the eye. The jar settles "
+            "again, as if it had never moved."
+        )
+        fatal = _wound_player(
+            g,
+            "Mantis-Bitten",
+            1,
+            (
+                "Mandibles close on your wrist and are gone before your "
+                "eyes catch up.",
+                "Something arched and chitinous snaps across your knuckles; "
+                "the cut is clean as scissors.",
+                "The head takes the web of your thumb -- it does not chew, "
+                "it measures.",
+            ),
+        )
+        if fatal:
+            _die(g, "The jar sings on over what it has done. THE END.")
+
+    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=False)
+
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
         g.player.set_property("escaped", True)
