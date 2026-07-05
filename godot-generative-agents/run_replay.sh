@@ -44,7 +44,12 @@ REPLAY_INPUTS=(
   "$PROJECT_DIR/sim/world_data_upenn.yaml"
 )
 
-if [[ "$SCENE" == *penn_replay* ]]; then
+# Live mode (issue #263): with a backend URL configured the scene follows a
+# running sim over HTTP/WS and never reads the baked file, so the bake checks
+# below don't apply.
+if [[ "$SCENE" == *penn_replay* && -n "${SIM_API_URL:-}" ]]; then
+  echo "Live mode: following $SIM_API_URL (no baked replay needed)." >&2
+elif [[ "$SCENE" == *penn_replay* ]]; then
   if [[ ! -f "$REPLAY_JSON" ]]; then
     # Missing entirely — bake it before we open to an empty map.
     echo "No maps/penn_replay.json yet — bake it first (from the repo root):" >&2
