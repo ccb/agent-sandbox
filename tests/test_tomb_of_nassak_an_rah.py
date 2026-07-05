@@ -1009,6 +1009,52 @@ def test_the_fire_guttering_out_is_announced_to_your_face():
     assert "What is cut can mend again" in out
 
 
+def test_the_sphere_becomes_the_fights_record():
+    """CCB: after the boss dies, the room should hold the story -- dropped
+    gear, the Autarch's bones, the released grave-goods, the shattered
+    coffin, the Horror's ash -- and the description must stop lighting the
+    room with a churn that no longer exists."""
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    # The eruption already re-writes the room: the coffin is shards, and the
+    # light is the Horror itself.
+    assert "burst coffin" in sphere.description
+    assert "orange churn" not in (sphere.dim_description or "")
+    game.do_command("burn horror")
+    game.do_command("drop flask")  # gear dropped mid-fight stays put
+    game.do_command("attack horror with blade")
+    game.do_command("attack horror with blade")
+    assert game.characters["fungal horror"].get_property("is_dead")
+    # The remains are an OBJECT, not a listed combatant.
+    assert "fungal horror" not in sphere.characters
+    assert "drift of ash" in sphere.items
+    assert "Autarch's bones" in sphere.items
+    assert "synth-hunting dagger" in sphere.items  # the released goods
+    assert "flask of gel" in sphere.items  # the dropped gear
+    assert "shattered" in sphere.items["coffin"].description
+    assert "quiet in a way it has not been" in sphere.description
+    # And the wreckage is scenery, not loot for the slot ledger.
+    game.do_command("get bones")
+    assert "Autarch's bones" in sphere.items
+
+
+def test_the_quiet_coffin_when_the_root_dies_first():
+    """Burn the corpse at the Summit before ever prying: the churn behind
+    the glass goes still, and the sphere's description follows (CCB: no
+    stale light sources)."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("burn corpse")
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    assert "still now" in sphere.description
+    assert "slow orange churn" not in sphere.dim_description
+
+
 def test_the_fires_meaning_is_only_told_to_those_who_saw_it_mend():
     """Burn the Horror before ever watching it knit and the narration keeps
     its counsel -- no unearned "the mending stops" (CCB: no hints like that).
