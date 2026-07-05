@@ -2884,7 +2884,7 @@ def build_game():
                 "eyes catch up.",
                 "Something arched and chitinous snaps across your knuckles; "
                 "the cut is clean as scissors.",
-                "The head takes the web of your thumb and lets go at once "
+                "The mantis head snips the web of your hand and lets go "
                 "-- a warning, not a meal.",
             ),
         )
