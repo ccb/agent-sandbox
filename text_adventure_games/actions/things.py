@@ -576,6 +576,17 @@ class Throw(base.Action):
     def apply_effects(self):
         self.character.discard_item(self.item)
         if self.target is not None:
+            # A no_catch target (no hands: a coil, a swarm) deflects the throw
+            # into the room instead -- what the impact DOES is a game trigger's
+            # business (a splash, a splatter, a bounce).
+            if self.target.get_property("no_catch"):
+                if self.location is not None:
+                    self.location.add_item(self.item)
+                self.parser.ok(
+                    f"You throw the {self.item.name} at {self.target.name}; "
+                    "it strikes, and drifts free."
+                )
+                return
             # A catch: the item changes hands. What the catcher DOES with it
             # is theirs to decide (a game trigger: eat it, keep it, drop it).
             self.target.add_to_inventory(self.item)
