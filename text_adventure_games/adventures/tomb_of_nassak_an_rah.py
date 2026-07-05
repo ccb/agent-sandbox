@@ -353,6 +353,10 @@ class Burn(actions.Action):
                 "You have nothing that makes a spark hot enough to mean it."
             )
             return False
+        if target == "horror" and self.game.characters["fungal horror"].get_property(
+            "gel_doused"
+        ):
+            return True  # already dripping with a thrown dose: spark alone
         flask = self.player.carried_items().get("flask of gel")
         if flask is None or int(flask.get_property("portions") or 0) <= 0:
             self.parser.fail(
@@ -364,7 +368,11 @@ class Burn(actions.Action):
 
     def apply_effects(self):
         target = self._target()
-        _gel_dose(self.game)
+        if not (
+            target == "horror"
+            and self.game.characters["fungal horror"].get_property("gel_doused")
+        ):
+            _gel_dose(self.game)
         loc = self.player.location
         if target == "corpse":
             loc.set_property("cleansed", True)
@@ -404,11 +412,22 @@ class Burn(actions.Action):
             )
         else:  # the Horror
             horror = self.game.characters["fungal horror"]
+            was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
+            horror.set_property("gel_doused", False)
             self.parser.ok(
-                "You sling the gel across the coil and strike your spark. The "
-                "Horror goes up with a sound like a held breath released -- "
-                "burning, it cannot knit itself; whatever you cut now stays cut."
+                (
+                    "You strike your spark, and the dose already sheeting the "
+                    "coil takes all at once. The Horror goes up with a sound "
+                    "like a held breath released -- burning, it cannot knit "
+                    "itself; whatever you cut now stays cut."
+                )
+                if was_doused
+                else (
+                    "You sling the gel across the coil and strike your spark. The "
+                    "Horror goes up with a sound like a held breath released -- "
+                    "burning, it cannot knit itself; whatever you cut now stays cut."
+                )
             )
 
 
@@ -1324,6 +1343,7 @@ def build_game():
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
     horror.set_property("vigor", 5)
+    horror.set_property("no_catch", True)  # a coil has no hands
     horror.set_property(
         "ko_text",
         "The blow lands true, and the mass folds around the blade's path "
@@ -2395,6 +2415,47 @@ def build_game():
         )
 
     game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
+
+    # Throwing the gel AT the Horror douses it (CCB's instinctive sequence):
+    # the flask bursts a dose across the coil, and the next spark needs no
+    # pour of its own.
+    def _gel_thrown_at_horror(g):
+        return (
+            not horror.get_property("is_dead")
+            and not horror.get_property("gel_doused")
+            and any(
+                e.actor == g.player.name
+                and e.action == "throw"
+                and "gel" in (e.summary or "").lower()
+                and any(
+                    a in (e.summary or "").lower() for a in ("horror", "mass", "fungal")
+                )
+                for e in g.events[g._round_event_start :]
+            )
+        )
+
+    def _gel_splash(g):
+        flask = None
+        for holder in (g.player.carried_items(), sphere.items):
+            if "flask of gel" in holder:
+                flask = holder["flask of gel"]
+                break
+        if flask is None or int(flask.get_property("portions") or 0) <= 0:
+            return
+        n = int(flask.get_property("portions")) - 1
+        flask.set_property("portions", n)
+        flask.description = (
+            f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+            if n
+            else "an empty flask"
+        )
+        horror.set_property("gel_doused", True)
+        g.parser.ok(
+            "The flask bursts against the coil and a dose of gel sheets "
+            "across the orange, luminous, clinging. It wants only a spark."
+        )
+
+    game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
 
     # --- The glass centipede's ambush -----------------------------------------
     def _centipede_lurks(g):
