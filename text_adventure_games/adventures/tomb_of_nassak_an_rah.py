@@ -319,18 +319,32 @@ class Burn(actions.Action):
         if loc.name == "Burial Sphere of Nassak An-Rah" and (
             "horror" in self.command
             or "mass" in self.command
+            or "gel" in self.command
+            and self._doused_horror_here()
             or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
         ):
             return "horror"
         return None
 
+    def _doused_horror_here(self):
+        horror = self.game.characters.get("fungal horror")
+        return (
+            horror is not None
+            and horror.location is self.player.location
+            and horror.get_property("gel_doused")
+            and not horror.get_property("is_dead")
+        )
+
     def check_preconditions(self) -> bool:
         if "gel" in self.command.split() or "flask" in self.command.split():
-            self.parser.fail(
-                "The gel burns where you pour it, not in your hand. Douse a "
-                "thing, and burn THAT."
-            )
-            return False
+            # Once the dose is ON something, lighting "the gel" IS lighting
+            # that something (CCB: throw gel at horror, then light gel).
+            if not self._doused_horror_here():
+                self.parser.fail(
+                    "The gel burns where you pour it, not in your hand. Douse "
+                    "a thing, and burn THAT."
+                )
+                return False
         target = self._target()
         if target is None:
             self.parser.fail("There's nothing here that wants burning.")
