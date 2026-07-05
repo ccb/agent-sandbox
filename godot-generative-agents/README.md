@@ -121,8 +121,9 @@ sim chose, with a name + activity label above each sprite. (`sim/` carries a
 
 A live real-LLM run spends money every step and can stall on the provider, so the
 viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
-backend health, and a one-click **Emergency stop**. Its data feed is pluggable
-(`scripts/hud_source.gd`):
+backend health, and a one-click **Emergency stop**. The `-`/`+` button in its header
+collapses it to just the title bar (the health dot stays visible); the meter keeps
+counting underneath. Its data feed is pluggable (`scripts/hud_source.gd`):
 
 - **Baked replay (the default):** no backend exists, so the monitor shows clearly
   labeled **simulated** usage that accrues while the replay plays
