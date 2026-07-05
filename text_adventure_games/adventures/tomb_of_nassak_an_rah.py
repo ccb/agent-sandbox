@@ -1865,7 +1865,7 @@ def build_game():
             return
         fatal = _wound_player(
             g,
-            "Addled",
+            "Mind-Handled",
             1,
             (
                 "Your thoughts arrive with someone else's fingerprints.",
@@ -1992,7 +1992,7 @@ def build_game():
 
     def _jackal_maul(g):
         g.parser.ok("The pack takes its due before you can raise an arm.")
-        _, messages, fatal = roll_wound(g.player, rng=_RNG)
+        _, messages, fatal = roll_wound(g.player, rng=_RNG, game=g)
         for m in messages:
             g.parser.ok(m)
         if fatal or g.player.get_property(Property.IS_DEAD):
