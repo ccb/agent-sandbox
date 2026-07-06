@@ -36,73 +36,75 @@
 # stacks are named "Book Stacks" here, not "West Wing Stacks".)
 
 personas:
-- name: Maya Chen
-  home: Penn campus
-  persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
-    diligent, and a little caffeine-dependent. I spend most of my day studying in
-    Van Pelt Library between classes.
-  emoji: 📚
-  start_tile:
-  - 164
-  - 57
-  schedule:
-  # Maya starts on the walk right outside Van Pelt's east door, so her day opens
-  # with a walk straight into the library and a circuit through its rooms.
-  - place: Van Pelt — Circulation Desk
-    activity: checking out a reserved organic chemistry textbook
-    emoji: 📚
-    steps: 15
-  - place: Van Pelt — Moelis Reading Room
-    activity: studying for an organic chemistry exam
-    emoji: 📚
-    # A long morning in the reading room: Priya Nair shares it with her, so this
-    # window has to outlast their conversation (see the `meetings` block below).
-    steps: 70
-  - place: Houston Hall
-    activity: grabbing a coffee at the student union
-    emoji: ☕
-    steps: 60
-  - place: College Hall
-    activity: heading to an afternoon seminar
-    emoji: 🎓
-    steps: 50
-  - place: Van Pelt — Book Stacks
-    activity: pulling a few references off the shelves
-    emoji: 📖
-    steps: 20
-  - place: Van Pelt — Study Booths
-    activity: reviewing her notes before tomorrow
-    emoji: 📖
-- name: Professor Ellis
-  home: Penn campus
-  persona: I am Professor Ellis, 52. I teach history at Penn and keep an office in
-    College Hall. I am thoughtful, a bit formal, and devoted to my students.
-  emoji: 🧑‍🏫
-  start_tile:
-  - 40
-  - 265
-  schedule:
-  - place: Houston Hall
-    activity: meeting a student over coffee
-    emoji: ☕
-    # Ellis lingers at the student union through the morning; Marcus Webb joins him
-    # for coffee here (see the `meetings` block), so this window stays long.
-    steps: 150
-  - place: Williams Hall
-    activity: giving a midday lecture
-    emoji: 🗣️
-    steps: 25
-  - place: Van Pelt — Microtext Collection
-    activity: scanning microfilm of primary sources
-    emoji: 📜
-    steps: 20
-  - place: Van Pelt — Book Stacks
-    activity: pulling sources for a paper
-    emoji: 📜
-    steps: 30
-  - place: College Hall
-    activity: holding office hours
-    emoji: 🧑‍🏫
+# -- MVP cast reduction: 4 of the 7 personas are parked while the live-LLM MVP
+#    runs on a 3-agent cast (Diego, Tanaka, Sofia). Re-enable by uncommenting. --
+# - name: Maya Chen
+#   home: Penn campus
+#   persona: I am Maya Chen, 19, a sophomore at Penn studying biology. I am curious,
+#     diligent, and a little caffeine-dependent. I spend most of my day studying in
+#     Van Pelt Library between classes.
+#   emoji: 📚
+#   start_tile:
+#   - 164
+#   - 57
+#   schedule:
+#   # Maya starts on the walk right outside Van Pelt's east door, so her day opens
+#   # with a walk straight into the library and a circuit through its rooms.
+#   - place: Van Pelt — Circulation Desk
+#     activity: checking out a reserved organic chemistry textbook
+#     emoji: 📚
+#     steps: 15
+#   - place: Van Pelt — Moelis Reading Room
+#     activity: studying for an organic chemistry exam
+#     emoji: 📚
+#     # A long morning in the reading room: Priya Nair shares it with her, so this
+#     # window has to outlast their conversation (see the `meetings` block below).
+#     steps: 70
+#   - place: Houston Hall
+#     activity: grabbing a coffee at the student union
+#     emoji: ☕
+#     steps: 60
+#   - place: College Hall
+#     activity: heading to an afternoon seminar
+#     emoji: 🎓
+#     steps: 50
+#   - place: Van Pelt — Book Stacks
+#     activity: pulling a few references off the shelves
+#     emoji: 📖
+#     steps: 20
+#   - place: Van Pelt — Study Booths
+#     activity: reviewing her notes before tomorrow
+#     emoji: 📖
+# - name: Professor Ellis
+#   home: Penn campus
+#   persona: I am Professor Ellis, 52. I teach history at Penn and keep an office in
+#     College Hall. I am thoughtful, a bit formal, and devoted to my students.
+#   emoji: 🧑‍🏫
+#   start_tile:
+#   - 40
+#   - 265
+#   schedule:
+#   - place: Houston Hall
+#     activity: meeting a student over coffee
+#     emoji: ☕
+#     # Ellis lingers at the student union through the morning; Marcus Webb joins him
+#     # for coffee here (see the `meetings` block), so this window stays long.
+#     steps: 150
+#   - place: Williams Hall
+#     activity: giving a midday lecture
+#     emoji: 🗣️
+#     steps: 25
+#   - place: Van Pelt — Microtext Collection
+#     activity: scanning microfilm of primary sources
+#     emoji: 📜
+#     steps: 20
+#   - place: Van Pelt — Book Stacks
+#     activity: pulling sources for a paper
+#     emoji: 📜
+#     steps: 30
+#   - place: College Hall
+#     activity: holding office hours
+#     emoji: 🧑‍🏫
 - name: Diego Torres
   home: Penn campus
   persona: I am Diego Torres, 24, a graduate student in architecture at Penn. I am
@@ -134,62 +136,63 @@ personas:
   - place: Meyerson Hall
     activity: refining the model late into the day
     emoji: ✏️
-- name: Priya Nair
-  home: Penn campus
-  persona: I am Priya Nair, 20, a junior studying computer science at Penn. I am
-    sharp, social, and always somewhere between a problem set and a coffee. Maya and
-    I have been study buddies since freshman bio.
-  emoji: 💻
-  # Starts on the walk beside Van Pelt's east door, next to Maya, so the two of them
-  # head into the reading room together.
-  start_tile:
-  - 163
-  - 57
-  schedule:
-  - place: Van Pelt — Moelis Reading Room
-    activity: working through a problem set with Maya
-    emoji: 💻
-    # Priya gets to the reading room first and settles in for a long morning;
-    # Maya arrives later (after the circulation desk), so this stays long enough
-    # that the two overlap through their whole conversation.
-    steps: 200
-  - place: Houston Hall
-    activity: grabbing lunch between classes
-    emoji: 🥪
-    steps: 50
-  - place: Van Pelt — Digital Scholarship Exchange
-    activity: pulling a dataset for a course project
-    emoji: 💻
-    steps: 40
-  - place: College Hall
-    activity: heading to an afternoon lecture
-    emoji: 🎓
-- name: Marcus Webb
-  home: Penn campus
-  persona: I am Marcus Webb, 20, a sophomore and part-time campus tour guide. I am
-    chatty, upbeat, and I know every shortcut on Locust Walk. I'm taking Professor
-    Ellis's history seminar this term.
-  emoji: 🎒
-  # Starts just outside Houston Hall, where he grabs coffee before a morning tour --
-  # the same student union where Ellis is holding court.
-  start_tile:
-  - 120
-  - 223
-  schedule:
-  - place: Houston Hall
-    activity: grabbing coffee before a campus tour
-    emoji: ☕
-    # Marcus gets here first; he lingers long enough that Ellis (a longer walk from
-    # the southwest) arrives and they share the student union through their whole
-    # coffee chat (see `meetings`).
-    steps: 220
-  - place: College Hall
-    activity: leading a tour group past the green
-    emoji: 🎒
-    steps: 45
-  - place: Van Pelt — Microtext Collection
-    activity: digging up an old campus map for the tour
-    emoji: 🗺️
+# -- MVP cast reduction (continued): Priya Nair + Marcus Webb parked. --
+# - name: Priya Nair
+#   home: Penn campus
+#   persona: I am Priya Nair, 20, a junior studying computer science at Penn. I am
+#     sharp, social, and always somewhere between a problem set and a coffee. Maya and
+#     I have been study buddies since freshman bio.
+#   emoji: 💻
+#   # Starts on the walk beside Van Pelt's east door, next to Maya, so the two of them
+#   # head into the reading room together.
+#   start_tile:
+#   - 163
+#   - 57
+#   schedule:
+#   - place: Van Pelt — Moelis Reading Room
+#     activity: working through a problem set with Maya
+#     emoji: 💻
+#     # Priya gets to the reading room first and settles in for a long morning;
+#     # Maya arrives later (after the circulation desk), so this stays long enough
+#     # that the two overlap through their whole conversation.
+#     steps: 200
+#   - place: Houston Hall
+#     activity: grabbing lunch between classes
+#     emoji: 🥪
+#     steps: 50
+#   - place: Van Pelt — Digital Scholarship Exchange
+#     activity: pulling a dataset for a course project
+#     emoji: 💻
+#     steps: 40
+#   - place: College Hall
+#     activity: heading to an afternoon lecture
+#     emoji: 🎓
+# - name: Marcus Webb
+#   home: Penn campus
+#   persona: I am Marcus Webb, 20, a sophomore and part-time campus tour guide. I am
+#     chatty, upbeat, and I know every shortcut on Locust Walk. I'm taking Professor
+#     Ellis's history seminar this term.
+#   emoji: 🎒
+#   # Starts just outside Houston Hall, where he grabs coffee before a morning tour --
+#   # the same student union where Ellis is holding court.
+#   start_tile:
+#   - 120
+#   - 223
+#   schedule:
+#   - place: Houston Hall
+#     activity: grabbing coffee before a campus tour
+#     emoji: ☕
+#     # Marcus gets here first; he lingers long enough that Ellis (a longer walk from
+#     # the southwest) arrives and they share the student union through their whole
+#     # coffee chat (see `meetings`).
+#     steps: 220
+#   - place: College Hall
+#     activity: leading a tour group past the green
+#     emoji: 🎒
+#     steps: 45
+#   - place: Van Pelt — Microtext Collection
+#     activity: digging up an old campus map for the tour
+#     emoji: 🗺️
 - name: Professor Tanaka
   home: Penn campus
   persona: I am Professor Tanaka, 47, a physicist at Penn. I am precise and warm with
@@ -304,14 +307,15 @@ locations:
 # of each other (a short conversation link) rather than at opposite edges of a big
 # room. The participants' schedules still have to put them there at the same time.
 meetings:
-- label: Maya & Priya cram for the orgo exam (Moelis Reading Room)
-  at: Van Pelt — Moelis Reading Room
-  participants: [Maya Chen, Priya Nair]
-  dialogue:
-  - [Maya Chen, "Priya! Did you get through the reaction mechanisms?"]
-  - [Priya Nair, "Barely -- chapter 12 nearly broke me. You?"]
-  - [Maya Chen, "Same. Want to quiz each other before the exam?"]
-  - [Priya Nair, "Yes. Then I owe us both a coffee at Houston."]
+# -- MVP cast reduction: meeting parked (Maya & Priya are commented out above). --
+# - label: Maya & Priya cram for the orgo exam (Moelis Reading Room)
+#   at: Van Pelt — Moelis Reading Room
+#   participants: [Maya Chen, Priya Nair]
+#   dialogue:
+#   - [Maya Chen, "Priya! Did you get through the reaction mechanisms?"]
+#   - [Priya Nair, "Barely -- chapter 12 nearly broke me. You?"]
+#   - [Maya Chen, "Same. Want to quiz each other before the exam?"]
+#   - [Priya Nair, "Yes. Then I owe us both a coffee at Houston."]
 - label: Diego shows Sofia around the gallery (Kamin Gallery)
   at: Van Pelt — Kamin Gallery
   participants: [Diego Torres, Sofia Ramirez]
@@ -320,14 +324,15 @@ meetings:
   - [Diego Torres, "Some of it. I'm pulling precedents for my studio project."]
   - [Sofia Ramirez, "That's amazing. I had no idea the library had this."]
   - [Diego Torres, "Stick around -- the guest lecture at Irvine is worth it too."]
-- label: Ellis and Marcus over coffee (Houston Hall)
-  at: Houston Hall
-  participants: [Professor Ellis, Marcus Webb]
-  dialogue:
-  - [Marcus Webb, "Morning, Professor! Mind if I take this seat?"]
-  - [Professor Ellis, "Of course, Marcus. How's the seminar treating you?"]
-  - [Marcus Webb, "Loving it -- though the reading is no joke."]
-  - [Professor Ellis, "It never is. My office hours are open if you need them."]
+# -- MVP cast reduction: meeting parked (Ellis & Marcus are commented out above). --
+# - label: Ellis and Marcus over coffee (Houston Hall)
+#   at: Houston Hall
+#   participants: [Professor Ellis, Marcus Webb]
+#   dialogue:
+#   - [Marcus Webb, "Morning, Professor! Mind if I take this seat?"]
+#   - [Professor Ellis, "Of course, Marcus. How's the seminar treating you?"]
+#   - [Marcus Webb, "Loving it -- though the reading is no joke."]
+#   - [Professor Ellis, "It never is. My office hours are open if you need them."]
 - label: Before the guest lecture at Irvine (Irvine Auditorium)
   at: Irvine Auditorium
   participants: [Professor Tanaka, Sofia Ramirez]
