@@ -56,8 +56,10 @@ Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,p
    build to `public/godot/`: `index.wasm` (the engine, ~37 MB), `index.pck` (the
    packed game — scenes, scripts, imported textures, **and the `.tmj` maps**), and
    `index.js` (the JS loader that defines Godot's `Engine` class). The script
-   temporarily points the project's main scene at `penn_replay.tscn` for the export
-   only, then restores `project.godot` (so desktop F5 still opens `main.tscn`).
+   temporarily pins the project's main scene to `main_menu.tscn` for the export
+   only (the landing page — the same default desktop F5 opens), then restores
+   `project.godot`. On web the menu hides its "Open a local file…" button and the
+   bundled replay is fetched over HTTP rather than packed (see below).
 
 2. **Replay fetched at runtime, not packed.** `scripts/penn_replay.gd` (in the
    Godot project) has a `web` branch: on web it `HTTPRequest`s the replay from
@@ -125,8 +127,9 @@ pnpm gen:docs       # optional: builds the MkDocs site into public/docs/ (the "D
 pnpm dev            # open the printed http://localhost:… URL
 ```
 
-You should see the campus load and Maya, Professor Ellis and Diego walk it with
-name + activity labels — the same scene as the desktop `penn_replay.tscn`.
+You should see the landing menu load over a live campus backdrop; click **Play the
+bundled replay** and Maya, Professor Ellis and Diego walk the campus with name +
+activity labels — the same viewer as the desktop `penn_replay.tscn`.
 
 The header's **Docs** link opens the project's MkDocs site at `/docs/` on this
 same origin. It's served as plain static files out of `public/docs/`, so run
@@ -205,7 +208,7 @@ web/
     godot/              # (git-ignored) Godot Web export output — built locally
     replay/penn_replay.json  # committed sample replay, fetched at runtime
   scripts/
-    export-godot.sh     # Godot → WASM (temporarily boots penn_replay.tscn)
+    export-godot.sh     # Godot → WASM (temporarily boots main_menu.tscn)
     gen-replay.sh       # run the sim → copy replay into public/
 ```
 

@@ -37,6 +37,9 @@ signal filter_changed(location: String)
 # backend's run state and pushes it back via set_live_run — the button flips
 # when the backend confirms, not when clicked.
 signal live_run_toggle_requested
+# The "Back to menu" button was pressed: return to the landing page (issue #399).
+# The viewer handles it without shutting a live backend down (see _on_back_to_menu).
+signal back_to_menu_requested
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
@@ -152,6 +155,13 @@ func _ready() -> void:
 	var view_row := HBoxContainer.new()
 	view_row.add_theme_constant_override("separation", 6)
 	col.add_child(view_row)
+
+	# Back to the landing menu (issue #399): the pack's house glyph — "home". Leads
+	# the row so it reads as leaving the viewer, not a view control. A live sim keeps
+	# running when you go back (the viewer doesn't shut the backend down).
+	view_row.add_child(_icon_button(
+		_pack_icon(BUTTON_GLYPHS, 6, 1), "Back to menu — a live simulation keeps running",
+		func() -> void: back_to_menu_requested.emit()))
 
 	# Zoom: the pack's outlined plus/minus (white row) — the neutral pair, so
 	# they read as map controls rather than the green/red pickup variants.

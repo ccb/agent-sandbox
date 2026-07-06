@@ -7,16 +7,22 @@ simulation walking across it. It's a *viewer*: the simulation runs offline in Py
 
 ## What's in the scene
 
-Two scenes render the same campus — the academic core block (34th–36th ×
-Spruce–Walnut), built from OpenStreetMap data by the repo's geo tool
-(`tools/geo/osm_to_tiled.py`) and drawn with **Kenney's RPG Urban Pack (CC0)**:
+The game opens on a **landing menu** — the front door where you pick how to enter
+the viewer (a replay, a local replay file, or a live backend). Behind it, two scenes
+render the same campus — the academic core block (34th–36th × Spruce–Walnut), built
+from OpenStreetMap data by the repo's geo tool (`tools/geo/osm_to_tiled.py`) and
+drawn with **Kenney's RPG Urban Pack (CC0)**:
 
-- **`scenes/campus_urban.tscn`** — the campus on its own (the **default** scene):
-  brick buildings, asphalt streets, tan paving for Locust Walk, green lawns. Pan and
-  zoom to explore it.
+- **`scenes/main_menu.tscn`** — the **front door** (the default scene): choose *Watch
+  a replay* (the bundled one or a local `.json` you point it at) or *Run a live
+  simulation* (connect to a running backend), and it hands off to the viewer. Its
+  backdrop is the campus itself, rendered live behind the menu.
+- **`scenes/campus_urban.tscn`** — the campus on its own: brick buildings, asphalt
+  streets, tan paving for Locust Walk, green lawns. Pan and zoom to explore it.
 - **`scenes/penn_replay.tscn`** — the same campus with a **generative-agents
   simulation** playing on top: a few Penn personas walking between real buildings on
-  their daily schedules (see *Watching the Penn agent simulation* below).
+  their daily schedules (see *Watching the Penn agent simulation* below). The
+  sidebar's 🏠 button returns to the menu.
 
 Both share a generic map renderer (`scripts/tiled_map.gd`) and a pan/zoom camera
 (`scripts/camera_controls.gd`).
@@ -72,10 +78,11 @@ Open the project folder in the Godot 4.6 editor and press **Play** (F5), or from
 terminal:
 
 ```bash
-# The campus in real Kenney CC0 urban art (the default scene):
+# Open the landing menu (the default scene) — pick a replay or a live backend:
 /Applications/Godot.app/Contents/MacOS/Godot --path .
 
-# Watch the agent simulation replay on the campus:
+# Skip the menu and jump straight to a scene (deep links, unaffected by the menu):
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/campus_urban.tscn
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
 
 # Headless smoke test — load every scene and check its map painted (exit 0 = OK):
@@ -135,6 +142,13 @@ uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
 # 2. Point the viewer at it (the same switch the run monitor uses):
 SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
 ```
+
+Or skip the env var entirely: launch the viewer normally so it opens the landing
+menu, type the backend's URL (and its token, if the server sets `SIM_API_TOKEN`)
+into **Run a live simulation**, and press **Connect**. The menu probes `GET /live`
+first, so a wrong URL or a backend with no live loop is reported right there instead
+of the viewer silently retrying. (`SIM_API_URL` / `SIM_API_TOKEN`, when set, prefill
+that form.)
 
 On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
 one `GET /events?since=0` backfill (history so far → jump to the live head),
@@ -199,6 +213,13 @@ auto-starting; `--start-paused` / `--no-start-paused` overrides either mode.
 running with nobody watching (`serve_penn` opts into the endpoint; the
 `shutdown_backend_on_exit` export on the scene turns the behavior off if you
 want a backend that outlives the window).
+
+**Going back to the menu does not.** The sidebar's 🏠 button returns to the
+landing page *without* shutting the backend down — it's for re-picking what to
+watch, not for ending the run. The menu prefills the URL you just left, so
+**Connect** reattaches to the same sim (the socket resumes with `?since=` and
+loses no frames). Use the window close, the run monitor's Emergency stop, or
+`POST /shutdown` when you actually want the sim to stop.
 
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):

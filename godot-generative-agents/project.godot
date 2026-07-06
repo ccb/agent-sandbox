@@ -12,9 +12,16 @@ config_version=5
 
 config/name="Godot Generative Agents"
 config/description="A tiny Godot 4 sandbox: render the real UPenn campus (OSM→Tiled, Kenney CC0 art) and play back a generative-agents simulation on it."
-run/main_scene="res://scenes/campus_urban.tscn"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
+
+[autoload]
+
+; The landing page (scenes/main_menu.tscn) records the user's choice — replay,
+; local file, or live backend — in this singleton, which persists across the
+; scene swap into the viewer (scenes/penn_replay.tscn) where it's read back.
+LaunchConfig="*res://scripts/launch_config.gd"
 
 [display]
 

@@ -24,14 +24,16 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-# The web build should boot the replay scene, but we don't want to change the
-# desktop default (main.tscn). Temporarily point the project's main scene at the
-# replay for the export only, then restore project.godot no matter what happens.
+# The web build boots the landing menu (issue #399), same as the desktop default.
+# We still force it explicitly for the export so the web entry point stays pinned
+# even if the desktop main scene changes, then restore project.godot no matter what
+# happens. (On web the menu's "Open a local file…" button is hidden and the bundled
+# replay is fetched over HTTP — the replay isn't packed into the build.)
 BACKUP="$(mktemp)"
 cp "$PROJECT_FILE" "$BACKUP"
 restore() { cp "$BACKUP" "$PROJECT_FILE"; rm -f "$BACKUP"; }
 trap restore EXIT
-sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/penn_replay.tscn"|' "$PROJECT_FILE"
+sed -i.bak 's|^run/main_scene=.*|run/main_scene="res://scenes/main_menu.tscn"|' "$PROJECT_FILE"
 rm -f "$PROJECT_FILE.bak"
 
 echo "==> Importing assets (first run can take a minute)…"
