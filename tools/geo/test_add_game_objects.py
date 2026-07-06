@@ -39,6 +39,9 @@ def _fisher_interior_cell():
 def _tmj_with_object(x, y):
     with open(SRC_MAP) as fh:
         tmj = json.load(fh)
+    # The real map now carries an authored fisher_objects layer; drop it so this
+    # fixture exercises exactly one synthetic object (idx 0 -> id 134000).
+    tmj["layers"] = [L for L in tmj["layers"] if L.get("name") != ago.OBJECT_LAYER]
     tmj["layers"].append(
         {
             "type": "objectgroup",
@@ -60,6 +63,8 @@ def _tmj_with_object(x, y):
 def test_read_objects_absent_layer_is_empty():
     with open(SRC_MAP) as fh:
         tmj = json.load(fh)
+    # Strip the authored layer to exercise the absent-layer path.
+    tmj["layers"] = [L for L in tmj["layers"] if L.get("name") != ago.OBJECT_LAYER]
     assert ago.read_objects(tmj) == []
 
 
