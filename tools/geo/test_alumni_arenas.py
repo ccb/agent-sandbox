@@ -96,3 +96,9 @@ def test_alumni_rooms_reachable_through_a_door(tmp_path):
     reached = _flood_reached_arenas(coll, arena)
     for rid in range(12700, 12722):
         assert str(rid) in reached, f"alumni room {rid} unreachable through the door"
+
+
+def test_alumni_east_entrance_brick_stays_closed(tmp_path):
+    mdir = _run(str(tmp_path))
+    coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
+    assert coll[99 * W + 46] == "1", "the Brick Wall cell (46,99) must stay a wall"

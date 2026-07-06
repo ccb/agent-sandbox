@@ -129,6 +129,14 @@ FORCED_DOORS = {
     "Sweeten Alumni Building": [{(15, 97), (16, 97), (17, 97)}],
 }
 
+# Perimeter cells to re-close AFTER door-carving, keyed by building name. Mirrors
+# the "Brick Wall" objects furnish_alumni draws to narrow an over-wide auto-door
+# (here: shrink Sweeten Alumni's east entrance from the auto-placed 3 tiles to 2).
+# subdivide_rooms only writes interior walls, so a perimeter closure must live here.
+FORCED_CLOSED = {
+    "Sweeten Alumni Building": {(46, 99)},
+}
+
 
 # --------------------------------------------------------------------------- #
 # Flat CSV maze layers: one ", "-joined row of width*height cell ids (the format
@@ -812,6 +820,10 @@ def main():
                 H,
                 plan,
             )
+
+        # Re-close any perimeter cells this building keeps walled past the auto-door.
+        for fx, fy in FORCED_CLOSED.get(name, set()):
+            collision[fy * W + fx] = "1"
 
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
             picture_jobs.append((name, foot, perimeter, door_cells))
