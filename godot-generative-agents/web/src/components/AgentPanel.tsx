@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { Replay } from "../types/replay";
 import { AgentCard } from "./AgentCard";
+import { LlmCallLog } from "./LlmCallLog";
 import { MemoryRows } from "./MemoryList";
 import { useReplayStep } from "../useReplay";
+import { useLlmCalls } from "../useLlmCalls";
 import "./AgentPanel.css";
 
 export function AgentPanel({ replay }: { replay: Replay }) {
@@ -12,6 +14,9 @@ export function AgentPanel({ replay }: { replay: Replay }) {
   // changes WHO you see; the replay keeps playing underneath.
   const [index, setIndex] = useState(0);
   const step = useReplayStep(steps);
+  // The live backend's per-request stream (#398) — off unless the page was
+  // opened with ?api=<backend url>, so the static replay page stays static.
+  const live = useLlmCalls();
 
   const count = personas.length;
   const persona = personas[index] ?? personas[0];
@@ -71,6 +76,11 @@ export function AgentPanel({ replay }: { replay: Replay }) {
               frame={frame}
               secPerStep={sec_per_step}
             />
+            {/* Live mode only: this agent's slice of the LLM-request stream,
+                under the card so the memory column keeps the full height. */}
+            {live.enabled && (
+              <LlmCallLog calls={live.calls} actor={persona.name} connected={live.connected} />
+            )}
           </div>
 
           {/* The expanded view: every memory the agent has formed so far, beyond the

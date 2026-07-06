@@ -145,6 +145,32 @@ stay running through both — just refresh the browser):
 | **Godot scripts / scenes / art** | `pnpm export:godot` | Vite serves `public/` statically, so the re-exported WASM is picked up on the next refresh. |
 | **Docs (mkdocs/)** | `pnpm gen:docs` | Same deal — `public/docs/` is served statically, so the rebuilt site shows up at `/docs/` on the next refresh. |
 
+### Live mode: the LLM-request stream (#398)
+
+The **Agent cards** page can follow a *running* live backend on top of the baked
+replay it plays: point the page at the server with an `?api=` query param and the
+selected agent's card grows an **LLM requests** log — the same
+one-line-per-model-call stream the backend's terminal monitor prints (and the
+Godot HUD shows), filtered to that agent via each record's `actor` field.
+
+```bash
+uv run python godot-generative-agents/sim/serve_penn.py            # terminal 1 (add --brain llm for real calls)
+pnpm dev                                                           # terminal 2
+# then open  http://localhost:5173/?api=http://127.0.0.1:8080#agents
+```
+
+Each row is `time · role · tokens in→out · $cost`; hover for the full detail
+(model, cache split, latency, turn, running total). Under the default mock brain
+the calls are free ($0.0000 rows) — real numbers appear when the server runs
+`--brain llm`. `VITE_SIM_API_URL` works as a `pnpm dev` default for the same
+setting; with neither given, the page stays fully static.
+
+How it works: [`src/useLlmCalls.ts`](src/useLlmCalls.ts) polls the backend's
+change feed (`GET /events?since=<cursor>`) and keeps the `engine` records whose
+payload is `kind: "llm_call"` — the wire contract is documented in
+[`backend/README.md`](../../backend/README.md). The backend's CORS already
+allows any localhost origin, so the dev server needs no proxy.
+
 ### Scripts
 
 | Command | What it does |
