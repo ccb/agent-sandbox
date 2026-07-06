@@ -205,10 +205,14 @@ def step(
 
         # Decision point: idle and not yet settled into an activity.
         if not st["path"] and not st["performing"]:
-            # Attribute this LLM call to the persona and step (usage.py).
+            # Attribute this LLM call to the persona and step (usage.py). The
+            # "role" key is read by the terminal request monitor (llm_monitor)
+            # to label the line; plain UsageLedgers ignore it.
             ctx = getattr(char.agent.llm_client, "context", None)
             if ctx is not None:
-                ctx.update({"actor": name, "turn": step_idx, "attempt": 0})
+                ctx.update(
+                    {"actor": name, "turn": step_idx, "attempt": 0, "role": "decide"}
+                )
             # Observe (perceive + retrieve memories) -> decide -> remember the
             # outcome, the same shape react_behavior gives engine NPCs. The usage
             # context above is set first so the decide() call inside

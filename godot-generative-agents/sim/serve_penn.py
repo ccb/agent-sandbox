@@ -30,6 +30,7 @@ The pieces:
 import argparse
 
 from backend.api import run
+from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.sim_config import CognitionConfig
 from backend.smallville_agents import attach_agents
@@ -195,10 +196,16 @@ class PennStepper:
     spent; ~$0 under the mock, real numbers when #261 swaps a brain in).
     """
 
-    def __init__(self, num_steps=DEFAULT_STEPS, endless=False, world=None):
+    def __init__(
+        self, num_steps=DEFAULT_STEPS, endless=False, world=None, monitor=None
+    ):
         self.num_steps = num_steps
         self.endless = endless
         self.ledger = UsageLedger()  # backs GET /usage across resets
+        # The terminal request monitor (backend.llm_monitor), or None for quiet.
+        # Like the ledger it lives here, not in _build(), so its call counter
+        # survives resets.
+        self.monitor = monitor
         self._build(world)
 
     def _build(self, world: PennWorld | None = None):
@@ -208,10 +215,18 @@ class PennStepper:
         self.world = world if world is not None else build_penn_world()
         self.cog = CognitionConfig()
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Every client records into self.ledger; with a monitor, through a
+        # write-through view that also prints one terminal line per call (the
+        # base ledger stays the single source GET /usage sums).
+        brain_ledger = (
+            RoleTaggedLedger(self.ledger, self.monitor, role="decide")
+            if self.monitor is not None
+            else self.ledger
+        )
         attach_agents(
             self.chars,
             self.world.personas,
-            ledger=self.ledger,
+            ledger=brain_ledger,
             vision_r=self.cog.vision_r,
             num_steps=self.num_steps,
         )
@@ -329,6 +344,13 @@ def main() -> int:
         help="wall-clock seconds per sim step; 0.1 matches the viewer's "
         "step_seconds default so live playback paces like a 1x replay",
     )
+    ap.add_argument(
+        "--monitor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="print one terminal line per LLM request (timestamp, actor, role, "
+        "tokens, latency, cost); --no-monitor silences it",
+    )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument(
@@ -339,7 +361,11 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    stepper = PennStepper(num_steps=args.steps, endless=args.endless)
+    stepper = PennStepper(
+        num_steps=args.steps,
+        endless=args.endless,
+        monitor=LlmCallMonitor() if args.monitor else None,
+    )
     wm = stepper.world.world_map
     print(
         f"Loaded the_upenn ({wm.width}x{wm.height}); "
