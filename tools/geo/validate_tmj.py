@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 
 from add_entrances import (
@@ -577,7 +577,15 @@ class Checker:
     def check_furniture_solidity(self):
         """Every *_furniture cell must be collision=1 unless its base gid is in
         block_furniture.WALKABLE_FURNITURE (chair seats). Lock-step: the matrix
-        must equal what block_furniture produces from the tmj."""
+        must equal what block_furniture produces from the tmj.
+
+        NOTE: this check is one-directional. It flags furniture that should be
+        solid but isn't; it does NOT flag an allowlisted cell that is still
+        solid. block_furniture.solid_cells only seals (walkable->wall), never
+        re-opens, so adding a gid to WALKABLE_FURNITURE and re-running
+        block_furniture alone leaves already-sealed cells solid. Regenerate from
+        a furniture-free collision baseline (the full add_entrances -> block_grass
+        -> block_furniture chain) after any allowlist addition."""
         try:
             import block_furniture as bf
         except Exception as exc:  # pragma: no cover - defensive
@@ -715,11 +723,9 @@ class Checker:
             )
 
     def _flood_from_border(self):
-        import collections
-
         W, H, coll = self.w.W, self.w.H, self.w.collision
         seen = [False] * (W * H)
-        q = collections.deque()
+        q = deque()
         for x in range(W):
             for y in (0, H - 1):
                 i = y * W + x
