@@ -22,9 +22,10 @@ Two pieces, both hooked into the engine's existing accounting seam
   ``GET /usage``, the cost kill-switch, and any attached ``RunLog`` are
   untouched), and then the monitor prints it, tagged with the view's role.
 * :class:`LlmCallMonitor` -- the formatter/printer. It also keeps a small
-  bounded buffer of primitive records (:meth:`LlmCallMonitor.drain`) so a later
-  PR can stream them to the web viewer through the live event feed; today the
-  terminal is the only consumer.
+  bounded buffer of primitive records (:meth:`LlmCallMonitor.drain`), which the
+  live Penn server drains into the event feed after every tick
+  (``PennStepper.drain_events``) -- so the Godot viewer's run monitor shows the
+  same one-line-per-request log this module prints in the terminal (#398).
 
 Role attribution: the planner and reflector get their own client (and view),
 so a static role is exact. The brain client is shared between *decide* and
@@ -116,14 +117,23 @@ class LlmCallMonitor:
 
     def on_call(self, rec: CallRecord, role: str, base: UsageLedger) -> None:
         """Print one row for *rec* (already stored in *base*) tagged *role*."""
+        wall = time.strftime("%H:%M:%S")
         with self._lock:
             self.calls += 1
             n = self.calls
             cum = base.total_cost_usd()
             kept = rec.to_primitive()
-            kept.update({"role": role, "call_no": n, "cum_cost_usd": round(cum, 6)})
+            # The extras the printed row has over the raw record -- kept on the
+            # buffered copy too, so a viewer can render the same line.
+            kept.update(
+                {
+                    "role": role,
+                    "call_no": n,
+                    "cum_cost_usd": round(cum, 6),
+                    "time": wall,
+                }
+            )
             self._kept.append(kept)
-        wall = time.strftime("%H:%M:%S")
         line = self._fmt_row(n, wall, role, rec, cum)
         if self.color:
             line = self._colorize(line, role, base.over_budget())
@@ -141,8 +151,8 @@ class LlmCallMonitor:
         self.stream.flush()
 
     def drain(self) -> list[dict]:
-        """Return (and clear) the buffered primitive records -- the seam a later
-        PR can pump into the live event feed for the web viewer."""
+        """Return (and clear) the buffered primitive records -- the seam the
+        live server pumps into the event feed for the viewer's request log."""
         with self._lock:
             kept = list(self._kept)
             self._kept.clear()

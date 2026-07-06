@@ -322,6 +322,7 @@ func _setup_hud() -> void:
 	_hud_source.usage_updated.connect(_hud.set_usage)
 	_hud_source.health_changed.connect(_hud.set_health)
 	_hud_source.halted_changed.connect(_on_run_halted)
+	_hud_source.llm_call.connect(_hud.add_llm_call)
 	_hud.stop_requested.connect(_hud_source.request_stop)
 	add_child(_hud_source)
 
@@ -583,6 +584,18 @@ func _apply_record(rec: Variant) -> void:
 			_apply_live_frame(int(record.get("step", -1)), record.get("agents"))
 		"status":
 			_on_live_status(record)
+		"engine":
+			# Engine change-feed records ride the same log as frames. The only
+			# payload the viewer renders today is the backend request monitor's
+			# llm_call rows (serve_penn's drain_events, issue #398), which flow
+			# to the HUD's request log through the source seam.
+			var event: Variant = record.get("event")
+			if (
+				typeof(event) == TYPE_DICTIONARY
+				and String((event as Dictionary).get("kind", "")) == "llm_call"
+				and _hud_source != null
+			):
+				_hud_source.note_llm_call(event)
 
 
 func _apply_live_frame(step: int, agents: Variant) -> void:

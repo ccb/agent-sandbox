@@ -18,11 +18,14 @@ Run from ``generative-agents``::
     uv run pytest tests/test_penn_live_llm.py -v
 """
 
+import io
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from backend.llm_monitor import LlmCallMonitor
 
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); import them off the sim directory, like test_penn_live.py.
@@ -166,7 +169,7 @@ class _ScriptedBrain:
         return len(text) // 4
 
 
-def _llm_stepper(monkeypatch, max_cost=5.0, fail=False):
+def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None):
     """A PennStepper in --brain llm mode, with the factory swapped for fakes."""
 
     def fake_create(config, ledger=None):
@@ -180,7 +183,7 @@ def _llm_stepper(monkeypatch, max_cost=5.0, fail=False):
         "model": "claude-haiku-4-5",
         "max_cost_usd": max_cost,
     }
-    return PennStepper(num_steps=50, world=build_penn_world(), llm=llm)
+    return PennStepper(num_steps=50, world=build_penn_world(), monitor=monitor, llm=llm)
 
 
 def _move(char, location):
@@ -273,3 +276,33 @@ def test_cost_ceiling_ends_the_day(monkeypatch):
     assert stepper.ledger.over_budget()
     assert stepper.tick() is None  # the gate ends the day before more spend
     assert stepper.step == 1
+
+
+# ------------------------------------------------ the live event feed (#398)
+
+
+def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
+    # backend.live probes drain_events() after every tick and publishes each
+    # returned dict as a kind:"engine" event -- this is what puts the terminal
+    # monitor's rows into the viewer HUD's request log. The payload is the
+    # monitor's kept record, re-stamped kind:"llm_call" (to_primitive() says
+    # kind:"call", which a feed consumer shouldn't have to know about).
+    monitor = LlmCallMonitor(stream=io.StringIO(), color=False)
+    stepper = _llm_stepper(monkeypatch, monitor=monitor)
+    assert stepper.drain_events() == []  # nothing before the first tick
+    assert stepper.tick() is not None
+    events = stepper.drain_events()
+    assert events  # the t0 decides were monitored
+    for ev in events:
+        assert ev["kind"] == "llm_call"
+        assert ev["model"] == "claude-haiku-4-5"
+        assert ev["role"] in {"decide", "converse", "reflect"}
+        assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
+    assert stepper.drain_events() == []  # drained means drained
+
+
+def test_drain_events_is_empty_without_a_monitor(monkeypatch):
+    # --no-monitor: nothing is kept, so nothing rides the feed.
+    stepper = _llm_stepper(monkeypatch)
+    assert stepper.tick() is not None
+    assert stepper.drain_events() == []
