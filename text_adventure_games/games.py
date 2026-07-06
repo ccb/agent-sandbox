@@ -248,6 +248,17 @@ class Game:
         self._round_event_start = len(self.events)  # this command begins a round
         success = self.parser.parse_command(command, actor=self.player)
         if success:
+            # A FREE action (Inventory, Help) is the player consulting their
+            # own memory, not the character acting: it reports without
+            # advancing the round -- no turn tick, no NPC turns, no triggers.
+            # config.engine.meta_actions_cost_turns restores the classic
+            # everything-costs-time behavior.
+            last = getattr(self.player, "last_action", None)
+            if (
+                getattr(last, "FREE_ACTION", False)
+                and not self.config.engine.meta_actions_cost_turns
+            ):
+                return success
             self.end_turn()
         return success
 
@@ -882,7 +893,9 @@ class Game:
                 if character_name == self.player.name:
                     continue
                 character = self.player.location.characters[character_name]
-                description += f"\n * {character.name} - {character.description}"
+                description += (
+                    f"\n * {character.name} - {character.visible_description()}"
+                )
         return description
 
     def describe_inventory(self) -> str:
@@ -970,7 +983,7 @@ class Game:
             if others:
                 lines.append("Characters here:")
                 for c in others:
-                    lines.append(f" * {c.name} - {c.description}")
+                    lines.append(f" * {c.name} - {c.visible_description()}")
 
         # Inventory
         if character.inventory:

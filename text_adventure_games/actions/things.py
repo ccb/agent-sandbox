@@ -269,6 +269,9 @@ class Inventory(base.Action):
     ACTION_DESCRIPTION = "Check the character's inventory"
     ACTION_ALIASES = ["i"]
     DURATION = 1  # a quick glance in one's pockets (issue #24)
+    # The list is for the player, not the character: free by default (see
+    # config.engine.meta_actions_cost_turns).
+    FREE_ACTION = True
 
     def __init__(
         self,
@@ -573,6 +576,17 @@ class Throw(base.Action):
     def apply_effects(self):
         self.character.discard_item(self.item)
         if self.target is not None:
+            # A no_catch target (no hands: a coil, a swarm) deflects the throw
+            # into the room instead -- what the impact DOES is a game trigger's
+            # business (a splash, a splatter, a bounce).
+            if self.target.get_property("no_catch"):
+                if self.location is not None:
+                    self.location.add_item(self.item)
+                self.parser.ok(
+                    f"You throw the {self.item.name} at {self.target.name}; "
+                    "it strikes, and drifts free."
+                )
+                return
             # A catch: the item changes hands. What the catcher DOES with it
             # is theirs to decide (a game trigger: eat it, keep it, drop it).
             self.target.add_to_inventory(self.item)

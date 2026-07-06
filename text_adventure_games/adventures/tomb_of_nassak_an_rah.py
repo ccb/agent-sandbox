@@ -77,7 +77,10 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 
 def _wound_player(g, name, slots_n, desc):
     """Wound the player: the standard [damage] line, any displaced-gear spill,
-    and the fatal verdict back to the caller."""
+    and the fatal verdict back to the caller. *desc* may be a tuple of
+    variants -- one is drawn, so a body hurt eight times reads eight ways."""
+    if isinstance(desc, (list, tuple)):
+        desc = _RNG.choice(desc)
     fatal, dropped = g.player.add_wound(Wound(name, slots_n, desc), rng=_RNG)
     g.parser.damage(f"{name} - {desc}")
     for it in dropped:
@@ -289,6 +292,11 @@ class Burn(actions.Action):
         "ignite",
         "torch",
         "set ablaze",
+        "burn gel",
+        "light gel",
+        "ignite gel",
+        "burn flask",
+        "light flask",
     ]
 
     def __init__(self, game, command, actor=None):
@@ -311,12 +319,32 @@ class Burn(actions.Action):
         if loc.name == "Burial Sphere of Nassak An-Rah" and (
             "horror" in self.command
             or "mass" in self.command
+            or "gel" in self.command
+            and self._doused_horror_here()
             or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
         ):
             return "horror"
         return None
 
+    def _doused_horror_here(self):
+        horror = self.game.characters.get("fungal horror")
+        return (
+            horror is not None
+            and horror.location is self.player.location
+            and horror.get_property("gel_doused")
+            and not horror.get_property("is_dead")
+        )
+
     def check_preconditions(self) -> bool:
+        if "gel" in self.command.split() or "flask" in self.command.split():
+            # Once the dose is ON something, lighting "the gel" IS lighting
+            # that something (CCB: throw gel at horror, then light gel).
+            if not self._doused_horror_here():
+                self.parser.fail(
+                    "The gel burns where you pour it, not in your hand. Douse "
+                    "a thing, and burn THAT."
+                )
+                return False
         target = self._target()
         if target is None:
             self.parser.fail("There's nothing here that wants burning.")
@@ -339,6 +367,10 @@ class Burn(actions.Action):
                 "You have nothing that makes a spark hot enough to mean it."
             )
             return False
+        if target == "horror" and self.game.characters["fungal horror"].get_property(
+            "gel_doused"
+        ):
+            return True  # already dripping with a thrown dose: spark alone
         flask = self.player.carried_items().get("flask of gel")
         if flask is None or int(flask.get_property("portions") or 0) <= 0:
             self.parser.fail(
@@ -350,7 +382,11 @@ class Burn(actions.Action):
 
     def apply_effects(self):
         target = self._target()
-        _gel_dose(self.game)
+        if not (
+            target == "horror"
+            and self.game.characters["fungal horror"].get_property("gel_doused")
+        ):
+            _gel_dose(self.game)
         loc = self.player.location
         if target == "corpse":
             loc.set_property("cleansed", True)
@@ -390,11 +426,22 @@ class Burn(actions.Action):
             )
         else:  # the Horror
             horror = self.game.characters["fungal horror"]
+            was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
+            horror.set_property("gel_doused", False)
             self.parser.ok(
-                "You sling the gel across the coil and strike your spark. The "
-                "Horror goes up with a sound like a held breath released -- "
-                "burning, it cannot knit itself; whatever you cut now stays cut."
+                (
+                    "You strike your spark, and the dose already sheeting the "
+                    "coil takes all at once. The Horror goes up with a sound "
+                    "like a held breath released -- burning, it cannot knit "
+                    "itself; whatever you cut now stays cut."
+                )
+                if was_doused
+                else (
+                    "You sling the gel across the coil and strike your spark. The "
+                    "Horror goes up with a sound like a held breath released -- "
+                    "burning, it cannot knit itself; whatever you cut now stays cut."
+                )
             )
 
 
@@ -570,8 +617,7 @@ class PryCoffin(actions.Action):
                 "You work the blade into the seam and the seam BULGES -- the "
                 "glass parts around a body coming out. The Horror unwinds from "
                 "the Autarch's bones into the weightless air, orange and vast "
-                "and patient, and keeps the bones in its coil. Where you cut "
-                "it, it will remember. Where it burns, it will not."
+                "and patient, and keeps the bones in its coil."
             )
             return
         coffin.set_property("pried", True)
@@ -1311,12 +1357,29 @@ def build_game():
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
     horror.set_property("vigor", 5)
+    horror.set_property("no_catch", True)  # a coil has no hands
     horror.set_property(
         "ko_text",
         "The blow lands true, and the mass folds around the blade's path "
         "without falling.",
     )
     den.add_character(horror)
+
+    # The glass centipede (source: "lying in ambush in the fungal chimney" --
+    # "four-foot centipede with translucent carapace"). Unseen until it
+    # strikes; one solid blow answers it; fire scours it out with the growth.
+    centipede = things.Character(
+        "glass centipede",
+        "a glass centipede, four feet of translucent patience",
+        "I wait. Everything comes down the chimney eventually.",
+    )
+    centipede.examine_text = (
+        "Four feet of centipede in a carapace like poured glass -- you see it "
+        "mostly by what bends behind it. It does not move while you watch."
+    )
+    for _a in ("centipede", "glass"):
+        centipede.add_alias(_a)
+    den.add_character(centipede)
 
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
     # guard-mummy gear and spore hazard arrive in Phase 4; for now the blade lets
@@ -1523,6 +1586,31 @@ def build_game():
     pack.add_item(glowstone)
     pack.add_item(waterskin)
 
+    # The dead don't sway (CCB): state-aware one-liners for the creatures.
+    spawn_guts.set_property(
+        "unconscious_description",
+        "the spawn of guts, collapsed in a heap, its falcon jar askew",
+    )
+    spawn_guts.set_property(
+        "dead_description", "the spawn of guts, dead and motionless"
+    )
+    spawn_brain.set_property(
+        "unconscious_description",
+        "the spawn of brain, felled mid-step, jar rolled to its side",
+    )
+    spawn_brain.set_property(
+        "dead_description", "the spawn of brain, dead and motionless"
+    )
+    jackal_pack.set_property(
+        "unconscious_description", "the jackal pack, sprawled senseless where they fell"
+    )
+    centipede.set_property(
+        "unconscious_description", "the glass centipede, cracked and still"
+    )
+    centipede.set_property(
+        "dead_description", "the glass centipede, shattered along its length"
+    )
+
     # Vaarn item slots (slots.py): ten -- gear and wounds share the gauge.
     player.slot_capacity = 10
     # The tomb's climbs: an encumbered scavenger cannot make them.
@@ -1533,7 +1621,15 @@ def build_game():
     game = TombGame(
         wreck,
         player,
-        characters=[silas, spawn_guts, spawn_brain, worry, jackal_pack, horror],
+        characters=[
+            silas,
+            spawn_guts,
+            spawn_brain,
+            worry,
+            jackal_pack,
+            horror,
+            centipede,
+        ],
         custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
     )
     game.max_score = 100
@@ -1611,13 +1707,16 @@ def build_game():
     def _bat_maul(g):
         """Dive-bombing bats deal a non-lethal wound each round the light (or
         din) persists; death comes only if wounds fill the scavenger's slots."""
-        fatal, dropped = g.player.add_wound(
-            Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Bat-Mauled",
+            1,
+            (
+                "Claw-rakes across your scalp and hands.",
+                "A wing's elbow takes your ear; claws find the nape of your neck.",
+                "They come through your raised arms; your knuckles come away gloved in blood.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(
-                f"The {it.name} is torn from your grip and spills into the dark."
-            )
         if fatal:
             _die(
                 g,
@@ -1712,12 +1811,16 @@ def build_game():
                 "shoulders like ash, disappointed."
             )
             return
-        fatal, dropped = g.player.add_wound(
-            Wound("Seared Lungs", 1, "Every breath is smaller than the last."),
-            rng=_RNG,
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the bloom in, and it keeps you. THE END.")
         else:
@@ -1763,12 +1866,16 @@ def build_game():
         game.add_trigger(f"menace:{spawn.name}", lambda g: True, tick, repeatable=True)
 
     def _guts_lash(g):
-        fatal, dropped = g.player.add_wound(
-            Wound("Acid-Lashed", 1, "A welt across your back, acid where it touched."),
-            rng=_RNG,
+        fatal = _wound_player(
+            g,
+            "Acid-Lashed",
+            1,
+            (
+                "A welt across your back, acid where it touched.",
+                "The lash takes your calf; the acid keeps its own count.",
+                "A wet arm cracks across your ribs and leaves its burn behind.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"The {it.name} spills from your pack.")
         if fatal:
             _die(g, "The spawn folds you into itself, patiently. THE END.")
         else:
@@ -1790,14 +1897,16 @@ def build_game():
                 f"hands open without your leave. The {it.name} clatters away."
             )
             return
-        fatal, dropped = g.player.add_wound(
-            Wound(
-                "Addled", 1, "Your thoughts arrive with someone else's fingerprints."
+        fatal = _wound_player(
+            g,
+            "Mind-Handled",
+            1,
+            (
+                "Your thoughts arrive with someone else's fingerprints.",
+                "A minute goes missing; you are somewhere in it.",
+                "Your own name takes a moment too long to answer.",
             ),
-            rng=_RNG,
         )
-        for it in dropped:
-            g.parser.ok(f"The {it.name} spills from your pack.")
         if fatal:
             _die(g, "Your mind is folded shut from the outside. THE END.")
         else:
@@ -1900,12 +2009,16 @@ def build_game():
                     )
         # The player, if fool enough to stand in the mobbing, is raked too.
         if g.player.location is youth:
-            fatal, dropped = g.player.add_wound(
-                Wound("Bat-Mauled", 1, "Claw-rakes across your scalp and hands."),
-                rng=_RNG,
+            fatal = _wound_player(
+                g,
+                "Bat-Mauled",
+                1,
+                (
+                    "Claw-rakes across your scalp and hands.",
+                    "A wing's elbow takes your ear; claws find the nape of your neck.",
+                    "They come through your raised arms; your knuckles come away gloved in blood.",
+                ),
             )
-            for it in dropped:
-                g.parser.ok(f"The {it.name} is torn from your grip.")
             if fatal:
                 _die(g, "The swarm takes you down beside the light. THE END.")
 
@@ -1913,7 +2026,7 @@ def build_game():
 
     def _jackal_maul(g):
         g.parser.ok("The pack takes its due before you can raise an arm.")
-        _, messages, fatal = roll_wound(g.player, rng=_RNG)
+        _, messages, fatal = roll_wound(g.player, rng=_RNG, game=g)
         for m in messages:
             g.parser.ok(m)
         if fatal or g.player.get_property(Property.IS_DEAD):
@@ -1935,32 +2048,38 @@ def build_game():
             key = f"_jk:{hall.name}"
             n = hall.get_property(key) or 0
             if here is not hall:
-                # Player gone: the pack loses interest; the trail cools toward
-                # calm from either side (positive suspicion drains, post-feed
-                # grace wears off).
-                if jackal_pack.location is hall:
-                    g.relocate(jackal_pack, den)
+                # The trail cools toward calm from either side (suspicion
+                # drains, post-feed grace wears off). The pack itself, once
+                # out, PURSUES -- handled below, not here.
                 hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
                 continue
             if jackal_pack.location is hall:
                 _jackal_maul(g)  # unfed, unfled: they collect
                 continue
             if _player_was_loud_in(g, hall, _QUIET):
-                n += 1
+                # A crash carries: breaking things counts double on the ledger.
+                crashed = any(
+                    e.actor == g.player.name
+                    and e.action == "break"
+                    and (e.payload or {}).get("location") == hall.name
+                    for e in g.events[g._round_event_start :]
+                )
+                n += 2 if crashed else 1
                 hall.set_property(key, n)
-                if n == 1:
+                if n <= 2:
                     g.parser.ok(
                         "Somewhere off in the halls, a yipping answers your "
                         "noise -- once, and then again, nearer."
                     )
-                elif n == 2:
+                elif n == 3:
                     g.parser.ok(
                         "Yellow eyes ring the doorways, unhurried. "
                         "Pthalo-jackals: cautious, clever, and done being "
                         "cautious."
                     )
-                elif n >= 3:
+                elif n >= 4:
                     g.relocate(jackal_pack, hall)
+                    jackal_pack.set_property("_stride", True)  # first beat: hang back
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
                         "filling the doorways. The nearest growls -- a sound "
@@ -1974,13 +2093,93 @@ def build_game():
 
     game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
 
+    # THE PACK PURSUES (CCB design): unlike the blind Spawn, jackals see and
+    # smell -- once out, they track you through their territory (the three
+    # ground halls), one hall per round. Sneaking means nothing to scent. The
+    # answers are distance (keep moving), the Youth (they will not follow into
+    # the bat vault), the stairs and the open sand (leave their ground long
+    # enough and they give you up), tribute, or steel.
+    _territory = (memory, hounds, warriors)
+
+    def _hop_toward(start, goal):
+        """One step from *start* toward *goal* through territory rooms."""
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, None)])
+        while queue:
+            room, first = queue.popleft()
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return first or nxt
+                if nxt in _territory and nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, first or nxt))
+        return None
+
+    def _pack_pursues(g):
+        return jackal_pack.location in _territory and not _pack_out(g)
+
+    def _pursue(g):
+        here = g.player.location
+        if here is jackal_pack.location:
+            return  # co-located: the main tick handles the mauling
+        if here in _territory:
+            jackal_pack.set_property("_lost", 0)
+            # A lope-and-rest rhythm: the pack closes every OTHER round, so a
+            # player who keeps moving holds their lead -- and one who stops to
+            # rummage is caught. Cautious, clever, patient.
+            if jackal_pack.get_property("_stride"):
+                jackal_pack.set_property("_stride", False)
+                g.parser.ok("The yipping hangs back a room, in no hurry at all.")
+                return
+            jackal_pack.set_property("_stride", True)
+            step = _hop_toward(jackal_pack.location, here)
+            if step is not None:
+                g.relocate(jackal_pack, step)
+                if step is here:
+                    g.parser.ok(
+                        "The pack comes through the doorway at a lope, "
+                        "unhurried, sure of you."
+                    )
+                else:
+                    g.parser.ok(
+                        "Behind you, the yipping keeps your pace. They are "
+                        "not following your noise. They are following you."
+                    )
+        elif here is youth:
+            g.parser.ok(
+                "The yipping stops at the lightless mouth of the Hall of "
+                "Youth and comes no further. Something about the dark above "
+                "is theirs to respect."
+            )
+            g.relocate(jackal_pack, den)
+        else:
+            lost = int(jackal_pack.get_property("_lost") or 0) + 1
+            jackal_pack.set_property("_lost", lost)
+            if lost >= 3:
+                jackal_pack.set_property("_lost", 0)
+                g.relocate(jackal_pack, den)
+                for h in _halls:
+                    h.set_property(f"_jk:{h.name}", 0)
+                g.parser.ok(
+                    "Somewhere below, the yipping circles twice, and gives " "you up."
+                )
+
+    game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
+
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
-        fatal, dropped = g.player.add_wound(
-            Wound("Seared Lungs", 1, "Every breath is smaller than the last."), rng=_RNG
+        fatal = _wound_player(
+            g,
+            "Seared Lungs",
+            1,
+            (
+                "Every breath is smaller than the last.",
+                "A cough you cannot finish, and something orange in what comes up.",
+                "Your chest works like a bellows with a hole in it.",
+            ),
         )
-        for it in dropped:
-            g.parser.ok(f"A coughing fit shakes the {it.name} from your pack.")
         if fatal:
             _die(g, "You breathe the tomb in, and it keeps you. THE END.")
         else:
@@ -2156,7 +2355,16 @@ def build_game():
             )
         # And its answer: acid, flung weightless.
         fatal = _wound_player(
-            g, "Acid-Burned", 1, "A rope of acid caught you across the shoulder."
+            g,
+            "Acid-Burned",
+            1,
+            (
+                "A rope of acid caught you across the shoulder.",
+                "A rope of acid took the forearm you raised in time.",
+                "Acid spatters your scalp and goes on burning after you wipe it.",
+                "A whip of acid opens the back of your hand to the tendons.",
+                "Acid across the hip; the cloth of your coat gives up first.",
+            ),
         )
         if fatal:
             _die(
@@ -2221,6 +2429,106 @@ def build_game():
         )
 
     game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
+
+    # Throwing the gel AT the Horror douses it (CCB's instinctive sequence):
+    # the flask bursts a dose across the coil, and the next spark needs no
+    # pour of its own.
+    def _gel_thrown_at_horror(g):
+        return (
+            not horror.get_property("is_dead")
+            and not horror.get_property("gel_doused")
+            and any(
+                e.actor == g.player.name
+                and e.action == "throw"
+                and "gel" in (e.summary or "").lower()
+                and any(
+                    a in (e.summary or "").lower() for a in ("horror", "mass", "fungal")
+                )
+                for e in g.events[g._round_event_start :]
+            )
+        )
+
+    def _gel_splash(g):
+        flask = None
+        for holder in (g.player.carried_items(), sphere.items):
+            if "flask of gel" in holder:
+                flask = holder["flask of gel"]
+                break
+        if flask is None or int(flask.get_property("portions") or 0) <= 0:
+            return
+        n = int(flask.get_property("portions")) - 1
+        flask.set_property("portions", n)
+        flask.description = (
+            f"a flask of gel with {n} dose{'s' if n != 1 else ''}"
+            if n
+            else "an empty flask"
+        )
+        horror.set_property("gel_doused", True)
+        g.parser.ok(
+            "The flask bursts against the coil and a dose of gel sheets "
+            "across the orange, luminous, clinging. It wants only a spark."
+        )
+
+    game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
+
+    # --- The glass centipede's ambush -----------------------------------------
+    def _centipede_lurks(g):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and g.player.location is chimney
+        )
+
+    def _centipede_bites(g):
+        if chimney.get_property("burned") and centipede.location is not chimney:
+            return  # scoured out before it ever sprang
+        if centipede.location is not chimney:
+            g.relocate(centipede, chimney)
+            g.parser.ok(
+                "The growth beside you bends wrong -- and four feet of glass "
+                "uncoils out of it, faster than the eye wants to allow."
+            )
+        fatal = _wound_player(
+            g,
+            "Centipede Venom",
+            1,
+            (
+                "Twin punctures in the calf; the venom goes in cold.",
+                "It takes you through the boot-seam; the leg answers slowly after.",
+                "A bite at the wrist as you shield your face; the arm hums.",
+            ),
+        )
+        if fatal:
+            _die(
+                g,
+                "The venom finishes what the tomb began; the shaft keeps you. "
+                "THE END.",
+            )
+
+    game.add_trigger(
+        "centipede_ambush", _centipede_lurks, _centipede_bites, repeatable=True
+    )
+
+    # Fire scours the shaft: the centipede goes with the growth.
+    def _centipede_scoured(g):
+        return chimney.get_property("burned") and not centipede.get_property("is_dead")
+
+    def _scour(g):
+        centipede.set_property("is_dead", True)
+        if centipede.location is chimney:
+            g.parser.ok(
+                "Something four feet long and glassy boils out of the burning "
+                "growth, seizes once, and is still."
+            )
+        else:
+            g.relocate(centipede, chimney)
+            centipede.set_property("is_hidden", True)
+            g.parser.ok(
+                "In the flames, something glassy spasms out of the growth and "
+                "drops away down the shaft."
+            )
+
+    game.add_trigger("centipede_scoured", _centipede_scoured, _scour, repeatable=False)
     game.add_trigger("horror_turn", _horror_fighting, _horror_turn, repeatable=True)
 
     # Eating the Autarch's preserved organs (CCB: "gross, but should be

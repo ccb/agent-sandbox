@@ -74,8 +74,10 @@ codegen = ["pymupdf>=1.27"]
 # The headless HTTP API (issue #179) lives in `backend.api`: a FastAPI app any
 # out-of-process frontend (Godot, Phaser, the web companion) polls for the typed
 # world-state snapshot + change feed. Opt-in so the engine core stays lean; install
-# with `uv sync --extra server`. pydantic rides along with fastapi.
-server = ["fastapi", "uvicorn"]
+# with `uv sync --extra server`. pydantic rides along with fastapi. websockets
+# lets uvicorn serve the live feed's `WS /ws` (#262) -- FastAPI's TestClient
+# speaks WS without it, so only *serving* over a real socket needs it.
+server = ["fastapi", "uvicorn", "websockets"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
