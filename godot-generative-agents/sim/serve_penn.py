@@ -499,6 +499,14 @@ def main() -> int:
         "(--brain llm only); the day ends when cumulative spend reaches it",
     )
     ap.add_argument(
+        "--start-paused",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="boot the loop paused so the day (and, under --brain llm, the "
+        "first paid model call) waits for the viewer's Start button / POST "
+        "/resume. Default: paused under --brain llm, auto-start under mock",
+    )
+    ap.add_argument(
         "--monitor",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -525,6 +533,13 @@ def main() -> int:
     # steps it (a second build would waste the map load and fork patch state).
     world = build_penn_world()
     llm = resolve_llm(world.llm, args.brain, model=args.model, max_cost=args.max_cost)
+    # A paying brain shouldn't spend before anyone is watching: under --brain
+    # llm the loop boots paused and the viewer's Start button (POST /resume)
+    # opens the day. The free mock keeps auto-starting. --[no-]start-paused
+    # overrides either way.
+    start_paused = (
+        args.start_paused if args.start_paused is not None else llm is not None
+    )
     try:
         stepper = PennStepper(
             num_steps=args.steps,
@@ -563,6 +578,11 @@ def main() -> int:
     print(
         f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"
     )
+    if start_paused:
+        print(
+            "Start gate: the loop boots PAUSED — press ▶ Start in the viewer "
+            "(or POST /resume) to begin the day."
+        )
     print(
         f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "
         "POST /pause|/resume|/reset, GET /usage  (OpenAPI at /docs)"
@@ -574,6 +594,7 @@ def main() -> int:
         auth_token=args.token,
         stepper=stepper,
         tick_seconds=args.tick_seconds,
+        start_paused=start_paused,
     )
     return 0
 

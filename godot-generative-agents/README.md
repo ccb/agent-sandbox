@@ -185,6 +185,14 @@ Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
 (or with a non-Anthropic `provider:` in the config) rather than serving a day
 of silently failing calls.
 
+**The Start gate.** Under `--brain llm` the loop boots **paused**: the server
+is up and the viewer connects, but not a single model call is made until you
+click the **▶ Start simulation** button the viewer shows front-and-centre
+(it sends `POST /resume`; `curl -X POST http://127.0.0.1:8080/resume` works
+too). So the paying part of the day only begins once someone is actually
+watching. The free mock brain keeps auto-starting; `--start-paused` /
+`--no-start-paused` overrides either mode.
+
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
 

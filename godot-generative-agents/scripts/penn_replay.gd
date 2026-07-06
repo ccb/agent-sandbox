@@ -199,6 +199,7 @@ var _retry_pending := false
 var _handshake_http: HTTPRequest    # GET /live (its own node: HTTPRequest is one-shot)
 var _events_http: HTTPRequest       # GET /events backfill
 var _live_buildings := {}           # Focus-dropdown entries discovered so far (a set)
+var _start_gate: CanvasLayer = null # "▶ Start simulation" overlay (start-paused backend)
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
@@ -513,6 +514,10 @@ func _on_live_handshake_completed(
 		_hud_source.set_cast(_names)
 		_update_clock()
 	_panel.set_live_status("catching up…")
+	# A backend booted with --start-paused (the --brain llm default) is armed
+	# but has never ticked: hold the day behind an explicit ▶ Start.
+	if bool((data as Dictionary).get("paused", false)) and int((data as Dictionary).get("step", 0)) == 0:
+		_show_start_gate()
 	_request_backfill()
 	_connect_ws()
 
@@ -567,6 +572,7 @@ func _apply_record(rec: Variant) -> void:
 func _apply_live_frame(step: int, agents: Variant) -> void:
 	if step < 0 or typeof(agents) != TYPE_DICTIONARY:
 		return
+	_hide_start_gate()  # a frame means the day is running, however it started
 	# Index-addressed: frame N lands at _frames[N] exactly, so the clock, the
 	# trails and the heatmap index the live array the same way they index a
 	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
@@ -602,7 +608,15 @@ func _on_live_status(record: Dictionary) -> void:
 	# sidebar. (The HUD's health dot has its own view via the socket signals.)
 	match String(record.get("reason", "")):
 		"started", "resumed":
-			_panel.set_live_status("following backend")
+			# "started" can carry paused=true (a --start-paused boot): the loop
+			# is armed but waiting, so the Start gate stays up until a record
+			# actually reports un-paused running.
+			if bool(record.get("paused", false)):
+				if _start_gate != null:
+					_panel.set_live_status("waiting for Start")
+			else:
+				_hide_start_gate()
+				_panel.set_live_status("following backend")
 		"paused":
 			_panel.set_live_status("backend paused")
 		"finished":
@@ -611,6 +625,55 @@ func _on_live_status(record: Dictionary) -> void:
 			_panel.set_live_status("backend reset — reload the viewer to follow the new run")
 		"stopped":
 			_panel.set_live_status("backend stopped")
+
+
+func _show_start_gate() -> void:
+	## The backend is serving but has never ticked (serve_penn --start-paused,
+	## the --brain llm default) -- and with a real brain the first tick is the
+	## first PAID model call. Hold the day behind a Start button so spend
+	## begins only when someone is actually watching.
+	if _start_gate != null:
+		return
+	_start_gate = CanvasLayer.new()
+	_start_gate.layer = 30  # above the fog and the HUD overlays
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE  # only the button eats clicks
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var button := Button.new()
+	button.text = "▶  Start simulation"
+	button.add_theme_font_size_override("font_size", 24)
+	button.pressed.connect(_on_start_gate_pressed)
+	var hint := Label.new()
+	hint.text = "backend is ready and paused — nothing runs (or spends) until you start"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.modulate = Color(1, 1, 1, 0.75)
+	box.add_child(button)
+	box.add_child(hint)
+	center.add_child(box)
+	_start_gate.add_child(center)
+	add_child(_start_gate)
+	_panel.set_live_status("waiting for Start")
+
+
+func _hide_start_gate() -> void:
+	if _start_gate == null:
+		return
+	_start_gate.queue_free()
+	_start_gate = null
+
+
+func _on_start_gate_pressed() -> void:
+	# Run control belongs to the HUD's live source (bearer token included) --
+	# reuse it rather than growing a second POST path. The gate comes down on
+	# the resulting "resumed" status record (or the first frame), NOT on the
+	# click, so a failed request leaves the button up to press again.
+	if _hud_source != null and _hud_source.has_method("request_resume"):
+		_hud_source.request_resume()
+		_panel.set_live_status("starting…")
 
 
 func _connect_ws() -> void:

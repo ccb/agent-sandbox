@@ -48,6 +48,17 @@ class FakeStepper:
 # ---------------------------------------------------------------- EventLog
 
 
+def test_controller_can_start_paused():
+    # --start-paused (serve_penn's --brain llm default): the loop boots armed
+    # but not ticking, so a paying brain's first call waits for resume().
+    ctl = LiveRunController(FakeStepper(), threading.Lock(), start_paused=True)
+    assert ctl.paused is True
+    ctl.resume()
+    assert ctl.paused is False
+    # And the default is unchanged: loops auto-run unless asked not to.
+    assert LiveRunController(FakeStepper(), threading.Lock()).paused is False
+
+
 def test_event_log_cursors_are_monotonic_and_1_based():
     log = EventLog()
     assert log.latest_cursor() == 0
