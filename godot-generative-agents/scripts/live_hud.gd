@@ -45,6 +45,21 @@ const HALT_COLOR := Color(0.78, 0.22, 0.18)
 # the Cute Fantasy parchment).
 const MUTED_COLOR := Color(0.42, 0.32, 0.24)
 const TRIPPED_COLOR := Color(0.72, 0.16, 0.12)
+# The request log under the meter rows: one compact line per LLM call, newest
+# at the bottom -- the in-viewer twin of backend/llm_monitor.py's terminal
+# rows. The panel is narrow, so each row keeps only timestamp, role, actor and
+# tokens/cost; hovering a row shows the full terminal-style detail.
+const LOG_HEIGHT := 108.0
+const LOG_MAX_ROWS := 40
+const LOG_FONT_SIZE := 12
+# The terminal monitor's role colours (cyan/magenta/blue/green), darkened to
+# stay readable on the parchment theme.
+const LOG_ROLE_TINTS := {
+	"decide": Color(0.10, 0.42, 0.48),
+	"converse": Color(0.55, 0.18, 0.45),
+	"plan": Color(0.17, 0.29, 0.56),
+	"reflect": Color(0.18, 0.45, 0.18),
+}
 
 var _dot: ColorRect
 var _status: Label
@@ -53,6 +68,8 @@ var _body: VBoxContainer  # everything below the header; hidden when collapsed
 var _collapse: Button     # the header's collapse/expand toggle
 var _values := {}       # row key -> value Label (see _add_row)
 var _budget_row: HBoxContainer
+var _log: RichTextLabel
+var _log_rows := PackedStringArray()  # formatted bbcode rows, capped
 var _stop: Button
 var _halted := false
 var _health_state := 0
@@ -154,6 +171,30 @@ func _ready() -> void:
 	_budget_row = _add_row(_body, "budget", "Budget")
 	_budget_row.visible = false  # only shown once a ceiling (#183) is reported
 
+	# The request log: every llm_call record the source emits becomes one row
+	# (see add_llm_call). It lives inside _body, so the collapse toggle folds
+	# it away with the rest of the meter.
+	var log_caption := Label.new()
+	log_caption.text = "LLM requests"
+	log_caption.add_theme_font_size_override("font_size", 16)
+	log_caption.add_theme_color_override("font_color", MUTED_COLOR)
+	_body.add_child(log_caption)
+
+	_log = RichTextLabel.new()
+	_log.bbcode_enabled = true
+	_log.scroll_active = true
+	_log.scroll_following = true  # stick to the newest row, like a terminal
+	_log.autowrap_mode = TextServer.AUTOWRAP_OFF  # one call = one (clipped) line
+	_log.clip_contents = true
+	_log.fit_content = false
+	_log.custom_minimum_size = Vector2(0, LOG_HEIGHT)
+	_log.add_theme_font_size_override("normal_font_size", LOG_FONT_SIZE)
+	# The Cute Fantasy theme styles Labels but not RichTextLabel, whose default
+	# font colour is white -- unreadable on the parchment panel.
+	_log.add_theme_color_override("default_color", Color(0.24, 0.18, 0.12))
+	_log.text = "[color=#8a7660]no requests yet[/color]"
+	_body.add_child(_log)
+
 	_stop = Button.new()
 	_stop.text = "Emergency stop"
 	_stop.tooltip_text = "Pause the run and trip the cost kill-switch"
@@ -236,6 +277,61 @@ func set_usage(summary: Dictionary) -> void:
 		_budget_row.visible = false
 
 
+func add_llm_call(rec: Dictionary) -> void:
+	## Append one row to the request log: an llm_call record from the source
+	## (see hud_source.gd for the shape -- the same record the backend's
+	## terminal monitor prints). The row keeps only what fits the narrow panel
+	## (timestamp, role, actor, tokens in→out, cost); hover it for the full
+	## detail (call #, sim turn, model, cache split, latency, cumulative spend).
+	var role := String(rec.get("role", "?"))
+	var actor: String = (
+		String(rec.get("actor")) if rec.get("actor") != null else "-"
+	)
+	# Surname only in the row ("Diego Torres" -> "Torres"): the full name is
+	# one hover away, and the column must fit next to the token counts.
+	var short_actor := actor.get_slice(" ", actor.get_slice_count(" ") - 1)
+	var tokens_in := (
+		_log_int(rec.get("input_tokens"))
+		+ _log_int(rec.get("cache_creation_input_tokens"))
+		+ _log_int(rec.get("cache_read_input_tokens"))
+	)
+	var tokens_out := _log_int(rec.get("output_tokens"))
+	var cost := _log_float(rec.get("cost_usd"))
+	var tint: Color = LOG_ROLE_TINTS.get(role, MUTED_COLOR)
+	var hint := "call %d · t %s · %s · in %d (%dw/%dr cache) · out %d · %s · $%.6f this call · Σ $%.4f" % [
+		_log_int(rec.get("call_no")),
+		str(_log_int(rec.get("turn"))) if rec.get("turn") != null else "-",
+		"%s · %s" % [actor, String(rec.get("model", "?"))],
+		tokens_in,
+		_log_int(rec.get("cache_creation_input_tokens")),
+		_log_int(rec.get("cache_read_input_tokens")),
+		tokens_out,
+		(
+			"%.0f ms" % _log_float(rec.get("latency_ms"))
+			if rec.get("latency_ms") != null
+			else "- ms"
+		),
+		cost,
+		_log_float(rec.get("cum_cost_usd")),
+	]
+	# Timestamp (muted) leads each row, like the terminal monitor; the call
+	# number is hover detail only.
+	var line := "[hint=%s][color=#8a7660]%s[/color] [color=#%s]%s[/color] %s %s→%s $%.4f[/hint]" % [
+		hint,
+		String(rec.get("time", "-")),
+		tint.to_html(false),
+		role,
+		short_actor,
+		_fmt_tok(tokens_in),
+		_fmt_tok(tokens_out),
+		cost,
+	]
+	_log_rows.append(line)
+	if _log_rows.size() > LOG_MAX_ROWS:
+		_log_rows = _log_rows.slice(_log_rows.size() - LOG_MAX_ROWS)
+	_log.text = "\n".join(_log_rows)
+
+
 func set_halted(halted: bool) -> void:
 	## The source confirmed a stop (or a resume). The button disables while
 	## halted -- there is nothing further to stop -- and Play (or the backend
@@ -285,3 +381,18 @@ func _fmt_usd(x: float) -> String:
 	# Four decimals below $10 (early-run costs are fractions of a cent), two
 	# above (where the tail digits stop mattering).
 	return ("$%.4f" if x < 10.0 else "$%.2f") % x
+
+
+func _fmt_tok(n: int) -> String:
+	# 12345 -> "12.3k": log-row token counts must fit the narrow panel.
+	return str(n) if n < 1000 else "%.1fk" % (n / 1000.0)
+
+
+func _log_int(v: Variant) -> int:
+	# JSON numbers arrive as floats and optional fields as null -- never feed
+	# int() a null.
+	return int(v) if typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT else 0
+
+
+func _log_float(v: Variant) -> float:
+	return float(v) if typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT else 0.0

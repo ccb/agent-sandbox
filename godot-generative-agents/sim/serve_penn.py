@@ -434,6 +434,21 @@ class PennStepper:
         self._step_idx += 1
         return frame
 
+    def drain_events(self) -> list:
+        """The monitor rows formed during the last ``tick()``, for the live feed.
+
+        ``backend.live`` probes this optional method after every tick and
+        publishes each returned dict as a ``kind: "engine"`` change-feed record
+        -- so the viewer's run monitor can show the same one-line-per-request
+        log the terminal prints (#398). The payload is the monitor's kept
+        record (a flattened :class:`~text_adventure_games.usage.CallRecord`
+        plus ``role``/``call_no``/``cum_cost_usd``/``time``), re-stamped
+        ``kind: "llm_call"`` so feed consumers can tell it from parser records
+        without guessing at fields."""
+        if self.monitor is None:
+            return []
+        return [dict(rec, kind="llm_call") for rec in self.monitor.drain()]
+
     def reset(self) -> None:
         self._build()
 

@@ -195,7 +195,8 @@ def test_drain_returns_then_clears_the_buffer():
     client.chat([{"role": "user", "content": "?"}])
     drained = monitor.drain()
     assert [d["call_no"] for d in drained] == [1, 2]
-    assert {"role", "cum_cost_usd", "model"} <= set(drained[0])
+    # Everything a viewer needs to render the terminal's row rides the record.
+    assert {"role", "cum_cost_usd", "model", "time"} <= set(drained[0])
     assert monitor.drain() == []  # cleared
 
 

@@ -209,6 +209,14 @@ request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
  #    8 12:09:44  converse  Sofia Ramirez       t  119  claude-haiku-4-5  in   1322 (   0w/ 1002r)  out   64    598ms  $0.000740  Σ $0.041007
 ```
 
+The same rows appear inside the viewer: the run monitor's **LLM requests** box
+(under the usage meter) logs each call as it happens —
+`12:09:44 converse Ramirez 1.3k→64 $0.0007`, newest at the bottom, hover a row
+for the full detail (sim turn, model, cache split, latency, cumulative spend).
+The rows ride the live event feed (`serve_penn`'s `drain_events()` publishes
+the monitor's records as `llm_call` events), so the box needs no extra
+polling — and `--no-monitor` silences it together with the terminal.
+
 **Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
 **$0.10** (the per-call-site arithmetic is in
 [`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md),
@@ -226,19 +234,23 @@ meter in the run monitor (not the budget row) is the outage signal.
 
 A live real-LLM run spends money every step and can stall on the provider, so the
 viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
-backend health, and a one-click **Emergency stop**. The `-`/`+` button in its header
-collapses it to just the title bar (the health dot stays visible); the meter keeps
-counting underneath. Its data feed is pluggable (`scripts/hud_source.gd`):
+an **LLM requests** log (one timestamped line per model call — the in-viewer twin
+of the terminal monitor above), backend health, and a one-click **Emergency stop**.
+The `-`/`+` button in its header collapses it to just the title bar (the health dot
+stays visible); the meter keeps counting underneath. Its data feed is pluggable
+(`scripts/hud_source.gd`):
 
 - **Baked replay (the default):** no backend exists, so the monitor shows clearly
-  labeled **simulated** usage that accrues while the replay plays
-  (`scripts/hud_source_replay.gd`) — realistic numbers, zero dollars at risk. The
-  stop button freezes playback and trips a mock budget gate; Play lifts it.
+  labeled **simulated** usage (and simulated request-log rows) that accrue while
+  the replay plays (`scripts/hud_source_replay.gd`) — realistic numbers, zero
+  dollars at risk. The stop button freezes playback and trips a mock budget gate;
+  Play lifts it.
 - **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
   the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
   environment, no editor needed — and the same monitor polls the real `GET /usage` +
   `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
-  `SIM_API_TOKEN` as a bearer token when set.
+  `SIM_API_TOKEN` as a bearer token when set; the request log fills from the event
+  feed's `llm_call` records instead of the simulation.
 
 Both feeds emit the engine's `UsageLedger.summary()` shape (what `GET /usage`
 serves), which is what makes the mock → real-LLM switch a pure configuration change.
