@@ -36,8 +36,10 @@ VISION_R = 8  # SMALLVILLE_VISION_R; the fog radius the viewer draws
 
 def test_build_penn_world_pieces():
     pw = build_penn_world()
-    assert len(pw.personas) == 7  # the authored Penn cast
-    assert len(pw.meetings) == 4  # the authored meetings block
+    # The active cast: 3 of the 7 authored personas (the rest are commented out
+    # in world_data_upenn.yaml while the live-LLM MVP keeps test runs cheap).
+    assert len(pw.personas) == 3
+    assert len(pw.meetings) == 2  # the meetings whose participants are active
     assert callable(pw.build_world_fn)
     # The routing patches are installed: walk_path is a closure over the map,
     # not the WorldMap method (a live server reusing this map inherits them).
@@ -115,7 +117,7 @@ def test_stepper_meta_shape():
         "personas",
     }
     assert meta["vision_r"] == VISION_R
-    assert len(meta["personas"]) == 7
+    assert len(meta["personas"]) == 3
     assert all(set(p) == {"name", "emoji"} for p in meta["personas"])
 
 
