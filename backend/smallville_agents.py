@@ -562,10 +562,13 @@ def maybe_converse(
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
         # Attribute the meeting's LLM calls to the initiator/step (best effort:
-        # the shared client alternates speakers within one converse()).
+        # the shared client alternates speakers within one converse()). The
+        # "role" key labels the terminal request monitor's line (llm_monitor).
         ctx = getattr(a.agent.llm_client, "context", None)
         if ctx is not None:
-            ctx.update({"actor": a.name, "turn": step, "attempt": 0})
+            ctx.update(
+                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
+            )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )
