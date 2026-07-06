@@ -1,0 +1,366 @@
+"""Serve the Penn campus sim LIVE over the backend API (issues #263/#297/#349).
+
+Where ``generate_penn_replay.py`` runs the whole sim offline and writes a baked
+``penn_replay.json`` the Godot viewer loads once, this script steps the *same*
+configured Penn world (``penn_world.build_penn_world``, #297) one tick at a time
+inside ``backend.api``'s self-stepping live loop (#349) -- so the viewer follows
+it over real HTTP + WebSocket (#262/#263) instead of reading a file. Everything
+runs on the deterministic mock brain: real requests, zero LLM keys, zero spend.
+
+Run from the repo root (terminal 1), then point the viewer at it (terminal 2)::
+
+    uv sync --extra server
+    uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
+    SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+
+The pieces:
+
+* :class:`PennStepper` -- implements the ``backend.live.SimStepper`` protocol by
+  reconstructing ``simulate()``'s pre-loop setup (the same reconstruction
+  ``generative-agents/tests/test_step_seam.py`` pins) and driving the extracted
+  one-tick ``step()`` seam (#296) per ``tick()``. Frames come out in the exact
+  replay schema the bake writes (``penn_world.replay_frame_entry``), so every
+  viewer feature -- bubbles, links, trails, minimap, heatmap -- works unchanged.
+* :class:`LiveMeetingInjector` -- the live port of the bake's post-hoc
+  ``_inject_scripted_conversations``: the mock brain never speaks, so the
+  authored ``meetings:`` dialogue is painted onto outgoing frames on the fly,
+  the moment all participants are genuinely within perception range.
+"""
+
+import argparse
+
+from backend.api import run
+from backend.run_simulation import step
+from backend.sim_config import CognitionConfig
+from backend.smallville_agents import attach_agents
+from penn_world import (
+    DIALOGUE_FADE_STEPS,
+    DIALOGUE_LINE_STEPS,
+    SEC_PER_STEP,
+    SIM_START,
+    PennWorld,
+    build_penn_world,
+    replay_frame_entry,
+)
+from text_adventure_games.usage import UsageLedger
+
+# The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
+# for every authored meeting to convene and the whole cast to finish its rounds.
+DEFAULT_STEPS = 1200
+
+
+class LiveMeetingInjector:
+    """Paint authored dialogue onto live frames -- proximity-honestly, on the fly.
+
+    The live port of the bake's ``_inject_scripted_conversations``: same window
+    math (``len(dialogue) * DIALOGUE_LINE_STEPS + DIALOGUE_FADE_STEPS`` frames of
+    the full transcript, which the viewer paces line-by-line itself), same clash
+    rules (a participant already mid-conversation blocks arming), same "never
+    faked across the map" rule (a meeting arms only when every participant is
+    mutually within ``vision_r`` tiles).
+
+    Two honest differences, because live code can't see the future:
+
+    * The bake scans the finished run for the LONGEST co-location window --
+      which the rendezvous routing makes the dwell at the authored venue. Live,
+      "first mutual co-location" alone would misfire (Maya and Priya spawn a
+      few tiles apart, so the Moelis study session would start in the dorms):
+      a meeting with a resolvable ``at:`` venue therefore also waits until
+      every participant is *settled at that venue* -- its ``act`` reads
+      ``"<activity> @ <venue address>"``, not a ``walking to ...`` leg.
+    * Once fired, the exchange plays for its full window even if participants
+      drift apart mid-exchange (the conversation link just stretches).
+
+    Each meeting fires at most once per run; ``reset()`` re-arms.
+    """
+
+    ARMED, FIRING, DONE = range(3)
+
+    def __init__(
+        self,
+        meetings,
+        vision_r,
+        locations=None,
+        line_steps=DIALOGUE_LINE_STEPS,
+        fade_steps=DIALOGUE_FADE_STEPS,
+    ):
+        self.vision_r = vision_r
+        # Resolve each meeting's `at:` name to its tile address (the same
+        # name->address lookup the rendezvous routing uses); None = no venue
+        # authored (or not resolvable), which degrades to proximity-only.
+        addr_of = {loc["name"]: loc.get("address") for loc in (locations or [])}
+        self._meetings = []
+        for m in meetings:
+            participants = list(m.get("participants", []))
+            dialogue = [[str(s), str(t)] for s, t in m.get("dialogue", [])]
+            if len(participants) < 2 or not dialogue:
+                continue  # bad spec: skip, exactly like the bake
+            self._meetings.append(
+                {
+                    "label": m.get("label", " + ".join(participants)),
+                    "participants": participants,
+                    "dialogue": dialogue,
+                    "venue": addr_of.get(m.get("at")),
+                    # Frames the whole exchange needs (incl. the final fade).
+                    "need": len(dialogue) * line_steps + fade_steps,
+                    "state": self.ARMED,
+                    "start": -1,
+                }
+            )
+
+    def _mutually_close(self, frame, participants):
+        points = []
+        for p in participants:
+            entry = frame.get(p)
+            if entry is None:
+                return False  # participant not in this cast/frame
+            points.append((entry["x"], entry["y"]))
+        for a in range(len(points)):
+            for b in range(a + 1, len(points)):
+                dx = points[a][0] - points[b][0]
+                dy = points[a][1] - points[b][1]
+                if (dx * dx + dy * dy) ** 0.5 > self.vision_r:
+                    return False
+        return True
+
+    def _settled_at_venue(self, frame, meeting):
+        """Every participant is *at* the meeting's venue, doing something there.
+
+        A frame's ``act`` is ``"<activity> @ <tile address>"`` (see
+        ``run_simulation.step``); a travel leg reads ``"walking to <name> @
+        <destination address>"``, which carries the venue's address the whole
+        way there -- so the walking prefix must be excluded or the meeting
+        would fire mid-commute. No authored venue -> trivially true."""
+        venue = meeting["venue"]
+        if not venue:
+            return True
+        for p in meeting["participants"]:
+            act = frame.get(p, {}).get("act") or ""
+            if not act.endswith(f"@ {venue}") or act.startswith("walking to "):
+                return False
+        return True
+
+    def apply(self, frame, step_idx):
+        """Mutate *frame* in place: write each firing meeting's transcript onto
+        its participants' ``chat``. Called once per tick, after the sim step."""
+        firing_cast = {
+            p
+            for m in self._meetings
+            if m["state"] == self.FIRING
+            for p in m["participants"]
+        }
+        for m in self._meetings:
+            if (
+                m["state"] == self.ARMED
+                # Don't garble a participant already mid-conversation -- whether
+                # in another authored meeting or (later, #261) a real-LLM chat.
+                and not (set(m["participants"]) & firing_cast)
+                and not any(
+                    frame[p].get("chat") for p in m["participants"] if p in frame
+                )
+                and self._mutually_close(frame, m["participants"])
+                and self._settled_at_venue(frame, m)
+            ):
+                m["state"], m["start"] = self.FIRING, step_idx
+                firing_cast.update(m["participants"])
+                print(f"  - FIRE  {m['label']} @ step {step_idx}")
+            if m["state"] == self.FIRING:
+                if step_idx - m["start"] < m["need"]:
+                    for p in m["participants"]:
+                        if p in frame:
+                            frame[p]["chat"] = m["dialogue"]
+                else:
+                    m["state"] = self.DONE
+
+    def reset(self):
+        for m in self._meetings:
+            m["state"], m["start"] = self.ARMED, -1
+
+
+class PennStepper:
+    """The Penn campus sim behind the ``backend.live.SimStepper`` seam.
+
+    Reconstructs ``simulate()``'s pre-loop setup (build the patched world,
+    attach the mock brains, seed each persona's per-step ``state``) and then
+    drives the extracted one-tick ``step()`` per ``tick()`` call -- so N ticks
+    produce exactly the frames ``simulate(world_map, N)`` would
+    (``generative-agents/tests/test_penn_live.py`` pins that equivalence).
+
+    ``reset()`` rebuilds *everything* from a fresh ``build_penn_world()``: the
+    routing patches carry per-venue round-robin counters in closures, so
+    reusing the old world would hand later runs different rendezvous slots.
+    That means the served ``Game`` is a new object after a reset -- which is why
+    :func:`main` hands the API a :class:`_GameProxy` rather than the game
+    itself. The ``ledger`` deliberately survives resets (money spent stays
+    spent; ~$0 under the mock, real numbers when #261 swaps a brain in).
+    """
+
+    def __init__(self, num_steps=DEFAULT_STEPS, endless=False, world=None):
+        self.num_steps = num_steps
+        self.endless = endless
+        self.ledger = UsageLedger()  # backs GET /usage across resets
+        self._build(world)
+
+    def _build(self, world: PennWorld | None = None):
+        # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
+        # same reconstruction test_step_seam.py::_build_run pins). If simulate's
+        # setup ever drifts from this, the equivalence test fails -- on purpose.
+        self.world = world if world is not None else build_penn_world()
+        self.cog = CognitionConfig()
+        self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        attach_agents(
+            self.chars,
+            self.world.personas,
+            ledger=self.ledger,
+            vision_r=self.cog.vision_r,
+            num_steps=self.num_steps,
+        )
+        self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
+        self.order = [p["name"] for p in self.world.personas]
+        self.state = {}
+        for spec in self.world.personas:
+            char = self.chars[spec["name"]]
+            self.state[char.name] = {
+                "tile": tuple(spec["start_tile"]),
+                "path": [],
+                "pron": self.emoji[char.name],
+                "desc": f"waking up @ {char.location.tile_address}",
+                "performing": False,
+                "perform_until": None,
+                "reasoning": "(waking up)",
+                "memories": [],
+                "chat": None,
+            }
+        self.injector = LiveMeetingInjector(
+            self.world.meetings,
+            vision_r=self.cog.vision_r,
+            locations=self.world.locations,
+        )
+        self._step_idx = 0
+
+    @property
+    def step(self) -> int:
+        return self._step_idx
+
+    def meta(self) -> dict:
+        """The handshake blob ``GET /live`` serves -- the baked replay's ``meta``
+        shape (minus ``steps``, which a live run doesn't know up front), so the
+        viewer spawns agents exactly the way the file loader does."""
+        wm = self.world.world_map
+        return {
+            "tile_px": wm.tile_size,
+            "width": wm.width,
+            "height": wm.height,
+            "sec_per_step": SEC_PER_STEP,
+            "start": SIM_START,
+            "vision_r": self.cog.vision_r,
+            "personas": [
+                {"name": p["name"], "emoji": p["emoji"]} for p in self.world.personas
+            ],
+        }
+
+    def tick(self) -> dict | None:
+        """One sim step -> one replay-schema frame (called under the app lock).
+
+        Returns ``None`` once the campus day is over (non-``endless``): the live
+        loop auto-pauses and publishes ``status(reason="finished")`` instead of
+        an endless stream of identical frames. ``POST /reset`` starts a new day.
+        """
+        if not self.endless and self._step_idx >= self.num_steps:
+            return None
+        raw, _chats = step(
+            self.game,
+            self.chars,
+            self.state,
+            self._step_idx,
+            order=self.order,
+            world_map=self.world.world_map,
+            emoji=self.emoji,
+            cog=self.cog,
+        )
+        frame = {name: replay_frame_entry(raw[name]) for name in self.order}
+        # Paint authored dialogue post-step, exactly where the bake's injector
+        # runs (on the converted frames, never the engine state) -- so a future
+        # real-LLM chat in `raw` composes: the clash rule above skips over it.
+        self.injector.apply(frame, self._step_idx)
+        self._step_idx += 1
+        return frame
+
+    def reset(self) -> None:
+        self._build()
+
+
+class _GameProxy:
+    """A stable façade over ``stepper.game`` for the API routes to close over.
+
+    ``create_app(game)`` captures the game object once, but ``PennStepper.reset()``
+    must rebuild a *fresh* world (see its docstring) -- so the routes are handed
+    this proxy instead, and every attribute access resolves against whichever
+    game the stepper currently owns. ``/world_state`` therefore serves the new
+    day immediately after a reset."""
+
+    def __init__(self, stepper):
+        object.__setattr__(self, "_stepper", stepper)
+
+    def __getattr__(self, name):
+        return getattr(self._stepper.game, name)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description="Serve the live Penn sim for the Godot viewer (#263)."
+    )
+    ap.add_argument(
+        "--steps",
+        type=int,
+        default=DEFAULT_STEPS,
+        help="length of the campus day; the loop pauses itself when it ends",
+    )
+    ap.add_argument(
+        "--endless",
+        action="store_true",
+        help="never finish: keep ticking past --steps (agents idle at their "
+        "last stop once their schedules run out)",
+    )
+    ap.add_argument(
+        "--tick-seconds",
+        type=float,
+        default=0.1,
+        help="wall-clock seconds per sim step; 0.1 matches the viewer's "
+        "step_seconds default so live playback paces like a 1x replay",
+    )
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument(
+        "--token",
+        default=None,
+        help="require 'Authorization: Bearer <token>' (defaults to the "
+        "SIM_API_TOKEN env var; required for a non-loopback --host)",
+    )
+    args = ap.parse_args()
+
+    stepper = PennStepper(num_steps=args.steps, endless=args.endless)
+    wm = stepper.world.world_map
+    print(
+        f"Loaded the_upenn ({wm.width}x{wm.height}); "
+        f"{len(stepper.order)} personas, {len(stepper.world.meetings)} authored "
+        f"meetings. Stepping every {args.tick_seconds}s "
+        f"({'endless' if args.endless else f'{args.steps}-step day'})."
+    )
+    print(
+        f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "
+        "POST /pause|/resume|/reset, GET /usage  (OpenAPI at /docs)"
+    )
+    run(
+        _GameProxy(stepper),
+        host=args.host,
+        port=args.port,
+        auth_token=args.token,
+        stepper=stepper,
+        tick_seconds=args.tick_seconds,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

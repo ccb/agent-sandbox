@@ -54,6 +54,12 @@ var _active := ""                   # name of the tracked character, or "" when 
 var _filter_option: OptionButton    # the Focus (filter-by-location) dropdown
 var _filter_locations: Array = []   # item index -> building name ("" = All locations)
 var _dimmed := {}                   # names the filter has dimmed (set: name -> true)
+# Live mode (issue #263): a red badge in the clock row plus a one-line status
+# under the step label ("following backend" / "reconnecting…"); both built
+# lazily on the first set_live(true). The scrubber locks -- you can't seek a
+# live stream -- but keeps moving as a read-only progress bar.
+var _live_badge: Label = null
+var _live_status: Label = null
 
 
 func _ready() -> void:
@@ -245,14 +251,19 @@ func set_character_status(name: String, text: String) -> void:
 
 func set_locations(buildings: PackedStringArray) -> void:
 	# Populate the Focus dropdown: "All locations" (no filter) plus one entry per
-	# building the cast visits. Called once by the viewer after the replay loads.
+	# building the cast visits. The baked viewer calls this once after load; live
+	# mode re-calls it as agents reach new buildings, so a current selection is
+	# preserved when it's still in the list (select() doesn't re-emit the filter).
+	var current := ""
+	if _filter_option.selected >= 0 and _filter_option.selected < _filter_locations.size():
+		current = _filter_locations[_filter_option.selected]
 	_filter_option.clear()
 	_filter_locations = [""]
 	_filter_option.add_item("All locations", 0)
 	for b in buildings:
 		_filter_locations.append(b)
 		_filter_option.add_item(b, _filter_locations.size() - 1)
-	_filter_option.select(0)
+	_filter_option.select(maxi(_filter_locations.find(current), 0))
 
 
 func set_dimmed_rows(dimmed: PackedStringArray) -> void:
@@ -270,6 +281,36 @@ func _on_filter_selected(idx: int) -> void:
 
 func set_playing(playing: bool) -> void:
 	_play.text = "Pause" if playing else "Play"
+
+
+func set_live(live: bool) -> void:
+	# Live-follow mode (issue #263): lock the timeline (there's no future to
+	# scrub to; set_progress still moves it as a read-only progress bar thanks
+	# to the _updating_scrubber guard) and show the LIVE badge + status line.
+	_scrubber.editable = not live
+	if live and _live_badge == null:
+		_live_badge = Label.new()
+		_live_badge.text = "● LIVE"
+		_live_badge.add_theme_color_override("font_color", Color(0.82, 0.20, 0.15))
+		_live_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_clock.get_parent().add_child(_live_badge)
+		_live_status = Label.new()
+		_live_status.text = "connecting…"
+		_live_status.add_theme_color_override("font_color", STATUS_COLOR)
+		_live_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var col := _step_label.get_parent()
+		col.add_child(_live_status)
+		col.move_child(_live_status, _step_label.get_index() + 1)
+	if _live_badge != null:
+		_live_badge.visible = live
+		_live_status.visible = live
+
+
+func set_live_status(text: String) -> void:
+	# One line of live-connection state ("following backend", "reconnecting…"),
+	# driven by the viewer's socket + the feed's status records.
+	if _live_status != null:
+		_live_status.text = text
 
 
 func set_progress(step: int, total: int) -> void:

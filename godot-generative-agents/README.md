@@ -117,6 +117,64 @@ Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path 
 sim chose, with a name + activity label above each sprite. (`sim/` carries a
 `.gdignore` so Godot leaves the Python alone.)
 
+### Live mode — follow a running sim (issue #263)
+
+The same scene can **follow a live simulation over real HTTP + WebSocket**
+instead of loading a baked file. `sim/serve_penn.py` steps the *same* configured
+Penn world (`sim/penn_world.py`, shared with the bake so the two can't drift —
+issue #297) inside the backend's self-stepping live loop (#349/#262), and the
+viewer becomes a thin client of `backend/api.py`:
+
+```bash
+# 1. Serve the live Penn sim (mock brain: real requests, zero keys, zero spend).
+#    From the repo root; needs the server extra (uv sync --extra server):
+uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
+
+# 2. Point the viewer at it (the same switch the run monitor uses):
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+```
+
+On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
+one `GET /events?since=0` backfill (history so far → jump to the live head),
+then opens a WebSocket to `/ws` and applies each pushed frame as it lands —
+bubbles, conversation links, trails, minimap, heatmap and fog all work
+unchanged, because live frames use the exact replay schema. A red **LIVE**
+badge joins the clock and the timeline locks into a read-only progress bar
+(you can't seek a live stream); the Pause button stays a *local* view-pause,
+while the run monitor's Emergency stop is what actually pauses the backend.
+
+The mock brain never speaks, so `serve_penn.py` also ports the bake's scripted
+`meetings:` injector to run on the fly: a meeting's authored dialogue fires the
+moment every participant is genuinely settled at its venue within perception
+range — watch Maya and Priya's study session light up in the Moelis Reading
+Room a couple of minutes into the default run.
+
+If the backend disappears the viewer holds the last pose, shows
+"reconnecting…", and retries with backoff; on reconnect the socket re-attaches
+with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
+/reset` on the server starts a fresh day (reload the viewer to re-handshake).
+
+### The run monitor (top-right)
+
+A live real-LLM run spends money every step and can stall on the provider, so the
+viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
+backend health, and a one-click **Emergency stop**. The `-`/`+` button in its header
+collapses it to just the title bar (the health dot stays visible); the meter keeps
+counting underneath. Its data feed is pluggable (`scripts/hud_source.gd`):
+
+- **Baked replay (the default):** no backend exists, so the monitor shows clearly
+  labeled **simulated** usage that accrues while the replay plays
+  (`scripts/hud_source_replay.gd`) — realistic numbers, zero dollars at risk. The
+  stop button freezes playback and trips a mock budget gate; Play lifts it.
+- **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
+  the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
+  environment, no editor needed — and the same monitor polls the real `GET /usage` +
+  `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
+  `SIM_API_TOKEN` as a bearer token when set.
+
+Both feeds emit the engine's `UsageLedger.summary()` shape (what `GET /usage`
+serves), which is what makes the mock → real-LLM switch a pure configuration change.
+
 ## Where this fits — the full-port proposals
 
 This is a **mock**: a standalone proof that the Godot-native tilemap + sprite path works.
