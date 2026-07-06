@@ -823,6 +823,29 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     )
 
 
+def test_the_climb_out_of_the_sphere_refuses_a_full_pack():
+    """CCB playtest: an encumbered player floated freely from the sphere UP
+    into the chimney, only to be refused at the chimney's own climb. The
+    hauling starts at the sphere's crown -- the gate belongs there too."""
+    from text_adventure_games.slots import Wound
+
+    game = _game()
+    sphere = _boss_setup(game)  # boots worn; blade, igniter, gel carried
+    assert not game.player.is_encumbered()
+    game.do_command("up")  # unencumbered: the climb is fine
+    assert game.player.location.name == "The Fungal Chimney"
+    game.do_command("down")
+    while not game.player.is_encumbered():
+        game.player.add_wound(Wound("Test-Weight", 2, "ballast"), rng=None)
+    cap = _texts(game)
+    game.do_command("up")
+    assert game.player.location is sphere  # refused at the crown
+    assert (
+        "climb is out of the question"
+        in " ".join(cap.texts(Channel.NARRATION) + cap.texts(Channel.BLOCKED)).lower()
+    )
+
+
 def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     game = _game()
     _embark(game)
@@ -926,7 +949,7 @@ def test_prying_the_live_coffin_wakes_the_boss():
     assert "prismatic blade" in game.player.carried_items()  # the blade survives
     assert "synth-hunting dagger" not in sphere.items  # kept in its coil
     out = " ".join(cap.texts(Channel.NARRATION))
-    assert "unwinds from the Autarch's bones" in out
+    assert "From among the shattered glass" in out  # glass fractures; no bulging
 
 
 def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
@@ -940,7 +963,12 @@ def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
     assert horror.get_property("vigor") == 5  # -1 hit, +1 knit: nowhere
     cap = _texts(game)
     game.do_command("burn horror")  # ablaze: nothing knits
-    assert "cannot knit itself" in " ".join(cap.texts(Channel.NARRATION))
+    out = " ".join(cap.texts(Channel.NARRATION))
+    # Concrete narration: the liquid, the target, the tool in hand (CCB).
+    assert "embalming gel" in out
+    assert "plasma-igniter" in out
+    # The player watched it mend, so the fire's meaning is earned knowledge.
+    assert "the mending stops" in out
     game.do_command("attack horror with blade")  # -1 hit, -1 burn
     game.do_command("attack horror with blade")  # -1 hit, -1 burn -> 0
     assert horror.get_property("is_dead")
@@ -966,6 +994,104 @@ def test_thrown_gel_douses_the_horror_for_a_spark_alone():
     assert horror.get_property("is_dead")
 
 
+def test_the_fire_burns_whether_or_not_you_watch():
+    """CCB's playtest: he lit the Horror, then spent the window shuttling gear
+    two rooms away -- and the fire politely waited for him. It must not: douse,
+    light, and RUN is a legitimate tactic. And when the window closes, it
+    closes audibly, never silently back to knitting."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    horror = game.characters["fungal horror"]
+    game.do_command("burn horror")  # lit: one burn tick already taken
+    burned_to = horror.get_property("vigor")
+    game.do_command("down")  # flee -- the fire keeps working
+    assert horror.get_property("vigor") == burned_to - 1
+    cap = _texts(game)
+    game.do_command("wait")  # the last ablaze round, spent elsewhere
+    assert horror.get_property("vigor") == burned_to - 2
+    assert int(horror.get_property("ablaze") or 0) == 0
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "roar of fire dies away" in out  # the window closes audibly
+    game.do_command("wait")  # and with the fire out, the knitting resumes
+    assert horror.get_property("vigor") == burned_to - 1
+
+
+def test_the_fire_guttering_out_is_announced_to_your_face():
+    """Standing in the sphere when ablaze expires, you are told plainly that
+    the window has shut -- the knit/burn state change is never silent."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    game.do_command("burn horror")
+    cap = _texts(game)
+    game.do_command("attack horror with blade")
+    game.do_command("wait")  # third and last ablaze round
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "fire gutters out" in out
+    assert "What is cut can mend again" in out
+
+
+def test_the_sphere_becomes_the_fights_record():
+    """CCB: after the boss dies, the room should hold the story -- dropped
+    gear, the Autarch's bones, the released grave-goods, the shattered
+    coffin, the Horror's ash -- and the description must stop lighting the
+    room with a churn that no longer exists."""
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    # The eruption already re-writes the room: the coffin is shards, and the
+    # light is the Horror itself.
+    assert "burst coffin" in sphere.description
+    assert "orange churn" not in (sphere.dim_description or "")
+    game.do_command("burn horror")
+    game.do_command("drop flask")  # gear dropped mid-fight stays put
+    game.do_command("attack horror with blade")
+    game.do_command("attack horror with blade")
+    assert game.characters["fungal horror"].get_property("is_dead")
+    # The remains are an OBJECT, not a listed combatant.
+    assert "fungal horror" not in sphere.characters
+    assert "drift of ash" in sphere.items
+    assert "Autarch's bones" in sphere.items
+    assert "synth-hunting dagger" in sphere.items  # the released goods
+    assert "flask of gel" in sphere.items  # the dropped gear
+    assert "shattered" in sphere.items["coffin"].description
+    assert "quiet in a way it has not been" in sphere.description
+    # And the wreckage is scenery, not loot for the slot ledger.
+    game.do_command("get bones")
+    assert "Autarch's bones" in sphere.items
+
+
+def test_the_quiet_coffin_when_the_root_dies_first():
+    """Burn the corpse at the Summit before ever prying: the churn behind
+    the glass goes still, and the sphere's description follows (CCB: no
+    stale light sources)."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("burn corpse")
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    assert "still now" in sphere.description
+    assert "slow orange churn" not in sphere.dim_description
+
+
+def test_the_fires_meaning_is_only_told_to_those_who_saw_it_mend():
+    """Burn the Horror before ever watching it knit and the narration keeps
+    its counsel -- no unearned "the mending stops" (CCB: no hints like that).
+    The regeneration lesson must be learned by watching, not from the fire."""
+    game = _game()
+    _boss_setup(game)
+    game.do_command("pry coffin")
+    cap = _texts(game)
+    game.do_command("burn horror")  # first act: it has never knit in view
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "embalming gel" in out and "plasma-igniter" in out
+    assert "the mending stops" not in out
+
+
 def test_burning_the_root_mid_fight_fells_the_horror():
     game = _game()
     sphere = _boss_setup(game)
@@ -976,6 +1102,10 @@ def test_burning_the_root_mid_fight_fells_the_horror():
     game.do_command("burn corpse")
     assert game.characters["fungal horror"].get_property("is_dead")
     assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
+    # The coil's keeping ends with it: the loot it held since the eruption
+    # is in the sphere, not sealed forever inside the coffin item.
+    assert "synth-hunting dagger" in sphere.items
+    assert "manifold box" in sphere.items
 
 
 def _summon_pack(game):
@@ -1040,6 +1170,23 @@ def test_the_dead_dont_sway_in_the_listings():
     assert "swaying toward every sound" not in out
 
 
+def test_the_mantis_jar_snaps_once_at_the_hand_that_opens_it():
+    """CCB: a one-time defensive snap -- the alarm has teeth, but it is not
+    a combatant. First open costs a Mantis-Bitten wound; after that, the
+    jar has made its point."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
+    cap = _texts(game)
+    game.do_command("open mantis jar")
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+    assert "mantis head STRIKES" in " ".join(cap.texts(Channel.NARRATION))
+    # A second violation draws nothing: the snap is one-time.
+    game.do_command("close mantis jar")
+    game.do_command("open mantis jar")
+    game.do_command("take fungal eyes")
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+
+
 def test_the_glass_centipede_ambushes_in_the_chimney():
     game = _game()
     game.relocate(game.player, game.locations["The Summit"])
@@ -1072,6 +1219,59 @@ def test_fire_scours_the_centipede_with_the_growth():
     game.relocate(game.player, game.locations["The Fungal Chimney"])
     game.do_command("burn growth")
     assert game.characters["glass centipede"].get_property("is_dead")
+
+
+def test_fire_finds_a_senseless_centipede_where_it_lies():
+    """CCB playtest: a KO'd centipede ("cracked and still") seemed to die
+    twice -- the scour line had it "boil out" of the growth. A senseless
+    thing does not boil out of anything; the fire finds it where it lies."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # bitten on entry
+    game.do_command("attack centipede with blade")  # cracked and still
+    cap = _texts(game)
+    game.do_command("burn growth")
+    assert game.characters["glass centipede"].get_property("is_dead")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "finds the cracked thing where it lies" in out
+    assert "boils out" not in out
+
+
+def test_burning_the_shaft_from_inside_costs_a_scorched_wound():
+    """You can light the chimney while standing in its throat -- it works,
+    and the flue you just made takes its due (CCB: a wound, not a death)."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Fungal Chimney"])
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    assert any(w.name == "Scorched" for w in game.player.wounds)
+
+
+def test_burning_the_shaft_from_the_summit_is_free():
+    """The smart play: light a chimney the way chimneys are lit -- from the
+    mouth, standing in open air. Same cleanse, no wound."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Summit"])
+    cap = _texts(game)
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    assert not any(w.name == "Scorched" for w in game.player.wounds)
+    assert "from open air" in " ".join(cap.texts(Channel.NARRATION))
+    # And the bare verbs at the Summit still mean the corpse, not the shaft.
+    assert not game.locations["The Summit"].get_property("cleansed")
 
 
 def test_burning_the_chimney_growth_clears_the_spores():
