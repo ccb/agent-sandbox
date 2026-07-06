@@ -478,6 +478,20 @@ def memory_stream_for_persona(agent) -> list[dict]:
     return memories_for_frame(records)
 
 
+def kind_counts_for_persona(agent) -> dict[str, int]:
+    """Tally an agent's memories by kind (observation / plan / reflection / chat).
+
+    A cheap activity summary for the ``/agents`` roster (#344): the per-kind
+    counts over the *same* records :func:`memory_stream_for_persona` returns, so
+    a roster tally and the full stream a client then fetches can never disagree.
+    Returns ``{}`` for an agent with no memory bound.
+    """
+    counts: dict[str, int] = {}
+    for entry in memory_stream_for_persona(agent):
+        counts[entry["kind"]] = counts.get(entry["kind"], 0) + 1
+    return counts
+
+
 def remember_outcome(char, command: str, step: int) -> None:
     """Record ``char``'s own successful action as a first-person memory.
 

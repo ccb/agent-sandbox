@@ -62,7 +62,7 @@ class Wear(base.Action):
         # Items may carry their own flavor for being put on (``wear_text``).
         self.parser.ok(
             self.item.get_property("wear_text")
-            or f"{self.character.name.capitalize()} puts on the {self.item.name}."
+            or f"{self.character.name.capitalize()} {base.conjugate(self.character, 'put', 'puts')} on the {self.item.name}."
         )
 
 
@@ -93,7 +93,7 @@ class Take_Off(base.Action):
     def apply_effects(self):
         self.character.take_off(self.item)
         self.parser.ok(
-            f"{self.character.name.capitalize()} takes off the {self.item.name}."
+            f"{self.character.name.capitalize()} {base.conjugate(self.character, 'take', 'takes')} off the {self.item.name}."
         )
 
 
@@ -131,7 +131,7 @@ class Wield(base.Action):
     def apply_effects(self):
         self.character.wield(self.item)
         self.parser.ok(
-            f"{self.character.name.capitalize()} wields the {self.item.name}."
+            f"{self.character.name.capitalize()} {base.conjugate(self.character, 'wield', 'wields')} the {self.item.name}."
         )
 
 
@@ -162,5 +162,5 @@ class Unwield(base.Action):
     def apply_effects(self):
         self.character.unwield(self.item)
         self.parser.ok(
-            f"{self.character.name.capitalize()} stows the {self.item.name}."
+            f"{self.character.name.capitalize()} {base.conjugate(self.character, 'stow', 'stows')} the {self.item.name}."
         )

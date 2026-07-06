@@ -68,7 +68,11 @@ def test_lower_diamond_is_a_four_cycle():
 def test_the_stairs_seal_and_chimney():
     game = _game()
     assert _goes(game, "Hall of Memory", "up", "Hall of the Canopic Jars")
-    assert _goes(game, "Hall of the Canopic Jars", "down", "Hall of Memory")
+    assert _goes(game, "Hall of Hounds", "up", "Hall of the Canopic Jars")
+    # Two stairways down from the pentagon (source, room 5): left to Memory,
+    # right to Hounds.
+    assert _goes(game, "Hall of the Canopic Jars", "left stairs", "Hall of Memory")
+    assert _goes(game, "Hall of the Canopic Jars", "right stairs", "Hall of Hounds")
     assert _goes(
         game, "Hall of the Canopic Jars", "up", "Burial Sphere of Nassak An-Rah"
     )
@@ -255,7 +259,13 @@ def _arm_and_reach_canopic(game):
     """Sneak in, take the prismatic blade from the Hall of Warriors, and creep up
     to the Canopic hall -- armed and safe."""
     _embark(game)
-    for cmd in ["sneak east", "take prismatic blade", "sneak east", "sneak up"]:
+    for cmd in [
+        "sneak east",
+        "break cerulean cylinder",
+        "take prismatic blade",
+        "sneak east",
+        "sneak up",
+    ]:
         game.do_command(cmd)
 
 
@@ -340,36 +350,102 @@ def test_enough_bat_wounds_kill():
     assert game.is_game_over() and not game.is_won()  # slots filled with wounds
 
 
-def test_sustained_noise_brings_the_jackals_who_take_their_due():
-    """Two warnings, then the pack savages you (a d20 wound-table roll) and
-    withdraws -- death comes from a fatal roll or wounds filling your slots."""
+def _no_spawn(game):
+    """KO both Spawn so a test can isolate the jackal pack (the Spawn are
+    drawn to the same noises and would interleave attacks)."""
+    for name in ("spawn of guts", "spawn of brain"):
+        game.characters[name].set_property("is_unconscious", True)
+
+
+def test_sustained_noise_brings_the_pack_who_growl_then_maul():
+    """Two warnings, then the pack ENTERS and growls (one round of grace);
+    unfed and unfled, they maul (a d20 wound-table roll) round after round."""
     tomb._RNG.seed(0)  # first roll: 13, Cracked Skull (2 slots)
     game = _game()
+    cap = _texts(game)
+    _no_spawn(game)
     _embark(game, glowstone=False)
-    game.do_command("sneak east")  # -> Hall of Warriors (safe to enter)
-    game.do_command("say hey")  # one shout: a warning
-    assert not game.is_game_over()
-    game.do_command("say hey")  # the second warning
-    assert not game.is_game_over() and not game.player.wounds
-    game.do_command("say hey")  # the pack takes its due
-    assert not game.is_game_over()
+    game.do_command("sneak north")  # -> Hall of Youth (dark, quiet)
+    game.do_command("sneak north")  # -> Hall of Memory (no Spawn here)
+    game.do_command("say hey")  # warning one: distant yipping
+    game.do_command("say hey")  # warning two: yellow eyes
+    assert not game.player.wounds
+    game.do_command("say hey")  # the pack enters and growls
+    hall = game.locations["Hall of Memory"]
+    assert "jackal pack" in hall.characters
+    assert "growls" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert not game.player.wounds  # the growl round is grace
+    game.do_command("wait")  # neither fed nor fled -> mauled
     assert game.player.wound_slots() == 2  # Cracked Skull
-    game.do_command("wait")  # quiet again -> the pack stays away
     assert not game.is_game_over()
+    assert "jackal pack" in hall.characters  # they wait for more
 
 
-def test_the_live_sphere_kills_only_when_you_disturb_it():
+def test_feeding_the_pack_buys_them_off():
+    game = _game()
+    cap = _texts(game)
+    _no_spawn(game)
+    # Bring the dates from the wreck, then make a racket in Memory.
+    for cmd in (
+        "in",
+        "take dates",
+        "out",
+        "north",
+        "north",
+        "north",
+        "say hey",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    hall = game.locations["Hall of Memory"]
+    assert "jackal pack" in hall.characters
+    game.do_command("give dates to jackals")
+    assert "jackal pack" not in hall.characters  # gone with the goods
+    assert not game.player.wounds
+    out = " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "terrible courtesy" in out
+    game.do_command("say hey")  # the fed pack forgets you a while
+    assert "jackal pack" not in hall.characters
+
+
+def test_the_pack_refuses_what_it_cannot_eat():
+    game = _game()
+    cap = _texts(game)
+    _no_spawn(game)
+    for cmd in (
+        "in",
+        "take bale",
+        "out",
+        "north",
+        "north",
+        "north",
+        "say hey",
+        "say hey",
+        "say hey",
+    ):
+        game.do_command(cmd)
+    hall = game.locations["Hall of Memory"]
+    tomb._RNG.seed(0)
+    game.do_command("give saffron to jackals")  # not that kind of hunger
+    assert "bale of saffron" in hall.items  # dropped at your feet
+    assert "jackal pack" in hall.characters  # and they are still here
+    assert "not that kind of hunger" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_the_sphere_is_safe_until_you_pry():
+    """The sphere has no noise hazard (design doc §17.3): enter, look, even
+    shout. Only the deliberate act -- prying the live coffin -- wakes the boss."""
     game = _game()
     _bring_jars_to_canopic(game)
     game.do_command("put falcon jar on falcon plinth")
     game.do_command("put jackal jar on jackal plinth")
-    game.do_command("up")  # entering and looking is safe
-    assert not game.is_game_over()
+    game.do_command("up")
     game.do_command("look")
+    game.do_command("say boo")
+    game.do_command("say boo")
     assert not game.is_game_over()
-    game.do_command("say boo")  # but any racket disturbs the live Horror...
-    game.do_command("say boo")  # ...and it erupts (limit 2)
-    assert game.is_game_over() and not game.is_won()
+    assert "fungal horror" not in game.player.location.characters
 
 
 def test_the_mantis_song_lures_the_spawn_to_the_canopic_hall():
@@ -456,11 +532,91 @@ def test_ulfire_light_reveals_the_ego_core_in_the_manifold_box():
     )
 
 
+def test_the_spawn_ignores_a_sneaking_scavenger():
+    """The Spawn are blind -- they hunt footfalls. Creep and they never know."""
+    game = _game()
+    game.do_command("north")
+    game.do_command("sneak east")  # into the spawn's dark hall, silently
+    game.do_command("sneak west")  # and out again
+    assert not game.player.wounds
+
+
+def test_striding_in_earns_a_warning_then_a_lash():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")
+    game.do_command("east")  # footfalls: it swings toward you
+    assert "swings toward your footfalls" in " ".join(cap.texts(Channel.NARRATION))
+    assert not game.player.wounds  # the swing is the warning
+    game.do_command("say hello")  # loud again while it listens -> the lash
+    assert any(w.name == "Acid-Lashed" for w in game.player.wounds)
+    assert not game.is_game_over()
+
+
+def test_the_brain_spawn_opens_your_hands():
+    """Psychic domination: it makes you drop your wielded weapon."""
+    game = _game()
+    blade = things_blade = None
+    # arm the player directly and walk into the brain's hall wielding steel
+    cyl = game.locations["Hall of Warriors"].items["cerulean cylinder"]
+    blade = cyl.contents["prismatic blade"]
+    cyl.remove_item(blade)
+    game.player.add_to_inventory(blade)
+    game.do_command("wield blade")
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("say hello")  # warn
+    game.do_command("say hello")  # dominate: hands open
+    assert "prismatic blade" not in game.player.wielded
+    assert "prismatic blade" in game.locations["Hall of Hounds"].items
+
+
+def test_the_kit_is_sealed_until_the_glass_breaks():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("north")
+    game.do_command("sneak east")  # Hall of Warriors -- creep: the Spawn hears
+    game.do_command("take blade")  # sealed under glass -> unreachable
+    assert "prismatic blade" not in game.player.inventory
+    game.do_command("break cerulean cylinder")  # loud: the crash carries
+    game.do_command("take blade")
+    assert "prismatic blade" in game.player.inventory
+    assert "rings on the stone" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_venting_the_orange_cylinder_sears_unmasked_lungs():
+    game = _game()
+    game.do_command("north")
+    game.do_command("sneak east")
+    game.do_command("break orange cylinder")  # no respirator -> the bloom bites
+    assert any(w.name == "Seared Lungs" for w in game.player.wounds)
+    assert not game.is_game_over()
+
+
+def test_a_respirator_makes_the_orange_cylinder_safe():
+    game = _game()
+    cap = _texts(game)
+    for cmd in (
+        "north",
+        "sneak east",
+        "break amber cylinder",
+        "take respirator",
+        "wear respirator",
+        "break orange cylinder",
+    ):
+        game.do_command(cmd)
+    # The mask's job is the spores (the spawn may still have opinions).
+    assert not any(w.name == "Seared Lungs" for w in game.player.wounds)
+    assert "disappointed" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    game.do_command("take igniter")
+    assert "plasma-igniter" in game.player.inventory
+
+
 def test_burning_the_corpse_consumes_an_unclaimed_fungus():
     game = _game()
     _embark(game)
     for cmd in [
         "sneak east",
+        "break orange cylinder",  # unmasked: costs a Seared Lungs wound
         "take igniter",
         "sneak east",
         "take gel",
@@ -472,6 +628,123 @@ def test_burning_the_corpse_consumes_an_unclaimed_fungus():
         game.do_command(cmd)
     corpse = game.locations["The Summit"].items["ossified corpse"]
     assert "friend's fungus" not in corpse.contents  # went up with him
+
+
+# --- Throw, the thrown-light gambit, and appetites ----------------------------
+
+
+def test_throw_lands_next_door_and_lures_the_sound_hunters():
+    game = _game()
+    cap = _texts(game)
+    for cmd in ("search merchant", "take purse", "north"):
+        game.do_command(cmd)
+    game.do_command("throw purse north")
+    assert "purse of water-debt tokens" in game.locations["Hall of Youth"].items
+    assert "a clatter from" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("wait")
+    game.do_command("wait")
+    # A spawn heard it land and went to see (whichever was closer).
+    assert any(
+        game.characters[n].location is game.locations["Hall of Youth"]
+        for n in ("spawn of guts", "spawn of brain")
+    )
+
+
+def test_the_thrown_light_gambit_kills_a_spawn_by_bats():
+    """CCB's puzzle: lure a spawn into the Youth with a thrown clatter, then
+    throw the LIT glowstone in after it -- the swarm mobs the light and rakes
+    the spawn dead, leaving its jar and a motionless body."""
+    game = _game()
+    for cmd in (
+        "open pack",
+        "take glowstone",
+        "search merchant",
+        "take purse",
+        "north",
+        "throw purse north",
+        "wait",
+        "wait",
+        "light glowstone",
+        "throw glowstone north",
+        "wait",
+        "wait",
+    ):
+        game.do_command(cmd)
+    youth = game.locations["Hall of Youth"]
+    dead = [
+        n
+        for n in ("spawn of guts", "spawn of brain")
+        if game.characters[n].get_property("is_dead")
+    ]
+    assert dead  # the swarm got one
+    assert any(j in youth.items for j in ("falcon jar", "jackal jar"))
+    assert "dead and motionless" in game.characters[dead[0]].description
+    assert not game.is_game_over()  # the player never entered
+
+
+def test_throwing_the_fungus_at_a_spawn_doses_it():
+    game = _game()
+    cap = _texts(game)
+    # Fetch the fungus, then find the spawn of guts and dose it.
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("search corpse")
+    game.do_command("take fungus")
+    guts = game.characters["spawn of guts"]
+    game.relocate(game.player, guts.location)
+    game.do_command("throw fungus at spawn of guts")
+    assert guts.get_property("dosed")
+    assert "extremely agreeable" in " ".join(cap.texts(Channel.NARRATION))
+    # Dosed, it no longer minds your noise.
+    game.do_command("say hello")
+    game.do_command("say hello")
+    game.do_command("say hello")
+    assert not any(w.name == "Acid-Lashed" for w in game.player.wounds)
+
+
+def test_silas_whispers_while_a_spawn_is_in_the_room():
+    game = _game()
+    cap = _texts(game)
+    silas = game.characters["Silas"]
+    game.relocate(game.characters["spawn of guts"], silas.location)
+    game.relocate(game.player, silas.location)
+    game.do_command("talk to silas")
+    assert "be silent, you fool" in " ".join(cap.texts(Channel.NARRATION)).lower()
+
+
+def test_the_waterskin_holds_three_healing_rations():
+    game = _game()
+    from text_adventure_games.slots import Wound
+
+    game.do_command("open pack")
+    game.do_command("take waterskin")
+    game.player.add_wound(Wound("Bloody Gash", 1, "..."))
+    for expected in ("2 rations", "1 ration", "an empty waterskin"):
+        game.do_command("drink water")
+        assert expected in game.player.inventory["waterskin"].description
+    assert not game.player.wounds  # the first drink healed it
+    cap = _texts(game)
+    game.do_command("drink water")  # a fourth: refused
+    assert "is empty" in " ".join(cap.texts(Channel.BLOCKED)).lower()
+
+
+def test_organs_are_gettable_edible_and_regrettable():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
+    game.do_command("open baboon jar")
+    game.do_command("take lungs")
+    assert "lungs" in game.player.inventory
+    game.do_command("eat lungs")
+    assert any(w.name == "Grave-Sick" for w in game.player.wounds)
+
+
+def test_breaking_the_hound_tank_spills_the_cyborg_hounds():
+    game = _game()
+    cap = _texts(game)
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("break tank")
+    hall = game.locations["Hall of Hounds"]
+    assert "cyborg hound" in hall.items
+    assert "flood" in " ".join(cap.texts(Channel.NARRATION)).lower()
 
 
 # --- Phase 4: fire, the zero-g coffin, and the win ---------------------------
@@ -526,9 +799,15 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     game.do_command("take waterskin")
     # blade would be next, but the cargo alone is 5 slots -- go check the climb
     game.do_command("north")
-    # load up past 10: add the blade and kit from the Hall of Warriors
-    game.do_command("east")
-    for cmd in ("take blade", "take igniter", "take boots", "take respirator"):
+    # load up past 10: smash out the blade and boots (takes between breaks
+    # keep the pack's suspicion at one)
+    game.do_command("sneak east")
+    for cmd in (
+        "break cerulean cylinder",
+        "take blade",
+        "break viridian cylinder",
+        "take boots",
+    ):
         game.do_command(cmd)
     assert game.player.is_encumbered()
     game.do_command("west")
@@ -546,6 +825,7 @@ def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     # Arm with gel + igniter, creep out to the Exterior, climb up, burn the root.
     for cmd in [
         "sneak east",
+        "break orange cylinder",  # unmasked: costs a Seared Lungs wound
         "take igniter",
         "sneak east",
         "take gel",
@@ -560,22 +840,143 @@ def test_burning_the_corpse_kills_the_horror_and_makes_the_sphere_safe():
     assert game.locations["The Summit"].get_property("cleansed")
 
 
-def test_prying_the_coffin_needs_the_magnetic_boots():
+def _hand(game, room, cylinder, item_name):
+    cyl = game.locations[room].items[cylinder]
+    it = cyl.contents[item_name]
+    cyl.remove_item(it)
+    game.player.add_to_inventory(it)
+    return it
+
+
+def test_prying_the_coffin_needs_an_anchor_and_a_blade_it_will_lose():
     game = _game()
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     sphere.set_property("horror_dead", True)  # pretend it's cleansed
     game.relocate(game.player, sphere)
-    game.do_command("pry coffin")  # no boots -> refused
+    game.do_command("pry coffin")  # no anchor -> you drift
     assert sphere.items["coffin"].get_property("pried") in (False, None)
-    assert "synth-hunting dagger" not in sphere.items
-    # with the boots worn, it works
-    boots = game.locations["Hall of Warriors"].items["magnetic boots"]
-    game.locations["Hall of Warriors"].remove_item(boots)
-    game.player.add_to_inventory(boots)
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
     game.do_command("wear boots")
-    game.do_command("pry coffin")
+    game.do_command("pry coffin")  # anchored but no lever -> refused
+    assert sphere.items["coffin"].get_property("pried") in (False, None)
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("pry coffin")  # anchored + blade -> it gives; the blade snaps
     assert sphere.items["coffin"].get_property("pried")
     assert "synth-hunting dagger" in sphere.items
+    assert "prismatic blade" not in game.player.carried_items()
+
+
+def test_the_spider_silk_tether_is_the_bootless_anchor():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("in")
+    game.do_command("take silk")
+    game.do_command("out")
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("tie silk to coffin")
+    assert sphere.items["coffin"].get_property("tethered")
+    assert "holds like law" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("pry coffin")  # tethered, no boots
+    assert sphere.items["coffin"].get_property("pried")
+
+
+def _boss_setup(game):
+    """Anchor, blade, gel, and spark -- straight to the sphere."""
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, sphere)
+    game.do_command("wear boots")
+    return sphere
+
+
+def test_prying_the_live_coffin_wakes_the_boss():
+    game = _game()
+    sphere = _boss_setup(game)
+    cap = _texts(game)
+    game.do_command("pry coffin")  # the eruption -- not a death
+    assert not game.is_game_over()
+    assert "fungal horror" in sphere.characters
+    assert "prismatic blade" in game.player.carried_items()  # the blade survives
+    assert "synth-hunting dagger" not in sphere.items  # kept in its coil
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "unwinds from the Autarch's bones" in out
+
+
+def test_steel_alone_is_a_stalemate_and_fire_breaks_it():
+    """The boss lesson (design doc §17.3): a hit costs 1 vigor, its turn knits
+    1 back -- until it burns."""
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    horror = game.characters["fungal horror"]
+    game.do_command("attack horror with blade")
+    assert horror.get_property("vigor") == 5  # -1 hit, +1 knit: nowhere
+    cap = _texts(game)
+    game.do_command("burn horror")  # ablaze: nothing knits
+    assert "cannot knit itself" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("attack horror with blade")  # -1 hit, -1 burn
+    game.do_command("attack horror with blade")  # -1 hit, -1 burn -> 0
+    assert horror.get_property("is_dead")
+    assert "synth-hunting dagger" in sphere.items  # the coil unclenches
+    assert not game.is_game_over()  # hurt, but standing
+    assert game.player.wound_slots() >= 3  # the acid kept the ledger
+
+
+def test_burning_the_root_mid_fight_fells_the_horror():
+    game = _game()
+    sphere = _boss_setup(game)
+    game.do_command("pry coffin")
+    # Flee the fight and burn the corpse at the Summit instead.
+    game.relocate(game.player, game.locations["The Summit"])
+    cap = _texts(game)
+    game.do_command("burn corpse")
+    assert game.characters["fungal horror"].get_property("is_dead")
+    assert "collapses mid-motion" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_burning_the_chimney_growth_clears_the_spores():
+    game = _game()
+    _hand(game, "Hall of Warriors", "orange cylinder", "plasma-igniter")
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["The Fungal Chimney"])
+    game.do_command("burn growth")
+    assert game.locations["The Fungal Chimney"].get_property("burned")
+    for _ in range(4):  # linger unmasked: the spores are gone
+        game.do_command("look")
+    assert not any(w.name == "Seared Lungs" for w in game.player.wounds)
+
+
+def test_the_gel_economy_refills_and_regrets():
+    game = _game()
+    gel = game.locations["Hall of Hounds"].items["flask of gel"]
+    game.locations["Hall of Hounds"].remove_item(gel)
+    game.player.add_to_inventory(gel)
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("drink gel")  # legal, inadvisable
+    assert any(w.name == "Gel-Gut" for w in game.player.wounds)
+    assert "2 doses" in gel.description
+    game.do_command("fill flask")  # topped back up at the tank
+    assert "3 doses" in gel.description
+
+
+def test_the_hound_gives_up_a_sparking_servo():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    game.do_command("break tank")
+    game.do_command("search hound")
+    game.do_command("take servo")
+    assert "sparking servo" in game.player.inventory
+    assert game.player.inventory["sparking servo"].get_property("ignition_source")
 
 
 def test_the_full_winning_run_scores_100():

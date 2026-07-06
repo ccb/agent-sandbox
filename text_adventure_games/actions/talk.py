@@ -44,6 +44,11 @@ class Talk(base.Action):
                 self.parser.ok(f"{name} has nothing to say about that.")
             return
         line = getattr(self.target, "talk_text", "")
+        # A talk_text may be a callable(game) -> str, computed at speech time
+        # (like travel_descriptions) -- so a character can answer to context
+        # (whisper while a monster shares the room, say).
+        if callable(line):
+            line = line(self.game)
         self.parser.ok(line if line else f"{name} has nothing to say.")
 
 
