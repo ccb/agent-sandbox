@@ -42,22 +42,15 @@ def test_object_cells_maps_pixels_to_tiles():
     assert v.object_cells(obj, 245, 279) == {(2, 1), (3, 1)}
 
 
-def test_inventories_capture_the_known_drift():
+def test_inventories_have_cohen_and_alumni_rooms():
     w = real_world()
     tmj = v.tmj_arenas_by_building(w)
     mtx = v.matrix_rooms_by_building(w)
-    # Cohen & Alumni: arenas drawn in the tmj...
-    assert len(tmj["Claudia Cohen Hall"]) >= 5
-    assert len(tmj["Sweeten Alumni Building"]) >= 10
-    # ...but no room arenas in the matrix.
-    assert mtx.get("Claudia Cohen Hall", []) == []
-    assert mtx.get("Sweeten Alumni Building", []) == []
-    # Van Pelt: rooms in the matrix, no tmj arena layer.
-    assert len(mtx["Van Pelt Library"]) == 25
-    assert "Van Pelt Library" not in tmj
-    # Decoys excluded: Fisher's "Rug*" objects are not counted as arenas.
-    fisher_names = {o["name"] for o in tmj["Fisher Fine Arts Library"]}
-    assert not any("Rug" in n for n in fisher_names)
+    # both buildings are drawn in the tmj AND now present in the matrix
+    assert len(tmj["Claudia Cohen Hall"]) == 5
+    assert len(mtx["Claudia Cohen Hall"]) == 5
+    assert len(tmj["Sweeten Alumni Building"]) == 22
+    assert len(mtx["Sweeten Alumni Building"]) == 22
 
 
 import json as _json
@@ -238,31 +231,19 @@ def test_real_data_structural_consistency():
 def test_drawn_vs_present_real_data():
     c = v.Checker(real_world()).run()
 
-    def has(code, building):
-        return any(f.code == code and f.building == building for f in c.findings)
+    def finding(code, building):
+        return next(
+            (f for f in c.findings if f.code == code and f.building == building), None
+        )
 
-    # Cohen & Alumni drawn but not bridged -> error
-    assert has("arena_drawn_not_in_matrix", "Claudia Cohen Hall")
-    assert has("arena_drawn_not_in_matrix", "Sweeten Alumni Building")
-    # Van Pelt in matrix, no tmj layer, json-sourced -> info (expected)
-    assert has("arena_matrix_no_tmj_layer", "Van Pelt Library")
-    vp = [
-        f
-        for f in c.findings
-        if f.code == "arena_matrix_no_tmj_layer" and f.building == "Van Pelt Library"
-    ][0]
-    assert vp.severity == "info"
-
-
-def test_unwired_error_mentions_room_subdivide():
-    c = v.Checker(real_world()).run()
-    cohen = [
-        f
-        for f in c.findings
-        if f.code == "arena_drawn_not_in_matrix" and f.building == "Claudia Cohen Hall"
-    ][0]
-    assert cohen.severity == "error"
-    assert "ROOM_SUBDIVIDE" in cohen.message
+    # Cohen & Alumni: drawn AND present -> names match, no error
+    assert finding("arena_names_match", "Claudia Cohen Hall")
+    assert finding("arena_names_match", "Sweeten Alumni Building")
+    assert not finding("arena_drawn_not_in_matrix", "Claudia Cohen Hall")
+    assert not finding("arena_drawn_not_in_matrix", "Sweeten Alumni Building")
+    # Van Pelt: matrix-only, json-sourced -> info (unchanged)
+    vp = finding("arena_matrix_no_tmj_layer", "Van Pelt Library")
+    assert vp and vp.severity == "info"
 
 
 def test_arena_layer_resolved_flags_orphan_objects(tmp_path):
@@ -317,11 +298,27 @@ def test_gate_green_against_baseline():
 
 
 def test_main_exit_code_1_when_error_unbaselined(tmp_path):
-    """Without a baseline, the real Cohen/Alumni errors are un-baselined -> exit 1."""
-    # Point --baseline at a nonexistent path so _load_baseline returns an empty set.
-    # Do NOT pass --tmj/--matrix so the real default map is used.
+    """A world with an error and no baseline -> exit 1."""
+
+    # Inject a gid_out_of_range error into a synthetic world.
+    def edit(tmj, mf):
+        tmj["layers"][0]["data"][6] = 9999  # gid with no covering tileset
+
+    w = make_world(tmp_path, edit)
     nonexistent = str(tmp_path / "no_baseline.json")
-    assert v.main(["--baseline", nonexistent]) == 1
+    assert (
+        v.main(
+            [
+                "--tmj",
+                str(tmp_path / "map.tmj"),
+                "--matrix",
+                str(tmp_path / "matrix"),
+                "--baseline",
+                nonexistent,
+            ]
+        )
+        == 1
+    )
 
 
 def test_baseline_only_lists_real_current_errors():
