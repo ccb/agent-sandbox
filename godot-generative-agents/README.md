@@ -109,7 +109,9 @@ uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
 ```
 
-The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast) and
+The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast — 3
+active personas while the live-LLM MVP keeps runs cheap; 4 more are parked in
+comments, ready to uncomment) and
 `the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
 The agent *engine* (deciding, pathfinding) is reused from the `backend` package,
 so this is the same simulation that runs there — just rendered here instead of in
@@ -146,13 +148,63 @@ while the run monitor's Emergency stop is what actually pauses the backend.
 The mock brain never speaks, so `serve_penn.py` also ports the bake's scripted
 `meetings:` injector to run on the fly: a meeting's authored dialogue fires the
 moment every participant is genuinely settled at its venue within perception
-range — watch Maya and Priya's study session light up in the Moelis Reading
-Room a couple of minutes into the default run.
+range — watch Diego showing Sofia around the Kamin Gallery partway into the
+default run.
 
 If the backend disappears the viewer holds the last pose, shows
 "reconnecting…", and retries with backoff; on reconnect the socket re-attaches
 with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
 /reset` on the server starts a fresh day (reload the viewer to re-handshake).
+
+### Real-LLM live mode — Claude Haiku drives the cast (issue #261)
+
+`--brain llm` swaps the deterministic mock for the model declared in the
+simulation config (`sim/world_data_upenn.yaml`, the `llm:` block): **Anthropic
+Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
+travel/perform decisions, every line of dialogue when the routing brings two
+agents within perception range (the scripted `meetings:` dialogue stands down;
+what you see is the model's own words), and the periodic reflection passes.
+The daily itinerary stays on the authored schedules for now (a Penn-aware LLM
+planner is follow-up work).
+
+```bash
+# One-time: the llm extra alongside server (installs the anthropic SDK):
+uv sync --extra server --extra llm
+
+# Serve with the real brain (terminal 1)…
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run python godot-generative-agents/sim/serve_penn.py --brain llm
+
+# …and watch it live (terminal 2), exactly as before:
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+```
+
+Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
+`LLM_API_KEY` / `OPENAI_API_KEY` — and the server refuses to start without it
+(or with a non-Anthropic `provider:` in the config) rather than serving a day
+of silently failing calls.
+
+Every request is printed to the server terminal as it happens (the **LLM
+request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
+
+```
+ LLM calls -- one line per model request (#, time, role, actor, sim turn, model, tokens in (cache w/r), tokens out, latency, $ this call, Σ $ run):
+ #    7 12:05:02  decide    Diego Torres        t  118  claude-haiku-4-5  in   1088 ( 912w/    0r)  out  102    731ms  $0.001238  Σ $0.021410
+ #    8 12:09:44  converse  Sofia Ramirez       t  119  claude-haiku-4-5  in   1322 (   0w/ 1002r)  out   64    598ms  $0.000740  Σ $0.041007
+```
+
+**Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
+**$0.10** (the per-call-site arithmetic is in
+[`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md),
+along with the exact tool schemas and prompts the model gets). The config's
+`max_cost_usd` (default $5) is a hard kill-switch: the moment cumulative spend
+reaches it the day ends — the live loop pauses and the run monitor's budget
+row shows **TRIPPED**. Two operational notes: ticks run serially, so each
+decision stretches its tick to the model's latency (the viewer just paces
+slower; `--tick-seconds` still sets the floor), and a provider outage never
+crashes the day — a failed call leaves that agent idle for one tick and it
+simply asks again, but failed calls record no cost, so a stalled tokens/min
+meter in the run monitor (not the budget row) is the outage signal.
 
 ### The run monitor (top-right)
 
