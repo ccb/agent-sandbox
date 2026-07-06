@@ -1,6 +1,8 @@
 extends PanelContainer
-## A left sidebar with the sim clock, zoom controls, and a character list (each
-## row has a "Track" button).
+## A left sidebar with the sim clock, a row of view controls (zoom out/in,
+## reset view, heatmap — icon buttons cut from the Cute Fantasy UI pack's
+## glyph sheets), playback controls, and a character list (each row has a
+## "Track" button).
 ##
 ## This panel is pure UI — it knows nothing about the camera or the agent nodes. The
 ## replay viewer (penn_replay.gd) fills it via add_character(), drives the clock via
@@ -47,10 +49,24 @@ const STATUS_COLOR := Color(0.42, 0.32, 0.24)
 # Playback speeds offered in the Speed dropdown.
 const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 
+# The Cute Fantasy UI pack's glyph sheets (16 px grid). _pack_icon() slices one
+# cell out and upscales it 2x so the pixel art stays crisp at button size; the
+# column/row picked for each button is noted where it's used. The pack has no
+# zoom or flame glyphs, so zoom borrows the plus/minus and Heatmap the bolt.
+const BUTTON_GLYPHS := preload("res://Cute_Fantasy_UI/UI/UI_Button_Icons.png")
+const MISC_GLYPHS := preload("res://Cute_Fantasy_UI/UI/UI_Icons.png")
+const GLYPH_CELL := 16   # the sheets' cell size, px
+const GLYPH_SCALE := 2   # 16 px cells → 32 px button icons
+
 var _clock: Label
-var _play: Button                   # play/pause toggle (label set by set_playing)
+var _play: Button                   # play/pause toggle (icon set by set_playing)
+# Pause/play glyphs, dark-brown row of the sheet (matches the theme's text).
+var _icon_pause := _pack_icon(BUTTON_GLYPHS, 0, 1)
+var _icon_play := _pack_icon(BUTTON_GLYPHS, 1, 1)
 var _scrubber: HSlider              # timeline; value is the current frame index
 var _speed_row: HBoxContainer       # the Speed picker row (hidden in live mode)
+var _col: VBoxContainer             # the sidebar's main column (set_live adds rows)
+var _transport_row: HBoxContainer   # pause/resume toggle + the step counter
 var _step_label: Label              # "step N / total"
 var _updating_scrubber := false     # true while we set the scrubber from playback
 var _list: VBoxContainer            # holds one row per character
@@ -80,6 +96,7 @@ func _ready() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	margin.add_child(col)
+	_col = col
 
 	var clock_row := HBoxContainer.new()
 	clock_row.add_theme_constant_override("separation", 6)
@@ -99,46 +116,47 @@ func _ready() -> void:
 	_clock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	clock_row.add_child(_clock)
 
-	var zoom_row := HBoxContainer.new()
-	zoom_row.add_theme_constant_override("separation", 6)
-	col.add_child(zoom_row)
+	# One toolbar row of icon buttons for the view controls: zoom out/in, reset
+	# view, heatmap. Tooltips carry the words (and keyboard shortcuts) the old
+	# text labels used to.
+	var view_row := HBoxContainer.new()
+	view_row.add_theme_constant_override("separation", 6)
+	col.add_child(view_row)
 
-	var zoom_out := Button.new()
-	zoom_out.text = "-"
-	zoom_out.tooltip_text = "Zoom out"
-	zoom_out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zoom_out.pressed.connect(func() -> void: zoom_out_requested.emit())
-	zoom_row.add_child(zoom_out)
+	# Zoom: the pack's outlined plus/minus (white row) — the neutral pair, so
+	# they read as map controls rather than the green/red pickup variants.
+	view_row.add_child(_icon_button(
+		_pack_icon(MISC_GLYPHS, 6, 2), "Zoom out",
+		func() -> void: zoom_out_requested.emit()))
+	view_row.add_child(_icon_button(
+		_pack_icon(MISC_GLYPHS, 0, 2), "Zoom in",
+		func() -> void: zoom_in_requested.emit()))
+	# Reset view: the home glyph — the map convention for "back to the default
+	# framing" (and it matches the Home key shortcut).
+	view_row.add_child(_icon_button(
+		_pack_icon(BUTTON_GLYPHS, 6, 1), "Reset view — frame the whole campus (R / Home)",
+		func() -> void: reset_requested.emit()))
+	# Heatmap: the lightning bolt, the pack's closest thing to a heat glyph.
+	view_row.add_child(_icon_button(
+		_pack_icon(MISC_GLYPHS, 9, 0), "Heatmap — where agents spend their time, up to now (H)",
+		func() -> void: heatmap_requested.emit()))
 
-	var zoom_in := Button.new()
-	zoom_in.text = "+"
-	zoom_in.tooltip_text = "Zoom in"
-	zoom_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zoom_in.pressed.connect(func() -> void: zoom_in_requested.emit())
-	zoom_row.add_child(zoom_in)
+	# Playback controls: a transport row (pause/resume beside the step counter),
+	# a seekable timeline, and a speed picker.
+	_transport_row = HBoxContainer.new()
+	_transport_row.add_theme_constant_override("separation", 6)
+	col.add_child(_transport_row)
 
-	var reset := Button.new()
-	reset.text = "Reset view"
-	reset.tooltip_text = "Frame the whole campus (R / Home)"
-	reset.pressed.connect(func() -> void: reset_requested.emit())
-	col.add_child(reset)
-
-	var heatmap := Button.new()
-	heatmap.text = "Heatmap"
-	heatmap.tooltip_text = "Where agents spend their time, up to now (H)"
-	heatmap.pressed.connect(func() -> void: heatmap_requested.emit())
-	col.add_child(heatmap)
-
-	# Playback controls: pause/resume, a seekable timeline, and a speed picker.
-	_play = Button.new()
-	_play.text = "Pause"
-	_play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_play.pressed.connect(func() -> void: play_pause_requested.emit())
-	col.add_child(_play)
+	_play = _icon_button(_icon_pause, "Pause playback",
+		func() -> void: play_pause_requested.emit())
+	_play.size_flags_horizontal = Control.SIZE_FILL  # compact, not full-width
+	_transport_row.add_child(_play)
 
 	_step_label = Label.new()
 	_step_label.text = "step — / —"
-	col.add_child(_step_label)
+	_step_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_step_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_transport_row.add_child(_step_label)
 
 	_scrubber = HSlider.new()
 	_scrubber.min_value = 0
@@ -205,6 +223,27 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
+
+
+static func _pack_icon(sheet: Texture2D, glyph_col: int, glyph_row: int) -> Texture2D:
+	# Cut one 16x16 cell out of a Cute Fantasy glyph sheet and upscale it with
+	# nearest-neighbour, so buttons get a crisp 32 px pixel-art icon.
+	var cell := sheet.get_image().get_region(Rect2i(
+		glyph_col * GLYPH_CELL, glyph_row * GLYPH_CELL, GLYPH_CELL, GLYPH_CELL))
+	cell.resize(GLYPH_CELL * GLYPH_SCALE, GLYPH_CELL * GLYPH_SCALE, Image.INTERPOLATE_NEAREST)
+	return ImageTexture.create_from_image(cell)
+
+
+func _icon_button(icon: Texture2D, tooltip: String, on_pressed: Callable) -> Button:
+	# An icon-only button (the words live in the tooltip), sharing a row equally
+	# with its siblings.
+	var button := Button.new()
+	button.icon = icon
+	button.tooltip_text = tooltip
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(on_pressed)
+	return button
 
 
 func set_clock_text(text: String) -> void:
@@ -287,7 +326,8 @@ func _on_filter_selected(idx: int) -> void:
 
 
 func set_playing(playing: bool) -> void:
-	_play.text = "Pause" if playing else "Play"
+	_play.icon = _icon_pause if playing else _icon_play
+	_play.tooltip_text = "Pause playback" if playing else "Resume playback"
 
 
 func set_live(live: bool) -> void:
@@ -307,16 +347,15 @@ func set_live(live: bool) -> void:
 		_live_status.text = "connecting…"
 		_live_status.add_theme_color_override("font_color", STATUS_COLOR)
 		_live_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var col := _step_label.get_parent()
-		col.add_child(_live_status)
-		col.move_child(_live_status, _step_label.get_index() + 1)
+		_col.add_child(_live_status)
+		_col.move_child(_live_status, _transport_row.get_index() + 1)
 		# The backend Start/Stop toggle lives right above the status line; it
 		# stays hidden until the viewer learns the backend's run state.
 		_live_run_btn = Button.new()
 		_live_run_btn.visible = false
 		_live_run_btn.pressed.connect(func(): live_run_toggle_requested.emit())
-		col.add_child(_live_run_btn)
-		col.move_child(_live_run_btn, _live_status.get_index())
+		_col.add_child(_live_run_btn)
+		_col.move_child(_live_run_btn, _live_status.get_index())
 	if _live_badge != null:
 		_live_badge.visible = live
 		_live_status.visible = live
