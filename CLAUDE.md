@@ -120,11 +120,13 @@ bind without `SIM_API_TOKEN` (then requires `Authorization: Bearer`).
   in `prompt_templates/README.md`** and pin its exact output in
   `tests/test_prompt_templates.py`.
 - Feature branches → PR → `main`. **Exception — the `godot-ga-main` branch:** a
-  change that touches *only* `godot-generative-agents/` and/or `tools/geo/` goes on
-  the long-lived `godot-ga-main` branch instead — branch off it and target your PR at
-  it (reviewed by the Godot/geo owners, @aking526 + @0frankie, not the full `main`
-  review). Anything touching the shared engine library (`text_adventure_games/`,
-  `backend/`, the root `tests/`, top-level docs, …) still goes through `main`. A change
-  spanning *both* the engine and godot/geo goes to `main`. Minor shared-config tweaks
-  (`.gitignore`, `mkdocs/`) may ride along on `godot-ga-main` when they're in service
-  of godot/geo work. `godot-ga-main` is cut from `main` and synced forward periodically.
+  change that touches *only* `godot-generative-agents/`, `tools/geo/`, and/or
+  `backend/` goes on the long-lived `godot-ga-main` branch instead — branch off it and
+  target your PR at it (reviewed by the Godot/geo owners, @aking526 + @0frankie, not
+  the full `main` review). Anything touching the rest of the shared engine library
+  (`text_adventure_games/`, the root `tests/`, top-level docs, …) still goes through
+  `main`. A change spanning *both* that shared engine and godot/geo/backend goes to
+  `main`. Minor shared-config tweaks (`.gitignore`, `mkdocs/`) — and the `tests/`/docs
+  that accompany godot/geo/backend work — may ride along on `godot-ga-main` when
+  they're in service of that work. `godot-ga-main` is cut from `main` and synced
+  forward periodically.
