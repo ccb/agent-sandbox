@@ -52,11 +52,41 @@ const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 # The Cute Fantasy UI pack's glyph sheets (16 px grid). _pack_icon() slices one
 # cell out and upscales it 2x so the pixel art stays crisp at button size; the
 # column/row picked for each button is noted where it's used. The pack has no
-# zoom or flame glyphs, so zoom borrows the plus/minus and Heatmap the bolt.
+# zoom glyph, so zoom borrows its plus/minus.
 const BUTTON_GLYPHS := preload("res://Cute_Fantasy_UI/UI/UI_Button_Icons.png")
 const MISC_GLYPHS := preload("res://Cute_Fantasy_UI/UI/UI_Icons.png")
 const GLYPH_CELL := 16   # the sheets' cell size, px
 const GLYPH_SCALE := 2   # 16 px cells → 32 px button icons
+
+# The pack has no flame either, so Heatmap's glyph is drawn here pixel by pixel
+# in the pack's own palette (its dark outline + its orange→yellow ramp, sampled
+# from the plus/bolt glyphs), one string per row, so it sits next to the sheet
+# icons without looking foreign.
+const FLAME_PALETTE := {
+	"#": Color("181425"),  # outline
+	"o": Color("f77622"),  # orange rim
+	"a": Color("feae34"),  # amber
+	"y": Color("fee761"),  # yellow
+	"w": Color("fff4b8"),  # white-hot core
+}
+const FLAME_ROWS: PackedStringArray = [
+	"................",
+	".......#........",
+	"......#o#.......",
+	"......#oo#......",
+	".....#ooo#......",
+	"....#ooooo#.....",
+	"...#ooooooo#....",
+	"..#oooaaaooo#...",
+	"..#ooaayyaoo#...",
+	".#ooaayyyyaoo#..",
+	".#oaayywwyyao#..",
+	".#oaaywwwyyao#..",
+	".#oaayywyyyao#..",
+	"..#oaayyyyao#...",
+	"...##oaaao##....",
+	".....#####......",
+]
 
 var _clock: Label
 var _play: Button                   # play/pause toggle (icon set by set_playing)
@@ -131,14 +161,13 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_pack_icon(MISC_GLYPHS, 0, 2), "Zoom in",
 		func() -> void: zoom_in_requested.emit()))
-	# Reset view: the home glyph — the map convention for "back to the default
-	# framing" (and it matches the Home key shortcut).
+	# Reset view: the pack's circular arrow — "put the view back".
 	view_row.add_child(_icon_button(
-		_pack_icon(BUTTON_GLYPHS, 6, 1), "Reset view — frame the whole campus (R / Home)",
+		_pack_icon(BUTTON_GLYPHS, 30, 1), "Reset view — frame the whole campus (R / Home)",
 		func() -> void: reset_requested.emit()))
-	# Heatmap: the lightning bolt, the pack's closest thing to a heat glyph.
+	# Heatmap: the hand-drawn flame (see FLAME_ROWS).
 	view_row.add_child(_icon_button(
-		_pack_icon(MISC_GLYPHS, 9, 0), "Heatmap — where agents spend their time, up to now (H)",
+		_flame_icon(), "Heatmap — where agents spend their time, up to now (H)",
 		func() -> void: heatmap_requested.emit()))
 
 	# Playback controls: a transport row (pause/resume beside the step counter),
@@ -232,6 +261,18 @@ static func _pack_icon(sheet: Texture2D, glyph_col: int, glyph_row: int) -> Text
 		glyph_col * GLYPH_CELL, glyph_row * GLYPH_CELL, GLYPH_CELL, GLYPH_CELL))
 	cell.resize(GLYPH_CELL * GLYPH_SCALE, GLYPH_CELL * GLYPH_SCALE, Image.INTERPOLATE_NEAREST)
 	return ImageTexture.create_from_image(cell)
+
+
+static func _flame_icon() -> Texture2D:
+	# Rasterize the FLAME_ROWS bitmap at the same size/scale as the sheet glyphs.
+	var img := Image.create_empty(GLYPH_CELL, GLYPH_CELL, false, Image.FORMAT_RGBA8)
+	for y in FLAME_ROWS.size():
+		var row := FLAME_ROWS[y]
+		for x in row.length():
+			if FLAME_PALETTE.has(row[x]):
+				img.set_pixel(x, y, FLAME_PALETTE[row[x]])
+	img.resize(GLYPH_CELL * GLYPH_SCALE, GLYPH_CELL * GLYPH_SCALE, Image.INTERPOLATE_NEAREST)
+	return ImageTexture.create_from_image(img)
 
 
 func _icon_button(icon: Texture2D, tooltip: String, on_pressed: Callable) -> Button:
