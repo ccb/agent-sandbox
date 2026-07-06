@@ -133,6 +133,12 @@ class Parser:
         self._emit(Channel.NARRATION, description)
         self.add_description_to_history(description)
 
+    def damage(self, description: str):
+        """Report a wound landing on its own channel, so harm always arrives
+        in one consistent voice: "Acid-Lashed - A welt across your back."."""
+        self._emit(Channel.DAMAGE, description)
+        self.add_description_to_history(description)
+
     def fail(self, description: str):
         """Report an action blocked by its preconditions. ``last_fail_message``
         is set so the ReAct Reflect step can read the reason."""
@@ -221,6 +227,10 @@ class Parser:
             # contain other command words), and this also handles the "speak"
             # alias, which is not auto-registered.
             return ActionName.SAY
+        elif command.split(" ", 1)[0] in ("throw", "hurl", "lob"):
+            # A throw names a direction ("throw purse north") or a target; the
+            # direction is the throw's argument, not a movement intent.
+            return "throw"
         elif command.startswith("adopt goal"):
             # Goal-management verbs are matched explicitly: "drop goal ..." must
             # win over the inventory "drop" verb below, and both must beat the
@@ -587,6 +597,14 @@ class Parser:
                 if exclude is not None and candidate is exclude:
                     continue
                 return candidate
+        # A character's aliases match too -- "give dates to jackals" finds the
+        # "jackal pack" (same substring rule as names).
+        for candidate in self.game.characters.values():
+            if exclude is not None and candidate is exclude:
+                continue
+            for alias in getattr(candidate, "aliases", ()):
+                if alias in command:
+                    return candidate
         return self.game.player
 
     def get_character_location(self, character: Character) -> Location:

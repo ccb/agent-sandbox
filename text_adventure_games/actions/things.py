@@ -514,6 +514,92 @@ class Examine(base.Action):
             self.parser.ok("You don't see anything special.")
 
 
+class Throw(base.Action):
+    """Throw a carried item in a direction: it leaves your hands and lands in
+    the connected room, clattering -- a real sound, emitted where it LANDS.
+    The classic noisemaker: anything that hunts by sound will go and see.
+
+    Blocks don't stop a thrown object (they gate travel, not flight through an
+    archway), but the exit must exist. A fragile item shatters where it lands.
+    """
+
+    ACTION_NAME = "throw"
+    ACTION_DESCRIPTION = "Throw something in a direction, or at someone"
+    ACTION_ALIASES = ["hurl", "lob"]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="thrower")
+        self.location = self.character.location
+        # "throw X at Y" targets a character (who catches it); otherwise a
+        # direction ("throw X north") sends it into the next room.
+        self.target = (
+            self.character_in_room(command, self.character)
+            if " at " in command.lower()
+            else None
+        )
+        # A throw names its direction at the END ("throw purse north", "hurl
+        # rock right stairs"): try the trailing two words, then one, as an
+        # exact direction/exit name.
+        self.direction = None
+        if self.target is None:
+            words = command.lower().strip().split()
+            for take in (2, 1):
+                if len(words) >= take:
+                    cand = " ".join(words[-take:])
+                    self.direction = self.parser.get_direction(cand, self.location)
+                    if self.direction:
+                        break
+        self.item = self.parser.match_item(
+            command, self.character.carried_items(), hint="thing to throw"
+        )
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.item, "I don't see it."):
+            return False
+        if self.character.is_worn(self.item) or self.character.is_wielded(self.item):
+            self.parser.fail(f"The {self.item.name} is in use. Stow it first.")
+            return False
+        if self.target is not None:
+            return True
+        if self.direction is None:
+            self.parser.fail("Throw it which way -- or at whom?")
+            return False
+        if not self.location or not self.location.get_connection(self.direction):
+            self.parser.fail("There's nothing that way to throw at.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.discard_item(self.item)
+        if self.target is not None:
+            # A catch: the item changes hands. What the catcher DOES with it
+            # is theirs to decide (a game trigger: eat it, keep it, drop it).
+            self.target.add_to_inventory(self.item)
+            self.parser.ok(
+                f"You throw the {self.item.name} at {self.target.name} -- "
+                f"and {self.target.name} catches it."
+            )
+            return
+        dest = self.location.connections[self.direction]
+        if self.item.get_property(Property.IS_FRAGILE):
+            description = (
+                f"You throw the {self.item.name} {self.direction}; a beat "
+                f"later, the sound of it shattering in {dest.name}."
+            )
+            sound = f"the shatter of a thrown {self.item.name}"
+        else:
+            dest.add_item(self.item)
+            description = (
+                f"You throw the {self.item.name} {self.direction}; a beat "
+                f"later, a clatter from {dest.name}."
+            )
+            sound = f"the clatter of a thrown {self.item.name}"
+        self.parser.ok(description)
+        # The noise happens where it LANDS -- the tactical point.
+        self.game.emit_sound(dest, 1, sound)
+
+
 class Give(base.Action):
     ACTION_NAME = ActionName.GIVE
     ACTION_DESCRIPTION = "Give something to someone"
@@ -552,6 +638,12 @@ class Give(base.Action):
         * The recipient must have room to receive the item
         """
         if not self.was_matched(self.item, "I don't see it."):
+            return False
+        # An unmatched recipient falls back to the player (parser default),
+        # which for a player-issued give means giving to yourself. Refuse and
+        # ask instead of narrating "You gave the X to You."
+        if self.recipient is self.giver:
+            self.parser.fail("Give it to whom?")
             return False
         if self.giver.is_worn(self.item):
             self.parser.fail(
@@ -593,7 +685,7 @@ class Give(base.Action):
         """
         self.giver.discard_item(self.item)
         self.recipient.accept_item(self.item)
-        description = "{giver} gave the {item_name} to {recipient}".format(
+        description = "{giver} gave the {item_name} to {recipient}.".format(
             giver=self.giver.name.capitalize(),
             item_name=self.item.name,
             recipient=self.recipient.name.capitalize(),
