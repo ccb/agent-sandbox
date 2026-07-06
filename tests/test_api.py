@@ -5,6 +5,7 @@ the pure ``run_command`` helper. Offline; requires the ``server`` extra (fastapi
 uvicorn) and ``httpx`` (TestClient) -- skipped cleanly if they're absent.
 """
 
+import threading
 import time
 import urllib.parse
 from collections import Counter
@@ -726,6 +727,27 @@ def test_live_disabled_by_default():
     assert c.get("/usage").json()["available"] is False
     assert c.get("/health").json()["ok"] is True
     assert c.post("/command", json={"command": "go north"}).status_code == 200
+
+
+def test_shutdown_hidden_unless_opted_in():
+    # The generic API never exposes remote shutdown: 404, exactly like a route
+    # that does not exist -- with or without a live loop.
+    assert _client().post("/shutdown").status_code == 404
+    with _live_client() as c:
+        assert c.post("/shutdown").status_code == 404
+
+
+def test_shutdown_pauses_the_loop_and_fires_the_hook():
+    # serve_penn opts in (allow_shutdown=True): the viewer POSTs /shutdown on
+    # window close, so the sim -- and its spend -- stops with nobody watching.
+    # Tests inject on_shutdown; the default SIGINTs the server process.
+    fired = threading.Event()
+    with _live_client(allow_shutdown=True, on_shutdown=fired.set) as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)  # day is running
+        assert c.post("/shutdown").json() == {"ok": True}
+        data = c.get("/live").json()
+        assert data["paused"] is True  # spend stopped before the process exits
+        assert fired.wait(timeout=5.0)
 
 
 def test_start_paused_holds_frames_until_resume():
