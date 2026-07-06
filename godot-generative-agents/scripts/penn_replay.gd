@@ -42,6 +42,10 @@ extends Node2D
 ## to the SIM_API_TOKEN env var when empty. Ignored in baked-replay mode.
 @export var live_api_token: String = ""
 
+## Take the backend down when this window closes (live mode): POST /shutdown,
+## so a paying real-LLM sim never keeps running — or spending — unwatched.
+@export var shutdown_backend_on_exit := true
+
 # The Cute Fantasy player sheet is a 6x10 grid; row 0 is a 6-frame walk cycle.
 const SHEET_HFRAMES := 6
 const SHEET_VFRAMES := 10
@@ -199,6 +203,8 @@ var _retry_pending := false
 var _handshake_http: HTTPRequest    # GET /live (its own node: HTTPRequest is one-shot)
 var _events_http: HTTPRequest       # GET /events backfill
 var _live_buildings := {}           # Focus-dropdown entries discovered so far (a set)
+var _backend_run_state := ""        # ""/waiting/running/paused/finished/stopped
+var _quitting := false              # window close in progress (shutdown then quit)
 
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
@@ -316,11 +322,15 @@ func _setup_hud() -> void:
 	_hud_source.usage_updated.connect(_hud.set_usage)
 	_hud_source.health_changed.connect(_hud.set_health)
 	_hud_source.halted_changed.connect(_on_run_halted)
+	_hud_source.llm_call.connect(_hud.add_llm_call)
 	_hud.stop_requested.connect(_hud_source.request_stop)
 	add_child(_hud_source)
 
 	if url != "":
 		_hud_source.configure(url, _resolve_backend_token())
+		# The sidebar's Start/Stop toggle shares the same control path as the
+		# HUD's Emergency stop; both states sync via the feed's status records.
+		_panel.live_run_toggle_requested.connect(_on_live_run_toggle)
 
 
 func _resolve_backend_url() -> String:
@@ -459,6 +469,9 @@ func _start_live() -> void:
 	_live_token = _resolve_backend_token()
 	_panel.set_live(true)
 	_panel.set_live_status("connecting to %s…" % _live_url)
+	# Closing the window should take the backend down with us (see
+	# _shutdown_and_quit): hold the auto-quit so the POST gets out first.
+	get_tree().set_auto_accept_quit(false)
 	# One HTTPRequest node per concern (they're one-request-at-a-time), the same
 	# split hud_source_live.gd uses for its polls.
 	_handshake_http = HTTPRequest.new()
@@ -513,6 +526,15 @@ func _on_live_handshake_completed(
 		_hud_source.set_cast(_names)
 		_update_clock()
 	_panel.set_live_status("catching up…")
+	# Seed the sidebar's Start/Stop toggle from the handshake. A backend booted
+	# with --start-paused (the --brain llm default) is armed but has never
+	# ticked: the day — and its spend — waits behind "▶ Start simulation".
+	if bool((data as Dictionary).get("paused", false)):
+		_set_backend_run_state(
+			"waiting" if int((data as Dictionary).get("step", 0)) == 0 else "paused"
+		)
+	else:
+		_set_backend_run_state("running")
 	_request_backfill()
 	_connect_ws()
 
@@ -562,11 +584,25 @@ func _apply_record(rec: Variant) -> void:
 			_apply_live_frame(int(record.get("step", -1)), record.get("agents"))
 		"status":
 			_on_live_status(record)
+		"engine":
+			# Engine change-feed records ride the same log as frames. The only
+			# payload the viewer renders today is the backend request monitor's
+			# llm_call rows (serve_penn's drain_events, issue #398), which flow
+			# to the HUD's request log through the source seam.
+			var event: Variant = record.get("event")
+			if (
+				typeof(event) == TYPE_DICTIONARY
+				and String((event as Dictionary).get("kind", "")) == "llm_call"
+				and _hud_source != null
+			):
+				_hud_source.note_llm_call(event)
 
 
 func _apply_live_frame(step: int, agents: Variant) -> void:
 	if step < 0 or typeof(agents) != TYPE_DICTIONARY:
 		return
+	if _backend_run_state != "running":
+		_set_backend_run_state("running")  # frames flowing = the day is on
 	# Index-addressed: frame N lands at _frames[N] exactly, so the clock, the
 	# trails and the heatmap index the live array the same way they index a
 	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
@@ -602,15 +638,74 @@ func _on_live_status(record: Dictionary) -> void:
 	# sidebar. (The HUD's health dot has its own view via the socket signals.)
 	match String(record.get("reason", "")):
 		"started", "resumed":
-			_panel.set_live_status("following backend")
+			# "started" can carry paused=true (a --start-paused boot): the day
+			# is still behind the sidebar's ▶ Start button.
+			if bool(record.get("paused", false)):
+				_set_backend_run_state(
+					"waiting" if int(record.get("step", 0)) == 0 else "paused"
+				)
+			else:
+				_set_backend_run_state("running")
+				_panel.set_live_status("following backend")
 		"paused":
+			_set_backend_run_state("paused")
 			_panel.set_live_status("backend paused")
 		"finished":
+			_set_backend_run_state("finished")
 			_panel.set_live_status("run finished (POST /reset for a new day)")
 		"reset":
 			_panel.set_live_status("backend reset — reload the viewer to follow the new run")
 		"stopped":
+			_set_backend_run_state("stopped")
 			_panel.set_live_status("backend stopped")
+
+
+func _set_backend_run_state(state: String) -> void:
+	# Backend run state -> the sidebar Start/Stop toggle + status line. Driven
+	# only by the handshake and the feed's status records — never by button
+	# clicks — so a failed control request leaves the UI truthful.
+	if state == _backend_run_state:
+		return
+	_backend_run_state = state
+	_panel.set_live_run(state)
+	if state == "waiting":
+		_panel.set_live_status("waiting — press ▶ Start to begin the day")
+
+
+func _on_live_run_toggle() -> void:
+	# The sidebar Start/Stop drives backend run control through the HUD's live
+	# source (POST /resume|/pause, bearer token included). The button flips on
+	# the backend's answering status record, not on the click.
+	if _hud_source == null:
+		return
+	if _backend_run_state == "running":
+		_hud_source.request_stop()
+	elif _hud_source.has_method("request_resume"):
+		_hud_source.request_resume()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_shutdown_and_quit()
+
+
+func _shutdown_and_quit() -> void:
+	# Live mode holds the window close (set_auto_accept_quit(false) in
+	# _start_live) just long enough to take the backend down with it: closing
+	# the viewer must also stop the sim — and its spend. Quit proceeds either
+	# way; a dead backend can't answer and shouldn't block the close.
+	if _quitting:
+		return
+	_quitting = true
+	if (
+		_is_live
+		and shutdown_backend_on_exit
+		and _hud_source != null
+		and _hud_source.has_method("request_shutdown")
+	):
+		_hud_source.request_shutdown()
+		await get_tree().create_timer(0.6).timeout
+	get_tree().quit()
 
 
 func _connect_ws() -> void:

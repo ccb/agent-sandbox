@@ -52,15 +52,21 @@ func configure(base_url: String, token: String) -> void:
 	_base_url = base_url.rstrip("/")
 	_token = token
 
+	# Every node gets a timeout: a real-LLM backend holds its app lock for the
+	# whole model call, so a poll can stall for seconds -- it must eventually
+	# free the node rather than wedge it busy forever.
 	_usage_http = HTTPRequest.new()
+	_usage_http.timeout = 4.0
 	_usage_http.request_completed.connect(_on_usage_completed)
 	add_child(_usage_http)
 
 	_health_http = HTTPRequest.new()
+	_health_http.timeout = 4.0
 	_health_http.request_completed.connect(_on_health_completed)
 	add_child(_health_http)
 
 	_control_http = HTTPRequest.new()
+	_control_http.timeout = 6.0
 	_control_http.request_completed.connect(_on_control_completed)
 	add_child(_control_http)
 
@@ -111,9 +117,18 @@ func request_resume() -> void:
 	_send_control("resume")
 
 
+func request_shutdown() -> void:
+	## Take the backend down with the viewer (POST /shutdown; serve_penn opts
+	## in). Called from the window-close path, so by the time the reply lands
+	## the scene is already quitting -- fire and forget.
+	_send_control("shutdown")
+
+
 func _send_control(op: String) -> void:
-	# ERR_BUSY = a previous control request is still in flight; the button can
+	# One control request at a time; if one is still in flight the button can
 	# simply be pressed again (nothing to queue -- the newest intent wins).
+	if not _idle(_control_http):
+		return
 	_control_op = op
 	var err := _control_http.request(
 		"%s/%s" % [_base_url, op], _headers(), HTTPClient.METHOD_POST, "{}"
@@ -127,6 +142,8 @@ func _on_control_completed(
 ) -> void:
 	var ok := result == HTTPRequest.RESULT_SUCCESS and code >= 200 and code < 300
 	if ok:
+		if _control_op == "shutdown":
+			return  # the viewer is quitting; no state left worth emitting
 		_halted = _control_op == "pause"
 		halted_changed.emit(_halted)
 	else:
@@ -145,8 +162,17 @@ func _headers() -> PackedStringArray:
 	return headers
 
 
+func _idle(req: HTTPRequest) -> bool:
+	# A Godot HTTPRequest is one-at-a-time, and calling request() on a busy one
+	# prints an engine ERROR before returning ERR_BUSY. A real-LLM backend can
+	# hold its app lock for seconds per tick, so polls routinely outlast their
+	# interval -- check first and skip the beat silently.
+	return req.get_http_client_status() == HTTPClient.STATUS_DISCONNECTED
+
+
 func _poll_usage() -> void:
-	# ERR_BUSY (the previous poll hasn't finished) just means we skip a beat.
+	if not _idle(_usage_http):
+		return  # previous poll still in flight (slow tick); skip a beat
 	_usage_http.request("%s/usage" % _base_url, _headers())
 
 
@@ -163,6 +189,8 @@ func _on_usage_completed(
 
 
 func _poll_health() -> void:
+	if not _idle(_health_http):
+		return  # previous check still in flight; the timeout will resolve it
 	_health_http.request("%s/health" % _base_url, _headers())
 
 

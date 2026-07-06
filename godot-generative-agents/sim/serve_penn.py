@@ -4,14 +4,26 @@ Where ``generate_penn_replay.py`` runs the whole sim offline and writes a baked
 ``penn_replay.json`` the Godot viewer loads once, this script steps the *same*
 configured Penn world (``penn_world.build_penn_world``, #297) one tick at a time
 inside ``backend.api``'s self-stepping live loop (#349) -- so the viewer follows
-it over real HTTP + WebSocket (#262/#263) instead of reading a file. Everything
-runs on the deterministic mock brain: real requests, zero LLM keys, zero spend.
+it over real HTTP + WebSocket (#262/#263) instead of reading a file.
+
+Two brains (#261). The default is the deterministic mock: real requests, zero
+LLM keys, zero spend, authored ``meetings:`` dialogue painted on. With
+``--brain llm`` the model named by the world YAML's ``llm:`` block -- Anthropic
+Claude Haiku -- makes every decide/converse/reflect call instead: agents choose
+their actions, speak for themselves when the routing brings them together
+(perception-gated, scripted dialogue off), and reflect; every request is
+metered by the terminal monitor and the ``max_cost_usd`` kill-switch ends the
+day if spend reaches the ceiling.
 
 Run from the repo root (terminal 1), then point the viewer at it (terminal 2)::
 
     uv sync --extra server
     uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
     SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+
+    # the real thing (uv sync --extra server --extra llm, key required):
+    ANTHROPIC_API_KEY=sk-ant-... \
+        uv run python godot-generative-agents/sim/serve_penn.py --brain llm
 
 The pieces:
 
@@ -28,8 +40,11 @@ The pieces:
 """
 
 import argparse
+import os
 
 from backend.api import run
+from backend.env import load_dotenv
+from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.sim_config import CognitionConfig
 from backend.smallville_agents import attach_agents
@@ -42,11 +57,63 @@ from penn_world import (
     build_penn_world,
     replay_frame_entry,
 )
+from text_adventure_games.llm_client import LlmConfig, create_llm_client
 from text_adventure_games.usage import UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
 DEFAULT_STEPS = 1200
+
+# The model --brain llm falls back to if the world's llm: block names none.
+# Claude Haiku: a campus day is dozens-to-hundreds of low-stakes calls, so the
+# cheapest current Anthropic model is the right default (issue #261).
+DEFAULT_LLM_MODEL = "claude-haiku-4-5"
+
+
+def resolve_llm(world_llm, brain, model=None, max_cost=None):
+    """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
+
+    ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
+    no key is needed, nothing is spent, and whatever the world YAML declares is
+    ignored. ``--brain llm`` starts from the world's ``llm:`` block and lets the
+    CLI override the ``model`` and ``max_cost_usd`` for one run.
+
+    Deliberately Anthropic-only and ``ANTHROPIC_API_KEY``-only: this never
+    reads ``LLM_PROVIDER`` / ``LLM_API_KEY`` / ``LLM_MODEL`` (the engine's
+    ``client_from_env`` knobs), so a stray key for some other provider sitting
+    in the environment can never be picked up by a Penn run. Both failure modes
+    (wrong provider, missing key) exit with a one-line fix rather than serving
+    an all-day sim whose every model call silently returns ``None``.
+
+    Note what is intentionally NOT configurable here: the daily planner. The
+    authored YAML schedules (and the rendezvous routing built on them) stay in
+    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` currently
+    validates stops against the *Smallville* location names, and a generated
+    schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
+    is follow-up work; decide/converse/reflect are the model's here.
+    """
+    if brain != "llm":
+        return None
+    llm = dict(world_llm or {})
+    if model is not None:
+        llm["model"] = model
+    if max_cost is not None:
+        llm["max_cost_usd"] = max_cost
+    provider = str(llm.get("provider", "anthropic")).lower()
+    if provider != "anthropic":
+        raise SystemExit(
+            f"--brain llm supports only provider 'anthropic' (the llm: block in "
+            f"world_data_upenn.yaml says {provider!r})."
+        )
+    llm["provider"] = "anthropic"
+    llm.setdefault("model", DEFAULT_LLM_MODEL)
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise SystemExit(
+            "--brain llm needs ANTHROPIC_API_KEY: export it, or put it in a "
+            "repo-root .env file (template: .env.example). "
+            "(--brain mock runs offline, without keys)"
+        )
+    return llm
 
 
 class LiveMeetingInjector:
@@ -192,14 +259,53 @@ class PennStepper:
     That means the served ``Game`` is a new object after a reset -- which is why
     :func:`main` hands the API a :class:`_GameProxy` rather than the game
     itself. The ``ledger`` deliberately survives resets (money spent stays
-    spent; ~$0 under the mock, real numbers when #261 swaps a brain in).
+    spent; ~$0 under the mock, real Haiku numbers under ``--brain llm``).
     """
 
-    def __init__(self, num_steps=DEFAULT_STEPS, endless=False, world=None):
+    def __init__(
+        self, num_steps=DEFAULT_STEPS, endless=False, world=None, monitor=None, llm=None
+    ):
         self.num_steps = num_steps
         self.endless = endless
-        self.ledger = UsageLedger()  # backs GET /usage across resets
+        # Resolved LLM settings (resolve_llm), or None for the mock brain. The
+        # ledger's cost ceiling comes from the same block, so GET /usage
+        # reports the budget and tick() can end the day at it.
+        self.llm = llm
+        self.ledger = UsageLedger(  # backs GET /usage across resets
+            max_cost_usd=(llm or {}).get("max_cost_usd")
+        )
+        # The terminal request monitor (backend.llm_monitor), or None for quiet.
+        # Like the ledger it lives here, not in _build(), so its call counter
+        # survives resets.
+        self.monitor = monitor
+        # The real-brain clients (issue #261): one shared by decide + converse,
+        # one for reflection -- separate instances so the request monitor can
+        # tag each role exactly, all recording into self.ledger. Built once
+        # here (they are stateless apart from ledger/context) and re-wired onto
+        # fresh agents by every _build().
+        self.llm_client = None
+        self.reflector_client = None
+        if llm is not None:
+            config = LlmConfig(provider="anthropic", model=llm.get("model"))
+            brain_ledger = self._recording_ledger("decide")
+            self.llm_client = create_llm_client(config, ledger=brain_ledger)
+            ctx = getattr(self.llm_client, "context", None)
+            if isinstance(brain_ledger, RoleTaggedLedger) and ctx is not None:
+                # decide and converse share this client; the call sites stamp
+                # context["role"] per call and the view reads it live.
+                brain_ledger.bind_context(ctx)
+            self.reflector_client = create_llm_client(
+                config, ledger=self._recording_ledger("reflect")
+            )
         self._build(world)
+
+    def _recording_ledger(self, role):
+        """What a client should record into: the base ledger, or -- when the
+        monitor is on -- a write-through view of it that also prints one
+        terminal line per call, tagged *role*."""
+        if self.monitor is None:
+            return self.ledger
+        return RoleTaggedLedger(self.ledger, self.monitor, role=role)
 
     def _build(self, world: PennWorld | None = None):
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
@@ -208,13 +314,31 @@ class PennStepper:
         self.world = world if world is not None else build_penn_world()
         self.cog = CognitionConfig()
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # Every client records into self.ledger; with a monitor, through a
+        # write-through view that also prints one terminal line per call (the
+        # base ledger stays the single source GET /usage sums). Under the mock
+        # brain the schedule clients this ledger feeds ARE the brains; under a
+        # real brain they only pace the day and never call a model.
         attach_agents(
             self.chars,
             self.world.personas,
-            ledger=self.ledger,
+            ledger=self._recording_ledger("decide"),
             vision_r=self.cog.vision_r,
             num_steps=self.num_steps,
+            # The #261 swap: with a real client every agent's decide (and its
+            # conversation lines) go through the model, and reflection passes
+            # run when enough importance accrues. With None (mock mode) both
+            # fall back exactly as before. No planner_client on purpose: the
+            # authored schedules own the itinerary (see resolve_llm).
+            llm_client=self.llm_client,
+            reflector_client=self.reflector_client,
         )
+        # Real conversations pace themselves through a per-pair cooldown that
+        # must OUTLIVE each tick (simulate() keeps one for its whole run;
+        # step()'s default is a throwaway dict, which would let a settled pair
+        # re-converse every single step). Fresh per day, like the rest of the
+        # world state.
+        self._convo_cooldowns = {}
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -232,7 +356,12 @@ class PennStepper:
                 "chat": None,
             }
         self.injector = LiveMeetingInjector(
-            self.world.meetings,
+            # Under a real brain the authored dialogue stands down entirely:
+            # the rendezvous routing still walks the cast together, but what
+            # they say when they meet comes from the model -- on-screen chat is
+            # never ambiguous about its author. (The injector object stays so
+            # apply()/reset() call sites are mode-blind.)
+            [] if self.llm_client is not None else self.world.meetings,
             vision_r=self.cog.vision_r,
             locations=self.world.locations,
         )
@@ -257,15 +386,30 @@ class PennStepper:
             "personas": [
                 {"name": p["name"], "emoji": p["emoji"]} for p in self.world.personas
             ],
+            # What is driving the cast: None under the mock brain, else the
+            # provider/model, so the viewer can say which model it is watching.
+            "llm": (
+                {"provider": self.llm["provider"], "model": self.llm["model"]}
+                if self.llm is not None
+                else None
+            ),
         }
 
     def tick(self) -> dict | None:
         """One sim step -> one replay-schema frame (called under the app lock).
 
-        Returns ``None`` once the campus day is over (non-``endless``): the live
-        loop auto-pauses and publishes ``status(reason="finished")`` instead of
-        an endless stream of identical frames. ``POST /reset`` starts a new day.
+        Returns ``None`` once the campus day is over (non-``endless``) -- or,
+        before anything else, once cumulative spend has reached the ledger's
+        cost ceiling (the ``llm:`` block's ``max_cost_usd``): ``simulate()``
+        polls ``over_budget()`` every step and the live path must too, or a
+        runaway day would keep paying until the schedule ran out. Either way
+        the live loop auto-pauses and publishes ``status(reason="finished")``
+        instead of an endless stream of identical frames. ``POST /reset``
+        starts a new day (spent money stays spent, so a tripped ceiling stays
+        tripped).
         """
+        if self.ledger.over_budget():
+            return None
         if not self.endless and self._step_idx >= self.num_steps:
             return None
         raw, _chats = step(
@@ -277,6 +421,10 @@ class PennStepper:
             world_map=self.world.world_map,
             emoji=self.emoji,
             cog=self.cog,
+            # Real conversations only when a real brain drives -- the same gate
+            # simulate() applies (conversation_enabled = llm_client is not None).
+            conversation_enabled=self.llm_client is not None,
+            conversation_cooldowns=self._convo_cooldowns,
         )
         frame = {name: replay_frame_entry(raw[name]) for name in self.order}
         # Paint authored dialogue post-step, exactly where the bake's injector
@@ -285,6 +433,21 @@ class PennStepper:
         self.injector.apply(frame, self._step_idx)
         self._step_idx += 1
         return frame
+
+    def drain_events(self) -> list:
+        """The monitor rows formed during the last ``tick()``, for the live feed.
+
+        ``backend.live`` probes this optional method after every tick and
+        publishes each returned dict as a ``kind: "engine"`` change-feed record
+        -- so the viewer's run monitor can show the same one-line-per-request
+        log the terminal prints (#398). The payload is the monitor's kept
+        record (a flattened :class:`~text_adventure_games.usage.CallRecord`
+        plus ``role``/``call_no``/``cum_cost_usd``/``time``), re-stamped
+        ``kind: "llm_call"`` so feed consumers can tell it from parser records
+        without guessing at fields."""
+        if self.monitor is None:
+            return []
+        return [dict(rec, kind="llm_call") for rec in self.monitor.drain()]
 
     def reset(self) -> None:
         self._build()
@@ -329,6 +492,42 @@ def main() -> int:
         help="wall-clock seconds per sim step; 0.1 matches the viewer's "
         "step_seconds default so live playback paces like a 1x replay",
     )
+    ap.add_argument(
+        "--brain",
+        choices=("mock", "llm"),
+        default="mock",
+        help="mock (default): the deterministic schedule brain -- offline, free, "
+        "authored meeting dialogue on. llm: the model named by the world's "
+        "llm: block (Anthropic Claude Haiku) makes every decide/converse/"
+        "reflect call; needs ANTHROPIC_API_KEY and `uv sync --extra llm`",
+    )
+    ap.add_argument(
+        "--model",
+        default=None,
+        help="override the llm: block's model for this run (--brain llm only)",
+    )
+    ap.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        help="override the llm: block's max_cost_usd kill-switch, in USD "
+        "(--brain llm only); the day ends when cumulative spend reaches it",
+    )
+    ap.add_argument(
+        "--start-paused",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="boot the loop paused so the day (and, under --brain llm, the "
+        "first paid model call) waits for the viewer's Start button / POST "
+        "/resume. Default: paused under --brain llm, auto-start under mock",
+    )
+    ap.add_argument(
+        "--monitor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="print one terminal line per LLM request (timestamp, actor, role, "
+        "tokens, latency, cost); --no-monitor silences it",
+    )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument(
@@ -339,7 +538,33 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    stepper = PennStepper(num_steps=args.steps, endless=args.endless)
+    # A repo-root .env (git-ignored; template at .env.example) can supply
+    # ANTHROPIC_API_KEY / SIM_API_TOKEN without per-terminal exports;
+    # already-exported environment variables always win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
+
+    # Build the world once: resolve_llm reads its llm: block, the stepper
+    # steps it (a second build would waste the map load and fork patch state).
+    world = build_penn_world()
+    llm = resolve_llm(world.llm, args.brain, model=args.model, max_cost=args.max_cost)
+    # A paying brain shouldn't spend before anyone is watching: under --brain
+    # llm the loop boots paused and the viewer's Start button (POST /resume)
+    # opens the day. The free mock keeps auto-starting. --[no-]start-paused
+    # overrides either way.
+    start_paused = (
+        args.start_paused if args.start_paused is not None else llm is not None
+    )
+    try:
+        stepper = PennStepper(
+            num_steps=args.steps,
+            endless=args.endless,
+            world=world,
+            monitor=LlmCallMonitor() if args.monitor else None,
+            llm=llm,
+        )
+    except ImportError as e:
+        raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
     wm = stepper.world.world_map
     print(
         f"Loaded the_upenn ({wm.width}x{wm.height}); "
@@ -347,9 +572,35 @@ def main() -> int:
         f"meetings. Stepping every {args.tick_seconds}s "
         f"({'endless' if args.endless else f'{args.steps}-step day'})."
     )
+    if llm is not None:
+        ceiling = llm.get("max_cost_usd")
+        print(
+            f"Brain: LIVE LLM -- anthropic/{llm['model']} makes every "
+            "decide/converse/reflect call. "
+            + (
+                f"Cost ceiling ${ceiling:.2f} (the day ends at it)."
+                if ceiling is not None
+                else "NO cost ceiling -- set max_cost_usd in the llm: block "
+                "or pass --max-cost."
+            )
+        )
+        print("Authored meeting dialogue: OFF -- the cast speaks through the model.")
+    else:
+        print(
+            "Brain: mock (deterministic, free; authored meeting dialogue ON). "
+            "For the real thing: --brain llm."
+        )
+    print(
+        f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"
+    )
+    if start_paused:
+        print(
+            "Start gate: the loop boots PAUSED — press ▶ Start in the viewer "
+            "(or POST /resume) to begin the day."
+        )
     print(
         f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "
-        "POST /pause|/resume|/reset, GET /usage  (OpenAPI at /docs)"
+        "POST /pause|/resume|/reset|/shutdown, GET /usage  (OpenAPI at /docs)"
     )
     run(
         _GameProxy(stepper),
@@ -358,6 +609,10 @@ def main() -> int:
         auth_token=args.token,
         stepper=stepper,
         tick_seconds=args.tick_seconds,
+        start_paused=start_paused,
+        # This server's lifecycle follows the viewer: closing the Godot window
+        # POSTs /shutdown, so a paying sim never keeps running unwatched.
+        allow_shutdown=True,
     )
     return 0
 
