@@ -354,6 +354,21 @@ uv run python tools/geo/wall_all_buildings.py             # apply
 - It's idempotent: the perimeter is re-derived and only perimeter cells are
   rewritten, so it's safe to re-run after a fresh `osm_to_tiled.py` bake.
 
+### `validate_tmj.py` — tmj ↔ matrix validator
+
+Detect-and-report checks that the authored `upenn_core_urban.tmj` and the
+generative-agents matrix (`sim/the_upenn/matrix`) agree, plus tmj
+internal-integrity checks. Prints a grouped report; exits non-zero on any
+**error** finding not listed in `validate_tmj_baseline.json` (the ledger of
+currently-accepted drift, e.g. Cohen/Alumni rooms drawn in the tmj but not yet
+wired into `add_entrances.ROOM_SUBDIVIDE`).
+
+    uv run python tools/geo/validate_tmj.py           # human report
+    uv run python tools/geo/validate_tmj.py --json    # findings as JSON
+
+`test_validate_tmj.py` runs it as a CI gate: all integrity checks must pass and
+no new error drift may appear beyond the baseline.
+
 ## Notes / limitations
 
 - Map data © OpenStreetMap contributors, **ODbL** — attribution required if
