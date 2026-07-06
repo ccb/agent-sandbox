@@ -5,6 +5,7 @@ the pure ``run_command`` helper. Offline; requires the ``server`` extra (fastapi
 uvicorn) and ``httpx`` (TestClient) -- skipped cleanly if they're absent.
 """
 
+import time
 import urllib.parse
 from collections import Counter
 
@@ -14,11 +15,19 @@ pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
+from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
-from backend.api import _demo_game, create_app, run, run_command  # noqa: E402
+from backend.api import (  # noqa: E402
+    _demo_game,
+    _demo_stepper,
+    create_app,
+    run,
+    run_command,
+)
 from backend.smallville_agents import memory_stream_for_persona  # noqa: E402
 from text_adventure_games import games, things  # noqa: E402
 from text_adventure_games.npc import ScriptedAgent  # noqa: E402
+from text_adventure_games.usage import UsageLedger  # noqa: E402
 
 
 def _tiny():
@@ -630,3 +639,303 @@ def test_run_command_advances_and_restores_renderer():
     assert game.parser.renderer is original
     assert result["game_over"] is False
     assert any(e["channel"] == "narration" for e in result["events"])
+
+
+# --- the live surface: loop + feed + run control (#349/#262) --------------
+#
+# These tests inject a fake SimStepper and run the loop for real (10 ms
+# ticks) inside ``with TestClient(app):`` -- the loop rides the lifespan, so a
+# bare TestClient never starts it. Every wait polls with a deadline; there are
+# no bare sleeps standing in for synchronization.
+
+
+class _FakeStepper:
+    """A deterministic SimStepper: agent "a" walks east one tile per tick."""
+
+    def __init__(self, finish_after=None, ledger=None):
+        self._step = 0
+        self.finish_after = finish_after
+        self.reset_calls = 0
+        self.ledger = ledger
+
+    @property
+    def step(self):
+        return self._step
+
+    def meta(self):
+        return {
+            "tile_px": 8,
+            "width": 4,
+            "height": 4,
+            "personas": [{"name": "a", "emoji": "@"}],
+        }
+
+    def tick(self):
+        if self.finish_after is not None and self._step >= self.finish_after:
+            return None
+        frame = {"a": {"x": self._step, "y": 0, "act": "walking @ demo", "e": "@"}}
+        self._step += 1
+        return frame
+
+    def reset(self):
+        self._step = 0
+        self.reset_calls += 1
+
+
+def _live_client(stepper=None, game=None, **kwargs):
+    """A TestClient over a live app. Use as ``with _live_client() as c:``."""
+    kwargs.setdefault("tick_seconds", 0.01)
+    return TestClient(
+        create_app(game or _tiny(), stepper=stepper or _FakeStepper(), **kwargs)
+    )
+
+
+def _wait_for_events(client, predicate, timeout=5.0, headers=None):
+    """Poll ``GET /events?since=0`` until *predicate*(events) holds."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        events = client.get("/events?since=0", headers=headers).json()["events"]
+        if predicate(events):
+            return events
+        time.sleep(0.01)
+    raise AssertionError("timed out waiting for the change feed")
+
+
+def _frame_count(events):
+    return sum(e["kind"] == "frame" for e in events)
+
+
+def test_live_disabled_by_default():
+    c = _client()  # no stepper: the command-driven API, byte-identical
+    assert c.get("/live").json() == {
+        "enabled": False,
+        "running": False,
+        "paused": False,
+        "step": None,
+        "cursor": 0,
+        "tick_seconds": None,
+        "meta": None,
+    }
+    assert c.get("/events").json() == {
+        "latest_cursor": 0,
+        "oldest_cursor": None,
+        "events": [],
+    }
+    for path in ("/pause", "/resume", "/reset"):
+        assert c.post(path).status_code == 409  # no loop to control
+    assert c.get("/usage").json()["available"] is False
+    assert c.get("/health").json()["ok"] is True
+    assert c.post("/command", json={"command": "go north"}).status_code == 200
+
+
+def test_live_handshake_reports_meta_and_state():
+    with _live_client() as c:
+        _wait_for_events(c, lambda evs: len(evs) >= 1)  # loop task has started
+        data = c.get("/live").json()
+        assert data["enabled"] is True
+        assert data["running"] is True
+        assert data["paused"] is False
+        assert data["tick_seconds"] == 0.01
+        assert data["meta"]["personas"] == [{"name": "a", "emoji": "@"}]
+
+
+def test_loop_appends_frames_with_contiguous_cursors():
+    with _live_client() as c:
+        events = _wait_for_events(c, lambda evs: _frame_count(evs) >= 3)
+        cursors = [e["cursor"] for e in events]
+        assert cursors == list(range(1, len(cursors) + 1))  # 1-based, no holes
+        assert events[0] == {
+            "cursor": 1,
+            "kind": "status",
+            "reason": "started",
+            "running": True,
+            "paused": False,
+            "step": 0,
+        }
+        frames = [e for e in events if e["kind"] == "frame"]
+        assert [f["step"] for f in frames[:3]] == [0, 1, 2]
+        assert frames[0]["agents"]["a"]["x"] == 0
+
+
+def test_events_since_returns_only_newer_and_empty_tail_promptly():
+    with _live_client() as c:
+        events = _wait_for_events(c, lambda evs: len(evs) >= 3)
+        mid = events[1]["cursor"]
+        tail = c.get(f"/events?since={mid}").json()
+        assert tail["events"] and all(e["cursor"] > mid for e in tail["events"])
+        latest = c.get("/events").json()["latest_cursor"]
+        far = c.get(f"/events?since={latest + 10_000}").json()
+        assert far["events"] == []  # an empty tail answers at once
+
+
+def test_ws_receives_pushed_frames():
+    with _live_client() as c:
+        with c.websocket_connect("/ws?since=0") as ws:
+            first = ws.receive_json()
+            assert first["kind"] == "status" and first["reason"] == "started"
+            record = ws.receive_json()
+            while record["kind"] != "frame":  # skip any interleaved statuses
+                record = ws.receive_json()
+            assert record["agents"]["a"]["act"] == "walking @ demo"
+
+
+def test_ws_reconnect_backfill_no_gap_no_dupes():
+    """The #262 acceptance: kill the socket, catch up over HTTP, re-attach --
+    the concatenated cursor sequence has no gap and no duplicate."""
+    with _live_client() as c:
+        seen = []
+        with c.websocket_connect("/ws?since=0") as ws:
+            for _ in range(3):
+                seen.append(ws.receive_json())
+        last = seen[-1]["cursor"]
+        # ...socket gone; the loop keeps stepping...
+        _wait_for_events(c, lambda evs: evs and evs[-1]["cursor"] > last + 1)
+        seen.extend(c.get(f"/events?since={last}").json()["events"])  # catch up
+        last = seen[-1]["cursor"]
+        with c.websocket_connect(f"/ws?since={last}") as ws:  # re-attach
+            seen.append(ws.receive_json())
+        cursors = [r["cursor"] for r in seen]
+        assert cursors == list(range(cursors[0], cursors[0] + len(cursors)))
+
+
+def test_ws_auth_header_or_query_token():
+    with _live_client(auth_token="s3cret") as c:
+        with pytest.raises(WebSocketDisconnect):
+            with c.websocket_connect("/ws"):
+                pass  # no token: refused before the handshake completes
+        with pytest.raises(WebSocketDisconnect):
+            with c.websocket_connect("/ws?token=wrong"):
+                pass
+        headers = {"Authorization": "Bearer s3cret"}
+        with c.websocket_connect("/ws?since=0", headers=headers) as ws:
+            assert ws.receive_json()["cursor"] == 1  # Godot's door: the header
+        with c.websocket_connect("/ws?since=0&token=s3cret") as ws:
+            assert ws.receive_json()["cursor"] == 1  # the browser's door
+
+
+def test_pause_stops_frames_resume_restarts():
+    with _live_client() as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)
+        state = c.post("/pause").json()
+        assert state["paused"] is True and state["running"] is True
+        time.sleep(0.05)  # let any tick already in flight land
+        settled = c.get("/events").json()["latest_cursor"]
+        time.sleep(0.05)
+        assert c.get("/events").json()["latest_cursor"] == settled  # silence
+        assert c.post("/resume").json()["paused"] is False
+        _wait_for_events(
+            c,
+            lambda evs: any(
+                e["kind"] == "frame" and e["cursor"] > settled for e in evs
+            ),
+        )
+
+
+def test_reset_restarts_steps_but_not_cursors():
+    stepper = _FakeStepper()
+    with _live_client(stepper=stepper) as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 2)
+        c.post("/pause")  # quiesce so the reset state is deterministic
+        state = c.post("/reset").json()
+        assert stepper.reset_calls == 1
+        assert state["step"] == 0
+        cursor_at_reset = state["cursor"]
+        assert cursor_at_reset >= 4  # started + 2 frames + paused came before
+        c.post("/resume")
+        events = _wait_for_events(
+            c,
+            lambda evs: any(
+                e["kind"] == "frame" and e["cursor"] > cursor_at_reset for e in evs
+            ),
+        )
+        restarted = [
+            e for e in events if e["kind"] == "frame" and e["cursor"] > cursor_at_reset
+        ]
+        assert restarted[0]["step"] == 0  # steps rewound; cursors never do
+
+
+def test_finished_stepper_pauses_the_loop():
+    with _live_client(stepper=_FakeStepper(finish_after=2)) as c:
+        events = _wait_for_events(
+            c,
+            lambda evs: any(
+                e["kind"] == "status" and e["reason"] == "finished" for e in evs
+            ),
+        )
+        assert _frame_count(events) == 2
+        assert c.get("/live").json()["paused"] is True
+
+
+def test_command_409_while_running_allowed_when_paused():
+    with _live_client() as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)
+        refused = c.post("/command", json={"command": "go north"})
+        assert refused.status_code == 409
+        assert "pause" in refused.json()["detail"]
+        c.post("/pause")
+        assert c.post("/command", json={"command": "go north"}).status_code == 200
+
+
+def test_usage_zeroed_when_no_ledger():
+    with _live_client() as c:
+        usage = c.get("/usage").json()
+        assert usage["available"] is False
+        assert usage["over_budget"] is False
+        assert usage["calls"] == 0 and usage["total_cost_usd"] == 0.0
+
+
+def test_usage_reports_ledger_summary():
+    ledger = UsageLedger(max_cost_usd=5.0)
+    with _live_client(stepper=_FakeStepper(ledger=ledger)) as c:
+        usage = c.get("/usage").json()
+        assert usage["available"] is True
+        assert usage["kind"] == "summary"
+        assert usage["over_budget"] is False
+        assert usage["max_cost_usd"] == 5.0
+        assert usage["remaining_budget_usd"] == 5.0
+        # Exactly the summary() keys the Godot run-monitor HUD (#264) renders.
+        for key in (
+            "calls",
+            "total_cost_usd",
+            "by_actor",
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        ):
+            assert key in usage
+
+
+def test_live_routes_require_auth_when_token_configured():
+    with _live_client(auth_token="s3cret") as c:
+        assert c.get("/live").status_code == 401
+        assert c.get("/events").status_code == 401
+        assert c.get("/usage").status_code == 401
+        for path in ("/pause", "/resume", "/reset"):
+            assert c.post(path).status_code == 401
+        ok = {"Authorization": "Bearer s3cret"}
+        assert c.get("/live", headers=ok).status_code == 200
+
+
+def test_lifespan_shutdown_stops_loop():
+    stepper = _FakeStepper()
+    with _live_client(stepper=stepper) as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)
+    ticked_to = stepper.step  # the client exited: lifespan cancelled the loop
+    time.sleep(0.05)
+    assert stepper.step == ticked_to
+
+
+def test_demo_stepper_advances_world_and_memory():
+    """The #349 acceptance shape, in miniature: with the loop's stepper and no
+    key anywhere, the world advances on its own and an agent's memory grows."""
+    game = _demo_game()
+    stepper = _demo_stepper(game)
+    gardener = game.characters["gardener"]
+    before = len(memory_stream_for_persona(gardener.agent))
+    first = stepper.tick()
+    second = stepper.tick()
+    assert first["player"] != second["player"]  # north, then back south
+    assert game.turn > 0  # real commands ran through the engine
+    assert len(memory_stream_for_persona(gardener.agent)) == before + 2
+    assert stepper.drain_events()  # engine records captured for the feed
