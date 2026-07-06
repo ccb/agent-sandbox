@@ -109,7 +109,9 @@ uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
 ```
 
-The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast) and
+The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast — 3
+active personas while the live-LLM MVP keeps runs cheap; 4 more are parked in
+comments, ready to uncomment) and
 `the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
 The agent *engine* (deciding, pathfinding) is reused from the `backend` package,
 so this is the same simulation that runs there — just rendered here instead of in
@@ -146,31 +148,109 @@ while the run monitor's Emergency stop is what actually pauses the backend.
 The mock brain never speaks, so `serve_penn.py` also ports the bake's scripted
 `meetings:` injector to run on the fly: a meeting's authored dialogue fires the
 moment every participant is genuinely settled at its venue within perception
-range — watch Maya and Priya's study session light up in the Moelis Reading
-Room a couple of minutes into the default run.
+range — watch Diego showing Sofia around the Kamin Gallery partway into the
+default run.
 
 If the backend disappears the viewer holds the last pose, shows
 "reconnecting…", and retries with backoff; on reconnect the socket re-attaches
 with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
 /reset` on the server starts a fresh day (reload the viewer to re-handshake).
 
+### Real-LLM live mode — Claude Haiku drives the cast (issue #261)
+
+`--brain llm` swaps the deterministic mock for the model declared in the
+simulation config (`sim/world_data_upenn.yaml`, the `llm:` block): **Anthropic
+Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
+travel/perform decisions, every line of dialogue when the routing brings two
+agents within perception range (the scripted `meetings:` dialogue stands down;
+what you see is the model's own words), and the periodic reflection passes.
+The daily itinerary stays on the authored schedules for now (a Penn-aware LLM
+planner is follow-up work).
+
+```bash
+# One-time: the llm extra alongside server (installs the anthropic SDK):
+uv sync --extra server --extra llm
+
+# Serve with the real brain (terminal 1)…
+export ANTHROPIC_API_KEY=sk-ant-...   # or: cp .env.example .env and fill it in —
+                                      # every backend CLI loads the repo-root .env
+uv run python godot-generative-agents/sim/serve_penn.py --brain llm
+
+# …and watch it live (terminal 2), exactly as before:
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+```
+
+Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
+`LLM_API_KEY` / `OPENAI_API_KEY` — and the server refuses to start without it
+(or with a non-Anthropic `provider:` in the config) rather than serving a day
+of silently failing calls.
+
+**The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
+server is up and the viewer connects, but not a single model call is made
+until you press **▶ Start simulation** in the left sidebar (it sends
+`POST /resume`; `curl -X POST http://127.0.0.1:8080/resume` works too). Once
+running, the same button reads **⏹ Stop simulation** (`POST /pause` — the same
+control the run monitor's Emergency stop drives) and **▶ Resume** after a
+stop, always reflecting the backend's actual state. The free mock brain keeps
+auto-starting; `--start-paused` / `--no-start-paused` overrides either mode.
+
+**Closing the viewer stops the backend.** In live mode the window close sends
+`POST /shutdown` before quitting, so the sim — and its spend — never keeps
+running with nobody watching (`serve_penn` opts into the endpoint; the
+`shutdown_backend_on_exit` export on the scene turns the behavior off if you
+want a backend that outlives the window).
+
+Every request is printed to the server terminal as it happens (the **LLM
+request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
+
+```
+ LLM calls -- one line per model request (#, time, role, actor, sim turn, model, tokens in (cache w/r), tokens out, latency, $ this call, Σ $ run):
+ #    7 12:05:02  decide    Diego Torres        t  118  claude-haiku-4-5  in   1088 ( 912w/    0r)  out  102    731ms  $0.001238  Σ $0.021410
+ #    8 12:09:44  converse  Sofia Ramirez       t  119  claude-haiku-4-5  in   1322 (   0w/ 1002r)  out   64    598ms  $0.000740  Σ $0.041007
+```
+
+The same rows appear inside the viewer: the run monitor's **LLM requests** box
+(under the usage meter) logs each call as it happens —
+`12:09:44 converse Ramirez 1.3k→64 $0.0007`, newest at the bottom, hover a row
+for the full detail (sim turn, model, cache split, latency, cumulative spend).
+The rows ride the live event feed (`serve_penn`'s `drain_events()` publishes
+the monitor's records as `llm_call` events), so the box needs no extra
+polling — and `--no-monitor` silences it together with the terminal.
+
+**Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
+**$0.10** (the per-call-site arithmetic is in
+[`../docs/design/agent-llm-interface.md`](../docs/design/agent-llm-interface.md),
+along with the exact tool schemas and prompts the model gets). The config's
+`max_cost_usd` (default $5) is a hard kill-switch: the moment cumulative spend
+reaches it the day ends — the live loop pauses and the run monitor's budget
+row shows **TRIPPED**. Two operational notes: ticks run serially, so each
+decision stretches its tick to the model's latency (the viewer just paces
+slower; `--tick-seconds` still sets the floor), and a provider outage never
+crashes the day — a failed call leaves that agent idle for one tick and it
+simply asks again, but failed calls record no cost, so a stalled tokens/min
+meter in the run monitor (not the budget row) is the outage signal.
+
 ### The run monitor (top-right)
 
 A live real-LLM run spends money every step and can stall on the provider, so the
 viewer carries a small **run monitor** (`scripts/live_hud.gd`): a token/cost meter,
-backend health, and a one-click **Emergency stop**. The `-`/`+` button in its header
-collapses it to just the title bar (the health dot stays visible); the meter keeps
-counting underneath. Its data feed is pluggable (`scripts/hud_source.gd`):
+an **LLM requests** log (one timestamped line per model call — the in-viewer twin
+of the terminal monitor above), backend health, and a one-click **Emergency stop**.
+The `-`/`+` button in its header collapses it to just the title bar (the health dot
+stays visible); the meter keeps counting underneath. Its data feed is pluggable
+(`scripts/hud_source.gd`):
 
 - **Baked replay (the default):** no backend exists, so the monitor shows clearly
-  labeled **simulated** usage that accrues while the replay plays
-  (`scripts/hud_source_replay.gd`) — realistic numbers, zero dollars at risk. The
-  stop button freezes playback and trips a mock budget gate; Play lifts it.
+  labeled **simulated** usage (and simulated request-log rows) that accrue while
+  the replay plays (`scripts/hud_source_replay.gd`) — realistic numbers, zero
+  dollars at risk. The stop button freezes playback and trips a mock budget gate;
+  Play lifts it.
 - **Live mode:** point the scene at a running backend (`backend/api.py`) by setting
   the `live_backend_url` export — or just `SIM_API_URL=http://127.0.0.1:8000` in the
   environment, no editor needed — and the same monitor polls the real `GET /usage` +
   `GET /health` and drives `POST /pause` (`scripts/hud_source_live.gd`), sending
-  `SIM_API_TOKEN` as a bearer token when set.
+  `SIM_API_TOKEN` as a bearer token when set; the request log fills from the event
+  feed's `llm_call` records instead of the simulation.
 
 Both feeds emit the engine's `UsageLedger.summary()` shape (what `GET /usage`
 serves), which is what makes the mock → real-LLM switch a pure configuration change.

@@ -482,6 +482,27 @@ advancing **on its own** while frontends follow along:
   [change-feed record](#the-events-change-feed) the stepper drained from the
   engine during that tick (steppers opt in by implementing `drain_events()`).
 
+  One `engine` payload has its own sub-contract: **`event.kind: "llm_call"`** —
+  one record per LLM request (#398), the buffered copy of the row the terminal
+  monitor prints (`backend/llm_monitor.py`: a flattened
+  `usage.CallRecord.to_primitive()` plus the monitor's `role` / `call_no` /
+  `cum_cost_usd` / `time` extras). A stepper publishes these by returning its
+  monitor's `drain()` from `drain_events()`, the way the Penn runner does:
+
+  ```json
+  { "cursor": 15, "kind": "engine", "step": 12, "event": {
+      "kind": "llm_call", "call_no": 7, "time": "12:05:02", "role": "decide",
+      "actor": "Diego Torres", "turn": 118, "attempt": null, "prompt_sha256": null,
+      "provider": "anthropic", "model": "claude-haiku-4-5",
+      "input_tokens": 1088, "output_tokens": 102,
+      "cache_creation_input_tokens": 912, "cache_read_input_tokens": 0,
+      "cost_usd": 0.001238, "cum_cost_usd": 0.02141, "latency_ms": 731.2 } }
+  ```
+
+  `turn` / `actor` / `latency_ms` may be `null` (viewers show `-`); `actor` is
+  the per-agent filter key. This stream is the per-request *detail* — the
+  aggregate [`GET /usage`](#get-usage) summary the HUD polls is unchanged.
+
 ### `GET /live`
 
 The handshake a live client reads once before following the feed:

@@ -61,6 +61,7 @@ import asyncio
 import contextlib
 import json
 import os
+import signal
 import threading
 
 from fastapi import (
@@ -81,12 +82,21 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from text_adventure_games.memory import MemoryKind
 from text_adventure_games.reporting import JSONRenderer
 
+from .env import load_dotenv
 from .live import EventLog, LiveRunController, SimStepper, run_loop
 from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
 
 # Hosts that never need auth: a server bound here is only reachable from the
 # same machine, so the loopback-only default is safe without a token (#186).
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _terminate_process() -> None:
+    """The default ``POST /shutdown`` action: SIGINT our own process, so
+    uvicorn unwinds exactly as a Ctrl-C would (the loop task cancels and
+    publishes its final ``stopped`` status on the way down)."""
+    os.kill(os.getpid(), signal.SIGINT)
+
 
 # A command request is a tiny JSON object; nothing legitimate approaches this.
 # Capping it (#186) turns a hostile ``Content-Length`` into a clean 413 instead
@@ -346,6 +356,9 @@ def create_app(
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
     stepper: SimStepper | None = None,
     tick_seconds: float = 1.0,
+    start_paused: bool = False,
+    allow_shutdown: bool = False,
+    on_shutdown=None,
     max_log_records: int = 10_000,
 ) -> FastAPI:
     """Build the FastAPI app serving *game*.
@@ -364,10 +377,19 @@ def create_app(
     eviction). Left ``None`` -- the default -- the app is byte-identical to the
     command-driven API. The loop rides the app's lifespan, so it only runs
     inside a server (or a ``with TestClient(app):`` block -- a bare
-    ``TestClient(app)`` never starts it)."""
+    ``TestClient(app)`` never starts it). *start_paused* boots that loop armed
+    but not ticking -- the first frame (and, with a real brain, the first paid
+    model call) waits for ``POST /resume``, e.g. the viewer's Start button.
+    *allow_shutdown* enables ``POST /shutdown`` (the viewer's close-the-window
+    kill; 404 otherwise), and *on_shutdown* overrides what it does -- tests
+    inject a spy; the default SIGINTs this very process."""
     lock = threading.Lock()
     log = EventLog(max_log_records)
-    controller = LiveRunController(stepper, lock) if stepper is not None else None
+    controller = (
+        LiveRunController(stepper, lock, start_paused=start_paused)
+        if stepper is not None
+        else None
+    )
     ledger = getattr(stepper, "ledger", None)
 
     lifespan = None
@@ -757,6 +779,23 @@ def create_app(
         record = log.append("status", reason="reset", **ctl.status())
         return {**ctl.status(), "cursor": record["cursor"]}
 
+    @app.post("/shutdown")
+    async def shutdown(_: None = Depends(require_auth)) -> dict:
+        """Stop the whole server process. The Penn viewer sends this when its
+        window closes, so a paying live sim never keeps running -- or spending
+        -- with nobody watching. Hidden (404) unless the embedding entrypoint
+        opted in via ``create_app(allow_shutdown=True)``, so the generic API
+        is unchanged. Pauses the loop first (spend stops even if the process
+        lingers), answers, then exits a beat later -- the delayed SIGINT lets
+        this response reach the client before uvicorn unwinds."""
+        if not allow_shutdown:
+            raise HTTPException(status_code=404, detail="Not Found")
+        if controller is not None:
+            controller.pause()
+            log.append("status", reason="paused", **controller.status())
+        threading.Timer(0.2, on_shutdown or _terminate_process).start()
+        return {"ok": True}
+
     @app.get("/usage")
     def usage(_: None = Depends(require_auth)) -> dict:
         """The stepper's ``UsageLedger.summary()`` -- tokens and dollars -- for
@@ -820,6 +859,8 @@ def run(
     *,
     stepper: SimStepper | None = None,
     tick_seconds: float = 1.0,
+    start_paused: bool = False,
+    allow_shutdown: bool = False,
 ) -> None:
     """Serve *game* over HTTP until interrupted (Ctrl-C).
 
@@ -839,7 +880,12 @@ def run(
         )
     uvicorn.run(
         create_app(
-            game, auth_token=auth_token, stepper=stepper, tick_seconds=tick_seconds
+            game,
+            auth_token=auth_token,
+            stepper=stepper,
+            tick_seconds=tick_seconds,
+            start_paused=start_paused,
+            allow_shutdown=allow_shutdown,
         ),
         host=host,
         port=port,
@@ -955,6 +1001,10 @@ def _demo_stepper(game):
 
 
 if __name__ == "__main__":
+    # A repo-root .env (git-ignored; template at .env.example) can supply
+    # HOST/PORT/SIM_LIVE/SIM_API_TOKEN; exported variables win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8080"))
     game = _demo_game()

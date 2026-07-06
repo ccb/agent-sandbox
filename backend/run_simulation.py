@@ -43,6 +43,7 @@ from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import ALL_PERSONAS, PERSONAS, build_world
+from .env import load_dotenv
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig, SimulationConfig
 from .smallville_agents import (
@@ -205,10 +206,14 @@ def step(
 
         # Decision point: idle and not yet settled into an activity.
         if not st["path"] and not st["performing"]:
-            # Attribute this LLM call to the persona and step (usage.py).
+            # Attribute this LLM call to the persona and step (usage.py). The
+            # "role" key is read by the terminal request monitor (llm_monitor)
+            # to label the line; plain UsageLedgers ignore it.
             ctx = getattr(char.agent.llm_client, "context", None)
             if ctx is not None:
-                ctx.update({"actor": name, "turn": step_idx, "attempt": 0})
+                ctx.update(
+                    {"actor": name, "turn": step_idx, "attempt": 0, "role": "decide"}
+                )
             # Observe (perceive + retrieve memories) -> decide -> remember the
             # outcome, the same shape react_behavior gives engine NPCs. The usage
             # context above is set first so the decide() call inside
@@ -554,6 +559,11 @@ def _print_cost_summary(ledger: UsageLedger, renderer=None) -> None:
 
 
 def main() -> None:
+    # A repo-root .env (git-ignored; template at .env.example) can supply the
+    # LLM_* knobs read below without per-terminal exports; already-exported
+    # environment variables always win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
     parser = argparse.ArgumentParser(description="Generate a Smallville replay.")
     # The run-time flags default to None so a value set in --config (or its
     # SimulationConfig defaults) is only overridden when the flag is given

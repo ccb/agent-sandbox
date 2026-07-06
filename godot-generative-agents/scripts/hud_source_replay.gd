@@ -138,6 +138,26 @@ func _accrue_call(name: String) -> void:
 	_cost_usd += cost
 	_by_actor[name] = float(_by_actor.get(name, 0.0)) + cost
 
+	# One llm_call record per fake call, in the exact shape the live feed
+	# carries (see hud_source.gd) -- so the HUD's request log demos offline
+	# the same way the rest of the meter does.
+	llm_call.emit({
+		"kind": "llm_call",
+		"call_no": _calls,
+		"time": Time.get_time_string_from_system(),
+		"role": "decide",
+		"actor": name,
+		"turn": _tick,
+		"model": MODEL_LABEL,
+		"input_tokens": uncached,
+		"output_tokens": output,
+		"cache_creation_input_tokens": cache_write,
+		"cache_read_input_tokens": cache_read,
+		"cost_usd": cost,
+		"cum_cost_usd": _cost_usd,
+		"latency_ms": null,
+	})
+
 
 func _summary() -> Dictionary:
 	# The exact UsageLedger.summary() shape (plus the ledger's optional budget

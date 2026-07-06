@@ -31,6 +31,20 @@ signal usage_updated(summary: Dictionary)
 signal health_changed(state: int, detail: String)
 ## The run was halted (emergency stop confirmed) or resumed.
 signal halted_changed(halted: bool)
+## One LLM request happened -- the record the backend's terminal monitor prints
+## (backend/llm_monitor.py: a flattened CallRecord plus the monitor's extras),
+## which the HUD renders as one line in its request log:
+##
+##     {"kind": "llm_call", "call_no": N, "time": "12:05:02", "role": "decide",
+##      "actor": "Diego Torres", "turn": 118, "model": "claude-haiku-4-5",
+##      "input_tokens": N, "output_tokens": N,
+##      "cache_creation_input_tokens": N, "cache_read_input_tokens": N,
+##      "cost_usd": X, "cum_cost_usd": X, "latency_ms": X}
+##
+## turn / latency_ms may be null (the HUD shows "-"). The replay source
+## synthesizes these alongside its simulated spend; live ones arrive through
+## the event feed (see note_llm_call).
+signal llm_call(record: Dictionary)
 
 ## SIMULATED = baked-replay mode, numbers are synthetic; OK/DEGRADED/DOWN are
 ## the live-backend liveness ladder (healthy / missed a check / unreachable).
@@ -61,3 +75,10 @@ func request_resume() -> void:
 	## Lift a previous stop (the viewer calls this when Play is pressed while
 	## halted). Replay: un-trip and resume accrual. Live: POST /resume.
 	pass
+
+
+func note_llm_call(record: Dictionary) -> void:
+	## Seam for the live client (#263): an `llm_call` record arrived on the
+	## event feed (the WebSocket lives in penn_replay.gd, not here). Re-emitted
+	## as the llm_call signal so the HUD stays a plain signal consumer.
+	llm_call.emit(record)
