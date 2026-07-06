@@ -29,10 +29,28 @@ from collections import Counter
 GID_MASK = 0x1FFFFFFF  # strip Tiled's flip flags before comparing gids
 SOLID_FURNITURE_LAYERS_SUFFIX = "_furniture"
 
+WALKABLE_FURNITURE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "walkable_furniture.json"
+)
+
+
+def load_walkable_furniture(path: str = WALKABLE_FURNITURE_PATH) -> set[int]:
+    """Base gids that stay WALKABLE (chair seats, stools, floor cushions), loaded
+    from walkable_furniture.json. Empty set if the file is absent. Use `--catalog`
+    to list furniture gids and the 'Furniture solidity' menu in catalog_web.py to
+    edit the file."""
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return set()
+    return {int(g) for g in data.get("walkable_gids", {})}
+
+
 # Base gids that stay WALKABLE despite living on a furniture layer: chair seats,
-# stools, benches -- tiles an agent can stand or sit on. Populated from
-# `--catalog` (see Task 2 of the plan). Empty means "all furniture is solid".
-WALKABLE_FURNITURE: set[int] = set()
+# stools, floor cushions -- tiles an agent can stand or sit on. Empty means
+# "all furniture is solid".
+WALKABLE_FURNITURE: set[int] = load_walkable_furniture()
 
 
 def is_solid_layer(name: str) -> bool:

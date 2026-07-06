@@ -1,0 +1,28 @@
+{
+  "_README": "Base gids (Tiled flip-flags masked with & 0x1FFFFFFF) of furniture tiles that stay WALKABLE despite living on a *_furniture layer -- chair seats, stool tops, floor cushions an agent stands or sits on. block_furniture.py loads walkable_gids.keys() into WALKABLE_FURNITURE; every other furniture cell is sealed solid. Edit this file via the 'Furniture solidity' menu in catalog_web.py --serve, or by hand. Seeded from furniture_catalog.json seat labels (single-tile seats + floor cushions); ambiguous multi-tile pieces (sofas, student desk+chair) were left SOLID pending review -- their seat tile can be added here if desired.",
+  "walkable_gids": {
+    "1072": "chair_wood (interior_franuka) -- wooden chair, side view",
+    "1071": "stool_wood (interior_franuka) -- wooden stool",
+    "1140": "armchair (interior_franuka) -- single armchair",
+    "1139": "armchair_pink (interior_franuka)",
+    "1171": "armchair_orange (interior_franuka)",
+    "1203": "armchair_green (interior_franuka)",
+    "1235": "armchair_red (interior_franuka)",
+    "1013": "cushion (interior_franuka) -- large blue floor cushion",
+    "1014": "cushion (interior_franuka) -- large blue floor cushion",
+    "1045": "cushion (interior_franuka) -- large blue floor cushion",
+    "1046": "cushion (interior_franuka) -- large blue floor cushion",
+    "1011": "cushion_orange (interior_franuka) -- large orange floor cushion",
+    "1012": "cushion_orange (interior_franuka) -- large orange floor cushion",
+    "1043": "cushion_orange (interior_franuka) -- large orange floor cushion",
+    "1044": "cushion_orange (interior_franuka) -- large orange floor cushion",
+    "1015": "cushion_cream (interior_franuka) -- large cream floor cushion",
+    "1016": "cushion_cream (interior_franuka) -- large cream floor cushion",
+    "1047": "cushion_cream (interior_franuka) -- large cream floor cushion",
+    "1048": "cushion_cream (interior_franuka) -- large cream floor cushion",
+    "1017": "cushion_red (interior_franuka) -- large red floor cushion",
+    "1018": "cushion_red (interior_franuka) -- large red floor cushion",
+    "1049": "cushion_red (interior_franuka) -- large red floor cushion",
+    "1050": "cushion_red (interior_franuka) -- large red floor cushion"
+  }
+}
