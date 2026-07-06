@@ -278,6 +278,35 @@ def cohen_boxes(tmj):
     return out
 
 
+def cohen_sections(tmj):
+    """{name: (c0, r0, c1, r1)} inclusive tile rects from cohen_arenas. All five
+    boxes are real rooms (no decoys), so none are filtered."""
+    T = tmj.get("tilewidth", 16)
+    layer = next((L for L in tmj["layers"] if L.get("name") == ARENA_LAYER), None)
+    out = {}
+    if layer is None:
+        return out
+    for o in layer.get("objects", []):
+        c0 = round(o["x"] / T)
+        r0 = round(o["y"] / T)
+        c1 = round((o["x"] + o["width"]) / T) - 1
+        r1 = round((o["y"] + o["height"]) / T) - 1
+        out[o["name"]] = (c0, r0, c1, r1)
+    return out
+
+
+def kitchen_wall_cells(tmj):
+    """The kitchen east-wall seam: Kitchen cells whose east neighbour is
+    Cafeteria 2, as a set of (x, y) collision cells. This is the partition
+    apply_kitchen draws as wall_set_red; the matrix subdivision and the picture
+    share it so they stay in lock-step. Counters (the north/south seams) are
+    furniture, not collision walls."""
+    boxes = cohen_boxes(tmj)
+    kitchen = boxes.get("Kitchen 1", set()) | boxes.get("Kitchen 2", set())
+    caf2 = boxes.get("Cafeteria 2", set())
+    return {(x, y) for (x, y) in kitchen if (x + 1, y) in caf2}
+
+
 def apply_kitchen(tmj):
     """Wall off the kitchen's east side (where it meets Cafeteria 2) and run
     serving counters along its north and south sides (where they meet Cafeteria
@@ -303,9 +332,7 @@ def apply_kitchen(tmj):
     # East wall: the kitchen column whose eastern neighbour is Cafeteria 2. A
     # straight vertical line down the seam, capped at each end by a transparent
     # corner tile so the counter's own corner piece reads cleanly there.
-    wall_col = sorted(
-        ((x, y) for (x, y) in kitchen if (x + 1, y) in caf2), key=lambda p: p[1]
-    )
+    wall_col = sorted(kitchen_wall_cells(tmj), key=lambda p: p[1])
     for x, y in wall_col:
         walls[y * W + x] = gid(WALL_VERT_OFF)
     if wall_col:
