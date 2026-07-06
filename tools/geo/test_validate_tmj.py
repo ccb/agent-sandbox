@@ -342,6 +342,13 @@ def test_baseline_only_lists_real_current_errors():
     assert not stale, f"baseline lists errors no longer present: {stale}"
 
 
+def test_furniture_is_solid_on_real_data():
+    c = v.Checker(real_world()).run()
+    codes = {(f.code, f.severity) for f in c.findings}
+    assert ("furniture-solid", "ok") in codes
+    assert not [f for f in c.errors() if f.code == "furniture-not-solid"]
+
+
 def test_main_exit_code_and_json(tmp_path, capsys):
     world = make_world(tmp_path)  # clean synthetic world -> no errors
     code = v.main(

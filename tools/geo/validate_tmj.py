@@ -570,6 +570,66 @@ class Checker:
                 f"({walkable}/{drawn} walkable overall)",
             )
 
+    def check_furniture_solidity(self):
+        """Every *_furniture cell must be collision=1 unless its base gid is in
+        block_furniture.WALKABLE_FURNITURE (chair seats). Lock-step: the matrix
+        must equal what block_furniture produces from the tmj."""
+        try:
+            import block_furniture as bf
+        except Exception as exc:  # pragma: no cover - defensive
+            self.add(
+                "warn",
+                "MATRIX_TMJ",
+                "",
+                "furniture-import",
+                f"could not import block_furniture: {exc}",
+            )
+            return
+        bad = 0
+        for layer in self.w.tmj["layers"]:
+            if layer.get("type") != "tilelayer" or not bf.is_solid_layer(layer["name"]):
+                continue
+            for i, g in enumerate(layer["data"]):
+                if not g or (g & bf.GID_MASK) in bf.WALKABLE_FURNITURE:
+                    continue
+                if self.w.collision[i] != "1":
+                    bad += 1
+        if bad:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "furniture-not-solid",
+                f"{bad} furniture tile cells are not solid in collision_maze "
+                f"(run block_furniture.py)",
+            )
+        else:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "furniture-solid",
+                "all *_furniture cells are solid (or allowlisted)",
+            )
+
+    def check_walkable_allowlist_fresh(self):
+        """Warn on any WALKABLE_FURNITURE gid no longer painted in a furniture
+        layer -- the art changed out from under the allowlist."""
+        try:
+            import block_furniture as bf
+        except Exception:  # pragma: no cover - defensive
+            return
+        present = set(bf.furniture_gid_counts(self.w.tmj))
+        stale = sorted(g for g in bf.WALKABLE_FURNITURE if g not in present)
+        for gid in stale:
+            self.add(
+                "warn",
+                "MATRIX_TMJ",
+                "",
+                "allowlist-stale",
+                f"WALKABLE_FURNITURE gid {gid} is not painted in any furniture layer",
+            )
+
     def run(self):
         self.check_orphan_block_rows()
         self.check_orphan_paint()
@@ -582,6 +642,8 @@ class Checker:
         self.check_drawn_vs_present()
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
+        self.check_furniture_solidity()
+        self.check_walkable_allowlist_fresh()
         return self
 
 
