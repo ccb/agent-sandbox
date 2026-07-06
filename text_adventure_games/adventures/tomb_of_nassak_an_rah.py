@@ -211,10 +211,11 @@ class Sneak(actions.Go):
         super().__init__(game, command, actor=actor)
 
 
-class FungalSong(reactions.Startle):
-    """The Canopic hall's mantis-headed jar -- split and fungal -- SINGS whenever it
-    hears a noise, and the wail carries across the whole tomb, luring the Spawn
-    (which are :class:`DrawnToSound`) to the singer. Re-arms each round."""
+class MantisSong(reactions.Startle):
+    """The Canopic hall's mantis-headed jar -- split and fungal -- SINGS whenever
+    it hears a noise, in an INSECT'S voice (CCB): a stridulation, wing-cases and
+    rubbed legs, carrying across the whole tomb and luring the Spawn (which are
+    :class:`DrawnToSound`) to the singer. Re-arms each round."""
 
     REPEATABLE = True
 
@@ -232,9 +233,10 @@ class FungalSong(reactions.Startle):
         if self.game.player.location is loc:
             self.game.parser.ok(
                 "The mantis-headed jar splits wider and SINGS -- a tuneless, "
-                "carrying wail that fills the tomb."
+                "carrying stridulation, as of a thousand wing-cases rubbed "
+                "to one note, and it fills the tomb."
             )
-        self.game.emit_sound(loc, 6, "a tuneless fungal song")
+        self.game.emit_sound(loc, 6, "a tuneless insect song")
 
 
 def _has_spark(player):
@@ -242,6 +244,15 @@ def _has_spark(player):
     return any(
         it.get_property("ignition_source") for it in player.carried_items().values()
     )
+
+
+def _spark_name(player):
+    """The NAME of the carried thing that makes the spark, so the burn
+    narrations can be concrete about the tool in hand (CCB)."""
+    for it in player.carried_items().values():
+        if it.get_property("ignition_source"):
+            return it.name
+    return "spark"
 
 
 def _gel_dose(g):
@@ -314,7 +325,20 @@ class Burn(actions.Action):
             or self.command.strip() in ("burn", "ignite", "torch", "set ablaze")
         ):
             return "corpse"
-        if loc.name == "The Fungal Chimney" and not loc.get_property("burned"):
+        chimney_loc = self.game.locations.get("The Fungal Chimney")
+        if (
+            chimney_loc is not None
+            and not chimney_loc.get_property("burned")
+            and (
+                loc is chimney_loc
+                # From the Summit you stand at the chimney's mouth: light it
+                # like a chimney is lit -- from open air, not from inside.
+                or (
+                    loc.name == "The Summit"
+                    and any(w in self.command for w in ("growth", "fungus", "chimney"))
+                )
+            )
+        ):
             return "chimney"
         if loc.name == "Burial Sphere of Nassak An-Rah" and (
             "horror" in self.command
@@ -354,13 +378,13 @@ class Burn(actions.Action):
             return False
         if target == "horror":
             horror = self.game.characters.get("fungal horror")
+            if horror is not None and horror.get_property("is_dead"):
+                self.parser.fail("It is already still, and past burning's help.")
+                return False
             if horror is None or horror.location is not self.player.location:
                 self.parser.fail(
                     "The mass is sealed behind the glass; burn what feeds it, or open its door."
                 )
-                return False
-            if horror.get_property("is_dead"):
-                self.parser.fail("It is already still, and past burning's help.")
                 return False
         if not _has_spark(self.player):
             self.parser.fail(
@@ -394,10 +418,11 @@ class Burn(actions.Action):
                 "horror_dead", True
             )
             message = (
-                "You splash the embalming gel over the ossified mystic and strike "
-                "your spark. Orange flame roars down the fungal chimney -- and far "
-                "below, the whole rotten network shudders and dies. The Fungal "
-                "Horror sloughs into ash. The tomb falls silent at last."
+                "You splash a dose of embalming gel over the ossified mystic "
+                f"and put a spark from the {_spark_name(self.player)} to it. Orange "
+                "flame roars down the fungal chimney -- and far below, the "
+                "whole rotten network shudders and dies. The Fungal Horror "
+                "sloughs into ash. The tomb falls silent at last."
             )
             corpse_item = loc.items.get("ossified corpse")
             if corpse_item is not None and "friend's fungus" in corpse_item.contents:
@@ -406,43 +431,106 @@ class Burn(actions.Action):
                     " The pouch nested in his clasped hands goes up with him, "
                     "sweet on the wind for a moment."
                 )
-            # If the Horror is out and fighting, the root's death is its death.
+            # If the Horror is out and fighting, the root's death is its death
+            # -- and the coil's keeping ends with it: the coffin's contents it
+            # held since the eruption drift free in the sphere, its remains
+            # hang there as ash, and the room's descriptions follow (CCB).
             horror = self.game.characters.get("fungal horror")
             if horror is not None and not horror.get_property("is_dead"):
                 horror.set_property("is_dead", True)
-                message += (
-                    " Far below, the coil collapses mid-motion, every thread of "
-                    "it gone slack at once."
-                )
+                sphere_loc = self.game.locations["Burial Sphere of Nassak An-Rah"]
+                if horror.location is sphere_loc:
+                    message += (
+                        " Far below, its coil collapses mid-motion, every "
+                        "thread of it gone slack at once."
+                    )
+                    coffin_item = sphere_loc.items.get("coffin")
+                    if coffin_item is not None:
+                        for it in list(coffin_item.contents.values()):
+                            coffin_item.remove_item(it)
+                            sphere_loc.add_item(it)
+                    sphere_loc.remove_character(horror)
+                    _sphere_aftermath(self.game, ash=True)
+                else:
+                    # Never erupted: the thing in the coffin dies unseen, and
+                    # the slow churn behind the glass goes still.
+                    _sphere_quieted(self.game)
             self.parser.ok(message)
             self.game.award("cleanse", 30, None)
         elif target == "chimney":
-            loc.set_property("burned", True)
-            self.parser.ok(
-                "The gel catches and the shaft goes up like a struck match, "
-                "flame crawling the growth from throat to crown. When it gutters "
-                "out, the chimney is black, bare, and breathable -- a local "
-                "victory. Somewhere below, the root of it all is untouched."
-            )
+            chimney_loc = self.game.locations["The Fungal Chimney"]
+            chimney_loc.set_property("burned", True)
+            if loc is chimney_loc:
+                # Lit from INSIDE the shaft: it works, and it costs you --
+                # you are standing in the thing you just made a flue.
+                self.parser.ok(
+                    "You sling a dose of embalming gel across the orange "
+                    f"growth and put a spark from the {_spark_name(self.player)} "
+                    "to it. The shaft goes up like a struck match, flame "
+                    "crawling the growth from throat to crown -- with you in "
+                    "its throat. When it gutters out, the chimney is black, "
+                    "bare, and breathable -- a local victory. Somewhere below, "
+                    "the root of it all is untouched."
+                )
+                fatal = _wound_player(
+                    self.game,
+                    "Scorched",
+                    1,
+                    (
+                        "The fire takes your eyebrows and the hair on the back "
+                        "of your neck as you scramble clear.",
+                        "A sheet of flame runs up your sleeve; the skin beneath "
+                        "keeps the shape of it.",
+                        "The first breath of the blaze crisps your cheek before "
+                        "you can turn from it.",
+                    ),
+                )
+                if fatal:
+                    _die(
+                        self.game,
+                        "The shaft becomes a flue, and you are what it burns. "
+                        "THE END.",
+                    )
+            else:
+                # Lit from the Summit's lip: the smart way to light a chimney.
+                self.parser.ok(
+                    "You douse a knot of the growth at the chimney's mouth "
+                    "with a dose of embalming gel, strike the "
+                    f"{_spark_name(self.player)} over it, and step back. The "
+                    "shaft takes it like a struck match, flame crawling the "
+                    "growth from throat to crown while you watch from open "
+                    "air. When it gutters out, the chimney is black, bare, "
+                    "and breathable. Somewhere below, the root of it all is "
+                    "untouched."
+                )
         else:  # the Horror
             horror = self.game.characters["fungal horror"]
             was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
             horror.set_property("gel_doused", False)
-            self.parser.ok(
-                (
-                    "You strike your spark, and the dose already sheeting the "
-                    "coil takes all at once. The Horror goes up with a sound "
-                    "like a held breath released -- burning, it cannot knit "
-                    "itself; whatever you cut now stays cut."
+            tool = _spark_name(self.player)
+            if was_doused:
+                message = (
+                    f"You strike a spark from the {tool}, and the dose of "
+                    "embalming gel already sheeting the Fungal Horror takes "
+                    "all at once. It goes up with a sound like a held breath "
+                    "released."
                 )
-                if was_doused
-                else (
-                    "You sling the gel across the coil and strike your spark. The "
-                    "Horror goes up with a sound like a held breath released -- "
-                    "burning, it cannot knit itself; whatever you cut now stays cut."
+            else:
+                message = (
+                    "You sling a dose of embalming gel from your flask across "
+                    f"the Fungal Horror and put a spark from the {tool} to it. It "
+                    "goes up with a sound like a held breath released."
                 )
-            )
+            # Say what the fire MEANS only to someone who has watched the
+            # thing mend (CCB: no unearned hints) -- and say it as a fact of
+            # the body, not a rule of the game.
+            if horror.get_property("knit_seen"):
+                message += (
+                    " And in the flames, the mending stops: the rents you "
+                    "cut gape, and go on gaping."
+                )
+            self.parser.ok(message)
 
 
 class Refill(actions.Action):
@@ -614,11 +702,15 @@ class PryCoffin(actions.Action):
                 self.game.relocate(horror, loc)
             coffin.set_property("pried", True)
             self.parser.ok(
-                "You work the blade into the seam and the seam BULGES -- the "
-                "glass parts around a body coming out. The Horror unwinds from "
-                "the Autarch's bones into the weightless air, orange and vast "
-                "and patient, and keeps the bones in its coil."
+                "You work the blade into the seam and the glass FRACTURES -- "
+                "cracks racing from the blade's edge until the coffin gives "
+                "all at once. From among the shattered glass the Fungal "
+                "Horror emerges: a mass of animate orange fungus coiled "
+                "around the bones of the Autarch, moving his dead limbs like "
+                "its own. It strikes at you with a speed no gravity "
+                "encumbers, sending the coffin shards spinning outward."
             )
+            _sphere_erupted(self.game)
             return
         coffin.set_property("pried", True)
         blade = self.player.carried_items()["prismatic blade"]
@@ -640,6 +732,7 @@ class PryCoffin(actions.Action):
             + ", ".join(taken)
             + ". The blade is done."
         )
+        _sphere_aftermath(self.game, ash=False)
         self.game.award("exotica", 30, None)
 
 
@@ -679,6 +772,129 @@ def _scenery(location, name, description, examine_text):
     it.set_property("gettable", False)
     location.add_item(it)
     return it
+
+
+def _sphere_gloom_blurb(g, text):
+    """Re-voice the Burial Sphere's half-light to match its current state."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    for veil in sphere.veils:
+        if isinstance(veil, perception.Gloom):
+            veil._blurb = text
+
+
+def _sphere_erupted(g):
+    """The eruption's mark on the room (CCB: the description must keep up):
+    the coffin is a drift of shards now, and the light is the Horror itself."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None:
+        coffin.description = "the burst remains of the anti-entropy coffin"
+        coffin.examine_text = (
+            "A slow orbit of glass shards around the point where the coffin "
+            "hung, edges catching the orange light. The field is dead; "
+            "whatever it kept, the Horror keeps now."
+        )
+    sphere.description = (
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: glass shards from the burst coffin "
+        "drift in slow orbits around the empty centre where it hung. The "
+        "chamber's light is the Fungal Horror itself, orange and luminous. "
+        "The prayers were carved to be read from every direction at once."
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless, lit by the Fungal Horror's own "
+        "orange glow. Glass shards turn slowly through it."
+    )
+    _sphere_gloom_blurb(
+        g,
+        "A rotten half-light: the Fungal Horror's glow fills the chamber, "
+        "and the carved prayers read as texture, not words.",
+    )
+
+
+def _sphere_aftermath(g, ash):
+    """After the keeping ends -- the Horror dead in the sphere, or the coffin
+    pried once nothing lives to mind it. The room becomes the fight's record
+    (CCB): shattered glass, the Autarch's bones adrift, and (if it died here)
+    the ash of the thing that held them."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None:
+        coffin.description = "the shattered remains of the anti-entropy coffin"
+        coffin.examine_text = (
+            "A slow orbit of glass shards around empty air. The field is "
+            "dead, and the keeping is over."
+        )
+    if "Autarch's bones" not in sphere.items:
+        bones = _scenery(
+            sphere,
+            "Autarch's bones",
+            "the bones of Nassak An-Rah, drifting free of their keeping",
+            "The Autarch, at last: a king reduced to drifting articulation, "
+            "gold wire at the joints, the skull tipped as if listening. "
+            "Vaarn has taken everything else.",
+        )
+        bones.add_alias("bones")
+        bones.add_alias("skeleton")
+        bones.add_alias("autarch")
+    if ash and "drift of ash" not in sphere.items:
+        ash_item = _scenery(
+            sphere,
+            "drift of ash",
+            "the ash of the Fungal Horror, hanging weightless in the air",
+            "Fine grey ash shot through with dull orange, still faintly warm, "
+            "hanging where the Horror burned. Nothing in it mends.",
+        )
+        ash_item.add_alias("ash")
+    sphere.description = (
+        "A spherical chamber carved over every inch with funeral prayers, and "
+        "nothing in it obeys the ground: glass shards from the shattered "
+        "coffin turn in slow orbits, and the chamber is quiet in a way it has "
+        "not been for a thousand years. The prayers were carved to be read "
+        "from every direction at once."
+    )
+    sphere.dim_description = (
+        "A spherical chamber, weightless and quiet. Glass and pale bone "
+        "drift in the half-dark; the prayers are texture only."
+    )
+    _sphere_gloom_blurb(
+        g,
+        "A settling half-light: drifting shapes, and nothing in the chamber "
+        "moves on its own.",
+    )
+
+
+def _sphere_quieted(g):
+    """The root burned before the coffin was ever opened: the churn inside
+    the glass goes still, and every description that leaned on it follows."""
+    sphere = g.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items.get("coffin")
+    if coffin is not None and not coffin.get_property("pried"):
+        coffin.examine_text = (
+            "A clouded glass sphere at the chamber's heart, its field "
+            "failing. Past the cloud, nothing moves any more; the slow "
+            "churn has stopped. The seam at its equator is fine as a hair "
+            "-- made to be pried, never opened."
+        )
+        sphere.description = (
+            "A spherical chamber carved over every inch with funeral "
+            "prayers, and nothing in it obeys the ground: dust and "
+            "bone-chips drift in the still air, and your own weight forgot "
+            "you at the threshold. In the dead centre floats the Autarch's "
+            "coffin, a glass anti-entropy sphere, clouded and still now -- "
+            "whatever moved inside it moves no more. The prayers were "
+            "carved to be read from every direction at once."
+        )
+        sphere.dim_description = (
+            "A spherical chamber, weightless, lit only by the fading orange "
+            "glow of the coffin at its heart -- still now. Dust and "
+            "bone-chips drift through it."
+        )
+        _sphere_gloom_blurb(
+            g,
+            "A rotten half-light, dimming: the coffin's glow no longer "
+            "stirs, and the carved prayers read as texture, not words.",
+        )
 
 
 def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
@@ -1179,7 +1395,8 @@ def build_game():
         "mantis jar",
         "a mantis-headed canopic jar",
         "A split, fungal jar with a mantis's head, a misshapen orange growth budding "
-        "from the crack. It stirs at the faintest sound, as if listening.",
+        "from the crack. It stirs at the faintest sound with a dry, chitinous "
+        "rasp, as if listening.",
         "fungal eyes",
         "a clutch of fungus-clotted eyes",
     )
@@ -1346,13 +1563,14 @@ def build_game():
     # coffin (narrative) until an alive-pry brings it out as a real Character.
     horror = things.Character(
         "fungal horror",
-        "the Fungal Horror, a coil of orange around a king's bones",
+        "the Fungal Horror, a mass of animate orange fungus coiled around "
+        "the Autarch's bones",
         "We keep him. We are keeping him still.",
     )
     horror.examine_text = (
-        "A single muscle of fungus the size of a river-snake, wound around "
-        "what is left of Nassak An-Rah. Where you cut it, it remembers; "
-        "where it burns, it does not."
+        "A single muscle of orange fungus the size of a river-snake, coiled "
+        "around what is left of Nassak An-Rah and moving his dead limbs like "
+        "its own. Where you cut it, it remembers; where it burns, it does not."
     )
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
@@ -1617,6 +1835,9 @@ def build_game():
     exterior.set_property("climb_exits", {"up"})
     summit.set_property("climb_exits", {"down"})
     chimney.set_property("climb_exits", {"out"})
+    # Weightless or not, hauling yourself up into the chimney's throat is a
+    # climb (CCB) -- the way DOWN is a drift, and stays free.
+    sphere.set_property("climb_exits", {"up"})
 
     game = TombGame(
         wreck,
@@ -1645,7 +1866,7 @@ def build_game():
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
     # Spawn come to you -- the safe place to fight them (the halls are deadly).
-    game.add_reaction(mantis_jar, FungalSong())
+    game.add_reaction(mantis_jar, MantisSong())
     game.add_reaction(spawn_guts, reactions.DrawnToSound())
     game.add_reaction(spawn_brain, reactions.DrawnToSound())
 
@@ -2326,13 +2547,14 @@ def build_game():
     # Each round the Horror is out, alive, and facing you: it regenerates
     # (visibly) unless ablaze, burns down if it IS ablaze, and sprays acid.
     def _horror_fighting(g):
-        return (
-            horror.location is sphere
-            and not horror.get_property("is_dead")
-            and g.player.location is sphere
-        )
+        # The Horror's turn runs whenever it is out and alive: FIRE does not
+        # care whether you are watching (CCB: douse, light, and run is a
+        # legitimate tactic), and it knits while you are away too. Only the
+        # acid needs you present.
+        return horror.location is sphere and not horror.get_property("is_dead")
 
     def _horror_turn(g):
+        watching = g.player.location is sphere
         vigor = int(horror.get_property("vigor") or 0)
         ablaze = int(horror.get_property("ablaze") or 0)
         if ablaze > 0:
@@ -2342,17 +2564,34 @@ def build_game():
             if vigor <= 0:
                 _horror_dies(g, burned=True)
                 return
-            g.parser.ok(
-                "The fire walks the coil and the coil thrashes; charred lengths "
-                "of it drift loose. Nothing knits. It is smaller than it was."
-            )
+            if watching:
+                g.parser.ok(
+                    "The fire walks the length of the Fungal Horror and it "
+                    "thrashes; charred ropes of fungus drift loose. Nothing "
+                    "mends. It is smaller than it was."
+                )
+            if ablaze - 1 == 0:
+                # The window closes AUDIBLY -- never silently back to knitting.
+                g.parser.ok(
+                    "The fire gutters out against the wet of the Fungal "
+                    "Horror's flesh. What is cut can mend again."
+                    if watching
+                    else "From the Burial Sphere, the roar of fire dies away "
+                    "to nothing."
+                )
         elif vigor < 5:
             horror.set_property("vigor", vigor + 1)
-            g.parser.ok(
-                "The rents you have cut knit closed before your eyes, new "
-                "threads lacing across them, pale and then orange. It is "
-                "mending faster than you are."
-            )
+            if watching:
+                # The player has now SEEN the mending -- the burn narration
+                # may speak of stopping it without giving an unearned hint.
+                horror.set_property("knit_seen", True)
+                g.parser.ok(
+                    "The rents you have cut in the Fungal Horror knit closed "
+                    "before your eyes, new threads lacing across them, pale "
+                    "and then orange. It is mending faster than you are."
+                )
+        if not watching:
+            return  # the acid needs a target
         # And its answer: acid, flung weightless.
         fatal = _wound_player(
             g,
@@ -2369,21 +2608,12 @@ def build_game():
         if fatal:
             _die(
                 g,
-                "The acid takes the last of you, and the coil folds you in "
-                "among the bones it keeps. THE END.",
+                "The acid takes the last of you, and the Fungal Horror folds "
+                "you in among the bones it keeps. THE END.",
             )
 
     def _horror_dies(g, burned=False):
         horror.set_property("is_dead", True)
-        horror.description = (
-            "the Fungal Horror, charred and still"
-            if burned
-            else ("the Fungal Horror, cut apart and still")
-        )
-        horror.examine_text = (
-            "Still at last. The coil lies slack around nothing; the bones it "
-            "kept drift free."
-        )
         # The coil unclenches: the coffin's keeping is over.
         coffin_item = sphere.items.get("coffin")
         released = []
@@ -2393,10 +2623,26 @@ def build_game():
                 sphere.add_item(it)
                 released.append(it.name)
         sphere.set_property("horror_dead", True)
-        msg = "The Horror comes apart and does not close again."
+        # Every death here is a burning one (steel alone is a treadmill): the
+        # remains are ASH, an object in the room, not a listed combatant --
+        # and the room itself becomes the fight's record (CCB).
+        if horror.location is sphere:
+            sphere.remove_character(horror)
+        _sphere_aftermath(g, ash=True)
+        if g.player.location is not sphere:
+            # Burned to death with no one watching: heard, not seen.
+            g.parser.ok(
+                "From the Burial Sphere, a long wet shriek, and then nothing "
+                "at all -- not even the sound of something mending."
+            )
+            return
+        msg = (
+            "The Horror comes apart and does not close again -- what the fire "
+            "leaves of it hangs in the air as a drift of ash."
+        )
         if released:
             msg += (
-                " The coil unclenches from the Autarch's bones, and what he "
+                " Its coil unclenches from the Autarch's bones, and what he "
                 "was buried with drifts free: " + ", ".join(released) + "."
             )
         g.parser.ok(msg)
@@ -2465,8 +2711,9 @@ def build_game():
         )
         horror.set_property("gel_doused", True)
         g.parser.ok(
-            "The flask bursts against the coil and a dose of gel sheets "
-            "across the orange, luminous, clinging. It wants only a spark."
+            "The flask bursts against the Fungal Horror and a dose of "
+            "embalming gel sheets across the orange, luminous, clinging. "
+            "It wants only a spark."
         )
 
     game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
@@ -2514,11 +2761,17 @@ def build_game():
         return chimney.get_property("burned") and not centipede.get_property("is_dead")
 
     def _scour(g):
+        was_senseless = centipede.get_property("is_unconscious")
         centipede.set_property("is_dead", True)
         if centipede.location is chimney:
+            # A senseless thing does not boil out of anything (CCB playtest:
+            # the "cracked and still" centipede seemed to die twice).
             g.parser.ok(
-                "Something four feet long and glassy boils out of the burning "
-                "growth, seizes once, and is still."
+                "The fire finds the cracked thing where it lies; it seizes "
+                "once in the flame, and is still."
+                if was_senseless
+                else "Something four feet long and glassy boils out of the "
+                "burning growth, seizes once, and is still."
             )
         else:
             g.relocate(centipede, chimney)
@@ -2604,6 +2857,41 @@ def build_game():
         )
 
     game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
+
+    # The mantis jar has teeth (CCB): a ONE-TIME defensive snap at the first
+    # hand that opens it. It stays an alarm, not a combatant -- the bite
+    # teaches respect; the song it sings at noise delivers the sentence.
+    def _jar_violated(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "open"
+            and "mantis" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _mantis_snaps(g):
+        g.parser.ok(
+            "The split in the jar widens and the mantis head STRIKES -- one "
+            "motion, out and back, quicker than the eye. The jar settles "
+            "again, as if it had never moved."
+        )
+        fatal = _wound_player(
+            g,
+            "Mantis-Bitten",
+            1,
+            (
+                "Mandibles close on your wrist and are gone before your "
+                "eyes catch up.",
+                "Something arched and chitinous snaps across your knuckles; "
+                "the cut is clean as scissors.",
+                "The mantis head snips the web of your hand and lets go "
+                "-- a warning, not a meal.",
+            ),
+        )
+        if fatal:
+            _die(g, "The jar sings on over what it has done. THE END.")
+
+    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=False)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
