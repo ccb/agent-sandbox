@@ -7,6 +7,13 @@ extends Node2D
 ## one Cute Fantasy sprite per persona, easing it tile-to-tile along its path —
 ## so you watch Maya, Professor Ellis and Diego walk the real campus. No agent
 ## logic here; this is purely the viewer (the sim already decided everything).
+##
+## With a backend URL configured (live_backend_url / SIM_API_URL), the same
+## scene instead FOLLOWS a running sim live (issue #263): a GET /live handshake
+## spawns the cast, GET /events backfills history, and a WebSocket to /ws
+## streams each new step (sim/serve_penn.py is the matching server). Frames
+## land in the same _frames array, so playback and every feature work
+## unchanged; only the scrubber locks (you can't seek a live stream).
 
 @export_file("*.json") var replay_path: String = "res://maps/penn_replay.json"
 ## On web exports the replay is NOT packed into the build; it's fetched over HTTP
@@ -24,6 +31,16 @@ extends Node2D
 ## Draw a short breadcrumb trail behind each agent so you can see where they just
 ## came from. Set false to hide every trail.
 @export var show_trail: bool = true
+## Run-monitor HUD (issue #264): base URL of a RUNNING backend (backend/api.py),
+## e.g. "http://127.0.0.1:8000". Empty (the default) = baked-replay mode, where
+## the top-right monitor shows clearly-labeled SIMULATED usage so the HUD is
+## demoable without spending money. Set a URL (or the SIM_API_URL env var, which
+## needs no editor visit) and the same HUD polls the real GET /usage + /health
+## and drives POST /pause — nothing else changes when real LLMs arrive.
+@export var live_backend_url: String = ""
+## Bearer token for the live backend (its SIM_API_TOKEN, issue #186); falls back
+## to the SIM_API_TOKEN env var when empty. Ignored in baked-replay mode.
+@export var live_api_token: String = ""
 
 # The Cute Fantasy player sheet is a 6x10 grid; row 0 is a 6-frame walk cycle.
 const SHEET_HFRAMES := 6
@@ -149,9 +166,44 @@ var _fog: CanvasLayer
 var _fog_rect: ColorRect
 var _fog_mat: ShaderMaterial
 
+# Run-monitor HUD (issue #264): `_hud_source` feeds the top-right monitor —
+# hud_source_replay.gd (simulated spend) in baked-replay mode, hud_source_live.gd
+# (real GET /usage + /health polls) when live_backend_url points at a backend.
+# `_run_halted` mirrors the source's halted state (Emergency Stop pressed);
+# `_hud_running` is the last is-playback-advancing value pushed to the source,
+# so the simulated meter only accrues while the replay actually plays.
+var _hud_source: Node
+var _run_halted := false
+var _hud_running := false
+
+# Live-client mode (issue #263): with a backend URL configured (the same
+# live_backend_url / SIM_API_URL the run monitor uses), the viewer follows the
+# backend's RUNNING sim instead of loading a baked file: one GET /live handshake
+# (meta -> spawn agents), one GET /events backfill (history so far), then a
+# WebSocket to /ws applying each pushed record as it lands. Frames land in the
+# same _frames array the baked path fills, so the clock, bubbles, links, trails,
+# minimap, heatmap and fog all work unchanged -- playback simply chases the
+# growing array (the _t clamp in _process). `_last_cursor` is the change-feed
+# cursor of the newest record applied; the socket reconnects with ?since= it,
+# so a drop loses nothing and re-applies nothing (records at or below it are
+# skipped as duplicates).
+var _is_live := false
+var _live_url := ""
+var _live_token := ""
+var _ws: WebSocketPeer = null
+var _ws_open := false
+var _last_cursor := -1
+var _live_started := false          # first backfill applied -> jump to the live head
+var _reconnect_delay := 1.0         # doubles per failure, capped; reset on connect
+var _retry_pending := false
+var _handshake_http: HTTPRequest    # GET /live (its own node: HTTPRequest is one-shot)
+var _events_http: HTTPRequest       # GET /events backfill
+var _live_buildings := {}           # Focus-dropdown entries discovered so far (a set)
+
 @onready var _camera: Camera2D = $Camera2D
 @onready var _panel = $UI/AgentPanel  # agent_panel.gd sidebar
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
+@onready var _hud = $UI/LiveHud  # live_hud.gd top-right run monitor
 @onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
@@ -201,6 +253,9 @@ func _ready() -> void:
 	# the replay loads (see _load_replay_from_text).
 	_panel.filter_changed.connect(_on_filter_changed)
 
+	# The top-right run monitor and its data source (simulated or live).
+	_setup_hud()
+
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
 	_sky = CanvasModulate.new()
@@ -230,12 +285,71 @@ func _ready() -> void:
 	get_viewport().physics_object_picking = true
 
 	_is_web = OS.has_feature("web")
-	# Desktop reads the replay straight off disk; web fetches it over HTTP so a new
-	# sim never needs a re-export (the JSON lives next to the page, not in the .pck).
-	if _is_web:
+	# With a backend configured, follow its live sim (issue #263) -- the same
+	# setting that put the run-monitor HUD in live mode, so one URL flips the
+	# whole scene. Otherwise: desktop reads the replay straight off disk; web
+	# fetches it over HTTP so a new sim never needs a re-export.
+	if _resolve_backend_url() != "":
+		_start_live()
+	elif _is_web:
 		_load_replay_web()
 	else:
 		_load_replay_desktop()
+
+
+func _setup_hud() -> void:
+	# Pick the run monitor's data feed (issue #264). Both sources speak the same
+	# contract (hud_source.gd), so this is the ONLY place that knows which mode
+	# we're in — the HUD and the wiring below are identical either way, which is
+	# what makes the switch to a real-LLM backend a one-line configuration.
+	var url := _resolve_backend_url()
+	if url != "":
+		_hud_source = preload("res://scripts/hud_source_live.gd").new()
+		_hud.set_source_label("live: %s" % url)
+	else:
+		_hud_source = preload("res://scripts/hud_source_replay.gd").new()
+		_hud.set_source_label("simulated (baked replay)")
+
+	# Connect BEFORE add_child: a source seeds the HUD (initial health + zeroed
+	# meter) from its _ready, which runs inside add_child — connect after and
+	# those first emissions are lost, leaving the status row blank.
+	_hud_source.usage_updated.connect(_hud.set_usage)
+	_hud_source.health_changed.connect(_hud.set_health)
+	_hud_source.halted_changed.connect(_on_run_halted)
+	_hud.stop_requested.connect(_hud_source.request_stop)
+	add_child(_hud_source)
+
+	if url != "":
+		_hud_source.configure(url, _resolve_backend_token())
+
+
+func _resolve_backend_url() -> String:
+	# The one switch between baked-replay and live mode, shared by the HUD and
+	# the live client: the export takes precedence, then the SIM_API_URL env var
+	# (which needs no editor visit). Empty = baked replay.
+	var url := live_backend_url
+	if url == "":
+		url = OS.get_environment("SIM_API_URL")
+	return url.rstrip("/")
+
+
+func _resolve_backend_token() -> String:
+	var token := live_api_token
+	if token == "":
+		token = OS.get_environment("SIM_API_TOKEN")
+	return token
+
+
+func _on_run_halted(halted: bool) -> void:
+	# The source confirmed an Emergency Stop (or a resume) — reflect it in the
+	# HUD, and freeze the replay playback too so the whole scene reads as halted
+	# (in live mode the backend loop is what actually paused; stopping the local
+	# playback as well keeps the picture consistent).
+	_run_halted = halted
+	_hud.set_halted(halted)
+	if halted and not _paused:
+		_paused = true
+		_panel.set_playing(false)
 
 
 func _load_replay_desktop() -> void:
@@ -276,24 +390,8 @@ func _load_replay_from_text(text: String) -> void:
 		push_error("penn_replay: replay payload is not valid replay JSON")
 		return
 
-	var meta: Dictionary = data["meta"]
-	_tile_px = int(meta["tile_px"])
-	_sec_per_step = int(meta.get("sec_per_step", 10))
-	# Perception radius for the tracking fog -- the sim's vision_r, falling back to
-	# the Smallville default for older replays that don't record it.
-	_vision_r = int(meta.get("vision_r", FOG_FALLBACK_VISION_R))
-	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
+	_apply_meta(data["meta"])
 	_frames = data["frames"]
-	var thumb := _make_thumbnail()
-	for i in meta["personas"].size():
-		var pname: String = meta["personas"][i]["name"]
-		var tint: Color = TINTS[i % TINTS.size()]
-		_names.append(pname)
-		_spawn_agent(pname, i)
-		# Mirror the world sprite's tint in the sidebar and on the minimap dot, so the
-		# three views of each character all agree at a glance.
-		_panel.add_character(pname, thumb, tint)
-		_minimap.add_agent(pname, _agents[pname]["node"], tint)
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -320,7 +418,276 @@ func _load_replay_from_text(text: String) -> void:
 	# Hand the whole replay to the heatmap pop-up so it can build its campus picture now
 	# (avoiding a blank first-open frame) and tally dwell up to any step on demand.
 	_heatmap.set_replay(_frames, _names, _tile_px)
+
+	# Tell the run monitor's source who the cast is, so its per-actor spend
+	# attribution matches the real ledger's by_actor rollup.
+	_hud_source.set_cast(_names)
 	print("penn_replay: %d steps, %d personas" % [_frames.size(), _names.size()])
+
+
+func _apply_meta(meta: Dictionary) -> void:
+	# World shape + cast, shared verbatim by the baked loader and the live
+	# handshake (issue #263) -- so an agent spawns identically either way.
+	_tile_px = int(meta["tile_px"])
+	_sec_per_step = int(meta.get("sec_per_step", 10))
+	# Perception radius for the tracking fog -- the sim's vision_r, falling back to
+	# the Smallville default for older replays that don't record it.
+	_vision_r = int(meta.get("vision_r", FOG_FALLBACK_VISION_R))
+	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
+	var thumb := _make_thumbnail()
+	for i in meta["personas"].size():
+		var pname: String = meta["personas"][i]["name"]
+		var tint: Color = TINTS[i % TINTS.size()]
+		_names.append(pname)
+		_spawn_agent(pname, i)
+		# Mirror the world sprite's tint in the sidebar and on the minimap dot, so the
+		# three views of each character all agree at a glance.
+		_panel.add_character(pname, thumb, tint)
+		_minimap.add_agent(pname, _agents[pname]["node"], tint)
+
+
+# --- Live-client mode (issue #263) -----------------------------------------
+
+
+func _start_live() -> void:
+	# Follow the backend's running sim: handshake -> backfill -> socket. The
+	# scene stays healthy with NO backend running -- every step below only
+	# warns and retries with backoff, so the campus still paints (and the smoke
+	# test still passes) while the viewer waits for a server to appear.
+	_is_live = true
+	_live_url = _resolve_backend_url()
+	_live_token = _resolve_backend_token()
+	_panel.set_live(true)
+	_panel.set_live_status("connecting to %s…" % _live_url)
+	# One HTTPRequest node per concern (they're one-request-at-a-time), the same
+	# split hud_source_live.gd uses for its polls.
+	_handshake_http = HTTPRequest.new()
+	add_child(_handshake_http)
+	_handshake_http.request_completed.connect(_on_live_handshake_completed)
+	_events_http = HTTPRequest.new()
+	add_child(_events_http)
+	_events_http.request_completed.connect(_on_events_completed)
+	_request_handshake()
+
+
+func _live_headers() -> PackedStringArray:
+	var headers := PackedStringArray()
+	if _live_token != "":
+		headers.append("Authorization: Bearer %s" % _live_token)
+	return headers
+
+
+func _request_handshake() -> void:
+	var err := _handshake_http.request("%s/live" % _live_url, _live_headers())
+	if err != OK and err != ERR_BUSY:
+		push_warning("penn_replay: live handshake request failed (%d); retrying" % err)
+		_schedule_retry(_request_handshake)
+
+
+func _on_live_handshake_completed(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	if code != 200:
+		push_warning("penn_replay: GET /live returned HTTP %d; retrying" % code)
+		_panel.set_live_status("waiting for backend…")
+		_schedule_retry(_request_handshake)
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY or not bool((data as Dictionary).get("enabled", false)):
+		push_warning("penn_replay: backend has no live loop (serve with a stepper); retrying")
+		_panel.set_live_status("backend has no live loop…")
+		_schedule_retry(_request_handshake)
+		return
+	var meta: Variant = (data as Dictionary).get("meta")
+	if typeof(meta) != TYPE_DICTIONARY:
+		push_warning("penn_replay: live handshake carried no meta; retrying")
+		_schedule_retry(_request_handshake)
+		return
+
+	# Spawn the cast once (a handshake retry after a hiccup must not re-spawn).
+	if _names.is_empty():
+		_apply_meta(meta)
+		# The heatmap holds _frames BY REFERENCE, so the live appends flow into
+		# it -- same hand-off the baked path does, just with an empty array now.
+		_heatmap.set_replay(_frames, _names, _tile_px)
+		_hud_source.set_cast(_names)
+		_update_clock()
+	_panel.set_live_status("catching up…")
+	_request_backfill()
+	_connect_ws()
+
+
+func _request_backfill() -> void:
+	# The HTTP catch-up door: everything after the newest record we've applied.
+	# ERR_BUSY (a backfill already in flight) is fine to drop -- the socket's
+	# ?since= replay covers the same records.
+	var err := _events_http.request(
+		"%s/events?since=%d" % [_live_url, maxi(_last_cursor, 0)], _live_headers()
+	)
+	if err != OK and err != ERR_BUSY:
+		push_warning("penn_replay: events backfill request failed (%d)" % err)
+
+
+func _on_events_completed(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	if code != 200:
+		push_warning("penn_replay: GET /events returned HTTP %d" % code)
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	for rec in (data as Dictionary).get("events", []):
+		_apply_record(rec)
+	# A late joiner starts at "now": once the first backfill lands, jump the
+	# playhead to the live head (history stays in _frames behind the clamp).
+	if not _live_started and not _frames.is_empty():
+		_live_started = true
+		_t = float(maxi(_frames.size() - 1, 0)) * step_seconds
+
+
+func _apply_record(rec: Variant) -> void:
+	# One change-feed record (either door). The cursor guard makes the socket's
+	# replay window and the HTTP backfill overlap-safe: whatever arrives twice
+	# is skipped, whatever is newer advances the cursor.
+	if typeof(rec) != TYPE_DICTIONARY:
+		return
+	var record := rec as Dictionary
+	var cursor := int(record.get("cursor", -1))
+	if cursor >= 0 and cursor <= _last_cursor:
+		return  # already applied
+	_last_cursor = maxi(_last_cursor, cursor)
+	match String(record.get("kind", "")):
+		"frame":
+			_apply_live_frame(int(record.get("step", -1)), record.get("agents"))
+		"status":
+			_on_live_status(record)
+
+
+func _apply_live_frame(step: int, agents: Variant) -> void:
+	if step < 0 or typeof(agents) != TYPE_DICTIONARY:
+		return
+	# Index-addressed: frame N lands at _frames[N] exactly, so the clock, the
+	# trails and the heatmap index the live array the same way they index a
+	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
+	# holding the previous pose rather than crashing the renderer.
+	while _frames.size() < step:
+		_frames.append(_frames[-1] if not _frames.is_empty() else agents)
+	if step == _frames.size():
+		_frames.append(agents)
+	else:
+		_frames[step] = agents
+	_register_frame_buildings(agents as Dictionary)
+
+
+func _register_frame_buildings(frame: Dictionary) -> void:
+	# The baked loader scans the whole replay once for the Focus dropdown; live
+	# mode grows the list as agents reach new buildings.
+	var changed := false
+	for name in _names:
+		if not frame.has(name):
+			continue
+		var b := _building_of(String((frame[name] as Dictionary).get("act", "")))
+		if b != "" and not _live_buildings.has(b):
+			_live_buildings[b] = true
+			changed = true
+	if changed:
+		var sorted_buildings := _live_buildings.keys()
+		sorted_buildings.sort()
+		_panel.set_locations(PackedStringArray(sorted_buildings))
+
+
+func _on_live_status(record: Dictionary) -> void:
+	# Run-state changes ride the same feed as frames; surface them in the
+	# sidebar. (The HUD's health dot has its own view via the socket signals.)
+	match String(record.get("reason", "")):
+		"started", "resumed":
+			_panel.set_live_status("following backend")
+		"paused":
+			_panel.set_live_status("backend paused")
+		"finished":
+			_panel.set_live_status("run finished (POST /reset for a new day)")
+		"reset":
+			_panel.set_live_status("backend reset — reload the viewer to follow the new run")
+		"stopped":
+			_panel.set_live_status("backend stopped")
+
+
+func _connect_ws() -> void:
+	# The push door. ?since= makes the attach gap-free: the server replays every
+	# retained record after the newest one we've applied, then tails -- so a
+	# reconnect IS the backfill, and the cursor guard drops any overlap. Auth:
+	# desktop sends the Bearer handshake header; a browser WebSocket can't set
+	# headers, so web exports pass ?token= instead (the backend accepts both).
+	_ws = WebSocketPeer.new()
+	var ws_url := _live_url.replace("https://", "wss://").replace("http://", "ws://") + "/ws"
+	ws_url += "?since=%d" % maxi(_last_cursor, 0)
+	if _live_token != "":
+		if _is_web:
+			ws_url += "&token=%s" % _live_token.uri_encode()
+		else:
+			_ws.handshake_headers = PackedStringArray(
+				["Authorization: Bearer %s" % _live_token]
+			)
+	if _ws.connect_to_url(ws_url) != OK:
+		_ws = null
+		_note_socket(false)
+		_schedule_retry(_connect_ws)
+
+
+func _poll_ws() -> void:
+	# WebSocketPeer is poll-driven: pump it every frame, drain whatever arrived,
+	# and watch for state changes (its docs' prescribed usage).
+	if _ws == null:
+		return
+	_ws.poll()
+	match _ws.get_ready_state():
+		WebSocketPeer.STATE_OPEN:
+			if not _ws_open:
+				_ws_open = true
+				_reconnect_delay = 1.0
+				_note_socket(true)
+				_panel.set_live_status("following backend")
+			while _ws.get_available_packet_count() > 0:
+				_apply_record(JSON.parse_string(_ws.get_packet().get_string_from_utf8()))
+				if _hud_source != null and _hud_source.has_method("note_socket_event"):
+					_hud_source.note_socket_event()
+		WebSocketPeer.STATE_CLOSED:
+			var code := _ws.get_close_code()
+			if code == 1011:
+				# We fell behind the backend's event retention; the ?since=
+				# reconnect below re-syncs from what it still has.
+				push_warning("penn_replay: fell behind the live feed; re-syncing")
+			_ws = null
+			if _ws_open:
+				_note_socket(false)
+			_ws_open = false
+			_panel.set_live_status("reconnecting…")
+			_schedule_retry(_connect_ws)
+		_:
+			pass  # CONNECTING / CLOSING: keep polling
+
+
+func _note_socket(open: bool) -> void:
+	# Feed the HUD's socket-primary health view (hud_source_live.gd anticipates
+	# these; the simulated source simply doesn't implement them).
+	if _hud_source != null and _hud_source.has_method("note_socket_state"):
+		_hud_source.note_socket_state(open)
+
+
+func _schedule_retry(retry: Callable) -> void:
+	# Single-flight exponential backoff (1s doubling to 15s) shared by the
+	# handshake and the socket -- whichever step failed is retried; success
+	# resets the delay (see _poll_ws's OPEN transition).
+	if _retry_pending:
+		return
+	_retry_pending = true
+	get_tree().create_timer(_reconnect_delay).timeout.connect(
+		func() -> void:
+			_retry_pending = false
+			retry.call()
+	)
+	_reconnect_delay = minf(_reconnect_delay * 2.0, 15.0)
 
 
 func _parse_sim_start(text: String) -> int:
@@ -614,11 +981,19 @@ func _update_fog() -> void:
 func _on_play_pause() -> void:
 	_paused = not _paused
 	_panel.set_playing(not _paused)
+	# Pressing Play after an Emergency Stop also lifts the halt: the source
+	# un-trips (replay mode) or POSTs /resume (live mode) and confirms back
+	# through halted_changed -> _on_run_halted.
+	if not _paused and _run_halted:
+		_hud_source.request_resume()
 
 
 func _on_seek(step: int) -> void:
 	# Jump the playhead; _process re-renders from _t every frame, so the seek shows
-	# even while paused.
+	# even while paused. You can't seek a live stream -- the panel disables its
+	# scrubber in live mode, and this guard is the belt-and-braces behind it.
+	if _is_live:
+		return
 	_t = float(step) * step_seconds
 	_anim_t = 0.0
 
@@ -655,6 +1030,8 @@ func _open_heatmap() -> void:
 	# Show the heat accumulated up to the step on screen right now; playback keeps
 	# running behind the pop-up (it live-updates via _process). Suppress the camera's
 	# keyboard pan so the arrow keys switch views instead of scrolling the map.
+	if _frames.is_empty():
+		return  # live mode before the first frame: nothing to tally yet
 	var last := maxi(_frames.size() - 1, 0)
 	var i := mini(int(_t / step_seconds), last)
 	_last_heat_step = i
@@ -703,6 +1080,11 @@ func _apply_spotlight() -> void:
 
 
 func _process(delta: float) -> void:
+	# Live mode: pump the socket first, so records that just arrived render in
+	# this same frame. Everything below is mode-agnostic -- live just means
+	# _frames is still growing, and the _t clamp keeps playback at its head.
+	if _is_live:
+		_poll_ws()
 	if _frames.is_empty():
 		return
 	# Advance only while playing; the render below always runs from _t, so a seek (or
@@ -725,6 +1107,15 @@ func _process(delta: float) -> void:
 	var frac: float = 0.0 if looped else fpos - float(i)
 	var j: int = i if looped else i + 1
 	_panel.set_progress(i, last)
+
+	# Keep the run monitor honest about whether the "run" is advancing: the
+	# simulated meter accrues spend only while the replay actually plays (not
+	# paused, not halted, not pinned at the final frame). Pushed only on change;
+	# the live source ignores it (a real backend spends on its own clock).
+	var advancing := not _paused and not looped
+	if advancing != _hud_running:
+		_hud_running = advancing
+		_hud_source.set_running(advancing)
 
 	# Keep the heatmap pop-up current: while it's open, re-tally the dwell up to the new
 	# step whenever the playhead crosses into it, so the heat grows live as the sim runs.
