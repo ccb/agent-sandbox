@@ -340,3 +340,24 @@ meetings:
   - [Professor Tanaka, "Find a seat anywhere -- we start in a few minutes."]
   - [Sofia Ramirez, "Thank you! I've never been inside Irvine before."]
   - [Professor Tanaka, "First time? Sit close -- the demos are the best part."]
+
+# ---------------------------------------------------------------------------
+# LLM configuration for the LIVE server (read by sim/serve_penn.py ONLY, and
+# only when launched with `--brain llm`; the engine's load_world_data never
+# sees this block). The default run (`--brain mock`, or no flag) stays the
+# deterministic, free mock brain no matter what is written here.
+#
+# provider must be "anthropic" -- the Penn runner accepts no other provider,
+# and the API key comes from the ANTHROPIC_API_KEY environment variable alone
+# (never LLM_API_KEY, never OPENAI_API_KEY).
+llm:
+  provider: anthropic
+  # Claude Haiku powers EVERY model call the live MVP makes: the travel/perform
+  # decisions, the conversation lines, and the reflection passes. (Daily
+  # planning stays on the hand-authored schedules above -- see
+  # serve_penn.resolve_llm for why.)
+  model: claude-haiku-4-5
+  # Hard cost ceiling (USD) for one server run: once cumulative spend reaches
+  # it, the tick loop ends the day (the live loop pauses; the viewer HUD's
+  # budget row shows TRIPPED). Resets do NOT clear spend.
+  max_cost_usd: 5.0
