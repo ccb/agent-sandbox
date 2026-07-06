@@ -43,6 +43,7 @@ import argparse
 import os
 
 from backend.api import run
+from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.sim_config import CognitionConfig
@@ -108,8 +109,8 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
     llm.setdefault("model", DEFAULT_LLM_MODEL)
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise SystemExit(
-            "--brain llm needs ANTHROPIC_API_KEY in the environment: "
-            "export ANTHROPIC_API_KEY=sk-ant-...  "
+            "--brain llm needs ANTHROPIC_API_KEY: export it, or put it in a "
+            "repo-root .env file (template: .env.example). "
             "(--brain mock runs offline, without keys)"
         )
     return llm
@@ -513,6 +514,12 @@ def main() -> int:
         "SIM_API_TOKEN env var; required for a non-loopback --host)",
     )
     args = ap.parse_args()
+
+    # A repo-root .env (git-ignored; template at .env.example) can supply
+    # ANTHROPIC_API_KEY / SIM_API_TOKEN without per-terminal exports;
+    # already-exported environment variables always win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
 
     # Build the world once: resolve_llm reads its llm: block, the stepper
     # steps it (a second build would waste the map load and fork patch state).

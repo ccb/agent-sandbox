@@ -172,7 +172,8 @@ planner is follow-up work).
 uv sync --extra server --extra llm
 
 # Serve with the real brain (terminal 1)…
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...   # or: cp .env.example .env and fill it in —
+                                      # every backend CLI loads the repo-root .env
 uv run python godot-generative-agents/sim/serve_penn.py --brain llm
 
 # …and watch it live (terminal 2), exactly as before:
