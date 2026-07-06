@@ -31,6 +31,10 @@ signal heatmap_requested
 # The Focus dropdown changed: spotlight only agents in this building ("" = All, no
 # filter). The viewer dims everyone elsewhere and glides the camera to the building.
 signal filter_changed(location: String)
+# The live Start/Stop button was pressed (live mode only). The viewer owns the
+# backend's run state and pushes it back via set_live_run — the button flips
+# when the backend confirms, not when clicked.
+signal live_run_toggle_requested
 
 # Tint applied to the active row so the tracked character is obvious at a glance.
 const ACTIVE_TINT := Color(1.0, 0.95, 0.6)
@@ -60,6 +64,7 @@ var _dimmed := {}                   # names the filter has dimmed (set: name -> 
 # live stream -- but keeps moving as a read-only progress bar.
 var _live_badge: Label = null
 var _live_status: Label = null
+var _live_run_btn: Button = null    # backend Start/Stop toggle (set_live_run)
 
 
 func _ready() -> void:
@@ -301,9 +306,17 @@ func set_live(live: bool) -> void:
 		var col := _step_label.get_parent()
 		col.add_child(_live_status)
 		col.move_child(_live_status, _step_label.get_index() + 1)
+		# The backend Start/Stop toggle lives right above the status line; it
+		# stays hidden until the viewer learns the backend's run state.
+		_live_run_btn = Button.new()
+		_live_run_btn.visible = false
+		_live_run_btn.pressed.connect(func(): live_run_toggle_requested.emit())
+		col.add_child(_live_run_btn)
+		col.move_child(_live_run_btn, _live_status.get_index())
 	if _live_badge != null:
 		_live_badge.visible = live
 		_live_status.visible = live
+		_live_run_btn.visible = _live_run_btn.visible and live
 
 
 func set_live_status(text: String) -> void:
@@ -311,6 +324,29 @@ func set_live_status(text: String) -> void:
 	# driven by the viewer's socket + the feed's status records.
 	if _live_status != null:
 		_live_status.text = text
+
+
+func set_live_run(state: String) -> void:
+	## Reflect the BACKEND's run state on the sidebar Start/Stop toggle:
+	## "waiting" = armed but never ticked (a --start-paused boot: the whole day
+	## — and, with a real brain, the first paid model call — sits behind this
+	## button), "running"/"paused" = the mid-day toggle, anything else (e.g.
+	## "finished": resume can't restart a finished day; POST /reset can) hides
+	## it. The viewer drives this from the feed's status records.
+	if _live_run_btn == null:
+		return
+	match state:
+		"waiting":
+			_live_run_btn.visible = true
+			_live_run_btn.text = "▶  Start simulation"
+		"running":
+			_live_run_btn.visible = true
+			_live_run_btn.text = "⏹  Stop simulation"
+		"paused":
+			_live_run_btn.visible = true
+			_live_run_btn.text = "▶  Resume simulation"
+		_:
+			_live_run_btn.visible = false
 
 
 func set_progress(step: int, total: int) -> void:

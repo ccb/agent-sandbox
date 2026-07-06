@@ -585,7 +585,7 @@ def main() -> int:
         )
     print(
         f"Live surface: GET /live, GET /events?since=0, ws://{args.host}:{args.port}/ws, "
-        "POST /pause|/resume|/reset, GET /usage  (OpenAPI at /docs)"
+        "POST /pause|/resume|/reset|/shutdown, GET /usage  (OpenAPI at /docs)"
     )
     run(
         _GameProxy(stepper),
@@ -595,6 +595,9 @@ def main() -> int:
         stepper=stepper,
         tick_seconds=args.tick_seconds,
         start_paused=start_paused,
+        # This server's lifecycle follows the viewer: closing the Godot window
+        # POSTs /shutdown, so a paying sim never keeps running unwatched.
+        allow_shutdown=True,
     )
     return 0
 

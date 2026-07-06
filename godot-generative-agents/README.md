@@ -185,13 +185,20 @@ Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
 (or with a non-Anthropic `provider:` in the config) rather than serving a day
 of silently failing calls.
 
-**The Start gate.** Under `--brain llm` the loop boots **paused**: the server
-is up and the viewer connects, but not a single model call is made until you
-click the **▶ Start simulation** button the viewer shows front-and-centre
-(it sends `POST /resume`; `curl -X POST http://127.0.0.1:8080/resume` works
-too). So the paying part of the day only begins once someone is actually
-watching. The free mock brain keeps auto-starting; `--start-paused` /
-`--no-start-paused` overrides either mode.
+**The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
+server is up and the viewer connects, but not a single model call is made
+until you press **▶ Start simulation** in the left sidebar (it sends
+`POST /resume`; `curl -X POST http://127.0.0.1:8080/resume` works too). Once
+running, the same button reads **⏹ Stop simulation** (`POST /pause` — the same
+control the run monitor's Emergency stop drives) and **▶ Resume** after a
+stop, always reflecting the backend's actual state. The free mock brain keeps
+auto-starting; `--start-paused` / `--no-start-paused` overrides either mode.
+
+**Closing the viewer stops the backend.** In live mode the window close sends
+`POST /shutdown` before quitting, so the sim — and its spend — never keeps
+running with nobody watching (`serve_penn` opts into the endpoint; the
+`shutdown_backend_on_exit` export on the scene turns the behavior off if you
+want a backend that outlives the window).
 
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
