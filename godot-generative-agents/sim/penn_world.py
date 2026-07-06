@@ -217,20 +217,34 @@ def _load_meetings(path):
     return data.get("meetings", []) or []
 
 
+def _load_llm(path):
+    """Read the authored `llm` block from the world YAML (or None if absent).
+
+    Another Godot-only extra `load_world_data` doesn't return: the provider/
+    model/cost-ceiling settings `serve_penn --brain llm` runs on. ``None``
+    (no block) simply means the world declares no LLM configuration."""
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("llm") or None
+
+
 @dataclass
 class PennWorld:
     """Everything the configured Penn sim is made of, ready to run.
 
     ``world_map`` carries the routing patches (and their round-robin state --
     see :func:`_pin_meeting_rendezvous`), ``build_world_fn`` bakes in the
-    perception gating, and ``meetings`` is the authored dialogue script both
-    conversation injectors consume."""
+    perception gating, ``meetings`` is the authored dialogue script both
+    conversation injectors consume, and ``llm`` is the world's declared LLM
+    settings (the YAML ``llm:`` block; only ``serve_penn --brain llm`` acts
+    on it)."""
 
     world_map: WorldMap
     personas: list
     locations: list
     meetings: list
     build_world_fn: Callable
+    llm: dict | None = None
 
 
 def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
@@ -264,6 +278,7 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
         build_world_fn=lambda wm: _gate_conversations_by_perception(
             build_world(wm, personas, locations)
         ),
+        llm=_load_llm(world_data),
     )
 
 

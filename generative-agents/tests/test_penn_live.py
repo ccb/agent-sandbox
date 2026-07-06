@@ -115,9 +115,11 @@ def test_stepper_meta_shape():
         "start",
         "vision_r",
         "personas",
+        "llm",
     }
     assert meta["vision_r"] == VISION_R
     assert len(meta["personas"]) == 3
+    assert meta["llm"] is None  # the default stepper runs the mock brain
     assert all(set(p) == {"name", "emoji"} for p in meta["personas"])
 
 

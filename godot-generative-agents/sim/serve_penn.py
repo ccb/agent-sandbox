@@ -28,6 +28,7 @@ The pieces:
 """
 
 import argparse
+import os
 
 from backend.api import run
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
@@ -43,11 +44,63 @@ from penn_world import (
     build_penn_world,
     replay_frame_entry,
 )
+from text_adventure_games.llm_client import LlmConfig, create_llm_client
 from text_adventure_games.usage import UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
 DEFAULT_STEPS = 1200
+
+# The model --brain llm falls back to if the world's llm: block names none.
+# Claude Haiku: a campus day is dozens-to-hundreds of low-stakes calls, so the
+# cheapest current Anthropic model is the right default (issue #261).
+DEFAULT_LLM_MODEL = "claude-haiku-4-5"
+
+
+def resolve_llm(world_llm, brain, model=None, max_cost=None):
+    """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
+
+    ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
+    no key is needed, nothing is spent, and whatever the world YAML declares is
+    ignored. ``--brain llm`` starts from the world's ``llm:`` block and lets the
+    CLI override the ``model`` and ``max_cost_usd`` for one run.
+
+    Deliberately Anthropic-only and ``ANTHROPIC_API_KEY``-only: this never
+    reads ``LLM_PROVIDER`` / ``LLM_API_KEY`` / ``LLM_MODEL`` (the engine's
+    ``client_from_env`` knobs), so a stray key for some other provider sitting
+    in the environment can never be picked up by a Penn run. Both failure modes
+    (wrong provider, missing key) exit with a one-line fix rather than serving
+    an all-day sim whose every model call silently returns ``None``.
+
+    Note what is intentionally NOT configurable here: the daily planner. The
+    authored YAML schedules (and the rendezvous routing built on them) stay in
+    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` currently
+    validates stops against the *Smallville* location names, and a generated
+    schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
+    is follow-up work; decide/converse/reflect are the model's here.
+    """
+    if brain != "llm":
+        return None
+    llm = dict(world_llm or {})
+    if model is not None:
+        llm["model"] = model
+    if max_cost is not None:
+        llm["max_cost_usd"] = max_cost
+    provider = str(llm.get("provider", "anthropic")).lower()
+    if provider != "anthropic":
+        raise SystemExit(
+            f"--brain llm supports only provider 'anthropic' (the llm: block in "
+            f"world_data_upenn.yaml says {provider!r})."
+        )
+    llm["provider"] = "anthropic"
+    llm.setdefault("model", DEFAULT_LLM_MODEL)
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise SystemExit(
+            "--brain llm needs ANTHROPIC_API_KEY in the environment: "
+            "export ANTHROPIC_API_KEY=sk-ant-...  "
+            "(--brain mock runs offline, without keys)"
+        )
+    return llm
 
 
 class LiveMeetingInjector:
@@ -197,16 +250,49 @@ class PennStepper:
     """
 
     def __init__(
-        self, num_steps=DEFAULT_STEPS, endless=False, world=None, monitor=None
+        self, num_steps=DEFAULT_STEPS, endless=False, world=None, monitor=None, llm=None
     ):
         self.num_steps = num_steps
         self.endless = endless
-        self.ledger = UsageLedger()  # backs GET /usage across resets
+        # Resolved LLM settings (resolve_llm), or None for the mock brain. The
+        # ledger's cost ceiling comes from the same block, so GET /usage
+        # reports the budget and tick() can end the day at it.
+        self.llm = llm
+        self.ledger = UsageLedger(  # backs GET /usage across resets
+            max_cost_usd=(llm or {}).get("max_cost_usd")
+        )
         # The terminal request monitor (backend.llm_monitor), or None for quiet.
         # Like the ledger it lives here, not in _build(), so its call counter
         # survives resets.
         self.monitor = monitor
+        # The real-brain clients (issue #261): one shared by decide + converse,
+        # one for reflection -- separate instances so the request monitor can
+        # tag each role exactly, all recording into self.ledger. Built once
+        # here (they are stateless apart from ledger/context) and re-wired onto
+        # fresh agents by every _build().
+        self.llm_client = None
+        self.reflector_client = None
+        if llm is not None:
+            config = LlmConfig(provider="anthropic", model=llm.get("model"))
+            brain_ledger = self._recording_ledger("decide")
+            self.llm_client = create_llm_client(config, ledger=brain_ledger)
+            ctx = getattr(self.llm_client, "context", None)
+            if isinstance(brain_ledger, RoleTaggedLedger) and ctx is not None:
+                # decide and converse share this client; the call sites stamp
+                # context["role"] per call and the view reads it live.
+                brain_ledger.bind_context(ctx)
+            self.reflector_client = create_llm_client(
+                config, ledger=self._recording_ledger("reflect")
+            )
         self._build(world)
+
+    def _recording_ledger(self, role):
+        """What a client should record into: the base ledger, or -- when the
+        monitor is on -- a write-through view of it that also prints one
+        terminal line per call, tagged *role*."""
+        if self.monitor is None:
+            return self.ledger
+        return RoleTaggedLedger(self.ledger, self.monitor, role=role)
 
     def _build(self, world: PennWorld | None = None):
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
@@ -217,16 +303,13 @@ class PennStepper:
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
         # Every client records into self.ledger; with a monitor, through a
         # write-through view that also prints one terminal line per call (the
-        # base ledger stays the single source GET /usage sums).
-        brain_ledger = (
-            RoleTaggedLedger(self.ledger, self.monitor, role="decide")
-            if self.monitor is not None
-            else self.ledger
-        )
+        # base ledger stays the single source GET /usage sums). Under the mock
+        # brain the schedule clients this ledger feeds ARE the brains; under a
+        # real brain they only pace the day and never call a model.
         attach_agents(
             self.chars,
             self.world.personas,
-            ledger=brain_ledger,
+            ledger=self._recording_ledger("decide"),
             vision_r=self.cog.vision_r,
             num_steps=self.num_steps,
         )
@@ -272,6 +355,13 @@ class PennStepper:
             "personas": [
                 {"name": p["name"], "emoji": p["emoji"]} for p in self.world.personas
             ],
+            # What is driving the cast: None under the mock brain, else the
+            # provider/model, so the viewer can say which model it is watching.
+            "llm": (
+                {"provider": self.llm["provider"], "model": self.llm["model"]}
+                if self.llm is not None
+                else None
+            ),
         }
 
     def tick(self) -> dict | None:
