@@ -50,6 +50,7 @@ const SPEEDS := [0.5, 1.0, 2.0, 4.0]
 var _clock: Label
 var _play: Button                   # play/pause toggle (label set by set_playing)
 var _scrubber: HSlider              # timeline; value is the current frame index
+var _speed_row: HBoxContainer       # the Speed picker row (hidden in live mode)
 var _step_label: Label              # "step N / total"
 var _updating_scrubber := false     # true while we set the scrubber from playback
 var _list: VBoxContainer            # holds one row per character
@@ -60,8 +61,9 @@ var _filter_locations: Array = []   # item index -> building name ("" = All loca
 var _dimmed := {}                   # names the filter has dimmed (set: name -> true)
 # Live mode (issue #263): a red badge in the clock row plus a one-line status
 # under the step label ("following backend" / "reconnecting…"); both built
-# lazily on the first set_live(true). The scrubber locks -- you can't seek a
-# live stream -- but keeps moving as a read-only progress bar.
+# lazily on the first set_live(true). The timeline scrubber and the Speed
+# picker leave the panel entirely -- there's no future to seek to and the
+# backend sets the pace -- while the status line above them stays.
 var _live_badge: Label = null
 var _live_status: Label = null
 var _live_run_btn: Button = null    # backend Start/Stop toggle (set_live_run)
@@ -146,14 +148,14 @@ func _ready() -> void:
 	_scrubber.value_changed.connect(_on_scrubber_changed)
 	col.add_child(_scrubber)
 
-	var speed_row := HBoxContainer.new()
-	speed_row.add_theme_constant_override("separation", 6)
-	col.add_child(speed_row)
+	_speed_row = HBoxContainer.new()
+	_speed_row.add_theme_constant_override("separation", 6)
+	col.add_child(_speed_row)
 
 	var speed_label := Label.new()
 	speed_label.text = "Speed"
 	speed_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	speed_row.add_child(speed_label)
+	_speed_row.add_child(speed_label)
 
 	var speed := OptionButton.new()
 	speed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -162,7 +164,7 @@ func _ready() -> void:
 		if SPEEDS[i] == 1.0:
 			speed.select(i)  # default to real-time
 	speed.item_selected.connect(func(i: int) -> void: speed_changed.emit(SPEEDS[i]))
-	speed_row.add_child(speed)
+	_speed_row.add_child(speed)
 
 	# Focus: spotlight only the agents currently in a chosen building (everyone else
 	# dims). The viewer fills the buildings via set_locations() after the replay loads;
@@ -289,10 +291,12 @@ func set_playing(playing: bool) -> void:
 
 
 func set_live(live: bool) -> void:
-	# Live-follow mode (issue #263): lock the timeline (there's no future to
-	# scrub to; set_progress still moves it as a read-only progress bar thanks
-	# to the _updating_scrubber guard) and show the LIVE badge + status line.
-	_scrubber.editable = not live
+	# Live-follow mode (issue #263): show the LIVE badge + status line, and
+	# drop the replay-only playback controls -- the timeline slider (no future
+	# to scrub to; set_progress keeps the step label current instead) and the
+	# Speed picker (the backend sets the pace, not the viewer).
+	_scrubber.visible = not live
+	_speed_row.visible = not live
 	if live and _live_badge == null:
 		_live_badge = Label.new()
 		_live_badge.text = "● LIVE"
