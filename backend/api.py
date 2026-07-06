@@ -81,6 +81,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from text_adventure_games.memory import MemoryKind
 from text_adventure_games.reporting import JSONRenderer
 
+from .env import load_dotenv
 from .live import EventLog, LiveRunController, SimStepper, run_loop
 from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
 
@@ -955,6 +956,10 @@ def _demo_stepper(game):
 
 
 if __name__ == "__main__":
+    # A repo-root .env (git-ignored; template at .env.example) can supply
+    # HOST/PORT/SIM_LIVE/SIM_API_TOKEN; exported variables win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8080"))
     game = _demo_game()

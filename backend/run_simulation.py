@@ -43,6 +43,7 @@ from text_adventure_games.usage import UsageLedger
 
 from . import exporter
 from .build_world import ALL_PERSONAS, PERSONAS, build_world
+from .env import load_dotenv
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig, SimulationConfig
 from .smallville_agents import (
@@ -558,6 +559,11 @@ def _print_cost_summary(ledger: UsageLedger, renderer=None) -> None:
 
 
 def main() -> None:
+    # A repo-root .env (git-ignored; template at .env.example) can supply the
+    # LLM_* knobs read below without per-terminal exports; already-exported
+    # environment variables always win (backend/env.py).
+    if load_dotenv():
+        print("Loaded .env from the repo root (already-exported variables win).")
     parser = argparse.ArgumentParser(description="Generate a Smallville replay.")
     # The run-time flags default to None so a value set in --config (or its
     # SimulationConfig defaults) is only overridden when the flag is given
