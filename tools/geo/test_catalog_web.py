@@ -49,19 +49,17 @@ def test_furniture_rows_cover_all_painted_gids():
         counts.keys()
     ), "row gids do not match furniture gid counts keys"
 
-    # Known seat gid 1072 must be walkable=True
-    seat_rows = [r for r in rows if r["gid"] == 1072]
-    assert seat_rows, "gid 1072 not found in furniture rows"
-    assert (
-        seat_rows[0]["walkable"] is True
-    ), f"gid 1072 walkable={seat_rows[0]['walkable']}, expected True"
-
-    # Known non-seat gid 1483 must be walkable=False
-    solid_rows = [r for r in rows if r["gid"] == 1483]
-    assert solid_rows, "gid 1483 not found in furniture rows"
-    assert (
-        solid_rows[0]["walkable"] is False
-    ), f"gid 1483 walkable={solid_rows[0]['walkable']}, expected False"
+    # Each row's walkable flag must mirror the current allowlist exactly (the
+    # allowlist is user-editable via the menu, so assert the invariant, not
+    # hardcoded gids). Both states must be represented so the flag is meaningful.
+    walk = block_furniture.load_walkable_furniture()
+    for r in rows:
+        assert r["walkable"] is (r["gid"] in walk), (
+            f"gid {r['gid']}: walkable={r['walkable']} but "
+            f"{'in' if r['gid'] in walk else 'not in'} allowlist"
+        )
+    assert any(r["walkable"] for r in rows), "no walkable furniture rows"
+    assert any(not r["walkable"] for r in rows), "no solid furniture rows"
 
     # Every row's sheet must be in the catalog
     catalog_sheets = set(catalog["sheets"].keys())
