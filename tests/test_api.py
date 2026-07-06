@@ -728,6 +728,21 @@ def test_live_disabled_by_default():
     assert c.post("/command", json={"command": "go north"}).status_code == 200
 
 
+def test_start_paused_holds_frames_until_resume():
+    # create_app(start_paused=True) -- serve_penn's --brain llm default: the
+    # loop is alive and serving, but the first tick (with a real brain, the
+    # first PAID model call) waits for POST /resume (the viewer's Start).
+    with _live_client(start_paused=True) as c:
+        _wait_for_events(c, lambda evs: any(e["kind"] == "status" for e in evs))
+        data = c.get("/live").json()
+        assert data["running"] is True
+        assert data["paused"] is True
+        assert data["step"] == 0
+        assert _frame_count(c.get("/events?since=0").json()["events"]) == 0
+        assert c.post("/resume").status_code == 200
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 2)  # the day runs
+
+
 def test_live_handshake_reports_meta_and_state():
     with _live_client() as c:
         _wait_for_events(c, lambda evs: len(evs) >= 1)  # loop task has started

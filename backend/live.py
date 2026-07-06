@@ -164,12 +164,23 @@ class LiveRunController:
     ``generation`` closes the reset-vs-in-flight-tick race: a tick that started
     before a ``reset()`` finishes with the old generation stamped on its
     result, and :func:`run_loop` drops it instead of publishing a stale frame.
+
+    ``start_paused`` boots the loop armed but not ticking: reads work, the
+    feed carries the ``started`` status, and the first frame waits for a
+    ``resume()`` (``POST /resume``) -- how a paying real-LLM sim holds its
+    first model call until someone actually presses Start in the viewer.
     """
 
-    def __init__(self, stepper: SimStepper, lock: threading.Lock):
+    def __init__(
+        self,
+        stepper: SimStepper,
+        lock: threading.Lock,
+        *,
+        start_paused: bool = False,
+    ):
         self._stepper = stepper
         self._lock = lock
-        self.paused = False
+        self.paused = start_paused
         self.running = False  # set/cleared by run_loop, read by the routes
         self.generation = 0
 

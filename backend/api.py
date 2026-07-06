@@ -347,6 +347,7 @@ def create_app(
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
     stepper: SimStepper | None = None,
     tick_seconds: float = 1.0,
+    start_paused: bool = False,
     max_log_records: int = 10_000,
 ) -> FastAPI:
     """Build the FastAPI app serving *game*.
@@ -365,10 +366,16 @@ def create_app(
     eviction). Left ``None`` -- the default -- the app is byte-identical to the
     command-driven API. The loop rides the app's lifespan, so it only runs
     inside a server (or a ``with TestClient(app):`` block -- a bare
-    ``TestClient(app)`` never starts it)."""
+    ``TestClient(app)`` never starts it). *start_paused* boots that loop armed
+    but not ticking -- the first frame (and, with a real brain, the first paid
+    model call) waits for ``POST /resume``, e.g. the viewer's Start button."""
     lock = threading.Lock()
     log = EventLog(max_log_records)
-    controller = LiveRunController(stepper, lock) if stepper is not None else None
+    controller = (
+        LiveRunController(stepper, lock, start_paused=start_paused)
+        if stepper is not None
+        else None
+    )
     ledger = getattr(stepper, "ledger", None)
 
     lifespan = None
@@ -821,6 +828,7 @@ def run(
     *,
     stepper: SimStepper | None = None,
     tick_seconds: float = 1.0,
+    start_paused: bool = False,
 ) -> None:
     """Serve *game* over HTTP until interrupted (Ctrl-C).
 
@@ -840,7 +848,11 @@ def run(
         )
     uvicorn.run(
         create_app(
-            game, auth_token=auth_token, stepper=stepper, tick_seconds=tick_seconds
+            game,
+            auth_token=auth_token,
+            stepper=stepper,
+            tick_seconds=tick_seconds,
+            start_paused=start_paused,
         ),
         host=host,
         port=port,
