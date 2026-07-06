@@ -1,3 +1,21 @@
+## 2026-07-06
+**Focus:** made furniture solid in the UPenn matrix and made Fisher's bookshelves/chairs addressable game-objects.
+
+**Done today:**
+- Shipped furniture solidity + interactable game-objects as **PR #402** (stacked on #401): `block_furniture.py` seals every `*_furniture` tile into `collision_maze` except a JSON seat allowlist, `add_game_objects.py` paints a `fisher_objects` layer into `game_object_maze`, plus a "Furniture solidity" menu in `catalog_web.py` and a furniture check family in `validate_tmj.py`.
+- Seeded the walkable-seat allowlist from `furniture_catalog.json` labels, then (on review) moved Fisher's 11 bookshelf use-tiles onto the now-walkable shelf bottoms + 8 armchair reading-seats — all 19 resolve as `UPenn:Fisher Fine Arts Library:<room>:<object>` through unchanged `world_map.py`.
+- Verified end-to-end: 123 geo + 1123 engine tests, `validate_tmj` 0 errors, pipeline idempotent, replay re-baked with agents routing around furniture.
+
+**Blockers / questions:**
+- `block_furniture` is seal-only (never re-opens), so an allowlist edit needs a regen from a furniture-free baseline, not just a re-run — and `check_furniture_solidity` only guards that direction. Footgun worth a follow-up guard.
+- Reported "agents walking on Van Pelt walls" turned out to be a rendering artifact — the wing walls are 100% solid in collision, unchanged by this branch — so it needs a viewer-side look, not a matrix fix.
+- #402 can't land until #401 merges (it depends on #401's `ROOM_SUBDIVIDE` wiring); needs retargeting afterward.
+
+**Next:**
+- Retarget #402 to `godot-ga-main` once #401 merges.
+- Extend interactables past Fisher (other buildings' shelves/desks) and decide the sofa / student-desk seat tiles left solid pending review.
+- Wire the `game_object` addresses to engine actions (sit / grab a book) — the verbs are still deliberately out of scope.
+
 ## 2026-07-03
 **Focus:** primarily focused on research symposium planning and code review
 
