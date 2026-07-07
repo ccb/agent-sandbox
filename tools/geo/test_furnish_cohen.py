@@ -5,7 +5,9 @@ import os
 import furnish_cohen as fc
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TMJ = os.path.join(REPO, "godot-generative-agents", "maps", "upenn_core_urban.tmj")
+TMJ = os.path.join(
+    REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
+)
 
 
 def _tmj():

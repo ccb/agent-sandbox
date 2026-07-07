@@ -6,7 +6,7 @@ committed artifact the runtime tools read. Re-run only to re-extract."""
 import json, math, os, subprocess
 
 SRC = "f5219ce"
-MAP = "godot-generative-agents/maps/upenn_core_urban.tmj"
+MAP = "godot-generative-agents/godot/maps/upenn_core_urban.tmj"
 LAYER_ORDER = [
     "westwing_floors",
     "eastwing_floors",

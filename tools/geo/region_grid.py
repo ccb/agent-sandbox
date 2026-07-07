@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw  # type: ignore
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-MAPS = os.path.join(REPO, "godot-generative-agents", "maps")
+MAPS = os.path.join(REPO, "godot-generative-agents", "godot", "maps")
 KENNEY = os.path.join(HERE, "assets", "kenney")
 
 

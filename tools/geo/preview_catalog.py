@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw  # type: ignore
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-SHEET_DIR = os.path.join(REPO, "godot-generative-agents", "maps")
+SHEET_DIR = os.path.join(REPO, "godot-generative-agents", "godot", "maps")
 TILE = 16
 
 
