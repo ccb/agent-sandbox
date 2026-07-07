@@ -75,6 +75,8 @@ MEYERSON = "Meyerson Hall"
 HOUSTON = "Houston Hall"
 IRVINE = "Irvine Auditorium"
 COLLEGE = "College Hall"
+COHEN = "Claudia Cohen Hall"
+ALUMNI = "Sweeten Alumni Building"
 ROOM_SUBDIVIDE = {
     VAN_PELT,
     FISHER,
@@ -82,6 +84,8 @@ ROOM_SUBDIVIDE = {
     HOUSTON,
     IRVINE,
     COLLEGE,
+    COHEN,
+    ALUMNI,
 }  # buildings split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
@@ -123,6 +127,14 @@ FORCED_DOORS = {
     # A north-side entrance at the top-left of the (combined) Sweeten Alumni
     # Building, mirroring the auto-placed east door at the top-right.
     "Sweeten Alumni Building": [{(15, 97), (16, 97), (17, 97)}],
+}
+
+# Perimeter cells to re-close AFTER door-carving, keyed by building name. Mirrors
+# the "Brick Wall" objects furnish_alumni draws to narrow an over-wide auto-door
+# (here: shrink Sweeten Alumni's east entrance from the auto-placed 3 tiles to 2).
+# subdivide_rooms only writes interior walls, so a perimeter closure must live here.
+FORCED_CLOSED = {
+    "Sweeten Alumni Building": {(46, 99)},
 }
 
 
@@ -523,6 +535,44 @@ def load_college_hall_plan(tmj, W, H, interior):
     return rooms, wall_cells
 
 
+def load_cohen_plan(tmj, W, H, interior):
+    """(rooms, wall_cells) for Cohen from cohen_arenas: the five room rects and
+    the kitchen<->Cafeteria 2 partition seam. Both come from furnish_cohen (the
+    same geometry the picture uses), so matrix and picture stay in lock-step."""
+    import furnish_cohen as fco
+
+    sections = fco.cohen_sections(tmj)
+    if not sections:
+        return [], set()
+    rooms = [{"name": nm, "rect": list(rect)} for nm, rect in sections.items()]
+    wall_cells = fco.kitchen_wall_cells(tmj) & set(interior)
+    return rooms, wall_cells
+
+
+def load_alumni_plan(tmj, W, H, interior):
+    """(rooms, wall_cells) for Sweeten Alumni from alumni_arenas. Rooms are the
+    non-decoy boxes; walls are the shared-edge partitions furnish_alumni.compute_walls
+    derives minus the partition doorways furnish_alumni.carve_doors carves
+    (matching the picture's ``open_walls = compute_walls - carve_doors``), so
+    matrix and picture stay in lock-step. Objects of kind 'wall' (Room 1: Wall,
+    Brick Wall) are decoys: they fill as walls but never become arenas."""
+    import furnish_alumni as fal
+
+    raw = fal.read_arenas(tmj)
+    if not raw:
+        return [], set()
+    rooms = [
+        {"name": nm, "rect": [c0, r0, c1, r1]}
+        for (nm, kind, c0, r0, c1, r1) in raw
+        if kind != "wall"
+    ]
+    interior_set = set(interior)
+    walls = fal.compute_walls(raw, interior_set)
+    doors = fal.carve_doors(walls, raw, interior_set)
+    wall_cells = walls - doors  # open the same partition doorways the picture carves
+    return rooms, wall_cells
+
+
 def _punch_doorway(room_cells, walk, collision, W, H):
     """Carve one cell gap between sealed room_cells and the adjacent walk.
 
@@ -752,6 +802,10 @@ def main():
                 plan = load_irvine_plan(tmj, W, H, interior)
             elif name == COLLEGE:
                 plan = load_college_hall_plan(tmj, W, H, interior)
+            elif name == COHEN:
+                plan = load_cohen_plan(tmj, W, H, interior)
+            elif name == ALUMNI:
+                plan = load_alumni_plan(tmj, W, H, interior)
             else:
                 plan = load_meyerson_plan(tmj, W, interior)
             subdivide_rooms(
@@ -766,6 +820,10 @@ def main():
                 H,
                 plan,
             )
+
+        # Re-close any perimeter cells this building keeps walled past the auto-door.
+        for fx, fy in FORCED_CLOSED.get(name, set()):
+            collision[fy * W + fx] = "1"
 
         if name != WILLIAMS:  # Williams' picture is already its furnished cutaway
             picture_jobs.append((name, foot, perimeter, door_cells))
