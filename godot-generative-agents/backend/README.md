@@ -18,7 +18,9 @@ it's imported as the top-level `backend` package via the editable install, so
 It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
 **snapshot + change-feed contract** — plus the on-demand reads of an agent's
 private cognition: its memory stream (issue #298), its belief set (issue #348),
-and its daily plan (issue #347), plus **live mode** (issues #349, #262): an opt-in self-stepping loop that
+and its daily plan (issue #347); the **write-side interventions** (issue #369)
+that let a human speak to an agent or perturb the world; plus **live mode**
+(issues #349, #262): an opt-in self-stepping loop that
 advances the sim on its own and publishes each step to a cursor-addressed change
 feed a viewer follows over `WS /ws` (with `GET /events?since=` as the catch-up
 door), controlled by `POST /pause|/resume|/reset`. See
@@ -41,6 +43,8 @@ door), controlled by `POST /pause|/resume|/reset`. See
   - [`GET /agents/{name}/retrieval`](#get-agentsnameretrieval)
   - [`GET /agents/{name}/plan`](#get-agentsnameplan)
   - [`POST /command`](#post-command)
+  - [`POST /agents/{name}/say`](#post-agentsnamesay)
+  - [`POST /world/event`](#post-worldevent)
 - [Live mode: the loop, the feed, run control (#349/#262)](#live-mode-the-loop-the-feed-run-control-349262)
   - [`GET /live`](#get-live)
   - [`GET /events`](#get-events)
@@ -103,7 +107,7 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Fourteen endpoints. `GET`s are read-only; `POST /command` advances the game by
+Seventeen endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn); the live routes observe and steer the
 self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed-run-control-349262)).
 
@@ -117,6 +121,8 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `GET`  | `/agents/{name}/retrieval` | What an agent would recall for a cue, read-only (#346) |
 | `GET`  | `/agents/{name}/plan`      | One agent's daily plan / intentions (#347)         |
 | `POST` | `/command`                 | Run one command → events + new snapshot            |
+| `POST` | `/agents/{name}/say`       | Speak to an agent → a `chat` memory it perceives (#369) |
+| `POST` | `/world/event`             | Inject an observable event agents in range perceive (#369) |
 | `GET`  | `/live`                    | Live-mode handshake: loop state + world `meta` (#262) |
 | `GET`  | `/events`                  | Change-feed catch-up: records after `?since=` (#262) |
 | `WS`   | `/ws`                      | Change-feed push: every record as it lands (#262)  |
@@ -556,6 +562,89 @@ curl -s -X POST http://127.0.0.1:8080/command \
 > that the command was disallowed. Clients should inspect the `events` channels to
 > learn whether a command actually succeeded — never the HTTP status alone.
 
+### `POST /agents/{name}/say`
+
+Lets a human **speak to an agent** (issue #369) — the write-side sibling of
+[`GET /agents/{name}/memory`](#get-agentsnamememory). The utterance enters the
+agent's stream as a **`chat`-kind memory** phrased from the listener's side
+(`'{speaker} said to me: "…"'`) — the same dual-write shape `conversation.py`
+uses, minus the speaker half (the human has no agent memory). The line is also
+pushed onto the character's `heard` buffer, so it surfaces in the agent's next
+observation exactly like overheard speech.
+
+`{name}` is the character's exact name — **case-sensitive**, URL-encoded as usual.
+
+**Request body** — `SayRequest`:
+
+```json
+{ "text": "The market closes at noon.", "speaker": "Alistair" }
+```
+
+`text` is a non-empty string; `speaker` is optional attribution (defaults to
+`"someone"` — a voice with no named source).
+
+**Response** `200 OK` — `SayResponse`:
+
+| Field     | Type          | Meaning                                                        |
+| --------- | ------------- | -------------------------------------------------------------- |
+| `persona` | `str`         | The agent spoken to                                            |
+| `turn`    | `int`         | The engine turn the utterance was delivered on                 |
+| `reply`   | `str` \| `null` | The agent's one-line answer — `null` under the mock brain (the utterance is remembered, but a scripted stand-in doesn't talk back); a real brain (#261) fills it |
+| `cursor`  | `int`         | The change-feed cursor of the `intervention` record this appended, so a viewer following `/ws` sees the same intervention |
+
+Applied **at the next tick boundary**: the delivery runs under the shared lock in
+a worker thread, so it lands cleanly between ticks even while the live loop is
+stepping. Unlike `POST /command`, an utterance does **not** advance a turn (it
+seeds a memory), so it is **not** refused with `409` while the loop runs.
+
+**Errors** — the two family `404`s (same as the read routes): `unknown character:
+'…'`, and `character '…' has no agent (and so cannot be spoken to)`. An empty
+`text` is `422`.
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/agents/gardener/say \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "The market closes at noon.", "speaker": "Alistair"}'
+```
+
+### `POST /world/event`
+
+Injects an **observable world event** (issue #369) that agent-bound characters in
+range perceive. It appends a `GameEvent` to the world log, so agents who can see
+`location` fold it into memory at their next `perceive()` (their next decision
+point) — the same path a real action's aftermath travels. It is **also** appended
+to the [change feed](#the-events-change-feed) as an `intervention` record, so a
+viewer sees the event happen even before any agent reacts.
+
+**Request body** — `WorldEventRequest`:
+
+```json
+{ "text": "A storm rolls in.", "location": "Field" }
+```
+
+`text` is a non-empty string. `location` is optional: with it, agents positioned
+to see that location perceive the event; **omitted, it's a feed-only announcement**
+no agent perceives (there is no origin room to see).
+
+**Response** `200 OK` — `WorldEventResponse`:
+
+| Field          | Type        | Meaning                                                       |
+| -------------- | ----------- | ------------------------------------------------------------- |
+| `turn`         | `int`       | The engine turn the event was injected on                     |
+| `location`     | `str` \| `null` | Where it happens (echoed back)                            |
+| `perceived_by` | `list[str]` | Agent-bound characters currently in range to perceive it — they fold it into memory at their next decision point (a prediction, not a promise: an agent that moves first may miss it). Empty for a feed-only announcement |
+| `cursor`       | `int`       | The change-feed cursor of the `intervention` record           |
+
+Applied **at the next tick boundary**, under the shared lock. A **given-but-unknown
+`location` is a `404`** (`unknown location: '…'`) — a typo shouldn't silently
+vanish. An empty `text` is `422`.
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/world/event \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "A storm rolls in.", "location": "Field"}'
+```
+
 ## Live mode: the loop, the feed, run control (#349/#262)
 
 Everything above is **command-driven**: the world only advances when a client
@@ -598,6 +687,8 @@ advancing **on its own** while frontends follow along:
   { "cursor": 12, "kind": "frame",  "step": 11, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
   { "cursor": 13, "kind": "status", "reason": "paused", "running": true, "paused": true, "step": 12 }
   { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
+  { "cursor": 16, "kind": "intervention", "intervention": "say", "name": "Maya Chen", "speaker": "Alistair", "text": "The market closes at noon.", "turn": 12 }
+  { "cursor": 17, "kind": "intervention", "intervention": "world_event", "text": "A storm rolls in.", "location": "The Willows Market", "turn": 12 }
   ```
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
@@ -606,6 +697,10 @@ advancing **on its own** while frontends follow along:
   (`started|paused|resumed|reset|finished|stopped`). `engine` wraps a
   [change-feed record](#the-events-change-feed) the stepper drained from the
   engine during that tick (steppers opt in by implementing `drain_events()`).
+  `intervention` records a human write ([`POST /agents/{name}/say`](#post-agentsnamesay)
+  or [`POST /world/event`](#post-worldevent), #369), discriminated by its
+  `intervention` field, so a viewer sees the same perturbation the operator made.
+  (These record shapes are pinned by the forthcoming data contract, #305.)
 
   One `engine` payload has its own sub-contract: **`event.kind: "llm_call"`** —
   one record per LLM request (#398), the buffered copy of the row the terminal
@@ -721,7 +816,7 @@ ceiling (#183); `over_budget` flips when the kill-switch trips.
 | ------ | ------------------------------------------------------------------------------------- |
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
-| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge,retrieval,plan}`, an unknown character or one with no agent |
+| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge,retrieval,plan,say}`, an unknown character or one with no agent; on `POST /world/event`, a given-but-unknown `location` |
 | `409`  | Run control without a loop enabled; or `POST /command` while the loop is actively stepping (pause first) |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |
