@@ -13,10 +13,9 @@ Pins the contracts the live-LLM MVP stands on:
   already exercises the whole path offline, and the call counter survives
   ``reset()`` alongside the ledger.
 
-Fully offline (mock clients record zero-cost usage). Run from
-``generative-agents``::
+Fully offline (mock clients record zero-cost usage). Run from the repo root::
 
-    uv run pytest tests/test_llm_monitor.py -v
+    uv run pytest godot-generative-agents/tests/test_llm_monitor.py -v
 """
 
 import io
@@ -24,10 +23,12 @@ import json
 import sys
 from pathlib import Path
 
-# serve_penn lives in the Godot tree and is run as a script (no package);
-# import it the way its own tests do -- off the sim directory itself.
-_SIM_DIR = Path(__file__).resolve().parents[2] / "godot-generative-agents" / "sim"
-sys.path.insert(0, str(_SIM_DIR))
+# serve_penn / penn_world live in the Godot tree and are run as scripts (no
+# package); import them off backend/penn/, the way test_penn_live.py does.
+_PENN_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
+sys.path.insert(0, str(_PENN_DIR))
 
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger  # noqa: E402
 from text_adventure_games.llm_client import MockLlmClient  # noqa: E402
