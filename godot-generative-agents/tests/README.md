@@ -20,7 +20,8 @@ reflection, conversation) is still covered at the engine level by the repo-root
 
 | File | Covers |
 | --- | --- |
-| `test_penn_live.py` | `build_penn_world`, `PennStepper` reproducing `simulate()` frame-for-frame, and the `LiveMeetingInjector` (issues #263/#297) |
+| `test_penn_live.py` | `build_penn_world`, `PennStepper` reproducing `simulate()` frame-for-frame, the `LiveMeetingInjector` incl. its `reset()` re-arm, and the `_GameProxy` post-reset swap (issues #263/#297/#392) |
+| `test_live_seam.py` | The live-loop edges of `backend.live` + `backend.api`: the WebSocket close codes (1008/1009/1011), `GET /events` under log eviction, and `POST /reset` / resume-after-finished interleavings (issue #392) — the branches the repo-root `tests/test_api.py` + `tests/test_live_loop.py` leave unpinned |
 | `test_penn_live_llm.py` | The `--brain llm` path: `resolve_llm`, real conversations, outage → idle-and-retry, the cost ceiling (issue #261) — fully offline via a scripted "real-shaped" brain, no SDK/key |
 | `test_llm_monitor.py` | The terminal LLM-request monitor + `RoleTaggedLedger` write-through accounting, and its `PennStepper` wiring |
 | `test_sim_clock.py` | `SimClock` step ↔ wall-clock mapping (issue #83) |
