@@ -2,7 +2,7 @@
 
 Godot can't run Python, so (exactly like the Phaser/Django replay) the sim runs
 offline here and we dump a compact per-step "replay" JSON; the Godot scene
-`scenes/penn_replay.tscn` reads it and animates a sprite per persona walking the
+`scenes/viewer.tscn` reads it and animates a sprite per persona walking the
 campus map.
 
 The Penn *world* lives next to this script (`world_data_upenn.yaml` + the
@@ -16,10 +16,10 @@ completion, the post-hoc conversation injector, and writing the JSON.
 
 Run from the repo root (so `uv run` finds the engine env)::
 
-    uv run python godot-generative-agents/sim/generate_penn_replay.py
-    uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 600
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 600
 
-Writes: godot-generative-agents/maps/penn_replay.json
+Writes: godot-generative-agents/godot/maps/penn_replay.json
 """
 
 import argparse
@@ -41,9 +41,12 @@ from penn_world import (
     replay_frame_entry,
 )
 
-_SIM_DIR = os.path.dirname(os.path.abspath(__file__))
-_GODOT_DIR = os.path.dirname(_SIM_DIR)
-_REPO = os.path.dirname(_GODOT_DIR)
+_SIM_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)  # .../godot-generative-agents/backend/penn
+_GG_DIR = os.path.dirname(os.path.dirname(_SIM_DIR))  # .../godot-generative-agents
+_GODOT_DIR = os.path.join(_GG_DIR, "godot")  # the Godot project (its res:// root)
+_REPO = os.path.dirname(_GG_DIR)
 
 OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 

@@ -1,5 +1,5 @@
 // Shape of godot-generative-agents/maps/penn_replay.json, written by
-// sim/generate_penn_replay.py and played by scripts/penn_replay.gd. The browser
+// backend/penn/generate_penn_replay.py and played by scripts/viewer.gd. The browser
 // shell serves a copy at /replay/penn_replay.json (see web/public/replay/).
 //
 // The Godot canvas already consumes this file itself; these types are here so the
@@ -77,7 +77,7 @@ export interface Replay {
   meta: ReplayMeta;
   frames: Frame[];
   /**
-   * Per-persona full memory stream, written by sim/generate_penn_replay.py. The
+   * Per-persona full memory stream, written by backend/penn/generate_penn_replay.py. The
    * companion panel filters each agent's records to `created_turn <= step` to show
    * the history accrued so far. Optional: a replay generated before this field
    * existed simply has no memory history to show.

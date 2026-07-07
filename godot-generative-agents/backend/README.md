@@ -1,11 +1,13 @@
 # Backend HTTP API
 
-The `backend` package is **agent-sandbox's one canonical backend seam**: a small
+The `backend` package is **agent-sandbox's backend seam**: a small
 [FastAPI](https://fastapi.tiangolo.com/) app (`backend/api.py`) that serves *any*
 engine `Game` over HTTP. Every out-of-process frontend — a Godot/2D renderer, the
-Smallville/Phaser viewer, the web inspection companion — polls the **same**
-endpoints here instead of embedding Python or baking its own data dump. The engine
-and any LLM stay server-side; the frontend just reads JSON.
+web inspection companion — polls the **same** endpoints here instead of embedding
+Python or baking its own data dump. The engine and any LLM stay server-side; the
+frontend just reads JSON. (The package lives at `godot-generative-agents/backend/`;
+it's imported as the top-level `backend` package via the editable install, so
+`from backend…` and `python -m backend.api` work from anywhere in the repo.)
 
 > This document is the human-readable endpoint reference. The interactive,
 > machine-readable contract is auto-served at **`/docs`** (Swagger UI) and
@@ -692,7 +694,7 @@ lock-step because all three come from the same formatter
 
 1. **this endpoint's** `memories` list (live, mid-run);
 2. a baked replay's **`memory_streams[name]`** block
-   (`godot-generative-agents/sim/generate_penn_replay.py`) and per-frame
+   (`godot-generative-agents/backend/penn/generate_penn_replay.py`) and per-frame
    `memories` shorthand;
 3. the frontend type **`MemoryRecord`**
    (`godot-generative-agents/web/src/types/replay.ts`).

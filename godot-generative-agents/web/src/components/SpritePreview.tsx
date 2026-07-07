@@ -6,13 +6,13 @@ import { useEffect, useRef } from "react";
 // sheet) tinted with that same colour, so the card portrait matches the canvas.
 //
 // The sheet is a 6×10 grid of 32×32 frames (web/public/sprites/player.png, a copy
-// of scripts/penn_replay.gd's player_sheet). We draw at native 32×32 and let CSS
+// of scripts/viewer.gd's player_sheet). We draw at native 32×32 and let CSS
 // scale the <canvas> up with image-rendering: pixelated, so the pixel art stays
 // crisp at any size.
 const SHEET_URL = `${import.meta.env.BASE_URL}sprites/player.png`;
 const FRAME = 32;
 
-// Per-persona tints, mirroring penn_replay.gd's TINTS array (indexed by persona
+// Per-persona tints, mirroring viewer.gd's TINTS array (indexed by persona
 // order) so a card's portrait is the same colour as that agent on the map. Godot
 // `modulate` multiplies the sprite by this colour; we reproduce that below.
 export const SPRITE_TINTS = [

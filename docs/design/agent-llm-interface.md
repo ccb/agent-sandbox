@@ -2,10 +2,10 @@
 
 **Scope.** This documents the interface between the generative agents and the
 live model for the **live-LLM MVP** (issue #261, epic #266): the Penn campus
-sim served by `godot-generative-agents/sim/serve_penn.py --brain llm`, watched
+sim served by `godot-generative-agents/backend/penn/serve_penn.py --brain llm`, watched
 live in the Godot viewer. The model is **Anthropic Claude Haiku
 (`claude-haiku-4-5`)** for every call, declared in the world's simulation
-config (`godot-generative-agents/sim/world_data_upenn.yaml`, the `llm:`
+config (`godot-generative-agents/backend/penn/world_data_upenn.yaml`, the `llm:`
 block) and pinned by `generative-agents/tests/test_penn_live_llm.py`.
 
 The same interface backs the Smallville batch runner

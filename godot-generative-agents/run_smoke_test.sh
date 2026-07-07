@@ -12,8 +12,9 @@
 # agent sprites are absent (Godot prints a harmless "cannot open" warning).
 set -euo pipefail
 
-# The Godot project is the directory this script lives in.
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The Godot project is the godot/ subfolder next to this script (its siblings
+# backend/ and web/ are not part of the game).
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/godot" && pwd)"
 
 # Find a Godot 4 binary: PATH first, then the standard macOS app bundle.
 GODOT="$(command -v godot || command -v godot4 || true)"

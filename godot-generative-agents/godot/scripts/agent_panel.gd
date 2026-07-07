@@ -5,11 +5,11 @@ extends PanelContainer
 ## "Track" button).
 ##
 ## This panel is pure UI — it knows nothing about the camera or the agent nodes. The
-## replay viewer (penn_replay.gd) fills it via add_character(), drives the clock via
+## replay viewer (viewer.gd) fills it via add_character(), drives the clock via
 ## set_clock_text(), and listens for the signals below to drive the camera; it also
 ## calls clear_active() when the camera stops following on its own (e.g. the user
 ## panned the map), so the highlight stays in sync. Rows are built in code (matching
-## penn_replay's build-nodes-in-code style) so the scene file only needs the empty
+## viewer's build-nodes-in-code style) so the scene file only needs the empty
 ## PanelContainer.
 
 # A row's Track button was pressed and that character is not already being tracked.

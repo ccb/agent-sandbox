@@ -167,7 +167,7 @@ cython_debug/
 *.jsonl.*
 
 # Generated per-checkout / per-run — regenerable, never commit.
-godot-generative-agents/maps/penn_replay.json
+godot-generative-agents/godot/maps/penn_replay.json
 tools/geo/out/upenn_core_ville_addresses.json
 
 # Project-shared Claude Code config (commit it); per-dev settings.local.json stays ignored.

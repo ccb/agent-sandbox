@@ -287,7 +287,7 @@ locations:
   address: UPenn:Irvine Auditorium:lobby
 
 # ---------------------------------------------------------------------------
-# Scripted meetings (read by sim/generate_penn_replay.py, NOT by the engine's
+# Scripted meetings (read by backend/penn/generate_penn_replay.py, NOT by the engine's
 # load_world_data). The mock brain never produces dialogue, so to show the
 # viewer's speech-bubble + conversation-link feature offline we author a short
 # exchange per meeting and the generator injects it into the replay's `chat`
@@ -342,7 +342,7 @@ meetings:
   - [Professor Tanaka, "First time? Sit close -- the demos are the best part."]
 
 # ---------------------------------------------------------------------------
-# LLM configuration for the LIVE server (read by sim/serve_penn.py ONLY, and
+# LLM configuration for the LIVE server (read by backend/penn/serve_penn.py ONLY, and
 # only when launched with `--brain llm`; the engine's load_world_data never
 # sees this block). The default run (`--brain mock`, or no flag) stays the
 # deterministic, free mock brain no matter what is written here.

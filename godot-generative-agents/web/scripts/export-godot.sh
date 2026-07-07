@@ -11,8 +11,8 @@ set -euo pipefail
 GODOT_BIN="${GODOT_BIN:-/Applications/Godot.app/Contents/MacOS/Godot}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WEB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"          # .../godot-generative-agents/web
-GODOT_PROJECT="$(cd "$WEB_DIR/.." && pwd)"        # .../godot-generative-agents
+WEB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"              # .../godot-generative-agents/web
+GODOT_PROJECT="$(cd "$WEB_DIR/../godot" && pwd)"     # .../godot-generative-agents/godot
 OUT_DIR="$WEB_DIR/public/godot"
 PROJECT_FILE="$GODOT_PROJECT/project.godot"
 

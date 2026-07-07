@@ -2,13 +2,13 @@ extends Node
 ## The one place the landing menu and the viewer agree on "what did the user
 ## pick?" (issue #399). Registered as the `LaunchConfig` autoload (see
 ## project.godot), so it's a single persistent instance that survives the scene
-## swap from scenes/main_menu.tscn to scenes/penn_replay.tscn — the menu writes
+## swap from scenes/main_menu.tscn to scenes/viewer.tscn — the menu writes
 ## the choice here, the viewer reads it in _ready(), and back-to-menu resets it.
 ##
 ## No `class_name`: the autoload name IS the global (LaunchConfig.mode, …), and a
 ## class_name of the same name would collide with it.
 ##
-## When `mode == NONE` (a direct launch: run_replay.sh, F6 on penn_replay.tscn, the
+## When `mode == NONE` (a direct launch: run.sh, F6 on viewer.tscn, the
 ## smoke test), the viewer falls through to its original export/env-var behaviour —
 ## so every existing deep link into the scene keeps working untouched.
 

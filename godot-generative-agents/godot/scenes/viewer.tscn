@@ -1,6 +1,6 @@
 [gd_scene load_steps=11 format=3]
 
-[ext_resource type="Script" path="res://scripts/penn_replay.gd" id="1_replay"]
+[ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
 [ext_resource type="Texture2D" uid="uid://cq7ritci4gvgn" path="res://Cute_Fantasy_Free/Player/Player.png" id="3_player"]
 [ext_resource type="Script" path="res://scripts/camera_controls.gd" id="4_cam"]
@@ -22,7 +22,7 @@ map_path = "res://maps/upenn_core_urban.tmj"
 
 ; Floating building name-plates over the campus, shown zoomed-out and faded as you
 ; zoom in (building_labels.gd). Sits above the Map but before the agent sprites
-; penn_replay.gd adds at runtime, so agent name-plates always draw on top.
+; viewer.gd adds at runtime, so agent name-plates always draw on top.
 [node name="BuildingLabels" type="Node2D" parent="."]
 script = ExtResource("7_buildings")
 
@@ -39,9 +39,9 @@ script = ExtResource("4_cam")
 
 ; Screen-space overlay (fixed on screen, unaffected by camera pan/zoom). The
 ; character sidebar sits in the left grey margin a portrait map leaves in a
-; landscape window, so it covers no campus. penn_replay.gd fills it after load.
+; landscape window, so it covers no campus. viewer.gd fills it after load.
 [node name="UI" type="CanvasLayer" parent="."]
-; Above the runtime "perception fog" overlay (penn_replay.gd adds it on its own
+; Above the runtime "perception fog" overlay (viewer.gd adds it on its own
 ; CanvasLayer at layer 1), so the sidebar + minimap are never dimmed by the fog.
 layer = 10
 
@@ -52,13 +52,13 @@ grow_vertical = 2
 theme = ExtResource("6_theme")
 script = ExtResource("5_panel")
 
-; Bottom-right minimap overview (minimap.gd). penn_replay.gd sizes + anchors it and
+; Bottom-right minimap overview (minimap.gd). viewer.gd sizes + anchors it and
 ; feeds it the camera + agents after load; sits over the campus in the bottom-right.
 [node name="Minimap" type="Control" parent="UI"]
 script = ExtResource("8_minimap")
 
 ; Top-right run monitor (live_hud.gd, issue #264): cost meter + backend health +
-; Emergency Stop. Pure UI like the sidebar and minimap — penn_replay.gd wires it to a
+; Emergency Stop. Pure UI like the sidebar and minimap — viewer.gd wires it to a
 ; data source: simulated usage in baked-replay mode (the default), or the real
 ; backend's GET /usage + /health when live_backend_url / SIM_API_URL is set. It
 ; anchors itself to the top-right corner in its own _ready.
@@ -70,7 +70,7 @@ script = ExtResource("10_hud")
 ; (10) so, when shown, its full-screen dim reliably covers the sidebar + minimap + world
 ; and it reads as a modal window (the same own-CanvasLayer trick the fog uses for
 ; predictable layering). Hidden until opened (H key / the sidebar "Heatmap" button);
-; penn_replay.gd feeds it the replay after load and pushes the current step so the heat
+; viewer.gd feeds it the replay after load and pushes the current step so the heat
 ; accumulates live.
 [node name="HeatmapLayer" type="CanvasLayer" parent="."]
 layer = 11

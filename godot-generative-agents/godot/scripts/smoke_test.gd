@@ -17,7 +17,7 @@ extends Node
 # intentionally excluded. Add new gameplay/view scenes here as they're created.
 const SCENES := [
 	"res://scenes/campus_urban.tscn",
-	"res://scenes/penn_replay.tscn",
+	"res://scenes/viewer.tscn",
 ]
 
 

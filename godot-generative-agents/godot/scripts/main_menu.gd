@@ -3,10 +3,10 @@ extends Control
 ## enter the viewer instead of baking the choice into the launch command.
 ##
 ## Three ways in, all handed to the viewer via the LaunchConfig autoload and then
-## `scenes/penn_replay.tscn`:
+## `scenes/viewer.tscn`:
 ##   • Play the bundled replay        — res://maps/penn_replay.json
 ##   • Open a local replay file…      — any replay .json on disk (desktop only)
-##   • Run a live simulation          — connect to a running backend/serve_penn.py
+##   • Run a live simulation          — connect to a running backend/penn/serve_penn.py
 ##
 ## Everything is built in code in _ready() (matching agent_panel.gd's house style),
 ## so the .tscn only carries the themed root. The backdrop is the REAL campus,
@@ -18,7 +18,7 @@ extends Control
 ## sim itself beyond a one-shot GET /live handshake to confirm a live backend is
 ## reachable before handing off — the viewer owns every connection after that.
 
-const VIEWER_SCENE := "res://scenes/penn_replay.tscn"
+const VIEWER_SCENE := "res://scenes/viewer.tscn"
 const BUNDLED_REPLAY := "res://maps/penn_replay.json"
 const BACKDROP_MAP := "res://maps/upenn_core_urban.tmj"
 const DEFAULT_LIVE_URL := "http://127.0.0.1:8080"  # serve_penn.py's default
@@ -270,7 +270,7 @@ func _on_bundled_pressed() -> void:
 	# (web_replay_url), so we always proceed and let that path handle a missing file.
 	if not OS.has_feature("web") and not FileAccess.file_exists(BUNDLED_REPLAY):
 		_show_replay_hint(
-			"No bundled replay yet. Generate one with sim/generate_penn_replay.py, "
+			"No bundled replay yet. Generate one with backend/penn/generate_penn_replay.py, "
 			+ "or use “Open a local replay file…”.", true)
 		return
 	LaunchConfig.set_replay(BUNDLED_REPLAY)
@@ -357,7 +357,7 @@ func _on_probe_completed(
 	var url := _normalize_url(_url_edit.text)
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_show_live_status(
-			"Can't reach %s — is the backend running? (sim/serve_penn.py)" % url, true)
+			"Can't reach %s — is the backend running? (backend/penn/serve_penn.py)" % url, true)
 		return
 	if code == 401 or code == 403:
 		_show_live_status("HTTP %d — check the token." % code, true)
@@ -368,7 +368,7 @@ func _on_probe_completed(
 	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(data) != TYPE_DICTIONARY or not bool((data as Dictionary).get("enabled", false)):
 		_show_live_status(
-			"Backend has no live loop — start it with a stepper (sim/serve_penn.py).", true)
+			"Backend has no live loop — start it with a stepper (backend/penn/serve_penn.py).", true)
 		return
 
 	# Reachable and live. Hand the connection to the viewer; it owns the handshake,

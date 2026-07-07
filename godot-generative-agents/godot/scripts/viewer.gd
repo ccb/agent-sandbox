@@ -1,7 +1,7 @@
 extends Node2D
 ## Plays a UPenn agent-simulation replay on the campus map.
 ##
-## The Python sim (sim/generate_penn_replay.py) writes maps/penn_replay.json:
+## The Python sim (backend/penn/generate_penn_replay.py) writes maps/penn_replay.json:
 ## per step, each persona's tile (x, y) + current activity + emoji. This scene
 ## renders the campus (a sibling TileMapLayer running tiled_map.gd) and animates
 ## one Cute Fantasy sprite per persona, easing it tile-to-tile along its path —
@@ -11,7 +11,7 @@ extends Node2D
 ## With a backend URL configured (live_backend_url / SIM_API_URL), the same
 ## scene instead FOLLOWS a running sim live (issue #263): a GET /live handshake
 ## spawns the cast, GET /events backfills history, and a WebSocket to /ws
-## streams each new step (sim/serve_penn.py is the matching server). Frames
+## streams each new step (backend/penn/serve_penn.py is the matching server). Frames
 ## land in the same _frames array, so playback and every feature work
 ## unchanged; only the scrubber locks (you can't seek a live stream).
 

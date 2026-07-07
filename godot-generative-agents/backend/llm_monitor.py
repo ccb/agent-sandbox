@@ -1,6 +1,6 @@
 """Terminal monitor for LLM requests: one formatted line per model call.
 
-The live Penn server (``godot-generative-agents/sim/serve_penn.py``) fires real
+The live Penn server (``godot-generative-agents/backend/penn/serve_penn.py``) fires real
 model calls from inside an asyncio-driven tick loop -- invisible unless you
 watch the provider dashboard. This module makes every call observable in the
 terminal running the server, as it happens::
