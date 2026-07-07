@@ -44,6 +44,14 @@ surface (#262) a following viewer needs:
 * ``GET  /usage``        -> the stepper's ``UsageLedger`` summary (tokens/cost)
   for the viewer's run-monitor HUD (#264) -- ~0 under the mock brain.
 
+The **write-side interventions** (issue #369) let a human touch a running sim --
+the mutating siblings of the read family, applied at the next tick boundary:
+
+* ``POST /agents/{name}/say`` body ``{text, speaker?}`` -> speak to an agent; the
+  utterance lands in its memory as a ``chat`` record it perceives next decision.
+* ``POST /world/event`` body ``{text, location?}`` -> inject an observable event
+  agents in range perceive, also appended to the change feed so viewers see it.
+
 ``GET`` requests are read-only; ``POST /command`` advances the game by exactly
 one command (and is refused with ``409`` while the live loop is actively
 stepping -- pause first). The interactive OpenAPI contract is served at
@@ -85,6 +93,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from text_adventure_games.events import GameEvent
 from text_adventure_games.memory import MemoryKind
 from text_adventure_games.reporting import JSONRenderer
 
@@ -106,6 +115,28 @@ def _terminate_process() -> None:
     uvicorn unwinds exactly as a Ctrl-C would (the loop task cancels and
     publishes its final ``stopped`` status on the way down)."""
     os.kill(os.getpid(), signal.SIGINT)
+
+
+def _agents_in_range_of(game, location_name: str) -> list[str]:
+    """Agent-bound characters currently positioned to perceive *location_name*.
+
+    Uses the engine's ``perceivable_locations`` visibility seam (falling back to
+    the character's own room when the game predates it), so it matches exactly
+    what ``AgentMemory.perceive`` will fold in: a character perceives an event at
+    a location when that location is among the rooms it can see. Sorted by name,
+    for a stable response."""
+    names: list[str] = []
+    for name, char in game.characters.items():
+        if getattr(char, "agent", None) is None:
+            continue
+        if hasattr(game, "perceivable_locations"):
+            locs = game.perceivable_locations(char)
+        else:
+            locs = [getattr(char, "location", None)]
+        loc_names = {getattr(loc, "name", loc) for loc in locs}
+        if location_name in loc_names:
+            names.append(name)
+    return sorted(names)
 
 
 # A command request is a tiny JSON object; nothing legitimate approaches this.
@@ -130,6 +161,69 @@ class CommandResponse(BaseModel):
     events: list[dict]
     world_state: dict
     game_over: bool
+
+
+class SayRequest(BaseModel):
+    """The body of ``POST /agents/{name}/say`` (#369): a human speaks to an agent."""
+
+    text: str = Field(..., min_length=1, description="what is said to the agent")
+    speaker: str = Field(
+        "someone",
+        min_length=1,
+        description="who is speaking, for attribution in the agent's memory "
+        "(defaults to 'someone' -- a voice with no named source)",
+    )
+
+
+class SayResponse(BaseModel):
+    """The result of an utterance delivered to *name* (#369).
+
+    ``reply`` is the agent's one-line answer -- ``null`` under the mock brain
+    (the utterance is remembered, but a scripted stand-in doesn't talk back); a
+    real brain (#261) fills it. ``cursor`` is the change-feed cursor of the
+    ``intervention`` record this appended, so a viewer following ``/ws`` sees the
+    same intervention the caller just made."""
+
+    persona: str
+    turn: int
+    reply: str | None = Field(
+        None, description="the agent's reply, or null when its brain doesn't answer"
+    )
+    cursor: int = Field(
+        ..., description="cursor of the intervention record this appended"
+    )
+
+
+class WorldEventRequest(BaseModel):
+    """The body of ``POST /world/event`` (#369): inject an observable happening."""
+
+    text: str = Field(..., min_length=1, description="the happening, in plain language")
+    location: str | None = Field(
+        None,
+        description="where it happens; agent-bound characters who can see that "
+        "location perceive it at their next decision. Omitted = a feed-only "
+        "announcement no agent perceives.",
+    )
+
+
+class WorldEventResponse(BaseModel):
+    """The result of injecting a world event (#369).
+
+    ``perceived_by`` is the agents currently positioned to see ``location`` --
+    they fold the event into memory at their next decision point (a prediction,
+    not a promise: an agent that moves first may miss it). Empty when no location
+    was given (a feed-only announcement). ``cursor`` is the change-feed cursor of
+    the ``intervention`` record, so viewers see the event land."""
+
+    turn: int
+    location: str | None
+    perceived_by: list[str] = Field(
+        default_factory=list,
+        description="agent-bound characters currently in range to perceive it",
+    )
+    cursor: int = Field(
+        ..., description="cursor of the intervention record this appended"
+    )
 
 
 class MemoryEntry(BaseModel):
@@ -1018,6 +1112,116 @@ def create_app(
             return run_command(game, req.command.strip(), lock)
         except Exception as exc:  # an engine bug shouldn't drop the connection
             raise HTTPException(status_code=500, detail=f"engine error: {exc}")
+
+    @app.post("/agents/{name}/say", response_model=SayResponse)
+    async def agent_say(name: str, req: SayRequest, _: None = Depends(require_auth)):
+        """Speak to an agent; the utterance lands in its memory (#369).
+
+        The write-side sibling of ``GET /agents/{name}/memory``: a human (or, later,
+        the Godot chat box) says something to *name*, and it enters the agent's
+        stream as a ``chat``-kind record phrased from the listener's side
+        (``'{speaker} said to me: "..."'``) -- the same dual-write shape
+        ``conversation.py`` uses, minus the speaker half (the human has no agent
+        memory). The line is also pushed onto the character's ``heard`` buffer, so
+        it surfaces in the agent's next observation exactly like overheard speech.
+
+        Applied **at the next tick boundary**: the delivery runs under the shared
+        lock in a worker thread, so it lands cleanly between ticks even while the
+        loop is stepping (no ``409`` -- unlike ``POST /command``, an utterance
+        doesn't advance a turn, it just seeds a memory). 404 conventions match the
+        read family: an unknown character 404s, and so does one with no agent
+        bound (there is no mind to speak to). The agent's ``reply`` is ``null``
+        under the mock brain and filled once #261 wires a real one."""
+        text = req.text.strip()
+        speaker = req.speaker.strip() or "someone"
+
+        def _deliver() -> int:
+            with lock:
+                char = game.characters.get(name)
+                if char is None:
+                    raise HTTPException(
+                        status_code=404, detail=f"unknown character: {name!r}"
+                    )
+                if char.agent is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"character {name!r} has no agent (and so cannot be spoken to)",
+                    )
+                char.agent.memory.add_chat(
+                    f'{speaker} said to me: "{text}"', turn=game.turn, partner=speaker
+                )
+                hear = getattr(char, "hear", None)
+                if callable(hear):
+                    hear(f'{speaker} said to you: "{text}"')
+                return game.turn
+
+        turn = await asyncio.get_running_loop().run_in_executor(None, _deliver)
+        record = log.append(
+            "intervention",
+            intervention="say",
+            name=name,
+            speaker=speaker,
+            text=text,
+            turn=turn,
+        )
+        return {
+            "persona": name,
+            "turn": turn,
+            "reply": None,
+            "cursor": record["cursor"],
+        }
+
+    @app.post("/world/event", response_model=WorldEventResponse)
+    async def world_event(req: WorldEventRequest, _: None = Depends(require_auth)):
+        """Inject an observable event agents in range perceive (#369).
+
+        Appends a :class:`~text_adventure_games.events.GameEvent` to the world log
+        so agent-bound characters who can see ``location`` fold it into memory at
+        their next ``perceive`` (their next decision point) -- the same path a
+        real action's aftermath travels. It is *also* appended to the #262 change
+        feed as an ``intervention`` record, so a viewer sees the event happen even
+        before any agent reacts. Omit ``location`` for a feed-only announcement
+        that no agent perceives.
+
+        Applied **at the next tick boundary** (delivered under the shared lock in
+        a worker thread), so it lands cleanly between ticks while the loop runs. A
+        given-but-unknown ``location`` is a ``404`` (a typo shouldn't silently
+        vanish); otherwise ``perceived_by`` reports who is currently in range."""
+        text = req.text.strip()
+        location = req.location
+
+        def _inject() -> tuple[int, list[str]]:
+            with lock:
+                if location is not None and location not in game.locations:
+                    raise HTTPException(
+                        status_code=404, detail=f"unknown location: {location!r}"
+                    )
+                turn = game.turn
+                payload = {"location": location} if location is not None else {}
+                game.events.append(
+                    GameEvent(turn, None, "world_event", summary=text, payload=payload)
+                )
+                perceived_by = (
+                    _agents_in_range_of(game, location) if location is not None else []
+                )
+                return turn, perceived_by
+
+        turn, perceived_by = await asyncio.get_running_loop().run_in_executor(
+            None, _inject
+        )
+        record = log.append(
+            "intervention",
+            intervention="world_event",
+            text=text,
+            location=location,
+            turn=turn,
+        )
+        return {
+            "turn": turn,
+            "location": location,
+            "perceived_by": perceived_by,
+            "cursor": record["cursor"],
+        }
 
     return app
 

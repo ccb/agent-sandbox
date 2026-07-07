@@ -1238,3 +1238,202 @@ def test_demo_stepper_advances_world_and_memory():
     assert game.turn > 0  # real commands ran through the engine
     assert len(memory_stream_for_persona(gardener.agent)) == before + 2
     assert stepper.drain_events()  # engine records captured for the feed
+
+
+# --- POST /agents/{name}/say + POST /world/event: interventions (#369) ------
+
+
+def test_say_delivers_a_chat_memory():
+    # The acceptance path: an utterance to an agent lands in its memory as a
+    # chat-kind record, visible via GET /agents/{name}/memory (#298).
+    game, npc = _with_agent()
+    client = _client(game)
+    resp = client.post(
+        "/agents/gardener/say", json={"text": "The market closes at noon."}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"persona", "turn", "reply", "cursor"}
+    assert body["persona"] == "gardener"
+    assert body["reply"] is None  # the mock brain doesn't talk back (#261 fills it)
+    assert body["cursor"] >= 1
+    mem = client.get("/agents/gardener/memory").json()
+    chat = [m for m in mem["memories"] if m["kind"] == "chat"]
+    assert len(chat) == 1
+    assert chat[0]["text"] == 'someone said to me: "The market closes at noon."'
+
+
+def test_say_uses_the_given_speaker():
+    game, npc = _with_agent()
+    _client(game).post(
+        "/agents/gardener/say",
+        json={"text": "Meet me at the fountain.", "speaker": "Alistair"},
+    )
+    texts = [r.text for r in npc.agent.memory.records if r.kind.value == "chat"]
+    assert texts == ['Alistair said to me: "Meet me at the fountain."']
+
+
+def test_say_pushes_onto_the_heard_buffer():
+    # Mirrors the Say action: the line shows up in the character's heard buffer,
+    # so it surfaces in the agent's next observation like any overheard speech.
+    game, npc = _with_agent()
+    _client(game).post("/agents/gardener/say", json={"text": "Hello there."})
+    assert any("Hello there." in line for line in npc.heard)
+
+
+def test_say_appears_in_the_change_feed():
+    # The utterance is also published as an intervention record, so a viewer
+    # following the feed sees the human speak.
+    game, npc = _with_agent()
+    client = _client(game)
+    client.post(
+        "/agents/gardener/say", json={"text": "Rain is coming.", "speaker": "Alistair"}
+    )
+    events = client.get("/events?since=0").json()["events"]
+    says = [e for e in events if e.get("intervention") == "say"]
+    assert len(says) == 1
+    assert says[0]["kind"] == "intervention"
+    assert says[0]["name"] == "gardener"
+    assert says[0]["speaker"] == "Alistair"
+    assert says[0]["text"] == "Rain is coming."
+
+
+def test_say_unknown_character_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).post("/agents/nobody/say", json={"text": "hi"})
+    assert resp.status_code == 404
+    assert "unknown" in resp.json()["detail"]
+
+
+def test_say_character_without_agent_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).post("/agents/player/say", json={"text": "hi"})
+    assert resp.status_code == 404
+    assert "no agent" in resp.json()["detail"]
+
+
+def test_say_empty_text_is_422():
+    game, _npc = _with_agent()
+    assert (
+        _client(game).post("/agents/gardener/say", json={"text": ""}).status_code == 422
+    )
+    assert _client(game).post("/agents/gardener/say", json={}).status_code == 422
+
+
+def test_say_requires_auth_when_token_configured():
+    game, _npc = _with_agent()
+    client = _client(game, auth_token="s3cret")
+    assert client.post("/agents/gardener/say", json={"text": "hi"}).status_code == 401
+    ok = client.post(
+        "/agents/gardener/say",
+        json={"text": "hi"},
+        headers={"Authorization": "Bearer s3cret"},
+    )
+    assert ok.status_code == 200
+
+
+def test_say_delivers_while_the_loop_is_running():
+    # The #369 acceptance criterion, with the #349 loop live: the utterance lands
+    # at the next tick boundary (under the shared lock) and shows up in memory.
+    game, npc = _with_agent()
+    with _live_client(game=game) as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)  # loop is stepping
+        assert (
+            c.post(
+                "/agents/gardener/say", json={"text": "A stranger is asking for you."}
+            ).status_code
+            == 200
+        )
+        mem = c.get("/agents/gardener/memory").json()
+        assert any(
+            m["kind"] == "chat" and "stranger is asking" in m["text"]
+            for m in mem["memories"]
+        )
+
+
+def test_world_event_appends_to_the_feed():
+    game, npc = _with_agent()
+    client = _client(game)
+    resp = client.post(
+        "/world/event", json={"text": "A storm rolls in.", "location": "Field"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"turn", "location", "perceived_by", "cursor"}
+    assert body["location"] == "Field"
+    assert body["perceived_by"] == ["gardener"]  # in range at Field
+    events = client.get("/events?since=0").json()["events"]
+    world = [e for e in events if e.get("intervention") == "world_event"]
+    assert len(world) == 1
+    assert world[0]["kind"] == "intervention"
+    assert world[0]["text"] == "A storm rolls in."
+    assert world[0]["location"] == "Field"
+
+
+def test_world_event_is_perceived_by_a_colocated_agent():
+    # The event enters game.events with the location as its origin, so the agent
+    # folds it into memory at its next perceive() -- its next decision point.
+    game, npc = _with_agent()
+    _client(game).post(
+        "/world/event", json={"text": "A bell tolls nearby.", "location": "Field"}
+    )
+    added = npc.agent.memory.perceive(game, npc)
+    assert any("bell tolls nearby" in r.text.lower() for r in added)
+
+
+def test_world_event_without_location_is_feed_only():
+    # No location => a feed-only announcement: it lands in the feed but no agent
+    # perceives it (there is no origin room to see).
+    game, npc = _with_agent()
+    client = _client(game)
+    body = client.post("/world/event", json={"text": "The day begins."}).json()
+    assert body["location"] is None
+    assert body["perceived_by"] == []
+    assert any(
+        e.get("intervention") == "world_event"
+        for e in client.get("/events?since=0").json()["events"]
+    )
+    assert npc.agent.memory.perceive(game, npc) == []  # nobody perceives it
+
+
+def test_world_event_unknown_location_is_404():
+    # A typo shouldn't silently vanish: a given-but-unknown location is a 404.
+    game, _npc = _with_agent()
+    resp = _client(game).post(
+        "/world/event", json={"text": "x", "location": "Atlantis"}
+    )
+    assert resp.status_code == 404
+    assert "unknown location" in resp.json()["detail"]
+
+
+def test_world_event_empty_text_is_422():
+    game, _npc = _with_agent()
+    assert _client(game).post("/world/event", json={"text": ""}).status_code == 422
+    assert _client(game).post("/world/event", json={}).status_code == 422
+
+
+def test_world_event_requires_auth_when_token_configured():
+    game, _npc = _with_agent()
+    client = _client(game, auth_token="s3cret")
+    assert client.post("/world/event", json={"text": "x"}).status_code == 401
+    ok = client.post(
+        "/world/event", json={"text": "x"}, headers={"Authorization": "Bearer s3cret"}
+    )
+    assert ok.status_code == 200
+
+
+def test_world_event_appears_in_the_feed_while_the_loop_is_running():
+    game, npc = _with_agent()
+    with _live_client(game=game) as c:
+        _wait_for_events(c, lambda evs: _frame_count(evs) >= 1)  # loop is stepping
+        assert (
+            c.post(
+                "/world/event", json={"text": "Thunder cracks.", "location": "Field"}
+            ).status_code
+            == 200
+        )
+        events = _wait_for_events(
+            c, lambda evs: any(e.get("intervention") == "world_event" for e in evs)
+        )
+        world = [e for e in events if e.get("intervention") == "world_event"]
+        assert world[-1]["text"] == "Thunder cracks."
