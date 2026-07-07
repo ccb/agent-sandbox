@@ -38,6 +38,7 @@ from penn_world import (
     SEC_PER_STEP,
     SIM_START,
     build_penn_world,
+    persona_meta_entry,
     replay_frame_entry,
 )
 
@@ -198,7 +199,10 @@ def main() -> int:
             # agent. Personas don't override it in world_data_upenn.yaml, so the
             # global default describes every agent.
             "vision_r": SMALLVILLE_VISION_R,
-            "personas": [{"name": p["name"], "emoji": p["emoji"]} for p in pw.personas],
+            # name/emoji drive the sprite + sidebar; persona/home/schedule feed the
+            # State Details inspector modal (viewer.gd, issue #408). See
+            # penn_world.persona_meta_entry -- the projection the live server shares.
+            "personas": [persona_meta_entry(p) for p in pw.personas],
         },
         "frames": [
             {name: replay_frame_entry(f[name]) for name in order} for f in frames
