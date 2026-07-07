@@ -31,8 +31,11 @@ LaunchConfig="*res://scripts/launch_config.gd"
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 
-; Open borderless-fullscreen, covering the whole display (Cmd+Q / Cmd+W to quit).
-window/size/mode=3
+; Open maximized — a normal window (keeps the title bar and is resizable), grown
+; to fill the work area, rather than borderless-fullscreen. (Cmd+Q / Cmd+W to
+; quit.) The stretch settings below scale the 1920x1080 canvas to whatever size
+; the window ends up, so the composition is identical maximized or resized.
+window/size/mode=2
 
 ; Scale the 1920x1080 canvas to the screen as one unit (keep = uniform scale, so
 ; the block never distorts; any leftover from a non-16:9 display is letterboxed).
