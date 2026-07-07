@@ -13,9 +13,9 @@ no network, no key -- a scripted "real-shaped" brain stands in for Anthropic):
   scripted meeting injector stands down, an API outage degrades to
   idle-and-retry (never a crash), and the cost ceiling ends the day.
 
-Run from ``generative-agents``::
+Run from the repo root::
 
-    uv run pytest tests/test_penn_live_llm.py -v
+    uv run pytest godot-generative-agents/tests/test_penn_live_llm.py -v
 """
 
 import io
