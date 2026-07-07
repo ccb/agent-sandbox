@@ -21,6 +21,9 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 * ``GET  /agents/{name}/knowledge`` -> what *name* *believes about the world*
   (issue #348) -- the seeded priors + anything learned since, the sibling read
   to memory (memory is the episodic log; knowledge is the current world-model).
+* ``GET  /agents/{name}/retrieval?q=`` -> the memories *name*'s retriever would
+  surface for a cue, scored most-useful-first but **not attended to** (issue
+  #346) -- a read-only (``touch=False``) window onto decision-time retrieval.
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
   change-feed ``events``, the new ``world_state`` snapshot, and ``game_over``.
 
@@ -84,7 +87,11 @@ from text_adventure_games.reporting import JSONRenderer
 
 from .env import load_dotenv
 from .live import EventLog, LiveRunController, SimStepper, run_loop
-from .smallville_agents import kind_counts_for_persona, memory_stream_for_persona
+from .smallville_agents import (
+    kind_counts_for_persona,
+    memories_for_frame,
+    memory_stream_for_persona,
+)
 
 # Hosts that never need auth: a server bound here is only reachable from the
 # same machine, so the loopback-only default is safe without a token (#186).
@@ -167,6 +174,25 @@ class MemoryStreamResponse(BaseModel):
             "to #298)"
         ),
     )
+    memories: list[MemoryEntry]
+
+
+class RetrievalResponse(BaseModel):
+    """``GET /agents/{name}/retrieval?q=``: the memories *name*'s retriever would
+    surface for a cue, scored but not attended to (#346).
+
+    The read-only probe sibling of :class:`MemoryStreamResponse`: the entries are
+    the same :class:`MemoryEntry` shape, but ``memories`` is ordered
+    most-useful-first (the retriever's recency + importance + relevance ranking)
+    rather than chronological, and the read runs with ``touch=False`` so it never
+    bumps a memory's recency. ``query`` echoes the cue that produced this ranking;
+    ``turn`` is the engine turn it was scored at (same counter ``GET /health``
+    reports), so two probes with no turn between them return the same records."""
+
+    persona: str
+    turn: int
+    query: str = Field(..., description="the retrieval cue this ranking answers")
+    count: int = Field(..., description="== len(memories)")
     memories: list[MemoryEntry]
 
 
@@ -552,6 +578,73 @@ def create_app(
             if filtered:
                 response["total"] = total
             return response
+
+    @app.get("/agents/{name}/retrieval", response_model=RetrievalResponse)
+    def agent_retrieval(
+        name: str,
+        q: str = Query(
+            ...,
+            min_length=1,
+            description="the retrieval cue to score the stream against -- the "
+            "same kind of query a decision-time retrieval passes",
+        ),
+        limit: int | None = Query(
+            default=None,
+            ge=1,
+            description="cap the probe at this many records (maps to the "
+            "retriever's max_records); omit for the decision-time default",
+        ),
+        _: None = Depends(require_auth),
+    ):
+        """What *name*'s memory would surface for query *q*, scored but **not
+        attended to** (#346).
+
+        A read-only window onto the retriever the agent uses at decision time: it
+        scores every memory by the paper's recency + importance + relevance and
+        returns the top few, ordered most-useful-first -- *not* chronological,
+        unlike ``/memory``. Crucially it retrieves with ``touch=False``:
+        inspecting what *would* surface never bumps a memory's
+        ``last_accessed_turn``, so a probe can't perturb the very recency it is
+        measuring, and two identical probes with no turn between them return the
+        same records. That is what makes it safe to fire on every keystroke of a
+        debugging UI (contrast the decision-time path, which bumps recency).
+
+        The 404 story matches the memory sibling: an unknown character 404s, and
+        so does one with no agent bound (the player, a scripted-behavior NPC) --
+        there is no mind to probe. An agent with an as-yet-empty stream is a 200
+        with ``memories: []``. Scored under the shared lock, so ``turn`` and
+        ``memories`` are one atomic snapshot; the entries are the same
+        :class:`MemoryEntry` shape ``/memory`` emits, so a client renders a probe
+        result and a stream slice through one code path."""
+        with lock:
+            char = game.characters.get(name)
+            if char is None:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown character: {name!r}"
+                )
+            if char.agent is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"character {name!r} has no agent (and so no memory to probe)",
+                )
+            # An agent bound but with no memory stream is an empty probe, not a
+            # 500 -- the same tolerance memory_stream_for_persona applies.
+            memory = getattr(char.agent, "memory", None)
+            if memory is None:
+                records = []
+            else:
+                kwargs = {} if limit is None else {"max_records": limit}
+                records = memory.retrieve(
+                    query=q, turn=game.turn, touch=False, **kwargs
+                )
+            memories = memories_for_frame(records)
+            return {
+                "persona": name,
+                "turn": game.turn,
+                "query": q,
+                "count": len(memories),
+                "memories": memories,
+            }
 
     @app.get("/agents/{name}/knowledge", response_model=KnowledgeResponse)
     def agent_knowledge(

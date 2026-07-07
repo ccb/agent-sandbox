@@ -38,6 +38,7 @@ door), controlled by `POST /pause|/resume|/reset`. See
   - [`GET /agents`](#get-agents)
   - [`GET /agents/{name}/memory`](#get-agentsnamememory)
   - [`GET /agents/{name}/knowledge`](#get-agentsnameknowledge)
+  - [`GET /agents/{name}/retrieval`](#get-agentsnameretrieval)
   - [`POST /command`](#post-command)
 - [Live mode: the loop, the feed, run control (#349/#262)](#live-mode-the-loop-the-feed-run-control-349262)
   - [`GET /live`](#get-live)
@@ -111,6 +112,7 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `GET`  | `/agents`                  | Roster of agent-bound characters + a summary (#344)|
 | `GET`  | `/agents/{name}/memory`    | One agent's memory stream, formed so far (#298)    |
 | `GET`  | `/agents/{name}/knowledge` | One agent's belief set (world-model) (#348)        |
+| `GET`  | `/agents/{name}/retrieval` | What an agent would recall for a cue, read-only (#346) |
 | `POST` | `/command`                 | Run one command → events + new snapshot            |
 | `GET`  | `/live`                    | Live-mode handshake: loop state + world `meta` (#262) |
 | `GET`  | `/events`                  | Change-feed catch-up: records after `?since=` (#262) |
@@ -386,6 +388,66 @@ curl -s http://127.0.0.1:8080/agents/gardener/knowledge
 curl -s 'http://127.0.0.1:8080/agents/gardener/knowledge?topic=forest'
 ```
 
+### `GET /agents/{name}/retrieval`
+
+Returns the memories the named agent's retriever **would surface for a cue**,
+scored but *not attended to* (issue #346). Where `/memory` hands back the whole
+stream in chronological order, this scores every memory the way the agent does at
+decision time — the paper's **recency + importance + relevance** — and returns
+the top few, **ordered most-useful-first**. It is the read-only window onto
+retrieval: a debugging UI can ask "what does Maya recall about the library right
+now?" and see exactly the block a real decision would draw on.
+
+The cue is the required **`?q=`** query. `{name}` is the character's exact name —
+**case-sensitive**, URL-encoded as usual. An optional **`?limit=`** caps the
+probe at that many records (it maps to the retriever's `max_records`); omit it for
+the decision-time default.
+
+The read runs with **`touch=False`**: inspecting what *would* surface never bumps
+a memory's `last_accessed_turn`, so a probe can't perturb the very recency it is
+measuring, and two identical probes with no turn between them return the same
+records. That is what makes it safe to fire on every keystroke of an inspector —
+unlike the decision-time path, which *does* bump recency (attending to a memory
+keeps it fresh).
+
+**Response** `200 OK` — `RetrievalResponse` (the demo gardener, `?q=flowers&limit=2`):
+
+```json
+{
+  "persona": "gardener",
+  "turn": 0,
+  "query": "flowers",
+  "count": 2,
+  "memories": [
+    { "kind": "observation", "importance": 3.0, "text": "The flowers by the north path bloomed overnight.", "created_turn": 0 },
+    { "kind": "plan", "importance": 5.0, "text": "Water the tall grass before midday.", "created_turn": 0 }
+  ]
+}
+```
+
+Note the ordering: the flowers observation leads the *higher-importance* plan
+because it matches the cue — relevance, recency, and importance combine, so the
+most on-topic memory wins even when it isn't the most important. `query` echoes
+the cue this ranking answers; `turn` is the engine turn it was scored at (the same
+counter `GET /health` reports). `count == len(memories)`, and each entry is the
+same shape [`GET /agents/{name}/memory`](#get-agentsnamememory) emits — so a
+client renders a probe result and a stream slice through one code path. Ordering
+is by score (most useful first), **not** chronological. An agent with an
+as-yet-empty stream returns `200` with `"memories": []`.
+
+**Errors** — the required cue plus the two family `404`s:
+
+| Case                                             | Status | `detail`                                              |
+| ------------------------------------------------ | ------ | ----------------------------------------------------- |
+| Missing or empty `?q=`                           | `422`  | (validation error — the cue is required)              |
+| No character by that name                        | `404`  | `unknown character: 'nobody'`                         |
+| Character exists but has **no agent** bound      | `404`  | `character 'player' has no agent (and so no memory to probe)` |
+
+```bash
+curl -s 'http://127.0.0.1:8080/agents/gardener/retrieval?q=forest'
+curl -s 'http://127.0.0.1:8080/agents/gardener/retrieval?q=forest&limit=3'
+```
+
 ### `POST /command`
 
 Runs exactly one command and returns what happened, the new world, and whether
@@ -598,7 +660,7 @@ ceiling (#183); `over_budget` flips when the kill-switch trips.
 | ------ | ------------------------------------------------------------------------------------- |
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
-| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge}`, an unknown character or one with no agent |
+| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge,retrieval}`, an unknown character or one with no agent |
 | `409`  | Run control without a loop enabled; or `POST /command` while the loop is actively stepping (pause first) |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |

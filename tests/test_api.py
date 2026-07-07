@@ -25,7 +25,10 @@ from backend.api import (  # noqa: E402
     run,
     run_command,
 )
-from backend.smallville_agents import memory_stream_for_persona  # noqa: E402
+from backend.smallville_agents import (  # noqa: E402
+    memories_for_frame,
+    memory_stream_for_persona,
+)
 from text_adventure_games import games, things  # noqa: E402
 from text_adventure_games.npc import ScriptedAgent  # noqa: E402
 from text_adventure_games.usage import UsageLedger  # noqa: E402
@@ -599,6 +602,134 @@ def test_demo_game_serves_a_belief_set():
     learned = [b["learned_turn"] for b in payload["beliefs"]]
     assert None in learned  # a prior known up front
     assert any(t is not None for t in learned)  # and one learned mid-run
+
+
+# --- GET /agents/{name}/retrieval (#346) -----------------------------------
+
+
+def test_retrieval_returns_scored_memories():
+    game, npc = _with_agent()
+    payload = (
+        _client(game).get("/agents/gardener/retrieval", params={"q": "sun"}).json()
+    )
+    assert set(payload) == {"persona", "turn", "query", "count", "memories"}
+    assert payload["persona"] == "gardener"
+    assert payload["turn"] == 0
+    assert payload["query"] == "sun"
+    assert payload["count"] == len(payload["memories"]) >= 1
+    for entry in payload["memories"]:
+        assert set(entry) == {"kind", "importance", "text", "created_turn"}
+
+
+def test_retrieval_matches_the_underlying_retriever():
+    # The endpoint is a thin wrapper over AgentMemory.retrieve(touch=False) piped
+    # through memories_for_frame, so a probe and a direct read-only retrieval
+    # return the same records in the same order.
+    game, npc = _with_agent()
+    expected = memories_for_frame(
+        npc.agent.memory.retrieve(query="forest", turn=game.turn, touch=False)
+    )
+    payload = (
+        _client(game).get("/agents/gardener/retrieval", params={"q": "forest"}).json()
+    )
+    assert payload["memories"] == expected
+
+
+def test_retrieval_ranks_the_relevant_memory_first():
+    # With recency and importance held equal, keyword relevance is the only
+    # differentiator -- so the memory that shares a word with the cue leads.
+    game, npc = _with_agent()
+    npc.agent.memory.records.clear()
+    npc.agent.memory.add_observation("I lit the lantern.", turn=0, importance=5.0)
+    npc.agent.memory.add_observation("I crossed the river.", turn=0, importance=5.0)
+    payload = (
+        _client(game).get("/agents/gardener/retrieval", params={"q": "lantern"}).json()
+    )
+    assert payload["memories"][0]["text"] == "I lit the lantern."
+
+
+def test_retrieval_is_read_only_and_does_not_bump_recency():
+    # The acceptance test for #346: probing runs touch=False, so it never bumps
+    # last_accessed_turn -- inspecting what would surface can't perturb the very
+    # recency it measures. The GET also never advances the game.
+    game, npc = _with_agent()
+    game.turn = 5  # pretend the sim has advanced past the seeded memories
+    before = [r.last_accessed_turn for r in npc.agent.memory.records]
+    payload = (
+        _client(game).get("/agents/gardener/retrieval", params={"q": "sun"}).json()
+    )
+    after = [r.last_accessed_turn for r in npc.agent.memory.records]
+    assert after == before  # touch=False: the probe left recency untouched
+    assert payload["turn"] == 5
+    assert game.turn == 5  # a GET never advanced the game
+    # Contrast: the decision-time (touch=True) path WOULD bump recency to now,
+    # which is exactly what the probe deliberately avoids.
+    npc.agent.memory.retrieve(query="sun", turn=5, touch=True)
+    assert [r.last_accessed_turn for r in npc.agent.memory.records] != before
+
+
+def test_retrieval_limit_caps_the_result():
+    game, npc = _with_agent()
+    for i in range(4):
+        npc.agent.memory.add_observation(f"note {i}", turn=0, importance=1.0)
+    payload = (
+        _client(game)
+        .get("/agents/gardener/retrieval", params={"q": "note", "limit": 1})
+        .json()
+    )
+    assert payload["count"] == 1
+
+
+def test_retrieval_requires_a_query():
+    # The cue is the whole point of a probe: no ?q= is a bad request, not an
+    # empty ranking.
+    game, _npc = _with_agent()
+    assert _client(game).get("/agents/gardener/retrieval").status_code == 422
+    assert (
+        _client(game).get("/agents/gardener/retrieval", params={"q": ""}).status_code
+        == 422
+    )
+
+
+def test_retrieval_empty_stream_is_200_not_error():
+    # An agent bound but with no memories yet is an empty probe, not a 500.
+    game, npc = _with_agent()
+    npc.agent.memory.records.clear()
+    payload = (
+        _client(game).get("/agents/gardener/retrieval", params={"q": "anything"}).json()
+    )
+    assert payload["count"] == 0
+    assert payload["memories"] == []
+
+
+def test_retrieval_unknown_character_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/nobody/retrieval", params={"q": "x"})
+    assert resp.status_code == 404
+    assert "unknown" in resp.json()["detail"]
+
+
+def test_retrieval_character_without_agent_is_404():
+    # Like the memory/knowledge siblings, the /agents/ family reads a *mind*: the
+    # player has no agent bound, so there is no retriever to probe.
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/player/retrieval", params={"q": "x"})
+    assert resp.status_code == 404
+    assert "no agent" in resp.json()["detail"]
+
+
+def test_retrieval_requires_auth_when_token_configured():
+    game, _npc = _with_agent()
+    client = _client(game, auth_token="s3cret")
+    assert (
+        client.get("/agents/gardener/retrieval", params={"q": "sun"}).status_code == 401
+    )
+    ok = client.get(
+        "/agents/gardener/retrieval",
+        params={"q": "sun"},
+        headers={"Authorization": "Bearer s3cret"},
+    )
+    assert ok.status_code == 200
 
 
 # --- #186 security posture ------------------------------------------------
