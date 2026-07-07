@@ -9,10 +9,10 @@ Pins the three contracts the Godot live client stands on:
 * ``serve_penn.LiveMeetingInjector`` fires authored dialogue only on genuine
   co-location, with the bake injector's pacing and clash rules.
 
-Fully offline (mock brain, the tracked ``the_upenn`` matrix). Run from
-``generative-agents``::
+Fully offline (mock brain, the tracked ``the_upenn`` matrix). Run from the
+repo root::
 
-    uv run pytest tests/test_penn_live.py -v
+    uv run pytest godot-generative-agents/tests/test_penn_live.py -v
 """
 
 import sys
