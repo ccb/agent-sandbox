@@ -28,7 +28,7 @@ signal close_requested
 
 # The card's fixed width; its height is capped to a fraction of the viewport and the
 # body scrolls inside that. A comfortable reading width for the persona blurb.
-const CARD_WIDTH := 600.0
+const CARD_WIDTH := 760.0
 const MAX_HEIGHT_FRACTION := 0.84
 # Dark translucent wash over the whole screen behind the card (matches the heatmap
 # pop-up's tone), so the card reads as a modal window and the campus recedes.
