@@ -2,8 +2,12 @@ import collections, json, os, shutil, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-SRC_MATRIX = os.path.join(REPO, "godot-generative-agents", "sim", "the_upenn", "matrix")
-SRC_MAP = os.path.join(REPO, "godot-generative-agents", "maps", "upenn_core_urban.tmj")
+SRC_MATRIX = os.path.join(
+    REPO, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
+)
+SRC_MAP = os.path.join(
+    REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
+)
 W, H = 245, 279
 FISHER = "Fisher Fine Arts Library"
 ROOM_IDS = list(range(13400, 13406))

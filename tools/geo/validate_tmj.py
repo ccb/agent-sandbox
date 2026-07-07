@@ -1,6 +1,6 @@
 """Validate the UPenn tmj against the generative-agents matrix (detect & report).
 
-Compares the authored map (godot-generative-agents/maps/upenn_core_urban.tmj)
+Compares the authored map (godot-generative-agents/godot/maps/upenn_core_urban.tmj)
 against the matrix the backend walks (backend/penn/the_upenn/matrix): are the interior
 rooms drawn in the tmj present in the matrix block map, do the ids follow the
 add_entrances scheme, is the tmj internally well-formed? It never edits either
@@ -625,13 +625,13 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--tmj",
         default=os.path.join(
-            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
         ),
     )
     ap.add_argument(
         "--matrix",
         default=os.path.join(
-            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+            repo, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
         ),
     )
     ap.add_argument(
