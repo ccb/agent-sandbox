@@ -5,9 +5,9 @@ it matches the exporter's own formula, the "one conversion" guarantee), the
 hour-of-day lookup, duration->steps conversion, the per-hour step budget, and the
 hour spine used by day->hourly decomposition.
 
-Fully offline, no maze assets, no LLM. Run from ``generative-agents``::
+Fully offline, no maze assets, no LLM. Run from the repo root::
 
-    uv run pytest tests/test_sim_clock.py -v
+    uv run pytest godot-generative-agents/tests/test_sim_clock.py -v
 """
 
 import datetime

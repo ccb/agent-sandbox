@@ -9,10 +9,10 @@ Pins the three contracts the Godot live client stands on:
 * ``serve_penn.LiveMeetingInjector`` fires authored dialogue only on genuine
   co-location, with the bake injector's pacing and clash rules.
 
-Fully offline (mock brain, the tracked ``the_upenn`` matrix). Run from
-``generative-agents``::
+Fully offline (mock brain, the tracked ``the_upenn`` matrix). Run from the
+repo root::
 
-    uv run pytest tests/test_penn_live.py -v
+    uv run pytest godot-generative-agents/tests/test_penn_live.py -v
 """
 
 import sys
@@ -28,7 +28,7 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402
 from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
-from serve_penn import LiveMeetingInjector, PennStepper  # noqa: E402
+from serve_penn import LiveMeetingInjector, PennStepper, _GameProxy  # noqa: E402
 
 VISION_R = 8  # SMALLVILLE_VISION_R; the fog radius the viewer draws
 
@@ -258,3 +258,53 @@ def test_injector_skips_bad_specs():
     frame = _frame(A=(0, 0), B=(1, 0))
     injector.apply(frame, 0)
     assert frame["A"]["chat"] is None and frame["B"]["chat"] is None
+
+
+def test_injector_reset_rearms_for_a_second_day():
+    # Each meeting fires at most once per run; reset() re-arms it, so a second
+    # simulated day (PennStepper.reset() rebuilds the world and calls this) plays
+    # the authored dialogue again. Fire-once, drift, and clash are covered above;
+    # this pins the re-arm the DONE->ARMED transition depends on.
+    meeting = _meeting(lines=1)  # need = 1*14 + 2 = 16 frames
+    injector = LiveMeetingInjector([meeting], vision_r=8)
+
+    frame = _frame(A=(0, 0), B=(1, 0))  # day 1: fires on co-location
+    injector.apply(frame, 0)
+    assert frame["A"]["chat"] == meeting["dialogue"]
+
+    frame = _frame(A=(0, 0), B=(1, 0))  # run the window out: FIRING -> DONE
+    injector.apply(frame, 16)
+    assert frame["A"]["chat"] is None
+
+    frame = _frame(A=(0, 0), B=(1, 0))  # spent: co-located again, stays quiet
+    injector.apply(frame, 30)
+    assert frame["A"]["chat"] is None
+
+    injector.reset()  # a fresh day re-arms it
+    frame = _frame(A=(0, 0), B=(1, 0))
+    injector.apply(frame, 0)
+    assert frame["A"]["chat"] == meeting["dialogue"]  # armed again, fires again
+
+
+# --------------------------------------------------------------- _GameProxy
+
+
+def test_game_proxy_delegates_and_follows_the_post_reset_swap():
+    # create_app(game) captures the served game ONCE, but PennStepper.reset()
+    # rebuilds a fresh world -- a NEW Game object (the routing patches carry
+    # round-robin state in closures, so the old world can't be reused). serve_penn
+    # therefore hands the API a _GameProxy, whose every attribute resolves against
+    # whichever game the stepper currently owns -- so /world_state serves the new
+    # day the instant a reset lands, rather than a stale pinned object.
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    proxy = _GameProxy(stepper)
+
+    # __getattr__ delegates to the live stepper.game (attribute and bound method).
+    first_game = stepper.game
+    assert proxy.turn == first_game.turn
+    assert proxy.to_world_state.__self__ is first_game
+
+    stepper.reset()  # rebuilds: stepper.game is a brand-new object
+    assert stepper.game is not first_game
+    assert proxy.turn == stepper.game.turn  # the proxy followed the swap...
+    assert proxy.to_world_state.__self__ is stepper.game  # ...never pinned the old one
