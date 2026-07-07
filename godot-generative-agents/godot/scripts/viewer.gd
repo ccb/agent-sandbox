@@ -124,6 +124,15 @@ var _start_unix := 0
 var _frames: Array = []
 var _names: Array = []
 var _agents := {}  # name -> {sprite, label}
+# Persona "State Details" inspector (issue #408). `_persona_detail` is the static
+# per-agent detail from the replay/live meta (name/emoji/persona/home/schedule),
+# keyed by name; `_memory_streams` is each persona's full memory history (baked
+# replay only -- empty in live mode, where the inspector falls back to the
+# retrieved-this-step memories in the frame). `_inspector_name` is the persona the
+# modal is currently showing ("" = closed).
+var _persona_detail := {}
+var _memory_streams := {}
+var _inspector_name := ""
 var _t := 0.0
 var _anim_t := 0.0
 var _paused := false
@@ -211,6 +220,7 @@ var _quitting := false              # window close in progress (shutdown then qu
 @onready var _minimap = $UI/Minimap  # minimap.gd bottom-right overview
 @onready var _hud = $UI/LiveHud  # live_hud.gd top-right run monitor
 @onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
+@onready var _inspector = $PersonaInspectorLayer/PersonaInspector  # persona_inspector.gd
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
@@ -253,6 +263,12 @@ func _ready() -> void:
 	# button / a click outside / Esc closes it. It's fed the replay after load.
 	_panel.heatmap_requested.connect(_toggle_heatmap)
 	_heatmap.close_requested.connect(_close_heatmap)
+
+	# Persona State Details inspector (issue #408): the sidebar's ⓘ button opens it
+	# per agent; the P key opens it for whoever's tracked; its close button / a click
+	# outside / Esc closes it. Fed the persona detail + the live step by the viewer.
+	_panel.inspect_requested.connect(_open_inspector)
+	_inspector.close_requested.connect(_close_inspector)
 
 	# Location spotlight: the sidebar's Focus dropdown picks a building; we dim everyone
 	# not there and glide the view to it. The dropdown's building list is filled after
@@ -426,6 +442,10 @@ func _load_replay_from_text(text: String) -> void:
 
 	_apply_meta(data["meta"])
 	_frames = data["frames"]
+	# The per-persona full memory history, for the State Details inspector's memory
+	# stream (issue #408). Baked replays carry it; a payload without it (or the live
+	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
+	_memory_streams = data.get("memory_streams", {})
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -470,9 +490,14 @@ func _apply_meta(meta: Dictionary) -> void:
 	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
 	var thumb := _make_thumbnail()
 	for i in meta["personas"].size():
-		var pname: String = meta["personas"][i]["name"]
+		var persona: Dictionary = meta["personas"][i]
+		var pname: String = persona["name"]
 		var tint: Color = TINTS[i % TINTS.size()]
 		_names.append(pname)
+		# Keep the full persona entry for the State Details inspector (issue #408).
+		# Newer metas carry persona/home/schedule; an older/minimal meta with just
+		# name/emoji still spawns fine and the inspector degrades on the missing keys.
+		_persona_detail[pname] = persona
 		_spawn_agent(pname, i)
 		# Mirror the world sprite's tint in the sidebar and on the minimap dot, so the
 		# three views of each character all agree at a glance.
@@ -1153,8 +1178,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_H:
 			_toggle_heatmap()
 			get_viewport().set_input_as_handled()
+		KEY_P:
+			# Toggle the State Details inspector for the tracked agent (issue #408).
+			if _inspector.visible:
+				_close_inspector()
+				get_viewport().set_input_as_handled()
+			elif _tracked_name != "":
+				_open_inspector(_tracked_name)
+				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			if _heatmap.visible:
+			if _inspector.visible:
+				_close_inspector()
+				get_viewport().set_input_as_handled()
+			elif _heatmap.visible:
 				_close_heatmap()
 				get_viewport().set_input_as_handled()
 		KEY_LEFT, KEY_RIGHT:
@@ -1189,6 +1225,41 @@ func _open_heatmap() -> void:
 func _close_heatmap() -> void:
 	_heatmap.visible = false
 	_camera.keyboard_enabled = true
+
+
+func _open_inspector(name: String) -> void:
+	# Open the State Details modal for a persona (issue #408). Fold the world globals
+	# (vision_r, sec_per_step) into the persona's static detail so the panel has
+	# everything it needs, then push the current step's dynamic state. Suppress the
+	# camera's keyboard pan so arrow keys don't scroll the map behind the modal.
+	if not _persona_detail.has(name):
+		return
+	_inspector_name = name
+	var detail: Dictionary = (_persona_detail[name] as Dictionary).duplicate(true)
+	detail["vision_r"] = _vision_r
+	detail["sec_per_step"] = _sec_per_step
+	_inspector.open(detail)
+	_camera.keyboard_enabled = false
+	if not _frames.is_empty():
+		var last := _frames.size() - 1
+		_push_inspector_step(clampi(int(_t / step_seconds), 0, last))
+
+
+func _close_inspector() -> void:
+	_inspector.close()
+	_inspector_name = ""
+	# Restore keyboard pan unless the heatmap modal is still holding it.
+	_camera.keyboard_enabled = not _heatmap.visible
+
+
+func _push_inspector_step(step: int) -> void:
+	# Hand the inspector this step's frame + the persona's memory stream + a wall-clock
+	# label, so its current-action / reasoning / memory sections match the playhead.
+	if _inspector_name == "" or _frames.is_empty():
+		return
+	var frame: Dictionary = (_frames[step] as Dictionary).get(_inspector_name, {})
+	var stream: Array = _memory_streams.get(_inspector_name, [])
+	_inspector.set_step_state(frame, stream, step, _format_sim_time(step * _sec_per_step))
 
 
 func _on_filter_changed(location: String) -> void:
@@ -1299,6 +1370,11 @@ func _process(delta: float) -> void:
 			_update_agent_speech(name, a, i)
 		# Re-evaluate the location spotlight now that everyone's building is up to date.
 		_apply_spotlight()
+		# Tick the State Details inspector's dynamic sections (current action,
+		# reasoning, memories) if it's open -- like the heatmap, it live-updates
+		# behind its own dim as playback advances.
+		if _inspector.visible:
+			_push_inspector_step(i)
 
 	# Bubbles + links refresh every frame (not just on a step change) so the
 	# turn-taking + fade play out smoothly as the playhead advances within a step.

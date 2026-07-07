@@ -282,6 +282,39 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
     )
 
 
+def persona_meta_entry(spec):
+    """One persona's static detail for the replay/live ``meta.personas`` block.
+
+    The sibling of :func:`replay_frame_entry` -- the single projection the bake
+    (``generate_penn_replay``) and the live server (``serve_penn.meta``) share, so
+    the persona-inspector "State Details" modal (viewer.gd, issue #408) gets the
+    same identity + schedule whether it's watching a baked file or a live run.
+
+    ``name``/``emoji`` drive the sprite + sidebar (they always existed here);
+    ``persona``/``home``/``schedule`` are the extra fields the inspector reads.
+    Everything is pulled from the *normalized* persona spec (see
+    ``build_world._normalize_personas``), so ``schedule`` is always a list of
+    ``{place, activity, emoji, steps}`` stops (``steps=None`` => stays put for the
+    rest of the day). ``vision_r`` is deliberately NOT here: Penn personas don't
+    override it, so it stays a single top-level ``meta`` global.
+    """
+    return {
+        "name": spec["name"],
+        "emoji": spec["emoji"],
+        "persona": spec.get("persona", ""),
+        "home": spec.get("home", ""),
+        "schedule": [
+            {
+                "place": s["place"],
+                "activity": s["activity"],
+                "emoji": s.get("emoji", spec["emoji"]),
+                "steps": s.get("steps"),
+            }
+            for s in spec.get("schedule", [])
+        ],
+    }
+
+
 def replay_frame_entry(raw):
     """One persona's raw ``simulate()``/``step()`` frame -> the replay schema.
 

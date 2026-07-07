@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/minimap.gd" id="8_minimap"]
 [ext_resource type="Script" path="res://scripts/heatmap_panel.gd" id="9_heatmap"]
 [ext_resource type="Script" path="res://scripts/live_hud.gd" id="10_hud"]
+[ext_resource type="Script" path="res://scripts/persona_inspector.gd" id="11_inspector"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -78,3 +79,16 @@ layer = 11
 [node name="HeatmapPanel" type="Control" parent="HeatmapLayer"]
 visible = false
 script = ExtResource("9_heatmap")
+
+; Persona "State Details" inspector pop-up (persona_inspector.gd, issue #408), on
+; its OWN CanvasLayer above both the UI layer (10) and the heatmap (11) so its
+; full-screen dim covers everything and it reads as a modal window (same trick as
+; the heatmap and the fog). Hidden until opened (the sidebar's ⓘ Details button /
+; the P key for the tracked agent); viewer.gd fills it from the persona meta + the
+; current step and refreshes it live as playback advances behind it.
+[node name="PersonaInspectorLayer" type="CanvasLayer" parent="."]
+layer = 12
+
+[node name="PersonaInspector" type="Control" parent="PersonaInspectorLayer"]
+visible = false
+script = ExtResource("11_inspector")
