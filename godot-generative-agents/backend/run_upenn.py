@@ -29,9 +29,14 @@ from .run_simulation import simulate
 from .world_map import WorldMap
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-# backend/ is a top-level package at the repo root; the Penn matrix it reads
-# still lives under the generative-agents/ asset tree, so reach into that sibling.
-_GA_DIR = os.path.join(os.path.dirname(_PACKAGE_DIR), "generative-agents")
+# backend/ now lives at godot-generative-agents/backend/ (moved in #399); the Penn
+# matrix it reads still lives under the repo-root generative-agents/ asset tree, so
+# reach up two levels (backend/ -> godot-generative-agents/ -> repo root) into it.
+# (A single dirname was correct pre-#399 when backend/ was at the repo root; after
+# the move it silently pointed at a nonexistent dir -- issue #407.)
+_GA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(_PACKAGE_DIR)), "generative-agents"
+)
 
 WORLD_DATA = os.path.join(_PACKAGE_DIR, "world_data_upenn.yaml")
 # The tracked asset tree (setup.sh rsyncs it into the git-ignored frontend/);
