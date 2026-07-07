@@ -92,6 +92,34 @@ def _to_anthropic_tool(tool: dict) -> dict:
     }
 
 
+def _cacheable_system(system_text: str) -> list[dict]:
+    """Wrap the system prompt as a single ``cache_control`` text block (#367).
+
+    An agent's system prompt -- its persona and goals -- is byte-identical across
+    the many decision/dialogue calls it makes, so it's the natural prompt-cache
+    prefix. Marking it ``ephemeral`` means the shared prefix (Anthropic renders
+    ``tools`` then ``system``, so a breakpoint on the system block caches both) is
+    written once and re-read at ~0.1x input cost on every subsequent call; the
+    ledger already bills ``cache_read_input_tokens`` at that rate (usage.py),
+    it just never had a request set ``cache_control`` before.
+
+    Prompt caching is GA -- no beta header. Below a model-dependent minimum prefix
+    (Haiku 4.5: 4096 tokens; Sonnet 4.6: 2048) the API *silently* declines to
+    cache -- no error, ``cache_creation_input_tokens`` stays 0 -- so this is a
+    safe no-op for short personas and a real saving once the prefix is large
+    enough (verify via the usage cache fields). A change anywhere in the prefix
+    (persona, goals, tools) invalidates it, which is the correct behavior: those
+    only change when the agent itself does.
+    """
+    return [
+        {
+            "type": "text",
+            "text": system_text,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
 # The normalized tool for picking one option from a numbered list (used by the
 # LLM parser to resolve intent / item / character / direction). Returning a
 # validated integer index replaces scraping a number out of prose.
@@ -321,7 +349,7 @@ class AnthropicClient:
                 "temperature": temperature,
             }
             if system_text:
-                kwargs["system"] = system_text
+                kwargs["system"] = _cacheable_system(system_text)
 
             t0 = time.perf_counter()
             response = self._client.messages.create(**kwargs)
@@ -375,7 +403,7 @@ class AnthropicClient:
                 "tool_choice": {"type": "tool", "name": tool["name"]},
             }
             if system_text:
-                kwargs["system"] = system_text
+                kwargs["system"] = _cacheable_system(system_text)
 
             t0 = time.perf_counter()
             response = self._client.messages.create(**kwargs)
