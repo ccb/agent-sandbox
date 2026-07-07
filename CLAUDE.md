@@ -104,6 +104,39 @@ Security (#186): loopback + unauthenticated by default, a 64 KiB body cap, and
 and `python -m backend.api` still work; the root `tests/` and `generative-agents/`
 still import it via the editable install).
 
+### Godot viewer: `godot-generative-agents/`
+
+A **Godot 4.6** frontend that renders the real UPenn campus and plays back — or
+follows live — a generative-agents simulation walking across it. The Python sim is
+unchanged; Godot is just a *viewer* that reads a baked replay file or talks to the
+backend seam above. Full docs (map regen, real-LLM live mode, the run monitor):
+`godot-generative-agents/README.md`. Needs Godot 4.6 on your `PATH` (as `godot`) or in
+the standard macOS app bundle; live mode also needs `uv sync --extra server`.
+
+```bash
+# Launch the game — opens the landing menu, where you pick a replay or a live backend:
+./godot-generative-agents/run.sh
+
+# Watch the bundled replay: bake it first (from the repo root), then "Play the bundled
+# replay" in the menu. It's a git-ignored artifact regenerated per checkout:
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
+
+# Follow a live sim (mock brain: real requests, no keys, no spend). Serve it, then
+# point the viewer at it (or type the URL into the menu's "Run a live simulation"):
+uv run python godot-generative-agents/backend/penn/serve_penn.py --tick-seconds 0.1  # terminal 1
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh                    # terminal 2
+
+# Headless smoke test — load every scene and check its campus map painted (exit 0 = OK):
+./godot-generative-agents/run_smoke_test.sh
+```
+
+`run.sh` auto-imports assets on first run: a fresh checkout has the asset sources but
+not the git-ignored `.godot/` cache, and launching a scene directly (unlike opening the
+editor) won't build it — so the script runs `--headless --import` first. For real-LLM
+live mode (`serve_penn.py --brain llm`, Claude Haiku) see the README. Two slash
+commands wrap the two halves: **`/run-viewer`** (launch the frontend — menu, a scene,
+or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
+
 ## Known issues / good first fixes
 
 - `Game.from_primitive()` has commented-out block deserialization, so save/load
