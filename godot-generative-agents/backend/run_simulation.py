@@ -57,11 +57,17 @@ from .smallville_agents import (
 )
 from .world_map import WorldMap
 
-# backend/ is a top-level package at the repo root, but the Smallville replay
-# assets it reads (the maze + storage) still live under the generative-agents/
-# frontend that consumes them, so reach back into that sibling directory.
+# backend/ now lives at godot-generative-agents/backend/ (moved there in #399),
+# but the Smallville replay assets it reads (the maze + storage) still live under
+# the repo-root generative-agents/ frontend that consumes them. Reach up two
+# levels -- backend/ -> godot-generative-agents/ -> repo root -- then into it.
+# (Before #399, backend/ sat at the repo root, so a single dirname sufficed;
+# after the move that path silently resolved to a nonexistent
+# godot-generative-agents/generative-agents/, so seeding no-op'd -- issue #407.)
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-_GA_DIR = os.path.join(os.path.dirname(_PACKAGE_DIR), "generative-agents")
+_GA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(_PACKAGE_DIR)), "generative-agents"
+)
 _FRONTEND = os.path.join(_GA_DIR, "frontend")
 
 DEFAULT_VILLE_DIR = os.path.join(_FRONTEND, "static_dirs", "assets", "the_ville")
