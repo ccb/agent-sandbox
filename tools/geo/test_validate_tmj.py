@@ -287,6 +287,21 @@ def test_collision_never_errors_on_real_data():
     )
 
 
+def test_collision_reads_walls_layers_on_real_data():
+    # #391: the check used to no-op on the real map (add_entrances zeroes the
+    # `buildings` layer), so it never actually verified walls. It now unions the
+    # per-building `*_walls` layers and checks those against collision_maze — a
+    # real finding sourced from the walls, not the old info no-op.
+    c = v.Checker(real_world()).run()
+    coll = [f for f in c.findings if f.code == "collision_walls_ok"]
+    assert coll, "no collision_walls_ok finding on the real map"
+    assert any("*_walls layers" in f.message for f in coll)
+    # still warn-only — a wall gap is a warning, never a baseline-failing error.
+    assert all(
+        f.severity != "error" for f in c.findings if f.code.startswith("collision_")
+    )
+
+
 def test_format_report_groups_and_counts():
     fs = [
         v.Finding("error", "MATRIX_TMJ", "Cohen", "c1", "drawn not present"),
