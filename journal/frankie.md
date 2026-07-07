@@ -1,3 +1,21 @@
+## 2026-07-07
+**Focus:** shipped the per-agent inspection API (read + write), cleared the post-#400-restructure merge/geo fallout, and kicked off the live-LLM cost/quality roadmap.
+
+**Done today:**
+- Landed the per-agent inspection surface on `godot-ga-main`: read-only retrieval probe (#346, **PR #403**), daily-plan endpoint (#347, **PR #404**), and user interventions — `POST /agents/{name}/say` + `POST /world/event` (#369, **PR #405**) — completing #266's M2 read+write family.
+- Cleared the #400/#399-restructure fallout: rebased #401/#403/#404/#405 (and #402 furniture) onto the moved tree, then fixed the repo-wide `tools/geo` path breakage — 37 files repointed at the relocated tmj (`godot/maps/`) + matrix (`backend/penn/…`), greening the whole geo suite (#413, merged).
+- Opened roadmap follow-ups: `the_ville` seeding path regression from the package move (#407, **PR #414**) and Anthropic prompt caching on the stable persona prefix (#367, **PR #415**).
+
+**Blockers / questions:**
+- #390 (wire the geo suite + `validate_tmj` drift-gate into CI) is committed but unpushable — the `gh` HTTPS token lacks the `workflow` OAuth scope to write `.github/workflows/`; needs a one-time `gh auth refresh -h github.com -s workflow`.
+- Prompt caching (#367) is a silent no-op on Haiku until the persona+tools prefix clears the 4096-token minimum — a real saving only once personas grow; confirm via the usage cache fields on a live run.
+- CLAUDE.md still says `backend-api` work targets `main`, but after #400 the backend + inspection endpoints actually live on `godot-ga-main` — the doc and the branch reality disagree; worth reconciling.
+
+**Next:**
+- Refresh the `workflow` scope and push #390 so a tmj⇄matrix drift can't silently land again.
+- Pick up #397 (Penn-aware LLM planner) — `LLMPlanner` is already built, just needs Penn goals + campus locations wired.
+- Merge the ready PRs (#414, #415) and rebase whichever geo PR lands second (#390 vs #402 both touch `tools/geo`).
+
 ## 2026-07-06
 **Focus:** made furniture solid in the UPenn matrix and made Fisher's bookshelves/chairs addressable game-objects.
 
