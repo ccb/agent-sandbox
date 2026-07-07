@@ -133,7 +133,9 @@ SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh              
 `run.sh` auto-imports assets on first run: a fresh checkout has the asset sources but
 not the git-ignored `.godot/` cache, and launching a scene directly (unlike opening the
 editor) won't build it — so the script runs `--headless --import` first. For real-LLM
-live mode (`serve_penn.py --brain llm`, Claude Haiku) see the README.
+live mode (`serve_penn.py --brain llm`, Claude Haiku) see the README. Two slash
+commands wrap the two halves: **`/run-viewer`** (launch the frontend — menu, a scene,
+or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
 
 ## Known issues / good first fixes
 
