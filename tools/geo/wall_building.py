@@ -244,13 +244,13 @@ def main():
     ap.add_argument(
         "--tmj",
         default=os.path.join(
-            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
         ),
     )
     ap.add_argument(
         "--matrix",
         default=os.path.join(
-            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+            repo, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
         ),
     )
     ap.add_argument("--sector", default="Van Pelt Library")

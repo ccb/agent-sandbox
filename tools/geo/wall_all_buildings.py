@@ -70,7 +70,7 @@ def main():
     ap.add_argument(
         "--tmj",
         default=os.path.join(
-            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
         ),
     )
     ap.add_argument(

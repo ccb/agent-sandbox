@@ -3,8 +3,12 @@ import os
 import validate_tmj as v
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TMJ = os.path.join(REPO, "godot-generative-agents", "maps", "upenn_core_urban.tmj")
-MATRIX = os.path.join(REPO, "godot-generative-agents", "sim", "the_upenn", "matrix")
+TMJ = os.path.join(
+    REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
+)
+MATRIX = os.path.join(
+    REPO, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
+)
 
 
 def real_world():

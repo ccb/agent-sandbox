@@ -31,7 +31,7 @@ import tile_presets
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-MAPS = os.path.join(REPO, "godot-generative-agents", "maps")
+MAPS = os.path.join(REPO, "godot-generative-agents", "godot", "maps")
 CATALOG_PATH = os.path.join(HERE, "furniture_catalog.json")
 TILE = 16  # every sheet is 16px tiles
 
