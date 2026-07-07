@@ -55,6 +55,7 @@ from penn_world import (
     SIM_START,
     PennWorld,
     build_penn_world,
+    persona_meta_entry,
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
@@ -383,9 +384,10 @@ class PennStepper:
             "sec_per_step": SEC_PER_STEP,
             "start": SIM_START,
             "vision_r": self.cog.vision_r,
-            "personas": [
-                {"name": p["name"], "emoji": p["emoji"]} for p in self.world.personas
-            ],
+            # Same projection the bake uses (penn_world.persona_meta_entry): name/
+            # emoji for the sprite + sidebar, persona/home/schedule for the State
+            # Details inspector (issue #408), so live and baked meta stay identical.
+            "personas": [persona_meta_entry(p) for p in self.world.personas],
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (

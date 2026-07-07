@@ -12,6 +12,10 @@ extends PanelContainer
 ## viewer's build-nodes-in-code style) so the scene file only needs the empty
 ## PanelContainer.
 
+# A row's ⓘ Details button was pressed: open the persona "State Details" inspector
+# for that character (issue #408). Kept separate from track_requested so inspecting
+# an agent doesn't disturb the camera-follow / perception fog Track drives.
+signal inspect_requested(name: String)
 # A row's Track button was pressed and that character is not already being tracked.
 signal track_requested(name: String)
 # The currently-tracked character's button was pressed again (toggle off).
@@ -330,6 +334,16 @@ func add_character(name: String, thumb: Texture2D, tint: Color) -> void:
 	status.add_theme_color_override("font_color", STATUS_COLOR)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_col.add_child(status)
+
+	# ⓘ opens the persona State Details inspector (issue #408); Track follows them.
+	# Two buttons because the two actions are independent — you can inspect without
+	# moving the camera, or follow without popping the modal.
+	var info := Button.new()
+	info.text = "ⓘ"
+	info.tooltip_text = "State Details (P)"
+	info.focus_mode = Control.FOCUS_NONE
+	info.pressed.connect(func() -> void: inspect_requested.emit(name))
+	row.add_child(info)
 
 	var button := Button.new()
 	button.text = "Track"

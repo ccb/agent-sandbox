@@ -122,7 +122,12 @@ def test_stepper_meta_shape():
     assert meta["vision_r"] == VISION_R
     assert len(meta["personas"]) == 3
     assert meta["llm"] is None  # the default stepper runs the mock brain
-    assert all(set(p) == {"name", "emoji"} for p in meta["personas"])
+    # Each persona carries identity + schedule for the State Details inspector
+    # (issue #408); vision_r stays a top-level global, not a per-persona key.
+    assert all(
+        set(p) == {"name", "emoji", "persona", "home", "schedule"}
+        for p in meta["personas"]
+    )
 
 
 def test_stepper_finishes_then_resets():
