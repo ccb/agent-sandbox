@@ -18,12 +18,12 @@ day if spend reaches the ceiling.
 Run from the repo root (terminal 1), then point the viewer at it (terminal 2)::
 
     uv sync --extra server
-    uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
-    SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+    uv run python godot-generative-agents/backend/penn/serve_penn.py --tick-seconds 0.1
+    SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 
     # the real thing (uv sync --extra server --extra llm, key required):
     ANTHROPIC_API_KEY=sk-ant-... \
-        uv run python godot-generative-agents/sim/serve_penn.py --brain llm
+        uv run python godot-generative-agents/backend/penn/serve_penn.py --brain llm
 
 The pieces:
 

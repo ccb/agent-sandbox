@@ -95,11 +95,15 @@ docs = [
 [tool.setuptools.dynamic]
 version = { attr = "text_adventure_games.__version__" }
 
-# Equivalent of the old find_packages(): ship text_adventure_games and the shared
-# simulation backend (`backend`, extracted from generative-agents/backend in #167 and
-# renamed in #179 so it reads as the project's one canonical backend behind every
-# frontend), but not notebooks/, tests/, or docs/ (they aren't importable packages).
+# Equivalent of the old find_packages(): ship text_adventure_games (repo root) and
+# the simulation backend (`backend`), but not notebooks/, tests/, or docs/ (they
+# aren't importable packages). The `backend` package was extracted to the repo root
+# in #167/#179, then moved under godot-generative-agents/ in #399 when it was folded
+# into that project alongside its web + godot front ends. Its import name stays
+# `backend`, so `from backend...` / `python -m backend.api` are unchanged — only the
+# on-disk location moved, which is why `where` now scans both roots.
 [tool.setuptools.packages.find]
+where = [".", "godot-generative-agents"]
 include = ["text_adventure_games*", "backend*"]
 
 # The prompt templates (issue #145) are data files, not Python, so list them

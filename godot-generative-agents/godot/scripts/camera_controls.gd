@@ -73,7 +73,7 @@ var _have_bounds := false
 # Screen-pixels down the LEFT edge hidden behind the on-screen sidebar
 # (agent_panel.gd, in the UI CanvasLayer). The clamp frames the map into the
 # UNCOVERED part of the window so the bar never permanently hides campus you
-# can't pan to. 0 = no sidebar. Set by penn_replay.gd via set_left_inset().
+# can't pan to. 0 = no sidebar. Set by viewer.gd via set_left_inset().
 var _left_inset := 0.0
 # When false, the arrow/WASD keyboard pan is ignored (mouse drag/zoom still work). The
 # heatmap pop-up sets this while open so LEFT/RIGHT switch its view instead of panning.

@@ -3,7 +3,7 @@ extends Node
 ##
 ## The HUD (live_hud.gd) is pure UI: it renders whatever a *source* reports and
 ## never talks to a backend itself. This base class pins the contract the two
-## sources share, so penn_replay.gd can wire either one to the HUD without
+## sources share, so viewer.gd can wire either one to the HUD without
 ## caring which it got:
 ##
 ## * hud_source_replay.gd -- baked-replay mode (the default today): no backend
@@ -79,6 +79,6 @@ func request_resume() -> void:
 
 func note_llm_call(record: Dictionary) -> void:
 	## Seam for the live client (#263): an `llm_call` record arrived on the
-	## event feed (the WebSocket lives in penn_replay.gd, not here). Re-emitted
+	## event feed (the WebSocket lives in viewer.gd, not here). Re-emitted
 	## as the llm_call signal so the HUD stays a plain signal consumer.
 	llm_call.emit(record)

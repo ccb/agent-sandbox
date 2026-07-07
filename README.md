@@ -212,10 +212,11 @@ uv run pytest tests/test_npc_behaviors.py -s  # watch the NPC behavior suite, na
 
 ### Serve a game over HTTP (backend API)
 
-For out-of-process frontends — a Godot/2D renderer, the Phaser viewer, the web
-companion — there's one canonical backend seam: a small FastAPI app that serves
-any engine `Game` over HTTP, so each frontend polls the same JSON endpoints
-(`GET /health`, `GET /world_state`, `POST /command`) instead of embedding Python.
+For out-of-process frontends — a Godot/2D renderer, the web companion — there's a
+backend seam: a small FastAPI app that serves any engine `Game` over HTTP, so each
+frontend polls the same JSON endpoints (`GET /health`, `GET /world_state`,
+`POST /command`) instead of embedding Python. The `backend` package lives under
+`godot-generative-agents/backend/` (its import name is still `backend`).
 
 ```bash
 uv sync --extra server               # adds fastapi + uvicorn
@@ -224,8 +225,9 @@ uv run python -m backend.api         # demo world on http://127.0.0.1:8080
 
 It's **unauthenticated and loopback-only by default** (local dev). Full endpoint
 reference — request/response shapes, status codes, auth (`SIM_API_TOKEN`), and a
-curl walkthrough — is in [`backend/README.md`](backend/README.md); the live
-interactive contract is at `/docs` while the server runs.
+curl walkthrough — is in
+[`godot-generative-agents/backend/README.md`](godot-generative-agents/backend/README.md);
+the live interactive contract is at `/docs` while the server runs.
 
 ### Browse the documentation site
 

@@ -46,8 +46,8 @@ Run order::
     uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
     uv run python tools/geo/furnish_building.py                          # Williams
     uv run python tools/geo/add_entrances.py                             # doors!
-    uv run python godot-generative-agents/sim/generate_building_labels.py
-    uv run python godot-generative-agents/sim/generate_penn_replay.py
+    uv run python godot-generative-agents/backend/penn/generate_building_labels.py
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
     # then commit the updated .tmj + matrix CSVs
 """
 
@@ -595,13 +595,13 @@ def main():
     ap.add_argument(
         "--tmj",
         default=os.path.join(
-            repo, "godot-generative-agents", "maps", "upenn_core_urban.tmj"
+            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
         ),
     )
     ap.add_argument(
         "--matrix",
         default=os.path.join(
-            repo, "godot-generative-agents", "sim", "the_upenn", "matrix"
+            repo, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
         ),
     )
     ap.add_argument("--dry-run", action="store_true", help="report, do not write")

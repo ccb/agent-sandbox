@@ -21,7 +21,9 @@ from pathlib import Path
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); tests import them the way the scripts import each other -- off the
 # sim directory itself.
-_SIM_DIR = Path(__file__).resolve().parents[2] / "godot-generative-agents" / "sim"
+_SIM_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402

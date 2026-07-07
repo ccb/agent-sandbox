@@ -29,7 +29,9 @@ from backend.llm_monitor import LlmCallMonitor
 
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); import them off the sim directory, like test_penn_live.py.
-_SIM_DIR = Path(__file__).resolve().parents[2] / "godot-generative-agents" / "sim"
+_SIM_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
 sys.path.insert(0, str(_SIM_DIR))
 
 import serve_penn  # noqa: E402

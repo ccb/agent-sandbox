@@ -1,6 +1,6 @@
 """Write the building name-plates the Godot campus viewer floats over the map.
 
-The replay viewer (`scenes/penn_replay.tscn`) shows a label over each building
+The replay viewer (`scenes/viewer.tscn`) shows a label over each building
 when you're zoomed all the way out, fading it as you zoom in. Godot can't read
 the Python world, so -- exactly like `generate_penn_replay.py` -- we precompute a
 tiny JSON here that the scene loads at startup.
@@ -14,9 +14,9 @@ over the building with the agents' own tile->world transform.
 
 Run from the repo root::
 
-    uv run python godot-generative-agents/sim/generate_building_labels.py
+    uv run python godot-generative-agents/backend/penn/generate_building_labels.py
 
-Writes: godot-generative-agents/maps/building_labels.json
+Writes: godot-generative-agents/godot/maps/building_labels.json
 """
 
 import argparse
@@ -24,8 +24,11 @@ import csv
 import json
 import os
 
-_SIM_DIR = os.path.dirname(os.path.abspath(__file__))
-_GODOT_DIR = os.path.dirname(_SIM_DIR)
+_SIM_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)  # .../godot-generative-agents/backend/penn
+_GG_DIR = os.path.dirname(os.path.dirname(_SIM_DIR))  # .../godot-generative-agents
+_GODOT_DIR = os.path.join(_GG_DIR, "godot")  # the Godot project (its res:// root)
 
 MATRIX_DIR = os.path.join(_SIM_DIR, "the_upenn", "matrix")
 SECTOR_BLOCKS = os.path.join(MATRIX_DIR, "special_blocks", "sector_blocks.csv")

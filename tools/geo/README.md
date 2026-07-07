@@ -256,12 +256,12 @@ footprint from an invariant mask, so re-runs are byte-stable):
 
 ```bash
 uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
-uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/sim/the_upenn
+uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/backend/penn/the_upenn
 uv run python tools/geo/furnish_building.py                          # Williams interior
 uv run python tools/geo/add_entrances.py                             # doors + interiors
 uv run python tools/geo/block_grass.py                               # lawns become un-walkable
-uv run python godot-generative-agents/sim/generate_building_labels.py
-LLM_PROVIDER=mock uv run python godot-generative-agents/sim/generate_penn_replay.py
+uv run python godot-generative-agents/backend/penn/generate_building_labels.py
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 ```
 
 `--dry-run` reports each building's footprint/interior size and chosen door cell
@@ -357,7 +357,7 @@ uv run python tools/geo/wall_all_buildings.py             # apply
 ### `validate_tmj.py` — tmj ↔ matrix validator
 
 Detect-and-report checks that the authored `upenn_core_urban.tmj` and the
-generative-agents matrix (`sim/the_upenn/matrix`) agree, plus tmj
+generative-agents matrix (`backend/penn/the_upenn/matrix`) agree, plus tmj
 internal-integrity checks. Prints a grouped report; exits non-zero on any
 **error** finding not listed in `validate_tmj_baseline.json` (the ledger of
 currently-accepted drift, e.g. Cohen/Alumni rooms drawn in the tmj but not yet

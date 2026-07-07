@@ -5,9 +5,9 @@ extends Node2D
 ## name-plates are what you want to read).
 ##
 ## The names + centres come from maps/building_labels.json, precomputed by
-## sim/generate_building_labels.py from the sim's sector matrix. Each entry is a
+## backend/penn/generate_building_labels.py from the sim's sector matrix. Each entry is a
 ## tile (x, y) in the very grid the agents walk, so we drop a centred Label over
-## each building with the same tile->world transform penn_replay.gd uses for
+## each building with the same tile->world transform viewer.gd uses for
 ## sprites. The labels live in world space (children of this node), so the camera
 ## pans and zooms them with the map; _process only dials their opacity by zoom.
 
@@ -41,7 +41,7 @@ func _ready() -> void:
 
 
 func _find_camera() -> Camera2D:
-	# The camera is a sibling under the scene root (same place penn_replay.gd adds
+	# The camera is a sibling under the scene root (same place viewer.gd adds
 	# the agent sprites), so scan our parent's children for it.
 	var parent := get_parent()
 	if parent != null:
@@ -75,7 +75,7 @@ func _add_label(name: String, tile_x: float, tile_y: float, tile_px: float) -> v
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.custom_minimum_size = Vector2(label_width, 0)
-	# Tile centre in world px (matches penn_replay.gd's _tile_to_world), then shift
+	# Tile centre in world px (matches viewer.gd's _tile_to_world), then shift
 	# the text box so it's centred over that point instead of starting there.
 	var world := Vector2((tile_x + 0.5) * tile_px, (tile_y + 0.5) * tile_px)
 	label.position = world - Vector2(label_width * 0.5, float(font_size) * 0.5)

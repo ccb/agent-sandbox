@@ -26,7 +26,7 @@ agent simulation, but they reach the code two different ad-hoc ways:
 
 - `generative-agents`' own tests/runners import `backend.*` by running with the
   working directory set to `generative-agents/`.
-- `godot-generative-agents/sim/generate_penn_replay.py` reaches it with
+- `godot-generative-agents/backend/penn/generate_penn_replay.py` reaches it with
   `sys.path.insert(0, "../generative-agents")` — a path hack into a sibling
   consumer.
 
@@ -55,7 +55,7 @@ inside `generative-agents/`.
 2. Add it to the packaged set in the root `pyproject.toml` so it installs
    alongside `text_adventure_games` (no CWD assumptions, no `sys.path.insert`).
 3. Update imports: `generative-agents` tests/runners and
-   `godot-generative-agents/sim/generate_penn_replay.py` → `import backend...`.
+   `godot-generative-agents/backend/penn/generate_penn_replay.py` → `import backend...`.
 4. Update READMEs / `CLAUDE.md` references to the old `backend/` path.
 
 **Fold in #100 (`SimulationConfig`):**

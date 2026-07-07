@@ -48,7 +48,7 @@ var _halted := false
 
 func configure(base_url: String, token: String) -> void:
 	## Point the source at a backend (e.g. "http://127.0.0.1:8000") and start
-	## polling. Called once by penn_replay.gd; must run after add_child().
+	## polling. Called once by viewer.gd; must run after add_child().
 	_base_url = base_url.rstrip("/")
 	_token = token
 

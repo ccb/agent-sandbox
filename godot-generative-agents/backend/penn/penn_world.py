@@ -41,13 +41,13 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 
-# How the Godot viewer (scripts/penn_replay.gd) plays a `chat` transcript back:
+# How the Godot viewer (scripts/viewer.gd) plays a `chat` transcript back:
 # ~DIALOGUE_LINE_STEPS replay steps per line, with the last line fading over
 # DIALOGUE_FADE_STEPS. We mirror them here so the conversation injectors (the
 # bake's post-hoc one and the live server's on-the-fly one) only fire a meeting
 # when the participants stay together long enough for the whole exchange to play
 # out on the map (otherwise the bubbles/link would linger after they part).
-# Keep in sync with the constants of the same name in penn_replay.gd.
+# Keep in sync with the constants of the same name in viewer.gd.
 DIALOGUE_LINE_STEPS = 14
 DIALOGUE_FADE_STEPS = 2
 

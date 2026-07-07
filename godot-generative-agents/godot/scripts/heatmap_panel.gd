@@ -11,7 +11,7 @@ extends Control
 ##     compare who lingers where.
 ##
 ## Like agent_panel.gd and minimap.gd this is pure UI: it knows nothing about the sim
-## until penn_replay.gd hands it the replay via set_replay(), then drives it with
+## until viewer.gd hands it the replay via set_replay(), then drives it with
 ## show_up_to(step) and cycle_view(delta). It renders the campus a second time into an
 ## off-screen SubViewport (exactly like minimap.gd) so the heat sits over the real map.
 
@@ -25,7 +25,7 @@ extends Control
 @export var supersample: int = 2
 
 ## Emitted when the user asks to close the pop-up (the close button, or a click on the
-## dimmed backdrop outside the panel). penn_replay.gd hides us and restores the camera.
+## dimmed backdrop outside the panel). viewer.gd hides us and restores the camera.
 signal close_requested
 
 # Dark translucent wash over the whole screen behind the panel (the fog's tone), so the
@@ -34,7 +34,7 @@ const BACKDROP_COLOR := Color(0.06, 0.07, 0.10, 0.82)
 # A second dim, drawn over the campus picture but UNDER the heat, so faint heat still
 # reads against the bright daytime map.
 const MAP_DIM := Color(0.05, 0.05, 0.08, 0.55)
-# Per-persona tints, kept in step with penn_replay.gd's TINTS (shared by the sprite, the
+# Per-persona tints, kept in step with viewer.gd's TINTS (shared by the sprite, the
 # sidebar row and the minimap dot) so an agent's heat matches its dot colour.
 const TINTS := [
 	Color(1.0, 0.95, 0.95),  # Maya    - warm white
@@ -81,7 +81,7 @@ var _hint: Label
 
 func _ready() -> void:
 	# Fill the screen so the backdrop can dim everything and catch a click-outside;
-	# start hidden (penn_replay.gd flips us visible on open). A hidden Control neither
+	# start hidden (viewer.gd flips us visible on open). A hidden Control neither
 	# draws nor handles input, so this is inert until opened. Use the ..._and_offsets_...
 	# variant so the offsets are zeroed too -- anchors alone leave a 0-size rect.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -106,7 +106,7 @@ func _ready() -> void:
 	add_child(center)
 
 	# The floating window. A dark rounded StyleBoxFlat built in code (like
-	# penn_replay._make_bubble_style) rather than the light parchment theme.
+	# viewer._make_bubble_style) rather than the light parchment theme.
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP  # eat clicks so they don't pan
 	_panel.add_theme_stylebox_override("panel", _make_panel_style())
@@ -182,7 +182,7 @@ func _ready() -> void:
 	_update_title()
 
 
-## Hand over the loaded replay (called once by penn_replay.gd after it loads). Builds
+## Hand over the loaded replay (called once by viewer.gd after it loads). Builds
 ## the off-screen campus picture eagerly -- like minimap.configure() at _ready time --
 ## so its UPDATE_ONCE texture is long rendered by the time the user first opens us (a
 ## lazy build would show a blank campus for the first frame). _frames/_names are read

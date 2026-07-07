@@ -36,7 +36,7 @@ state out of Godot.
 
 ```
 Python sim ──▶ maps/penn_replay.json ──(copied)──▶ web/public/replay/penn_replay.json
-(sim/generate_penn_replay.py)                              │  Vite serves it at /replay/...
+(backend/penn/generate_penn_replay.py)                              │  Vite serves it at /replay/...
                                                            ▼
 Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,pck,…}
 (scripts/export-godot.sh)                                  │  Vite serves it at /godot/...
@@ -56,10 +56,12 @@ Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,p
    build to `public/godot/`: `index.wasm` (the engine, ~37 MB), `index.pck` (the
    packed game — scenes, scripts, imported textures, **and the `.tmj` maps**), and
    `index.js` (the JS loader that defines Godot's `Engine` class). The script
-   temporarily points the project's main scene at `penn_replay.tscn` for the export
-   only, then restores `project.godot` (so desktop F5 still opens `main.tscn`).
+   temporarily pins the project's main scene to `main_menu.tscn` for the export
+   only (the landing page — the same default desktop F5 opens), then restores
+   `project.godot`. On web the menu hides its "Open a local file…" button and the
+   bundled replay is fetched over HTTP rather than packed (see below).
 
-2. **Replay fetched at runtime, not packed.** `scripts/penn_replay.gd` (in the
+2. **Replay fetched at runtime, not packed.** `scripts/viewer.gd` (in the
    Godot project) has a `web` branch: on web it `HTTPRequest`s the replay from
    `/replay/penn_replay.json` instead of reading it from the `.pck`. So a new sim is
    a one-file swap — no re-export. (The desktop `FileAccess` path is unchanged.)
@@ -78,7 +80,7 @@ setting `variant/thread_support=false` in `../export_presets.cfg`.
 
 ### The data contract (replay JSON)
 
-Produced by `sim/generate_penn_replay.py`, consumed by both the Godot canvas and
+Produced by `backend/penn/generate_penn_replay.py`, consumed by both the Godot canvas and
 (soon) the companion panels. Typed in [`src/types/replay.ts`](src/types/replay.ts):
 
 ```jsonc
@@ -125,8 +127,9 @@ pnpm gen:docs       # optional: builds the MkDocs site into public/docs/ (the "D
 pnpm dev            # open the printed http://localhost:… URL
 ```
 
-You should see the campus load and Maya, Professor Ellis and Diego walk it with
-name + activity labels — the same scene as the desktop `penn_replay.tscn`.
+You should see the landing menu load over a live campus backdrop; click **Play the
+bundled replay** and Maya, Professor Ellis and Diego walk the campus with name +
+activity labels — the same viewer as the desktop `viewer.tscn`.
 
 The header's **Docs** link opens the project's MkDocs site at `/docs/` on this
 same origin. It's served as plain static files out of `public/docs/`, so run
@@ -154,7 +157,7 @@ one-line-per-model-call stream the backend's terminal monitor prints (and the
 Godot HUD shows), filtered to that agent via each record's `actor` field.
 
 ```bash
-uv run python godot-generative-agents/sim/serve_penn.py            # terminal 1 (add --brain llm for real calls)
+uv run python godot-generative-agents/backend/penn/serve_penn.py            # terminal 1 (add --brain llm for real calls)
 pnpm dev                                                           # terminal 2
 # then open  http://localhost:5173/?api=http://127.0.0.1:8080#agents
 ```
@@ -205,7 +208,7 @@ web/
     godot/              # (git-ignored) Godot Web export output — built locally
     replay/penn_replay.json  # committed sample replay, fetched at runtime
   scripts/
-    export-godot.sh     # Godot → WASM (temporarily boots penn_replay.tscn)
+    export-godot.sh     # Godot → WASM (temporarily boots main_menu.tscn)
     gen-replay.sh       # run the sim → copy replay into public/
 ```
 
@@ -224,7 +227,7 @@ The panels are a pure-data feature — you don't need to touch Godot:
    `<GodotCanvas/>` in [`App.tsx`](src/App.tsx) (the `.app-stage` is a positioned
    container ready for a sidebar).
 3. To keep panels in step with the canvas, track the current step the same way
-   `penn_replay.gd` does — `floor(elapsed_seconds / step_seconds)` — or, for tight
+   `viewer.gd` does — `floor(elapsed_seconds / step_seconds)` — or, for tight
    coupling (e.g. click a panel → highlight that agent in Godot), use Godot's
    `JavaScriptBridge` to post the current step out and accept calls in. `GodotCanvas`
    already embeds the engine in-DOM specifically to make that bridge possible.
@@ -250,7 +253,7 @@ The panels are a pure-data feature — you don't need to touch Godot:
 | `export:godot` fails about templates | Web export templates not installed — *Godot → Editor → Manage Export Templates → Download and Install* (matching version). |
 | `ERR_PNPM_IGNORED_BUILDS: esbuild` on `pnpm install`/`build` | pnpm blocks dependency build scripts by default. We allow esbuild in `pnpm-workspace.yaml` (`allowBuilds: { esbuild: true }`). On pnpm 11 this setting lives in `pnpm-workspace.yaml`, **not** the `package.json` `pnpm` field. Run `pnpm install` after editing it. |
 | Canvas loads but the map is blank/grey | The `.tmj` maps weren't packed. They're plain JSON (not Godot resources), so the `Web` preset must keep `include_filter="*.tmj"`. (Note: `export_presets.cfg` uses `;` for comments, **not `#`** — a `#` silently drops the next setting.) |
-| `Invalid URL scheme` / replay won't load on web | Godot's `HTTPRequest` needs an absolute URL; `penn_replay.gd` resolves the relative path via `JavaScriptBridge`. Make sure the replay is reachable at `/replay/penn_replay.json` (run `pnpm gen:replay`). |
+| `Invalid URL scheme` / replay won't load on web | Godot's `HTTPRequest` needs an absolute URL; `viewer.gd` resolves the relative path via `JavaScriptBridge`. Make sure the replay is reachable at `/replay/penn_replay.json` (run `pnpm gen:replay`). |
 | Blank page / `SharedArrayBuffer is not defined` | The page isn't cross-origin isolated. Use `pnpm dev`/`pnpm preview` (they set COOP/COEP). If serving another way, send those headers, or export single-threaded (`variant/thread_support=false`). |
 | Port 5173 already in use | Another Vite is running. Stop it, or Vite will pick the next free port (check its printed URL). |
 
