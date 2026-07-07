@@ -322,8 +322,14 @@ func _setup_hud() -> void:
 		_hud_source = preload("res://scripts/hud_source_live.gd").new()
 		_hud.set_source_label("live: %s" % url)
 	else:
+		# Baked-replay mode: there's no live run to watch and no real money
+		# spent, so hide the whole run monitor (cost meter + LLM request log)
+		# rather than show synthesized figures that read like a real bill. The
+		# replay source is still created and wired below so the viewer's
+		# unconditional _hud_source calls (set_cast, set_running) stay valid —
+		# it just feeds a hidden panel.
 		_hud_source = preload("res://scripts/hud_source_replay.gd").new()
-		_hud.set_source_label("simulated (baked replay)")
+		_hud.visible = false
 
 	# Connect BEFORE add_child: a source seeds the HUD (initial health + zeroed
 	# meter) from its _ready, which runs inside add_child — connect after and
