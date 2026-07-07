@@ -33,7 +33,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 MAPS = os.path.join(REPO, "godot-generative-agents", "godot", "maps")
 CATALOG_PATH = os.path.join(HERE, "furniture_catalog.json")
+WALKABLE_PATH = os.path.join(HERE, "walkable_furniture.json")
+TMJ = os.path.join(MAPS, "upenn_core_urban.tmj")
 TILE = 16  # every sheet is 16px tiles
+
+# Map tmj tileset names → catalog sheet names
+SHEET_ALIAS = {
+    "interior_franuka": "franuka",
+    "interior_school": "school",
+    "interior_bath": "bath",
+    "interior_alchemy": "alchemy",
+    "interior_bedroom": "bedroom",
+    "interior_clockwork": "clockwork",
+    "interior_music": "music",
+    "kenney_urban": "kenney",
+}
 
 # Fallback guidance if the catalog has no "_llm_guidance" block.
 DEFAULT_GUIDANCE = {
@@ -47,6 +61,65 @@ DEFAULT_GUIDANCE = {
 def load_catalog() -> dict:
     with open(CATALOG_PATH) as fh:
         return json.load(fh)
+
+
+def load_walkable_json(path: str = WALKABLE_PATH) -> dict:
+    """Load walkable_furniture.json; returns {} if missing."""
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        return {}
+
+
+def save_walkable_json(data: dict, path: str = WALKABLE_PATH) -> None:
+    """Write walkable_furniture.json with indent=2 + trailing newline.
+    Preserves the existing _README if the incoming payload omits it."""
+    existing = load_walkable_json(path=path)
+    out = {}
+    readme = data.get("_README") or existing.get("_README")
+    if readme:
+        out["_README"] = readme
+    out["walkable_gids"] = data.get("walkable_gids", {})
+    with open(path, "w") as fh:
+        json.dump(out, fh, indent=2)
+        fh.write("\n")
+
+
+def furniture_solidity_rows(catalog: dict) -> list:
+    """Return one dict per distinct furniture gid, ordered by paint count desc.
+
+    Each dict: {gid, sheet, col, row, count, walkable}.
+    Reuses block_furniture helpers — does not re-derive gids.
+    """
+    import block_furniture as bf  # lazy import; tools/geo must be on sys.path
+
+    tmj = json.load(open(TMJ))
+    counts = bf.furniture_gid_counts(tmj)
+    walk = bf.load_walkable_furniture()
+
+    rows = []
+    for gid, n in counts.most_common():
+        ts_name, local = bf.tileset_of(gid, tmj["tilesets"])
+        sheet = SHEET_ALIAS.get(ts_name, ts_name)
+        if sheet not in catalog["sheets"]:
+            print(
+                f"WARNING furniture_solidity_rows: gid {gid} → sheet {sheet!r} "
+                "not in catalog, skipping"
+            )
+            continue
+        cols = catalog["sheets"][sheet]["cols"]
+        rows.append(
+            {
+                "gid": gid,
+                "sheet": sheet,
+                "col": local % cols,
+                "row": local // cols,
+                "count": n,
+                "walkable": gid in walk,
+            }
+        )
+    return rows
 
 
 def data_uri(filename: str) -> str:
@@ -66,6 +139,7 @@ def build_html(catalog: dict, served: bool) -> str:
     }
     guidance = catalog.get("_llm_guidance", DEFAULT_GUIDANCE)
     presets = tile_presets.load_presets()
+    wj = load_walkable_json()
     app = {
         "raw": catalog,
         "sheets": sheets,
@@ -74,6 +148,8 @@ def build_html(catalog: dict, served: bool) -> str:
         "tile": TILE,
         "presets": presets.get("presets", {}),
         "active": presets.get("active"),
+        "furniture": furniture_solidity_rows(catalog),
+        "walkableLabels": wj.get("walkable_gids", {}),
     }
     return _TEMPLATE.replace("__DATA__", json.dumps(app))
 
@@ -178,6 +254,7 @@ _TEMPLATE = r"""<!doctype html>
     <div class="tabs">
       <div class="tab sel" data-sec="catalog" onclick="showSec('catalog')">Catalog</div>
       <div class="tab" data-sec="browse" onclick="showSec('browse')">Browse packs</div>
+      <div class="tab" data-sec="solidity" onclick="showSec('solidity')">Furniture solidity</div>
     </div>
     <input id="search" placeholder="filter by name/label" oninput="render()">
     <select id="vfilter" onchange="render()">
@@ -215,6 +292,14 @@ _TEMPLATE = r"""<!doctype html>
     <div id="tabs-browse" class="tabs"></div>
     <div id="addform" class="addform"></div>
     <div id="sheetview"></div>
+  </section>
+  <section id="sec-solidity" class="sec">
+    <div class="row" style="margin-bottom:10px">
+      <span id="solidity-summary" class="meta"></span>
+      <span style="flex:1"></span>
+      <button class="primary" onclick="saveWalkable()">Save walkable set</button>
+    </div>
+    <div id="solidity-grid" class="grid"></div>
   </section>
 </main>
 <div id="modal" class="modal"><div class="box">
@@ -555,6 +640,68 @@ function showSec(name){
     t.classList.toggle('sel',t.dataset.sec===name));
   document.getElementById('sec-catalog').classList.toggle('show',name==='catalog');
   document.getElementById('sec-browse').classList.toggle('show',name==='browse');
+  document.getElementById('sec-solidity').classList.toggle('show',name==='solidity');
+}
+
+// ---- furniture solidity panel --------------------------------------------
+let WALK = new Set();
+(function initWalk(){
+  for(const r of APP.furniture){ if(r.walkable) WALK.add(r.gid); }
+})();
+
+function renderSolidity(){
+  const grid = document.getElementById('solidity-grid');
+  grid.innerHTML='';
+  for(const r of APP.furniture){
+    const walkable = WALK.has(r.gid);
+    const c = document.createElement('div'); c.className='card';
+    // tile crop
+    const wrap=document.createElement('div'); wrap.className='crop-wrap';
+    const cr=document.createElement('div'); cr.className='crop';
+    cr.style=cropStyle({sheet:r.sheet,col:r.col,row:r.row,w:1,h:1},4);
+    wrap.appendChild(cr); c.appendChild(wrap);
+    // gid + count
+    const nm=document.createElement('div'); nm.className='nm';
+    nm.textContent='gid '+r.gid; c.appendChild(nm);
+    const lb=document.createElement('div'); lb.className='lb';
+    lb.textContent='painted \xd7'+r.count; c.appendChild(lb);
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.textContent=r.sheet+' ('+r.col+','+r.row+')'; c.appendChild(meta);
+    // toggle pill
+    const row=document.createElement('div'); row.className='row';
+    const pill=document.createElement('button');
+    pill.className='pill '+(walkable?'ok':'no');
+    pill.textContent=walkable?'● walkable':'■ solid';
+    pill.onclick=(function(gid){return function(){
+      if(WALK.has(gid)) WALK.delete(gid); else WALK.add(gid);
+      renderSolidity();
+    };})(r.gid);
+    row.appendChild(pill); c.appendChild(row);
+    grid.appendChild(c);
+  }
+  const summary = document.getElementById('solidity-summary');
+  summary.textContent=WALK.size+' walkable · '+APP.furniture.length+' total furniture tiles';
+}
+
+async function saveWalkable(){
+  const walkable_gids={};
+  for(const r of APP.furniture){
+    if(!WALK.has(r.gid)) continue;
+    const key=String(r.gid);
+    walkable_gids[key] = APP.walkableLabels[key] || (r.sheet+' ('+r.col+','+r.row+')');
+  }
+  const payload={walkable_gids};
+  if(APP.served){
+    try{const res=await fetch('/save-walkable',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast(res.ok?'saved to walkable_furniture.json':'save failed');}
+    catch(e){toast('save failed: '+e);}
+  }else{
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='walkable_furniture.json'; a.click();
+    toast('downloaded — replace tools/geo/walkable_furniture.json');
+  }
 }
 let _t; function toast(m){const e=document.getElementById('toast'); e.textContent=m;
   e.className='toast show'; clearTimeout(_t); _t=setTimeout(()=>e.className='toast',1800);}
@@ -649,6 +796,7 @@ function copyMenu(){ const t=document.getElementById('menuText'); t.select();
 // ---- boot ----------------------------------------------------------------
 buildTabs(); drawSheet(curSheet);
 if(ACTIVE&&PRESETS[ACTIVE]) selectPreset(ACTIVE); else newPreset();
+renderSolidity();
 </script>
 </body></html>"""
 
@@ -670,7 +818,7 @@ def serve(port: int) -> None:
                 self._send(204, b"")
 
         def do_POST(self):  # noqa: N802
-            if self.path not in ("/save", "/save-presets"):
+            if self.path not in ("/save", "/save-presets", "/save-walkable"):
                 self._send(404, b"")
                 return
             n = int(self.headers.get("Content-Length", 0))
@@ -681,6 +829,9 @@ def serve(port: int) -> None:
                         json.dump(data, fh, indent=2)
                         fh.write("\n")
                     print(f"saved {CATALOG_PATH}")
+                elif self.path == "/save-walkable":
+                    save_walkable_json(data)
+                    print(f"saved {WALKABLE_PATH}")
                 else:  # /save-presets
                     tile_presets.write_presets(data)
                     print(f"saved {tile_presets.PRESETS_PATH}")

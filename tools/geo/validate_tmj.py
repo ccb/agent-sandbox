@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 
 from add_entrances import (
@@ -63,6 +63,10 @@ class World:
         self.arena_blocks = read_blocks(os.path.join(blocks, "arena_blocks.csv"))
         self.sector_blocks = read_blocks(os.path.join(blocks, "sector_blocks.csv"))
         self.world_blocks = read_blocks(os.path.join(blocks, "world_blocks.csv"))
+        self.game_object = read_flat(os.path.join(maze, "game_object_maze.csv"))
+        self.game_object_blocks = read_blocks(
+            os.path.join(blocks, "game_object_blocks.csv")
+        )
         with open(os.path.join(matrix_path, "maze_meta_info.json")) as _f:
             self.meta = json.load(_f)
 
@@ -570,6 +574,181 @@ class Checker:
                 f"({walkable}/{drawn} walkable overall)",
             )
 
+    def check_furniture_solidity(self):
+        """Every *_furniture cell must be collision=1 unless its base gid is in
+        block_furniture.WALKABLE_FURNITURE (chair seats). Lock-step: the matrix
+        must equal what block_furniture produces from the tmj.
+
+        NOTE: this check is one-directional. It flags furniture that should be
+        solid but isn't; it does NOT flag an allowlisted cell that is still
+        solid. block_furniture.solid_cells only seals (walkable->wall), never
+        re-opens, so adding a gid to WALKABLE_FURNITURE and re-running
+        block_furniture alone leaves already-sealed cells solid. Regenerate from
+        a furniture-free collision baseline (the full add_entrances -> block_grass
+        -> block_furniture chain) after any allowlist addition."""
+        try:
+            import block_furniture as bf
+        except Exception as exc:  # pragma: no cover - defensive
+            self.add(
+                "warn",
+                "MATRIX_TMJ",
+                "",
+                "furniture-import",
+                f"could not import block_furniture: {exc}",
+            )
+            return
+        bad = 0
+        for layer in self.w.tmj["layers"]:
+            if layer.get("type") != "tilelayer" or not bf.is_solid_layer(layer["name"]):
+                continue
+            for i, g in enumerate(layer["data"]):
+                if not g or (g & bf.GID_MASK) in bf.WALKABLE_FURNITURE:
+                    continue
+                if self.w.collision[i] != "1":
+                    bad += 1
+        if bad:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "furniture-not-solid",
+                f"{bad} furniture tile cells are not solid in collision_maze "
+                f"(run block_furniture.py)",
+            )
+        else:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "furniture-solid",
+                "all *_furniture cells are solid (or allowlisted)",
+            )
+
+    def check_walkable_allowlist_fresh(self):
+        """Warn on any WALKABLE_FURNITURE gid no longer painted in a furniture
+        layer -- the art changed out from under the allowlist."""
+        try:
+            import block_furniture as bf
+        except Exception:  # pragma: no cover - defensive
+            return
+        present = set(bf.furniture_gid_counts(self.w.tmj))
+        stale = sorted(g for g in bf.WALKABLE_FURNITURE if g not in present)
+        for gid in stale:
+            self.add(
+                "warn",
+                "MATRIX_TMJ",
+                "",
+                "allowlist-stale",
+                f"WALKABLE_FURNITURE gid {gid} is not painted in any furniture layer",
+            )
+
+    def check_game_object_orphans(self):
+        """Both directions: every game_object_blocks row has >=1 painted cell,
+        and every painted game_object id has a block row."""
+        painted = {g for g in self.w.game_object if g != "0"}
+        row_ids = {r[0] for r in self.w.game_object_blocks}
+        for rid in sorted(row_ids - painted):
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "gobj-orphan-row",
+                f"game_object_blocks id {rid} has no painted cell",
+            )
+        for pid in sorted(painted - row_ids):
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "gobj-orphan-paint",
+                f"game_object id {pid} painted but has no block row",
+            )
+        if not (row_ids - painted) and not (painted - row_ids):
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "gobj-orphans",
+                f"{len(row_ids)} game objects: rows and paint agree",
+            )
+
+    def check_game_object_use_tiles_walkable(self):
+        """Every cell carrying a game_object id must be walkable (collision=0)."""
+        bad = [
+            i
+            for i, g in enumerate(self.w.game_object)
+            if g != "0" and self.w.collision[i] != "0"
+        ]
+        if bad:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "gobj-use-tile-sealed",
+                f"{len(bad)} game_object use-tiles are not walkable",
+            )
+
+    def check_game_object_containment(self):
+        """Each game object's cells must lie in a single (non-zero) arena."""
+        by_id = defaultdict(set)
+        for i, g in enumerate(self.w.game_object):
+            if g != "0":
+                by_id[g].add(self.w.arena[i])
+        for gid, arenas in sorted(by_id.items()):
+            if "0" in arenas or len(arenas) != 1:
+                self.add(
+                    "error",
+                    "MATRIX_TMJ",
+                    "",
+                    "gobj-containment",
+                    f"game object {gid} spans arenas {sorted(arenas)} "
+                    f"(must be exactly one non-zero arena)",
+                )
+
+    def check_game_object_reachable(self):
+        """Every game_object use-tile must be BFS-reachable over collision from a
+        map-border walkable cell."""
+        goal = {i for i, g in enumerate(self.w.game_object) if g != "0"}
+        if not goal:
+            return
+        reached = self._flood_from_border()
+        stuck = sorted(goal - reached)
+        if stuck:
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "gobj-unreachable",
+                f"{len(stuck)} game_object use-tiles are unreachable",
+            )
+
+    def _flood_from_border(self):
+        W, H, coll = self.w.W, self.w.H, self.w.collision
+        seen = [False] * (W * H)
+        q = deque()
+        for x in range(W):
+            for y in (0, H - 1):
+                i = y * W + x
+                if coll[i] == "0" and not seen[i]:
+                    seen[i] = True
+                    q.append((x, y))
+        for y in range(H):
+            for x in (0, W - 1):
+                i = y * W + x
+                if coll[i] == "0" and not seen[i]:
+                    seen[i] = True
+                    q.append((x, y))
+        while q:
+            x, y = q.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < W and 0 <= ny < H:
+                    j = ny * W + nx
+                    if coll[j] == "0" and not seen[j]:
+                        seen[j] = True
+                        q.append((nx, ny))
+        return {i for i, s in enumerate(seen) if s}
+
     def run(self):
         self.check_orphan_block_rows()
         self.check_orphan_paint()
@@ -582,6 +761,12 @@ class Checker:
         self.check_drawn_vs_present()
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
+        self.check_furniture_solidity()
+        self.check_walkable_allowlist_fresh()
+        self.check_game_object_orphans()
+        self.check_game_object_use_tiles_walkable()
+        self.check_game_object_containment()
+        self.check_game_object_reachable()
         return self
 
 
