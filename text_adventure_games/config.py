@@ -284,9 +284,10 @@ class GameConfig:
 
         Reads the same ``LLM_*`` vars as
         :func:`~text_adventure_games.llm_client.client_from_env` for the LLM
-        section, plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for rendering and
-        ``LLM_LOG`` / ``LLM_LOG_PROMPTS`` / ``LLM_MAX_COST`` for the usage log and
-        cost ceiling. Anything unset keeps its default.
+        section -- including the resilience knobs ``LLM_MAX_RETRIES`` and
+        ``LLM_API_TIMEOUT_SEC`` -- plus ``OUTPUT_LEVEL`` and ``NO_COLOR`` for
+        rendering and ``LLM_LOG`` / ``LLM_LOG_PROMPTS`` / ``LLM_MAX_COST`` for the
+        usage log and cost ceiling. Anything unset keeps its default.
         """
         config = cls()
         provider = os.environ.get("LLM_PROVIDER")
@@ -297,6 +298,12 @@ class GameConfig:
                 model=os.environ.get("LLM_MODEL"),
                 base_url=os.environ.get("LLM_BASE_URL"),
                 verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+                max_retries=int(
+                    os.environ.get("LLM_MAX_RETRIES", LlmConfig.max_retries)
+                ),
+                timeout_sec=float(
+                    os.environ.get("LLM_API_TIMEOUT_SEC", LlmConfig.timeout_sec)
+                ),
             )
         level = os.environ.get("OUTPUT_LEVEL", "").strip().lower()
         if level in ("quiet", "normal", "verbose"):

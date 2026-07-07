@@ -691,6 +691,13 @@ def main() -> None:
                     model=model,
                     base_url=os.environ.get("LLM_BASE_URL"),
                     verbose=os.environ.get("LLM_VERBOSE", "").lower() in ("1", "true"),
+                    # Resilience for the call-heavy real bake (issue #260).
+                    max_retries=int(
+                        os.environ.get("LLM_MAX_RETRIES", LlmConfig.max_retries)
+                    ),
+                    timeout_sec=float(
+                        os.environ.get("LLM_API_TIMEOUT_SEC", LlmConfig.timeout_sec)
+                    ),
                 ),
                 ledger=ledger,
             )
