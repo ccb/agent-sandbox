@@ -98,13 +98,16 @@ def make_world(tmp_path, edit=None):
         sector[y * W + x] = "1"
         arena[y * W + x] = "1"  # grounds
         collision[y * W + x] = "1"
+    game_object = ["0"] * N
     matrix_files = {
         "maze/collision_maze.csv": collision,
         "maze/arena_maze.csv": arena,
         "maze/sector_maze.csv": sector,
+        "maze/game_object_maze.csv": game_object,
         "special_blocks/arena_blocks.csv": [["1", "UPenn", "Test Hall", "grounds"]],
         "special_blocks/sector_blocks.csv": [["1", "UPenn", "Test Hall"]],
         "special_blocks/world_blocks.csv": [["1", "UPenn"]],
+        "special_blocks/game_object_blocks.csv": [],
         "maze_meta_info.json": {
             "world_name": "UPenn",
             "maze_width": W,
@@ -340,6 +343,13 @@ def test_baseline_only_lists_real_current_errors():
     }
     stale = baseline - live
     assert not stale, f"baseline lists errors no longer present: {stale}"
+
+
+def test_furniture_is_solid_on_real_data():
+    c = v.Checker(real_world()).run()
+    codes = {(f.code, f.severity) for f in c.findings}
+    assert ("furniture-solid", "ok") in codes
+    assert not [f for f in c.errors() if f.code == "furniture-not-solid"]
 
 
 def test_main_exit_code_and_json(tmp_path, capsys):
