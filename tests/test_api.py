@@ -31,6 +31,13 @@ from backend.smallville_agents import (  # noqa: E402
 )
 from text_adventure_games import games, things  # noqa: E402
 from text_adventure_games.npc import ScriptedAgent  # noqa: E402
+from text_adventure_games.planning import (  # noqa: E402
+    DailyPlan,
+    DayBlock,
+    HourBlock,
+    Stop,
+    replace_tail,
+)
 from text_adventure_games.usage import UsageLedger  # noqa: E402
 
 
@@ -730,6 +737,130 @@ def test_retrieval_requires_auth_when_token_configured():
         headers={"Authorization": "Bearer s3cret"},
     )
     assert ok.status_code == 200
+
+
+# --- GET /agents/{name}/plan (#347) ----------------------------------------
+
+
+def _seed_plan(npc):
+    """Attach a DailyPlan the way the sim builder does (``agent.plan``).
+
+    A small but complete plan -- a day block, an hour block, and two stops --
+    so the endpoint has all three altitude levels to serialize. Returns the
+    plan for chaining."""
+    plan = DailyPlan(
+        day=[DayBlock(label="morning", summary="tend the garden")],
+        hours=[HourBlock(start_hour=8, summary="water the beds, then gather wood")],
+        stops=[
+            Stop(place="Field", activity="water the tall grass", emoji="💧", steps=3),
+            Stop(place="Forest", activity="gather kindling", emoji="🪵", steps=2),
+        ],
+    )
+    npc.agent.plan = plan
+    return plan
+
+
+def test_plan_endpoint_returns_the_daily_plan():
+    game, npc = _with_agent()
+    _seed_plan(npc)
+    payload = _client(game).get("/agents/gardener/plan").json()
+    assert set(payload) == {"persona", "turn", "revision", "plan"}
+    assert payload["persona"] == "gardener"
+    assert payload["turn"] == 0
+    assert payload["revision"] == 0  # freshly generated, not yet revised
+    assert set(payload["plan"]) == {"day", "hours", "stops", "revision"}
+    assert [s["place"] for s in payload["plan"]["stops"]] == ["Field", "Forest"]
+
+
+def test_plan_matches_to_primitive():
+    # The endpoint emits DailyPlan.to_primitive() verbatim -- the same shape the
+    # bake writes to personas/<name>/daily_plan.json -- so a live read and the
+    # baked artifact can never drift apart.
+    game, npc = _with_agent()
+    plan = _seed_plan(npc)
+    payload = _client(game).get("/agents/gardener/plan").json()
+    assert payload["plan"] == plan.to_primitive()
+    assert payload["revision"] == plan.revision
+
+
+def test_plan_reflects_a_mid_run_revision():
+    # The acceptance test for #347: after a plan is revised mid-run, revision
+    # increments and the new tail is visible; the executed head is preserved.
+    game, npc = _with_agent()
+    _seed_plan(npc)
+    client = _client(game)
+    before = client.get("/agents/gardener/plan").json()
+    assert before["revision"] == 0
+    # replace_tail is the sanctioned mid-day revision (what maybe_revise_plan
+    # commits): keep stop 0, rewrite the rest, bump revision.
+    npc.agent.plan = replace_tail(
+        npc.agent.plan,
+        after=0,
+        new_stops=[Stop(place="Field", activity="rake the leaves", steps=4)],
+    )
+    after = client.get("/agents/gardener/plan").json()
+    assert after["revision"] == 1
+    stops = after["plan"]["stops"]
+    assert stops[0]["place"] == "Field"  # the executed head is preserved verbatim
+    assert stops[0]["activity"] == "water the tall grass"
+    assert stops[-1]["activity"] == "rake the leaves"  # the new tail appears
+
+
+def test_plan_absent_when_agent_never_planned():
+    # A bound agent whose brain never planned (a bare ScriptedAgent, agent.plan
+    # unset) is a 200 with plan/revision null -- absent, not an error, since a
+    # plan may still be generated later (like "no memories yet" is a 200 []).
+    game, _npc = _with_agent()
+    payload = _client(game).get("/agents/gardener/plan").json()
+    assert payload == {
+        "persona": "gardener",
+        "turn": 0,
+        "revision": None,
+        "plan": None,
+    }
+
+
+def test_plan_unknown_character_is_404():
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/nobody/plan")
+    assert resp.status_code == 404
+    assert "unknown" in resp.json()["detail"]
+
+
+def test_plan_character_without_agent_is_404():
+    # Like the memory/knowledge siblings, the /agents/ family reads a *mind*: the
+    # player has no agent bound, so there is no plan to read.
+    game, _npc = _with_agent()
+    resp = _client(game).get("/agents/player/plan")
+    assert resp.status_code == 404
+    assert "no agent" in resp.json()["detail"]
+
+
+def test_plan_get_is_read_only():
+    game, npc = _with_agent()
+    _seed_plan(npc)
+    client = _client(game)
+    a = client.get("/agents/gardener/plan").json()
+    b = client.get("/agents/gardener/plan").json()
+    assert a == b  # deterministic + unchanged
+    assert game.turn == 0  # a GET never advanced the game
+
+
+def test_plan_requires_auth_when_token_configured():
+    game, npc = _with_agent()
+    _seed_plan(npc)
+    client = _client(game, auth_token="s3cret")
+    assert client.get("/agents/gardener/plan").status_code == 401
+    ok = client.get("/agents/gardener/plan", headers={"Authorization": "Bearer s3cret"})
+    assert ok.status_code == 200
+
+
+def test_plan_persona_name_with_space():
+    game, npc = _with_agent(name="Maya Chen")
+    _seed_plan(npc)
+    client = _client(game)
+    assert client.get("/agents/Maya%20Chen/plan").json()["persona"] == "Maya Chen"
+    assert client.get("/agents/maya%20chen/plan").status_code == 404
 
 
 # --- #186 security posture ------------------------------------------------
