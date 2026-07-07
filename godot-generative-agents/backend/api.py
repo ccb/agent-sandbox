@@ -24,6 +24,9 @@ Endpoints (composing the engine's world-state export #90 + change feed):
 * ``GET  /agents/{name}/retrieval?q=`` -> the memories *name*'s retriever would
   surface for a cue, scored most-useful-first but **not attended to** (issue
   #346) -- a read-only (``touch=False``) window onto decision-time retrieval.
+* ``GET  /agents/{name}/plan`` -> what *name* *intends to do today* (issue #347)
+  -- the live counterpart of the baked ``daily_plan.json``: the day outline,
+  hourly schedule, and stops, plus a ``revision`` counter that bumps on replan.
 * ``POST /command``      body ``{"command": "go north"}`` -> the resulting
   change-feed ``events``, the new ``world_state`` snapshot, and ``game_over``.
 
@@ -263,6 +266,36 @@ class KnowledgeResponse(BaseModel):
     turn: int
     count: int = Field(..., description="== len(beliefs)")
     beliefs: list[BeliefEntry]
+
+
+class PlanResponse(BaseModel):
+    """``GET /agents/{name}/plan``: what *name* intends to do today (#347).
+
+    The intentions sibling of the memory / knowledge reads: memory is what the
+    agent *remembers*, knowledge what it *believes*, and this is what it *plans*.
+    ``plan`` is the verbatim ``DailyPlan.to_primitive()`` shape -- the same object
+    the bake writes to ``personas/<name>/daily_plan.json`` -- so a live read and a
+    baked artifact can never drift (the #298 rule: one formatter for both). It
+    carries the day outline, the hourly schedule, and the ``stops`` the step loop
+    walks. ``revision`` is lifted out of the plan to the top level so a client can
+    poll it cheaply and refetch only when a mid-run replan bumps it. An agent
+    whose brain never planned (a bare ``ScriptedAgent``) is ``plan: null`` /
+    ``revision: null`` -- a 200, since a plan may still be generated later, the
+    same way "no memories yet" is a 200 with ``memories: []``. ``turn`` is the
+    engine turn it was snapshotted at (same counter ``GET /health`` reports)."""
+
+    persona: str
+    turn: int
+    revision: int | None = Field(
+        None,
+        description="the plan's revision counter (0 when first generated, bumped "
+        "on each mid-run replan); null when the agent has no plan yet",
+    )
+    plan: dict | None = Field(
+        None,
+        description="DailyPlan.to_primitive() (day / hours / stops / revision), "
+        "the same shape the bake writes; null when the agent has no plan yet",
+    )
 
 
 class LiveStatusResponse(BaseModel):
@@ -698,6 +731,51 @@ def create_app(
                 "turn": game.turn,
                 "count": len(beliefs),
                 "beliefs": beliefs,
+            }
+
+    @app.get("/agents/{name}/plan", response_model=PlanResponse)
+    def agent_plan(name: str, _: None = Depends(require_auth)):
+        """What *name* intends to do today (#347).
+
+        The live counterpart of the baked ``personas/<name>/daily_plan.json``:
+        the agent's :class:`~text_adventure_games.planning.DailyPlan` -- day
+        outline, hourly schedule, and the ``stops`` the step loop walks --
+        serialized through the plan's own ``to_primitive()``, so a live read and
+        the baked artifact are byte-identical (the #298 rule: one formatter for
+        both, so they can never drift). Where ``/memory`` shows what the agent
+        *remembers* and ``/knowledge`` what it *believes*, this is what it
+        *plans*; together they are the agent card.
+
+        ``revision`` is hoisted to the top level so a client can poll it cheaply
+        and refetch the (larger) plan only when a mid-run replan
+        (``maybe_revise_plan``) bumps it. The 404 story matches the memory
+        sibling: an unknown character 404s, and so does one with no agent bound
+        (the player, a scripted-behavior NPC) -- there is no mind whose plan to
+        read. An agent that is bound but whose brain never planned (a bare
+        ``ScriptedAgent``, ``agent.plan`` unset) is a 200 with ``plan: null`` /
+        ``revision: null`` -- absent, not an error, since a plan may still be
+        generated later (mirroring "no memories yet" being a 200 with an empty
+        stream). Read under the shared lock, so ``turn``, ``revision``, and
+        ``plan`` are one atomic snapshot."""
+        with lock:
+            char = game.characters.get(name)
+            if char is None:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown character: {name!r}"
+                )
+            if char.agent is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"character {name!r} has no agent (and so no plan)",
+                )
+            # A bare agent whose brain never planned has no .plan attribute at
+            # all; treat that as "no plan yet" (200, null), not a 500.
+            plan = getattr(char.agent, "plan", None)
+            return {
+                "persona": name,
+                "turn": game.turn,
+                "revision": plan.revision if plan is not None else None,
+                "plan": plan.to_primitive() if plan is not None else None,
             }
 
     @app.get("/live", response_model=LiveStatusResponse)

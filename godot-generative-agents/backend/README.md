@@ -17,8 +17,8 @@ it's imported as the top-level `backend` package via the editable install, so
 
 It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
 **snapshot + change-feed contract** — plus the on-demand reads of an agent's
-private cognition: its memory stream (issue #298) and its belief set (issue
-#348), plus **live mode** (issues #349, #262): an opt-in self-stepping loop that
+private cognition: its memory stream (issue #298), its belief set (issue #348),
+and its daily plan (issue #347), plus **live mode** (issues #349, #262): an opt-in self-stepping loop that
 advances the sim on its own and publishes each step to a cursor-addressed change
 feed a viewer follows over `WS /ws` (with `GET /events?since=` as the catch-up
 door), controlled by `POST /pause|/resume|/reset`. See
@@ -39,6 +39,7 @@ door), controlled by `POST /pause|/resume|/reset`. See
   - [`GET /agents/{name}/memory`](#get-agentsnamememory)
   - [`GET /agents/{name}/knowledge`](#get-agentsnameknowledge)
   - [`GET /agents/{name}/retrieval`](#get-agentsnameretrieval)
+  - [`GET /agents/{name}/plan`](#get-agentsnameplan)
   - [`POST /command`](#post-command)
 - [Live mode: the loop, the feed, run control (#349/#262)](#live-mode-the-loop-the-feed-run-control-349262)
   - [`GET /live`](#get-live)
@@ -51,6 +52,7 @@ door), controlled by `POST /pause|/resume|/reset`. See
 - [The `events` change feed](#the-events-change-feed)
 - [The memory stream](#the-memory-stream)
 - [The belief set](#the-belief-set)
+- [The daily plan](#the-daily-plan)
 - [Authentication & security](#authentication--security)
 - [CORS](#cors)
 - [Quick start (a full curl walkthrough)](#quick-start-a-full-curl-walkthrough)
@@ -101,7 +103,7 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Thirteen endpoints. `GET`s are read-only; `POST /command` advances the game by
+Fourteen endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn); the live routes observe and steer the
 self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed-run-control-349262)).
 
@@ -113,6 +115,7 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `GET`  | `/agents/{name}/memory`    | One agent's memory stream, formed so far (#298)    |
 | `GET`  | `/agents/{name}/knowledge` | One agent's belief set (world-model) (#348)        |
 | `GET`  | `/agents/{name}/retrieval` | What an agent would recall for a cue, read-only (#346) |
+| `GET`  | `/agents/{name}/plan`      | One agent's daily plan / intentions (#347)         |
 | `POST` | `/command`                 | Run one command → events + new snapshot            |
 | `GET`  | `/live`                    | Live-mode handshake: loop state + world `meta` (#262) |
 | `GET`  | `/events`                  | Change-feed catch-up: records after `?since=` (#262) |
@@ -448,6 +451,64 @@ curl -s 'http://127.0.0.1:8080/agents/gardener/retrieval?q=forest'
 curl -s 'http://127.0.0.1:8080/agents/gardener/retrieval?q=forest&limit=3'
 ```
 
+### `GET /agents/{name}/plan`
+
+Returns the named agent's **daily plan** — what it *intends to do today* (issue
+#347). This completes the agent card: **memory** is what it remembers, **knowledge**
+what it believes, and this is what it **plans**. The plan is the agent's
+`DailyPlan` (`text_adventure_games/planning.py`) at three altitudes — a `day`
+outline, an `hours` schedule, and the concrete `stops` (`{place, activity, emoji,
+steps}`) the step loop actually walks. It is the **live counterpart of the baked
+`personas/<name>/daily_plan.json`**: both go through the plan's own
+`to_primitive()`, so a live read and the baked artifact can never drift (the #298
+rule — one formatter for both). See [The daily plan](#the-daily-plan) for the shape.
+
+`{name}` is the character's exact name — **case-sensitive** — URL-encoded as usual
+(`/agents/Maya%20Chen/plan`).
+
+**Response** `200 OK` — `PlanResponse` (illustrative — the shape a planned agent returns):
+
+```json
+{
+  "persona": "Maya Chen",
+  "turn": 42,
+  "revision": 1,
+  "plan": {
+    "day": [{ "label": "morning", "summary": "open and run the cafe" }],
+    "hours": [{ "start_hour": 8, "summary": "tend the counter, then buy milk" }],
+    "stops": [
+      { "place": "Hays Cafe", "activity": "brew the morning batch", "emoji": "☕", "steps": 6 },
+      { "place": "The Willows Market", "activity": "buy milk", "emoji": "🥛", "steps": 3 }
+    ],
+    "revision": 1
+  }
+}
+```
+
+`revision` is **hoisted to the top level** so a client can poll it cheaply and
+refetch the (larger) plan only when a mid-run replan bumps it — it starts at `0`
+when the plan is first generated and increments each time `maybe_revise_plan`
+rewrites the not-yet-executed tail. `turn` is the engine turn the plan was
+snapshotted at (the same counter `GET /health` reports). The nested `plan` is
+`DailyPlan.to_primitive()` verbatim (note it carries its own `revision`, mirrored
+by the top-level field).
+
+An agent that is bound but whose brain **never planned** (a bare `ScriptedAgent`)
+returns `200` with `"plan": null` and `"revision": null` — absent, not an error,
+since a plan may still be generated later (the same way "no memories yet" is a
+`200` with `"memories": []`). The stock demo gardener is exactly this case.
+
+**Errors** — the two family `404`s:
+
+| Case                                             | `detail`                                              |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| No character by that name                        | `unknown character: 'nobody'`                         |
+| Character exists but has **no agent** bound (the player, a scripted-behavior NPC) | `character 'player' has no agent (and so no plan)` |
+
+```bash
+curl -s http://127.0.0.1:8080/agents/gardener/plan   # stock demo → "plan": null
+```
+
 ### `POST /command`
 
 Runs exactly one command and returns what happened, the new world, and whether
@@ -660,7 +721,7 @@ ceiling (#183); `over_budget` flips when the kill-switch trips.
 | ------ | ------------------------------------------------------------------------------------- |
 | `200`  | Success — **including a command the engine rejected** (surfaced as a `blocked` event) |
 | `401`  | A token is configured and the `Authorization: Bearer <token>` header is missing/wrong |
-| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge,retrieval}`, an unknown character or one with no agent |
+| `404`  | Unknown path; on `/agents/{name}/{memory,knowledge,retrieval,plan}`, an unknown character or one with no agent |
 | `409`  | Run control without a loop enabled; or `POST /command` while the loop is actively stepping (pause first) |
 | `413`  | Request body exceeds the cap (64 KiB by default) — rejected before it is read         |
 | `422`  | Invalid request body: missing / empty / non-string `command`, or malformed JSON       |
@@ -829,6 +890,47 @@ legitimately empty (`"beliefs": []`), not an error.
 later. Today it reads the in-process `Knowledge` under the same lock
 `POST /command` mutates under, so `turn` and `beliefs` are one atomic snapshot.
 
+## The daily plan
+
+The data model behind [`GET /agents/{name}/plan`](#get-agentsnameplan). The nested
+`plan` object is **the exact shape `DailyPlan.to_primitive()` emits**
+(`text_adventure_games/planning.py`; design doc `docs/design/daily-planning.md`) —
+the same object the bake writes to `personas/<name>/daily_plan.json`, so the wire
+*is* the baked artifact and there is no second schema to drift. It holds the plan
+at three altitudes plus a revision counter:
+
+| Field      | Type          | Meaning                                                                 |
+| ---------- | ------------- | ----------------------------------------------------------------------- |
+| `day`      | `DayBlock[]`  | The broad day outline — `{label, summary}` phrases ("morning": "open the cafe") |
+| `hours`    | `HourBlock[]` | The hourly schedule — `{start_hour, summary}`, one per in-sim hour       |
+| `stops`    | `Stop[]`      | The concrete minute plan the step loop walks — `{place, activity, emoji, steps}` |
+| `revision` | `int`         | `0` when first generated; bumped on each mid-run replan                  |
+
+A `Stop`'s `place` must resolve to a known `Location` name when executed;
+`activity` is free text; `emoji` is an optional glyph a viewer renders; `steps` is
+how many sim steps to perform the activity for (`null` = stay indefinitely). The
+step loop only consumes `stops`; `day`/`hours` are the higher-altitude reasoning,
+kept so retrieval, reflection, and revision see the agent's intentions at every
+level (they are also written into the memory stream as `plan`-kind records).
+
+**Why `revision` is also at the top level.** The response lifts `plan.revision`
+out to a sibling field so a client can **poll `revision` cheaply and refetch the
+whole plan only when it changes** — a mid-run replan (`maybe_revise_plan` →
+`planning.replace_tail`) preserves the already-executed head of `stops` and
+rewrites the tail, bumping `revision`. The top-level value always equals the
+nested `plan.revision`.
+
+**Memory vs. knowledge vs. plan.** The three halves — er, thirds — of an agent's
+private cognition, one `/agents/{name}/...` read each: memory is what it
+*remembers* (#298), knowledge what it *believes* (#348), plan what it *intends*
+(#347). An agent whose brain never planned has no plan yet, so the read is a `200`
+with `"plan": null` (like an empty memory stream is `200 []`), never a `404`.
+
+**Forward pointers.** Same trajectory as the sibling reads: a persistent store
+(#304) and run-scoping (`/runs/{run_id}/agents/{name}/plan`, #306) come later.
+Today it reads the in-process `DailyPlan` under the same lock `POST /command`
+mutates under, so `turn`, `revision`, and `plan` are one atomic snapshot.
+
 ## Authentication & security
 
 Issue #186. The defaults are tuned for **local development**:
@@ -951,9 +1053,9 @@ Deferred (don't expect these yet):
 - a **real-LLM brain** inside the live loop — #261; today's steppers are
   scripted/mock (that's the point: the whole live surface works offline);
 - a persistent store behind the private-cognition reads, and run-scoping
-  (`/runs/{run_id}/agents/{name}/{memory,knowledge}`) — #304/#306; today
-  `/agents/{name}/memory` and `/agents/{name}/knowledge` read the live in-process
-  `AgentMemory` / `Knowledge`;
+  (`/runs/{run_id}/agents/{name}/{memory,knowledge,plan}`) — #304/#306; today
+  `/agents/{name}/memory`, `/agents/{name}/knowledge`, and `/agents/{name}/plan`
+  read the live in-process `AgentMemory` / `Knowledge` / `DailyPlan`;
 - migrating the Flask webapp and the web companion from file-based replay to
   thin clients of this API (the Godot viewer's live client is #263, built on
   this feed).
