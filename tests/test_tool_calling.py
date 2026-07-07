@@ -77,6 +77,10 @@ def _make_openai(fake_sdk):
     client._model = "gpt-4o-mini"
     client._verbose = False
     client._tokenizer = None
+    # Resilience attrs the real __init__ would set (issue #260). A no-op sleep
+    # keeps any retry test instant; RuntimeError("boom") stays non-retryable.
+    client._max_retries = 2
+    client._sleep = lambda *a, **k: None
     return client
 
 
@@ -85,6 +89,8 @@ def _make_anthropic(fake_sdk):
     client._client = fake_sdk
     client._model = "claude-sonnet-4-20250514"
     client._verbose = False
+    client._max_retries = 2
+    client._sleep = lambda *a, **k: None
     return client
 
 
