@@ -17,7 +17,7 @@ extends Node
 # intentionally excluded. Add new gameplay/view scenes here as they're created.
 const SCENES := [
 	"res://scenes/campus_urban.tscn",
-	"res://scenes/penn_replay.tscn",
+	"res://scenes/viewer.tscn",
 ]
 
 
@@ -25,10 +25,15 @@ func _ready() -> void:
 	var failures := 0
 	for path in SCENES:
 		failures += await _check_scene(path)
+	# The landing menu (issue #399) builds its whole UI in code, so it has no tiles
+	# to count — it gets its own check (does it paint any buttons?) rather than a
+	# spot in SCENES, which would trip the tile-cells assertion.
+	failures += await _check_menu()
+	var checks := SCENES.size() + 1
 	if failures == 0:
-		print("smoke_test: PASS — %d scene(s) OK" % SCENES.size())
+		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
-		printerr("smoke_test: FAIL — %d of %d scene(s) had problems" % [failures, SCENES.size()])
+		printerr("smoke_test: FAIL — %d of %d scene(s) had problems" % [failures, checks])
 	get_tree().quit(1 if failures > 0 else 0)
 
 
@@ -69,4 +74,44 @@ func _count_tile_cells(node: Node) -> int:
 		total += (node as TileMapLayer).get_used_cells().size()
 	for child in node.get_children():
 		total += _count_tile_cells(child)
+	return total
+
+
+# Returns 0 if the landing menu is healthy, 1 if it failed a check.
+func _check_menu() -> int:
+	var path := "res://scenes/main_menu.tscn"
+	var packed: PackedScene = load(path)
+	if packed == null:
+		printerr("  %s: could not load scene (missing file or broken script ref)" % path)
+		return 1
+	var inst: Node = packed.instantiate()
+	if inst == null:
+		printerr("  %s: could not instantiate scene" % path)
+		return 1
+
+	add_child(inst)
+	# main_menu.gd builds every Control in _ready(), which runs during add_child; a
+	# couple of idle frames also lets the backdrop SubViewport settle.
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var buttons := _count_buttons(inst)
+	inst.queue_free()
+	await get_tree().process_frame
+
+	if buttons <= 0:
+		printerr("  %s: menu painted 0 buttons (broken _ready?)" % path)
+		return 1
+	print("  %s: OK (%d menu button(s))" % [path, buttons])
+	return 0
+
+
+# Count the Button descendants of a node — the menu builds its choices in code, so
+# zero buttons means _ready() bailed before laying the UI out.
+func _count_buttons(node: Node) -> int:
+	var total := 0
+	if node is Button:
+		total += 1
+	for child in node.get_children():
+		total += _count_buttons(child)
 	return total

@@ -30,7 +30,7 @@ Run order (each step feeds the next; commit the updated artifacts):
     uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
     uv run python tools/geo/furnish_building.py                          # furnish Williams
     uv run python tools/geo/frame_edges.py                               # THIS -- run last
-    uv run python godot-generative-agents/sim/generate_penn_replay.py    # re-bake the replay
+    uv run python godot-generative-agents/backend/penn/generate_penn_replay.py    # re-bake the replay
 
 Why last: it shifts whole layers, so the ``williams_*`` layers furnish_building added
 get translated correctly along with everything else.
@@ -418,25 +418,26 @@ def patch_world_data(path: str, pad: int) -> None:
 def main() -> int:
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(os.path.dirname(here))
-    godot = os.path.join(repo, "godot-generative-agents")
+    gg = os.path.join(repo, "godot-generative-agents")
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument(
-        "--tmj", default=os.path.join(godot, "maps", "upenn_core_urban.tmj")
+        "--tmj", default=os.path.join(gg, "godot", "maps", "upenn_core_urban.tmj")
     )
     ap.add_argument(
-        "--matrix", default=os.path.join(godot, "sim", "the_upenn", "matrix")
+        "--matrix", default=os.path.join(gg, "backend", "penn", "the_upenn", "matrix")
     )
     ap.add_argument(
-        "--world-data", default=os.path.join(godot, "sim", "world_data_upenn.yaml")
+        "--world-data",
+        default=os.path.join(gg, "backend", "penn", "world_data_upenn.yaml"),
     )
     ap.add_argument(
         "--scenes",
         nargs="*",
         default=[
-            os.path.join(godot, "scenes", "penn_replay.tscn"),
-            os.path.join(godot, "scenes", "campus_urban.tscn"),
+            os.path.join(gg, "godot", "scenes", "viewer.tscn"),
+            os.path.join(gg, "godot", "scenes", "campus_urban.tscn"),
         ],
     )
     ap.add_argument(

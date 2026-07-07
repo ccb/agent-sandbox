@@ -4,7 +4,7 @@ extends PanelContainer
 ## A live real-LLM run spends money every step and can stall on the provider;
 ## this small HUD makes spend and liveness visible and gives the operator a
 ## one-click stop. It is pure UI, in the same shape as agent_panel.gd and
-## minimap.gd: it knows nothing about backends or replays. penn_replay.gd wires
+## minimap.gd: it knows nothing about backends or replays. viewer.gd wires
 ## a *source* (hud_source_replay.gd today, hud_source_live.gd when a backend is
 ## running) whose signals drive the setters below, and routes our
 ## `stop_requested` back to that source -- so switching from simulated to real

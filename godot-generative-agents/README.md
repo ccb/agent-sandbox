@@ -5,18 +5,39 @@ University of Pennsylvania campus** in Godot and plays back a generative-agents
 simulation walking across it. It's a *viewer*: the simulation runs offline in Python
 (the rest of this repo) and Godot draws the world + the agents moving through it.
 
+## Project layout
+
+Three parts sit side by side here. You run the game and choose replay-vs-live from
+the **in-game menu** — there's no separate "replay" vs "live" launch script anymore:
+
+- **`godot/`** — the Godot 4.6 game and the `res://` project root. Open *this* folder
+  in the editor (or run `./run.sh`). Holds the scenes, scripts, art, and campus maps.
+- **`backend/`** — the Python simulation engine + headless HTTP API (imported as the
+  top-level `backend` package). The Penn world lives under **`backend/penn/`**: the
+  cast (`world_data_upenn.yaml`), the OSM-derived navigation grid (`the_upenn/`), and
+  the replay/live entry points (`generate_penn_replay.py`, `serve_penn.py`).
+- **`web/`** — a React/Vite shell that wraps a WebAssembly export of the game.
+
+Paths below are relative to the Godot project (`godot/`) unless noted.
+
 ## What's in the scene
 
-Two scenes render the same campus — the academic core block (34th–36th ×
-Spruce–Walnut), built from OpenStreetMap data by the repo's geo tool
-(`tools/geo/osm_to_tiled.py`) and drawn with **Kenney's RPG Urban Pack (CC0)**:
+The game opens on a **landing menu** — the front door where you pick how to enter
+the viewer (a replay, a local replay file, or a live backend). Behind it, two scenes
+render the same campus — the academic core block (34th–36th × Spruce–Walnut), built
+from OpenStreetMap data by the repo's geo tool (`tools/geo/osm_to_tiled.py`) and
+drawn with **Kenney's RPG Urban Pack (CC0)**:
 
-- **`scenes/campus_urban.tscn`** — the campus on its own (the **default** scene):
-  brick buildings, asphalt streets, tan paving for Locust Walk, green lawns. Pan and
-  zoom to explore it.
-- **`scenes/penn_replay.tscn`** — the same campus with a **generative-agents
+- **`scenes/main_menu.tscn`** — the **front door** (the default scene): choose *Watch
+  a replay* (the bundled one or a local `.json` you point it at) or *Run a live
+  simulation* (connect to a running backend), and it hands off to the viewer. Its
+  backdrop is the campus itself, rendered live behind the menu.
+- **`scenes/campus_urban.tscn`** — the campus on its own: brick buildings, asphalt
+  streets, tan paving for Locust Walk, green lawns. Pan and zoom to explore it.
+- **`scenes/viewer.tscn`** — the same campus with a **generative-agents
   simulation** playing on top: a few Penn personas walking between real buildings on
-  their daily schedules (see *Watching the Penn agent simulation* below).
+  their daily schedules (see *Watching the Penn agent simulation* below). The
+  sidebar's 🏠 button returns to the menu.
 
 Both share a generic map renderer (`scripts/tiled_map.gd`) and a pan/zoom camera
 (`scripts/camera_controls.gd`).
@@ -36,7 +57,7 @@ that `.tmj` with the [YATI](https://github.com/Kiamo2/YATI) addon, and the same 
 also loads natively in Phaser. (`maps/tilemap_packed.png` is the CC0 sheet it
 references.)
 
-`scripts/penn_replay.gd` drives the agent replay on top of that map — see *Watching
+`scripts/viewer.gd` drives the agent replay on top of that map — see *Watching
 the Penn agent simulation* below.
 
 ### Regenerating / swapping the campus map
@@ -46,8 +67,8 @@ to render the full campus instead of the 34th–38th × Spruce–Walnut core sub
 
 ```bash
 uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
-cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/maps/
-cp tools/geo/out/tilemap_packed.png    godot-generative-agents/maps/
+cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/godot/maps/
+cp tools/geo/out/tilemap_packed.png    godot-generative-agents/godot/maps/
 
 # Post-processes that the committed map bakes in (re-run after a fresh bake, in
 # this order — both edit maps/upenn_core_urban.tmj in place and are re-run safe):
@@ -68,15 +89,19 @@ verify the render.
 
 ## Running it
 
-Open the project folder in the Godot 4.6 editor and press **Play** (F5), or from a
-terminal:
+Open the **`godot/`** folder in the Godot 4.6 editor and press **Play** (F5), or from
+a terminal (these commands assume you're in this `godot-generative-agents/` folder):
 
 ```bash
-# The campus in real Kenney CC0 urban art (the default scene):
-/Applications/Godot.app/Contents/MacOS/Godot --path .
+# Launch the game — opens the landing menu, where you pick a replay or a live backend:
+./run.sh
 
-# Watch the agent simulation replay on the campus:
-/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
+# The same thing by hand (godot/ is the res:// project root, not this folder):
+/Applications/Godot.app/Contents/MacOS/Godot --path godot
+
+# Skip the menu and jump straight to a scene (deep links, unaffected by the menu):
+/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/campus_urban.tscn
+/Applications/Godot.app/Contents/MacOS/Godot --path godot res://scenes/viewer.tscn
 
 # Headless smoke test — load every scene and check its map painted (exit 0 = OK):
 ./run_smoke_test.sh
@@ -95,7 +120,7 @@ everything.
 
 ## Watching the Penn agent simulation
 
-`scenes/penn_replay.tscn` plays a **generative-agents simulation on the real
+`scenes/viewer.tscn` plays a **generative-agents simulation on the real
 campus**: a few Penn personas (a student, a professor, an architecture grad)
 walking between real buildings on their daily schedules. Godot is just the
 *viewer* — the simulation runs offline in Python and writes a replay file the
@@ -103,38 +128,45 @@ scene reads (the same split as the upstream Phaser replay):
 
 ```bash
 # 1. Run the sim -> maps/penn_replay.json (from the repo root, so uv finds the env):
-uv run python godot-generative-agents/sim/generate_penn_replay.py --steps 400
+uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
 
 # 2. Watch it:
-/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/penn_replay.tscn
+/Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/viewer.tscn
 ```
 
-The Penn world lives in [`sim/`](sim/): `world_data_upenn.yaml` (the cast — 3
-active personas while the live-LLM MVP keeps runs cheap; 4 more are parked in
-comments, ready to uncomment) and
-`the_upenn/` (the OSM-derived navigation grid from `tools/geo/osm_to_ville.py`).
-The agent *engine* (deciding, pathfinding) is reused from the `backend` package,
-so this is the same simulation that runs there — just rendered here instead of in
-Phaser. `scripts/penn_replay.gd` eases each persona tile-to-tile along the path the
-sim chose, with a name + activity label above each sprite. (`sim/` carries a
-`.gdignore` so Godot leaves the Python alone.)
+The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
+(the cast — 3 active personas while the live-LLM MVP keeps runs cheap; 4 more are
+parked in comments, ready to uncomment) and `the_upenn/` (the OSM-derived navigation
+grid from `tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
+the surrounding `backend` package, so this is the same simulation that runs there —
+just rendered here instead of in Phaser. `scripts/viewer.gd` eases each persona
+tile-to-tile along the path the sim chose, with a name + activity label above each
+sprite. (`backend/` sits beside the Godot project, not inside it, so Godot never
+touches the Python.)
 
 ### Live mode — follow a running sim (issue #263)
 
 The same scene can **follow a live simulation over real HTTP + WebSocket**
-instead of loading a baked file. `sim/serve_penn.py` steps the *same* configured
-Penn world (`sim/penn_world.py`, shared with the bake so the two can't drift —
+instead of loading a baked file. `backend/penn/serve_penn.py` steps the *same* configured
+Penn world (`backend/penn/penn_world.py`, shared with the bake so the two can't drift —
 issue #297) inside the backend's self-stepping live loop (#349/#262), and the
 viewer becomes a thin client of `backend/api.py`:
 
 ```bash
 # 1. Serve the live Penn sim (mock brain: real requests, zero keys, zero spend).
 #    From the repo root; needs the server extra (uv sync --extra server):
-uv run python godot-generative-agents/sim/serve_penn.py --tick-seconds 0.1
+uv run python godot-generative-agents/backend/penn/serve_penn.py --tick-seconds 0.1
 
 # 2. Point the viewer at it (the same switch the run monitor uses):
-SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 ```
+
+Or skip the env var entirely: launch the viewer normally so it opens the landing
+menu, type the backend's URL (and its token, if the server sets `SIM_API_TOKEN`)
+into **Run a live simulation**, and press **Connect**. The menu probes `GET /live`
+first, so a wrong URL or a backend with no live loop is reported right there instead
+of the viewer silently retrying. (`SIM_API_URL` / `SIM_API_TOKEN`, when set, prefill
+that form.)
 
 On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
 one `GET /events?since=0` backfill (history so far → jump to the live head),
@@ -159,7 +191,7 @@ with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
 ### Real-LLM live mode — Claude Haiku drives the cast (issue #261)
 
 `--brain llm` swaps the deterministic mock for the model declared in the
-simulation config (`sim/world_data_upenn.yaml`, the `llm:` block): **Anthropic
+simulation config (`backend/penn/world_data_upenn.yaml`, the `llm:` block): **Anthropic
 Claude Haiku (`claude-haiku-4-5`) on every model call** — each agent's
 travel/perform decisions, every line of dialogue when the routing brings two
 agents within perception range (the scripted `meetings:` dialogue stands down;
@@ -174,10 +206,10 @@ uv sync --extra server --extra llm
 # Serve with the real brain (terminal 1)…
 export ANTHROPIC_API_KEY=sk-ant-...   # or: cp .env.example .env and fill it in —
                                       # every backend CLI loads the repo-root .env
-uv run python godot-generative-agents/sim/serve_penn.py --brain llm
+uv run python godot-generative-agents/backend/penn/serve_penn.py --brain llm
 
 # …and watch it live (terminal 2), exactly as before:
-SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run_replay.sh
+SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 ```
 
 Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
@@ -199,6 +231,13 @@ auto-starting; `--start-paused` / `--no-start-paused` overrides either mode.
 running with nobody watching (`serve_penn` opts into the endpoint; the
 `shutdown_backend_on_exit` export on the scene turns the behavior off if you
 want a backend that outlives the window).
+
+**Going back to the menu does not.** The sidebar's 🏠 button returns to the
+landing page *without* shutting the backend down — it's for re-picking what to
+watch, not for ending the run. The menu prefills the URL you just left, so
+**Connect** reattaches to the same sim (the socket resumes with `?since=` and
+loses no frames). Use the window close, the run monitor's Emergency stop, or
+`POST /shutdown` when you actually want the sim to stop.
 
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):

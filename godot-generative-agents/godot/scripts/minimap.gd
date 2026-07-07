@@ -9,7 +9,7 @@ extends Control
 ## glides the main view to that spot.
 ##
 ## This panel is pure UI, like agent_panel.gd: it knows nothing about the agents or
-## the camera until penn_replay.gd hands them over. The viewer calls configure() once
+## the camera until viewer.gd hands them over. The viewer calls configure() once
 ## with the camera, add_agent() per persona after the replay loads, and wires our
 ## recenter_requested signal to the camera so a click moves the main view.
 
@@ -32,7 +32,7 @@ extends Control
 @export var frustum_color: Color = Color(1.0, 1.0, 1.0, 0.95)
 
 ## Emitted on a click or drag inside the minimap, with the world point under the
-## cursor; penn_replay.gd routes this to the camera's move_to() to glide the view.
+## cursor; viewer.gd routes this to the camera's move_to() to glide the view.
 signal recenter_requested(world_pos: Vector2)
 
 # Set once configure() has built the overview and learned the map's world bounds;
@@ -56,7 +56,7 @@ var _dimmed := {}
 
 func configure(camera: Camera2D) -> void:
 	# Hand the minimap the main camera and build its overview. Called once from
-	# penn_replay.gd._ready(), after the scene (this node included) is in the tree.
+	# viewer.gd._ready(), after the scene (this node included) is in the tree.
 	_camera = camera
 	_build_overview()
 	if _bounds.size.x <= 0.0 or _bounds.size.y <= 0.0:

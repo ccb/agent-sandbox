@@ -88,18 +88,21 @@ Flask app with a `WebParser` that buffers messages for the HTTP response. Import
 the game from `notebooks/hw1_solution/action_castle.py`. This is the human-facing
 HTML UI — distinct from the headless JSON API below.
 
-### Backend HTTP API: `backend/api.py` (issue #179)
+### Backend HTTP API: `godot-generative-agents/backend/api.py` (issue #179)
 
-The project's **one canonical backend seam**: a FastAPI app (`server` extra) that
-serves any engine `Game` over HTTP so every out-of-process frontend (Godot,
-Phaser, the web companion) polls the *same* endpoints instead of baking its own
-data path. `GET /health`, `GET /world_state` (the typed `WorldState` snapshot,
-#90), `POST /command` (advances one turn → change-feed `events` + new snapshot);
-the OpenAPI contract is at `/docs`. `create_app(game)` is game-agnostic;
-`run(game, host, port)` serves it (`uv sync --extra server`, then
-`uv run python -m backend.api` for a demo world). Security (#186): loopback +
-unauthenticated by default, a 64 KiB body cap, and `run()` refuses a non-loopback
-bind without `SIM_API_TOKEN` (then requires `Authorization: Bearer`).
+The **backend seam**: a FastAPI app (`server` extra) that serves any engine `Game`
+over HTTP so an out-of-process frontend (Godot, the web companion) polls the *same*
+endpoints instead of baking its own data path. `GET /health`, `GET /world_state`
+(the typed `WorldState` snapshot, #90), `POST /command` (advances one turn →
+change-feed `events` + new snapshot); the OpenAPI contract is at `/docs`.
+`create_app(game)` is game-agnostic; `run(game, host, port)` serves it
+(`uv sync --extra server`, then `uv run python -m backend.api` for a demo world).
+Security (#186): loopback + unauthenticated by default, a 64 KiB body cap, and
+`run()` refuses a non-loopback bind without `SIM_API_TOKEN` (then requires
+`Authorization: Bearer`). The `backend` package was folded into
+`godot-generative-agents/` in #399 (its import name is unchanged — `from backend…`
+and `python -m backend.api` still work; the root `tests/` and `generative-agents/`
+still import it via the editable install).
 
 ## Known issues / good first fixes
 
@@ -124,7 +127,10 @@ bind without `SIM_API_TOKEN` (then requires `Authorization: Bearer`).
   the long-lived `godot-ga-main` branch instead — branch off it and target your PR at
   it (reviewed by the Godot/geo owners, @aking526 + @0frankie, not the full `main`
   review). Anything touching the shared engine library (`text_adventure_games/`,
-  `backend/`, the root `tests/`, top-level docs, …) still goes through `main`. A change
-  spanning *both* the engine and godot/geo goes to `main`. Minor shared-config tweaks
+  the root `tests/`, top-level docs, …) still goes through `main`. A change
+  spanning *both* the engine and godot/geo goes to `main`. (The `backend` package
+  moved under `godot-generative-agents/backend/` in #399, so backend-only changes now
+  ride `godot-ga-main` with the rest of that project — even though the root `tests/`
+  and `generative-agents/` still import it.) Minor shared-config tweaks
   (`.gitignore`, `mkdocs/`) may ride along on `godot-ga-main` when they're in service
   of godot/geo work. `godot-ga-main` is cut from `main` and synced forward periodically.

@@ -4,7 +4,7 @@ shader_type canvas_item;
 // their perception radius is dimmed under a translucent grey cover, leaving a clear
 // circle around them (the same vision_r the sim uses to decide what they perceive).
 //
-// Driven by penn_replay.gd, which fills these uniforms each frame in the overlay
+// Driven by viewer.gd, which fills these uniforms each frame in the overlay
 // rect's own pixel space (a full-screen ColorRect on a CanvasLayer):
 //   center    -- the tracked agent's on-screen position
 //   radius    -- fully-clear radius around them, in screen pixels

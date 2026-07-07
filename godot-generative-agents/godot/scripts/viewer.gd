@@ -1,7 +1,7 @@
 extends Node2D
 ## Plays a UPenn agent-simulation replay on the campus map.
 ##
-## The Python sim (sim/generate_penn_replay.py) writes maps/penn_replay.json:
+## The Python sim (backend/penn/generate_penn_replay.py) writes maps/penn_replay.json:
 ## per step, each persona's tile (x, y) + current activity + emoji. This scene
 ## renders the campus (a sibling TileMapLayer running tiled_map.gd) and animates
 ## one Cute Fantasy sprite per persona, easing it tile-to-tile along its path —
@@ -11,7 +11,7 @@ extends Node2D
 ## With a backend URL configured (live_backend_url / SIM_API_URL), the same
 ## scene instead FOLLOWS a running sim live (issue #263): a GET /live handshake
 ## spawns the cast, GET /events backfills history, and a WebSocket to /ws
-## streams each new step (sim/serve_penn.py is the matching server). Frames
+## streams each new step (backend/penn/serve_penn.py is the matching server). Frames
 ## land in the same _frames array, so playback and every feature work
 ## unchanged; only the scrubber locks (you can't seek a live stream).
 
@@ -259,6 +259,10 @@ func _ready() -> void:
 	# the replay loads (see _load_replay_from_text).
 	_panel.filter_changed.connect(_on_filter_changed)
 
+	# The sidebar's back button returns to the landing menu (issue #399). Unlike a
+	# window close it leaves any live backend running (see _on_back_to_menu).
+	_panel.back_to_menu_requested.connect(_on_back_to_menu)
+
 	# The top-right run monitor and its data source (simulated or live).
 	_setup_hud()
 
@@ -290,6 +294,11 @@ func _ready() -> void:
 	# pick is dead until we switch it on for this scene's viewport.
 	get_viewport().physics_object_picking = true
 
+	# A replay picked on the landing menu (bundled or a local file, issue #399)
+	# overrides the exported default path. Live and direct launches leave it be.
+	if LaunchConfig.mode == LaunchConfig.Mode.REPLAY and LaunchConfig.replay_path != "":
+		replay_path = LaunchConfig.replay_path
+
 	_is_web = OS.has_feature("web")
 	# With a backend configured, follow its live sim (issue #263) -- the same
 	# setting that put the run-monitor HUD in live mode, so one URL flips the
@@ -313,8 +322,14 @@ func _setup_hud() -> void:
 		_hud_source = preload("res://scripts/hud_source_live.gd").new()
 		_hud.set_source_label("live: %s" % url)
 	else:
+		# Baked-replay mode: there's no live run to watch and no real money
+		# spent, so hide the whole run monitor (cost meter + LLM request log)
+		# rather than show synthesized figures that read like a real bill. The
+		# replay source is still created and wired below so the viewer's
+		# unconditional _hud_source calls (set_cast, set_running) stay valid —
+		# it just feeds a hidden panel.
 		_hud_source = preload("res://scripts/hud_source_replay.gd").new()
-		_hud.set_source_label("simulated (baked replay)")
+		_hud.visible = false
 
 	# Connect BEFORE add_child: a source seeds the HUD (initial health + zeroed
 	# meter) from its _ready, which runs inside add_child — connect after and
@@ -335,8 +350,15 @@ func _setup_hud() -> void:
 
 func _resolve_backend_url() -> String:
 	# The one switch between baked-replay and live mode, shared by the HUD and
-	# the live client: the export takes precedence, then the SIM_API_URL env var
-	# (which needs no editor visit). Empty = baked replay.
+	# the live client. The landing menu's explicit choice (LaunchConfig) wins when
+	# set — a menu-chosen replay must stay a replay even if SIM_API_URL is exported
+	# in the shell, and a menu-chosen live URL beats the (unset) export. With no
+	# menu choice (mode NONE: a direct launch), fall back to the export, then the
+	# SIM_API_URL env var. Empty = baked replay.
+	if LaunchConfig.mode == LaunchConfig.Mode.REPLAY:
+		return ""
+	if LaunchConfig.mode == LaunchConfig.Mode.LIVE:
+		return LaunchConfig.live_url.rstrip("/")
 	var url := live_backend_url
 	if url == "":
 		url = OS.get_environment("SIM_API_URL")
@@ -344,6 +366,8 @@ func _resolve_backend_url() -> String:
 
 
 func _resolve_backend_token() -> String:
+	if LaunchConfig.mode == LaunchConfig.Mode.LIVE:
+		return LaunchConfig.live_token
 	var token := live_api_token
 	if token == "":
 		token = OS.get_environment("SIM_API_TOKEN")
@@ -708,6 +732,28 @@ func _shutdown_and_quit() -> void:
 	get_tree().quit()
 
 
+func _on_back_to_menu() -> void:
+	# Return to the landing menu (issue #399). Deliberately NOT a shutdown: unlike
+	# closing the window (_shutdown_and_quit), going back leaves a live backend
+	# running so you can reconnect to the same sim — the menu prefills the URL we
+	# stash here (WS ?since= then resumes the stream gap-free on reconnect).
+	if _quitting:
+		return  # a window close is already tearing this scene down; let it finish
+	if _is_live:
+		LaunchConfig.last_live_url = _live_url
+		LaunchConfig.live_token = _live_token
+		# The socket is a RefCounted WebSocketPeer (not a scene child), so hang it up
+		# ourselves — freeing the scene wouldn't close it cleanly on its own.
+		if _ws != null:
+			_ws.close()
+			_ws = null
+	# Undo _start_live's hold on the window close (harmless in replay mode): the menu
+	# is a plain scene with no backend to take down.
+	get_tree().set_auto_accept_quit(true)
+	LaunchConfig.reset()
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
 func _connect_ws() -> void:
 	# The push door. ?since= makes the attach gap-free: the server replays every
 	# retained record after the newest one we've applied, then tails -- so a
@@ -779,6 +825,11 @@ func _schedule_retry(retry: Callable) -> void:
 	_retry_pending = true
 	get_tree().create_timer(_reconnect_delay).timeout.connect(
 		func() -> void:
+			# The timer is owned by the tree, not this node, so it can still fire
+			# after a back-to-menu freed the scene (issue #399). Bail if so — the
+			# retry would poke a dangling viewer and its now-null socket.
+			if not is_instance_valid(self):
+				return
 			_retry_pending = false
 			retry.call()
 	)

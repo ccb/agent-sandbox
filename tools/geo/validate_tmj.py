@@ -1,7 +1,7 @@
 """Validate the UPenn tmj against the generative-agents matrix (detect & report).
 
 Compares the authored map (godot-generative-agents/maps/upenn_core_urban.tmj)
-against the matrix the backend walks (sim/the_upenn/matrix): are the interior
+against the matrix the backend walks (backend/penn/the_upenn/matrix): are the interior
 rooms drawn in the tmj present in the matrix block map, do the ids follow the
 add_entrances scheme, is the tmj internally well-formed? It never edits either
 side -- it prints a grouped report and exits non-zero on un-baselined errors.

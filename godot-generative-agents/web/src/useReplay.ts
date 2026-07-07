@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { Replay } from "./types/replay";
 
 // The Godot canvas plays this exact file (web/public/replay/penn_replay.json,
-// written by sim/generate_penn_replay.py); the companion panel reads the same
+// written by backend/penn/generate_penn_replay.py); the companion panel reads the same
 // data rather than scraping state out of the WASM. BASE_URL keeps it correct if
 // the app is ever served under a sub-path.
 const REPLAY_URL = `${import.meta.env.BASE_URL}replay/penn_replay.json`;
 
-// Real seconds Godot spends per sim step (penn_replay.gd's `step_seconds`). Used
+// Real seconds Godot spends per sim step (viewer.gd's `step_seconds`). Used
 // only by the fallback clock below, for when Godot isn't driving the step.
 const PLAYBACK_STEP_SECONDS = 0.1;
 
@@ -52,13 +52,13 @@ export function useReplay(): ReplayState {
 
 declare global {
   interface Window {
-    /** Registered below; penn_replay.gd calls it each time the step changes. */
+    /** Registered below; viewer.gd calls it each time the step changes. */
     __pennReplayStep?: (step: number) => void;
   }
 }
 
 /**
- * The current replay step to display. Godot is the source of truth: penn_replay.gd
+ * The current replay step to display. Godot is the source of truth: viewer.gd
  * calls `window.__pennReplayStep(i)` whenever the integer step changes, keeping the
  * panel exactly in sync with the canvas. If those calls never arrive (e.g. the WASM
  * was exported before that bridge existed), a fallback clock drives the step at the

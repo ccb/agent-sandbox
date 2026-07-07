@@ -14,7 +14,7 @@ SRC_JSON="$GODOT_PROJECT/maps/penn_replay.json"
 DEST_JSON="$WEB_DIR/public/replay/penn_replay.json"
 
 echo "==> Running the Penn sim…"
-( cd "$REPO_ROOT" && uv run python godot-generative-agents/sim/generate_penn_replay.py "$@" )
+( cd "$REPO_ROOT" && uv run python godot-generative-agents/backend/penn/generate_penn_replay.py "$@" )
 
 mkdir -p "$(dirname "$DEST_JSON")"
 cp "$SRC_JSON" "$DEST_JSON"

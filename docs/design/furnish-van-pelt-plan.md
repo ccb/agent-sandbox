@@ -606,7 +606,7 @@ git commit -m "feat(geo): subdivide Van Pelt into per-room navigable arenas"
 
 **Files:**
 - Modify (regenerate): `godot-generative-agents/maps/upenn_core_urban.tmj`
-- Modify (regenerate): `godot-generative-agents/sim/the_upenn/matrix/maze/{arena_maze,collision_maze}.csv`, `…/special_blocks/arena_blocks.csv`
+- Modify (regenerate): `godot-generative-agents/backend/penn/the_upenn/matrix/maze/{arena_maze,collision_maze}.csv`, `…/special_blocks/arena_blocks.csv`
 
 **Interfaces:** none (runs the Task 2 + Task 3 tools against the real files).
 
@@ -642,16 +642,16 @@ stop and fix the asset/clip before committing.
 
 - [ ] **Step 5: Sanity-check the matrix addressing**
 
-Run: `grep "Van Pelt Library" godot-generative-agents/sim/the_upenn/matrix/special_blocks/arena_blocks.csv`
+Run: `grep "Van Pelt Library" godot-generative-agents/backend/penn/the_upenn/matrix/special_blocks/arena_blocks.csv`
 Expected: 27 lines — `grounds`, `lobby`, and 25 named rooms with ids `13000`–`13024`.
 
 - [ ] **Step 6: Commit the regenerated artifacts**
 
 ```bash
 git add godot-generative-agents/maps/upenn_core_urban.tmj \
-        godot-generative-agents/sim/the_upenn/matrix/maze/arena_maze.csv \
-        godot-generative-agents/sim/the_upenn/matrix/maze/collision_maze.csv \
-        godot-generative-agents/sim/the_upenn/matrix/special_blocks/arena_blocks.csv
+        godot-generative-agents/backend/penn/the_upenn/matrix/maze/arena_maze.csv \
+        godot-generative-agents/backend/penn/the_upenn/matrix/maze/collision_maze.csv \
+        godot-generative-agents/backend/penn/the_upenn/matrix/special_blocks/arena_blocks.csv
 git commit -m "feat(geo): regenerate map + matrix with furnished, navigable Van Pelt"
 ```
 
