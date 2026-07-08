@@ -10,7 +10,10 @@ from text_adventure_games.reporting import CaptureRenderer, Channel
 
 
 def _game():
-    return tomb.build_game()
+    # Seed per game so no test depends on the RNG state its neighbors left
+    # behind (the climb test once failed only in full-file runs because a new
+    # test upstream shifted the stream before its wound-displacement draw).
+    return tomb.build_game(seed=0)
 
 
 def _goes(game, room, direction, dest):
@@ -1260,21 +1263,37 @@ def test_the_crystal_seal_bars_the_stair_from_both_ends():
     assert game.player.location is sphere
 
 
-def test_the_mantis_jar_snaps_once_at_the_hand_that_opens_it():
-    """CCB: a one-time defensive snap -- the alarm has teeth, but it is not
-    a combatant. First open costs a Mantis-Bitten wound; after that, the
-    jar has made its point."""
+def test_the_mantis_jar_bites_per_violation():
+    """CCB: one bite per VIOLATION -- opening the jar, and again for the
+    hand that reaches in for the eyes. Not per attempt: re-opening after
+    both draws nothing more."""
     game = _game()
     game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
     cap = _texts(game)
     game.do_command("open mantis jar")
     assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
     assert "mantis head STRIKES" in " ".join(cap.texts(Channel.NARRATION))
-    # A second violation draws nothing: the snap is one-time.
+    game.do_command("take fungal eyes")  # the reach is bitten too
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 2
     game.do_command("close mantis jar")
-    game.do_command("open mantis jar")
-    game.do_command("take fungal eyes")
-    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+    game.do_command("open mantis jar")  # both prices paid: no third
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 2
+
+
+def test_the_jar_sings_at_loud_entry_but_not_sneaking():
+    """CCB playtest: entering the canopic hall didn't start the song. The
+    jar now hears exactly what the Spawn hear -- footfalls carry; sneak
+    exists for a reason."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    cap = _texts(game)
+    game.do_command("go up")
+    assert any("SINGS" in t for t in cap.texts(Channel.NARRATION))
+    quiet_game = _game()
+    quiet_game.relocate(quiet_game.player, quiet_game.locations["Hall of Hounds"])
+    quiet_cap = _texts(quiet_game)
+    quiet_game.do_command("sneak up")
+    assert not any("SINGS" in t for t in quiet_cap.texts(Channel.NARRATION))
 
 
 def test_the_glass_centipede_ambushes_in_the_chimney():
