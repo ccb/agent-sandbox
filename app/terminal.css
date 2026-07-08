@@ -1,0 +1,149 @@
+/* The blue phosphor (docs/design/ios-tomb-app.md §3): the classic
+   green-phosphor CRT look, swatched to Vaarn's blue -- the Blue Ruins on a
+   blue screen. Bloom via text-shadow, scanlines as a gradient overlay.
+   M1 keeps it tasteful; the full dressing (typewriter, flicker, curvature,
+   sound) is M3, each piece toggleable. */
+
+:root {
+  --phosphor: #4db8ff;
+  --phosphor-dim: #1e5f8a;
+  --phosphor-bright: #a8dcff;
+  --blood: #ff6a4d;           /* the one interruption of the blue */
+  --bg: #020608;
+  --glow: 0 0 2px rgba(77, 184, 255, 0.9), 0 0 8px rgba(77, 184, 255, 0.35);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  overscroll-behavior: none;
+}
+
+body, input {
+  font-family: "SF Mono", ui-monospace, "JetBrains Mono", "IBM Plex Mono",
+    Menlo, monospace;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--phosphor);
+  text-shadow: var(--glow);
+}
+
+#crt {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) 0.75rem env(safe-area-inset-bottom);
+  position: relative;
+}
+
+/* the Infocom status line */
+#statusbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0.25rem;
+  border-bottom: 1px solid var(--phosphor-dim);
+  color: var(--phosphor-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: 0 0 auto;
+}
+
+#output {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.6rem 0.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-overflow-scrolling: touch;
+}
+#output .echo    { color: var(--phosphor-bright); }
+#output .blocked { color: var(--phosphor-dim); text-shadow: none; }
+#output .damage  {
+  color: var(--blood);
+  text-shadow: 0 0 2px rgba(255, 106, 77, 0.9), 0 0 8px rgba(255, 106, 77, 0.3);
+}
+#output p { margin-bottom: 0.55rem; }
+
+/* the accessory bar: a mercy, not a menu */
+#suggestbar {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--phosphor-dim);
+  padding: 0.3rem 0;
+}
+.chip-row {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.15rem 0.25rem;
+  scrollbar-width: none;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 3px;
+  padding: 0.1rem 0.55rem;
+  cursor: pointer;
+  user-select: none;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+.chip:active { background: var(--phosphor-dim); color: var(--bg); }
+.chip.noun { color: var(--phosphor-bright); }
+
+#inputline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.25rem 0.6rem;
+  flex: 0 0 auto;
+}
+#cmd {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  caret-color: var(--phosphor-bright);
+}
+.prompt { color: var(--phosphor-bright); }
+
+/* scanlines + vignette overlay */
+#scanlines {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.22) 0px,
+      rgba(0, 0, 0, 0.22) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* the diegetic warm-up: a CRT takes a moment to glow */
+#bootscreen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s;
+}
+#bootscreen.done { opacity: 0; pointer-events: none; }
+#boottext {
+  color: var(--phosphor);
+  text-shadow: var(--glow);
+  animation: warmup 1.6s ease-in;
+}
+@keyframes warmup {
+  from { opacity: 0.15; filter: blur(2px); }
+  to   { opacity: 1; filter: none; }
+}

@@ -1,0 +1,174 @@
+"""The JS <-> Python bridge for the Tomb terminal (docs/design/ios-tomb-app.md §1.1).
+
+The only new Python in the app. Loaded into Pyodide after the engine wheel;
+JavaScript calls the four entry points and gets JSON strings back:
+
+- ``boot(seed)`` -- build the Tomb (seeded: determinism is what makes saves
+  work), attach the save store, render the opening look.
+- ``command(text)`` -- one turn: the turn's channel events plus status. Also
+  services a staged RESTORE (this module is the loop that owns the game
+  object) and autosaves every turn to the "auto" slot.
+- ``suggestions()`` -- verbs and the nouns the player could actually mean
+  *here*, honoring perception: in the dark, the visible-noun well runs dry.
+- ``transcript()`` -- the expedition log, for the share sheet.
+
+Everything crosses as JSON so neither side holds live references to the other.
+Runs identically under plain CPython (tests use it directly; the save store
+falls back to memory when ``js.localStorage`` is absent).
+"""
+
+import json
+
+from text_adventure_games import saves
+from text_adventure_games.adventures import tomb_of_nassak_an_rah as tomb
+from text_adventure_games.perception import Sight
+from text_adventure_games.reporting import CaptureRenderer
+
+_game = None
+_cap = None
+_store = None
+
+#: The accessory bar's verb row: curated, not exhaustive (HELP lists all).
+VERBS = [
+    "look",
+    "examine",
+    "take",
+    "drop",
+    "open",
+    "search",
+    "read",
+    "attack",
+    "burn",
+    "throw",
+    "light",
+    "drink",
+    "talk to",
+    "wear",
+    "inventory",
+    "wait",
+]
+
+
+class _LocalStorageStore:
+    """The browser's save store: SLOTS in ``localStorage`` (design §2)."""
+
+    PREFIX = "tomb_save_"
+
+    def __init__(self):
+        from js import localStorage  # present only under Pyodide in a browser
+
+        self._ls = localStorage
+
+    def read(self, slot):
+        raw = self._ls.getItem(self.PREFIX + str(slot))
+        return json.loads(raw) if raw else None
+
+    def write(self, slot, blob):
+        self._ls.setItem(self.PREFIX + str(slot), json.dumps(blob))
+
+    def list(self):
+        out = {}
+        for slot in saves.SLOTS:
+            blob = self.read(slot)
+            if blob:
+                out[slot] = blob.get("meta", {})
+        return out
+
+
+def _make_store():
+    try:
+        return _LocalStorageStore()
+    except ImportError:
+        return saves.MemorySaveStore()
+
+
+def _events():
+    return [{"channel": m.channel.value, "text": m.text} for m in _cap.drain()]
+
+
+def _status():
+    return {
+        "room": _game.player.location.name if _game.player.location else None,
+        "turn": _game.turn,
+        "score": _game.score,
+        "max_score": _game.max_score,
+        "game_over": _game.is_game_over(),
+        "won": _game.is_won(),
+    }
+
+
+def _suggestions():
+    """Nouns the player could mean here -- perception-honest: room contents
+    only when they can actually be seen; inventory and exits always."""
+    loc = _game.player.location
+    scene = _game.perceive(_game.player)
+    nouns = []
+    if scene.sight >= Sight.CLEAR:
+        nouns += [i.name for i in loc.items.values() if not i.get_property("is_hidden")]
+        nouns += [c.name for c in loc.characters.values() if c is not _game.player]
+    nouns += list(_game.player.carried_items().keys())
+    seen, deduped = set(), []
+    for n in nouns:
+        if n not in seen:
+            seen.add(n)
+            deduped.append(n)
+    return {
+        "verbs": VERBS,
+        "nouns": deduped,
+        "exits": sorted(loc.connections.keys()),
+    }
+
+
+def _payload():
+    return json.dumps(
+        {"events": _events(), "status": _status(), "suggestions": _suggestions()}
+    )
+
+
+def boot(seed):
+    """Build the Tomb (seeded) and return the opening scene's events."""
+    global _game, _cap, _store
+    _game = tomb.build_game(seed=int(seed))
+    _cap = CaptureRenderer()
+    _game.parser.set_renderer(_cap)
+    _store = _make_store()
+    _game.save_store = _store
+    _game.parser.parse_command("look")
+    return _payload()
+
+
+def command(text):
+    """One player turn. Owns the RESTORE contract and the every-turn autosave."""
+    global _game, _cap
+    _game.do_command(str(text))
+    pending = getattr(_game, "pending_restore", None)
+    if pending is not None:
+        _game.pending_restore = None
+        restored, drift = saves.restore(tomb.build_game, pending)
+        _game = restored
+        _cap = CaptureRenderer()
+        _game.parser.set_renderer(_cap)
+        _game.save_store = _store
+        if drift:
+            _game.parser.ok(
+                "This expedition was logged by an older tomb; the paths have "
+                "shifted since, and the restore may not be faithful. The log "
+                "itself survives (SCRIPT)."
+            )
+        _game.parser.ok(
+            f"[restored: {_game.player.location.name}, turn {_game.turn}, "
+            f"score {_game.score}/{_game.max_score}]"
+        )
+        _game.parser.parse_command("look")
+    elif not _game.is_game_over():
+        # The autosave slot: iOS may kill the process at any moment, and
+        # backgrounding must never lose a turn (design §2).
+        _store.write("auto", saves.snapshot(_game))
+    return _payload()
+
+
+def transcript():
+    """The expedition log as text, for sharing."""
+    lines = [f"TOMB OF NASSAK AN-RAH -- expedition log (seed {_game.rng_seed})"]
+    lines += [f"> {c}" for c in _game.journal]
+    return "\n".join(lines)

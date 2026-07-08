@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>TOMB OF NASSAK AN-RAH</title>
+<link rel="stylesheet" href="terminal.css">
+</head>
+<body>
+<div id="crt">
+  <div id="statusbar">
+    <span id="status-room">THE BLUE RUINS</span>
+    <span id="status-score">0/100 &nbsp; T:0</span>
+  </div>
+  <div id="output" aria-live="polite"></div>
+  <div id="suggestbar">
+    <div class="chip-row" id="chips-verbs"></div>
+    <div class="chip-row" id="chips-nouns"></div>
+  </div>
+  <div id="inputline">
+    <span class="prompt">&gt;</span>
+    <input id="cmd" type="text" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false" enterkeyhint="send"
+           aria-label="command">
+    <span id="cursor"></span>
+  </div>
+  <div id="scanlines"></div>
+</div>
+<div id="bootscreen">
+  <pre id="boottext">TOMB OF NASSAK AN-RAH
+a Vaults of Vaarn expedition
+
+warming the phosphor .</pre>
+</div>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="terminal.js"></script>
+</body>
+</html>
