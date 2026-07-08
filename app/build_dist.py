@@ -25,7 +25,36 @@ REPO = os.path.dirname(HERE)
 DIST = os.path.join(HERE, "dist")
 
 
+PYODIDE_VERSION = "0.26.4"
+PYODIDE_CDN = f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/"
+# The five files the browser runtime needs; everything else in the full
+# distribution is optional packages the Tomb never imports.
+PYODIDE_FILES = (
+    "pyodide.js",
+    "pyodide.asm.js",
+    "pyodide.asm.wasm",
+    "python_stdlib.zip",
+    "pyodide-lock.json",
+)
+
+
+def _vendor_pyodide() -> None:
+    """Download the Pyodide runtime into dist/pyodide/ so the bundle is fully
+    offline -- required for the iOS app (design §4), optional for the web."""
+    import urllib.request
+
+    vendor = os.path.join(DIST, "pyodide")
+    os.makedirs(vendor, exist_ok=True)
+    for name in PYODIDE_FILES:
+        target = os.path.join(vendor, name)
+        if os.path.exists(target):
+            continue
+        print(f"fetching {name} ...")
+        urllib.request.urlretrieve(PYODIDE_CDN + name, target)
+
+
 def main() -> int:
+    with_pyodide = "--with-pyodide" in sys.argv
     os.makedirs(DIST, exist_ok=True)
     for stale in glob.glob(os.path.join(DIST, "*.whl")):
         os.remove(stale)
@@ -37,9 +66,14 @@ def main() -> int:
     wheel = os.path.basename(wheels[-1])
     for name in ("index.html", "terminal.css", "terminal.js", "app_api.py"):
         shutil.copy(os.path.join(HERE, name), DIST)
+    manifest = {"wheel": wheel}
+    if with_pyodide:
+        _vendor_pyodide()
+        manifest["pyodideBase"] = "./pyodide/"
     with open(os.path.join(DIST, "manifest.json"), "w") as fh:
-        json.dump({"wheel": wheel}, fh)
-    print(f"dist/ ready: {wheel} + terminal ({DIST})")
+        json.dump(manifest, fh)
+    kind = "offline (pyodide vendored)" if with_pyodide else "CDN runtime"
+    print(f"dist/ ready: {wheel} + terminal, {kind} ({DIST})")
     return 0
 
 
