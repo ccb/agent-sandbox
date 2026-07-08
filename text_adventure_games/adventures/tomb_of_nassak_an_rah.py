@@ -844,6 +844,7 @@ class Butcher(actions.Action):
             "listeners.",
         )
         meat.set_property(Property.EDIBLE, True)
+        meat.set_property("smells_edible", True)  # the pack's nose (jackal scent)
         meat.add_alias("meat")
         meat.add_alias("zox meat")
         meat.add_alias("haunch")
@@ -1124,6 +1125,10 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     organ = things.Item(organ_name, organ_desc, organ_desc)
     organ.set_property("gettable", True)
     organ.set_property(Property.EDIBLE, True)
+    # (Deliberately NOT smells_edible: the win route carries the cured
+    # intestines openly, and making loose organs draw the pack wrecks the
+    # pacifist path. If we ever want that, the route must first learn to
+    # seal them back in their jar.)
     organ.set_property(
         Property.TASTE,
         "of four thousand years of preservative, and beneath that, of exactly "
@@ -2693,6 +2698,63 @@ def build_game(seed=None):
                 )
 
     game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
+
+    # THE SCENT (CCB): jackals smell food. A player carrying anything edible
+    # within two rooms of the den mouth (the Hall of Memory, heart of their
+    # ground) draws the denned pack OUT -- no noise required; salt meat is
+    # its own summons. Once out, the existing pursuit closes the distance.
+    # A freshly fed pack (post-feed grace: negative ledgers) stays sated.
+    def _hops(start, goal, cap=2):
+        if start is goal:
+            return 0
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, 0)])
+        while queue:
+            room, d = queue.popleft()
+            if d >= cap:
+                continue
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return d + 1
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, d + 1))
+        return cap + 1
+
+    def _smells_of_food(g):
+        # What the pack can SMELL: exposed meat (zox haunches, loose organs)
+        # -- not everything technically edible. The friend's fungus rides in
+        # a sealed plastic pouch; organs inside their sealed jars are mute.
+        return any(
+            it.get_property("smells_edible") for it in g.player.carried_items().values()
+        )
+
+    def _scent_check(g):
+        if jackal_pack.location is not den or not _smells_of_food(g):
+            return False
+        if jackal_pack.get_property("is_dead") or jackal_pack.get_property(
+            "is_unconscious"
+        ):
+            return False
+        # Sated is sated: post-feed grace holds even against fresh meat.
+        if any((h.get_property(f"_jk:{h.name}") or 0) < 0 for h in _halls):
+            return False
+        return _hops(memory, g.player.location) <= 2
+
+    def _scent_pull(g):
+        g.relocate(jackal_pack, memory)
+        # Keep the pack's lope-and-rest rhythm: emergence is its own beat, so
+        # the pursuit's first move is the hang-back yip, not the doorway.
+        jackal_pack.set_property("_stride", True)
+        g.parser.ok(
+            "Down in the halls, noses lift. Something has smelled the salt "
+            "on what you carry -- a yipping starts, low and purposeful, and "
+            "begins to close."
+        )
+
+    game.add_trigger("jackal_scent", _scent_check, _scent_pull, repeatable=True)
 
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
