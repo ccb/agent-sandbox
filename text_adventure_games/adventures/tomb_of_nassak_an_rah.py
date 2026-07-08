@@ -1234,6 +1234,9 @@ def build_game(seed=None):
         "with somebody. The Cacklemaw do not trade.",
     )
     crates.make_container()
+    # The crates are the OPEN rehearsal now (CCB) -- lashed tight until opened.
+    crates.set_property("is_closed", True)
+    crates.add_command_hint("open crates")
     for _name, _desc, _ex, _slots in (
         (
             "bale of saffron",
@@ -1285,26 +1288,20 @@ def build_game(seed=None):
     ledger.set_property(
         "read_text",
         "The hand is neat until it is not. '...ninth day. Camped in the lee "
-        "of the tomb the guards call the Three Mouths. They will not pass "
-        "it after dark, and I have stopped teasing them for it. Kotesh "
-        "swears the boy's mouth is lightless within, and that what roosts "
-        "there hates a lamp worse than a shout. The halls, he says, "
-        "remember every footfall. And none of them, drunk or paid, will "
-        "speak of the old man's mouth, which weeps orange. Superstition -- "
-        "but I observe that my guards are paid to be brave, and are not. "
-        "Tomorrow, Gnomon.' The entry is the last.",
+        "of the tomb the road-folk call the Three Mouths. Of it, Gnomon "
+        "tells three things: that the boy's mouth is lightless within, and "
+        "what roosts there hates a lamp worse than a shout; that the halls "
+        "remember every footfall; and that no one, drunk or paid, will "
+        "speak of the old man's mouth, which weeps orange. Rumor -- but the "
+        "road teaches a certain respect for rumor. Tomorrow, Gnomon.' The "
+        "entry is the last.",
     )
     ledger.set_property("gettable", True)  # take it along; it reads anywhere
     ledger.add_command_hint("read ledger")
 
-    pack = things.Item(
-        "pack",
-        "the merchant's half-buried pack",
-        "Boiled leather, half-buried, the straps still buckled. Whatever the "
-        "Cacklemaw came for, it was not this.",
-    ).make_container()
-    pack.set_property("is_closed", True)
-    pack.add_command_hint("open pack")
+    # (CCB: no separate pack -- everything the merchant carried is ON the
+    # merchant, found the way the tokens are: by searching the dead. The
+    # corpse-searching habit is rehearsed harder for it.)
     waterskin = things.Item(
         "waterskin",
         "a waterskin with 3 rations",
@@ -1322,7 +1319,8 @@ def build_game(seed=None):
     )
     waterskin.add_alias("water")
     waterskin.add_alias("skin")
-    wreck.add_item(pack)
+    waterskin.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(waterskin)
 
     # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
     # walk like men", wear masks in imitation of the human face). She was the
@@ -2102,8 +2100,8 @@ def build_game(seed=None):
     )  # no "lantern" alias: the Ulfire Lantern owns that word
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
-    pack.add_item(glowstone)
-    pack.add_item(waterskin)
+    glowstone.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(glowstone)
 
     # The dead don't sway (CCB): state-aware one-liners for the creatures.
     spawn_guts.set_property(
@@ -3442,10 +3440,10 @@ WALK = [
     # open/take, then light/douse/read in the safe dark of the hold.
     "examine wreck",
     "search merchant",
-    "talk to worry",
-    "open pack",
     "take glowstone",
+    "talk to worry",
     "in",
+    "open crates",
     "light glowstone",
     "read ledger",
     "douse glowstone",
@@ -3481,7 +3479,7 @@ WALK = [
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
     # Loot the wreck (water heals; the glowstone lights the dark Warriors).
-    "open pack",
+    "search merchant",
     "take glowstone",
     "take waterskin",
     "north",
