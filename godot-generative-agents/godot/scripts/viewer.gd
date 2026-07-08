@@ -354,6 +354,7 @@ func _setup_hud() -> void:
 	_hud_source.health_changed.connect(_hud.set_health)
 	_hud_source.halted_changed.connect(_on_run_halted)
 	_hud_source.llm_call.connect(_hud.add_llm_call)
+	_hud_source.engine_event.connect(_hud.add_engine_event)
 	_hud.stop_requested.connect(_hud_source.request_stop)
 	add_child(_hud_source)
 
@@ -634,17 +635,18 @@ func _apply_record(rec: Variant) -> void:
 		"status":
 			_on_live_status(record)
 		"engine":
-			# Engine change-feed records ride the same log as frames. The only
-			# payload the viewer renders today is the backend request monitor's
-			# llm_call rows (serve_penn's drain_events, issue #398), which flow
-			# to the HUD's request log through the source seam.
+			# Engine change-feed records ride the same log as frames. The
+			# request monitor's llm_call rows (serve_penn's drain_events, #398)
+			# go to the HUD's request log; the *other* JSONRenderer events
+			# (narration, blocked, ...) rode the same feed but were dropped —
+			# they now land in the same event feed too (#394).
 			var event: Variant = record.get("event")
-			if (
-				typeof(event) == TYPE_DICTIONARY
-				and String((event as Dictionary).get("kind", "")) == "llm_call"
-				and _hud_source != null
-			):
-				_hud_source.note_llm_call(event)
+			if typeof(event) == TYPE_DICTIONARY and _hud_source != null:
+				var ev := event as Dictionary
+				if String(ev.get("kind", "")) == "llm_call":
+					_hud_source.note_llm_call(ev)
+				else:
+					_hud_source.note_engine_event(ev)
 
 
 func _apply_live_frame(step: int, agents: Variant) -> void:
