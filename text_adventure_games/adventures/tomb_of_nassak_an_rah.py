@@ -792,6 +792,72 @@ class PryCoffin(actions.Action):
         self.game.award("exotica", 30, None)
 
 
+class Butcher(actions.Action):
+    """BUTCHER ZOXEN (CCB): with a blade in hand, the dead draught-beasts at
+    the wreck become trail food -- two cuts before the sand claims the rest.
+    Zox meat is EDIBLE, which makes it lunch, jackal tribute... and scent."""
+
+    ACTION_NAME = "butcher"
+    ACTION_DESCRIPTION = "Butcher a dead animal for meat (needs a blade)"
+    ACTION_ALIASES = [
+        "butcher zoxen",
+        "butcher the zoxen",
+        "butcher zox",
+        "carve zoxen",
+        "carve the zoxen",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def _zoxen(self):
+        loc = self.player.location
+        return loc.items.get("zoxen") if loc else None
+
+    def check_preconditions(self) -> bool:
+        zoxen = self._zoxen()
+        if zoxen is None:
+            self.parser.fail("There is nothing here to butcher.")
+            return False
+        if not any("blade" in n or "dagger" in n for n in self.player.carried_items()):
+            self.parser.fail(
+                "Butchery wants an edge. Your hands alone won't part zox hide."
+            )
+            return False
+        if int(zoxen.get_property("butchered") or 0) >= 2:
+            self.parser.fail(
+                "Nothing left on them worth the knife; the sand has the rest."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        zoxen = self._zoxen()
+        cut = int(zoxen.get_property("butchered") or 0) + 1
+        zoxen.set_property("butchered", cut)
+        meat = things.Item(
+            "zox haunch" if cut == 1 else "lean zox haunch",
+            "a briny haunch of zox meat",
+            "A dense, briny haunch, dark as jerky already -- zoxen are half "
+            "salt by weight. It will keep. In these halls, meat has "
+            "listeners.",
+        )
+        meat.set_property(Property.EDIBLE, True)
+        meat.add_alias("meat")
+        meat.add_alias("zox meat")
+        meat.add_alias("haunch")
+        self.player.location.add_item(meat)
+        self.parser.ok(
+            "You open the nearer zox along the flank the sand hasn't "
+            "claimed and carve loose a haunch. Road-butchery: quick, "
+            "ungentle, honest."
+            if cut == 1
+            else "You take a second haunch, leaner than the first. The road "
+            "will have what's left by morning."
+        )
+
+
 class TossCentipede(actions.Action):
     """KICK or THROW the glass centipede off the Summit (CCB): it falls the
     height of the tomb and shatters on the stones at the base, leaving its
@@ -2081,7 +2147,15 @@ def build_game(seed=None):
             horror,
             centipede,
         ],
-        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill, TossCentipede],
+        custom_actions=[
+            Sneak,
+            Burn,
+            PryCoffin,
+            TieSilk,
+            Refill,
+            TossCentipede,
+            Butcher,
+        ],
     )
     game.max_score = 100
     game.rng_seed = seed  # the save blob records this alongside game.journal
