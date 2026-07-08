@@ -737,19 +737,26 @@ class PryCoffin(actions.Action):
 
 
 class CrystalSeal(blocks.Block):
-    """The red-crystal seal barring the stair from the Canopic hall up to the
-    Burial Sphere. It clears once both missing canopic jars sit on their matching
-    plinths (the placement trigger sets ``seal_open`` on the Canopic hall)."""
+    """The red-crystal seal on the stair between the Canopic hall and the
+    Burial Sphere. A physical seal bars a stair from BOTH ends (CCB fix: it
+    was one-directional), so one instance sits on the hall's "up" and another
+    on the sphere's "down"; both key on the same ``seal_open`` property, set
+    by the jar-placement trigger, so they clear together."""
 
-    def __init__(self, canopic):
-        super().__init__(
-            "A seal of red crystal",
-            "A seal of red crystal bars the stair, cut and fitted to the "
+    def __init__(self, canopic, from_above: bool = False):
+        description = (
+            "A seal of red crystal closes the stair below, cut and fitted to "
+            "the treads so exactly that the joins read as one stone -- "
+            "tombwright work, made to open for one thing only. The crystal "
+            "hums at a pitch just under hearing, with the patience of a lock."
+            if from_above
+            else "A seal of red crystal bars the stair, cut and fitted to the "
             "treads so exactly that the joins read as one stone -- tombwright "
-            "work, made to open for one thing only. Five beast-sigils are set in the arch above "
-            "it; two of them are dark. The crystal hums at a pitch just under "
-            "hearing, with the patience of a lock.",
+            "work, made to open for one thing only. Five beast-sigils are set "
+            "in the arch above it; two of them are dark. The crystal hums at "
+            "a pitch just under hearing, with the patience of a lock."
         )
+        super().__init__("A seal of red crystal", description)
         self.canopic = canopic
 
     def is_blocked(self) -> bool:
@@ -1786,7 +1793,11 @@ def build_game(seed=None):
 
     # The crystal seal bars the stair up from the Canopic hall until both jars are
     # placed (registered before the game so the parser picks up the block).
+    # A physical seal bars the stair from BOTH ends (CCB fix): whoever drops
+    # into the sphere from the chimney meets the same crystal from above, and
+    # the jar puzzle clears both at once.
     canopic.add_block("up", CrystalSeal(canopic))
+    sphere.add_block("down", CrystalSeal(canopic, from_above=True))
 
     # --- The player ----------------------------------------------------------
     player = things.Character(

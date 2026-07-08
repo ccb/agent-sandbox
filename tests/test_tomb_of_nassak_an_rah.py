@@ -911,7 +911,10 @@ def test_the_spider_silk_tether_is_the_bootless_anchor():
 
 
 def _boss_setup(game):
-    """Anchor, blade, gel, and spark -- straight to the sphere."""
+    """Anchor, blade, gel, and spark -- straight to the sphere. The jar
+    puzzle is treated as solved (the seal now bars BOTH directions, and a
+    fleeing fighter needs the stair)."""
+    game.locations["Hall of the Canopic Jars"].set_property("seal_open", True)
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
@@ -1168,6 +1171,23 @@ def test_the_dead_dont_sway_in_the_listings():
     out = " ".join(cap.texts(Channel.NARRATION))
     assert "collapsed in a heap" in out
     assert "swaying toward every sound" not in out
+
+
+def test_the_crystal_seal_bars_the_stair_from_both_ends():
+    """CCB fix: the seal was one-directional. A scavenger who came down the
+    chimney into the sphere must not walk down an unsolved stair; once the
+    jars sit on their plinths, BOTH directions clear together."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    canopic = game.locations["Hall of the Canopic Jars"]
+    game.relocate(game.player, sphere)
+    game.do_command("down")
+    assert game.player.location is sphere  # barred from above too
+    canopic.set_property("seal_open", True)  # the jar puzzle, solved
+    game.do_command("down")
+    assert game.player.location is canopic
+    game.do_command("up")  # and the other direction stays clear
+    assert game.player.location is sphere
 
 
 def test_the_mantis_jar_snaps_once_at_the_hand_that_opens_it():
