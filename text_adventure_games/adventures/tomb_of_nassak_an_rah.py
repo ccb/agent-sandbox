@@ -917,7 +917,13 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     return jar
 
 
-def build_game():
+def build_game(seed=None):
+    """Build the Tomb. With *seed*, the module RNG is seeded first, making the
+    whole game deterministic -- (seed, game.journal) is then a complete save
+    file, restored by ``build_game(seed).replay(journal)`` (the iOS app design,
+    docs/design/ios-tomb-app.md §2). The seed is kept on ``game.rng_seed``."""
+    if seed is not None:
+        _RNG.seed(seed)
     # --- The onboarding: the Caravan Wreck (start) ---------------------------
     # A safe sandbox one room south of the tomb that teaches the old-school
     # verb+object language (EXAMINE / OPEN / TAKE / LIGHT / DOUSE / READ / TALK)
@@ -1854,6 +1860,7 @@ def build_game():
         custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
     )
     game.max_score = 100
+    game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
     game.enable_senses()
