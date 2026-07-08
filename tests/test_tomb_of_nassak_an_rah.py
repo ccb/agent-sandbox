@@ -1330,6 +1330,39 @@ def test_fire_scours_the_centipede_with_the_growth():
     assert game.characters["glass centipede"].get_property("is_dead")
 
 
+def test_butchering_the_zoxen_wants_a_blade_and_yields_two_cuts():
+    """CCB: the zoxen earn their keep -- BUTCHER with a blade in hand gives
+    edible trail meat, twice, and then the sand has the rest."""
+    game = _game()
+    cap = _texts(game)
+    game.do_command("butcher zoxen")
+    assert any("wants an edge" in t for t in cap.texts(Channel.BLOCKED))
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("butcher zoxen")
+    game.do_command("butcher zoxen")  # the sand has the rest
+    wreck = game.player.location
+    assert "zox haunch" in wreck.items and "lean zox haunch" in wreck.items
+    assert any("sand has the rest" in t for t in cap.texts(Channel.BLOCKED))
+    game.do_command("take zox haunch")
+    game.do_command("eat zox haunch")  # it is real food
+    assert "zox haunch" not in game.player.carried_items()
+
+
+def test_zox_meat_serves_as_jackal_tribute():
+    """The haunch plugs into the existing feed mechanic: GIVE it to the pack
+    and they carry it off to the den, sated a long while."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    _summon_pack(game)
+    game.relocate(game.player, game.characters["jackal pack"].location)
+    game.do_command("give zox haunch to jackal pack")
+    game.do_command("wait")
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
 def test_the_centipede_hunts_once_sprung():
     """CCB: after its ambush the centipede follows the player anywhere, a
     room a round, and bites every round it shares one -- with one arrival
