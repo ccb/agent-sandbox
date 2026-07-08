@@ -260,6 +260,21 @@ class MantisSong(reactions.Startle):
 
     REPEATABLE = True
 
+    def check_preconditions(self) -> bool:
+        # Engine sounds (say, breaks, the clatter of an overloaded pack) --
+        # the Startle base -- OR the Spawn's ear (CCB: walking in unsneakily
+        # must start the song; footfalls carry, and the jar listens exactly
+        # like the jar-headed Spawn it calls to).
+        if super().check_preconditions():
+            return True
+        loc = self.owner.location
+        if loc is None:
+            holder = getattr(self.owner, "owner", None)
+            loc = getattr(holder, "location", None)
+        if loc is None:
+            return False
+        return _player_was_loud_in(self.game, loc, _QUIET_SPAWN)
+
     def apply_effects(self):
         # The jar may be carried (it is gettable, at the carrier's peril): sing
         # from wherever it is -- its own location, or its holder's.
@@ -3097,14 +3112,30 @@ def build_game(seed=None):
     # hand that opens it. It stays an alarm, not a combatant -- the bite
     # teaches respect; the song it sings at noise delivers the sentence.
     def _jar_violated(g):
-        return any(
+        opened = any(
             e.actor == g.player.name
             and e.action == "open"
             and "mantis" in (e.summary or "").lower()
             for e in g.events[g._round_event_start :]
         )
+        open_due = opened and not mantis_jar.get_property("bit_for_open")
+        # The eyes leave the jar only by a hand reaching in (CCB: that hand
+        # is bitten too) -- one bite per violation, not per carry.
+        reach_due = "fungal eyes" in g.player.inventory and not mantis_jar.get_property(
+            "bit_for_eyes"
+        )
+        return open_due or reach_due
 
     def _mantis_snaps(g):
+        if any(
+            e.actor == g.player.name
+            and e.action == "open"
+            and "mantis" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        ):
+            mantis_jar.set_property("bit_for_open", True)
+        if "fungal eyes" in g.player.inventory:
+            mantis_jar.set_property("bit_for_eyes", True)
         g.parser.ok(
             "The split in the jar widens and the mantis head STRIKES -- one "
             "motion, out and back, quicker than the eye. The jar settles "
@@ -3126,7 +3157,7 @@ def build_game(seed=None):
         if fatal:
             _die(g, "The jar sings on over what it has done. THE END.")
 
-    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=False)
+    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=True)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
