@@ -4,6 +4,122 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-07 — Student PR review day; Slack round
+
+### Reviewed and merged all four open student PRs
+Frankie's **#414** (asset-path regression after the #399 restructure — seeding
+had been *silently* no-op'ing), **#402** (furniture solidity + Fisher's
+bookshelves/chairs as addressable game objects), **#415** (Anthropic prompt
+caching on the stable persona prefix), and Alistair's **#342** (resilient LLM
+client: retries + backoff + timeout, with every attempt recorded in the usage
+ledger). Review method worth keeping: don't take the PR body's word for it —
+**re-verify the claims locally**. #402's "pipeline is idempotent" checked out
+byte-for-byte (re-running both scripts reproduced the committed CSVs exactly);
+#342/#415 interleave in the same two client functions, so I merged their
+combination locally and ran the full suite (1452 green) before merging either.
+One rake: running the Godot smoke test in my review worktree let Godot rewrite
+53 `.png.import` files — editor metadata masquerading as a diff. Know what your
+tools touch. Flagged a leftover single-`dirname` path in `compare_plans.py`
+(same class as #407) for a student follow-up.
+
+### Journals + Slack
+Frankie's journal is exemplary — daily through 7/7, with honest post-mortems
+(his rebase-vs-merge analysis of the godot-ga-main sync is better than most of
+what I've seen from grad students). Alistair's is stale since 6/25 despite his
+biggest stretch of work (the live-LLM MVP!); Mark's since 6/23; Mekides hasn't
+started. Sent encouraging DMs to Alistair and Mark (journal habit + I'm on
+campus Thursday), a DM to Frankie offering help with his logged blockers (the
+`workflow`-scope push failure on #390; the CLAUDE.md branch-reality mismatch),
+and a note in #summer-research-26 asking Alistair and Frankie to sketch what
+**actions** agents should take in the Penn simulator (check out a book, study,
+take an exam, eat at Houston Hall...) — and Mark the same for Tingen. The
+framing question for Thursday: what does an action need to be *real* in the sim
+(a place, a duration, a visible state change, something memory can reason
+about)?
+
+## 2026-07-05 — The fire burns whether or not you watch
+
+Boss-fight playtest forensics. I lit the Horror, spent the burn window
+shuttling gear (acid wounds kept displacing my blade — the slot system working
+as intended), came back, and landed blow after blow against a boss that
+wouldn't die. The bug: **the Horror's turn only ran while I was in the room**,
+so the fire froze whenever I left, expired unseen, and the only tell was
+narration quietly switching from "the fire walks the coil" back to "the rents
+knit closed." Two principles came out of it (#378):
+- **The world runs whether or not you watch.** Burn ticks (and regeneration)
+  now continue with the player elsewhere; only the acid needs a target. Douse,
+  light, and *run* is now a legitimate tactic.
+- **State changes are never silent.** The window closes audibly — a gutter-out
+  line in the room, a dying roar heard remotely, a heard-not-seen shriek if it
+  dies alone.
+
+The rest of the day was narration legibility, all from playtest reactions:
+- **#381**: burning the chimney growth from *inside* the shaft now costs a
+  Scorched wound; from the Summit's mouth it's free — light a chimney the way
+  chimneys are lit. Same shape as the coffin's boots-or-silk: two routes, one
+  insight.
+- **#383**: burn narration names the liquid, the target, and the tool actually
+  in hand; the "burning, it cannot knit itself" tag became **earned knowledge**
+  — only said once you've *watched* it mend (a `knit_seen` flag); and bare "the
+  coil" got anchored ("What is 'the coil'?" is a question no player should have
+  to ask).
+- **#384**: the Burial Sphere becomes **the fight's record** — shattered
+  coffin, the Autarch's bones adrift, the Horror's remains as a drift-of-ash
+  *object* (not a lingering Characters entry), and room descriptions that track
+  all three states (erupted / aftermath / root-killed-first). A room that
+  forgets what happened in it is a bug.
+- **#385/#386**: the climb gate moved to the sphere's crown (refuse the
+  encumbered *before* they float up a room), and the mantis jar got its
+  one-time defensive snap — an alarm with teeth, not a fourth combatant.
+
+## 2026-07-04 — The boss fight earns its physics
+
+Playtest-driven day on the Horror fight and the creatures around it:
+- **Wound variety (#361)**: every wound description now draws from a variant
+  pool — being killed by the Horror is "actually great fun," being told
+  "a rope of acid caught you across the shoulder" four times is not.
+- **Free meta-actions (#362)**: reasoned through whether checking inventory
+  should cost a turn (it drew boss attacks — "punishingly fun" but wrong as a
+  default). Now an engine policy: `Inventory`/`Help` are `FREE_ACTION`, with a
+  `meta_actions_cost_turns` config knob for anyone who wants the old cruelty.
+- **The jackals had never attacked me (#363/#364)**: the suspicion ledger
+  decayed faster than real play raised it — playtest data beats design intent.
+  Crashes now weigh +2, and the pack *pursues* by sight and scent through its
+  territory at a lope-and-rest rhythm (escapable by a player who keeps moving,
+  which is the point). The glass centipede existed only in the design doc;
+  now it ambushes in the chimney for real.
+- **The throw-douse-spark sequence (#375–#377)**: my own instinctive attack
+  ("throw gel at horror", then "light gel") failed three ways — the alias
+  didn't match, the Horror *caught* the flask, and lighting the dose wasn't a
+  thing. All three fixed (engine: alias matching in combat targeting, a
+  `no_catch` property; tomb: thrown gel douses, a spark alone ignites). The
+  lesson: **when the player's instinct is physical and reasonable, the parser
+  saying no is the bug.**
+
+## 2026-07-03 — Slots, wounds, and the Horror as a boss
+
+The big Vaarn-mechanics day (~25 PRs, #311–#351):
+- **Slots + wounds (#323–#326)**: Vaarn's "inventory is your HP bar" —
+  10 hard slots, wounds occupy slots and displace gear (your blade literally
+  spills from your pack as you take hits), full = encumbered = no climbing.
+  The death spiral is legible: you are too hurt to carry everything.
+- **The [damage] channel + the coffin, properly (#340)**: every wound lands in
+  one consistent voice on its own reporting channel; the coffin pry wants an
+  anchor (boots worn *or* silk tether) and a lever (the blade — which snaps as
+  the coffin gives: the sword you fought with buys the treasure and is spent
+  doing it).
+- **Fire, the gel economy, and the boss (#341, design doc §17)**: the flask
+  holds 3 doses, refillable at gel pools, drinkable-but-regrettable; BURN
+  generalized (corpse / chimney growth / the Horror); and the Fungal Horror is
+  a real boss — vigor 5, a weapon hit costs 1, its turn **visibly knits 1
+  back** ("mending faster than you are") plus an acid wound. Steel alone is a
+  treadmill; ablaze, nothing knits. The fight teaches its own solution.
+- **Embodied jackals (#333), spawn sound-hunting in darkness (#336), footfall
+  verbs (#338), the throw gambit (#339)** — and a batch of line edits from
+  playing (the tombwright seal, no unearned hints, "floating and unmoored from
+  gravity").
+Also merged Frankie's #311, un-sticking the black-format CI gate on main.
+
 ## 2026-07-02 — Dren onboarded
 
 New student: **Dren Zabeli** (@ZaDrMeister) joins the project. Invited him to the
