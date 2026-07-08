@@ -1735,14 +1735,14 @@ def build_game(seed=None):
     # warns you about the Spawn and the seal if you talk to him.
     silas = things.Character(
         "Silas",
-        "a yellow-robed synthetic archivist",
+        "a synthetic archivist in yellow monk's robes",
         "I am Silas, of the Seekers of Eyeless Wisdom. I read the dead.",
     )
     silas.examine_text = (
-        "A gaunt synth in fuligin-yellow robes, fingertips tipped with cranial "
-        "bores, drawing memory from the lattice in slow bright threads. Patient, "
-        "courteous, elsewhere. Now and then his lips move -- circular glyphs, "
-        "no sound."
+        "A gaunt synth in yellow monk's robes, plain-woven and dust-hemmed, "
+        "fingertips tipped with cranial bores, drawing memory from the "
+        "lattice in slow bright threads. Patient, courteous, elsewhere. Now "
+        "and then his lips move -- circular glyphs, no sound."
     )
     _silas_speech = (
         'Silas speaks without turning. "Scavenger. You walk in a house of '
@@ -1774,6 +1774,55 @@ def build_game(seed=None):
         return _silas_speech
 
     silas.talk_text = _silas_talk
+    # ASK SILAS ABOUT ... (CCB): the archivist answers on his subjects.
+    # Several keywords share an answer; parser.match_topic picks by keyword
+    # (longest match wins), the LLM parser by meaning.
+    _about_lattice = (
+        "Silas's fingertips still. \"The lattice is a memory-crystal -- "
+        "New-Pangean work, grown rather than cut. The tombwrights fed it the "
+        "Autarch's days as they embalmed him, and it holds them yet, set "
+        "down in facets: a reader with the right fingertips can walk them "
+        "like halls. Most are small. A meal. A lesson. Rain on a roof that "
+        "is dust now. That is what makes them precious -- empires save "
+        'their triumphs; only crystal remembers breakfast." He turns back '
+        'to the light. "Look into it yourself, if you are gentle. It shows '
+        'what it chooses."'
+    )
+    _about_himself = (
+        '"Why am I here?" Silas considers the question as if reading it. '
+        '"I am of the Seekers of Eyeless Wisdom -- a mendicant order; the '
+        "robes are the rule, yellow so the dust of the road shows on them. "
+        "We read the dead where they kept their own records. When I have "
+        "the Autarch whole -- every remembered day in its order -- my "
+        "order will speak him aloud once, in a hall built for the purpose, "
+        "and then let him go. A man is not done dying until he is done "
+        'being remembered. I am here to finish Nassak An-Rah properly."'
+    )
+    silas.talk_topics = {
+        "memories": _about_lattice,
+        "memory": _about_lattice,
+        "lattice": _about_lattice,
+        "crystal": _about_lattice,
+        "himself": _about_himself,
+        "why he is here": _about_himself,
+        "seekers": _about_himself,
+        "his order": _about_himself,
+        "robes": _about_himself,
+        "autarch": (
+            '"Nassak An-Rah. A nobleman of the Fallen Autarchy, buried in '
+            "state above us -- and not, I should say, entirely at rest. His "
+            "appetites and his thoughts were jarred separately, as the rite "
+            "requires, and both have got up. I do not fight them; I read. "
+            'But keep your voice low and your blade closer."'
+        ),
+        "lantern": (
+            '"The lantern burns ulfire -- the ninth colour. Its light passes '
+            "through solid things; only lead stops it. An archivist's tool: "
+            'one reads a sealed page by it. It is not for sale." A pause. '
+            '"Though I am, in one matter, corruptible. The order forbids us '
+            'nothing that grows."'
+        ),
+    }
     # Silas keeps the Ulfire Lantern (Exotica; design doc §13). Ulfire is the
     # ninth colour: its light shines THROUGH solid objects -- the "very specific
     # angle" from which the Manifold Box's hypergeometric compartment can be
