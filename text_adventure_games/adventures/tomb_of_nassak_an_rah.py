@@ -14,7 +14,15 @@ tutorial entirely.
 
 import random
 
-from text_adventure_games import games, things, actions, blocks, reactions, perception
+from text_adventure_games import (
+    games,
+    things,
+    actions,
+    blocks,
+    reactions,
+    perception,
+    vaarn_chargen,
+)
 from text_adventure_games.enums import Property
 from text_adventure_games.slots import Wound, roll_wound
 
@@ -1322,34 +1330,60 @@ def build_game(seed=None):
     waterskin.set_property(Property.IS_HIDDEN, True)
     merchant.add_item(waterskin)
 
-    # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
-    # walk like men", wear masks in imitation of the human face). She was the
-    # caravan's TEAMSTER, driving the zoxen; the zoxen pulled. Newbeasts are
-    # never beasts of burden -- canon reserves that for zoxen and iron mules.
-    worry = things.Character(
-        "Worry",
-        "a new-mule teamster",
-        "I am Worry. I drove the wagon; now there is no wagon.",
+    # The TEAMSTER is a NEWBEAST (Issue 1: humanoid animal-people who "speak
+    # and walk like men", wearing masks in imitation of the human face) --
+    # and a different one each expedition: rolled on the zine's own spark
+    # tables (vaarn_chargen), from a side-RNG derived from the game seed so
+    # the roll never shifts the main stream (saves stay deterministic).
+    # Newbeasts are never beasts of burden; the zoxen pulled, she drove.
+    _nb = vaarn_chargen.generate(
+        random.Random(None if seed is None else f"teamster-{seed}"),
+        ancestry="newbeast",
     )
-    worry.examine_text = (
-        "A grey new-mule in a drover's long coat, upright on her hind hooves, "
-        "dressed in the road's dust. Patient, mournful, unhurt. A carved mask "
-        "in imitation of a human face hangs at her neck on a cord; there is no "
-        "one left on the road to wear it for. A brass pin on the coat reads "
-        "WORRY."
+    _beast = _nb.sparks["beast"]
+    _hue = _nb.sparks["hue"].lower()
+    _mask = _nb.sparks["mask"]
+    _mask_line = (
+        "She wears no mask; her beast face meets you bare, which among "
+        "newbeasts is either candor or challenge."
+        if _mask == "None"
+        else f"A carved mask in imitation of a human face -- a {_mask.lower()} "
+        "one -- hangs at her neck on a cord; there is no one left on the "
+        "road to wear it for."
     )
-    worry.talk_text = (
-        '"They came at moonset, laughing," Worry says. "I ran, and the merchant '
-        "could not, and that is the whole story. The Cacklemaw make no secret "
-        'of their coming." She looks '
-        'north, to the faces in the azure stone. "Take what he no longer needs '
-        "-- better you than the sand. There is water in his pack, three rations "
-        "of it, and a glowstone besides. You can take whatever you can carry "
-        "from the hold. But "
-        "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
-        'and a caravan is seldom wrong twice."'
+    _oddity = _nb.sparks["oddity"]
+    teamster = things.Character(
+        _nb.name,
+        f"a {_beast.lower()} teamster",
+        f"I am {_nb.name}. I drove the wagon; now there is no wagon.",
     )
-    wreck.add_character(worry)
+    teamster.examine_text = (
+        f"A {_hue}-coated {_beast.lower()} in a drover's long coat, upright, "
+        "dressed in the road's dust. Patient, mournful, unhurt. "
+        f"{_mask_line} ({_oddity.rstrip('.')}.) A brass pin on the coat "
+        f"reads {_nb.name.upper()}."
+    )
+
+    def _teamster_talk(g):
+        teamster.set_property("has_spoken", True)
+        return (
+            f'"They came at moonset, laughing," {_nb.name} says. "I ran, and '
+            "the merchant could not, and that is the whole story. The "
+            'Cacklemaw make no secret of their coming." She looks north, to '
+            'the faces in the azure stone. "Take what he no longer needs -- '
+            "better you than the sand. He carried water, three rations of "
+            "it, and a glowstone; search him, he is past minding. The hold "
+            "is yours too, whatever you can carry. But mind the tomb, "
+            "scavenger. The caravans give its mouths a wide berth, and a "
+            'caravan is seldom wrong twice." She settles her pack straps as '
+            "she speaks, the way people do who have already decided to be "
+            "elsewhere."
+        )
+
+    teamster.talk_text = _teamster_talk
+    teamster.add_alias("teamster")
+    teamster.add_alias(_beast.lower())
+    wreck.add_character(teamster)
 
     # --- The eight locations -------------------------------------------------
     exterior = things.Location(
@@ -2145,7 +2179,7 @@ def build_game(seed=None):
             silas,
             spawn_guts,
             spawn_brain,
-            worry,
+            teamster,
             jackal_pack,
             horror,
             centipede,
@@ -2793,6 +2827,22 @@ def build_game(seed=None):
         )
 
     game.add_trigger("jackal_scent", _scent_check, _scent_pull, repeatable=True)
+
+    # The teamster DECAMPS once she has said her piece (CCB): she survived
+    # the night by knowing when to be elsewhere, and she still knows.
+    def _teamster_spoken(g):
+        return teamster.get_property("has_spoken") and teamster.location is wreck
+
+    def _teamster_decamps(g):
+        wreck.remove_character(teamster)
+        g.parser.ok(
+            f"{teamster.name} settles the mask over her face, takes up her "
+            "stick, and sets off south along the trail on foot -- a small "
+            "figure keeping to the wind-shadow of the dunes, smaller, then "
+            "gone. The road is yours, and the tomb is the road's."
+        )
+
+    game.add_trigger("teamster_decamps", _teamster_spoken, _teamster_decamps)
 
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
@@ -3481,7 +3531,7 @@ WALK = [
     "examine wreck",
     "search merchant",
     "take glowstone",
-    "talk to worry",
+    "talk to teamster",
     "in",
     "open crates",
     "light glowstone",
