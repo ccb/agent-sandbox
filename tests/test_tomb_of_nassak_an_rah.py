@@ -145,13 +145,32 @@ def test_the_merchants_body_can_be_searched_for_his_tokens():
     assert "purse of water-debt tokens" in game.player.inventory
 
 
-def test_worry_the_mule_tells_the_story():
+def test_the_teamster_tells_the_story_and_decamps():
+    """CCB: the teamster is a GENERATED newbeast (a different one each
+    expedition, rolled on Issue 1's spark tables), and once she has said
+    her piece she decamps south along the trail, out of the game."""
     game = _game()
+    wreck = game.locations["The Caravan Wreck"]
+    teamster = next(c for c in wreck.characters.values() if "teamster" in c.description)
+    assert teamster.name != "Worry"  # rolled, not canned
     cap = _texts(game)
-    game.do_command("talk to worry")
+    game.do_command("talk to teamster")
     said = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "they came at moonset" in said
     assert "caravan is seldom wrong twice" in said
+    # She has already decided to be elsewhere.
+    assert teamster.name not in wreck.characters
+    assert "sets off south along the trail" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_different_seeds_meet_different_teamsters():
+    names = set()
+    for seed in range(6):
+        game = tomb.build_game(seed=seed)
+        wreck = game.locations["The Caravan Wreck"]
+        t = next(c for c in wreck.characters.values() if "teamster" in c.description)
+        names.add((t.name, t.description))
+    assert len(names) >= 3  # the spark tables are doing the casting
 
 
 def test_smoke_tour_traverses_every_room_cleanly():
