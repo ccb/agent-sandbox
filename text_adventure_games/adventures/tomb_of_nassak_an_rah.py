@@ -75,6 +75,47 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 # act alone: prying its coffin (the boss fight, below).
 
 
+# The lattice holds the Autarch's DAYS (CCB: a different memory per look, not
+# always the embalming). The embalming replay -- the jar-puzzle clue -- stays
+# in the pool: you sift a dead king's days for the useful one, and Silas
+# points the way ("the lattice remembers his embalming, for those who trouble
+# to look").
+_LATTICE_MEMORIES = (
+    "the Autarch's embalming: the baboon took his lungs, the human his "
+    "liver, the mantis his eyes; the falcon was given his intestines, and "
+    "the jackal -- strangely -- his brain.",
+    "a breakfast: flat bread and salt-oil on a balcony above a garden whose "
+    "species no longer exist. Someone laughs, off-facet. He decides to be "
+    "kind today. The crystal does not record whether he managed it.",
+    "the day they raised him: ten thousand banners the colour of this sand, "
+    "and his own hands shaking too hard to take the staff, so that he grips "
+    "his wrist to steady it -- the gesture his historians would later call "
+    "the Vice.",
+    "a physician's chamber. Something orange in a sample-jar, small as a "
+    "coin, and An-Rah watching it move against the glass with an expression "
+    "the facet preserves exactly. It is not fear.",
+    "a memory that is not his: eight-jointed hands sorting seeds by "
+    "starlight, patient as arithmetic. The lattice does not say whose day "
+    "this was, or how it got in among the king's.",
+    "an old man's hands -- his own, by then -- teaching a kestrel to stand "
+    "on a wrist, over and over, with the patience of a man who has outlived "
+    "everyone who would have laughed at him.",
+    "the tombwrights taking his measurements while he still lived; his own "
+    "voice, bored, asking whether the sky-facing face might be made to "
+    "smile. It was not.",
+)
+
+
+def _lattice_look(g=None):
+    """A different facet each look (callable examine_text; engine support in
+    actions.things.Examine / Thing.sense_text)."""
+    return (
+        "Lazulite crystals knit across the walls, worn smooth at "
+        "hand-height. A bank wakes at your attention and replays "
+        + _RNG.choice(_LATTICE_MEMORIES)
+    )
+
+
 def _wound_player(g, name, slots_n, desc):
     """Wound the player: the standard [damage] line, any displaced-gear spill,
     and the fatal verdict back to the caller. *desc* may be a tuple of
@@ -1329,10 +1370,7 @@ def build_game(seed=None):
         memory,
         "crystal lattice",
         "lattices of memory-crystal",
-        "Lazulite crystals knit across the walls, worn smooth at hand-height. "
-        "One bank replays the Autarch's embalming for no one: the baboon took "
-        "his lungs, the human his liver, the mantis his eyes; the falcon was "
-        "given his intestines, and the jackal -- strangely -- his brain.",
+        _lattice_look,  # a different facet each look (CCB)
     )
     lattice.add_alias("lattice")
     lattice.add_alias("crystals")

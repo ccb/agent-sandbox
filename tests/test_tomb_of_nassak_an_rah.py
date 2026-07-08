@@ -206,12 +206,20 @@ def test_silas_warns_about_the_spawn_and_the_seal():
 
 
 def test_memory_crystals_give_the_head_to_organ_clue():
+    """The clue is now one facet among many (CCB: random memory per look):
+    whoever troubles to keep looking still finds the embalming."""
     game = _game()
     _embark(game)
+    tomb._RNG.seed(1)
     cap = _texts(game)
     game.do_command("sneak north")
     game.do_command("sneak north")
-    game.do_command("examine crystal lattice")
+    for _ in range(30):  # sift the king's days for the useful one
+        game.do_command("examine crystal lattice")
+        if "the jackal -- strangely -- his brain" in " ".join(
+            cap.texts(Channel.NARRATION)
+        ):
+            break
     assert "the jackal -- strangely -- his brain" in " ".join(
         cap.texts(Channel.NARRATION)
     )
@@ -1171,6 +1179,21 @@ def test_the_dead_dont_sway_in_the_listings():
     out = " ".join(cap.texts(Channel.NARRATION))
     assert "collapsed in a heap" in out
     assert "swaying toward every sound" not in out
+
+
+def test_the_lattice_shows_a_different_memory_each_look():
+    """CCB: looking into the lattice draws a random facet of the Autarch's
+    days, not always the embalming -- but the embalming (the jar-puzzle clue)
+    stays in the pool, findable by whoever troubles to look."""
+    game = _game()
+    tomb._RNG.seed(4)
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    for _ in range(8):
+        game.do_command("x lattice")
+    looks = [t for t in cap.texts(Channel.NARRATION) if "Lazulite" in t]
+    assert len(set(looks)) >= 3  # variety across looks
+    assert any("embalming" in m for m in tomb._LATTICE_MEMORIES)  # clue kept
 
 
 def test_silas_answers_on_his_subjects():
