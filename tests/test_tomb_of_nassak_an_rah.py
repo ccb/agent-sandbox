@@ -1330,6 +1330,51 @@ def test_fire_scours_the_centipede_with_the_growth():
     assert game.characters["glass centipede"].get_property("is_dead")
 
 
+def test_carried_food_draws_the_denned_pack_by_scent():
+    """CCB: anything edible carried within two rooms of the pack's ground
+    pulls them out -- no noise required; salt meat is its own summons."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    pack = game.characters["jackal pack"]
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")  # noses lift: they emerge
+    assert pack.location.name == "Hall of Memory"
+    game.do_command("wait")  # and close
+    assert pack.location is game.player.location
+
+
+def test_no_food_no_scent():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
+def test_a_sated_pack_ignores_the_scent():
+    """Post-feed grace holds even against fresh meat."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    for hall in ("Hall of Memory", "Hall of Hounds", "Hall of Warriors"):
+        loc = game.locations[hall]
+        loc.set_property(f"_jk:{hall}", -4)  # just fed
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
+def test_scent_has_a_two_room_range():
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    game.do_command("wait")  # at the wreck: 3+ hops from the den mouth
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
 def test_butchering_the_zoxen_wants_a_blade_and_yields_two_cuts():
     """CCB: the zoxen earn their keep -- BUTCHER with a blade in hand gives
     edible trail meat, twice, and then the sand has the rest."""
@@ -1350,17 +1395,21 @@ def test_butchering_the_zoxen_wants_a_blade_and_yields_two_cuts():
 
 
 def test_zox_meat_serves_as_jackal_tribute():
-    """The haunch plugs into the existing feed mechanic: GIVE it to the pack
-    and they carry it off to the den, sated a long while."""
+    """The scent draws them, and the same meat buys them off: GIVE the haunch
+    and the pack carries it to the den, sated a long while."""
     game = _game()
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
     game.do_command("butcher zoxen")
     game.do_command("take zox haunch")
-    _summon_pack(game)
-    game.relocate(game.player, game.characters["jackal pack"].location)
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")  # noses lift
+    game.do_command("wait")  # they arrive
+    pack = game.characters["jackal pack"]
+    assert pack.location is game.player.location
     game.do_command("give zox haunch to jackal pack")
-    game.do_command("wait")
-    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+    assert pack.location.name == "Shallow Dens"  # gone with their tribute
+    game.do_command("wait")  # and the grace holds against nothing at all
+    assert pack.location.name == "Shallow Dens"
 
 
 def test_the_centipede_hunts_once_sprung():
