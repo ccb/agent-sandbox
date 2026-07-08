@@ -28,11 +28,15 @@ from .things import (
 from .investigate import Read, Search
 from .talk import Say, Talk, Follow, Unfollow
 from .goals import AdoptGoal, DropGoal
+from .saves import Save, Restore, Script
 from .vehicles import Mount, Dismount
 from .use import use_item_on
 
 __all__ = [
     "Action",
+    "Save",
+    "Restore",
+    "Script",
     "ActionSequence",
     "Wait",
     "Quit",

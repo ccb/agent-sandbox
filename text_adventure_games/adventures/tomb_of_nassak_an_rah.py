@@ -3049,4 +3049,9 @@ if __name__ == "__main__":
     elif "--walk" in sys.argv:
         _run(WALK)
     else:
-        build_game().game_loop()
+        # Interactive play gets the Infocom trio: SAVE/RESTORE slots persist
+        # to a JSON file beside your home dir, via the loop that can actually
+        # rebuild the world on RESTORE (saves.run_with_saves).
+        from ..saves import FileSaveStore, run_with_saves
+
+        run_with_saves(build_game, FileSaveStore("~/.tomb_of_nassak_saves.json"))
