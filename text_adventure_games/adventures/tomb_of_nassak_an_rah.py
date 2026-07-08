@@ -1281,8 +1281,12 @@ def build_game(seed=None):
         exterior,
         "tomb",
         "the Tomb of Nassak An-Rah",
-        "Three faces in azure stone -- boy, warrior, and sky-gazing elder -- "
-        "their mouths gaping as doors. Orange fungus mortars every seam.",
+        "A blue slab of stone, thirty feet high, carved as three likenesses "
+        "of Nassak An-Rah: a boy on the western face, a helmed warrior on "
+        "the eastern, and at the summit an old man with his face to the sky. "
+        "The two lower mouths gape as doorways. From the elder's mouth -- a "
+        "chimney -- bright orange tendrils and fungal vines sprout, webbing "
+        "down over the stone, shifting drowsily in the red light of the sun.",
     )
     # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
     # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
