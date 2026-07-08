@@ -2221,12 +2221,52 @@ def build_game(seed=None):
         "dark of it, the fungus is warm."
     )
 
+    # THE WHOLE TOMB IS DARK (CCB): every interior hall wants a carried
+    # light. The three ground halls have their own faint canonical glows
+    # (the luminous tank, the crimson plinths, the glimmering lattice), so
+    # they are GLOOM -- shape and exits show, contents don't, and the dim
+    # description carries the room until a light does.
+    memory.obscure(
+        perception.Gloom(
+            blurb="The lattice's glimmer is light the way frost is water: "
+            "walls of faint constellations, and nothing else legible."
+        )
+    )
+    memory.dim_description = (
+        "A hall lit only by the lattice itself -- drifts of pale glimmer "
+        "crawling the walls, each point a day someone else lived. Between "
+        "their constellations, the dark keeps its own counsel."
+    )
+    hounds.obscure(
+        perception.Gloom(
+            blurb="A wall of green-gold light: the tank glows like old honey "
+            "held to a lamp, and everything before it is silhouette."
+        )
+    )
+    hounds.dim_description = (
+        "The hall is lit only by the tank -- a wall of green-gold, luminous "
+        "and slow, ten hound-shapes hanging in it like thoughts. Everything "
+        "on your side of the plexiglas is shadow and floor-grit."
+    )
+    canopic.obscure(
+        perception.Gloom(
+            blurb="Two points of crimson burn at knee height and light "
+            "nothing but themselves. The stair climbs into black."
+        )
+    )
+    canopic.dim_description = (
+        "A pentagon of dressed stone, dark except where two empty plinths "
+        "burn crimson from within -- light that reaches nothing, like coals "
+        "in a cold room. Something in this room is listening; you can tell, "
+        "the way one can."
+    )
+
     youth.obscure(
         perception.Darkness(
             blurb="Dark as the inside of a sealed jar. The air is chill and smells "
             "of old guano; somewhere far above, leather rustles against leather, "
-            "patient and vast. The caravan-guards' word for the boy's mouth was "
-            "'lightless', and they meant it as advice."
+            "patient and vast. The road-folk's word for the boy's mouth is "
+            "'lightless', and they mean it as advice."
         )
     )
 
