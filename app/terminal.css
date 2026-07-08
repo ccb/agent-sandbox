@@ -111,7 +111,7 @@ body, input {
 }
 .prompt { color: var(--phosphor-bright); }
 
-/* scanlines + vignette overlay */
+/* scanlines + vignette overlay, with the phosphor's faint breathing (M3) */
 #scanlines {
   pointer-events: none;
   position: fixed;
@@ -126,6 +126,57 @@ body, input {
     ),
     radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
 }
+#crt { animation: flicker 4s infinite; }
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.96; }
+  94% { opacity: 1; }
+  97% { opacity: 0.985; }
+}
+
+/* CRT EFFECTS off: a plain, readable terminal (also the accessibility mode) */
+body.no-crt #scanlines { display: none; }
+body.no-crt #crt { animation: none; }
+body.no-crt, body.no-crt input, body.no-crt #boottext { text-shadow: none; }
+
+/* TEXT SIZE */
+body.size-small, body.size-small input { font-size: 13px; }
+body.size-large, body.size-large input { font-size: 18px; }
+
+/* the settings overlay: terminal-styled, not a system sheet */
+#gear {
+  margin-left: 0.6rem;
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 3px;
+  padding: 0 0.45rem;
+  cursor: pointer;
+  color: var(--phosphor-bright);
+}
+#settings {
+  position: absolute;
+  top: 2.2rem;
+  right: 0.25rem;
+  z-index: 5;
+  min-width: 16rem;
+  background: var(--bg);
+  border: 1px solid var(--phosphor-dim);
+  box-shadow: 0 0 18px rgba(77, 184, 255, 0.25);
+  padding: 0.4rem 0;
+}
+#settings.hidden { display: none; }
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.05em;
+}
+.setting-row:active { background: var(--phosphor-dim); color: var(--bg); }
+.setting-value { color: var(--phosphor-bright); }
+.setting-done { justify-content: center; color: var(--phosphor-bright); }
 
 /* the diegetic warm-up: a CRT takes a moment to glow */
 #bootscreen {

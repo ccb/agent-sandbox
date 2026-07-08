@@ -37,7 +37,8 @@ Or: `xcodegen generate`, open the project in Xcode, hit Run.
 Running on a real iPhone or distributing via TestFlight needs CCB's Apple
 Developer account: open the project in Xcode, set the team under Signing &
 Capabilities, and archive. Before the App Store: an icon set and screenshots
-(design §5 v2). Known open question from the design doc: `localStorage`
-persistence under custom URL schemes across app relaunches — if saves don't
-survive a relaunch on device, the fallback is bridging the save store to
-`UserDefaults` via a third message handler.
+(design §5 v2). The design doc's open question on `localStorage`
+persistence under custom URL schemes is answered in the SIMULATOR: the
+autosave survived a terminate + relaunch (the RESTORE AUTO banner came up).
+Re-confirm once on a real device; if it ever fails there, the fallback is
+bridging the save store to `UserDefaults` via a third message handler.
