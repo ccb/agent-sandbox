@@ -1173,6 +1173,22 @@ def test_the_dead_dont_sway_in_the_listings():
     assert "swaying toward every sound" not in out
 
 
+def test_silas_answers_on_his_subjects():
+    """CCB: ASK SILAS ABOUT memories/lattice/crystal explains what the
+    memories are; about himself/robes, why he is there (a mendicant of the
+    Seekers, in yellow monk's robes)."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    game.do_command("ask silas about the memories")
+    game.do_command("ask silas about his robes")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "memory-crystal" in out and "only crystal remembers breakfast" in out
+    assert "Seekers of Eyeless Wisdom" in out and "yellow" in out
+    game.do_command("x silas")
+    assert "yellow monk's robes" in " ".join(cap.texts(Channel.NARRATION))
+
+
 def test_the_crystal_seal_bars_the_stair_from_both_ends():
     """CCB fix: the seal was one-directional. A scavenger who came down the
     chimney into the sphere must not walk down an unsolved stair; once the
