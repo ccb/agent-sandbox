@@ -92,9 +92,15 @@ _LATTICE_MEMORIES = (
     "the Autarch's embalming: the baboon took his lungs, the human his "
     "liver, the mantis his eyes; the falcon was given his intestines, and "
     "the jackal -- strangely -- his brain.",
-    "a breakfast: flat bread and salt-oil on a balcony above a garden whose "
-    "species no longer exist. Someone laughs, off-facet. He decides to be "
-    "kind today. The crystal does not record whether he managed it.",
+    "a bath: full immersion, water to the chin and warm -- a luxury no one "
+    "now living has tasted. He weeps in it, quietly, where no court can "
+    "see, and the crystal keeps the weeping with the warmth.",
+    "his mother's hand on the back of his neck, from before either crown "
+    "or name. The facet is brief. It is the most consulted bank in the "
+    "lattice; the wear on the crystal says so.",
+    "the first time he drew blood: a training yard, a cousin's forearm "
+    "opened by accident, and the long second in which he understands that "
+    "no one is going to punish him. The facet ends on that second.",
     "the day they raised him: ten thousand banners the colour of this sand, "
     "and his own hands shaking too hard to take the staff, so that he grips "
     "his wrist to steady it -- the gesture his historians would later call "
@@ -2042,12 +2048,14 @@ def build_game(seed=None):
     # (longest match wins), the LLM parser by meaning.
     _about_lattice = (
         "Silas's fingertips still. \"The lattice is a memory-crystal -- "
-        "New-Pangean work, grown rather than cut. The tombwrights fed it the "
-        "Autarch's days as they embalmed him, and it holds them yet, set "
-        "down in facets: a reader with the right fingertips can walk them "
-        "like halls. Most are small. A meal. A lesson. Rain on a roof that "
-        "is dust now. That is what makes them precious -- empires save "
-        'their triumphs; only crystal remembers breakfast." He turns back '
+        "New-Pangean work, grown rather than cut. The tombwrights fed it "
+        "the Autarch's chosen memories as they embalmed him, and it holds "
+        "them yet, set down in facets: a reader with the right fingertips "
+        "can walk them like halls. Not his decrees -- crystal is too dear "
+        "for decrees. What it keeps is what he could not buy twice: his "
+        "mother's hand on the back of his neck. A bath, full immersion, "
+        "water to the chin -- a luxury this world no longer imagines. The "
+        'first time he drew blood, and what it taught him." He turns back '
         'to the light. "Look into it yourself, if you are gentle. It shows '
         'what it chooses."'
     )
