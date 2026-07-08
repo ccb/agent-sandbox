@@ -1250,6 +1250,33 @@ def test_silas_answers_on_his_subjects():
     assert "yellow monk's robes" in " ".join(cap.texts(Channel.NARRATION))
 
 
+def test_the_whole_tomb_is_dark_without_a_light():
+    """CCB: every interior hall wants a carried light. The ground halls'
+    own glows (tank, plinths, lattice) make them GLOOM -- dim description,
+    contents unlisted -- until a lit glowstone changes everything."""
+    game = _game()
+    cap = _texts(game)
+    for hall, tell in (
+        ("Hall of Memory", "each point a day someone else lived"),
+        ("Hall of Hounds", "lit only by the tank"),
+        ("Hall of the Canopic Jars", "like coals in a cold room"),
+    ):
+        game.relocate(game.player, game.locations[hall])
+        game.do_command("look")
+        out = " ".join(cap.texts(Channel.NARRATION))
+        assert tell in out, hall
+    # Contents are shapes, not listings: the jars are not itemized unlit.
+    assert "baboon-headed canopic jar" not in " ".join(cap.texts(Channel.NARRATION))
+    # A lit glowstone restores the full hall.
+    merchant = game.locations["The Caravan Wreck"].items["dead merchant"]
+    stone = merchant.contents["glowstone"]
+    merchant.remove_item(stone)
+    game.player.add_to_inventory(stone)
+    game.do_command("light glowstone")
+    game.do_command("look")
+    assert "baboon-headed canopic jar" in " ".join(cap.texts(Channel.NARRATION))
+
+
 def test_the_crystal_seal_bars_the_stair_from_both_ends():
     """CCB fix: the seal was one-directional. A scavenger who came down the
     chimney into the sphere must not walk down an unsolved stair; once the
