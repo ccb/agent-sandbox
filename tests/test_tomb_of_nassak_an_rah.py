@@ -1330,6 +1330,64 @@ def test_fire_scours_the_centipede_with_the_growth():
     assert game.characters["glass centipede"].get_property("is_dead")
 
 
+def test_the_centipede_hunts_once_sprung():
+    """CCB: after its ambush the centipede follows the player anywhere, a
+    room a round, and bites every round it shares one -- with one arrival
+    round of grace, so running works and stopping doesn't."""
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # the ambush: sprung + first bite
+    cent = game.characters["glass centipede"]
+    assert cent.get_property("sprung")
+    bites = sum(1 for w in game.player.wounds if w.name == "Centipede Venom")
+    assert bites == 1
+    game.do_command("out")  # flee: it follows to the Summit
+    game.do_command("wait")  # it arrives (grace round) or bites
+    game.do_command("wait")  # co-located: bitten
+    assert cent.location is game.player.location
+    assert sum(1 for w in game.player.wounds if w.name == "Centipede Venom") > bites
+
+
+def test_kick_the_centipede_off_the_roof():
+    """CCB: on the Summit, KICK sends it over the edge -- it shatters at the
+    tomb's base, leaving remains there. A boot pays no venom."""
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")
+    game.do_command("out")
+    game.do_command("wait")  # let it arrive
+    wounds = len(game.player.wounds)
+    cap = _texts(game)
+    game.do_command("kick centipede")
+    cent = game.characters["glass centipede"]
+    assert cent.get_property("is_dead")
+    assert "centipede remains" in game.locations["Tomb Exterior"].items
+    assert len(game.player.wounds) == wounds  # the boot pays nothing
+    assert "dropped chandelier" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_throwing_it_by_hand_draws_a_parting_bite():
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")
+    game.do_command("out")
+    game.do_command("wait")
+    wounds = len(game.player.wounds)
+    game.do_command("throw centipede off the roof")
+    assert game.characters["glass centipede"].get_property("is_dead")
+    assert len(game.player.wounds) == wounds + 1  # hands pay for live glass
+
+
+def test_no_edge_no_toss():
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # sprung, co-located in the chimney
+    cap = _texts(game)
+    game.do_command("kick centipede")
+    assert not game.characters["glass centipede"].get_property("is_dead")
+    assert any("no edge here" in t for t in cap.texts(Channel.BLOCKED))
+
+
 def test_fire_finds_a_senseless_centipede_where_it_lies():
     """CCB playtest: a KO'd centipede ("cracked and still") seemed to die
     twice -- the scour line had it "boil out" of the growth. A senseless
