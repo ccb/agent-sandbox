@@ -211,3 +211,5 @@ godot-generative-agents/web/*.tsbuildinfo
 # deps are still skipped. (pnpm-lock.yaml / pnpm-workspace.yaml are YAML, tracked.)
 !godot-generative-agents/web/**/*.json
 app/dist/
+ios/build/
+ios/*.xcodeproj

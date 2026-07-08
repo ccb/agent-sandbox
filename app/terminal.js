@@ -21,6 +21,11 @@ function print(text, cls) {
   output.scrollTop = output.scrollHeight;
 }
 
+function haptic(kind) {
+  // Present only inside the iOS shell; the web build silently skips it.
+  try { window.webkit.messageHandlers.haptic.postMessage(kind); } catch (e) {}
+}
+
 function render(payloadJson) {
   const payload = JSON.parse(payloadJson);
   for (const ev of payload.events) {
@@ -30,8 +35,10 @@ function render(payloadJson) {
     const prefix = ev.channel === "damage" ? "♥ " :
                    ev.channel === "blocked" ? "✗ " : "";
     print(prefix + ev.text, cls);
+    if (ev.channel === "damage") haptic("damage");
   }
   const s = payload.status;
+  if (s.game_over && !s.won) haptic("death");
   statusRoom.textContent = (s.room || "").toUpperCase();
   statusScore.textContent = `${s.score}/${s.max_score}   T:${s.turn}`;
   renderChips(payload.suggestions);
@@ -76,12 +83,24 @@ cmd.addEventListener("keydown", (e) => {
 
 async function main() {
   boottext.textContent += ".";
-  const pyodide = await loadPyodide();
+  // The manifest names the wheel and where the Pyodide runtime lives: the
+  // CDN for the plain web deploy, "./pyodide/" when vendored (the iOS bundle
+  // is fully offline -- build_dist.py --with-pyodide).
+  const manifest = await (await fetch("manifest.json")).json();
+  const base = manifest.pyodideBase ||
+    "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+  await new Promise((ok, bad) => {
+    const s = document.createElement("script");
+    s.src = base + "pyodide.js";
+    s.onload = ok;
+    s.onerror = () => bad(new Error("could not load the Python runtime"));
+    document.head.appendChild(s);
+  });
+  const pyodide = await loadPyodide({ indexURL: base });
   boottext.textContent += ".";
 
   // The engine wheel: pure Python, zero dependencies (verified by the
   // blocked-imports audit). unpackArchive installs it without micropip.
-  const manifest = await (await fetch("manifest.json")).json();
   const wheel = await (await fetch(manifest.wheel)).arrayBuffer();
   pyodide.unpackArchive(wheel, "wheel");
   boottext.textContent += ".";
