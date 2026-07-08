@@ -792,6 +792,94 @@ class PryCoffin(actions.Action):
         self.game.award("exotica", 30, None)
 
 
+class TossCentipede(actions.Action):
+    """KICK or THROW the glass centipede off the Summit (CCB): it falls the
+    height of the tomb and shatters on the stones at the base, leaving its
+    remains there. The verb matters -- KICK uses a boot; THROW means picking a
+    venomous glass centipede up with your hands, and the hands pay for it."""
+
+    ACTION_NAME = "kick centipede"
+    ACTION_DESCRIPTION = "Kick (or throw) the glass centipede off the roof"
+    ACTION_ALIASES = [
+        "kick the centipede",
+        "throw centipede",
+        "throw the centipede",
+        "toss centipede",
+        "toss the centipede",
+        "kick centipede off",
+        "throw centipede off",
+        "kick centipede off the roof",
+        "throw centipede off the roof",
+        "kick glass centipede",
+        "throw glass centipede",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+
+    def check_preconditions(self) -> bool:
+        centipede = self.game.characters.get("glass centipede")
+        if centipede is None or centipede.location is not self.player.location:
+            self.parser.fail("The centipede isn't here to kick.")
+            return False
+        if centipede.get_property("is_dead"):
+            self.parser.fail("It is past kicking.")
+            return False
+        if self.player.location.name != "The Summit":
+            self.parser.fail(
+                "There is no edge here worth the trouble -- it would only "
+                "come back. The Summit has a drop that means it."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        centipede = self.game.characters["glass centipede"]
+        by_hand = "throw" in self.command or "toss" in self.command
+        if by_hand and not centipede.get_property("is_unconscious"):
+            # Picking up four feet of live venomous glass: the hands pay.
+            fatal = _wound_player(
+                self.game,
+                "Centipede Venom",
+                1,
+                (
+                    "It hits you once across the palm as you heave it -- a "
+                    "parting gift, going in cold.",
+                ),
+            )
+            if fatal:
+                _die(
+                    self.game,
+                    "The venom finishes its work at the very edge of the "
+                    "sky. THE END.",
+                )
+                return
+        verb = "heave" if by_hand else "kick"
+        self.parser.ok(
+            f"You {verb} the glass centipede over the Summit's edge. It "
+            "falls the height of all three carved faces, turning, catching "
+            "the red light -- and comes apart on the stones below with a "
+            "sound like a dropped chandelier."
+        )
+        centipede.set_property("is_dead", True)
+        if centipede.location is not None:
+            centipede.location.remove_character(centipede)
+        exterior = self.game.locations["Tomb Exterior"]
+        remains = things.Item(
+            "centipede remains",
+            "the shattered remains of the glass centipede",
+            "A spray of translucent chitin across the stones, glittering "
+            "like a burst chandelier. The venom dries to nothing in the "
+            "open air.",
+        )
+        remains.set_property("gettable", False)
+        remains.add_alias("remains")
+        remains.add_alias("shattered centipede")
+        exterior.add_item(remains)
+
+
 class CrystalSeal(blocks.Block):
     """The red-crystal seal on the stair between the Canopic hall and the
     Burial Sphere. A physical seal bars a stair from BOTH ends (CCB fix: it
@@ -1993,7 +2081,7 @@ def build_game(seed=None):
             horror,
             centipede,
         ],
-        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
+        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill, TossCentipede],
     )
     game.max_score = 100
     game.rng_seed = seed  # the save blob records this alongside game.journal
@@ -2968,23 +3056,12 @@ def build_game(seed=None):
 
     game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
 
-    # --- The glass centipede's ambush -----------------------------------------
-    def _centipede_lurks(g):
-        return (
-            not centipede.get_property("is_dead")
-            and not centipede.get_property("is_unconscious")
-            and g.player.location is chimney
-        )
-
-    def _centipede_bites(g):
-        if chimney.get_property("burned") and centipede.location is not chimney:
-            return  # scoured out before it ever sprang
-        if centipede.location is not chimney:
-            g.relocate(centipede, chimney)
-            g.parser.ok(
-                "The growth beside you bends wrong -- and four feet of glass "
-                "uncoils out of it, faster than the eye wants to allow."
-            )
+    # --- The glass centipede: ambush, then a HUNT (CCB) ----------------------
+    # It springs in the chimney as before -- but once sprung it follows the
+    # player anywhere, a room a round, and bites every round it shares one.
+    # The outs: keep moving (it closes but grants an arrival round), one solid
+    # blade hit, fire in the chimney -- or the Summit's edge (the toss, below).
+    def _centipede_venom(g):
         fatal = _wound_player(
             g,
             "Centipede Venom",
@@ -2998,12 +3075,47 @@ def build_game(seed=None):
         if fatal:
             _die(
                 g,
-                "The venom finishes what the tomb began; the shaft keeps you. "
+                "The venom finishes what the tomb began; the tomb keeps you. "
                 "THE END.",
             )
 
+    def _centipede_active(g):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and (centipede.get_property("sprung") or g.player.location is chimney)
+        )
+
+    def _centipede_hunts(g):
+        here = g.player.location
+        if not centipede.get_property("sprung"):
+            if chimney.get_property("burned"):
+                return  # scoured out before it ever sprang
+            centipede.set_property("sprung", True)
+            if centipede.location is not chimney:
+                g.relocate(centipede, chimney)
+            g.parser.ok(
+                "The growth beside you bends wrong -- and four feet of glass "
+                "uncoils out of it, faster than the eye wants to allow."
+            )
+            _centipede_venom(g)
+            return
+        if centipede.location is here:
+            _centipede_venom(g)
+            return
+        step = _hop_anywhere(centipede.location, here)
+        if step is not None:
+            g.relocate(centipede, step)
+            g.parser.ok(
+                "Glass pours through the doorway after you, unhurried as "
+                "water finding a level."
+                if step is here
+                else "Somewhere behind you, glass ticks over stone, keeping "
+                "your pace."
+            )
+
     game.add_trigger(
-        "centipede_ambush", _centipede_lurks, _centipede_bites, repeatable=True
+        "centipede_hunt", _centipede_active, _centipede_hunts, repeatable=True
     )
 
     # Fire scours the shaft: the centipede goes with the growth.
