@@ -83,7 +83,10 @@ class Thing:
         from ..perception import Sense, GENERIC_SENSE_TEXT
 
         if sense == Sense.SIGHT:
-            return getattr(self, "examine_text", "") or self.description
+            text = getattr(self, "examine_text", "") or self.description
+            # examine_text may be a callable (see actions.things.Examine);
+            # sense_text has no game handle, so call it bare.
+            return text() if callable(text) else text
         if sense in self._senses:
             return self._senses[sense] or GENERIC_SENSE_TEXT.get(sense, "")
         return None

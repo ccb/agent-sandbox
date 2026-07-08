@@ -493,6 +493,11 @@ class Examine(base.Action):
                     if inner.get_property("is_hidden"):
                         inner.set_property("is_hidden", False)
             base_text = self.matched_item.examine_text or self.matched_item.description
+            # Like talk_text, an examine_text may be a callable(game) -> str,
+            # computed at look time -- for things whose close-up changes (a
+            # memory lattice showing a different facet each look, a gauge).
+            if callable(base_text):
+                base_text = base_text(self.game)
             text = base_text + self._contents_sentence(self.matched_item)
             # A mirror reflects whoever looks into it -- compose the examiner's
             # live appearance (+ what they're wearing) rather than canned text
