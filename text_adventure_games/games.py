@@ -76,6 +76,13 @@ class Game:
         # Records history of commands, states, and descriptions
         self.game_history = []
 
+        # The journal: every turn-consuming player command, in order (the iOS
+        # app design, docs/design/ios-tomb-app.md §2). Because a game is
+        # deterministic once its RNG is seeded, (seed, journal) IS the save
+        # file: restore = rebuild + replay(). FREE actions (Inventory, Help)
+        # and failed commands change no state, so they are not recorded.
+        self.journal: list[str] = []
+
         self.game_over = False
         self.game_over_description = None
 
@@ -259,8 +266,39 @@ class Game:
                 and not self.config.engine.meta_actions_cost_turns
             ):
                 return success
+            # A turn-consuming success enters the journal (a comma-sequence
+            # journals part by part via the recursion above, so a replay of
+            # the journal never re-splits). Failed commands and FREE actions
+            # change no state and are deliberately absent.
+            self.journal.append(command)
             self.end_turn()
         return success
+
+    def replay(self, commands, quiet: bool = True) -> int:
+        """Re-run *commands* through :meth:`do_command`, by default with
+        rendering suppressed -- the restore half of a (seed, journal) save
+        (docs/design/ios-tomb-app.md §2). Returns the number of commands run.
+
+        Replayed commands re-enter :attr:`journal` exactly as they did live, so
+        after a replay the journal equals the commands that succeeded -- saving
+        again works without special cases. Stops early if the game ends.
+        """
+        from .reporting import CaptureRenderer
+
+        old_renderer = self.parser.renderer
+        if quiet:
+            self.parser.set_renderer(CaptureRenderer())
+        ran = 0
+        try:
+            for command in commands:
+                if self.is_game_over():
+                    break
+                self.do_command(command)
+                ran += 1
+        finally:
+            if quiet:
+                self.parser.set_renderer(old_renderer)
+        return ran
 
     def end_turn(self):
         """
