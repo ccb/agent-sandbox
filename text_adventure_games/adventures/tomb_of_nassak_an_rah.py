@@ -1374,6 +1374,25 @@ def build_game(seed=None):
     )
     lattice.add_alias("lattice")
     lattice.add_alias("crystals")
+    # BREAKABLE (CCB): smashing it yields a MEMORY SHARD -- and an archivist's
+    # undying wrath (the trigger below the jackal block).
+    lattice.set_property("is_breakable", True)
+    lattice.set_property(
+        "break_text",
+        "The bank gives with a sound like a struck bell-field: facet after "
+        "facet cascades dark, a thousand remembered days going out at once. "
+        "A hand-sized shard skitters to your feet, one memory still alive "
+        "inside it.",
+    )
+    # The shard's one surviving memory is drawn at BREAK time (inside the
+    # trigger), not at build: a build-time draw would shift the RNG stream
+    # for every game, seeded or not.
+    memory_shard = things.Item(
+        "memory shard",
+        "a shard of memory-crystal, one facet still lit",
+        "A splinter of lazulite, warm-edged where it broke.",
+    )
+    memory_shard.add_alias("shard")
     tank = _scenery(
         hounds,
         "tank",
@@ -2497,6 +2516,113 @@ def build_game(seed=None):
                 )
 
     game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
+
+    # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
+    def _lattice_broken(g):
+        return (
+            any(
+                e.actor == g.player.name
+                and e.action == "break"
+                and any(w in (e.summary or "").lower() for w in ("lattice", "crystal"))
+                for e in g.events[g._round_event_start :]
+            )
+            and "crystal lattice" not in memory.items
+        )
+
+    def _lattice_shatters(g):
+        memory_shard.examine_text = (
+            "A splinter of lazulite, warm-edged where it broke. One facet "
+            "still plays, over and over, "
+            + _RNG.choice(_LATTICE_MEMORIES)
+            + " The rest of the bank it came from is dark now, and will "
+            "stay so."
+        )
+        memory.add_item(memory_shard)
+        memory.description = (
+            "Dead lattices climb every wall, dark where they were lit -- a "
+            "library burned in a language no one else could read. Splinters "
+            "of lazulite grit underfoot."
+        )
+        _scenery(
+            memory,
+            "shattered lattice",
+            "the dead memory-crystal, dark and fractured",
+            "The facets are ash-grey and silent. Whatever days the Autarch "
+            "kept here are gone from the universe now, except the one in "
+            "the shard.",
+        )
+        if not silas.get_property("is_dead") and not silas.get_property(
+            "is_unconscious"
+        ):
+            silas.set_property("wrathful", True)
+            silas.set_property("mellowed", False)
+            g.parser.ok(
+                'Silas turns all the way around for the first time. "Those '
+                "were EVERYONE'S,\" he says, very quietly, and the cranial "
+                'bores slide from his fingertips like claws. "Every day he '
+                "ever kept. You have made me the last reader of a burned "
+                'book." He comes for you, and he does not stop coming.'
+            )
+
+    game.add_trigger("lattice_break", _lattice_broken, _lattice_shatters)
+
+    def _hop_anywhere(start, goal):
+        """One step from *start* toward *goal*, any route (Silas knows every
+        hall; unlike the pack he honors no territory)."""
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, None)])
+        while queue:
+            room, first = queue.popleft()
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return first or nxt
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, first or nxt))
+        return None
+
+    def _silas_wrathful(g):
+        return (
+            silas.get_property("wrathful")
+            and not silas.get_property("is_dead")
+            and not silas.get_property("is_unconscious")
+        )
+
+    def _silas_hunts(g):
+        here = g.player.location
+        if silas.location is here:
+            fatal = _wound_player(
+                g,
+                "Bore-Struck",
+                1,
+                (
+                    "A cranial bore skips off your skull, taking skin.",
+                    "His fingertips find the base of your neck; a white "
+                    "spark of someone else's morning blinds you.",
+                    "The archivist's hand closes on your jaw; the bore "
+                    "sings against bone.",
+                ),
+            )
+            if fatal:
+                _die(
+                    g,
+                    "Silas reads you to the last page, and closes it. THE END.",
+                )
+            return
+        step = _hop_anywhere(silas.location, here)
+        if step is not None:
+            g.relocate(silas, step)
+            g.parser.ok(
+                "Soft, unhurried footsteps keep coming -- the archivist, "
+                "reading your trail."
+                if step is not here
+                else "Silas comes through the doorway, yellow robes without "
+                "haste, bores out."
+            )
+
+    game.add_trigger("silas_wrath", _silas_wrathful, _silas_hunts, repeatable=True)
 
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):

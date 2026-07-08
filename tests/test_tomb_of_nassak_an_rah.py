@@ -1196,6 +1196,37 @@ def test_the_lattice_shows_a_different_memory_each_look():
     assert any("embalming" in m for m in tomb._LATTICE_MEMORIES)  # clue kept
 
 
+def test_breaking_the_lattice_yields_a_shard_and_silass_wrath():
+    """CCB: BREAK LATTICE -> a memory shard, and an archivist who attacks
+    and keeps attacking -- through every hall, every round."""
+    game = _game()
+    memory = game.locations["Hall of Memory"]
+    game.relocate(game.player, memory)
+    cap = _texts(game)
+    game.do_command("break lattice")
+    assert "memory shard" in memory.items
+    assert game.characters["Silas"].get_property("wrathful")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "EVERYONE'S" in out
+    game.do_command("take shard")
+    game.do_command("x shard")  # while there's light to read it by
+    assert "One facet still plays" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("go south")  # flee: he honors no territory
+    game.do_command("wait")
+    assert game.characters["Silas"].location is game.player.location
+    assert any(w.name == "Bore-Struck" for w in game.player.wounds)
+
+
+def test_a_dead_archivist_holds_no_grudge():
+    game = _game()
+    memory = game.locations["Hall of Memory"]
+    game.relocate(game.player, memory)
+    game.characters["Silas"].set_property("is_dead", True)
+    game.do_command("break lattice")
+    assert "memory shard" in memory.items
+    assert not game.characters["Silas"].get_property("wrathful")
+
+
 def test_silas_answers_on_his_subjects():
     """CCB: ASK SILAS ABOUT memories/lattice/crystal explains what the
     memories are; about himself/robes, why he is there (a mendicant of the
