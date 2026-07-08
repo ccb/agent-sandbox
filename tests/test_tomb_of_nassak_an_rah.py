@@ -25,7 +25,7 @@ def _embark(game, *, glowstone=True):
     common preamble for tests of the tomb proper. With ``glowstone=False``,
     leave the stone in the pack (some tests want an empty-handed scavenger)."""
     if glowstone:
-        game.do_command("open pack")
+        game.do_command("search merchant")
         game.do_command("take glowstone")
     game.do_command("north")
 
@@ -96,7 +96,7 @@ def test_scavenger_starts_at_the_wreck_and_finds_the_glowstone():
     game = _game()
     assert game.player.location.name == "The Caravan Wreck"
     assert "glowstone" not in game.player.inventory  # found, not given
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     assert "glowstone" in game.player.inventory
 
@@ -115,7 +115,7 @@ def test_the_wrecks_hold_teaches_light_in_safety():
     the Hall of Youth's deadly version of the same lesson."""
     game = _game()
     cap = _texts(game)
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("in")
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
@@ -400,6 +400,7 @@ def test_feeding_the_pack_buys_them_off():
     # Bring the dates from the wreck, then make a racket in Memory.
     for cmd in (
         "in",
+        "open crates",
         "take dates",
         "out",
         "north",
@@ -428,6 +429,7 @@ def test_the_pack_refuses_what_it_cannot_eat():
     _no_spawn(game)
     for cmd in (
         "in",
+        "open crates",
         "take bale",
         "out",
         "north",
@@ -670,7 +672,7 @@ def test_the_thrown_light_gambit_kills_a_spawn_by_bats():
     the spawn dead, leaving its jar and a motionless body."""
     game = _game()
     for cmd in (
-        "open pack",
+        "search merchant",
         "take glowstone",
         "search merchant",
         "take purse",
@@ -729,7 +731,7 @@ def test_the_waterskin_holds_three_healing_rations():
     game = _game()
     from text_adventure_games.slots import Wound
 
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take waterskin")
     game.player.add_wound(Wound("Bloody Gash", 1, "..."))
     for expected in ("2 rations", "1 ration", "an empty waterskin"):
@@ -785,7 +787,7 @@ def test_the_chimney_is_passable_but_the_spores_scar_your_lungs():
 
 def test_drinking_water_mends_a_wound():
     game = _game()
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("take waterskin")
     from text_adventure_games.slots import Wound
@@ -803,13 +805,14 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     # Greed: haul all the cargo out of the hold, then try the tomb face.
     for cmd in (
         "in",
+        "open crates",
         "take bale of saffron",
         "take crate of dates",
         "take bolt of spider-silk",
         "out",
     ):
         game.do_command(cmd)
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("take waterskin")
     # blade would be next, but the cargo alone is 5 slots -- go check the climb
@@ -910,6 +913,7 @@ def test_the_spider_silk_tether_is_the_bootless_anchor():
     sphere.set_property("horror_dead", True)
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
     game.do_command("in")
+    game.do_command("open crates")
     game.do_command("take silk")
     game.do_command("out")
     game.relocate(game.player, sphere)
@@ -1173,7 +1177,7 @@ def test_the_dead_dont_sway_in_the_listings():
     visible_description replaces the lively text."""
     game = _game()
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
-    for cmd in ("open pack", "take glowstone", "light glowstone"):
+    for cmd in ("search merchant", "take glowstone", "light glowstone"):
         game.do_command(cmd)
     game.relocate(game.player, game.locations["Hall of Warriors"])
     game.do_command("attack spawn of guts with blade")
