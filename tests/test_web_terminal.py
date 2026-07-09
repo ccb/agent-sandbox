@@ -129,6 +129,20 @@ def test_restore_rebuilds_the_explored_map():
     assert "The Caravan Wreck" in m["nodes"]  # the journey survived the rebuild
 
 
+def test_restart_begins_a_fresh_expedition():
+    """CCB: 'reload' at the death screen did nothing. RESTART (and its
+    aliases) now boots a new seed and clears the autosave, so the title
+    screen doesn't offer the dead past back."""
+    app_api.boot(0)
+    app_api.command("north")
+    assert app_api._store.read("auto") is not None
+    payload = json.loads(app_api.command("restart"))
+    assert payload["status"]["turn"] == 0
+    assert payload["status"]["room"] == "The Caravan Wreck"
+    assert app_api._store.read("auto") is None
+    assert any("new expedition" in e["text"] for e in payload["events"])
+
+
 _AUDIT = r"""
 import sys
 from importlib.abc import MetaPathFinder
