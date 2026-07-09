@@ -135,6 +135,26 @@ body, input {
   font-size: 16px;
 }
 .prompt { color: var(--phosphor-bright); }
+#send {
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 3px;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  color: var(--phosphor-bright);
+}
+#send:active { background: var(--phosphor-dim); color: var(--bg); }
+#bootmenu { margin-top: 1.2rem; }
+.boot-option {
+  border: 1px solid var(--phosphor-dim);
+  padding: 0.4rem 0.9rem;
+  margin: 0.7rem auto 0;
+  display: table;
+  cursor: pointer;
+  color: var(--phosphor-bright);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.boot-option:active { background: var(--phosphor-dim); color: var(--bg); }
 
 /* scanlines + vignette overlay, with the phosphor's faint breathing (M3) */
 #scanlines {
@@ -276,6 +296,7 @@ body.size-large, body.size-large input { font-size: 18px; }
   inset: 0;
   background: var(--bg);
   display: flex;
+  flex-direction: column; /* title above the resume menu, not beside it */
   align-items: center;
   justify-content: center;
   transition: opacity 0.6s;

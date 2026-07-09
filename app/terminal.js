@@ -85,7 +85,6 @@ function renderSettings() {
 function toggleSettings(show) {
   const on = show ?? settingsPanel.classList.contains("hidden");
   settingsPanel.classList.toggle("hidden", !on);
-  if (!on) cmd.focus();
 }
 document.getElementById("gear").addEventListener("pointerdown", (e) => {
   e.preventDefault();
@@ -170,17 +169,22 @@ const sounds = {
 const queue = [];
 let typing = false;
 
+function nearBottom() {
+  return output.scrollTop + output.clientHeight >= output.scrollHeight - 80;
+}
+
 function print(text, cls, instant) {
   const p = document.createElement("p");
   if (cls) p.className = cls;
   output.appendChild(p);
   if (instant || settings.typewriter === "off") {
     p.textContent = text;
-    output.scrollTop = output.scrollHeight;
+    if (nearBottom()) output.scrollTop = output.scrollHeight;
   } else {
     queue.push({ p, text, done: false });
     if (!typing) typeNext();
   }
+  return p;
 }
 
 function typeNext() {
@@ -194,7 +198,9 @@ function typeNext() {
     if (job.done) { typeNext(); return; } // flushed mid-type
     i = Math.min(i + step, job.text.length);
     job.p.textContent = job.text.slice(0, i);
-    output.scrollTop = output.scrollHeight;
+    // Follow the reveal only if the reader is at the bottom; a long room
+    // description reads from the TOP, at the reader's own pace (CCB).
+    if (nearBottom()) output.scrollTop = output.scrollHeight;
     if (i % 24 < step) sounds.tick();
     if (i < job.text.length) setTimeout(tick, delay);
     else typeNext();
@@ -209,7 +215,6 @@ function flushTypewriter() {
   }
   queue.length = 0;
   typing = false;
-  output.scrollTop = output.scrollHeight;
 }
 
 output.addEventListener("pointerdown", flushTypewriter);
@@ -256,7 +261,8 @@ function chip(word, cls, withSpace) {
     click();
     const sep = cmd.value && !cmd.value.endsWith(" ") ? " " : "";
     cmd.value += sep + word + (withSpace ? " " : "");
-    cmd.focus();
+    // No focus here: composing by chip should not summon the keyboard
+    // (CCB) -- tap the input line when you want to type.
   });
   return el;
 }
@@ -274,14 +280,23 @@ function submit() {
   if (!text || !api) return;
   cmd.value = "";
   flushTypewriter();
-  print("> " + text, "echo", true);
+  const anchor = print("> " + text, "echo", true);
   render(api.command(text));
+  // Read from the TOP of the turn (CCB): the echoed command pins to the
+  // top of the view and the player scrolls down at their own pace.
+  output.scrollTop = Math.max(0, anchor.offsetTop - 4);
 }
 
 cmd.addEventListener("keydown", (e) => {
   ensureAudio();
   click();
   if (e.key === "Enter") submit();
+});
+document.getElementById("send").addEventListener("pointerdown", (e) => {
+  e.preventDefault(); // don't steal focus from wherever it is
+  ensureAudio();
+  click();
+  submit();
 });
 document.addEventListener("pointerdown", ensureAudio, { once: true });
 
@@ -495,8 +510,7 @@ async function main() {
     panels: () => pyodide.runPython("app_api.panel_data()"),
   };
 
-  // Seed: resume the autosave's seed when one exists (so RESTORE AUTO is
-  // meaningful across visits), else the clock.
+  // Seed: resume the autosave's seed when one exists, else the clock.
   let seed = Date.now() % 1000000;
   let hasAuto = false;
   try {
@@ -506,30 +520,59 @@ async function main() {
 
   applySettings();
 
-  // The title holds until the player asks for the tomb (CCB): warm-up done,
-  // show the invitation and wait for a tap or a key before the opening scene.
-  boottext.textContent =
-    "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition\n\n" +
-    "[ tap or press any key to begin ]";
+  // The title holds until the player asks for the tomb (CCB). When an
+  // unfinished expedition is on file, the CHOICE lives here on the title
+  // screen -- continue it, or begin anew -- not as a banner in the story.
+  boottext.textContent = "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition";
   boottext.classList.add("ready");
-  await new Promise((begin) => {
-    const go = () => {
-      document.removeEventListener("pointerdown", go);
-      document.removeEventListener("keydown", go);
-      begin();
-    };
-    document.addEventListener("pointerdown", go);
-    document.addEventListener("keydown", go);
+  const resume = await new Promise((begin) => {
+    if (!hasAuto) {
+      boottext.textContent += "\n\n[ tap or press any key to begin ]";
+      const go = () => {
+        document.removeEventListener("pointerdown", go);
+        document.removeEventListener("keydown", go);
+        begin(false);
+      };
+      document.addEventListener("pointerdown", go);
+      document.addEventListener("keydown", go);
+      return;
+    }
+    boottext.textContent += "\n\nan unfinished expedition is on file";
+    const menu = document.createElement("div");
+    menu.id = "bootmenu";
+    for (const [label, value] of [
+      ["[ CONTINUE THE EXPEDITION ]", true],
+      ["[ BEGIN ANEW ]", false],
+    ]) {
+      const b = document.createElement("div");
+      b.className = "boot-option";
+      b.textContent = label;
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        menu.remove();
+        begin(value);
+      });
+      menu.appendChild(b);
+    }
+    boottext.after(menu);
   });
 
-  render(api.boot(seed));
-  if (hasAuto) {
-    print("(an unfinished expedition is on file -- type RESTORE AUTO to resume it)", "blocked", true);
+  if (resume && hasAuto) {
+    render(api.boot(seed), { instant: true });
+    output.replaceChildren(); // the restored look is the real opening
+    render(api.command("restore auto"), { instant: true });
+  } else {
+    if (hasAuto) {
+      try { localStorage.removeItem("tomb_save_auto"); } catch (e) {}
+      seed = Date.now() % 1000000;
+    }
+    render(api.boot(seed));
   }
+  output.scrollTop = 0; // the expedition reads from the top (CCB)
   bootscreen.classList.add("done");
   ensureAudio();
   sounds.boot();
-  cmd.focus();
+  // No autofocus (CCB): the keyboard comes when the player taps the input.
 }
 
 main().catch((e) => {
