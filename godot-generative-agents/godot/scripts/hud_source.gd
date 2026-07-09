@@ -45,6 +45,10 @@ signal halted_changed(halted: bool)
 ## synthesizes these alongside its simulated spend; live ones arrive through
 ## the event feed (see note_llm_call).
 signal llm_call(record: Dictionary)
+## One non-`llm_call` engine change-feed record (narration, blocked, ...) that
+## rode the same feed as llm_calls (#394). Re-emitted so the HUD logs it in the
+## same event feed instead of the viewer dropping it.
+signal engine_event(event: Dictionary)
 
 ## SIMULATED = baked-replay mode, numbers are synthetic; OK/DEGRADED/DOWN are
 ## the live-backend liveness ladder (healthy / missed a check / unreachable).
@@ -82,3 +86,9 @@ func note_llm_call(record: Dictionary) -> void:
 	## event feed (the WebSocket lives in viewer.gd, not here). Re-emitted
 	## as the llm_call signal so the HUD stays a plain signal consumer.
 	llm_call.emit(record)
+
+
+func note_engine_event(event: Dictionary) -> void:
+	## Seam twin of note_llm_call for the *other* engine change-feed records on
+	## the feed — narration, blocked, ... (#394). Re-emitted as engine_event.
+	engine_event.emit(event)

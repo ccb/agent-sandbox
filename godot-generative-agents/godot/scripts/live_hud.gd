@@ -326,6 +326,35 @@ func add_llm_call(rec: Dictionary) -> void:
 		_fmt_tok(tokens_out),
 		cost,
 	]
+	_push_row(line)
+
+
+func add_engine_event(event: Dictionary) -> void:
+	## Append one row for a non-`llm_call` engine change-feed record (#394): the
+	## JSONRenderer events serve_penn drains (narration, blocked, ...) that ride
+	## the same feed as llm_calls but the viewer used to drop on the floor. Renders
+	## a compact "turn · channel · text" row in the same event log. bbcode in the
+	## prose is neutralized so a stray "[" can't corrupt the RichTextLabel.
+	var text := String(event.get("text", "")).strip_edges().replace("\n", " ")
+	if text.is_empty():
+		return
+	if text.length() > 80:
+		text = text.substr(0, 79) + "…"
+	text = text.replace("[", "[lb]")
+	var channel := String(event.get("channel", "event"))
+	var turn: Variant = event.get("turn")
+	var when := "t%s" % str(turn) if turn != null else "-"
+	_push_row(
+		(
+			"[hint=%s · %s][color=#8a7660]%s[/color] [color=#%s]%s[/color] %s[/hint]"
+			% [channel, when, when, MUTED_COLOR.to_html(false), channel, text]
+		)
+	)
+
+
+func _push_row(line: String) -> void:
+	## Append a formatted bbcode row to the event log — newest at the bottom,
+	## capped at LOG_MAX_ROWS. Shared by add_llm_call and add_engine_event (#394).
 	_log_rows.append(line)
 	if _log_rows.size() > LOG_MAX_ROWS:
 		_log_rows = _log_rows.slice(_log_rows.size() - LOG_MAX_ROWS)
