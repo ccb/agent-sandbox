@@ -154,6 +154,11 @@ var _last_step := -1
 # Heatmap pop-up: the last step pushed into it, so we only recompute the (live) heat
 # when the integer step actually changes while it's open (see _process).
 var _last_heat_step := -1
+# Social-graph pop-up (issue #252): same push-on-step-change guard as the heatmap,
+# plus the seed relationships from the replay/live meta (meta.relationships; [] for
+# a pre-#252 replay or backend, which the panel renders as an empty seed view).
+var _last_graph_step := -1
+var _relationships: Array = []
 
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
@@ -221,6 +226,7 @@ var _quitting := false              # window close in progress (shutdown then qu
 @onready var _hud = $UI/LiveHud  # live_hud.gd top-right run monitor
 @onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
 @onready var _inspector = $PersonaInspectorLayer/PersonaInspector  # persona_inspector.gd
+@onready var _social_graph = $SocialGraphLayer/SocialGraphPanel  # social_graph_panel.gd
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
@@ -263,6 +269,11 @@ func _ready() -> void:
 	# button / a click outside / Esc closes it. It's fed the replay after load.
 	_panel.heatmap_requested.connect(_toggle_heatmap)
 	_heatmap.close_requested.connect(_close_heatmap)
+
+	# Social-graph pop-up (issue #252): same contract as the heatmap — the sidebar
+	# button (or the G key) toggles it, and it's fed the replay + seed edges after load.
+	_panel.social_graph_requested.connect(_toggle_social_graph)
+	_social_graph.close_requested.connect(_close_social_graph)
 
 	# Persona State Details inspector (issue #408): the sidebar's ⓘ button opens it
 	# per agent; the P key opens it for whoever's tracked; its close button / a click
@@ -473,6 +484,9 @@ func _load_replay_from_text(text: String) -> void:
 	# Hand the whole replay to the heatmap pop-up so it can build its campus picture now
 	# (avoiding a blank first-open frame) and tally dwell up to any step on demand.
 	_heatmap.set_replay(_frames, _names, _tile_px)
+	# And to the social-graph pop-up (issue #252), with the seed relationships the
+	# meta carried, so it can accumulate conversations up to any step on demand.
+	_social_graph.set_replay(_frames, _names, _relationships)
 
 	# Tell the run monitor's source who the cast is, so its per-actor spend
 	# attribution matches the real ledger's by_actor rollup.
@@ -489,6 +503,9 @@ func _apply_meta(meta: Dictionary) -> void:
 	# the Smallville default for older replays that don't record it.
 	_vision_r = int(meta.get("vision_r", FOG_FALLBACK_VISION_R))
 	_start_unix = _parse_sim_start(String(meta.get("start", sim_start)))
+	# The authored t=0 seed social graph for the social-graph pop-up (issue #252).
+	# Older replays/backends don't carry the key; [] just means an empty seed view.
+	_relationships = meta.get("relationships", [])
 	var thumb := _make_thumbnail()
 	for i in meta["personas"].size():
 		var persona: Dictionary = meta["personas"][i]
@@ -573,6 +590,9 @@ func _on_live_handshake_completed(
 		# The heatmap holds _frames BY REFERENCE, so the live appends flow into
 		# it -- same hand-off the baked path does, just with an empty array now.
 		_heatmap.set_replay(_frames, _names, _tile_px)
+		# Same by-reference hand-off for the social graph; its seed view is
+		# meaningful right away, before the first frame ever arrives.
+		_social_graph.set_replay(_frames, _names, _relationships)
 		_hud_source.set_cast(_names)
 		_update_clock()
 	_panel.set_live_status("catching up…")
@@ -1172,7 +1192,7 @@ func _on_seek(step: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Keyboard shortcuts for the heatmap pop-up (this scene has no other key handling;
+	# Keyboard shortcuts for the pop-up modals (this scene has no other key handling;
 	# camera_controls.gd owns zoom/pan keys). Same guard idiom as camera_controls.
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
@@ -1180,25 +1200,40 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_H:
 			_toggle_heatmap()
 			get_viewport().set_input_as_handled()
+		KEY_G:
+			# Toggle the social-graph pop-up (issue #252).
+			_toggle_social_graph()
+			get_viewport().set_input_as_handled()
 		KEY_P:
-			# Toggle the State Details inspector for the tracked agent (issue #408).
+			# Toggle the State Details inspector for the tracked agent (issue #408) --
+			# unless the social graph is above it (layer 13 > 12): opening a modal
+			# UNDER another modal's backdrop would just be confusing.
 			if _inspector.visible:
 				_close_inspector()
 				get_viewport().set_input_as_handled()
-			elif _tracked_name != "":
+			elif _tracked_name != "" and not _social_graph.visible:
 				_open_inspector(_tracked_name)
 				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			if _inspector.visible:
+			# Close the topmost open modal first (their CanvasLayer stacking order:
+			# social graph 13 > inspector 12 > heatmap 11).
+			if _social_graph.visible:
+				_close_social_graph()
+				get_viewport().set_input_as_handled()
+			elif _inspector.visible:
 				_close_inspector()
 				get_viewport().set_input_as_handled()
 			elif _heatmap.visible:
 				_close_heatmap()
 				get_viewport().set_input_as_handled()
 		KEY_LEFT, KEY_RIGHT:
-			# While the pop-up is open, LEFT/RIGHT cycle its view (camera keyboard-pan is
-			# suppressed meanwhile, so the arrows don't also scroll the map).
-			if _heatmap.visible:
+			# While a pop-up is open, LEFT/RIGHT cycle its view (camera keyboard-pan is
+			# suppressed meanwhile, so the arrows don't also scroll the map). The
+			# topmost view-cycling modal wins, matching the Esc order above.
+			if _social_graph.visible:
+				_social_graph.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
+				get_viewport().set_input_as_handled()
+			elif _heatmap.visible:
 				_heatmap.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
 				get_viewport().set_input_as_handled()
 
@@ -1226,7 +1261,36 @@ func _open_heatmap() -> void:
 
 func _close_heatmap() -> void:
 	_heatmap.visible = false
-	_camera.keyboard_enabled = true
+	# Restore keyboard pan unless another arrow-stealing modal is still open.
+	_camera.keyboard_enabled = not _social_graph.visible
+
+
+func _toggle_social_graph() -> void:
+	if _social_graph.visible:
+		_close_social_graph()
+	else:
+		_open_social_graph()
+
+
+func _open_social_graph() -> void:
+	# Show the conversations accumulated up to the step on screen right now; playback
+	# keeps running behind the pop-up (it live-updates via _process). Unlike the
+	# heatmap, don't bail while _frames is still empty (live mode before the first
+	# frame): the SEED view is already meaningful, and show_up_to guards internally.
+	# Suppress the camera's keyboard pan so the arrow keys switch views instead.
+	if not _frames.is_empty():
+		var last := maxi(_frames.size() - 1, 0)
+		var i := mini(int(_t / step_seconds), last)
+		_last_graph_step = i
+		_social_graph.show_up_to(i)
+	_social_graph.visible = true
+	_camera.keyboard_enabled = false
+
+
+func _close_social_graph() -> void:
+	_social_graph.visible = false
+	# Restore keyboard pan unless another arrow-stealing modal is still open.
+	_camera.keyboard_enabled = not _heatmap.visible
 
 
 func _open_inspector(name: String) -> void:
@@ -1250,8 +1314,8 @@ func _open_inspector(name: String) -> void:
 func _close_inspector() -> void:
 	_inspector.close()
 	_inspector_name = ""
-	# Restore keyboard pan unless the heatmap modal is still holding it.
-	_camera.keyboard_enabled = not _heatmap.visible
+	# Restore keyboard pan unless another modal is still holding it.
+	_camera.keyboard_enabled = not (_heatmap.visible or _social_graph.visible)
 
 
 func _push_inspector_step(step: int) -> void:
@@ -1341,6 +1405,12 @@ func _process(delta: float) -> void:
 	if _heatmap.visible and i != _last_heat_step:
 		_last_heat_step = i
 		_heatmap.show_up_to(i)
+
+	# Same for the social-graph pop-up: new conversations appear (and edge weights
+	# shift with recency) as the playhead crosses each step while it's open.
+	if _social_graph.visible and i != _last_graph_step:
+		_last_graph_step = i
+		_social_graph.show_up_to(i)
 
 	for name in _names:
 		var a: Dictionary = _frames[i][name]

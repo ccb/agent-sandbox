@@ -287,6 +287,42 @@ locations:
   address: UPenn:Irvine Auditorium:lobby
 
 # ---------------------------------------------------------------------------
+# Seed social graph: who knows whom at t=0 (read by backend/penn/penn_world.py,
+# NOT by the engine's load_world_data). Emitted as `meta.relationships` for the
+# viewer's social-graph pop-up (#252), which contrasts this seeded graph with
+# the conversations that actually happen during the run. Structured -- unlike
+# Smallville's whisper CSV (agent_history_init_n25.csv) -- so the viewer can
+# draw edges directly; `description` stays natural language so a future pass
+# (#409) can also seed it into agent memory the way seed.seed_relationships
+# does for Smallville. `closeness` is 1 (acquaintance) to 5 (inseparable) and
+# drives edge thickness. Every `a`/`b` must name an ACTIVE persona above --
+# the loader fails the bake/server on unknown names, so parked personas' edges
+# stay commented out with them. Sofia has no seed edge on purpose: she is a
+# first-year who knows nobody at t=0 -- the pop-up's conversations view shows
+# her graph forming over the day.
+relationships:
+# -- MVP cast reduction: edges among parked personas ride with their personas. --
+# - a: Maya Chen
+#   b: Priya Nair
+#   kind: study buddies
+#   closeness: 4
+#   description: Maya and Priya have been study buddies since freshman bio and
+#     meet most mornings in Van Pelt to grind through problem sets together.
+# - a: Professor Ellis
+#   b: Marcus Webb
+#   kind: professor & student
+#   closeness: 2
+#   description: Marcus is taking Professor Ellis's history seminar this term
+#     and looks for him over coffee at Houston Hall.
+- a: Diego Torres
+  b: Professor Tanaka
+  kind: lecture regular
+  closeness: 2
+  description: Diego sits in on Professor Tanaka's public guest lectures at
+    Irvine whenever architecture and physics cross paths; she knows him by
+    name from the question line.
+
+# ---------------------------------------------------------------------------
 # Scripted meetings (read by backend/penn/generate_penn_replay.py, NOT by the engine's
 # load_world_data). The mock brain never produces dialogue, so to show the
 # viewer's speech-bubble + conversation-link feature offline we author a short

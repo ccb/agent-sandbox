@@ -22,7 +22,7 @@ stepper) lives in the server.
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import yaml
@@ -217,6 +217,20 @@ def _load_meetings(path):
     return data.get("meetings", []) or []
 
 
+def _load_relationships(path):
+    """Read the authored `relationships` block from the world YAML (or [] if absent).
+
+    Another Godot-only extra `load_world_data` doesn't return: the seed social
+    graph (who knows whom at t=0) the viewer's social-graph pop-up draws (#252).
+    Each edge is ``{a, b, kind, closeness, description}`` -- see the YAML block's
+    comment for the authoring contract. Raw here; validated/normalized by
+    :func:`relationships_meta` at build time.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("relationships", []) or []
+
+
 def _load_llm(path):
     """Read the authored `llm` block from the world YAML (or None if absent).
 
@@ -235,9 +249,10 @@ class PennWorld:
     ``world_map`` carries the routing patches (and their round-robin state --
     see :func:`_pin_meeting_rendezvous`), ``build_world_fn`` bakes in the
     perception gating, ``meetings`` is the authored dialogue script both
-    conversation injectors consume, and ``llm`` is the world's declared LLM
+    conversation injectors consume, ``llm`` is the world's declared LLM
     settings (the YAML ``llm:`` block; only ``serve_penn --brain llm`` acts
-    on it)."""
+    on it), and ``relationships`` is the validated t=0 seed social graph the
+    viewer's social-graph pop-up draws (#252)."""
 
     world_map: WorldMap
     personas: list
@@ -245,6 +260,7 @@ class PennWorld:
     meetings: list
     build_world_fn: Callable
     llm: dict | None = None
+    relationships: list = field(default_factory=list)
 
 
 def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
@@ -279,7 +295,63 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
             build_world(wm, personas, locations)
         ),
         llm=_load_llm(world_data),
+        # Validated once here, so an authoring typo fails the bake / the live
+        # server's boot loudly instead of drawing a wrong graph.
+        relationships=relationships_meta(personas, _load_relationships(world_data)),
     )
+
+
+def relationships_meta(personas, relationships):
+    """The world YAML's ``relationships`` block -> the ``meta.relationships`` list.
+
+    A sibling of :func:`persona_meta_entry`: the single projection the bake
+    (``generate_penn_replay``) and the live server (``serve_penn.meta``) share,
+    so the viewer's social-graph pop-up (#252) sees the same seed edges whether
+    it's watching a baked file or a live run.
+
+    Validates against the *active* cast and normalizes for determinism: names
+    are sorted within each edge, edges are sorted by ``(a, b)``, and the output
+    carries exactly ``{a, b, kind, closeness, description}``. Raises
+    ``ValueError`` on an unknown name (parked personas' edges must stay
+    commented out in the YAML), a self-edge, a duplicate pair, or a
+    ``closeness`` outside 1..5 -- authoring mistakes should fail the build,
+    not render a misleading graph.
+    """
+    cast = {p["name"] for p in personas}
+    edges = []
+    seen_pairs = set()
+    for rel in relationships:
+        a, b = str(rel.get("a", "")), str(rel.get("b", ""))
+        for name in (a, b):
+            if name not in cast:
+                raise ValueError(
+                    f"relationships: {name!r} is not an active persona "
+                    f"(cast: {sorted(cast)})"
+                )
+        if a == b:
+            raise ValueError(f"relationships: self-edge on {a!r}")
+        pair = tuple(sorted((a, b)))
+        if pair in seen_pairs:
+            raise ValueError(
+                f"relationships: duplicate edge {pair[0]!r} -- {pair[1]!r}"
+            )
+        seen_pairs.add(pair)
+        closeness = int(rel.get("closeness", 1))
+        if not 1 <= closeness <= 5:
+            raise ValueError(
+                f"relationships: closeness {closeness} for {pair[0]!r} -- {pair[1]!r} "
+                "must be 1..5"
+            )
+        edges.append(
+            {
+                "a": pair[0],
+                "b": pair[1],
+                "kind": str(rel.get("kind", "")),
+                "closeness": closeness,
+                "description": str(rel.get("description", "")),
+            }
+        )
+    return sorted(edges, key=lambda e: (e["a"], e["b"]))
 
 
 def persona_meta_entry(spec):

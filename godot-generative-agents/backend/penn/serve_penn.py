@@ -388,6 +388,11 @@ class PennStepper:
             # emoji for the sprite + sidebar, persona/home/schedule for the State
             # Details inspector (issue #408), so live and baked meta stay identical.
             "personas": [persona_meta_entry(p) for p in self.world.personas],
+            # The t=0 seed social graph, already validated/normalized by
+            # penn_world.relationships_meta at build time -- the same list the
+            # bake writes, so the social-graph pop-up (#252) sees identical
+            # seed edges live and baked.
+            "relationships": self.world.relationships,
             # What is driving the cast: None under the mock brain, else the
             # provider/model, so the viewer can say which model it is watching.
             "llm": (

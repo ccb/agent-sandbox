@@ -18,6 +18,8 @@ repo root::
 import sys
 from pathlib import Path
 
+import pytest
+
 # The Penn sim modules live in the Godot tree and are run as scripts (no
 # package); tests import them the way the scripts import each other -- off the
 # sim directory itself.
@@ -27,7 +29,11 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402
-from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
+from penn_world import (  # noqa: E402
+    build_penn_world,
+    relationships_meta,
+    replay_frame_entry,
+)
 from serve_penn import LiveMeetingInjector, PennStepper, _GameProxy  # noqa: E402
 
 VISION_R = 8  # SMALLVILLE_VISION_R; the fog radius the viewer draws
@@ -47,6 +53,54 @@ def test_build_penn_world_pieces():
     # not the WorldMap method (a live server reusing this map inherits them).
     assert pw.world_map.walk_path.__name__ == "walk_path"
     assert type(pw.world_map).walk_path is not pw.world_map.walk_path
+
+
+def test_build_penn_world_relationships():
+    # The authored t=0 seed social graph (#252): one edge among the active cast
+    # (Diego knows Tanaka from her lectures; Sofia knows nobody on purpose --
+    # the pop-up's demo story is a first-year's graph growing over the day).
+    pw = build_penn_world()
+    assert pw.relationships == [
+        {
+            "a": "Diego Torres",
+            "b": "Professor Tanaka",
+            "kind": "lecture regular",
+            "closeness": 2,
+            "description": (
+                "Diego sits in on Professor Tanaka's public guest lectures at "
+                "Irvine whenever architecture and physics cross paths; she knows "
+                "him by name from the question line."
+            ),
+        }
+    ]
+
+
+def test_relationships_meta_validation():
+    # relationships_meta is the authoring gate: typos fail the bake/server boot
+    # instead of drawing a wrong graph. Names sort within an edge, edges sort
+    # by (a, b), and only the five contract keys survive.
+    personas = [{"name": "Ana"}, {"name": "Bo"}, {"name": "Cy"}]
+    out = relationships_meta(
+        personas,
+        [
+            {"a": "Cy", "b": "Bo", "kind": "labmates", "closeness": 5},
+            {"a": "Bo", "b": "Ana", "kind": "friends", "closeness": 3, "extra": 1},
+        ],
+    )
+    assert out == [
+        {"a": "Ana", "b": "Bo", "kind": "friends", "closeness": 3, "description": ""},
+        {"a": "Bo", "b": "Cy", "kind": "labmates", "closeness": 5, "description": ""},
+    ]
+    with pytest.raises(ValueError):  # unknown name (a parked persona, say)
+        relationships_meta(personas, [{"a": "Ana", "b": "Maya Chen"}])
+    with pytest.raises(ValueError):  # self-edge
+        relationships_meta(personas, [{"a": "Ana", "b": "Ana"}])
+    with pytest.raises(ValueError):  # duplicate pair, either order
+        relationships_meta(personas, [{"a": "Ana", "b": "Bo"}, {"a": "Bo", "b": "Ana"}])
+    with pytest.raises(ValueError):  # closeness outside 1..5
+        relationships_meta(personas, [{"a": "Ana", "b": "Bo", "closeness": 0}])
+    with pytest.raises(ValueError):
+        relationships_meta(personas, [{"a": "Ana", "b": "Bo", "closeness": 6}])
 
 
 def _move(char, location):
@@ -117,6 +171,7 @@ def test_stepper_meta_shape():
         "start",
         "vision_r",
         "personas",
+        "relationships",
         "llm",
     }
     assert meta["vision_r"] == VISION_R
@@ -128,6 +183,33 @@ def test_stepper_meta_shape():
         set(p) == {"name", "emoji", "persona", "home", "schedule"}
         for p in meta["personas"]
     )
+    # The seed social graph (#252): normalized edges among the active cast,
+    # names sorted within each edge (a < b), for the viewer's social-graph
+    # pop-up. Content itself is pinned by test_build_penn_world_relationships.
+    cast = {p["name"] for p in meta["personas"]}
+    for edge in meta["relationships"]:
+        assert set(edge) == {"a", "b", "kind", "closeness", "description"}
+        assert edge["a"] < edge["b"]
+        assert {edge["a"], edge["b"]} <= cast
+
+
+def test_bake_meta_carries_relationships(tmp_path, monkeypatch):
+    # Bake/live parity for the seed graph: the replay file's meta.relationships
+    # is the same validated list the live handshake serves, because both come
+    # from penn_world.relationships_meta at build time.
+    import json
+
+    import generate_penn_replay
+
+    out = tmp_path / "r.json"
+    monkeypatch.setattr(
+        sys, "argv", ["generate_penn_replay.py", "--steps", "2", "--out", str(out)]
+    )
+    assert generate_penn_replay.main() == 0
+    baked_meta = json.loads(out.read_text())["meta"]
+    live_meta = PennStepper(num_steps=2, world=build_penn_world()).meta()
+    assert baked_meta["relationships"] == live_meta["relationships"]
+    assert len(baked_meta["relationships"]) == 1  # Diego -- Tanaka, the seed edge
 
 
 def test_stepper_finishes_then_resets():
