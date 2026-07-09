@@ -279,10 +279,12 @@ class PennWorld:
 def _furnish_boil_water(game) -> None:
     """Stock Houston Hall with the boil-water props (#300).
 
-    The first Item instances in the Penn world: two contaminated cups (drink one
-    and DrinkPenn makes you sick), a pot, and two fixed devices. Activating the
-    stove sets ``is_on`` and deliberately nothing else -- no heat process exists;
-    that capability gap is the point of the self-coding experiment (#299)."""
+    The first Item instances in the Penn world: two cups of unboiled water
+    (``requires_boiling`` + ``is_boiled: False`` -- drink one and DrinkPenn
+    makes you sick), a pot, and two fixed devices. Activating the stove sets
+    ``is_on`` and deliberately nothing else -- no heat process exists, so
+    nothing in this world can flip ``is_boiled``; that capability gap is the
+    point of the self-coding experiment (#299)."""
     hall = game.locations.get("Houston Hall")
     if hall is None:
         return
@@ -298,7 +300,8 @@ def _furnish_boil_water(game) -> None:
     for name in ("cup of murky water", "second cup of murky water"):
         cup = Item(name, "a cup of murky water", "Cloudy, untreated tap water.")
         cup.set_property(Property.DRINKABLE, True)
-        cup.set_property("is_contaminated", True)
+        cup.set_property("requires_boiling", True)
+        cup.set_property("is_boiled", False)
         hall.add_item(cup)
     hall.add_item(sink)
     hall.add_item(stove)

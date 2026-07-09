@@ -1,5 +1,11 @@
 # Boil-Water Action Layer Implementation Plan
 
+> **Post-review rename (2026-07-09):** the shipped code uses
+> `requires_boiling` + `is_boiled: False` (matching #300's phrasing) instead of
+> this plan's `is_contaminated`. The pair avoids the default-False polarity trap
+> (`is_boiled` alone would sicken every future drinkable). Code blocks below are
+> the historical execution record — don't transcribe `is_contaminated` from them.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give Penn agents their first world-mutating verbs — `drink` (contaminated water → `is_sick`), `activate`/`deactivate` (device toggles) — with props in Houston Hall, mock-brain command replay, and high-importance sickness memories, per the approved spec (`godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md`). Closes the world half of #300; engine upstreaming is tracked in #464.
