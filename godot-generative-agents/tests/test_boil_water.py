@@ -223,3 +223,40 @@ def test_get_is_remembered_at_normal_importance():
     entries = memory_stream_for_persona(char.agent)
     got = [e for e in entries if e["text"] == 'I did "get pot".']
     assert got and got[-1]["importance"] == 2.0
+
+
+# -- the real Penn world: furnished Houston Hall + Sofia's authored stop (#300) -
+
+from backend.penn.penn_world import build_penn_world
+
+
+def test_houston_hall_is_stocked_and_the_scenario_plays():
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    hall = game.locations["Houston Hall"]
+    for name in (
+        "sink",
+        "stove",
+        "pot",
+        "cup of murky water",
+        "second cup of murky water",
+    ):
+        assert name in hall.items, f"{name} missing from Houston Hall"
+    sofia = chars["Sofia Ramirez"]
+    assert game.parser.parse_command("travel to Houston Hall", actor=sofia)
+    assert game.parser.parse_command("get cup of murky water", actor=sofia)
+    assert game.parser.parse_command("drink cup of murky water", actor=sofia)
+    assert sofia.get_property("is_sick") is True
+    assert any(e.action == "sickness" for e in game.events)
+    # The withheld gap (#299): the stove turns on, and nothing heats.
+    assert game.parser.parse_command("activate stove", actor=sofia)
+    assert (
+        hall.items["second cup of murky water"].get_property("is_contaminated") is True
+    )
+
+
+def test_sofias_houston_hall_stop_carries_the_commands():
+    pw = build_penn_world()
+    sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
+    stop = next(s for s in sofia["schedule"] if s["place"] == "Houston Hall")
+    assert stop["commands"] == ["get cup of murky water", "drink cup of murky water"]
