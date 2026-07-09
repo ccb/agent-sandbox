@@ -216,3 +216,6 @@ godot-generative-agents/web/dist/
 godot-generative-agents/web/*.tsbuildinfo
 # (The app's package.json / tsconfig*.json / committed replay are tracked normally
 # now that the blanket *.json ignore is gone; the build dirs above stay excluded.)
+app/dist/
+ios/build/
+ios/*.xcodeproj

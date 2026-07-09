@@ -10,7 +10,10 @@ from text_adventure_games.reporting import CaptureRenderer, Channel
 
 
 def _game():
-    return tomb.build_game()
+    # Seed per game so no test depends on the RNG state its neighbors left
+    # behind (the climb test once failed only in full-file runs because a new
+    # test upstream shifted the stream before its wound-displacement draw).
+    return tomb.build_game(seed=0)
 
 
 def _goes(game, room, direction, dest):
@@ -22,7 +25,7 @@ def _embark(game, *, glowstone=True):
     common preamble for tests of the tomb proper. With ``glowstone=False``,
     leave the stone in the pack (some tests want an empty-handed scavenger)."""
     if glowstone:
-        game.do_command("open pack")
+        game.do_command("search merchant")
         game.do_command("take glowstone")
     game.do_command("north")
 
@@ -93,7 +96,7 @@ def test_scavenger_starts_at_the_wreck_and_finds_the_glowstone():
     game = _game()
     assert game.player.location.name == "The Caravan Wreck"
     assert "glowstone" not in game.player.inventory  # found, not given
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     assert "glowstone" in game.player.inventory
 
@@ -112,7 +115,7 @@ def test_the_wrecks_hold_teaches_light_in_safety():
     the Hall of Youth's deadly version of the same lesson."""
     game = _game()
     cap = _texts(game)
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("in")
     dark = " ".join(cap.texts(Channel.NARRATION)).lower()
@@ -142,13 +145,70 @@ def test_the_merchants_body_can_be_searched_for_his_tokens():
     assert "purse of water-debt tokens" in game.player.inventory
 
 
-def test_worry_the_mule_tells_the_story():
+def test_the_pack_takes_three_blows():
+    """The vigor system (CCB): a PACK does not drop to one swing."""
     game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    pack = game.characters["jackal pack"]
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    game.relocate(pack, game.player.location)
     cap = _texts(game)
-    game.do_command("talk to worry")
+    game.do_command("attack jackal pack with blade")
+    game.do_command("attack jackal pack with blade")
+    assert not pack.get_property("is_unconscious")
+    assert any("thinner by one" in t for t in cap.texts(Channel.NARRATION))
+    game.do_command("attack jackal pack with blade")
+    assert pack.get_property("is_unconscious")
+
+
+def test_silas_takes_two_blows():
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    silas = game.characters["Silas"]
+    game.do_command("attack silas with blade")
+    assert not silas.get_property("is_unconscious")
+    game.do_command("attack silas with blade")
+    assert silas.get_property("is_unconscious")
+
+
+def test_unstatted_creatures_still_drop_in_one():
+    """vigor unset = the classic one-hit knockout: the engine default
+    leaves every existing NPC untouched."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # the centipede springs
+    game.do_command("attack centipede with blade")
+    assert game.characters["glass centipede"].get_property("is_unconscious")
+
+
+def test_the_teamster_tells_the_story_and_decamps():
+    """CCB: the teamster is a GENERATED newbeast (a different one each
+    expedition, rolled on Issue 1's spark tables), and once she has said
+    her piece she decamps south along the trail, out of the game."""
+    game = _game()
+    wreck = game.locations["The Caravan Wreck"]
+    teamster = next(c for c in wreck.characters.values() if "teamster" in c.description)
+    assert teamster.name != "Worry"  # rolled, not canned
+    cap = _texts(game)
+    game.do_command("talk to teamster")
     said = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "they came at moonset" in said
     assert "caravan is seldom wrong twice" in said
+    # She has already decided to be elsewhere.
+    assert teamster.name not in wreck.characters
+    assert "sets off south along the trail" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_different_seeds_meet_different_teamsters():
+    names = set()
+    for seed in range(6):
+        game = tomb.build_game(seed=seed)
+        wreck = game.locations["The Caravan Wreck"]
+        t = next(c for c in wreck.characters.values() if "teamster" in c.description)
+        names.add((t.name, t.description))
+    assert len(names) >= 3  # the spark tables are doing the casting
 
 
 def test_smoke_tour_traverses_every_room_cleanly():
@@ -206,12 +266,20 @@ def test_silas_warns_about_the_spawn_and_the_seal():
 
 
 def test_memory_crystals_give_the_head_to_organ_clue():
+    """The clue is now one facet among many (CCB: random memory per look):
+    whoever troubles to keep looking still finds the embalming."""
     game = _game()
     _embark(game)
+    tomb._RNG.seed(1)
     cap = _texts(game)
     game.do_command("sneak north")
     game.do_command("sneak north")
-    game.do_command("examine crystal lattice")
+    for _ in range(30):  # sift the king's days for the useful one
+        game.do_command("examine crystal lattice")
+        if "the jackal -- strangely -- his brain" in " ".join(
+            cap.texts(Channel.NARRATION)
+        ):
+            break
     assert "the jackal -- strangely -- his brain" in " ".join(
         cap.texts(Channel.NARRATION)
     )
@@ -389,6 +457,7 @@ def test_feeding_the_pack_buys_them_off():
     # Bring the dates from the wreck, then make a racket in Memory.
     for cmd in (
         "in",
+        "open crates",
         "take dates",
         "out",
         "north",
@@ -417,6 +486,7 @@ def test_the_pack_refuses_what_it_cannot_eat():
     _no_spawn(game)
     for cmd in (
         "in",
+        "open crates",
         "take bale",
         "out",
         "north",
@@ -549,7 +619,7 @@ def test_striding_in_earns_a_warning_then_a_lash():
     cap = _texts(game)
     game.do_command("north")
     game.do_command("east")  # footfalls: it swings toward you
-    assert "swings toward your footfalls" in " ".join(cap.texts(Channel.NARRATION))
+    assert "swings toward your noise" in " ".join(cap.texts(Channel.NARRATION))
     assert not game.player.wounds  # the swing is the warning
     game.do_command("say hello")  # loud again while it listens -> the lash
     assert any(w.name == "Acid-Lashed" for w in game.player.wounds)
@@ -659,7 +729,7 @@ def test_the_thrown_light_gambit_kills_a_spawn_by_bats():
     the spawn dead, leaving its jar and a motionless body."""
     game = _game()
     for cmd in (
-        "open pack",
+        "search merchant",
         "take glowstone",
         "search merchant",
         "take purse",
@@ -718,7 +788,7 @@ def test_the_waterskin_holds_three_healing_rations():
     game = _game()
     from text_adventure_games.slots import Wound
 
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take waterskin")
     game.player.add_wound(Wound("Bloody Gash", 1, "..."))
     for expected in ("2 rations", "1 ration", "an empty waterskin"):
@@ -774,7 +844,7 @@ def test_the_chimney_is_passable_but_the_spores_scar_your_lungs():
 
 def test_drinking_water_mends_a_wound():
     game = _game()
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("take waterskin")
     from text_adventure_games.slots import Wound
@@ -792,13 +862,14 @@ def test_overloaded_scavenger_cannot_make_the_climb():
     # Greed: haul all the cargo out of the hold, then try the tomb face.
     for cmd in (
         "in",
+        "open crates",
         "take bale of saffron",
         "take crate of dates",
         "take bolt of spider-silk",
         "out",
     ):
         game.do_command(cmd)
-    game.do_command("open pack")
+    game.do_command("search merchant")
     game.do_command("take glowstone")
     game.do_command("take waterskin")
     # blade would be next, but the cargo alone is 5 slots -- go check the climb
@@ -899,6 +970,7 @@ def test_the_spider_silk_tether_is_the_bootless_anchor():
     sphere.set_property("horror_dead", True)
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
     game.do_command("in")
+    game.do_command("open crates")
     game.do_command("take silk")
     game.do_command("out")
     game.relocate(game.player, sphere)
@@ -911,7 +983,10 @@ def test_the_spider_silk_tether_is_the_bootless_anchor():
 
 
 def _boss_setup(game):
-    """Anchor, blade, gel, and spark -- straight to the sphere."""
+    """Anchor, blade, gel, and spark -- straight to the sphere. The jar
+    puzzle is treated as solved (the seal now bars BOTH directions, and a
+    fleeing fighter needs the stair)."""
+    game.locations["Hall of the Canopic Jars"].set_property("seal_open", True)
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]
     _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
@@ -1159,7 +1234,7 @@ def test_the_dead_dont_sway_in_the_listings():
     visible_description replaces the lively text."""
     game = _game()
     _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
-    for cmd in ("open pack", "take glowstone", "light glowstone"):
+    for cmd in ("search merchant", "take glowstone", "light glowstone"):
         game.do_command(cmd)
     game.relocate(game.player, game.locations["Hall of Warriors"])
     game.do_command("attack spawn of guts with blade")
@@ -1170,21 +1245,143 @@ def test_the_dead_dont_sway_in_the_listings():
     assert "swaying toward every sound" not in out
 
 
-def test_the_mantis_jar_snaps_once_at_the_hand_that_opens_it():
-    """CCB: a one-time defensive snap -- the alarm has teeth, but it is not
-    a combatant. First open costs a Mantis-Bitten wound; after that, the
-    jar has made its point."""
+def test_the_lattice_shows_a_different_memory_each_look():
+    """CCB: looking into the lattice draws a random facet of the Autarch's
+    days, not always the embalming -- but the embalming (the jar-puzzle clue)
+    stays in the pool, findable by whoever troubles to look."""
+    game = _game()
+    tomb._RNG.seed(4)
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    for _ in range(8):
+        game.do_command("x lattice")
+    looks = [t for t in cap.texts(Channel.NARRATION) if "Lazulite" in t]
+    assert len(set(looks)) >= 3  # variety across looks
+    assert any("embalming" in m for m in tomb._LATTICE_MEMORIES)  # clue kept
+
+
+def test_breaking_the_lattice_yields_a_shard_and_silass_wrath():
+    """CCB: BREAK LATTICE -> a memory shard, and an archivist who attacks
+    and keeps attacking -- through every hall, every round."""
+    game = _game()
+    memory = game.locations["Hall of Memory"]
+    game.relocate(game.player, memory)
+    cap = _texts(game)
+    game.do_command("break lattice")
+    assert "memory shard" in memory.items
+    assert game.characters["Silas"].get_property("wrathful")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "EVERYONE'S" in out
+    game.do_command("take shard")
+    game.do_command("x shard")  # while there's light to read it by
+    assert "One facet still plays" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("go south")  # flee: he honors no territory
+    game.do_command("wait")
+    assert game.characters["Silas"].location is game.player.location
+    assert any(w.name == "Bore-Struck" for w in game.player.wounds)
+
+
+def test_a_dead_archivist_holds_no_grudge():
+    game = _game()
+    memory = game.locations["Hall of Memory"]
+    game.relocate(game.player, memory)
+    game.characters["Silas"].set_property("is_dead", True)
+    game.do_command("break lattice")
+    assert "memory shard" in memory.items
+    assert not game.characters["Silas"].get_property("wrathful")
+
+
+def test_silas_answers_on_his_subjects():
+    """CCB: ASK SILAS ABOUT memories/lattice/crystal explains what the
+    memories are; about himself/robes, why he is there (a mendicant of the
+    Seekers, in yellow monk's robes)."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    game.do_command("ask silas about the memories")
+    game.do_command("ask silas about his robes")
+    out = " ".join(cap.texts(Channel.NARRATION))
+    assert "memory-crystal" in out and "could not buy or take by conquest" in out
+    assert "Seekers of Eyeless Wisdom" in out and "yellow" in out
+    game.do_command("x silas")
+    assert "yellow monk's robes" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_the_whole_tomb_is_dark_without_a_light():
+    """CCB: every interior hall wants a carried light. The ground halls'
+    own glows (tank, plinths, lattice) make them GLOOM -- dim description,
+    contents unlisted -- until a lit glowstone changes everything."""
+    game = _game()
+    cap = _texts(game)
+    for hall, tell in (
+        ("Hall of Memory", "each point a day someone else lived"),
+        ("Hall of Hounds", "lit only by the tank"),
+        ("Hall of the Canopic Jars", "like coals in a cold room"),
+    ):
+        game.relocate(game.player, game.locations[hall])
+        game.do_command("look")
+        out = " ".join(cap.texts(Channel.NARRATION))
+        assert tell in out, hall
+    # Contents are shapes, not listings: the jars are not itemized unlit.
+    assert "baboon-headed canopic jar" not in " ".join(cap.texts(Channel.NARRATION))
+    # A lit glowstone restores the full hall.
+    merchant = game.locations["The Caravan Wreck"].items["dead merchant"]
+    stone = merchant.contents["glowstone"]
+    merchant.remove_item(stone)
+    game.player.add_to_inventory(stone)
+    game.do_command("light glowstone")
+    game.do_command("look")
+    assert "baboon-headed canopic jar" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_the_crystal_seal_bars_the_stair_from_both_ends():
+    """CCB fix: the seal was one-directional. A scavenger who came down the
+    chimney into the sphere must not walk down an unsolved stair; once the
+    jars sit on their plinths, BOTH directions clear together."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    canopic = game.locations["Hall of the Canopic Jars"]
+    game.relocate(game.player, sphere)
+    game.do_command("down")
+    assert game.player.location is sphere  # barred from above too
+    canopic.set_property("seal_open", True)  # the jar puzzle, solved
+    game.do_command("down")
+    assert game.player.location is canopic
+    game.do_command("up")  # and the other direction stays clear
+    assert game.player.location is sphere
+
+
+def test_the_mantis_jar_bites_per_violation():
+    """CCB: one bite per VIOLATION -- opening the jar, and again for the
+    hand that reaches in for the eyes. Not per attempt: re-opening after
+    both draws nothing more."""
     game = _game()
     game.relocate(game.player, game.locations["Hall of the Canopic Jars"])
     cap = _texts(game)
     game.do_command("open mantis jar")
     assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
     assert "mantis head STRIKES" in " ".join(cap.texts(Channel.NARRATION))
-    # A second violation draws nothing: the snap is one-time.
+    game.do_command("take fungal eyes")  # the reach is bitten too
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 2
     game.do_command("close mantis jar")
-    game.do_command("open mantis jar")
-    game.do_command("take fungal eyes")
-    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 1
+    game.do_command("open mantis jar")  # both prices paid: no third
+    assert sum(1 for w in game.player.wounds if w.name == "Mantis-Bitten") == 2
+
+
+def test_the_jar_sings_at_loud_entry_but_not_sneaking():
+    """CCB playtest: entering the canopic hall didn't start the song. The
+    jar now hears exactly what the Spawn hear -- footfalls carry; sneak
+    exists for a reason."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    cap = _texts(game)
+    game.do_command("go up")
+    assert any("SINGS" in t for t in cap.texts(Channel.NARRATION))
+    quiet_game = _game()
+    quiet_game.relocate(quiet_game.player, quiet_game.locations["Hall of Hounds"])
+    quiet_cap = _texts(quiet_game)
+    quiet_game.do_command("sneak up")
+    assert not any("SINGS" in t for t in quiet_cap.texts(Channel.NARRATION))
 
 
 def test_the_glass_centipede_ambushes_in_the_chimney():
@@ -1219,6 +1416,146 @@ def test_fire_scours_the_centipede_with_the_growth():
     game.relocate(game.player, game.locations["The Fungal Chimney"])
     game.do_command("burn growth")
     assert game.characters["glass centipede"].get_property("is_dead")
+
+
+def test_carried_food_draws_the_denned_pack_by_scent():
+    """CCB: anything edible carried within two rooms of the pack's ground
+    pulls them out -- no noise required; salt meat is its own summons."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    pack = game.characters["jackal pack"]
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")  # noses lift: they emerge
+    assert pack.location.name == "Hall of Memory"
+    game.do_command("wait")  # and close
+    assert pack.location is game.player.location
+
+
+def test_no_food_no_scent():
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
+def test_a_sated_pack_ignores_the_scent():
+    """Post-feed grace holds even against fresh meat."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    for hall in ("Hall of Memory", "Hall of Hounds", "Hall of Warriors"):
+        loc = game.locations[hall]
+        loc.set_property(f"_jk:{hall}", -4)  # just fed
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
+def test_scent_has_a_two_room_range():
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    game.do_command("wait")  # at the wreck: 3+ hops from the den mouth
+    assert game.characters["jackal pack"].location.name == "Shallow Dens"
+
+
+def test_butchering_the_zoxen_wants_a_blade_and_yields_two_cuts():
+    """CCB: the zoxen earn their keep -- BUTCHER with a blade in hand gives
+    edible trail meat, twice, and then the sand has the rest."""
+    game = _game()
+    cap = _texts(game)
+    game.do_command("butcher zoxen")
+    assert any("wants an edge" in t for t in cap.texts(Channel.BLOCKED))
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("butcher zoxen")
+    game.do_command("butcher zoxen")  # the sand has the rest
+    wreck = game.player.location
+    assert "zox haunch" in wreck.items and "lean zox haunch" in wreck.items
+    assert any("sand has the rest" in t for t in cap.texts(Channel.BLOCKED))
+    game.do_command("take zox haunch")
+    game.do_command("eat zox haunch")  # it is real food
+    assert "zox haunch" not in game.player.carried_items()
+
+
+def test_zox_meat_serves_as_jackal_tribute():
+    """The scent draws them, and the same meat buys them off: GIVE the haunch
+    and the pack carries it to the den, sated a long while."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("butcher zoxen")
+    game.do_command("take zox haunch")
+    game.relocate(game.player, game.locations["Hall of Warriors"])
+    game.do_command("wait")  # noses lift
+    game.do_command("wait")  # they arrive
+    pack = game.characters["jackal pack"]
+    assert pack.location is game.player.location
+    game.do_command("give zox haunch to jackal pack")
+    assert pack.location.name == "Shallow Dens"  # gone with their tribute
+    game.do_command("wait")  # and the grace holds against nothing at all
+    assert pack.location.name == "Shallow Dens"
+
+
+def test_the_centipede_hunts_once_sprung():
+    """CCB: after its ambush the centipede follows the player anywhere, a
+    room a round, and bites every round it shares one -- with one arrival
+    round of grace, so running works and stopping doesn't."""
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # the ambush: sprung + first bite
+    cent = game.characters["glass centipede"]
+    assert cent.get_property("sprung")
+    bites = sum(1 for w in game.player.wounds if w.name == "Centipede Venom")
+    assert bites == 1
+    game.do_command("out")  # flee: it follows to the Summit
+    game.do_command("wait")  # it arrives (grace round) or bites
+    game.do_command("wait")  # co-located: bitten
+    assert cent.location is game.player.location
+    assert sum(1 for w in game.player.wounds if w.name == "Centipede Venom") > bites
+
+
+def test_kick_the_centipede_off_the_roof():
+    """CCB: on the Summit, KICK sends it over the edge -- it shatters at the
+    tomb's base, leaving remains there. A boot pays no venom."""
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")
+    game.do_command("out")
+    game.do_command("wait")  # let it arrive
+    wounds = len(game.player.wounds)
+    cap = _texts(game)
+    game.do_command("kick centipede")
+    cent = game.characters["glass centipede"]
+    assert cent.get_property("is_dead")
+    assert "centipede remains" in game.locations["Tomb Exterior"].items
+    assert len(game.player.wounds) == wounds  # the boot pays nothing
+    assert "dropped chandelier" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_throwing_it_by_hand_draws_a_parting_bite():
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")
+    game.do_command("out")
+    game.do_command("wait")
+    wounds = len(game.player.wounds)
+    game.do_command("throw centipede off the roof")
+    assert game.characters["glass centipede"].get_property("is_dead")
+    assert len(game.player.wounds) == wounds + 1  # hands pay for live glass
+
+
+def test_no_edge_no_toss():
+    game = _game()
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # sprung, co-located in the chimney
+    cap = _texts(game)
+    game.do_command("kick centipede")
+    assert not game.characters["glass centipede"].get_property("is_dead")
+    assert any("no edge here" in t for t in cap.texts(Channel.BLOCKED))
 
 
 def test_fire_finds_a_senseless_centipede_where_it_lies():
@@ -1318,5 +1655,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 100 == game.max_score
+    assert game.score == 115 == game.max_score
     assert game.player.location.name == "Tomb Exterior"

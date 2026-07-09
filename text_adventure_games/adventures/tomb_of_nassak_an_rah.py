@@ -14,7 +14,15 @@ tutorial entirely.
 
 import random
 
-from text_adventure_games import games, things, actions, blocks, reactions, perception
+from text_adventure_games import (
+    games,
+    things,
+    actions,
+    blocks,
+    reactions,
+    perception,
+    vaarn_chargen,
+)
 from text_adventure_games.enums import Property
 from text_adventure_games.slots import Wound, roll_wound
 
@@ -73,6 +81,55 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 # The sphere has NO noise hazard (CCB: noise reactions are covered
 # elsewhere) -- enter, look, even shout. The Horror wakes on the deliberate
 # act alone: prying its coffin (the boss fight, below).
+
+
+# The lattice holds the Autarch's DAYS (CCB: a different memory per look, not
+# always the embalming). The embalming replay -- the jar-puzzle clue -- stays
+# in the pool: you sift a dead king's days for the useful one, and Silas
+# points the way ("the lattice remembers his embalming, for those who trouble
+# to look").
+_LATTICE_MEMORIES = (
+    "the Autarch's embalming: the baboon took his lungs, the human his "
+    "liver, the mantis his eyes; the falcon was given his intestines, and "
+    "the jackal -- strangely -- his brain.",
+    "a bath: full immersion, water to the chin and warm -- a luxury no one "
+    "now living has tasted. He weeps in it, quietly, where no court can "
+    "see, and the crystal keeps the weeping with the warmth.",
+    "his mother's hand on the back of his neck, from before either crown "
+    "or name. The facet is brief. It is the most consulted bank in the "
+    "lattice; the wear on the crystal says so.",
+    "the first time he drew blood: a training yard, a cousin's forearm "
+    "opened by accident, and the long second in which he understands that "
+    "no one is going to punish him. The facet ends on that second.",
+    "the day they raised him: ten thousand banners the colour of this sand, "
+    "and his own hands shaking too hard to take the staff, so that he grips "
+    "his wrist to steady it -- the gesture his historians would later call "
+    "the Vice.",
+    "a physician's chamber. Something orange in a sample-jar, small as a "
+    "coin, and An-Rah watching it move against the glass with an expression "
+    "the facet preserves exactly. It is not fear.",
+    "a memory that is not his: eight-jointed hands sorting seeds by "
+    "starlight, patient as arithmetic. The lattice does not say whose day "
+    "this was, or how it got in among the king's.",
+    "an old man's hands -- his own, by then -- teaching a kestrel to stand "
+    "on a wrist, over and over, with the patience of a man who has outlived "
+    "everyone who would have laughed at him.",
+    "the tombwrights taking his measurements while he still lived; his own "
+    "voice, bored, asking whether the sky-facing face might be made to "
+    "smile. It was not.",
+)
+
+
+def _lattice_look(g=None):
+    """A different facet each look (callable examine_text; engine support in
+    actions.things.Examine / Thing.sense_text)."""
+    if g is not None:
+        g.award("lattice", 5, "[+5 -- a dead king's days]")
+    return (
+        "Lazulite crystals knit across the walls, worn smooth at "
+        "hand-height. A bank wakes at your attention and replays "
+        + _RNG.choice(_LATTICE_MEMORIES)
+    )
 
 
 def _wound_player(g, name, slots_n, desc):
@@ -218,6 +275,21 @@ class MantisSong(reactions.Startle):
     :class:`DrawnToSound`) to the singer. Re-arms each round."""
 
     REPEATABLE = True
+
+    def check_preconditions(self) -> bool:
+        # Engine sounds (say, breaks, the clatter of an overloaded pack) --
+        # the Startle base -- OR the Spawn's ear (CCB: walking in unsneakily
+        # must start the song; footfalls carry, and the jar listens exactly
+        # like the jar-headed Spawn it calls to).
+        if super().check_preconditions():
+            return True
+        loc = self.owner.location
+        if loc is None:
+            holder = getattr(self.owner, "owner", None)
+            loc = getattr(holder, "location", None)
+        if loc is None:
+            return False
+        return _player_was_loud_in(self.game, loc, _QUIET_SPAWN)
 
     def apply_effects(self):
         # The jar may be carried (it is gettable, at the carrier's peril): sing
@@ -456,7 +528,7 @@ class Burn(actions.Action):
                     # the slow churn behind the glass goes still.
                     _sphere_quieted(self.game)
             self.parser.ok(message)
-            self.game.award("cleanse", 30, None)
+            self.game.award("horror", 25, "[+25 -- the Horror is ended]")
         elif target == "chimney":
             chimney_loc = self.game.locations["The Fungal Chimney"]
             chimney_loc.set_property("burned", True)
@@ -733,23 +805,184 @@ class PryCoffin(actions.Action):
             + ". The blade is done."
         )
         _sphere_aftermath(self.game, ash=False)
-        self.game.award("exotica", 30, None)
+
+
+class Butcher(actions.Action):
+    """BUTCHER ZOXEN (CCB): with a blade in hand, the dead draught-beasts at
+    the wreck become trail food -- two cuts before the sand claims the rest.
+    Zox meat is EDIBLE, which makes it lunch, jackal tribute... and scent."""
+
+    ACTION_NAME = "butcher"
+    ACTION_DESCRIPTION = "Butcher a dead animal for meat (needs a blade)"
+    ACTION_ALIASES = [
+        "butcher zoxen",
+        "butcher the zoxen",
+        "butcher zox",
+        "carve zoxen",
+        "carve the zoxen",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def _zoxen(self):
+        loc = self.player.location
+        return loc.items.get("zoxen") if loc else None
+
+    def check_preconditions(self) -> bool:
+        zoxen = self._zoxen()
+        if zoxen is None:
+            self.parser.fail("There is nothing here to butcher.")
+            return False
+        if not any("blade" in n or "dagger" in n for n in self.player.carried_items()):
+            self.parser.fail(
+                "Butchery wants an edge. Your hands alone won't part zox hide."
+            )
+            return False
+        if int(zoxen.get_property("butchered") or 0) >= 2:
+            self.parser.fail(
+                "Nothing left on them worth the knife; the sand has the rest."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        zoxen = self._zoxen()
+        cut = int(zoxen.get_property("butchered") or 0) + 1
+        zoxen.set_property("butchered", cut)
+        meat = things.Item(
+            "zox haunch" if cut == 1 else "lean zox haunch",
+            "a briny haunch of zox meat",
+            "A dense, briny haunch, dark as jerky already -- zoxen are half "
+            "salt by weight. It will keep. In these halls, meat has "
+            "listeners.",
+        )
+        meat.set_property(Property.EDIBLE, True)
+        meat.set_property("smells_edible", True)  # the pack's nose (jackal scent)
+        meat.add_alias("meat")
+        meat.add_alias("zox meat")
+        meat.add_alias("haunch")
+        self.player.location.add_item(meat)
+        self.parser.ok(
+            "You open the nearer zox along the flank the sand hasn't "
+            "claimed and carve loose a haunch. Road-butchery: quick, "
+            "ungentle, honest."
+            if cut == 1
+            else "You take a second haunch, leaner than the first. The road "
+            "will have what's left by morning."
+        )
+
+
+class TossCentipede(actions.Action):
+    """KICK or THROW the glass centipede off the Summit (CCB): it falls the
+    height of the tomb and shatters on the stones at the base, leaving its
+    remains there. The verb matters -- KICK uses a boot; THROW means picking a
+    venomous glass centipede up with your hands, and the hands pay for it."""
+
+    ACTION_NAME = "kick centipede"
+    ACTION_DESCRIPTION = "Kick (or throw) the glass centipede off the roof"
+    ACTION_ALIASES = [
+        "kick the centipede",
+        "throw centipede",
+        "throw the centipede",
+        "toss centipede",
+        "toss the centipede",
+        "kick centipede off",
+        "throw centipede off",
+        "kick centipede off the roof",
+        "throw centipede off the roof",
+        "kick glass centipede",
+        "throw glass centipede",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+
+    def check_preconditions(self) -> bool:
+        centipede = self.game.characters.get("glass centipede")
+        if centipede is None or centipede.location is not self.player.location:
+            self.parser.fail("The centipede isn't here to kick.")
+            return False
+        if centipede.get_property("is_dead"):
+            self.parser.fail("It is past kicking.")
+            return False
+        if self.player.location.name != "The Summit":
+            self.parser.fail(
+                "There is no edge here worth the trouble -- it would only "
+                "come back. The Summit has a drop that means it."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        centipede = self.game.characters["glass centipede"]
+        by_hand = "throw" in self.command or "toss" in self.command
+        if by_hand and not centipede.get_property("is_unconscious"):
+            # Picking up four feet of live venomous glass: the hands pay.
+            fatal = _wound_player(
+                self.game,
+                "Centipede Venom",
+                1,
+                (
+                    "It hits you once across the palm as you heave it -- a "
+                    "parting gift, going in cold.",
+                ),
+            )
+            if fatal:
+                _die(
+                    self.game,
+                    "The venom finishes its work at the very edge of the "
+                    "sky. THE END.",
+                )
+                return
+        verb = "heave" if by_hand else "kick"
+        self.parser.ok(
+            f"You {verb} the glass centipede over the Summit's edge. It "
+            "falls the height of all three carved faces, turning, catching "
+            "the red light -- and comes apart on the stones below with a "
+            "sound like a dropped chandelier."
+        )
+        centipede.set_property("is_dead", True)
+        if centipede.location is not None:
+            centipede.location.remove_character(centipede)
+        exterior = self.game.locations["Tomb Exterior"]
+        remains = things.Item(
+            "centipede remains",
+            "the shattered remains of the glass centipede",
+            "A spray of translucent chitin across the stones, glittering "
+            "like a burst chandelier. The venom dries to nothing in the "
+            "open air.",
+        )
+        remains.set_property("gettable", False)
+        remains.add_alias("remains")
+        remains.add_alias("shattered centipede")
+        exterior.add_item(remains)
 
 
 class CrystalSeal(blocks.Block):
-    """The red-crystal seal barring the stair from the Canopic hall up to the
-    Burial Sphere. It clears once both missing canopic jars sit on their matching
-    plinths (the placement trigger sets ``seal_open`` on the Canopic hall)."""
+    """The red-crystal seal on the stair between the Canopic hall and the
+    Burial Sphere. A physical seal bars a stair from BOTH ends (CCB fix: it
+    was one-directional), so one instance sits on the hall's "up" and another
+    on the sphere's "down"; both key on the same ``seal_open`` property, set
+    by the jar-placement trigger, so they clear together."""
 
-    def __init__(self, canopic):
-        super().__init__(
-            "A seal of red crystal",
-            "A seal of red crystal bars the stair, cut and fitted to the "
+    def __init__(self, canopic, from_above: bool = False):
+        description = (
+            "A seal of red crystal closes the stair below, cut and fitted to "
+            "the treads so exactly that the joins read as one stone -- "
+            "tombwright work, made to open for one thing only. The crystal "
+            "hums at a pitch just under hearing, with the patience of a lock."
+            if from_above
+            else "A seal of red crystal bars the stair, cut and fitted to the "
             "treads so exactly that the joins read as one stone -- tombwright "
-            "work, made to open for one thing only. Five beast-sigils are set in the arch above "
-            "it; two of them are dark. The crystal hums at a pitch just under "
-            "hearing, with the patience of a lock.",
+            "work, made to open for one thing only. Five beast-sigils are set "
+            "in the arch above it; two of them are dark. The crystal hums at "
+            "a pitch just under hearing, with the patience of a lock."
         )
+        super().__init__("A seal of red crystal", description)
         self.canopic = canopic
 
     def is_blocked(self) -> bool:
@@ -907,6 +1140,10 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     organ = things.Item(organ_name, organ_desc, organ_desc)
     organ.set_property("gettable", True)
     organ.set_property(Property.EDIBLE, True)
+    # (Deliberately NOT smells_edible: the win route carries the cured
+    # intestines openly, and making loose organs draw the pack wrecks the
+    # pacifist path. If we ever want that, the route must first learn to
+    # seal them back in their jar.)
     organ.set_property(
         Property.TASTE,
         "of four thousand years of preservative, and beneath that, of exactly "
@@ -917,7 +1154,13 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     return jar
 
 
-def build_game():
+def build_game(seed=None):
+    """Build the Tomb. With *seed*, the module RNG is seeded first, making the
+    whole game deterministic -- (seed, game.journal) is then a complete save
+    file, restored by ``build_game(seed).replay(journal)`` (the iOS app design,
+    docs/design/ios-tomb-app.md §2). The seed is kept on ``game.rng_seed``."""
+    if seed is not None:
+        _RNG.seed(seed)
     # --- The onboarding: the Caravan Wreck (start) ---------------------------
     # A safe sandbox one room south of the tomb that teaches the old-school
     # verb+object language (EXAMINE / OPEN / TAKE / LIGHT / DOUSE / READ / TALK)
@@ -1006,6 +1249,9 @@ def build_game():
         "with somebody. The Cacklemaw do not trade.",
     )
     crates.make_container()
+    # The crates are the OPEN rehearsal now (CCB) -- lashed tight until opened.
+    crates.set_property("is_closed", True)
+    crates.add_command_hint("open crates")
     for _name, _desc, _ex, _slots in (
         (
             "bale of saffron",
@@ -1056,27 +1302,21 @@ def build_game():
     )
     ledger.set_property(
         "read_text",
-        "The hand is neat until it is not. '...ninth day. Camped in the lee "
-        "of the tomb the guards call the Three Mouths. They will not pass "
-        "it after dark, and I have stopped teasing them for it. Kotesh "
-        "swears the boy's mouth is lightless within, and that what roosts "
-        "there hates a lamp worse than a shout. The halls, he says, "
-        "remember every footfall. And none of them, drunk or paid, will "
-        "speak of the old man's mouth, which weeps orange. Superstition -- "
-        "but I observe that my guards are paid to be brave, and are not. "
-        "Tomorrow, Gnomon.' The entry is the last.",
+        "The hand is neat. '...ninth day. Camped in the lee "
+        "of the tomb the road-folk call the Three Mouths. Of it, Gnomon "
+        "tells three things: that the boy's mouth is lightless within, and "
+        "what roosts there hates a lamp worse than a shout; that the halls "
+        "remember every footfall; and that no one, drunk or paid, will "
+        "speak of the old man's mouth, which weeps orange. Rumor -- but the "
+        "road teaches a certain respect for rumor. Tomorrow, Gnomon.' The "
+        "entry is the last.",
     )
     ledger.set_property("gettable", True)  # take it along; it reads anywhere
     ledger.add_command_hint("read ledger")
 
-    pack = things.Item(
-        "pack",
-        "the merchant's half-buried pack",
-        "Boiled leather, half-buried, the straps still buckled. Whatever the "
-        "Cacklemaw came for, it was not this.",
-    ).make_container()
-    pack.set_property("is_closed", True)
-    pack.add_command_hint("open pack")
+    # (CCB: no separate pack -- everything the merchant carried is ON the
+    # merchant, found the way the tokens are: by searching the dead. The
+    # corpse-searching habit is rehearsed harder for it.)
     waterskin = things.Item(
         "waterskin",
         "a waterskin with 3 rations",
@@ -1094,36 +1334,63 @@ def build_game():
     )
     waterskin.add_alias("water")
     waterskin.add_alias("skin")
-    wreck.add_item(pack)
+    waterskin.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(waterskin)
 
-    # Worry is a NEWBEAST -- a humanoid animal-person (Issue 1: they "speak and
-    # walk like men", wear masks in imitation of the human face). She was the
-    # caravan's TEAMSTER, driving the zoxen; the zoxen pulled. Newbeasts are
-    # never beasts of burden -- canon reserves that for zoxen and iron mules.
-    worry = things.Character(
-        "Worry",
-        "a new-mule teamster",
-        "I am Worry. I drove the wagon; now there is no wagon.",
+    # The TEAMSTER is a NEWBEAST (Issue 1: humanoid animal-people who "speak
+    # and walk like men", wearing masks in imitation of the human face) --
+    # and a different one each expedition: rolled on the zine's own spark
+    # tables (vaarn_chargen), from a side-RNG derived from the game seed so
+    # the roll never shifts the main stream (saves stay deterministic).
+    # Newbeasts are never beasts of burden; the zoxen pulled, she drove.
+    _nb = vaarn_chargen.generate(
+        random.Random(None if seed is None else f"teamster-{seed}"),
+        ancestry="newbeast",
     )
-    worry.examine_text = (
-        "A grey new-mule in a drover's long coat, upright on her hind hooves, "
-        "dressed in the road's dust. Patient, mournful, unhurt. A carved mask "
-        "in imitation of a human face hangs at her neck on a cord; there is no "
-        "one left on the road to wear it for. A brass pin on the coat reads "
-        "WORRY."
+    _beast = _nb.sparks["beast"]
+    _hue = _nb.sparks["hue"].lower()
+    _mask = _nb.sparks["mask"]
+    _mask_line = (
+        "She wears no mask; her beast face meets you bare, which among "
+        "newbeasts is either candor or challenge."
+        if _mask == "None"
+        else f"A carved mask in imitation of a human face -- a {_mask.lower()} "
+        "one -- hangs at her neck on a cord; there is no one left on the "
+        "road to wear it for."
     )
-    worry.talk_text = (
-        '"They came at moonset, laughing," Worry says. "I ran, and the merchant '
-        "could not, and that is the whole story. The Cacklemaw make no secret "
-        'of their coming." She looks '
-        'north, to the faces in the azure stone. "Take what he no longer needs '
-        "-- better you than the sand. There is water in his pack, three rations "
-        "of it, and a glowstone besides. You can take whatever you can carry "
-        "from the hold. But "
-        "mind the tomb, scavenger. The caravans give its mouths a wide berth, "
-        'and a caravan is seldom wrong twice."'
+    _oddity = _nb.sparks["oddity"]
+    teamster = things.Character(
+        _nb.name,
+        f"a {_beast.lower()} teamster",
+        f"I am {_nb.name}. I drove the wagon; now there is no wagon.",
     )
-    wreck.add_character(worry)
+    teamster.examine_text = (
+        f"A {_hue}-coated {_beast.lower()} in a drover's long coat, upright, "
+        "dressed in the road's dust. Patient, mournful, unhurt. "
+        f"{_mask_line} ({_oddity.rstrip('.')}.) A brass pin on the coat "
+        f"reads {_nb.name.upper()}."
+    )
+
+    def _teamster_talk(g):
+        teamster.set_property("has_spoken", True)
+        return (
+            f'"They came at moonset, laughing," {_nb.name} says. "I ran, and '
+            "the merchant could not, and that is the whole story. The "
+            'Cacklemaw make no secret of their coming." She looks north, to '
+            'the faces in the azure stone. "Take what he no longer needs -- '
+            "better you than the sand. He carried water, three rations of "
+            "it, and a glowstone; search him, he is past minding. The hold "
+            "is yours too, whatever you can carry. But mind the tomb, "
+            "scavenger. The caravans give its mouths a wide berth, and a "
+            'caravan is seldom wrong twice." She settles her pack straps as '
+            "she speaks, the way people do who have already decided to be "
+            "elsewhere."
+        )
+
+    teamster.talk_text = _teamster_talk
+    teamster.add_alias("teamster")
+    teamster.add_alias(_beast.lower())
+    wreck.add_character(teamster)
 
     # --- The eight locations -------------------------------------------------
     exterior = things.Location(
@@ -1275,8 +1542,12 @@ def build_game():
         exterior,
         "tomb",
         "the Tomb of Nassak An-Rah",
-        "Three faces in azure stone -- boy, warrior, and sky-gazing elder -- "
-        "their mouths gaping as doors. Orange fungus mortars every seam.",
+        "A blue slab of stone, thirty feet high, carved as three likenesses "
+        "of Nassak An-Rah: a boy on the western face, a helmed warrior on "
+        "the eastern, and at the summit an old man with his face to the sky. "
+        "The two lower mouths gape as doorways. From the elder's mouth -- a "
+        "chimney -- bright orange tendrils and fungal vines sprout, webbing "
+        "down over the stone, shifting drowsily in the red light of the sun.",
     )
     # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
     # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
@@ -1312,13 +1583,29 @@ def build_game():
         memory,
         "crystal lattice",
         "lattices of memory-crystal",
-        "Lazulite crystals knit across the walls, worn smooth at hand-height. "
-        "One bank replays the Autarch's embalming for no one: the baboon took "
-        "his lungs, the human his liver, the mantis his eyes; the falcon was "
-        "given his intestines, and the jackal -- strangely -- his brain.",
+        _lattice_look,  # a different facet each look (CCB)
     )
     lattice.add_alias("lattice")
     lattice.add_alias("crystals")
+    # BREAKABLE (CCB): smashing it yields a MEMORY SHARD -- and an archivist's
+    # undying wrath (the trigger below the jackal block).
+    lattice.set_property("is_breakable", True)
+    lattice.set_property(
+        "break_text",
+        "The bank gives with a sound like a struck bell-field: facet after "
+        "facet cascades dark, a thousand remembered days going out at once. "
+        "A hand-sized shard skitters to your feet, one memory still alive "
+        "inside it.",
+    )
+    # The shard's one surviving memory is drawn at BREAK time (inside the
+    # trigger), not at build: a build-time draw would shift the RNG stream
+    # for every game, seeded or not.
+    memory_shard = things.Item(
+        "memory shard",
+        "a shard of memory-crystal, one facet still lit",
+        "A splinter of lazulite, warm-edged where it broke.",
+    )
+    memory_shard.add_alias("shard")
     tank = _scenery(
         hounds,
         "tank",
@@ -1557,6 +1844,13 @@ def build_game():
     )
     for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
         jackal_pack.add_alias(_a)
+    # A PACK does not drop to one swing (the vigor system, CCB): three blows
+    # thin it to nothing.
+    jackal_pack.set_property("vigor", 3)
+    jackal_pack.set_property(
+        "struck_text",
+        "The blow lands; the pack gives ground snarling, thinner by one.",
+    )
     den.add_character(jackal_pack)
 
     # The Fungal Horror -- the boss (design doc §17.3). It lives coiled in the
@@ -1574,13 +1868,15 @@ def build_game():
     )
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
-    horror.set_property("vigor", 5)
     horror.set_property("no_catch", True)  # a coil has no hands
+    horror.set_property("vigor", 5)
     horror.set_property(
-        "ko_text",
-        "The blow lands true, and the mass folds around the blade's path "
-        "without falling.",
+        "struck_text",
+        "The blade opens a rent in the orange mass; it seethes, and does " "not fall.",
     )
+    # The engine prints ko_text on the FINAL blow, just before the death
+    # trigger converts the knockout into the end it really is.
+    horror.set_property("ko_text", "The last rent does not close.")
     den.add_character(horror)
 
     # The glass centipede (source: "lying in ambush in the fungal chimney" --
@@ -1718,14 +2014,14 @@ def build_game():
     # warns you about the Spawn and the seal if you talk to him.
     silas = things.Character(
         "Silas",
-        "a yellow-robed synthetic archivist",
+        "a synthetic archivist in yellow monk's robes",
         "I am Silas, of the Seekers of Eyeless Wisdom. I read the dead.",
     )
     silas.examine_text = (
-        "A gaunt synth in fuligin-yellow robes, fingertips tipped with cranial "
-        "bores, drawing memory from the lattice in slow bright threads. Patient, "
-        "courteous, elsewhere. Now and then his lips move -- circular glyphs, "
-        "no sound."
+        "A gaunt synth in yellow monk's robes, plain-woven and dust-hemmed, "
+        "fingertips tipped with cranial bores, drawing memory from the "
+        "lattice in slow bright threads. Patient, courteous, elsewhere. Now "
+        "and then his lips move -- circular glyphs, no sound."
     )
     _silas_speech = (
         'Silas speaks without turning. "Scavenger. You walk in a house of '
@@ -1739,6 +2035,7 @@ def build_game():
     )
 
     def _silas_talk(g):
+        g.award("silas", 5, "[+5 -- the archivist's acquaintance]")
         # With a living spawn in earshot, Silas will not perform the lecture.
         for name in ("spawn of guts", "spawn of brain"):
             sp = g.characters.get(name)
@@ -1757,6 +2054,58 @@ def build_game():
         return _silas_speech
 
     silas.talk_text = _silas_talk
+    # ASK SILAS ABOUT ... (CCB): the archivist answers on his subjects.
+    # Several keywords share an answer; parser.match_topic picks by keyword
+    # (longest match wins), the LLM parser by meaning.
+    _about_lattice = (
+        "Silas's fingertips still. \"The lattice is a memory-crystal -- "
+        "New-Pangean work, grown rather than cut. The tombwrights fed it "
+        "the Autarch's chosen memories as they embalmed him, and it holds "
+        "them yet, set down in facets: a reader with the right fingertips "
+        "can walk them like halls. Not his decrees -- crystal is too dear "
+        "for decrees. What it keeps is what he could not buy or take by "
+        "conquest: his "
+        "mother's hand on the back of his neck. A bath, full immersion, "
+        "water to the chin -- a luxury this world no longer imagines. The "
+        'first time he drew blood, and what it taught him." He turns back '
+        'to the light. "Look into it yourself, if you are gentle. It shows '
+        'what it chooses."'
+    )
+    _about_himself = (
+        '"Why am I here?" Silas considers the question as if reading it. '
+        '"I am of the Seekers of Eyeless Wisdom -- a mendicant order; the '
+        "robes are the rule, yellow so the dust of the road shows on them. "
+        "We read the dead where they kept their own records. When I have "
+        "the Autarch whole -- every remembered day in its order -- my "
+        "order will speak him aloud once, in a hall built for the purpose, "
+        "and then let him go. A man is not done dying until he is done "
+        'being remembered. I am here to finish Nassak An-Rah properly."'
+    )
+    silas.talk_topics = {
+        "memories": _about_lattice,
+        "memory": _about_lattice,
+        "lattice": _about_lattice,
+        "crystal": _about_lattice,
+        "himself": _about_himself,
+        "why he is here": _about_himself,
+        "seekers": _about_himself,
+        "his order": _about_himself,
+        "robes": _about_himself,
+        "autarch": (
+            '"Nassak An-Rah. A nobleman of the Fallen Autarchy, buried in '
+            "state above us -- and not, I should say, entirely at rest. His "
+            "appetites and his thoughts were jarred separately, as the rite "
+            "requires, and both have got up. I do not fight them; I read. "
+            'But keep your voice low and your blade closer."'
+        ),
+        "lantern": (
+            '"The lantern burns ulfire -- the ninth colour. Its light passes '
+            "through solid things; only lead stops it. An archivist's tool: "
+            'one reads a sealed page by it. It is not for sale." A pause. '
+            '"Though I am, in one matter, corruptible. The order forbids us '
+            'nothing that grows."'
+        ),
+    }
     # Silas keeps the Ulfire Lantern (Exotica; design doc §13). Ulfire is the
     # ninth colour: its light shines THROUGH solid objects -- the "very specific
     # angle" from which the Manifold Box's hypergeometric compartment can be
@@ -1772,11 +2121,22 @@ def build_game():
     ulfire_lantern.set_property(Property.FLAMMABLE, True)
     ulfire_lantern.add_alias("lantern")
     silas.add_to_inventory(ulfire_lantern)
+    # A synth takes some breaking (vigor 2).
+    silas.set_property("vigor", 2)
+    silas.set_property(
+        "struck_text",
+        "Silas takes the blow with synthetic patience; something inside him "
+        "ticks, recalibrates, and holds.",
+    )
     memory.add_character(silas)
 
     # The crystal seal bars the stair up from the Canopic hall until both jars are
     # placed (registered before the game so the parser picks up the block).
+    # A physical seal bars the stair from BOTH ends (CCB fix): whoever drops
+    # into the sphere from the chimney meets the same crystal from above, and
+    # the jar puzzle clears both at once.
     canopic.add_block("up", CrystalSeal(canopic))
+    sphere.add_block("down", CrystalSeal(canopic, from_above=True))
 
     # --- The player ----------------------------------------------------------
     player = things.Character(
@@ -1801,8 +2161,8 @@ def build_game():
     )  # no "lantern" alias: the Ulfire Lantern owns that word
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
-    pack.add_item(glowstone)
-    pack.add_item(waterskin)
+    glowstone.set_property(Property.IS_HIDDEN, True)
+    merchant.add_item(glowstone)
 
     # The dead don't sway (CCB): state-aware one-liners for the creatures.
     spawn_guts.set_property(
@@ -1846,14 +2206,23 @@ def build_game():
             silas,
             spawn_guts,
             spawn_brain,
-            worry,
+            teamster,
             jackal_pack,
             horror,
             centipede,
         ],
-        custom_actions=[Sneak, Burn, PryCoffin, TieSilk, Refill],
+        custom_actions=[
+            Sneak,
+            Burn,
+            PryCoffin,
+            TieSilk,
+            Refill,
+            TossCentipede,
+            Butcher,
+        ],
     )
-    game.max_score = 100
+    game.max_score = 115
+    game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
     game.enable_senses()
@@ -1913,12 +2282,52 @@ def build_game():
         "dark of it, the fungus is warm."
     )
 
+    # THE WHOLE TOMB IS DARK (CCB): every interior hall wants a carried
+    # light. The three ground halls have their own faint canonical glows
+    # (the luminous tank, the crimson plinths, the glimmering lattice), so
+    # they are GLOOM -- shape and exits show, contents don't, and the dim
+    # description carries the room until a light does.
+    memory.obscure(
+        perception.Gloom(
+            blurb="The lattice's glimmer is light the way frost is water: "
+            "walls of faint constellations, and nothing else legible."
+        )
+    )
+    memory.dim_description = (
+        "A hall lit only by the lattice itself -- drifts of pale glimmer "
+        "crawling the walls, each point a day someone else lived. Between "
+        "their constellations, the dark keeps its own counsel."
+    )
+    hounds.obscure(
+        perception.Gloom(
+            blurb="A wall of green-gold light: the tank glows like old honey "
+            "held to a lamp, and everything before it is silhouette."
+        )
+    )
+    hounds.dim_description = (
+        "The hall is lit only by the tank -- a wall of green-gold, luminous "
+        "and slow, ten hound-shapes hanging in it like thoughts. Everything "
+        "on your side of the plexiglas is shadow and floor-grit."
+    )
+    canopic.obscure(
+        perception.Gloom(
+            blurb="Two points of crimson burn at knee height and light "
+            "nothing but themselves. The stair climbs into black."
+        )
+    )
+    canopic.dim_description = (
+        "A pentagon of dressed stone, dark except where two empty plinths "
+        "burn crimson from within -- light that reaches nothing, like coals "
+        "in a cold room. Something in this room is listening; you can tell, "
+        "the way one can."
+    )
+
     youth.obscure(
         perception.Darkness(
             blurb="Dark as the inside of a sealed jar. The air is chill and smells "
             "of old guano; somewhere far above, leather rustles against leather, "
-            "patient and vast. The caravan-guards' word for the boy's mouth was "
-            "'lightless', and they meant it as advice."
+            "patient and vast. The road-folk's word for the boy's mouth is "
+            "'lightless', and they mean it as advice."
         )
     )
 
@@ -2138,7 +2547,7 @@ def build_game():
 
     _spawn_menace(
         spawn_guts,
-        "The spawn of guts swings toward your footfalls, arms rising from the "
+        "The spawn of guts swings toward your noise, arms rising from the "
         "floor like kelp in a current.",
         _guts_lash,
     )
@@ -2389,6 +2798,209 @@ def build_game():
 
     game.add_trigger("jackal_pursuit", _pack_pursues, _pursue, repeatable=True)
 
+    # THE SCENT (CCB): jackals smell food. A player carrying anything edible
+    # within two rooms of the den mouth (the Hall of Memory, heart of their
+    # ground) draws the denned pack OUT -- no noise required; salt meat is
+    # its own summons. Once out, the existing pursuit closes the distance.
+    # A freshly fed pack (post-feed grace: negative ledgers) stays sated.
+    def _hops(start, goal, cap=2):
+        if start is goal:
+            return 0
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, 0)])
+        while queue:
+            room, d = queue.popleft()
+            if d >= cap:
+                continue
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return d + 1
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, d + 1))
+        return cap + 1
+
+    def _smells_of_food(g):
+        # What the pack can SMELL: exposed meat (zox haunches, loose organs)
+        # -- not everything technically edible. The friend's fungus rides in
+        # a sealed plastic pouch; organs inside their sealed jars are mute.
+        return any(
+            it.get_property("smells_edible") for it in g.player.carried_items().values()
+        )
+
+    def _scent_check(g):
+        if jackal_pack.location is not den or not _smells_of_food(g):
+            return False
+        if jackal_pack.get_property("is_dead") or jackal_pack.get_property(
+            "is_unconscious"
+        ):
+            return False
+        # Sated is sated: post-feed grace holds even against fresh meat.
+        if any((h.get_property(f"_jk:{h.name}") or 0) < 0 for h in _halls):
+            return False
+        return _hops(memory, g.player.location) <= 2
+
+    def _scent_pull(g):
+        g.relocate(jackal_pack, memory)
+        # Keep the pack's lope-and-rest rhythm: emergence is its own beat, so
+        # the pursuit's first move is the hang-back yip, not the doorway.
+        jackal_pack.set_property("_stride", True)
+        g.parser.ok(
+            "Down in the halls, noses lift. Something has smelled the salt "
+            "on what you carry -- a yipping starts, low and purposeful, and "
+            "begins to close."
+        )
+
+    game.add_trigger("jackal_scent", _scent_check, _scent_pull, repeatable=True)
+
+    # The teamster DECAMPS once she has said her piece (CCB): she survived
+    # the night by knowing when to be elsewhere, and she still knows.
+    def _teamster_spoken(g):
+        return teamster.get_property("has_spoken") and teamster.location is wreck
+
+    def _teamster_decamps(g):
+        wreck.remove_character(teamster)
+        g.parser.ok(
+            f"{teamster.name} settles the mask over her face, takes up her "
+            "stick, and sets off south along the trail on foot -- a small "
+            "figure keeping to the wind-shadow of the dunes, smaller, then "
+            "gone. The road is yours, and the tomb is the road's."
+        )
+
+    game.add_trigger("teamster_decamps", _teamster_spoken, _teamster_decamps)
+
+    # --- The point table's progress beats (CCB): the score is a progress
+    # bar, not a diploma -- small awards mark the expedition's firsts, and
+    # both victory routes reach the same 115.
+    _interior = (youth, memory, hounds, warriors, canopic, sphere, chimney)
+
+    def _score_beats(g):
+        inv = g.player.inventory
+        if g.player.location in _interior:
+            g.award("threshold", 5, "[+5 -- the threshold]")
+        if "waterskin" in inv:
+            g.award("water", 5, "[+5 -- an inheritance of water]")
+        if "falcon jar" in inv:
+            g.award("falcon_jar", 5, "[+5 -- the falcon jar]")
+        if "jackal jar" in inv:
+            g.award("jackal_jar", 5, "[+5 -- the jackal jar]")
+        if "synth-hunting dagger" in inv and "manifold box" in inv:
+            g.award("exotica", 10, "[+10 -- the Autarch's Exotica, both]")
+        stone = inv.get("glowstone")
+        if stone is not None and stone.get_property(Property.IS_LIT):
+            g.award("first_light", 5, "[+5 -- light, learned]")
+
+    game.add_trigger("score_beats", lambda g: True, _score_beats, repeatable=True)
+
+    # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
+    def _lattice_broken(g):
+        return (
+            any(
+                e.actor == g.player.name
+                and e.action == "break"
+                and any(w in (e.summary or "").lower() for w in ("lattice", "crystal"))
+                for e in g.events[g._round_event_start :]
+            )
+            and "crystal lattice" not in memory.items
+        )
+
+    def _lattice_shatters(g):
+        memory_shard.examine_text = (
+            "A splinter of lazulite, warm-edged where it broke. One facet "
+            "still plays, over and over, "
+            + _RNG.choice(_LATTICE_MEMORIES)
+            + " The rest of the bank it came from is dark now, and will "
+            "stay so."
+        )
+        memory.add_item(memory_shard)
+        memory.description = (
+            "Dead lattices climb every wall, dark where they were lit -- a "
+            "library burned in a language no one else could read. Splinters "
+            "of lazulite grit underfoot."
+        )
+        _scenery(
+            memory,
+            "shattered lattice",
+            "the dead memory-crystal, dark and fractured",
+            "The facets are ash-grey and silent. Whatever days the Autarch "
+            "kept here are gone from the universe now, except the one in "
+            "the shard.",
+        )
+        if not silas.get_property("is_dead") and not silas.get_property(
+            "is_unconscious"
+        ):
+            silas.set_property("wrathful", True)
+            silas.set_property("mellowed", False)
+            g.parser.ok(
+                'Silas turns all the way around for the first time. "Those '
+                "were EVERYONE'S,\" he says, very quietly, and the cranial "
+                'bores slide from his fingertips like claws. "Every day he '
+                "ever kept. You have made me the last reader of a burned "
+                'book." He comes for you, and he does not stop coming.'
+            )
+
+    game.add_trigger("lattice_break", _lattice_broken, _lattice_shatters)
+
+    def _hop_anywhere(start, goal):
+        """One step from *start* toward *goal*, any route (Silas knows every
+        hall; unlike the pack he honors no territory)."""
+        from collections import deque
+
+        seen = {start}
+        queue = deque([(start, None)])
+        while queue:
+            room, first = queue.popleft()
+            for nxt in room.connections.values():
+                if nxt is goal:
+                    return first or nxt
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append((nxt, first or nxt))
+        return None
+
+    def _silas_wrathful(g):
+        return (
+            silas.get_property("wrathful")
+            and not silas.get_property("is_dead")
+            and not silas.get_property("is_unconscious")
+        )
+
+    def _silas_hunts(g):
+        here = g.player.location
+        if silas.location is here:
+            fatal = _wound_player(
+                g,
+                "Bore-Struck",
+                1,
+                (
+                    "A cranial bore skips off your skull, taking skin.",
+                    "His fingertips find the base of your neck; a white "
+                    "spark of someone else's morning blinds you.",
+                    "The archivist's hand closes on your jaw; the bore "
+                    "sings against bone.",
+                ),
+            )
+            if fatal:
+                _die(
+                    g,
+                    "Silas reads you to the last page, and closes it. THE END.",
+                )
+            return
+        step = _hop_anywhere(silas.location, here)
+        if step is not None:
+            g.relocate(silas, step)
+            g.parser.ok(
+                "Soft, unhurried footsteps keep coming -- the archivist, "
+                "reading your trail."
+                if step is not here
+                else "Silas comes through the doorway, yellow robes without "
+                "haste, bores out."
+            )
+
+    game.add_trigger("silas_wrath", _silas_wrathful, _silas_hunts, repeatable=True)
+
     # The chimney's spores: choke you each round you're in it without a respirator.
     def _spore_sear(g):
         fatal = _wound_player(
@@ -2454,7 +3066,7 @@ def build_game():
             "As the last jar settles onto its plinth, the crimson light steadies to "
             "white. The crystal seal sighs apart into motes, baring the stair up."
         )
-        g.award("seal", 20, None)
+        g.award("seal", 20, "[+20 -- the seal answers the jars]")
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
 
@@ -2507,6 +3119,7 @@ def build_game():
                 f"The water does what water does in Vaarn. The {healed.name.lower()} "
                 "troubles you less; something knits."
             )
+            g.award("healed", 5, "[+5 -- water, spent wisely]")
         n = int(waterskin.get_property("portions") or 0)
         if n <= 0:
             waterskin.description = "an empty waterskin"
@@ -2614,6 +3227,7 @@ def build_game():
 
     def _horror_dies(g, burned=False):
         horror.set_property("is_dead", True)
+        g.award("horror", 25, "[+25 -- the Horror is ended]")
         # The coil unclenches: the coffin's keeping is over.
         coffin_item = sphere.items.get("coffin")
         released = []
@@ -2647,32 +3261,17 @@ def build_game():
             )
         g.parser.ok(msg)
 
-    # Striking the Horror: a weapon hit costs it one vigor, visibly.
+    # Striking the Horror: the ENGINE's vigor system (actions/fight.py) does
+    # the arithmetic now -- vigor 5, struck_text per blow. This trigger only
+    # converts the FINAL blow's knockout into the death it really is, before
+    # _horror_turn could let a "senseless" Horror knit.
     def _struck_horror(g):
-        # The event summary is the raw command ("attack horror with blade"),
-        # so match any of the thing's names.
-        return any(
-            e.actor == g.player.name
-            and e.action == "attack"
-            and any(
-                a in (e.summary or "").lower()
-                for a in ("fungal horror", "horror", "mass")
-            )
-            for e in g.events[g._round_event_start :]
-        ) and not horror.get_property("is_dead")
+        return horror.get_property("is_unconscious") and not horror.get_property(
+            "is_dead"
+        )
 
     def _horror_struck(g):
-        # Undo the engine's one-hit KO; convert it into a point of vigor.
-        horror.set_property("is_unconscious", False)
-        vigor = int(horror.get_property("vigor") or 0) - 1
-        horror.set_property("vigor", vigor)
-        if vigor <= 0:
-            _horror_dies(g)
-            return
-        g.parser.ok(
-            "The blade opens a rent in the orange mass; it seethes, and does "
-            "not fall."
-        )
+        _horror_dies(g)
 
     game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
 
@@ -2718,23 +3317,12 @@ def build_game():
 
     game.add_trigger("gel_splash", _gel_thrown_at_horror, _gel_splash, repeatable=True)
 
-    # --- The glass centipede's ambush -----------------------------------------
-    def _centipede_lurks(g):
-        return (
-            not centipede.get_property("is_dead")
-            and not centipede.get_property("is_unconscious")
-            and g.player.location is chimney
-        )
-
-    def _centipede_bites(g):
-        if chimney.get_property("burned") and centipede.location is not chimney:
-            return  # scoured out before it ever sprang
-        if centipede.location is not chimney:
-            g.relocate(centipede, chimney)
-            g.parser.ok(
-                "The growth beside you bends wrong -- and four feet of glass "
-                "uncoils out of it, faster than the eye wants to allow."
-            )
+    # --- The glass centipede: ambush, then a HUNT (CCB) ----------------------
+    # It springs in the chimney as before -- but once sprung it follows the
+    # player anywhere, a room a round, and bites every round it shares one.
+    # The outs: keep moving (it closes but grants an arrival round), one solid
+    # blade hit, fire in the chimney -- or the Summit's edge (the toss, below).
+    def _centipede_venom(g):
         fatal = _wound_player(
             g,
             "Centipede Venom",
@@ -2748,12 +3336,47 @@ def build_game():
         if fatal:
             _die(
                 g,
-                "The venom finishes what the tomb began; the shaft keeps you. "
+                "The venom finishes what the tomb began; the tomb keeps you. "
                 "THE END.",
             )
 
+    def _centipede_active(g):
+        return (
+            not centipede.get_property("is_dead")
+            and not centipede.get_property("is_unconscious")
+            and (centipede.get_property("sprung") or g.player.location is chimney)
+        )
+
+    def _centipede_hunts(g):
+        here = g.player.location
+        if not centipede.get_property("sprung"):
+            if chimney.get_property("burned"):
+                return  # scoured out before it ever sprang
+            centipede.set_property("sprung", True)
+            if centipede.location is not chimney:
+                g.relocate(centipede, chimney)
+            g.parser.ok(
+                "The growth beside you bends wrong -- and four feet of glass "
+                "uncoils out of it, faster than the eye wants to allow."
+            )
+            _centipede_venom(g)
+            return
+        if centipede.location is here:
+            _centipede_venom(g)
+            return
+        step = _hop_anywhere(centipede.location, here)
+        if step is not None:
+            g.relocate(centipede, step)
+            g.parser.ok(
+                "Glass pours through the doorway after you, unhurried as "
+                "water finding a level."
+                if step is here
+                else "Somewhere behind you, glass ticks over stone, keeping "
+                "your pace."
+            )
+
     game.add_trigger(
-        "centipede_ambush", _centipede_lurks, _centipede_bites, repeatable=True
+        "centipede_hunt", _centipede_active, _centipede_hunts, repeatable=True
     )
 
     # Fire scours the shaft: the centipede goes with the growth.
@@ -2862,14 +3485,30 @@ def build_game():
     # hand that opens it. It stays an alarm, not a combatant -- the bite
     # teaches respect; the song it sings at noise delivers the sentence.
     def _jar_violated(g):
-        return any(
+        opened = any(
             e.actor == g.player.name
             and e.action == "open"
             and "mantis" in (e.summary or "").lower()
             for e in g.events[g._round_event_start :]
         )
+        open_due = opened and not mantis_jar.get_property("bit_for_open")
+        # The eyes leave the jar only by a hand reaching in (CCB: that hand
+        # is bitten too) -- one bite per violation, not per carry.
+        reach_due = "fungal eyes" in g.player.inventory and not mantis_jar.get_property(
+            "bit_for_eyes"
+        )
+        return open_due or reach_due
 
     def _mantis_snaps(g):
+        if any(
+            e.actor == g.player.name
+            and e.action == "open"
+            and "mantis" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        ):
+            mantis_jar.set_property("bit_for_open", True)
+        if "fungal eyes" in g.player.inventory:
+            mantis_jar.set_property("bit_for_eyes", True)
         g.parser.ok(
             "The split in the jar widens and the mantis head STRIKES -- one "
             "motion, out and back, quicker than the eye. The jar settles "
@@ -2891,12 +3530,12 @@ def build_game():
         if fatal:
             _die(g, "The jar sings on over what it has done. THE END.")
 
-    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=False)
+    game.add_trigger("mantis_snap", _jar_violated, _mantis_snaps, repeatable=True)
 
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
         g.player.set_property("escaped", True)
-        g.award("escape", 20, None)
+        g.award("escape", 20, "[+20 -- out alive]")
         g.parser.ok(
             "You climb out into the phthalo sands. The dying sun stains the dunes "
             "red, the Autarch's Exotica heavy in your pack. You have plundered the "
@@ -2928,10 +3567,10 @@ WALK = [
     # open/take, then light/douse/read in the safe dark of the hold.
     "examine wreck",
     "search merchant",
-    "talk to worry",
-    "open pack",
     "take glowstone",
+    "talk to teamster",
     "in",
+    "open crates",
     "light glowstone",
     "read ledger",
     "douse glowstone",
@@ -2967,7 +3606,7 @@ WALK = [
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
     # Loot the wreck (water heals; the glowstone lights the dark Warriors).
-    "open pack",
+    "search merchant",
     "take glowstone",
     "take waterskin",
     "north",
@@ -2992,6 +3631,12 @@ WIN_WALKTHROUGH = [
     "take boots",
     "douse glowstone",
     "drop glowstone",  # the halls ahead light themselves
+    # The archivist's acquaintance and the dead king's days (the full-score
+    # detour: Memory is one quiet hall south, and the lattice lights itself).
+    "sneak south",
+    "talk to silas",
+    "x lattice",
+    "sneak north",
     "sneak east",
     "take gel",  # Hounds: gel
     "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
@@ -3042,4 +3687,9 @@ if __name__ == "__main__":
     elif "--walk" in sys.argv:
         _run(WALK)
     else:
-        build_game().game_loop()
+        # Interactive play gets the Infocom trio: SAVE/RESTORE slots persist
+        # to a JSON file beside your home dir, via the loop that can actually
+        # rebuild the world on RESTORE (saves.run_with_saves).
+        from ..saves import FileSaveStore, run_with_saves
+
+        run_with_saves(build_game, FileSaveStore("~/.tomb_of_nassak_saves.json"))

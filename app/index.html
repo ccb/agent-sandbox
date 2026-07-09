@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>TOMB OF NASSAK AN-RAH</title>
+<link rel="stylesheet" href="terminal.css">
+</head>
+<body>
+<div id="crt">
+  <div id="statusbar">
+    <span id="status-room">THE BLUE RUINS</span>
+    <span>
+      <span id="status-score">0/100 &nbsp; T:0</span>
+      <span id="btn-inv" class="bar-btn" role="button" aria-label="inventory">i</span>
+      <span id="btn-map" class="bar-btn" role="button" aria-label="map">m</span>
+      <span id="gear" class="bar-btn" role="button" aria-label="settings">*</span>
+    </span>
+  </div>
+  <div id="settings" class="hidden"></div>
+  <div id="panel-inv" class="panel hidden left"></div>
+  <div id="panel-map" class="panel hidden right"></div>
+  <div id="output" aria-live="polite"></div>
+  <div id="suggestbar">
+    <div class="chip-row" id="chips-verbs"></div>
+    <div class="chip-row" id="chips-nouns"></div>
+  </div>
+  <div id="inputline">
+    <span class="prompt">&gt;</span>
+    <input id="cmd" type="text" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false" enterkeyhint="send"
+           aria-label="command">
+    <span id="cursor"></span>
+  </div>
+  <div id="scanlines"></div>
+</div>
+<div id="bootscreen">
+  <pre id="boottext">TOMB OF NASSAK AN-RAH
+a Vaults of Vaarn expedition
+
+warming the phosphor .</pre>
+</div>
+<script src="terminal.js"></script>
+</body>
+</html>
