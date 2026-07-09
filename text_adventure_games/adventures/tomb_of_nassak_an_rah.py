@@ -3009,6 +3009,71 @@ def build_game(seed=None):
 
     game.add_trigger("plinth_descs", lambda g: True, _plinth_descs, repeatable=True)
 
+    # The Canopic hall reads its own progress too (CCB: "two stand empty" is
+    # out of date the moment it isn't): plinth occupancy, per-plinth verdicts,
+    # the seal, and whether the listener is even still in the room.
+    def _canopic_state():
+        occupied = sum(1 for pl in (falcon_plinth, jackal_plinth) if pl.contents)
+        right = sum(
+            1
+            for pl, jar in (
+                (falcon_plinth, "falcon jar"),
+                (jackal_plinth, "jackal jar"),
+            )
+            if jar in pl.contents
+        )
+        return (
+            occupied,
+            right,
+            bool(canopic.get_property("seal_open")),
+            "mantis jar" in canopic.items,
+        )
+
+    def _canopic_desc_stale(g):
+        return canopic.get_property("_desc_state") != str(_canopic_state())
+
+    def _canopic_desc_update(g):
+        occupied, right, seal_open, listener = _canopic_state()
+        canopic.set_property("_desc_state", str(_canopic_state()))
+        parts = ["Five plinths ring a central stair in a pentagon of dressed stone."]
+        if occupied == 0:
+            parts.append(
+                "Three still bear their canopic jars; two stand empty, lit "
+                "from within by a crimson light that does not flicker."
+            )
+        elif occupied == 1:
+            parts.append(
+                "Four bear jars now; the fifth stands empty, lit from within "
+                "by a crimson light that does not flicker."
+            )
+        else:
+            parts.append("For the first time in an age, none stands empty.")
+        if not seal_open and right == 1 and occupied >= 1:
+            parts.append(
+                "One of the restored lights has turned white; the crimson "
+                "of the rest is unconvinced."
+            )
+        elif not seal_open and occupied == 2 and right == 0:
+            parts.append(
+                "The crimson has not gone out of either restored plinth; "
+                "the stone is not persuaded."
+            )
+        parts.append(
+            "The stair climbs open into the dark above; of the seal, only "
+            "a red glitter remains on the treads."
+            if seal_open
+            else "The stair climbs into shadow, barred by a seal of red " "crystal."
+        )
+        if listener:
+            parts.append(
+                "Something in this room is listening; you can tell, the way " "one can."
+            )
+        canopic.description = " ".join(parts)
+
+    game.add_trigger(
+        "canopic_desc", _canopic_desc_stale, _canopic_desc_update, repeatable=True
+    )
+
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
         return (
@@ -3183,6 +3248,7 @@ def build_game(seed=None):
             "stair: the way up stands open."
         )
         g.award("seal", 20, "[+20 -- the seal answers the jars]")
+        _canopic_desc_update(g)  # the room reads open THIS round, not next
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
 
