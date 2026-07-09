@@ -1301,7 +1301,7 @@ def test_silas_answers_on_his_subjects():
     game.do_command("ask silas about the memories")
     game.do_command("ask silas about his robes")
     out = " ".join(cap.texts(Channel.NARRATION))
-    assert "memory-crystal" in out and "what he could not buy twice" in out
+    assert "memory-crystal" in out and "could not buy or take by conquest" in out
     assert "Seekers of Eyeless Wisdom" in out and "yellow" in out
     game.do_command("x silas")
     assert "yellow monk's robes" in " ".join(cap.texts(Channel.NARRATION))
