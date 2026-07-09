@@ -190,7 +190,8 @@ def panel_data():
 
 def boot(seed):
     """Build the Tomb (seeded) and return the opening scene's events."""
-    global _game, _cap, _store
+    global _game, _cap, _store, _pending_restart
+    _pending_restart = False
     _game = tomb.build_game(seed=int(seed))
     _cap = CaptureRenderer()
     _game.parser.set_renderer(_cap)
@@ -204,21 +205,40 @@ def boot(seed):
 RESTART_WORDS = {"restart", "reload", "new game", "start over", "begin anew"}
 
 
+_pending_restart = False
+
+
+def _do_restart():
+    import time
+
+    try:
+        _store.clear("auto")
+    except Exception:
+        pass
+    boot(int(time.time()) % 1000000)
+    _game.parser.ok(
+        "The sand takes the old story. A new expedition stands at the wreck."
+    )
+    return _payload()
+
+
 def command(text):
     """One player turn. Owns the RESTORE contract, the every-turn autosave,
-    and RESTART (a fresh expedition -- new seed, new teamster; the autosave
-    is cleared so the title screen doesn't offer the dead past back)."""
-    global _game, _cap
-    if str(text).strip().lower() in RESTART_WORDS:
-        import time
-
-        try:
-            _store.clear("auto")
-        except Exception:
-            pass
-        payload = boot(int(time.time()) % 1000000)
+    and RESTART (confirmed with y/n -- CCB: an expedition should not die to
+    a slipped word)."""
+    global _game, _cap, _pending_restart
+    t = str(text).strip().lower()
+    if _pending_restart:
+        _pending_restart = False
+        if t in ("y", "yes"):
+            return _do_restart()
+        _game.parser.ok("The expedition continues.")
+        return _payload()
+    if t in RESTART_WORDS:
+        _pending_restart = True
         _game.parser.ok(
-            "The sand takes the old story. A new expedition stands at the " "wreck."
+            "Begin a new expedition? The one underway will be lost to the "
+            "sand. (y / n)"
         )
         return _payload()
     _game.do_command(str(text))
