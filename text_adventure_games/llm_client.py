@@ -204,6 +204,29 @@ def _preflight_key(client, provider: str, key_env: str, live_probe) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Normalized tool-call result
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ToolCallResult:
+    """One model response from :meth:`LlmClient.call_tools`, normalized across
+    providers.
+
+    ``text`` is any prose the model returned alongside its tool calls (Anthropic
+    text blocks / OpenAI ``message.content``); ``None`` when it returned tools
+    only. ``tool_calls`` collects *every* tool call the model made this turn --
+    each a ``{"id", "name", "arguments": dict}`` -- not just the first, so a
+    model offered several tools under ``tool_choice="auto"/"any"`` can pick more
+    than one. An empty ``tool_calls`` means the model answered without calling a
+    tool.
+    """
+
+    text: str | None
+    tool_calls: list[dict]
+
+
+# ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
 
@@ -230,7 +253,27 @@ class LlmClient(Protocol):
     ) -> dict | None:
         """Force the model to call the single named *tool* and return its
         arguments as a dict (validated by the provider), or None if tool
-        calling is unavailable or no tool call came back."""
+        calling is unavailable or no tool call came back.
+
+        This is the forced-single special case of :meth:`call_tools`; the real
+        adapters implement it as a thin wrapper (force the one tool, return the
+        first call's arguments)."""
+        ...
+
+    def call_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> "ToolCallResult | None":
+        """Offer *tools* and let the model choose. ``tool_choice`` is ``"auto"``
+        (may answer with text or call tools), ``"any"`` (must call some tool), or
+        ``{"name": ...}`` (must call that one). Returns a :class:`ToolCallResult`
+        -- whose ``tool_calls`` may be empty under ``"auto"`` -- or ``None`` on
+        failure, the same graceful contract as :meth:`chat` / :meth:`call_tool`.
+        """
         ...
 
     def count_tokens(self, text: str) -> int:
@@ -304,6 +347,186 @@ def _cacheable_system(system_text: str) -> list[dict]:
             "cache_control": {"type": "ephemeral"},
         }
     ]
+
+
+# tool_choice translation (issue #354). The normalized values are "auto" (may
+# answer with text or call tools), "any" (must call some tool), and a forced
+# {"name": ...} (must call that one). call_tool's forced-single path passes the
+# {"name": ...} form, so these must reproduce today's forced wire shapes exactly.
+def _openai_tool_choice(tool_choice):
+    if tool_choice == "auto":
+        return "auto"
+    if tool_choice == "any":
+        return "required"
+    return {"type": "function", "function": {"name": tool_choice["name"]}}
+
+
+def _anthropic_tool_choice(tool_choice):
+    if tool_choice == "auto":
+        return {"type": "auto"}
+    if tool_choice == "any":
+        return {"type": "any"}
+    return {"type": "tool", "name": tool_choice["name"]}
+
+
+# Block-shaped message content (issue #355). A normalized message's ``content``
+# may be a plain string (as always) OR a list of blocks:
+#   {"type": "text",        "text": str}
+#   {"type": "tool_use",    "id": str, "name": str, "arguments": dict}
+#   {"type": "tool_result", "tool_use_id": str, "content": str, "is_error": bool}
+# The loop helper (run_tool_loop) appends assistant tool_use turns and user
+# tool_result turns in this shape; the adapters below translate them per provider.
+
+
+def _content_to_text(content) -> str:
+    """Flatten a message's ``content`` to a plain string for token counting.
+
+    A plain string returns itself (so the string path is byte-identical); a list
+    of blocks is stringified -- text verbatim, tool_use arguments and tool_result
+    content rendered -- so :func:`limit_context_length` can budget block turns.
+    """
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content:
+        btype = block.get("type")
+        if btype == "text":
+            parts.append(block.get("text", ""))
+        elif btype == "tool_use":
+            parts.append(json.dumps(block.get("arguments", {})))
+        elif btype == "tool_result":
+            parts.append(str(block.get("content", "")))
+        else:
+            parts.append(json.dumps(block))
+    return "\n".join(parts)
+
+
+def _to_anthropic_blocks(blocks: list[dict], role: str) -> list[dict]:
+    """Translate normalized content blocks to Anthropic's native content blocks.
+
+    ``arguments`` becomes ``input``; ``tool_result`` passes through with its
+    ``is_error`` flag. Assistant text is rstripped (Anthropic rejects trailing
+    whitespace), mirroring the plain-string path.
+    """
+    out: list[dict] = []
+    for block in blocks:
+        btype = block.get("type")
+        if btype == "text":
+            text = block.get("text", "")
+            if role == "assistant":
+                text = text.rstrip()
+            out.append({"type": "text", "text": text})
+        elif btype == "tool_use":
+            out.append(
+                {
+                    "type": "tool_use",
+                    "id": block["id"],
+                    "name": block["name"],
+                    "input": block.get("arguments", {}),
+                }
+            )
+        elif btype == "tool_result":
+            out.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block["tool_use_id"],
+                    "content": block.get("content", ""),
+                    "is_error": bool(block.get("is_error", False)),
+                }
+            )
+    return out
+
+
+def _split_anthropic_messages(messages: list[dict]):
+    """Split normalized messages into ``(system_text, chat_messages)`` for the
+    Anthropic SDK.
+
+    Lifts the system role into a separate string (Anthropic takes ``system`` as
+    its own parameter), rstrips assistant *string* content (Anthropic rejects
+    trailing whitespace), and translates list-shaped block content into native
+    content blocks. Plain-string messages are preserved exactly as the previous
+    inline extraction produced them, so ``chat``/``call_tool`` are unaffected.
+    """
+    system_text = None
+    chat_messages: list[dict] = []
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "system":
+            system_text = content
+            continue
+        if isinstance(content, str):
+            if role == "assistant":
+                content = content.rstrip()
+            chat_messages.append({"role": role, "content": content})
+        else:
+            chat_messages.append(
+                {"role": role, "content": _to_anthropic_blocks(content, role)}
+            )
+    return system_text, chat_messages
+
+
+def _to_openai_messages(messages: list[dict]) -> list[dict]:
+    """Flatten normalized messages (which may carry block content) to OpenAI wire
+    format.
+
+    Plain-string messages pass through unchanged. An assistant block turn becomes
+    a message with ``tool_calls`` (each ``function.arguments`` a JSON string);
+    ``tool_result`` blocks become separate ``role: "tool"`` messages (OpenAI has
+    no ``is_error`` field, so an error is folded into the tool message content).
+    Order is preserved, so an assistant ``tool_calls`` turn is always followed by
+    its ``tool`` result messages.
+    """
+    out: list[dict] = []
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        if isinstance(content, str):
+            out.append({"role": role, "content": content})
+            continue
+        text_parts: list[str] = []
+        tool_calls: list[dict] = []
+        tool_result_msgs: list[dict] = []
+        for block in content:
+            btype = block.get("type")
+            if btype == "text":
+                text_parts.append(block.get("text", ""))
+            elif btype == "tool_use":
+                tool_calls.append(
+                    {
+                        "id": block["id"],
+                        "type": "function",
+                        "function": {
+                            "name": block["name"],
+                            "arguments": json.dumps(block.get("arguments", {})),
+                        },
+                    }
+                )
+            elif btype == "tool_result":
+                text = str(block.get("content", ""))
+                if block.get("is_error"):
+                    text = f"Error: {text}"
+                tool_result_msgs.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": block["tool_use_id"],
+                        "content": text,
+                    }
+                )
+        if role == "assistant":
+            message: dict = {
+                "role": "assistant",
+                "content": "".join(text_parts) or None,
+            }
+            if tool_calls:
+                message["tool_calls"] = tool_calls
+            out.append(message)
+            out.extend(tool_result_msgs)  # defensive: results normally on user turns
+        else:
+            out.extend(tool_result_msgs)
+            if text_parts:
+                out.append({"role": role, "content": "".join(text_parts)})
+    return out
 
 
 # The normalized tool for picking one option from a numbered list (used by the
@@ -443,34 +666,44 @@ class OpenAIClient:
                 print(f"OpenAI API error: {e}")
             return None
 
-    def call_tool(
+    def call_tools(
         self,
         messages: list[dict],
-        tool: dict,
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
         max_tokens: int = 256,
         temperature: float = 0.0,
-    ) -> dict | None:
+    ) -> "ToolCallResult | None":
         try:
+            wire_messages = _to_openai_messages(messages)
             if self._verbose:
-                print(json.dumps(messages, indent=2))
+                print(json.dumps(wire_messages, indent=2))
             response, latency_ms = _resilient_create(
                 self,
                 lambda: self._client.chat.completions.create(
                     model=self._model,
-                    messages=messages,
+                    messages=wire_messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    tools=[_to_openai_tool(tool)],
-                    tool_choice={
-                        "type": "function",
-                        "function": {"name": tool["name"]},
-                    },
+                    tools=[_to_openai_tool(t) for t in tools],
+                    tool_choice=_openai_tool_choice(tool_choice),
                 ),
                 provider="openai",
                 messages=messages,
             )
-            tool_calls = response.choices[0].message.tool_calls
-            args_text = tool_calls[0].function.arguments if tool_calls else None
+            message = response.choices[0].message
+            tool_calls = []
+            for tc in getattr(message, "tool_calls", None) or []:
+                fn = getattr(tc, "function", None)
+                args_text = getattr(fn, "arguments", None)
+                tool_calls.append(
+                    {
+                        "id": getattr(tc, "id", None),
+                        "name": getattr(fn, "name", None),
+                        "arguments": json.loads(args_text) if args_text else {},
+                    }
+                )
+            text = getattr(message, "content", None)
             record_call(
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
@@ -478,16 +711,38 @@ class OpenAIClient:
                 self._model,
                 getattr(response, "usage", None),
                 messages,
-                args_text,
+                (
+                    json.dumps([c["arguments"] for c in tool_calls])
+                    if tool_calls
+                    else text
+                ),
                 latency_ms,
             )
-            if not tool_calls:
-                return None
-            return json.loads(args_text)
+            return ToolCallResult(text=text, tool_calls=tool_calls)
         except Exception as e:
             if self._verbose:
                 print(f"OpenAI tool-call error: {e}")
             return None
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        # Forced-single special case of call_tools: pin the one tool, return the
+        # first call's arguments. Existing consumers are unchanged.
+        result = self.call_tools(
+            messages,
+            [tool],
+            tool_choice={"name": tool["name"]},
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if result is None or not result.tool_calls:
+            return None
+        return result.tool_calls[0]["arguments"]
 
     def count_tokens(self, text: str) -> int:
         tokenizer = self._get_tokenizer()
@@ -552,18 +807,7 @@ class AnthropicClient:
         temperature: float = 0.0,
     ) -> str | None:
         try:
-            # Extract system message for Anthropic's separate system parameter
-            system_text = None
-            chat_messages = []
-            for msg in messages:
-                if msg["role"] == "system":
-                    system_text = msg["content"]
-                else:
-                    content = msg["content"]
-                    # Anthropic rejects assistant messages with trailing whitespace
-                    if msg["role"] == "assistant":
-                        content = content.rstrip()
-                    chat_messages.append({"role": msg["role"], "content": content})
+            system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
                 print(json.dumps(messages, indent=2))
@@ -600,25 +844,16 @@ class AnthropicClient:
                 print(f"Anthropic API error: {e}")
             return None
 
-    def call_tool(
+    def call_tools(
         self,
         messages: list[dict],
-        tool: dict,
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
         max_tokens: int = 256,
         temperature: float = 0.0,
-    ) -> dict | None:
+    ) -> "ToolCallResult | None":
         try:
-            # Same system-message extraction as chat().
-            system_text = None
-            chat_messages = []
-            for msg in messages:
-                if msg["role"] == "system":
-                    system_text = msg["content"]
-                else:
-                    content = msg["content"]
-                    if msg["role"] == "assistant":
-                        content = content.rstrip()
-                    chat_messages.append({"role": msg["role"], "content": content})
+            system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
                 print(json.dumps(messages, indent=2))
@@ -628,8 +863,8 @@ class AnthropicClient:
                 "messages": chat_messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "tools": [_to_anthropic_tool(tool)],
-                "tool_choice": {"type": "tool", "name": tool["name"]},
+                "tools": [_to_anthropic_tool(t) for t in tools],
+                "tool_choice": _anthropic_tool_choice(tool_choice),
             }
             if system_text:
                 kwargs["system"] = _cacheable_system(system_text)
@@ -640,11 +875,21 @@ class AnthropicClient:
                 provider="anthropic",
                 messages=messages,
             )
-            args = None
+            text_parts = []
+            tool_calls = []
             for block in response.content:
-                if getattr(block, "type", None) == "tool_use":
-                    args = dict(block.input)
-                    break
+                btype = getattr(block, "type", None)
+                if btype == "tool_use":
+                    tool_calls.append(
+                        {
+                            "id": getattr(block, "id", None),
+                            "name": getattr(block, "name", None),
+                            "arguments": dict(getattr(block, "input", {}) or {}),
+                        }
+                    )
+                elif btype == "text":
+                    text_parts.append(getattr(block, "text", "") or "")
+            text = "".join(text_parts) or None
             record_call(
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
@@ -652,14 +897,38 @@ class AnthropicClient:
                 self._model,
                 getattr(response, "usage", None),
                 messages,
-                json.dumps(args) if args is not None else None,
+                (
+                    json.dumps([c["arguments"] for c in tool_calls])
+                    if tool_calls
+                    else text
+                ),
                 latency_ms,
             )
-            return args
+            return ToolCallResult(text=text, tool_calls=tool_calls)
         except Exception as e:
             if self._verbose:
                 print(f"Anthropic tool-call error: {e}")
             return None
+
+    def call_tool(
+        self,
+        messages: list[dict],
+        tool: dict,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict | None:
+        # Forced-single special case of call_tools: pin the one tool, return the
+        # first call's arguments. Existing consumers are unchanged.
+        result = self.call_tools(
+            messages,
+            [tool],
+            tool_choice={"name": tool["name"]},
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if result is None or not result.tool_calls:
+            return None
+        return result.tool_calls[0]["arguments"]
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token
@@ -677,6 +946,29 @@ class AnthropicClient:
 # ---------------------------------------------------------------------------
 # Mock adapter (for offline tests and local development)
 # ---------------------------------------------------------------------------
+
+
+def _coerce_tool_call_result(raw) -> "ToolCallResult | None":
+    """Normalize a scripted ``call_tools`` reply into a :class:`ToolCallResult`.
+
+    Accepts a ``ToolCallResult`` verbatim, a dict ``{text?, tool_calls}`` (filling
+    a missing ``id`` per call so tests need not invent them), or ``None`` (a
+    decline). Lets tests script plural tool calls as plain dicts.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, ToolCallResult):
+        return raw
+    calls = []
+    for i, call in enumerate(raw.get("tool_calls", []) or []):
+        calls.append(
+            {
+                "id": call.get("id") or f"call_{i}",
+                "name": call.get("name"),
+                "arguments": call.get("arguments", {}),
+            }
+        )
+    return ToolCallResult(text=raw.get("text"), tool_calls=calls)
 
 
 class MockLlmClient:
@@ -721,6 +1013,7 @@ class MockLlmClient:
         responses=None,
         default: str | None = "",
         tool_responses=None,
+        tool_calls_responses=None,
         ledger: UsageLedger | None = None,
     ):
         # Usage accounting: the mock records a zero-cost Usage on every call, so
@@ -753,6 +1046,26 @@ class MockLlmClient:
             )
         # A log of every call_tool() call, mirroring `calls`.
         self.tool_calls: list[dict] = []
+
+        # call_tools() support (issue #354): a THIRD separate queue/responder,
+        # scripting plural, model-chooses tool calls. A list yields one
+        # ToolCallResult (or a convertible dict / None) per call in order; a
+        # callable (messages, tools, tool_choice, max_tokens, temperature) ->
+        # ToolCallResult | dict | None computes each. Kept separate from the
+        # `tool_responses` queue -- and logged separately in `tool_calls_log` --
+        # so the two never consume each other's scripts and existing assertions
+        # on `tool_calls` stay valid. Defaults to None -> call_tools returns None
+        # (the graceful-fallback / decline signal the loop treats as "no call").
+        if callable(tool_calls_responses):
+            self._tool_calls_responder = tool_calls_responses
+            self._tool_calls_queue = None
+        else:
+            self._tool_calls_responder = None
+            self._tool_calls_queue = (
+                list(tool_calls_responses) if tool_calls_responses is not None else []
+            )
+        # A log of every call_tools() call, mirroring `tool_calls`.
+        self.tool_calls_log: list[dict] = []
 
     def chat(
         self,
@@ -814,6 +1127,55 @@ class MockLlmClient:
             messages,
             json.dumps(result) if result is not None else None,
         )
+        return result
+
+    def call_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> "ToolCallResult | None":
+        self.tool_calls_log.append(
+            {
+                # A shallow snapshot: run_tool_loop appends to `messages` in
+                # place across rounds, so a reference would show every round the
+                # final list. Copying the list (blocks are never mutated, only
+                # appended) captures what each round's request actually carried.
+                "messages": list(messages),
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        if self._tool_calls_responder is not None:
+            raw = self._tool_calls_responder(
+                messages, tools, tool_choice, max_tokens, temperature
+            )
+        elif self._tool_calls_queue:
+            raw = self._tool_calls_queue.pop(0)
+        else:
+            raw = None
+        result = _coerce_tool_call_result(raw)
+        # Record usage only on a non-None result: a None return is a decline /
+        # probe (e.g. the loop's first round against a chat-only script), which
+        # bills nothing and must not add a ledger record.
+        if result is not None:
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "mock",
+                "mock",
+                None,
+                messages,
+                (
+                    json.dumps([c["arguments"] for c in result.tool_calls])
+                    if result.tool_calls
+                    else result.text
+                ),
+            )
         return result
 
     def count_tokens(self, text: str) -> int:
@@ -1096,6 +1458,106 @@ class MockReActClient(MockLlmClient):
         )
         return result
 
+    def call_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> "ToolCallResult | None":
+        """Plural counterpart of :meth:`call_tool`, for the bounded tool loop
+        (issue #355). The mock brain is a string rule engine with no memory, so
+        it can't read block-shaped tool_use/tool_result turns directly -- instead
+        we RECONSTRUCT the same reflection observation string ``npc._reflect``
+        would build (last command + the ``is_error`` failure reason) from the
+        conversation, feed it to the brain, and emit a one-call
+        ``ToolCallResult``. That makes a within-conversation retry (e.g. the
+        troll's ``attack player`` -> gated -> ``attack player with club``) work
+        exactly as the across-turn escalation does. Returns ``None`` to decline.
+        """
+        self.tool_calls_log.append(
+            {
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
+        tool = tools[0] if tools else {}
+        # The system prompt and the base observation are the first string-content
+        # system/user turns (messages[0] / messages[1] as the loop builds them).
+        system = ""
+        base_obs = ""
+        for msg in messages:
+            content = msg["content"]
+            if not isinstance(content, str):
+                continue
+            if msg["role"] == "system" and not system:
+                system = content
+            elif msg["role"] == "user" and not base_obs:
+                base_obs = content
+        # Reconstruct the latest command + failure reason from the block turns.
+        last_command = None
+        last_fail = None
+        for msg in messages:
+            content = msg["content"]
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if block.get("type") == "tool_use":
+                    args = block.get("arguments", {}) or {}
+                    action = (args.get("action") or "").strip()
+                    arguments = (args.get("arguments") or "").strip()
+                    last_command = f"{action} {arguments}".strip()
+                elif block.get("type") == "tool_result" and block.get("is_error"):
+                    last_fail = str(block.get("content", ""))
+        if last_command and last_fail:
+            # Byte-for-byte the string npc._reflect produces (duplicated on
+            # purpose: llm_client must not import the agent layer -- same
+            # rationale as _split_decision), so the brain's reflect rules fire.
+            observation = (
+                f"{base_obs}\n\n"
+                f"Your previous command '{last_command}' failed: {last_fail}\n"
+                "Reflect on why it failed and choose a different action."
+            )
+        else:
+            observation = base_obs
+
+        decision = _mock_brain_choose(system, observation)
+        result = None
+        if decision is not None:
+            reasoning, command = _split_decision(decision)
+            if command:
+                self.decisions.append({"command": command, "system": system})
+                verb, rest = _split_command(command, tool)
+                result = ToolCallResult(
+                    text=None,
+                    tool_calls=[
+                        {
+                            "id": f"call_{len(self.tool_calls_log)}",
+                            "name": tool.get("name", "choose_action"),
+                            "arguments": {
+                                "reasoning": reasoning,
+                                "action": verb,
+                                "arguments": rest,
+                            },
+                        }
+                    ],
+                )
+        if result is not None:
+            record_call(
+                getattr(self, "ledger", None),
+                getattr(self, "context", {}),
+                "mock",
+                "mock",
+                None,
+                messages,
+                json.dumps([c["arguments"] for c in result.tool_calls]),
+            )
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Factory
@@ -1172,6 +1634,84 @@ def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
 
 
 # ---------------------------------------------------------------------------
+# Bounded tool loop (issue #355)
+# ---------------------------------------------------------------------------
+
+
+def run_tool_loop(
+    client: "LlmClient",
+    messages: list[dict],
+    tools: list[dict],
+    execute,
+    max_rounds: int = 4,
+    tool_choice: str | dict = "auto",
+    max_tokens: int = 256,
+    temperature: float = 0.0,
+) -> "ToolCallResult | None":
+    """Drive a native tool-use conversation to completion, mutating *messages*.
+
+    Each round calls :meth:`LlmClient.call_tools`, hands every returned tool call
+    to ``execute(name, arguments) -> (result: str, is_error: bool, done: bool)``,
+    then appends the model's assistant ``tool_use`` turn and a user ``tool_result``
+    turn to *messages* -- so next round the model sees its own call and our reply
+    (the prompt-caching-friendly, in-conversation retry #355 wants). The loop
+    stops when:
+
+    * the model answers without calling a tool (or ``call_tools`` returns None),
+    * any executed tool reports ``done=True`` (a terminal action succeeded -- no
+      wasted confirmation round-trip), or
+    * ``max_rounds`` is reached (a hard cap).
+
+    ``is_error`` without ``done`` keeps the loop going: the failing call comes back
+    as an ``is_error`` tool_result and the model retries in the same conversation.
+    ``done=False, is_error=False`` (a future intermediate tool such as ``recall``)
+    also continues, so the model can act after reading. Returns the last
+    :class:`ToolCallResult` (or None).
+    """
+    result = None
+    for _ in range(max_rounds):
+        result = client.call_tools(
+            messages,
+            tools,
+            tool_choice=tool_choice,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if result is None or not result.tool_calls:
+            break
+        assistant_blocks: list[dict] = []
+        if result.text:
+            assistant_blocks.append({"type": "text", "text": result.text})
+        for call in result.tool_calls:
+            assistant_blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": call["id"],
+                    "name": call["name"],
+                    "arguments": call["arguments"],
+                }
+            )
+        messages.append({"role": "assistant", "content": assistant_blocks})
+        result_blocks: list[dict] = []
+        stop = False
+        for call in result.tool_calls:
+            res, is_error, done = execute(call["name"], call["arguments"])
+            result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": call["id"],
+                    "content": res,
+                    "is_error": is_error,
+                }
+            )
+            stop = stop or done
+        messages.append({"role": "user", "content": result_blocks})
+        if stop:
+            break
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Utility: context length limiting (ported from GptParser)
 # ---------------------------------------------------------------------------
 
@@ -1196,7 +1736,7 @@ def limit_context_length(
     total_tokens = 0
     limited: list[dict] = []
     for message in reversed(messages):
-        msg_tokens = token_counter(message["content"])
+        msg_tokens = token_counter(_content_to_text(message["content"]))
         if total_tokens + msg_tokens > max_tokens:
             break
         total_tokens += msg_tokens
