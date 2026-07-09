@@ -1301,7 +1301,7 @@ def build_game(seed=None):
     )
     ledger.set_property(
         "read_text",
-        "The hand is neat until it is not. '...ninth day. Camped in the lee "
+        "The hand is neat. '...ninth day. Camped in the lee "
         "of the tomb the road-folk call the Three Mouths. Of it, Gnomon "
         "tells three things: that the boy's mouth is lightless within, and "
         "what roosts there hates a lamp worse than a shout; that the halls "
