@@ -1354,6 +1354,28 @@ def test_the_whole_tomb_is_dark_without_a_light():
     assert "baboon-headed canopic jar" in " ".join(cap.texts(Channel.NARRATION))
 
 
+def test_the_plinths_read_true():
+    """CCB: 'empty' only while empty -- and a plinth knows its own jar:
+    the wrong jar reads crimson-unconvinced, the right one goes white."""
+    game = _game()
+    canopic = game.locations["Hall of the Canopic Jars"]
+    game.relocate(game.player, canopic)
+    fp = canopic.items["falcon plinth"]
+    assert fp.description == "an empty plinth carved with a falcon"
+    game.do_command("take baboon jar")
+    game.do_command("put baboon jar on falcon plinth")  # the wrong jar
+    assert fp.description == "a falcon-carved plinth, its jar seated"
+    assert "wrong mouth" in fp.examine_text()
+    game.do_command("take baboon jar")
+    # Hand the true jar over directly (in play it rides on a spawn).
+    jar = game.characters["spawn of guts"].inventory["falcon jar"]
+    game.characters["spawn of guts"].remove_from_inventory(jar)
+    game.player.add_to_inventory(jar)
+    game.do_command("put falcon jar on falcon plinth")
+    game.do_command("wait")
+    assert "reads as finished" in fp.examine_text()
+
+
 def test_the_crystal_seal_bars_the_stair_from_both_ends():
     """CCB fix: the seal was one-directional. A scavenger who came down the
     chimney into the sphere must not walk down an unsolved stair; once the

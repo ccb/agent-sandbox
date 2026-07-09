@@ -1737,15 +1737,40 @@ def build_game(seed=None):
     falcon_plinth = things.Item(
         "falcon plinth",
         "an empty plinth carved with a falcon",
-        "A plinth carved as a falcon, lit crimson and empty. The carving's "
-        "talons are cupped, curled around the shape of something it has lost.",
+        lambda g=None: (
+            "A plinth carved as a falcon, lit crimson and empty. The "
+            "carving's talons are cupped, curled around the shape of "
+            "something it has lost."
+            if not falcon_plinth.contents
+            else (
+                "A plinth carved as a falcon, the crimson gone white. The "
+                "talons cup their jar again, and the carving reads as "
+                "finished."
+                if "falcon jar" in falcon_plinth.contents
+                else "A plinth carved as a falcon, still burning crimson. "
+                "The talons hold the jar awkwardly, like a word in the "
+                "wrong mouth."
+            )
+        ),
     ).make_surface(capacity=1)
     falcon_plinth.set_property("gettable", False)
     jackal_plinth = things.Item(
         "jackal plinth",
         "an empty plinth carved with a jackal",
-        "A plinth carved as a jackal, lit crimson and empty. The stone jaws are "
-        "parted, holding their grip on an absence.",
+        lambda g=None: (
+            "A plinth carved as a jackal, lit crimson and empty. The stone "
+            "jaws are parted, holding their grip on an absence."
+            if not jackal_plinth.contents
+            else (
+                "A plinth carved as a jackal, the crimson gone white. The "
+                "stone jaws close true around their jar, grip answered at "
+                "last."
+                if "jackal jar" in jackal_plinth.contents
+                else "A plinth carved as a jackal, still burning crimson. "
+                "The stone jaws hold the jar without conviction; this is "
+                "not what they were parted for."
+            )
+        ),
     ).make_surface(capacity=1)
     jackal_plinth.set_property("gettable", False)
     canopic.add_item(falcon_plinth)
@@ -2971,6 +2996,18 @@ def build_game(seed=None):
     game.add_trigger(
         "warriors_desc", _warriors_desc_stale, _warriors_desc_update, repeatable=True
     )
+
+    # The plinths' one-line descriptions read true (CCB): "empty" only while
+    # they are.
+    def _plinth_descs(g):
+        for plinth, beast in ((falcon_plinth, "falcon"), (jackal_plinth, "jackal")):
+            plinth.description = (
+                f"an empty plinth carved with a {beast}"
+                if not plinth.contents
+                else f"a {beast}-carved plinth, its jar seated"
+            )
+
+    game.add_trigger("plinth_descs", lambda g: True, _plinth_descs, repeatable=True)
 
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
