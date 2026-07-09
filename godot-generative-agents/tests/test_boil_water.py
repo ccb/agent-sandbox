@@ -44,13 +44,14 @@ def _tiny_world(extra_actions=()):
     return game, chars["Testa"]
 
 
-def _cup(contaminated=True):
+def _cup(unboiled=True):
     cup = Item(
         "cup of murky water", "a cup of murky water", "Cloudy, untreated tap water."
     )
     cup.set_property(Property.DRINKABLE, True)
-    if contaminated:
-        cup.set_property("is_contaminated", True)
+    if unboiled:
+        cup.set_property("requires_boiling", True)
+        cup.set_property("is_boiled", False)
     return cup
 
 
@@ -59,7 +60,7 @@ def test_drink_override_is_registered():
     assert game.parser.actions["drink"] is DrinkPenn
 
 
-def test_contaminated_drink_sickens_and_logs_event():
+def test_unboiled_drink_sickens_and_logs_event():
     game, char = _tiny_world(extra_actions=[DrinkPenn])
     game.locations["Union"].add_item(_cup())
     assert game.parser.parse_command("get cup of murky water", actor=char)
@@ -73,7 +74,20 @@ def test_contaminated_drink_sickens_and_logs_event():
 
 def test_clean_drink_has_no_sickness():
     game, char = _tiny_world(extra_actions=[DrinkPenn])
-    game.locations["Union"].add_item(_cup(contaminated=False))
+    game.locations["Union"].add_item(_cup(unboiled=False))
+    assert game.parser.parse_command("get cup of murky water", actor=char)
+    assert game.parser.parse_command("drink cup of murky water", actor=char)
+    assert not char.get_property("is_sick")
+    assert not [e for e in game.events if e.action == "sickness"]
+
+
+def test_boiled_water_is_safe_to_drink():
+    # The success condition #301's self-coded boil aims for: once is_boiled
+    # is set, the same requires_boiling water no longer sickens.
+    game, char = _tiny_world(extra_actions=[DrinkPenn])
+    cup = _cup()
+    cup.set_property("is_boiled", True)
+    game.locations["Union"].add_item(cup)
     assert game.parser.parse_command("get cup of murky water", actor=char)
     assert game.parser.parse_command("drink cup of murky water", actor=char)
     assert not char.get_property("is_sick")
@@ -364,11 +378,12 @@ def test_houston_hall_is_stocked_and_the_scenario_plays():
     assert game.parser.parse_command("drink cup of murky water", actor=sofia)
     assert sofia.get_property("is_sick") is True
     assert any(e.action == "sickness" for e in game.events)
-    # The withheld gap (#299): the stove turns on, and nothing heats.
+    # The withheld gap (#299): the stove turns on, and nothing heats -- the
+    # remaining cup stays unboiled.
     assert game.parser.parse_command("activate stove", actor=sofia)
-    assert (
-        hall.items["second cup of murky water"].get_property("is_contaminated") is True
-    )
+    second = hall.items["second cup of murky water"]
+    assert second.get_property("requires_boiling") is True
+    assert not second.get_property("is_boiled")
 
 
 def test_sofias_houston_hall_stop_carries_the_commands():

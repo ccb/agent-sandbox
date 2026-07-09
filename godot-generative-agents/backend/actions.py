@@ -91,15 +91,21 @@ class Act(base.Action):
 
 class DrinkPenn(consume.Drink):
     """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
-    liquid tagged ``is_contaminated`` sets ``is_sick`` on the drinker and logs a
-    ``sickness`` GameEvent -- the measurable motivation signal the self-coding
-    experiment (#299) needs. Registered with the same "drink" action name, so it
+    liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
+    on the drinker and logs a ``sickness`` GameEvent -- the measurable
+    motivation signal the self-coding experiment (#299) needs. The pair is
+    deliberate: properties default to False, so gating on ``is_boiled`` alone
+    would sicken every future drinkable; ``requires_boiling`` scopes the rule
+    to raw water, and a (self-coded, #301) boil action clears it by setting
+    ``is_boiled``. Registered with the same "drink" action name, so it
     overrides the built-in for this game only. No cure exists in this world:
     that gap is deliberate (see the spec; upstreaming tracked in #464)."""
 
     def apply_effects(self):
         super().apply_effects()
-        if self.item.get_property("is_contaminated"):
+        if self.item.get_property("requires_boiling") and not self.item.get_property(
+            "is_boiled"
+        ):
             self.character.set_property("is_sick", True)
             # One-shot marker: this drink is what just sickened the character,
             # as opposed to an already-sick character drinking something clean.

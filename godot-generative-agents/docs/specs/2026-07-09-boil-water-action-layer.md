@@ -40,7 +40,9 @@ drink model is **get-then-drink** (zero change to `Drink` preconditions).
 - `ACTION_NAME` stays `"drink"`; registered via `custom_actions` so it overrides the
   built-in in the Penn parser.
 - `apply_effects()`: call `super().apply_effects()` (inherits portions/thirst/taste
-  handling, `consume.py:111-157`), then if the item has `is_contaminated`:
+  handling, `consume.py:111-157`), then if the item has `requires_boiling` and not
+  `is_boiled` (the pair matches #300's `is_boiled: false` phrasing; `requires_boiling`
+  scopes the rule so default-False `is_boiled` can't sicken every future drinkable):
   - `character.set_property("is_sick", True)`
   - `parser.ok(...)` narration: "… drinks the murky water and begins to feel violently ill."
   - record a **`sickness` `GameEvent`** (`text_adventure_games/events.py:24`) with
@@ -76,7 +78,7 @@ items; `build_world.py:155-164` builds only Locations). Placed into Houston Hall
 | `sink` | `is_device`, not gettable |
 | `stove` | `is_device`, not gettable |
 | `pot` | `gettable` (prop for the future boil; no behavior yet) |
-| `cup of murky water` ×2–3 (distinct names, e.g. "cup of murky water", "second cup of murky water") | `gettable`, `drinkable`, `is_contaminated` |
+| `cup of murky water` ×2–3 (distinct names, e.g. "cup of murky water", "second cup of murky water") | `gettable`, `drinkable`, `requires_boiling`, `is_boiled: false` |
 
 Personas: at least one persona gets a Houston Hall schedule stop (with §3 `commands:`)
 so the encounter fires deterministically under the mock brain — proximity is
@@ -128,7 +130,7 @@ Follow `test_penn_live.py` / `test_live_seam.py` patterns. New file, e.g.
    with the Houston Hall stop executes its `commands:`; assert the agent ends sick, an
    importance-8.0 observation is in its memory stream, the `sickness` event is in the
    event feed, and **no water is ever boiled** (stove `is_on` has no effect on any
-   `is_contaminated` flag).
+   `is_boiled` flag).
 
 Verification: `uv run pytest godot-generative-agents/tests/ -v` plus the existing suite
 (`uv run pytest tests/ -v`) stays green; `uv run black .` clean.
