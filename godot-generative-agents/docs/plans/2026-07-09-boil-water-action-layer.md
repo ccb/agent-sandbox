@@ -655,11 +655,20 @@ git commit -m "feat(backend): drink outcomes in memory -- sickness at importance
 
 ---
 
-### Task 5: Houston Hall props + Maya's authored commands (the Penn wiring)
+### Task 5: Houston Hall props + Sofia's authored commands (the Penn wiring)
+
+> **Amended during execution:** the original task text targeted Maya Chen in
+> `backend/world_data_upenn.yaml` — but `build_penn_world()` loads
+> `backend/penn/world_data_upenn.yaml` (via `WORLD_DATA`, `penn_world.py:38`),
+> whose active MVP cast is Diego/Tanaka/Sofia (pinned at 3 by
+> `test_penn_live.py`); Maya is commented out there. Sofia Ramirez already has a
+> Houston Hall stop (her last stop of the day, no `steps`), so she carries the
+> authored commands instead. Same spec requirement ("at least one persona routes
+> through the room"), corrected file + persona.
 
 **Files:**
 - Modify: `godot-generative-agents/backend/penn/penn_world.py` (furnish helper + `build_world_fn`)
-- Modify: `godot-generative-agents/backend/world_data_upenn.yaml:28-31` (Maya's Houston Hall stop)
+- Modify: `godot-generative-agents/backend/penn/world_data_upenn.yaml:239-240` (Sofia's Houston Hall stop)
 - Test: `godot-generative-agents/tests/test_boil_water.py` (append)
 
 **Interfaces:**
@@ -678,21 +687,21 @@ def test_houston_hall_is_stocked_and_the_scenario_plays():
     hall = game.locations["Houston Hall"]
     for name in ("sink", "stove", "pot", "cup of murky water", "second cup of murky water"):
         assert name in hall.items, f"{name} missing from Houston Hall"
-    maya = chars["Maya Chen"]
-    assert game.parser.parse_command("travel to Houston Hall", actor=maya)
-    assert game.parser.parse_command("get cup of murky water", actor=maya)
-    assert game.parser.parse_command("drink cup of murky water", actor=maya)
-    assert maya.get_property("is_sick") is True
+    sofia = chars["Sofia Ramirez"]
+    assert game.parser.parse_command("travel to Houston Hall", actor=sofia)
+    assert game.parser.parse_command("get cup of murky water", actor=sofia)
+    assert game.parser.parse_command("drink cup of murky water", actor=sofia)
+    assert sofia.get_property("is_sick") is True
     assert any(e.action == "sickness" for e in game.events)
     # The withheld gap (#299): the stove turns on, and nothing heats.
-    assert game.parser.parse_command("activate stove", actor=maya)
+    assert game.parser.parse_command("activate stove", actor=sofia)
     assert hall.items["second cup of murky water"].get_property("is_contaminated") is True
 
 
-def test_mayas_houston_hall_stop_carries_the_commands():
+def test_sofias_houston_hall_stop_carries_the_commands():
     pw = build_penn_world()
-    maya = next(p for p in pw.personas if p["name"] == "Maya Chen")
-    stop = next(s for s in maya["schedule"] if s["place"] == "Houston Hall")
+    sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
+    stop = next(s for s in sofia["schedule"] if s["place"] == "Houston Hall")
     assert stop["commands"] == ["get cup of murky water", "drink cup of murky water"]
 ```
 
@@ -761,13 +770,11 @@ and in `build_penn_world` (`:289-301`), replace the `build_world_fn=lambda wm: .
 
 and pass `build_world_fn=_build,` in the `PennWorld(...)` constructor call.
 
-- [ ] **Step 4: Author Maya's commands** — in `godot-generative-agents/backend/world_data_upenn.yaml`, extend her Houston Hall stop (lines 28-31):
+- [ ] **Step 4: Author Sofia's commands** — in `godot-generative-agents/backend/penn/world_data_upenn.yaml`, extend her Houston Hall stop (lines 239-240; it has no `emoji`/`steps` — add only the `commands:` block, preserving the file's 2-space list indentation):
 
 ```yaml
   - place: Houston Hall
-    activity: grabbing lunch at the student union
-    emoji: 🍜
-    steps: 40
+    activity: meeting friends for dinner
     commands:
     - get cup of murky water
     - drink cup of murky water
@@ -784,8 +791,8 @@ Run: `uv run pytest godot-generative-agents/tests/ -q` — expected: all pass.
 
 ```bash
 uv run black godot-generative-agents/
-git add godot-generative-agents/backend/penn/penn_world.py godot-generative-agents/backend/world_data_upenn.yaml godot-generative-agents/tests/test_boil_water.py
-git commit -m "feat(penn): boil-water props in Houston Hall + Maya's murky-water commands (#300)"
+git add godot-generative-agents/backend/penn/penn_world.py godot-generative-agents/backend/penn/world_data_upenn.yaml godot-generative-agents/tests/test_boil_water.py
+git commit -m "feat(penn): boil-water props in Houston Hall + Sofia's murky-water commands (#300)"
 ```
 
 ---
@@ -883,7 +890,7 @@ Implements the world half of #300 per the approved spec
   upstreaming is deliberately deferred to #464, pending the #446 verb-API
   discussion.
 - **World:** Houston Hall stocked with sink/stove/pot/two contaminated cups —
-  the first Items in the Penn world. Maya's lunch stop now gets-and-drinks.
+  the first Items in the Penn world. Sofia's dinner stop now gets-and-drinks.
 - **Mock replay:** schedule stops may author one-shot `commands:`; the mock
   brain replays them, so the scenario runs offline and deterministically.
 - **Memory:** sickness lands at importance 8.0 ("I drank the cup of murky water
