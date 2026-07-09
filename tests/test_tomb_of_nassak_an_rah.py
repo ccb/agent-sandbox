@@ -1600,9 +1600,19 @@ def test_kick_the_centipede_off_the_roof():
     game.do_command("kick centipede")
     cent = game.characters["glass centipede"]
     assert cent.get_property("is_dead")
-    assert "centipede remains" in game.locations["Tomb Exterior"].items
+    exterior = game.locations["Tomb Exterior"]
+    assert "centipede remains" in exterior.items
     assert len(game.player.wounds) == wounds  # the boot pays nothing
     assert "dropped chandelier" in " ".join(cap.texts(Channel.NARRATION))
+    # The fall forges a knife (CCB): one carapace splinter, edged, a real
+    # weapon -- and butchery accepts it.
+    shard = exterior.items["crystal shard"]
+    assert shard.get_property("is_weapon") and shard.get_property("edged")
+    game.relocate(game.player, exterior)
+    game.do_command("take crystal shard")
+    game.relocate(game.player, game.locations["The Caravan Wreck"])
+    game.do_command("butcher zoxen")
+    assert "zox haunch" in game.player.location.items
 
 
 def test_throwing_it_by_hand_draws_a_parting_bite():
