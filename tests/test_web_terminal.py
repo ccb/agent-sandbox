@@ -37,7 +37,7 @@ def test_the_win_route_plays_through_the_bridge():
         if last["status"]["game_over"]:
             break
     assert last["status"]["won"]
-    assert last["status"]["score"] == last["status"]["max_score"] == 100
+    assert last["status"]["score"] == last["status"]["max_score"] == 115
 
 
 def test_events_carry_channels_not_prose_parsing():
