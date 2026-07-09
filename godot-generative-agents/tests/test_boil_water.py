@@ -136,3 +136,51 @@ def test_drink_still_matches_via_delegation():
 def test_custom_action_fallback_routing_intact_through_delegation():
     game, char = _tiny_world(extra_actions=[Activate, Deactivate])
     assert game.parser.determine_intent("travel to Union", actor=char) == "travel"
+
+
+# -- authored per-stop commands: normalization, mock replay, action_names --
+
+from backend.smallville_agents import SmallvilleMockClient, attach_agents
+
+COMMANDS = ["get cup of murky water", "drink cup of murky water"]
+
+
+def _commands_persona():
+    return _persona(
+        [
+            {
+                "place": "Union",
+                "activity": "hanging out",
+                "steps": 5,
+                "commands": list(COMMANDS),
+            }
+        ]
+    )
+
+
+def test_normalize_passes_commands_through():
+    spec = _normalize_personas([_commands_persona()])[0]
+    assert spec["schedule"][0]["commands"] == COMMANDS
+    # Stops authored without commands get an empty list, uniformly.
+    other = _normalize_personas([_persona([{"place": "Union", "activity": "idling"}])])[
+        0
+    ]
+    assert other["schedule"][0]["commands"] == []
+
+
+def test_mock_brain_replays_authored_commands_then_performs():
+    schedule = _normalize_personas([_commands_persona()])[0]["schedule"]
+    brain = SmallvilleMockClient(schedule)
+    away, here = "Campus\nThe green.", "Union\nThe union."
+    assert brain._choose(away) == "travel to Union"
+    assert brain._choose(here) == "get cup of murky water"
+    assert brain._choose(here) == "drink cup of murky water"
+    assert brain._choose(here) == "perform hanging out"
+    assert brain._choose(here) == "perform hanging out"
+
+
+def test_action_names_include_authored_verbs():
+    personas = _normalize_personas([_commands_persona()])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    assert chars["Testa"].agent.action_names == ["travel", "perform", "drink", "get"]
