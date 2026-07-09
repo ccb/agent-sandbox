@@ -44,6 +44,10 @@ DOOR_W = 2  # centered doorway gap, in cells, per partition segment
 
 # rugs sit on their own layer UNDER the furniture so a sofa/table can rest on one
 RUG_LAYER = "houston_rugs"
+# NOTE(#466): the boil-water kitchen strip at cells (117-120, 247-248) is
+# hand-painted onto houston_furniture (see docs/plans/2026-07-09-houston-
+# boilwater-props.md); a rerun of this script wipes it -- re-apply after any
+# regen (pinned by tests/test_houston_objects.py).
 FURN_LAYER = "houston_furniture"
 RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cyan"}
 

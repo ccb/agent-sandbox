@@ -100,8 +100,10 @@ def paint_objects(tmj, collision, arena, sector, sector_names, W, H):
     per_sector: Counter = Counter()
     for name, rect in read_objects(tmj):
         cells = _rect_cells(rect, W, H)
+        if not cells:
+            continue  # degenerate rect (fully out of bounds) -- paint nothing
         sid_counts = Counter(sector[y * W + x] for (x, y) in cells)
-        sid = sid_counts.most_common(1)[0][0] if sid_counts else FISHER_SECTOR
+        sid = sid_counts.most_common(1)[0][0]
         goid = str(GAME_OBJECT_BASE + int(sid) * 1000 + per_sector[sid])
         per_sector[sid] += 1
         arena_counts = Counter(

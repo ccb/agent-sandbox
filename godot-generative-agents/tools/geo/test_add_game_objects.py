@@ -157,3 +157,22 @@ def test_real_map_paint_matches_committed_matrix():
     assert new_coll == coll  # every use-tile already open in the committed maze
     assert obj_maze == _flat("game_object_maze.csv")
     assert [r for r in rows] == _blocks("game_object_blocks.csv")
+
+
+def test_degenerate_out_of_bounds_rect_is_skipped():
+    """A rect fully outside the grid paints nothing and books no id."""
+    with open(SRC_MAP) as fh:
+        tmj = json.load(fh)
+    _strip_object_layers(tmj)
+    tmj["layers"].append(_object_layer("fisher_objects", [("ghost", 9999, 9999)]))
+    coll, arena, sector = (
+        _flat("collision_maze.csv"),
+        _flat("arena_maze.csv"),
+        _flat("sector_maze.csv"),
+    )
+    new_coll, obj_maze, rows = ago.paint_objects(
+        tmj, coll, arena, sector, _sector_names(), W, H
+    )
+    assert rows == []
+    assert new_coll == coll
+    assert all(g == "0" for g in obj_maze)
