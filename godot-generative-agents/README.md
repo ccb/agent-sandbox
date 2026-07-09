@@ -270,6 +270,8 @@ for the full detail (sim turn, model, cache split, latency, cumulative spend).
 The rows ride the live event feed (`serve_penn`'s `drain_events()` publishes
 the monitor's records as `llm_call` events), so the box needs no extra
 polling — and `--no-monitor` silences it together with the terminal.
+Engine `GameEvent`s (e.g. the boil-water `sickness` event) ride the same feed
+as `game_event` records (#467), rendered as plain rows in the same box.
 
 **Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
 **$0.10** (the per-call-site arithmetic is in

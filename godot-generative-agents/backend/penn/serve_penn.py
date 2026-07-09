@@ -317,6 +317,9 @@ class PennStepper:
         self.world = world if world is not None else build_penn_world()
         self.cog = CognitionConfig()
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
+        # How much of game.events drain_events() has already published
+        # (#467). Lives in _build so reset() restarts it with the new game.
+        self._events_seen = 0
         # Every client records into self.ledger; with a monitor, through a
         # write-through view that also prints one terminal line per call (the
         # base ledger stays the single source GET /usage sums). Under the mock
@@ -448,19 +451,30 @@ class PennStepper:
         return frame
 
     def drain_events(self) -> list:
-        """The monitor rows formed during the last ``tick()``, for the live feed.
+        """New change-feed rows formed during the last ``tick()`` (#398, #467).
 
         ``backend.live`` probes this optional method after every tick and
-        publishes each returned dict as a ``kind: "engine"`` change-feed record
-        -- so the viewer's run monitor can show the same one-line-per-request
-        log the terminal prints (#398). The payload is the monitor's kept
-        record (a flattened :class:`~text_adventure_games.usage.CallRecord`
-        plus ``role``/``call_no``/``cum_cost_usd``/``time``), re-stamped
-        ``kind: "llm_call"`` so feed consumers can tell it from parser records
-        without guessing at fields."""
-        if self.monitor is None:
-            return []
-        return [dict(rec, kind="llm_call") for rec in self.monitor.drain()]
+        publishes each returned dict as a ``kind: "engine"`` change-feed
+        record. Two row types ride it, told apart by their inner ``kind``:
+
+        * ``"llm_call"`` -- the request monitor's kept records (a flattened
+          :class:`~text_adventure_games.usage.CallRecord` plus ``role``/
+          ``call_no``/``cum_cost_usd``/``time``), so the viewer's run monitor
+          shows the same one-line-per-request log the terminal prints (#398).
+        * ``"game_event"`` -- the engine ``GameEvent``s logged since the last
+          drain (#467), ``to_primitive()`` dicts (the #305 EventState shape,
+          identical to what the replay bake persists), e.g. the boil-water
+          ``sickness`` events (#465).
+        """
+        rows = []
+        if self.monitor is not None:
+            rows.extend(dict(rec, kind="llm_call") for rec in self.monitor.drain())
+        new_events = self.game.events[self._events_seen :]
+        self._events_seen = len(self.game.events)
+        rows.extend(
+            dict(event.to_primitive(), kind="game_event") for event in new_events
+        )
+        return rows
 
     def reset(self) -> None:
         self._build()

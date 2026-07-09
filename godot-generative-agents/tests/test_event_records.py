@@ -124,3 +124,42 @@ def test_write_simulation_writes_events_json(tmp_path):
     )
     with open(f"{sim_dir}/events.json") as fh:
         assert json.load(fh) == events
+
+
+def _game_event_rows(rows):
+    return [r for r in rows if r.get("kind") == "game_event"]
+
+
+def test_penn_stepper_drains_game_events_exactly_once():
+    """#467 live half: drain_events yields each GameEvent once, stamped
+    kind=game_event, alongside (not instead of) the llm_call rows."""
+    from backend.penn.serve_penn import PennStepper
+
+    stepper = PennStepper(num_steps=2)
+    turn = stepper.game.turn
+    stepper.game.log_event(
+        "Sofia Ramirez", "sickness", summary="felt awful", payload={"item": "cup"}
+    )
+    assert _game_event_rows(stepper.drain_events()) == [
+        {
+            "turn": turn,
+            "actor": "Sofia Ramirez",
+            "action": "sickness",
+            "summary": "felt awful",
+            "payload": {"item": "cup"},
+            "kind": "game_event",
+        }
+    ]
+    assert _game_event_rows(stepper.drain_events()) == []
+
+
+def test_penn_stepper_reset_restarts_event_cursor():
+    from backend.penn.serve_penn import PennStepper
+
+    stepper = PennStepper(num_steps=2)
+    stepper.game.log_event("a", "narration", summary="before reset")
+    stepper.drain_events()
+    stepper.reset()
+    stepper.game.log_event("b", "narration", summary="after reset")
+    rows = _game_event_rows(stepper.drain_events())
+    assert [r["actor"] for r in rows] == ["b"]
