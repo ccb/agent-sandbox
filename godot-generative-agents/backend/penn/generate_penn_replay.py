@@ -203,6 +203,11 @@ def main() -> int:
             # State Details inspector modal (viewer.gd, issue #408). See
             # penn_world.persona_meta_entry -- the projection the live server shares.
             "personas": [persona_meta_entry(p) for p in pw.personas],
+            # The t=0 seed social graph (world YAML `relationships:` block,
+            # validated by penn_world.relationships_meta -- shared with the live
+            # server). The viewer's social-graph pop-up (#252) contrasts it with
+            # the conversations that actually happen over the run.
+            "relationships": pw.relationships,
         },
         "frames": [
             {name: replay_frame_entry(f[name]) for name in order} for f in frames

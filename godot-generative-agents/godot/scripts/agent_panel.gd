@@ -34,6 +34,9 @@ signal reset_requested
 # The "Heatmap" button was pressed (open/close the movement-heatmap pop-up). The viewer
 # owns the pop-up's visibility; this is just a request to toggle it (H does the same).
 signal heatmap_requested
+# The "Social graph" button was pressed (open/close the who-talked-to-whom pop-up,
+# issue #252). Same contract as heatmap_requested: a toggle request (G does the same).
+signal social_graph_requested
 # The Focus dropdown changed: spotlight only agents in this building ("" = All, no
 # filter). The viewer dims everyone elsewhere and glides the camera to the building.
 signal filter_changed(location: String)
@@ -93,6 +96,33 @@ const FLAME_ROWS: PackedStringArray = [
 	"..#oaayyyyao#...",
 	"...##oaaao##....",
 	".....#####......",
+]
+
+# No network/graph glyph in the pack either, so the Social graph button gets the
+# same treatment as the flame: three linked nodes drawn pixel by pixel in the
+# pack's palette (its dark outline + the blue of its gem/button glyphs).
+const GRAPH_PALETTE := {
+	"#": Color("181425"),  # outline + edges
+	"b": Color("0099db"),  # pack blue node fill
+	"w": Color("8de6ff"),  # light-blue core
+}
+const GRAPH_ROWS: PackedStringArray = [
+	".###........###.",
+	"#bbb#......#bbb#",
+	"#bwb########bwb#",
+	"#bbb#......#bbb#",
+	".###........###.",
+	"..#..........#..",
+	"...#........#...",
+	"....#......#....",
+	".....#....#.....",
+	"......#..#......",
+	".......###......",
+	"......#bbb#.....",
+	"......#bwb#.....",
+	"......#bbb#.....",
+	".......###......",
+	"................",
 ]
 
 var _clock: Label
@@ -183,6 +213,10 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_flame_icon(), "Heatmap — where agents spend their time, up to now (H)",
 		func() -> void: heatmap_requested.emit()))
+	# Social graph: the hand-drawn three-linked-nodes glyph (see GRAPH_ROWS).
+	view_row.add_child(_icon_button(
+		_graph_icon(), "Social graph — who has talked to whom, up to now (G)",
+		func() -> void: social_graph_requested.emit()))
 
 	# Playback controls: a transport row (pause/resume beside the step counter),
 	# a seekable timeline, and a speed picker.
@@ -279,12 +313,21 @@ static func _pack_icon(sheet: Texture2D, glyph_col: int, glyph_row: int) -> Text
 
 static func _flame_icon() -> Texture2D:
 	# Rasterize the FLAME_ROWS bitmap at the same size/scale as the sheet glyphs.
+	return _bitmap_icon(FLAME_ROWS, FLAME_PALETTE)
+
+
+static func _graph_icon() -> Texture2D:
+	# Rasterize the GRAPH_ROWS bitmap at the same size/scale as the sheet glyphs.
+	return _bitmap_icon(GRAPH_ROWS, GRAPH_PALETTE)
+
+
+static func _bitmap_icon(rows: PackedStringArray, palette: Dictionary) -> Texture2D:
 	var img := Image.create_empty(GLYPH_CELL, GLYPH_CELL, false, Image.FORMAT_RGBA8)
-	for y in FLAME_ROWS.size():
-		var row := FLAME_ROWS[y]
+	for y in rows.size():
+		var row := rows[y]
 		for x in row.length():
-			if FLAME_PALETTE.has(row[x]):
-				img.set_pixel(x, y, FLAME_PALETTE[row[x]])
+			if palette.has(row[x]):
+				img.set_pixel(x, y, palette[row[x]])
 	img.resize(GLYPH_CELL * GLYPH_SCALE, GLYPH_CELL * GLYPH_SCALE, Image.INTERPOLATE_NEAREST)
 	return ImageTexture.create_from_image(img)
 

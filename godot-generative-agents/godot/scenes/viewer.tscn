@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/heatmap_panel.gd" id="9_heatmap"]
 [ext_resource type="Script" path="res://scripts/live_hud.gd" id="10_hud"]
 [ext_resource type="Script" path="res://scripts/persona_inspector.gd" id="11_inspector"]
+[ext_resource type="Script" path="res://scripts/social_graph_panel.gd" id="12_socgraph"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -92,3 +93,17 @@ layer = 12
 [node name="PersonaInspector" type="Control" parent="PersonaInspectorLayer"]
 visible = false
 script = ExtResource("11_inspector")
+
+; Social-graph pop-up (social_graph_panel.gd, issue #252): who has talked to whom up
+; to the current step, plus the authored t=0 seed relationships. On its OWN
+; CanvasLayer above the other modals (heatmap 11, inspector 12) — same layering
+; trick — so its dim covers everything, and Esc closes the topmost modal first.
+; Hidden until opened (G key / the sidebar "Social graph" button); viewer.gd feeds
+; it the replay + meta.relationships after load and pushes the current step so the
+; graph accumulates live.
+[node name="SocialGraphLayer" type="CanvasLayer" parent="."]
+layer = 13
+
+[node name="SocialGraphPanel" type="Control" parent="SocialGraphLayer"]
+visible = false
+script = ExtResource("12_socgraph")

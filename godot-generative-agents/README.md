@@ -144,6 +144,14 @@ tile-to-tile along the path the sim chose, with a name + activity label above ea
 sprite. (`backend/` sits beside the Godot project, not inside it, so Godot never
 touches the Python.)
 
+Two pop-ups let you interrogate the run at any point while it plays: the
+**movement heatmap** (`H`, or the sidebar's flame button) shows *where* everyone
+has spent their time so far, and the **social graph** (`G`, or the three-linked-nodes
+button; issue #252) shows *who has talked to whom* so far — edges thicken with more
+and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
+relationships** (the `relationships:` block in `world_data_upenn.yaml`) so you can
+compare who *started out* knowing whom against who actually met during the day.
+
 ### Live mode — follow a running sim (issue #263)
 
 The same scene can **follow a live simulation over real HTTP + WebSocket**
@@ -171,8 +179,8 @@ that form.)
 On boot the viewer does one `GET /live` handshake (world meta → spawn the cast),
 one `GET /events?since=0` backfill (history so far → jump to the live head),
 then opens a WebSocket to `/ws` and applies each pushed frame as it lands —
-bubbles, conversation links, trails, minimap, heatmap and fog all work
-unchanged, because live frames use the exact replay schema. A red **LIVE**
+bubbles, conversation links, trails, minimap, heatmap, social graph and fog all
+work unchanged, because live frames use the exact replay schema. A red **LIVE**
 badge joins the clock and the timeline locks into a read-only progress bar
 (you can't seek a live stream); the Pause button stays a *local* view-pause,
 while the run monitor's Emergency stop is what actually pauses the backend.
