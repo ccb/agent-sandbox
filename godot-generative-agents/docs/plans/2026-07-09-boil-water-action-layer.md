@@ -799,7 +799,20 @@ git commit -m "feat(penn): boil-water props in Houston Hall + Sofia's murky-wate
 
 ### Task 6: End-to-end acceptance — a mock-brain run drinks, sickens, remembers
 
+> **Amended during execution:** the acceptance test exposed a latent defect —
+> `attach_agents` commits every schedule through the engine's `planning.Stop`
+> round-trip (`smallville_agents.py:353-354` → `to_schedule_entry`,
+> `planning.py:68`), which doesn't carry the `commands` field, so authored
+> commands were silently dropped before the mock brain saw them. Engine files
+> are off-limits on this branch, so the fix is backend-local:
+> `SmallvilleMockClient.replace_schedule` carries the current stop's authored
+> `commands` onto an incoming entry at the same index that matches on
+> (place, activity) and has none of its own — healing the attach-time
+> round-trip while leaving genuinely new planner stops command-less. Round-trip
+> support in the engine `Stop` joins the #464 upstreaming list.
+
 **Files:**
+- Modify: `godot-generative-agents/backend/smallville_agents.py` (`replace_schedule` carry-over)
 - Test: `godot-generative-agents/tests/test_boil_water.py` (append)
 
 **Interfaces:**

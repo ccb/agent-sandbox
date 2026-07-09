@@ -179,6 +179,38 @@ def test_mock_brain_replays_authored_commands_then_performs():
     assert brain._choose(here) == "perform hanging out"
 
 
+def test_replace_schedule_carries_authored_commands_through_stop_round_trip():
+    """Latent defect (found by Task 6): the engine's ``planning.Stop`` has no
+    ``commands`` field, so ``Stop.to_schedule_entry()`` silently drops any
+    authored per-stop commands. ``replace_schedule`` must patch that loss back
+    in for a matching stop (same place/activity), so a plan built via
+    ``Stop.from_schedule_entry`` -> ``Stop.to_schedule_entry`` (what
+    ``MockPlanner``/``LLMPlanner`` do) still replays the authored commands."""
+    schedule = _normalize_personas([_commands_persona()])[0]["schedule"]
+    brain = SmallvilleMockClient(schedule)
+
+    # Simulate the Stop round-trip: same place/activity/steps, but no
+    # "commands" key at all (as if it went through planning.Stop).
+    round_tripped = [
+        {k: v for k, v in stop.items() if k != "commands"} for stop in schedule
+    ]
+    brain.replace_schedule(round_tripped)
+
+    here = "Union\nThe union."
+    assert brain._choose(here) == "get cup of murky water"
+    assert brain._choose(here) == "drink cup of murky water"
+    assert brain._choose(here) == "perform hanging out"
+
+    # A replacement stop that differs in place is a genuinely new/revised stop
+    # -- it must NOT inherit the old stop's commands.
+    brain2 = SmallvilleMockClient(schedule)
+    different_place = [{**schedule[0], "place": "Campus"}]
+    different_place[0].pop("commands", None)
+    brain2.replace_schedule(different_place)
+    assert brain2._stop.get("commands") in (None, [])
+    assert brain2._choose("Campus\nThe green.") == "perform hanging out"
+
+
 def test_action_names_include_authored_verbs():
     personas = _normalize_personas([_commands_persona()])
     game, chars = build_world(None, personas, LOCATIONS)
@@ -260,3 +292,52 @@ def test_sofias_houston_hall_stop_carries_the_commands():
     sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
     stop = next(s for s in sofia["schedule"] if s["place"] == "Houston Hall")
     assert stop["commands"] == ["get cup of murky water", "drink cup of murky water"]
+
+
+# -- end-to-end acceptance: a mock-brain run drinks, sickens, remembers (#300) -
+
+from backend.penn.penn_world import PENN_EXTRA_ACTIONS, _furnish_boil_water
+from backend.run_simulation import simulate
+
+
+def test_end_to_end_mock_run_agent_drinks_and_gets_sick():
+    """#300 acceptance: in a mock-brain run, an agent drinks, gets sick, and the
+    high-importance observation lands in its memory stream."""
+    pw = build_penn_world()
+    persona = {
+        "name": "Testa Sip",
+        "home": "Houston Hall",
+        "persona": "I am Testa Sip, a thirsty test persona.",
+        "emoji": "🥤",
+        "start_tile": [25, 109],
+        "schedule": [
+            {
+                "place": "Houston Hall",
+                "activity": "getting a drink of water",
+                "emoji": "🥤",
+                "steps": 3,
+                "commands": ["get cup of murky water", "drink cup of murky water"],
+            }
+        ],
+    }
+    personas = _normalize_personas([persona])
+
+    def build_fn(wm):
+        game, characters = build_world(
+            wm, personas, pw.locations, extra_actions=PENN_EXTRA_ACTIONS
+        )
+        _furnish_boil_water(game)
+        return game, characters
+
+    memories = {}
+    simulate(
+        pw.world_map,
+        10,
+        personas=personas,
+        build_world_fn=build_fn,
+        out_memories=memories,
+    )
+    stream = memories["Testa Sip"]
+    sick = [m for m in stream if "terribly sick" in m["text"]]
+    assert sick, f"no sickness memory in {[m['text'] for m in stream]}"
+    assert sick[0]["importance"] == 8.0
