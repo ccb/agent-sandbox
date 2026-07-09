@@ -1655,5 +1655,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 100 == game.max_score
+    assert game.score == 115 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
