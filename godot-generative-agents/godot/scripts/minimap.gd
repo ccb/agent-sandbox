@@ -74,6 +74,14 @@ func add_agent(name: String, node: Node2D, tint: Color) -> void:
 	_agents.append({"name": name, "node": node, "tint": tint})
 
 
+func clear() -> void:
+	# Drop every registered agent dot (e.g. when the run resets and the cast
+	# respawns). _draw() reads _agents, so emptying it removes the dots on the
+	# next redraw.
+	_agents.clear()
+	queue_redraw()
+
+
 func set_dimmed(names: PackedStringArray) -> void:
 	# Which agents the location filter has dimmed; their dots draw faint. Rebuilt as a
 	# set each call (empty = no filter). _process already redraws every frame.
