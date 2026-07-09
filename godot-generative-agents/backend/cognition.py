@@ -111,8 +111,40 @@ class ScheduleMockClient(MockReActClient):
         ``stop_index`` -- so the index stays valid and only the upcoming tail
         differs. The mock never calls this (its day is static); it exists for the
         revision seam a real planner drives (``cognition.maybe_revise_plan``).
+
+        Carrying over authored ``commands`` (#300): the engine's
+        ``planning.Stop`` has no ``commands`` field, so any schedule that has been
+        through a ``Stop`` round-trip (``to_schedule_entry`` / `from_schedule_entry``,
+        e.g. every ``MockPlanner``/``LLMPlanner`` plan) silently drops the
+        per-stop commands an author put in ``world_data.yaml`` / persona schedule.
+        Rather than teach the engine's ``Stop`` about a backend-only field
+        (upstreaming tracked in #464), we patch the loss back in here: for each
+        incoming entry that lines up positionally with the *current* schedule's
+        entry at the same index (same ``place`` and ``activity``) and itself
+        carries no ``commands`` (missing key or empty list), we carry over the
+        current stop's ``commands``. An entry that differs in ``place`` or
+        ``activity`` is a genuinely revised/new stop (e.g. a future LLM planner's
+        tail-replace) and gets no carry-over -- it has no authored commands to
+        inherit. This does not touch ``_commands_used``: the current stop (index
+        ``stop_index``), if it matched, is the *same* authored stop the agent may
+        already be partway through, so its progress must survive the swap.
         """
-        self.schedule = schedule
+        current = self.schedule
+        patched = []
+        for i, entry in enumerate(schedule):
+            if entry.get("commands"):
+                patched.append(entry)
+                continue
+            if i < len(current):
+                prior = current[i]
+                if (
+                    prior.get("place") == entry.get("place")
+                    and prior.get("activity") == entry.get("activity")
+                    and prior.get("commands")
+                ):
+                    entry = {**entry, "commands": list(prior["commands"])}
+            patched.append(entry)
+        self.schedule = patched
 
     def _current_location(self, observation: str) -> str:
         """describe_for() puts the location name (UPPERCASE) on the first line."""
