@@ -619,7 +619,7 @@ def test_striding_in_earns_a_warning_then_a_lash():
     cap = _texts(game)
     game.do_command("north")
     game.do_command("east")  # footfalls: it swings toward you
-    assert "swings toward your footfalls" in " ".join(cap.texts(Channel.NARRATION))
+    assert "swings toward your noise" in " ".join(cap.texts(Channel.NARRATION))
     assert not game.player.wounds  # the swing is the warning
     game.do_command("say hello")  # loud again while it listens -> the lash
     assert any(w.name == "Acid-Lashed" for w in game.player.wounds)
