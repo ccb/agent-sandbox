@@ -109,6 +109,25 @@ class Attack(base.Action):
             )
             self.parser.ok(description)
         else:
+            # VIGOR (Vaarn): how many blows the fiction lets a character
+            # take. Unset (or 1) is the classic one-hit knockout, so every
+            # existing game and NPC is untouched. A tougher character -- a
+            # pack, a synth, a boss -- sets vigor N: each hit costs one, and
+            # only the last blow fells them. A non-final hit narrates via the
+            # victim's struck_text (or a plain default) and ends there.
+            vigor = self.victim.get_property("vigor")
+            if vigor is not None and int(vigor) > 1:
+                self.victim.set_property("vigor", int(vigor) - 1)
+                struck = self.victim.get_property("struck_text") or (
+                    "The blow lands, and {name} {verb} standing.".format(
+                        name=self.victim.name,
+                        verb=base.conjugate(self.victim, "stay", "stays"),
+                    )
+                )
+                self.parser.ok(struck)
+                return
+            if vigor is not None:
+                self.victim.set_property("vigor", 0)
             # the victim is knocked unconscious
             self.victim.set_property(Property.IS_UNCONSCIOUS, True)
             # A victim may supply its own knockout line (a boss that shrugs

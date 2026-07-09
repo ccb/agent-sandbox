@@ -145,6 +145,44 @@ def test_the_merchants_body_can_be_searched_for_his_tokens():
     assert "purse of water-debt tokens" in game.player.inventory
 
 
+def test_the_pack_takes_three_blows():
+    """The vigor system (CCB): a PACK does not drop to one swing."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    pack = game.characters["jackal pack"]
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    game.relocate(pack, game.player.location)
+    cap = _texts(game)
+    game.do_command("attack jackal pack with blade")
+    game.do_command("attack jackal pack with blade")
+    assert not pack.get_property("is_unconscious")
+    assert any("thinner by one" in t for t in cap.texts(Channel.NARRATION))
+    game.do_command("attack jackal pack with blade")
+    assert pack.get_property("is_unconscious")
+
+
+def test_silas_takes_two_blows():
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    silas = game.characters["Silas"]
+    game.do_command("attack silas with blade")
+    assert not silas.get_property("is_unconscious")
+    game.do_command("attack silas with blade")
+    assert silas.get_property("is_unconscious")
+
+
+def test_unstatted_creatures_still_drop_in_one():
+    """vigor unset = the classic one-hit knockout: the engine default
+    leaves every existing NPC untouched."""
+    game = _game()
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.relocate(game.player, game.locations["The Summit"])
+    game.do_command("in")  # the centipede springs
+    game.do_command("attack centipede with blade")
+    assert game.characters["glass centipede"].get_property("is_unconscious")
+
+
 def test_the_teamster_tells_the_story_and_decamps():
     """CCB: the teamster is a GENERATED newbeast (a different one each
     expedition, rolled on Issue 1's spark tables), and once she has said
