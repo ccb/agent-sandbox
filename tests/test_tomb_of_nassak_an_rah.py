@@ -145,6 +145,26 @@ def test_the_merchants_body_can_be_searched_for_his_tokens():
     assert "purse of water-debt tokens" in game.player.inventory
 
 
+def test_the_hall_of_warriors_reads_its_own_wreckage():
+    """CCB: the room description updates as cylinders break -- remaining
+    colours named, the fungus note gone with the orange one, and a final
+    all-burst state ("one darkening lake")."""
+    game = _game()
+    warriors = game.locations["Hall of Warriors"]
+    game.relocate(game.player, warriors)
+    assert "Four plexiglas cylinders stand" in warriors.description
+    game.do_command("break cerulean cylinder")
+    game.do_command("break orange cylinder")
+    assert "amber and viridian still stand" in warriors.description
+    assert "Fungus" not in warriors.description  # gone with the orange
+    cylinders = warriors.items["cylinders"]
+    assert "Only the amber and viridian" in cylinders.examine_text()
+    game.do_command("break amber cylinder")
+    game.do_command("break viridian cylinder")
+    assert "one darkening lake" in warriors.description
+    assert "All four cylinders lie burst" in cylinders.examine_text()
+
+
 def test_the_pack_takes_three_blows():
     """The vigor system (CCB): a PACK does not drop to one swing."""
     game = _game()

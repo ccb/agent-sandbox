@@ -1651,15 +1651,53 @@ def build_game(seed=None):
     servo.add_alias("servo")
     hound_pile.add_item(servo)
     tank.add_item(hound_pile)
+    _CYLINDER_NAMES = (
+        "cerulean cylinder",
+        "amber cylinder",
+        "viridian cylinder",
+        "orange cylinder",
+    )
+
+    def _standing_cylinders():
+        return [n.split()[0] for n in _CYLINDER_NAMES if n in warriors.items]
+
+    def _colour_list(colours):
+        if len(colours) <= 1:
+            return colours[0] if colours else ""
+        if len(colours) == 2:
+            return f"{colours[0]} and {colours[1]}"
+        return ", ".join(colours[:-1]) + f", and {colours[-1]}"
+
+    def _cylinders_examine(g=None):
+        standing = _standing_cylinders()
+        if len(standing) == 4:
+            return (
+                "Four guard-mummies at an attention no order will ever "
+                "relieve, each sealed under its own gel -- cerulean, amber, "
+                "viridian, orange -- and each armed as in life. Whatever "
+                "they carried went under the glass with them. The plexiglas "
+                "is crazed to milk at the corners; a firm blow would finish "
+                "what the centuries started."
+            )
+        if not standing:
+            return (
+                "All four cylinders lie burst. The guard-mummies sprawl "
+                "where their gel let them down, at attention from the waist "
+                "up, relieved of everything but posture."
+            )
+        kept = _colour_list(standing)
+        return (
+            f"Only the {kept} still {'stands' if len(standing) == 1 else 'stand'} "
+            "sealed, its dead still armed as in life. The broken ones gape, "
+            "their guard-mummies slumped in drying gel, glass crazed to milk "
+            "where the blows landed."
+        )
+
     _scenery(
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
-        "Four guard-mummies at an attention no order will ever relieve, each "
-        "sealed under its own gel -- cerulean, amber, viridian, orange -- and "
-        "each armed as in life. Whatever they carried went under the glass "
-        "with them. The plexiglas is crazed to milk at the corners; a firm "
-        "blow would finish what the centuries started.",
+        _cylinders_examine,
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -2893,6 +2931,44 @@ def build_game(seed=None):
             g.award("first_light", 5, "[+5 -- light, learned]")
 
     game.add_trigger("score_beats", lambda g: True, _score_beats, repeatable=True)
+
+    # The Hall of Warriors reads its own wreckage (CCB): the room description
+    # recomputes whenever the set of standing cylinders changes.
+    warriors.set_property("_cyl_state", ",".join(_standing_cylinders()))
+
+    def _warriors_desc_stale(g):
+        return warriors.get_property("_cyl_state") != ",".join(_standing_cylinders())
+
+    def _warriors_desc_update(g):
+        standing = _standing_cylinders()
+        warriors.set_property("_cyl_state", ",".join(standing))
+        fungus = (
+            " Fungus has found the orange one; veins fan out under its "
+            "glass like pressed flowers."
+            if "orange" in standing
+            else ""
+        )
+        if not standing:
+            warriors.description = (
+                "The four cylinders lie burst on the uneven floor, their "
+                "gels run together into one darkening lake. The guard-"
+                "mummies sprawl at attention from the waist up, and their "
+                "scattered kit outlasts them still, as kit does."
+            )
+            return
+        kept = _colour_list(standing)
+        verb = "stands" if len(standing) == 1 else "stand"
+        warriors.description = (
+            f"Of the four plexiglas cylinders, only the {kept} still {verb} "
+            "sealed, the guard-mummy within at an attention no order will "
+            "relieve. The rest lie burst, their dead slumped in drifts of "
+            f"drying gel, kit scattered where the flood carried it.{fungus} "
+            "What kit remains has outlasted its owners, as kit does."
+        )
+
+    game.add_trigger(
+        "warriors_desc", _warriors_desc_stale, _warriors_desc_update, repeatable=True
+    )
 
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
