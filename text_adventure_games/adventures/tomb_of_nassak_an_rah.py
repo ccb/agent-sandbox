@@ -2547,7 +2547,7 @@ def build_game(seed=None):
 
     _spawn_menace(
         spawn_guts,
-        "The spawn of guts swings toward your footfalls, arms rising from the "
+        "The spawn of guts swings toward your noise, arms rising from the "
         "floor like kelp in a current.",
         _guts_lash,
     )
