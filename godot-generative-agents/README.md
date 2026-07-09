@@ -271,7 +271,8 @@ The rows ride the live event feed (`serve_penn`'s `drain_events()` publishes
 the monitor's records as `llm_call` events), so the box needs no extra
 polling — and `--no-monitor` silences it together with the terminal.
 Engine `GameEvent`s (e.g. the boil-water `sickness` event) ride the same feed
-as `game_event` records (#467), rendered as plain rows in the same box.
+as `game_event` records (#467); the HUD's generic rows currently render only
+`text`-bearing records, so surfacing these on-screen is #302/#264 follow-up.
 
 **Cost & safety.** A full 3-agent 1200-step day is ≈ 55–60 Haiku calls ≈
 **$0.10** (the per-call-site arithmetic is in

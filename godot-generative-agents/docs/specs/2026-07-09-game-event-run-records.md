@@ -76,17 +76,20 @@ through **both** doors (`GET /events?since=` and `/ws`) with zero changes to
 mirrors the existing `llm_call` re-stamp pattern (`serve_penn.py:446` docstring)
 so feed consumers distinguish record types without guessing at fields.
 
-Viewer compatibility (verified, no work needed): `viewer.gd:657-667` routes
-inner `kind == "llm_call"` to the request monitor and every other engine
-record through the generic `add_engine_event` row path (#394) — `game_event`
-records render as readable log rows for free.
+Viewer compatibility: `viewer.gd:657-667` routes inner `kind == "llm_call"`
+to the request monitor and every other engine record to the generic
+`add_engine_event` path (#394) — so nothing breaks. Note the generic path
+renders only `text`-bearing records (`live_hud.gd`), so `game_event` rows
+reach the viewer but are not yet drawn; on-screen surfacing is #302/#264
+follow-up work. (Corrected post-review: an earlier revision claimed they
+render as log rows for free.)
 
 Concurrency: `tick_once()` steps and drains under the same app lock
 (`live.py:187-202`), so the counter never sees a torn read.
 
 ## Non-goals
 
-- No viewer/HUD feature work (surfacing beyond the free #394 rows is #302/#264/#163).
+- No viewer/HUD feature work (on-screen surfacing is #302/#264/#163).
 - No engine changes — `GameEvent`/`log_event` stay as they are.
 - No new endpoints, no event filtering or truncation (payloads are already
   digest-sized), no backfill of old baked replays.
