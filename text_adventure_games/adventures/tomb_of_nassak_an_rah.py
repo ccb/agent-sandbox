@@ -2505,7 +2505,9 @@ def build_game(seed=None):
         )
         g.relocate(jackal_pack, den)
         for h in _halls:
-            h.set_property(f"_jk:{h.name}", -4)  # a fed pack forgets you a while
+            # A real tribute buys real peace: deep enough that even a
+            # cylinder-looting spree won't burn back through it.
+            h.set_property(f"_jk:{h.name}", -6)
 
     game.add_trigger("jackal_feed", _jackal_feed_check, _jackal_feed, repeatable=True)
 
@@ -2759,19 +2761,51 @@ def build_game(seed=None):
         if _pack_out(g):
             return
         here = g.player.location
+        # The mantis song is the tomb's dinner bell: every round the jar
+        # sings, every ground hall's ledger climbs. Noise begets the song;
+        # the song begets the pack.
+        song_round = any(
+            "insect song" in ((e.payload or {}).get("sound") or "")
+            for e in g.events[g._round_event_start :]
+        )
         for hall in _halls:
             key = f"_jk:{hall.name}"
+            streak_key = f"_jkq:{hall.name}"
             n = hall.get_property(key) or 0
+            if song_round and n >= 0:
+                hall.set_property(streak_key, 0)  # the song IS noise
+                n += 1
+                hall.set_property(key, n)
+                if n >= 4 and jackal_pack.location is den:
+                    g.relocate(jackal_pack, hall)
+                    jackal_pack.set_property("_stride", True)
+                    g.parser.ok(
+                        "They come in low and unhurried, cerulean-coated, "
+                        "filling the doorways -- the song called, and the "
+                        "pack answers what it summons."
+                        if here is hall
+                        else "Somewhere below, a yipping rises to meet the "
+                        "song, gathers, and goes quiet. Purposeful."
+                    )
+                    continue
             if here is not hall:
                 # The trail cools toward calm from either side (suspicion
-                # drains, post-feed grace wears off). The pack itself, once
-                # out, PURSUES -- handled below, not here.
-                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                # drains, post-feed grace wears off) -- but only after THREE
+                # consecutive quiet rounds (CCB: the jackals were MIA in real
+                # play; a -1 per quiet round cancelled almost every +1, so
+                # only back-to-back crashes ever summoned them). Suspicion
+                # outlasts a pause to read a ledger.
+                streak = (hall.get_property(streak_key) or 0) + 1
+                if streak >= 3 and n != 0:
+                    hall.set_property(key, n - 1 if n > 0 else n + 1)
+                    streak = 0
+                hall.set_property(streak_key, streak)
                 continue
             if jackal_pack.location is hall:
                 _jackal_maul(g)  # unfed, unfled: they collect
                 continue
             if _player_was_loud_in(g, hall, _QUIET):
+                hall.set_property(streak_key, 0)
                 # A crash carries: breaking things counts double on the ledger.
                 crashed = any(
                     e.actor == g.player.name
@@ -2781,7 +2815,9 @@ def build_game(seed=None):
                 )
                 n += 2 if crashed else 1
                 hall.set_property(key, n)
-                if n <= 2:
+                if n <= 0:
+                    pass  # sated (or long-calmed): the noise only burns patience
+                elif n <= 2:
                     g.parser.ok(
                         "Somewhere off in the halls, a yipping answers your "
                         "noise -- once, and then again, nearer."
@@ -2804,7 +2840,11 @@ def build_game(seed=None):
                 # n <= 0: a fed (or long-calmed) pack lets it go -- the noise
                 # only burns through their patience.
             else:
-                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                streak = (hall.get_property(streak_key) or 0) + 1
+                if streak >= 3 and n != 0:
+                    hall.set_property(key, n - 1 if n > 0 else n + 1)
+                    streak = 0
+                hall.set_property(streak_key, streak)
 
     game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
 
@@ -3807,17 +3847,24 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # Loot the wreck (water heals; the glowstone lights the dark Warriors).
+    # Loot the wreck (water heals; the glowstone lights the dark Warriors)
+    # -- and bring the dates: the crashes ahead ring the mantis song, the
+    # song calls the jackals, and the pack is BOUGHT, not fought.
     "search merchant",
     "take glowstone",
     "take waterskin",
+    "in",
+    "open crates",
+    "take crate of dates",
+    "out",
     "north",
     "sneak east",  # Warriors: pitch dark; the kit is sealed in the cylinders
     "light glowstone",  # safe here -- no bats -- and the colours matter
     "break amber cylinder",  # the eyeless spawn swings toward the crash --
     "take respirator",  # -- and the crashes call its brother from next door
     "wear respirator",
-    "break cerulean cylinder",  # second crash: the lash lands; take the blade
+    "break cerulean cylinder",  # second crash: the song has the pack's ear now
+    "give dates to jackal pack",  # -- so pay the toll the moment they fill the doorways
     "take blade",
     "attack spawn of guts with blade",  # answer it: the falcon jar drops
     "take falcon jar",
