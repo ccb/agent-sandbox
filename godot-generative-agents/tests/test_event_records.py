@@ -74,3 +74,27 @@ def test_simulate_out_events_carries_sickness_record():
     }
     assert record["actor"] == "Testa Sip"
     assert {"turn", "summary"} <= set(record)
+
+
+def test_penn_replay_bake_writes_events_key(tmp_path, monkeypatch):
+    """#467 acceptance, bake artifact: the replay JSON carries the run's
+    event log as a top-level ``events`` array (empty is fine for a short
+    run — presence and shape are the contract; the sickness *content* is
+    pinned at the simulate() seam above)."""
+    import os
+
+    # Add penn directory to sys.path so generate_penn_replay can import penn_world
+    penn_dir = os.path.join(os.path.dirname(__file__), "..", "backend", "penn")
+    monkeypatch.syspath_prepend(penn_dir)
+
+    from backend.penn import generate_penn_replay
+
+    out = tmp_path / "penn_replay.json"
+    monkeypatch.setattr(
+        sys, "argv", ["generate_penn_replay", "--steps", "8", "--out", str(out)]
+    )
+    assert generate_penn_replay.main() == 0
+    replay = json.loads(out.read_text())
+    assert isinstance(replay["events"], list)
+    for record in replay["events"]:
+        assert {"turn", "actor", "action", "summary", "payload"} <= set(record)

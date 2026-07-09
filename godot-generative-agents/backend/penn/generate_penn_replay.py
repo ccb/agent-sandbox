@@ -177,12 +177,14 @@ def main() -> int:
     # perform reflections and perception observations still accrue, so the
     # history is populated either way -- it just gets richer with a real model.
     memory_streams: dict = {}
+    events: list = []
     frames = simulate(
         pw.world_map,
         args.steps,
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
         out_memories=memory_streams,
+        out_events=events,
         extra_action_names=PENN_ACTION_VERBS,
     )
 
@@ -221,6 +223,10 @@ def main() -> int:
         # Per-persona full memory stream: [{kind, importance, text, created_turn}].
         # The panel filters to created_turn <= current step to show history so far.
         "memory_streams": memory_streams,
+        # The run's GameEvent log (#467): EventState-shaped records straight
+        # from GameEvent.to_primitive(). The viewer ignores unknown top-level
+        # keys; post-hoc metrics (#299) read this instead of the memory stream.
+        "events": events,
     }
 
     # Light up the viewer's speech-bubble + conversation-link feature with authored
