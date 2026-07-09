@@ -103,3 +103,36 @@ def test_activate_rejects_a_non_device():
     game.locations["Union"].add_item(pot)
     assert not game.parser.parse_command("activate pot", actor=char)
     assert not pot.get_property("is_on")
+
+
+# -- PennParser.determine_intent regression tests (#300) -------------------
+#
+# PennParser overrides determine_intent only to catch "activate"/"deactivate"
+# before they'd otherwise fall into the engine's buggy "ate " substring check
+# (text_adventure_games/parsing.py ~line 296-302, which matches "ate " inside
+# "activate" and mis-routes it to EAT). Everything else must delegate to
+# Parser.determine_intent unchanged -- these tests pin both the new-verb
+# handling and that the delegated path still behaves like the engine parser.
+
+
+def test_activate_and_deactivate_are_routed_to_device_intents():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    assert game.parser.determine_intent("activate stove", actor=char) == "activate"
+    assert game.parser.determine_intent("deactivate stove", actor=char) == "deactivate"
+
+
+def test_eat_still_word_matches_via_delegation():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    assert game.parser.determine_intent("eat bread", actor=char) == "eat"
+
+
+def test_drink_still_matches_via_delegation():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    assert (
+        game.parser.determine_intent("drink cup of murky water", actor=char) == "drink"
+    )
+
+
+def test_custom_action_fallback_routing_intact_through_delegation():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    assert game.parser.determine_intent("travel to Union", actor=char) == "travel"

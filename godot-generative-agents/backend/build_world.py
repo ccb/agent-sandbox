@@ -180,7 +180,9 @@ def build_world(
         world_map=world_map,
     )
 
-    # Wire up the custom parser that fixes "ate" false positives and adds device verbs
+    # Wire up the custom parser that fixes the "ate " substring collision with
+    # "activate"/"deactivate" (see parser.py); delegates everything else to
+    # the engine parser unchanged.
     game.set_parser(PennParser(game))
 
     # Place each persona in their home location (Game only auto-places the player).
