@@ -2061,7 +2061,8 @@ def build_game(seed=None):
         "the Autarch's chosen memories as they embalmed him, and it holds "
         "them yet, set down in facets: a reader with the right fingertips "
         "can walk them like halls. Not his decrees -- crystal is too dear "
-        "for decrees. What it keeps is what he could not buy twice: his "
+        "for decrees. What it keeps is what he could not buy or take by "
+        "conquest: his "
         "mother's hand on the back of his neck. A bath, full immersion, "
         "water to the chin -- a luxury this world no longer imagines. The "
         'first time he drew blood, and what it taught him." He turns back '
