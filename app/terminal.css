@@ -36,7 +36,10 @@ body, input {
   height: 100dvh;
   max-width: 52rem;
   margin: 0 auto;
-  padding: env(safe-area-inset-top) 0.75rem env(safe-area-inset-bottom);
+  /* env() works in Safari; the iOS shell injects --safe-top/--safe-bottom
+     (its .never inset behavior zeroes env inside WKWebView). */
+  padding: max(env(safe-area-inset-top), var(--safe-top, 0px)) 0.75rem
+    max(env(safe-area-inset-bottom), var(--safe-bottom, 0px));
   position: relative;
 }
 
@@ -162,7 +165,7 @@ body.size-large, body.size-large input { font-size: 18px; }
   width: min(88vw, 26rem);
   z-index: 6;
   background: var(--bg);
-  padding: calc(env(safe-area-inset-top) + 1rem) 1rem 1rem;
+  padding: calc(max(env(safe-area-inset-top), var(--safe-top, 0px)) + 1rem) 1rem 1rem;
   overflow-y: auto;
   transition: transform 0.22s ease-out;
   border-color: var(--phosphor-dim);
