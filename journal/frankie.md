@@ -1,3 +1,21 @@
+## 2026-07-08
+**Focus:** cleared the ready `godot-ga-main` PR queue and verified #367 prompt caching end-to-end (offline predictor + live Haiku run).
+
+**Done today:**
+- Merged the ready `godot-ga-main` queue in dependency order — #391 wall-collision fix (**PR #416**) → geo CI + `validate_tmj` drift gate (#390, **PR #421**) → viewer `kind:"engine"` feed records (#394, **PR #418**) → converse-once-per-step guard (#187, **PR #419**); checker landed before the gate so CI stays green.
+- Proved #367 prompt caching is a silent no-op on the live Penn cast — the persona+tools prefix is ~200 tokens, ~20× under Haiku's 4096 floor — confirmed live via `serve_penn --brain llm` (`cache_creation`/`cache_read` held 0 while cost climbed). Committed the offline predictor as `cache_prefix_check.py` (#367).
+- Exercised the live LLM brain to confirm the sim path is complete: real Haiku decisions, event-driven (one per schedule transition, not per tick), `/usage` accounting + `LlmCallMonitor` rows working, loop healthy at step ~589/1200.
+
+**Blockers / questions:**
+- #367 stays dormant until the stable *system* prefix (a map/rules/action-catalog preamble, or the memory/planning phases) clears the model floor — the per-turn observation renders after the cache breakpoint and never counts; `cache_prefix_check.py` is the tripwire.
+- The live cast makes very few calls (~6 in the opening burst, then a long plateau through multi-hundred-step activities), so it barely exercises caching or cost — a real caching test needs a bigger prefix, not a longer run.
+- `cache_prefix_check.py` is committed on `feat/cache-prefix-check-367` but not yet pushed / no PR opened.
+
+**Next:**
+- Push `feat/cache-prefix-check-367`, open a PR to `godot-ga-main`, and add a "reading the live cache fields" note to the backend README.
+- Add a `--live` two-call verifier that proves the #367 caching wiring fires once a >4096-token prefix is used.
+- Tidy up: delete the four merged head branches (#416/#421/#418/#419).
+
 ## 2026-07-07
 **Focus:** shipped the per-agent inspection API (read + write), cleared the post-#400-restructure merge/geo fallout, and kicked off the live-LLM cost/quality roadmap.
 
