@@ -98,3 +98,29 @@ def test_penn_replay_bake_writes_events_key(tmp_path, monkeypatch):
     assert isinstance(replay["events"], list)
     for record in replay["events"]:
         assert {"turn", "actor", "action", "summary", "payload"} <= set(record)
+
+
+def test_write_simulation_writes_events_json(tmp_path):
+    """#467: the generic exporter persists the event log beside the other
+    run artifacts. frames=[] keeps the fixture minimal — write_simulation
+    tolerates a missing base personas dir and zero steps."""
+    events = [
+        {
+            "turn": 1,
+            "actor": "A",
+            "action": "sickness",
+            "summary": "A got sick drinking cup",
+            "payload": {"item": "cup", "location": "Houston Hall"},
+        }
+    ]
+    sim_dir = write_simulation(
+        storage_root=str(tmp_path),
+        sim_code="test_sim",
+        frames=[],
+        start_dt=datetime.datetime(2023, 2, 13, 8, 0, 0),
+        start_tiles={"A": (0, 0)},
+        base_personas_dir=str(tmp_path / "no_such_dir"),
+        events=events,
+    )
+    with open(f"{sim_dir}/events.json") as fh:
+        assert json.load(fh) == events
