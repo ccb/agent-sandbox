@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 
 from . import prompt_templates
+from .actions.base import HIDDEN_ACTIONS, registered_action_entries
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .llm_client import run_tool_loop
@@ -146,6 +147,182 @@ def build_choose_action_tool(action_names: list[str]) -> dict:
             "required": ["action"],
         },
     }
+
+
+# ----------------------------------------------------------------------
+# Per-action tool schemas, derived from the action registry (issue #356)
+#
+# The idiomatic N-tools shape: one tool per registered verb (used with
+# tool_choice="any"), instead of a single choose_action whose `action` is an
+# enum. build_choose_action_tool above stays the fallback for clients without
+# multi-tool support and for the free-text path.
+# ----------------------------------------------------------------------
+
+# Scope categories a tool argument slot may declare (Action.ARGUMENTS_SCHEMA):
+# each is filled at decision time with an enum of the entities the actor can
+# currently see -- the same scope game.describe_for() renders as prose.
+_SCOPE_KINDS = ("item", "character", "direction")
+# JSON primitives a slot may declare directly (anything else falls back to string).
+_JSON_TYPES = ("string", "integer", "number", "boolean")
+# Cap on how many entities a scope enum may list. Past it we DROP the enum and
+# leave the slot free text: truncating would make a valid entity unnameable, and
+# a very long enum bloats the tool definition -- which counts against context and
+# is NOT trimmed by limit_context_length. Games with big rooms can tune this.
+_MAX_SCOPE_ENUM = 20
+
+
+def _scope_enum(kind: str, parser, actor) -> list[str] | None:
+    """In-scope entity names for a scope-category slot, or ``None`` when *kind*
+    is a plain JSON type (not a scope category) or there's no actor to scope to.
+
+    Reuses the parser's own scope resolution so the enum and ``describe_for()``
+    never disagree about what's here: items the actor can see or carry, other
+    characters in the room, or exits."""
+    if kind not in _SCOPE_KINDS or actor is None:
+        return None
+    loc = getattr(actor, "location", None)
+    if kind == "item":
+        return sorted(parser.get_items_in_scope(actor).keys())
+    if loc is None:
+        return []
+    if kind == "character":
+        return sorted(name for name in loc.characters if name != actor.name)
+    return list(loc.connections.keys())  # direction
+
+
+def _slot_property(slot: dict, parser, actor, max_enum: int | None) -> dict:
+    """Translate one ARGUMENTS_SCHEMA slot into a JSON-schema property.
+
+    A scope slot becomes a string constrained to an enum of the actor's in-scope
+    entities (dropped when there are none, or too many to list within
+    *max_enum*); a plain-typed slot passes its JSON type through."""
+    kind = slot.get("type", "string")
+    prop = {"type": "string", "description": slot.get("description", "")}
+    enum = _scope_enum(kind, parser, actor)
+    if enum is None:
+        prop["type"] = kind if kind in _JSON_TYPES else "string"
+    elif enum and (max_enum is None or len(enum) <= max_enum):
+        prop["enum"] = enum
+    return prop
+
+
+def _build_action_tool(name, action, description, aliases, parser, actor, max_enum):
+    """Build one normalized per-action tool. The tool NAME is the verb;
+    ``reasoning`` is always offered (so the trace still shows *why*). A declared
+    ``ARGUMENTS_SCHEMA`` becomes typed slots (with scope enums where the actor's
+    view allows); an undeclared action falls back to a single free-text
+    ``arguments`` field -- the same contract ``choose_action`` used, so no
+    built-in action needs migrating."""
+    desc = description or f"Perform the '{name}' action."
+    if aliases:
+        desc += f" (aliases: {', '.join(aliases)})"
+    properties = {
+        "reasoning": {
+            "type": "string",
+            "description": "one short sentence explaining the choice",
+        }
+    }
+    required: list[str] = []
+    schema = getattr(action, "ARGUMENTS_SCHEMA", None) if action is not None else None
+    if schema:
+        for slot_name, slot in schema.items():
+            properties[slot_name] = _slot_property(slot, parser, actor, max_enum)
+            if slot.get("required"):
+                required.append(slot_name)
+    else:
+        properties["arguments"] = {
+            "type": "string",
+            "description": "the rest of the command, e.g. 'player with club'; '' if none",
+        }
+    return {
+        "name": name,
+        "description": desc,
+        "parameters": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+        },
+    }
+
+
+def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_ENUM):
+    """Derive one normalized tool per registered action (issue #356).
+
+    The N-tools counterpart to :func:`build_choose_action_tool`: instead of one
+    ``choose_action`` whose ``action`` is an enum of verbs, each verb becomes its
+    own tool (offered with ``tool_choice="any"``), typed by its
+    ``ARGUMENTS_SCHEMA`` and -- when *actor* is given -- narrowed with scope enums
+    drawn from what that actor can currently see.
+
+    *names* limits which verbs are exposed (pass the agent's ``action_names``;
+    ``None`` or empty means every registered verb). The comma-sequence wrapper is
+    always dropped. A name with no registered action still gets a generic
+    free-text tool, so ``action_names`` stays the authoritative menu even when it
+    lists a verb the parser hasn't registered.
+
+    Token budget: tool definitions count against context and are NOT trimmed by
+    :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
+    are capped (see :data:`_MAX_SCOPE_ENUM`) and a caller may pass a narrower
+    *names* to curate the set per decision.
+    """
+    entries = {
+        name: (action, desc, aliases)
+        for name, action, desc, aliases in registered_action_entries(parser)
+    }
+    wanted = list(names) if names else list(entries)
+    tools = []
+    seen = set()
+    for name in wanted:
+        if name in HIDDEN_ACTIONS or name in seen:
+            continue
+        seen.add(name)
+        action, desc, aliases = entries.get(name, (None, "", []))
+        tools.append(
+            _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
+        )
+    return tools
+
+
+def command_from_args(verb: str, args: dict, schema: dict | None) -> str:
+    """Reassemble a raw command string from a per-action tool call's arguments.
+
+    An undeclared action carries a single free-text ``arguments`` slot, so the
+    command is just ``"<verb> <arguments>"``. A declared ``ARGUMENTS_SCHEMA``
+    lists its slots in order; each present value is appended after its optional
+    ``connector`` word, so ``{"target": "player", "weapon": "club"}`` on an attack
+    whose weapon slot declares connector ``"with"`` assembles ``"attack player
+    with club"``. The parser's matchers then resolve those names to entities
+    exactly as for typed human input -- and the precondition gate still decides."""
+    if not schema:
+        rest = (args.get("arguments") or "").strip()
+        return f"{verb} {rest}".strip()
+    parts = [verb]
+    for slot_name, slot in schema.items():
+        value = args.get(slot_name)
+        if value is None or value == "":
+            continue
+        connector = slot.get("connector")
+        if connector:
+            parts.append(str(connector))
+        parts.append(str(value))
+    return " ".join(parts).strip()
+
+
+def command_from_tool_call(name: str, args: dict, parser) -> str:
+    """Turn a single tool call into a raw command string for the parser.
+
+    Backward-compatible with the single ``choose_action`` tool -- where the verb
+    rides in ``args['action']`` and the rest is free text -- and with the #356
+    per-action tools, where the verb IS the tool name and the slots come from the
+    action's ``ARGUMENTS_SCHEMA``. Either shape becomes a command string routed
+    through the same precondition gate; schemas only shrink the space of invalid
+    *phrasings*, never the gate's authority over invalid *acts*."""
+    if name == "choose_action":
+        verb = (args.get("action") or "").strip()
+        return command_from_args(verb, args, None)
+    action = parser.actions.get(name) if parser is not None else None
+    schema = getattr(action, "ARGUMENTS_SCHEMA", None) if action is not None else None
+    return command_from_args(name, args, schema)
 
 
 def _parse_decision(
@@ -673,7 +850,12 @@ def _decide_and_route_loop(
     agent.last_duration = None
     mem = getattr(agent, "memory", None)
     turn = getattr(game, "turn", 0)
-    tool = build_choose_action_tool(agent.action_names)
+    # Per-action tools (issue #356): one tool per verb the agent may choose,
+    # typed and scope-narrowed to this actor. Fall back to the single
+    # choose_action tool only if the registry yields nothing (a degenerate game).
+    tools = tools_for(game.parser, actor=character, names=agent.action_names)
+    if not tools:
+        tools = [build_choose_action_tool(agent.action_names)]
     messages = [
         {"role": Role.SYSTEM, "content": agent._structured_system_message()},
         {"role": Role.USER, "content": observation},
@@ -683,9 +865,9 @@ def _decide_and_route_loop(
     def execute(name, args):
         state["calls"] += 1
         agent.last_reasoning = (args.get("reasoning") or "").strip() or None
-        action = (args.get("action") or "").strip()
-        arguments = (args.get("arguments") or "").strip()
-        command = f"{action} {arguments}".strip()
+        # `name` is the verb for a per-action tool, or "choose_action" for the
+        # fallback; command_from_tool_call handles both and assembles the string.
+        command = command_from_tool_call(name, args, game.parser)
         if not command:
             # The model called the tool but named no action: nothing to route.
             # Terminal (no retry) so the loop ends, mirroring decide()'s "no
@@ -723,7 +905,7 @@ def _decide_and_route_loop(
     run_tool_loop(
         agent.llm_client,
         messages,
-        [tool],
+        tools,
         execute,
         max_rounds=max_rounds,
         tool_choice="any",
