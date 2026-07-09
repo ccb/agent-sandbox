@@ -47,7 +47,7 @@ rename, remove, or re-wire a template.**
 | Template | Rendered by | Used for |
 | --- | --- | --- |
 | `plan_memory.prompty` | `cognition.py` — `attach_agents()` | The day's PLAN memory seeded onto each persona at t=0: `Plan: go to <destination> and <activity>.`, plus `Today's stops: <itinerary>.` when the whole-day itinerary is given (#83). |
-| `reflection.prompty` | `cognition.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I did "<command>".` |
+| `reflection.prompty` | `cognition.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I drank the <item>.` (with a sick variant when drinking contaminated water, #300) / `I did "<command>".` |
 | `spatial_knowledge.prompty` | `seed.py` — `seed_spatial_knowledge()` | One place a persona knows up front (a Belief): `You know <place> — its <areas>.` / `You know <place>.` |
 | `plan_system.prompty` | `planner.py` — `LLMPlanner._call()` (day / hourly / minute / revise) | **Real model prompt.** System message for the optional LLM daily planner (#83): plan one day in character. The per-level user message is assembled in code. |
 

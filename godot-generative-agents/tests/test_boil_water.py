@@ -184,3 +184,42 @@ def test_action_names_include_authored_verbs():
     game, chars = build_world(None, personas, LOCATIONS)
     attach_agents(chars, personas)
     assert chars["Testa"].agent.action_names == ["travel", "perform", "drink", "get"]
+
+
+# -- remember_outcome memory branching (#300) --------------------------------
+
+from backend.smallville_agents import memory_stream_for_persona, remember_outcome
+
+
+def _attached_char():
+    personas = _normalize_personas([_commands_persona()])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    return chars["Testa"]
+
+
+def test_sick_drink_is_remembered_at_high_importance():
+    char = _attached_char()
+    char.set_property("is_sick", True)  # DrinkPenn set this during apply_effects
+    remember_outcome(char, "drink cup of murky water", 7)
+    entries = memory_stream_for_persona(char.agent)
+    sick = [e for e in entries if "terribly sick" in e["text"]]
+    assert sick, f"no sick memory in {[e['text'] for e in entries]}"
+    assert sick[-1]["importance"] == 8.0
+    assert "I drank the cup of murky water" in sick[-1]["text"]
+
+
+def test_clean_drink_is_remembered_at_normal_importance():
+    char = _attached_char()
+    remember_outcome(char, "drink cup of murky water", 7)
+    entries = memory_stream_for_persona(char.agent)
+    drank = [e for e in entries if e["text"] == "I drank the cup of murky water."]
+    assert drank and drank[-1]["importance"] == 2.0
+
+
+def test_get_is_remembered_at_normal_importance():
+    char = _attached_char()
+    remember_outcome(char, "get pot", 3)
+    entries = memory_stream_for_persona(char.agent)
+    got = [e for e in entries if e["text"] == 'I did "get pot".']
+    assert got and got[-1]["importance"] == 2.0
