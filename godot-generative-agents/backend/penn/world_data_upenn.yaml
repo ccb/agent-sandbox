@@ -238,6 +238,9 @@ personas:
     steps: 60
   - place: Houston Hall
     activity: meeting friends for dinner
+    commands:
+    - get cup of murky water
+    - drink cup of murky water
 
 locations:
 - name: Penn campus
