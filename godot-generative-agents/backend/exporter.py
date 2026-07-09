@@ -101,6 +101,8 @@ def write_simulation(
     ``simulate(out_events=...)``) is the run's engine event log (issue #467);
     we write it to ``events.json`` so post-hoc metrics (#299) can count events
     and their causes from the run record alone.
+
+    Returns the sim folder path.
     """
     sim_dir = os.path.join(storage_root, sim_code)
     movement_dir = os.path.join(sim_dir, "movement")

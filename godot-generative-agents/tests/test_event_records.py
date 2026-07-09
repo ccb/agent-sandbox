@@ -8,7 +8,17 @@ feed's rows additionally carry ``kind: "game_event"`` (see serve_penn's
 
 import datetime
 import json
+import os
 import sys
+from pathlib import Path
+
+# The Penn sim modules live in the Godot tree and are run as scripts (no
+# package); tests import them the way the scripts import each other -- off the
+# sim directory itself.
+_SIM_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
+sys.path.insert(0, str(_SIM_DIR))
 
 from backend.build_world import _normalize_personas, build_world
 from backend.exporter import write_simulation
@@ -81,8 +91,6 @@ def test_penn_replay_bake_writes_events_key(tmp_path, monkeypatch):
     event log as a top-level ``events`` array (empty is fine for a short
     run — presence and shape are the contract; the sickness *content* is
     pinned at the simulate() seam above)."""
-    import os
-
     # Add penn directory to sys.path so generate_penn_replay can import penn_world
     penn_dir = os.path.join(os.path.dirname(__file__), "..", "backend", "penn")
     monkeypatch.syspath_prepend(penn_dir)

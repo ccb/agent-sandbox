@@ -314,4 +314,8 @@ def test_drain_events_is_empty_without_a_monitor(monkeypatch):
     # Without a monitor there are no llm_call records, but game_events may exist.
     llm_calls = [ev for ev in events if ev["kind"] == "llm_call"]
     assert llm_calls == []  # no monitor means no llm_call rows
-    # game_event rows are OK -- they come from game.events, not the monitor.
+    # Without a monitor the only rows are engine game_events (#467), each the
+    # EventState shape re-stamped with kind.
+    for row in events:
+        assert row["kind"] == "game_event"
+        assert set(row) == {"turn", "actor", "action", "summary", "payload", "kind"}
