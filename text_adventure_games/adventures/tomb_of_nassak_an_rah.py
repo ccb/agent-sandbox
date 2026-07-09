@@ -1843,6 +1843,13 @@ def build_game(seed=None):
     )
     for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
         jackal_pack.add_alias(_a)
+    # A PACK does not drop to one swing (the vigor system, CCB): three blows
+    # thin it to nothing.
+    jackal_pack.set_property("vigor", 3)
+    jackal_pack.set_property(
+        "struck_text",
+        "The blow lands; the pack gives ground snarling, thinner by one.",
+    )
     den.add_character(jackal_pack)
 
     # The Fungal Horror -- the boss (design doc §17.3). It lives coiled in the
@@ -1860,13 +1867,15 @@ def build_game(seed=None):
     )
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
-    horror.set_property("vigor", 5)
     horror.set_property("no_catch", True)  # a coil has no hands
+    horror.set_property("vigor", 5)
     horror.set_property(
-        "ko_text",
-        "The blow lands true, and the mass folds around the blade's path "
-        "without falling.",
+        "struck_text",
+        "The blade opens a rent in the orange mass; it seethes, and does " "not fall.",
     )
+    # The engine prints ko_text on the FINAL blow, just before the death
+    # trigger converts the knockout into the end it really is.
+    horror.set_property("ko_text", "The last rent does not close.")
     den.add_character(horror)
 
     # The glass centipede (source: "lying in ambush in the fungal chimney" --
@@ -2109,6 +2118,13 @@ def build_game(seed=None):
     ulfire_lantern.set_property(Property.FLAMMABLE, True)
     ulfire_lantern.add_alias("lantern")
     silas.add_to_inventory(ulfire_lantern)
+    # A synth takes some breaking (vigor 2).
+    silas.set_property("vigor", 2)
+    silas.set_property(
+        "struck_text",
+        "Silas takes the blow with synthetic patience; something inside him "
+        "ticks, recalibrates, and holds.",
+    )
     memory.add_character(silas)
 
     # The crystal seal bars the stair up from the Canopic hall until both jars are
@@ -3217,32 +3233,17 @@ def build_game(seed=None):
             )
         g.parser.ok(msg)
 
-    # Striking the Horror: a weapon hit costs it one vigor, visibly.
+    # Striking the Horror: the ENGINE's vigor system (actions/fight.py) does
+    # the arithmetic now -- vigor 5, struck_text per blow. This trigger only
+    # converts the FINAL blow's knockout into the death it really is, before
+    # _horror_turn could let a "senseless" Horror knit.
     def _struck_horror(g):
-        # The event summary is the raw command ("attack horror with blade"),
-        # so match any of the thing's names.
-        return any(
-            e.actor == g.player.name
-            and e.action == "attack"
-            and any(
-                a in (e.summary or "").lower()
-                for a in ("fungal horror", "horror", "mass")
-            )
-            for e in g.events[g._round_event_start :]
-        ) and not horror.get_property("is_dead")
+        return horror.get_property("is_unconscious") and not horror.get_property(
+            "is_dead"
+        )
 
     def _horror_struck(g):
-        # Undo the engine's one-hit KO; convert it into a point of vigor.
-        horror.set_property("is_unconscious", False)
-        vigor = int(horror.get_property("vigor") or 0) - 1
-        horror.set_property("vigor", vigor)
-        if vigor <= 0:
-            _horror_dies(g)
-            return
-        g.parser.ok(
-            "The blade opens a rent in the orange mass; it seethes, and does "
-            "not fall."
-        )
+        _horror_dies(g)
 
     game.add_trigger("horror_struck", _struck_horror, _horror_struck, repeatable=True)
 
