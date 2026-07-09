@@ -455,15 +455,12 @@ def test_sustained_noise_brings_the_pack_who_growl_then_maul():
     _embark(game, glowstone=False)
     game.do_command("sneak north")  # -> Hall of Youth (dark, quiet)
     game.do_command("sneak north")  # -> Hall of Memory (no Spawn here)
-    game.do_command("say hey")  # yipping, distant
-    game.do_command("say hey")  # yipping, nearer
-    game.do_command("say hey")  # yellow eyes
+    game.do_command("say hey")  # a shout AND the song it wakes: +2
     assert not game.player.wounds
-    game.do_command("say hey")  # the pack enters and growls
+    game.do_command("say hey")  # +2 again: the pack enters
     hall = game.locations["Hall of Memory"]
     assert "jackal pack" in hall.characters
-    assert "growls" in " ".join(cap.texts(Channel.NARRATION)).lower()
-    assert not game.player.wounds  # the growl round is grace
+    assert not game.player.wounds  # the entry round is grace
     game.do_command("wait")  # neither fed nor fled -> mauled
     assert game.player.wound_slots() == 2  # Cracked Skull
     assert not game.is_game_over()
@@ -485,15 +482,15 @@ def test_feeding_the_pack_buys_them_off():
         "north",
         "say hey",
         "say hey",
-        "say hey",
-        "say hey",
     ):
         game.do_command(cmd)
     hall = game.locations["Hall of Memory"]
     assert "jackal pack" in hall.characters
+    wounds_before = game.player.wound_slots()
     game.do_command("give dates to jackals")
     assert "jackal pack" not in hall.characters  # gone with the goods
-    assert not game.player.wounds
+    game.do_command("wait")
+    assert game.player.wound_slots() == wounds_before  # sated: no more mauls
     out = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "terrible courtesy" in out
     game.do_command("say hey")  # the fed pack forgets you a while
@@ -687,6 +684,7 @@ def test_venting_the_orange_cylinder_sears_unmasked_lungs():
 
 def test_a_respirator_makes_the_orange_cylinder_safe():
     game = _game()
+    _sate_pack(game)  # this test is about spores, not jackals
     cap = _texts(game)
     for cmd in (
         "north",
@@ -878,6 +876,7 @@ def test_drinking_water_mends_a_wound():
 
 def test_overloaded_scavenger_cannot_make_the_climb():
     game = _game()
+    _sate_pack(game)  # this test is about slots, not jackals
     cap = _texts(game)
     # Greed: haul all the cargo out of the hold, then try the tomb face.
     for cmd in (
@@ -1203,6 +1202,13 @@ def test_burning_the_root_mid_fight_fells_the_horror():
     assert "manifold box" in sphere.items
 
 
+def _sate_pack(game):
+    """Deep post-feed grace: for tests about other mechanics entirely, whose
+    noise would now ring the song and summon the pack mid-setup."""
+    for hall in ("Hall of Memory", "Hall of Hounds", "Hall of Warriors"):
+        game.locations[hall].set_property(f"_jk:{hall}", -99)
+
+
 def _summon_pack(game):
     """Quietly reach Memory, then shout the pack into the room."""
     _no_spawn(game)
@@ -1210,10 +1216,8 @@ def _summon_pack(game):
     for cmd in (
         "sneak north",
         "sneak north",
-        "say hey",
-        "say hey",
-        "say hey",
-        "say hey",
+        "say hey",  # the shout AND the song it wakes: +2
+        "say hey",  # +2 again -- the pack enters (and grants its grace round)
     ):
         game.do_command(cmd)
     assert game.characters["jackal pack"].location.name == "Hall of Memory"
