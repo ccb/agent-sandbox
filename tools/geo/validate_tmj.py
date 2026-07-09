@@ -521,35 +521,46 @@ class Checker:
 
     COLLISION_TOLERANCE = 0.60  # share of wall-drawn cells left walkable before we warn
 
-    # NOTE: this check reads from the `buildings` layer, which add_entrances zeroes
-    # out over every opened/furnished building.  On a fully-processed map `drawn`
-    # will be 0 and the check is a no-op.  A version that reads individual
-    # `*_walls` layers instead is a possible future refinement.
+    def _wall_cells(self) -> tuple[set[int], str]:
+        """Indices of cells drawn as walls, and where they came from.
+
+        The per-building ``*_walls`` layers are the truth on the real map: once
+        ``add_entrances`` opens a building it zeroes that building's footprint in
+        the ``buildings`` layer, so the old ``buildings``-only read found nothing
+        and the collision check was a silent no-op (issue #391). We union every
+        ``*_walls`` layer instead. The legacy ``buildings`` layer is kept only as
+        a fallback for maps/fixtures that predate the split (no ``*_walls`` at
+        all), so synthetic tests still exercise the tolerance logic."""
+        wall_layers = [n for n in self.w.tile_layers if n.endswith("_walls")]
+        if wall_layers:
+            cells: set[int] = set()
+            for name in wall_layers:
+                data = self.w.tile_layers[name].get("data", [])
+                cells.update(i for i, tile in enumerate(data) if tile)
+            return cells, "*_walls layers"
+        buildings = self.w.tile_layers.get("buildings", {}).get("data", [])
+        return {i for i, tile in enumerate(buildings) if tile}, "buildings layer"
+
     def check_collision_vs_walls(self):
-        buildings = self.w.tile_layers.get("buildings", {}).get(
-            "data", [0] * len(self.w.collision)
-        )
+        cells, source = self._wall_cells()
         names = sector_name_by_id(self.w)
-        drawn = walkable = 0
+        walkable = 0
         per_sector = defaultdict(lambda: [0, 0])  # sid -> [drawn, walkable]
-        for i, tile in enumerate(buildings):
-            if not tile:
-                continue
-            drawn += 1
+        for i in cells:
             sid = self.w.sector[i]
             per_sector[sid][0] += 1
             if self.w.collision[i] == "0":
                 walkable += 1
                 per_sector[sid][1] += 1
+        drawn = len(cells)
         if drawn == 0:
             self.add(
                 "info",
                 "MATRIX_TMJ",
                 "",
                 "collision_walls_ok",
-                "no roofed cells in the `buildings` layer to check "
-                "(buildings are opened; walls live in per-building `*_walls` layers) "
-                "— collision check was a no-op",
+                "no wall-drawn cells to check (no `*_walls` layers and an empty "
+                "`buildings` layer) — collision check was a no-op",
             )
             return
         warned = False
@@ -571,7 +582,7 @@ class Checker:
                 "",
                 "collision_walls_ok",
                 f"wall-drawn cells largely stay solid in collision_maze "
-                f"({walkable}/{drawn} walkable overall)",
+                f"({walkable}/{drawn} walkable overall, from {source})",
             )
 
     def check_furniture_solidity(self):
