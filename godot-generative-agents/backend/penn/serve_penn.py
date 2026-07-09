@@ -465,6 +465,10 @@ class PennStepper:
           drain (#467), ``to_primitive()`` dicts (the #305 EventState shape,
           identical to what the replay bake persists), e.g. the boil-water
           ``sickness`` events (#465).
+
+        Assumes a finishing tick (``tick()`` -> ``None``) logs no new
+        GameEvents -- backend.live drops drained rows for ``None`` ticks,
+        same as llm_call rows since #398.
         """
         rows = []
         if self.monitor is not None:

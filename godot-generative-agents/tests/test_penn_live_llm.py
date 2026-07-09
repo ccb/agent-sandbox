@@ -305,7 +305,7 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
     assert all_drained == []  # drained means drained
 
 
-def test_drain_events_is_empty_without_a_monitor(monkeypatch):
+def test_drain_events_has_no_llm_rows_without_a_monitor(monkeypatch):
     # --no-monitor: the monitor keeps nothing, but drain_events still returns
     # any GameEvents logged during the tick (#467).
     stepper = _llm_stepper(monkeypatch)
