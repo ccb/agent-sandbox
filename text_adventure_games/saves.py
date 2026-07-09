@@ -90,6 +90,9 @@ class MemorySaveStore:
     def write(self, slot: str, blob: dict) -> None:
         self._slots[str(slot)] = blob
 
+    def clear(self, slot: str) -> None:
+        self._slots.pop(str(slot), None)
+
     def list(self) -> dict:
         return {s: b.get("meta", {}) for s, b in self._slots.items()}
 
@@ -115,6 +118,12 @@ class FileSaveStore:
         data[str(slot)] = blob
         with open(self.path, "w") as fh:
             json.dump(data, fh, indent=1)
+
+    def clear(self, slot: str) -> None:
+        data = self._load()
+        if data.pop(str(slot), None) is not None:
+            with open(self.path, "w") as fh:
+                json.dump(data, fh, indent=1)
 
     def list(self) -> dict:
         return {s: b.get("meta", {}) for s, b in self._load().items()}
