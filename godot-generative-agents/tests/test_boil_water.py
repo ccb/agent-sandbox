@@ -3,6 +3,8 @@
 Spec: godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md
 """
 
+import pytest
+
 from backend.build_world import _normalize_personas, build_world
 from backend.actions import DrinkPenn, Activate, Deactivate
 from text_adventure_games.enums import Property
@@ -218,6 +220,50 @@ def test_action_names_include_authored_verbs():
     assert chars["Testa"].agent.action_names == ["travel", "perform", "drink", "get"]
 
 
+# -- extra_action_names: Penn's real-brain verb set (spec §3, final review) --
+
+PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate"]
+
+
+def test_extra_action_names_yields_penn_verb_set_with_authored_commands():
+    """A commands-bearing persona (authoring "get"/"drink") plus the Penn
+    extra_action_names must yield exactly the spec §3 verb set, with no
+    duplicates -- "get"/"drink" appear once even though both the authored
+    commands and extra_action_names name them."""
+    personas = _normalize_personas([_commands_persona()])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, extra_action_names=PENN_ACTION_VERBS)
+    assert chars["Testa"].agent.action_names == [
+        "travel",
+        "perform",
+        "get",
+        "drink",
+        "activate",
+        "deactivate",
+    ]
+
+
+def test_extra_action_names_yields_penn_verb_set_without_authored_commands():
+    """Even a persona with NO authored commands (a non-Sofia persona) must get
+    the full real-brain verb set when extra_action_names is passed -- this is
+    the bug the final review caught: a real LLM brain has a closed action
+    enum, so it could never choose "get"/"drink"/"activate"/"deactivate"
+    without them being handed in explicitly."""
+    personas = _normalize_personas(
+        [_persona([{"place": "Union", "activity": "hanging out", "steps": 5}])]
+    )
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, extra_action_names=PENN_ACTION_VERBS)
+    assert chars["Testa"].agent.action_names == [
+        "travel",
+        "perform",
+        "get",
+        "drink",
+        "activate",
+        "deactivate",
+    ]
+
+
 # -- remember_outcome memory branching (#300) --------------------------------
 
 from backend.smallville_agents import memory_stream_for_persona, remember_outcome
@@ -232,13 +278,35 @@ def _attached_char():
 
 def test_sick_drink_is_remembered_at_high_importance():
     char = _attached_char()
-    char.set_property("is_sick", True)  # DrinkPenn set this during apply_effects
+    # DrinkPenn sets both during apply_effects: is_sick (ongoing state) and
+    # just_sickened (one-shot transition marker remember_outcome keys off).
+    char.set_property("is_sick", True)
+    char.set_property("just_sickened", True)
     remember_outcome(char, "drink cup of murky water", 7)
     entries = memory_stream_for_persona(char.agent)
     sick = [e for e in entries if "terribly sick" in e["text"]]
     assert sick, f"no sick memory in {[e['text'] for e in entries]}"
     assert sick[-1]["importance"] == 8.0
     assert "I drank the cup of murky water" in sick[-1]["text"]
+    # The one-shot marker is consumed so a later clean drink doesn't reuse it.
+    assert char.get_property("just_sickened") is False
+
+
+def test_clean_drink_while_still_sick_stays_normal_importance():
+    """Fix #2 (final review): a still-sick agent drinking a CLEAN liquid must
+    not misattribute "terribly sick" to this drink -- remember_outcome keys off
+    the one-shot just_sickened transition marker, not the ongoing is_sick
+    property, so a stale is_sick alone doesn't trigger the high-importance
+    memory."""
+    char = _attached_char()
+    char.set_property("is_sick", True)  # still sick from an earlier drink
+    # just_sickened is NOT set -- this drink itself didn't cause it.
+    remember_outcome(char, "drink cup of murky water", 7)
+    entries = memory_stream_for_persona(char.agent)
+    drank = [e for e in entries if e["text"] == "I drank the cup of murky water."]
+    assert drank, f"no normal drink memory in {[e['text'] for e in entries]}"
+    assert drank[-1]["importance"] == 2.0
+    assert not any("terribly sick" in e["text"] for e in entries)
 
 
 def test_clean_drink_is_remembered_at_normal_importance():
@@ -254,6 +322,22 @@ def test_get_is_remembered_at_normal_importance():
     remember_outcome(char, "get pot", 3)
     entries = memory_stream_for_persona(char.agent)
     got = [e for e in entries if e["text"] == 'I did "get pot".']
+    assert got and got[-1]["importance"] == 2.0
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["activate stove", "deactivate stove"],
+    ids=["activate", "deactivate"],
+)
+def test_device_verbs_are_remembered_at_normal_importance(command):
+    """Cheap coverage close (final review): activate/deactivate share the
+    "get"/quoted-fallback branch in remember_outcome -- pin both explicitly
+    alongside the existing "get" case."""
+    char = _attached_char()
+    remember_outcome(char, command, 3)
+    entries = memory_stream_for_persona(char.agent)
+    got = [e for e in entries if e["text"] == f'I did "{command}".']
     assert got and got[-1]["importance"] == 2.0
 
 

@@ -101,6 +101,11 @@ class DrinkPenn(consume.Drink):
         super().apply_effects()
         if self.item.get_property("is_contaminated"):
             self.character.set_property("is_sick", True)
+            # One-shot marker: this drink is what just sickened the character,
+            # as opposed to an already-sick character drinking something clean.
+            # Consumed (and cleared) by smallville_agents.remember_outcome so
+            # the high-importance memory attaches to the actual transition.
+            self.character.set_property("just_sickened", True)
             self.parser.ok(
                 f"{self.character.name.capitalize()} clutches their stomach -- "
                 "that water was foul."

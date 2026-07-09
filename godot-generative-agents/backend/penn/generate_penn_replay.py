@@ -36,6 +36,7 @@ from backend.cognition import DEFAULT_VISION_R
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
+    PENN_ACTION_VERBS,
     SEC_PER_STEP,
     SIM_START,
     build_penn_world,
@@ -182,6 +183,7 @@ def main() -> int:
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
         out_memories=memory_streams,
+        extra_action_names=PENN_ACTION_VERBS,
     )
 
     # Godot-friendly replay: meta + one entry per step per persona (see

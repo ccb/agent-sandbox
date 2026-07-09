@@ -46,6 +46,11 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # Upstreaming these into the engine library is #464.
 PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn]
 
+# The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
+# boil-water scenario wires in, on top of the base travel/perform. Handed to
+# attach_agents(extra_action_names=...) by every Penn entry point.
+PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate"]
+
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 
