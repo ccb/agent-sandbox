@@ -123,6 +123,8 @@ _LATTICE_MEMORIES = (
 def _lattice_look(g=None):
     """A different facet each look (callable examine_text; engine support in
     actions.things.Examine / Thing.sense_text)."""
+    if g is not None:
+        g.award("lattice", 5, "[+5 -- a dead king's days]")
     return (
         "Lazulite crystals knit across the walls, worn smooth at "
         "hand-height. A bank wakes at your attention and replays "
@@ -526,7 +528,7 @@ class Burn(actions.Action):
                     # the slow churn behind the glass goes still.
                     _sphere_quieted(self.game)
             self.parser.ok(message)
-            self.game.award("cleanse", 30, None)
+            self.game.award("horror", 25, "[+25 -- the Horror is ended]")
         elif target == "chimney":
             chimney_loc = self.game.locations["The Fungal Chimney"]
             chimney_loc.set_property("burned", True)
@@ -803,7 +805,6 @@ class PryCoffin(actions.Action):
             + ". The blade is done."
         )
         _sphere_aftermath(self.game, ash=False)
-        self.game.award("exotica", 30, None)
 
 
 class Butcher(actions.Action):
@@ -2034,6 +2035,7 @@ def build_game(seed=None):
     )
 
     def _silas_talk(g):
+        g.award("silas", 5, "[+5 -- the archivist's acquaintance]")
         # With a living spawn in earshot, Silas will not perform the lecture.
         for name in ("spawn of guts", "spawn of brain"):
             sp = g.characters.get(name)
@@ -2219,7 +2221,7 @@ def build_game(seed=None):
             Butcher,
         ],
     )
-    game.max_score = 100
+    game.max_score = 115
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2869,6 +2871,29 @@ def build_game(seed=None):
 
     game.add_trigger("teamster_decamps", _teamster_spoken, _teamster_decamps)
 
+    # --- The point table's progress beats (CCB): the score is a progress
+    # bar, not a diploma -- small awards mark the expedition's firsts, and
+    # both victory routes reach the same 115.
+    _interior = (youth, memory, hounds, warriors, canopic, sphere, chimney)
+
+    def _score_beats(g):
+        inv = g.player.inventory
+        if g.player.location in _interior:
+            g.award("threshold", 5, "[+5 -- the threshold]")
+        if "waterskin" in inv:
+            g.award("water", 5, "[+5 -- an inheritance of water]")
+        if "falcon jar" in inv:
+            g.award("falcon_jar", 5, "[+5 -- the falcon jar]")
+        if "jackal jar" in inv:
+            g.award("jackal_jar", 5, "[+5 -- the jackal jar]")
+        if "synth-hunting dagger" in inv and "manifold box" in inv:
+            g.award("exotica", 10, "[+10 -- the Autarch's Exotica, both]")
+        stone = inv.get("glowstone")
+        if stone is not None and stone.get_property(Property.IS_LIT):
+            g.award("first_light", 5, "[+5 -- light, learned]")
+
+    game.add_trigger("score_beats", lambda g: True, _score_beats, repeatable=True)
+
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
         return (
@@ -3041,7 +3066,7 @@ def build_game(seed=None):
             "As the last jar settles onto its plinth, the crimson light steadies to "
             "white. The crystal seal sighs apart into motes, baring the stair up."
         )
-        g.award("seal", 20, None)
+        g.award("seal", 20, "[+20 -- the seal answers the jars]")
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
 
@@ -3094,6 +3119,7 @@ def build_game(seed=None):
                 f"The water does what water does in Vaarn. The {healed.name.lower()} "
                 "troubles you less; something knits."
             )
+            g.award("healed", 5, "[+5 -- water, spent wisely]")
         n = int(waterskin.get_property("portions") or 0)
         if n <= 0:
             waterskin.description = "an empty waterskin"
@@ -3201,6 +3227,7 @@ def build_game(seed=None):
 
     def _horror_dies(g, burned=False):
         horror.set_property("is_dead", True)
+        g.award("horror", 25, "[+25 -- the Horror is ended]")
         # The coil unclenches: the coffin's keeping is over.
         coffin_item = sphere.items.get("coffin")
         released = []
@@ -3508,7 +3535,7 @@ def build_game(seed=None):
     # Win: escape to the surface carrying both Exotica (the Dagger + the Box).
     def _escape(g):
         g.player.set_property("escaped", True)
-        g.award("escape", 20, None)
+        g.award("escape", 20, "[+20 -- out alive]")
         g.parser.ok(
             "You climb out into the phthalo sands. The dying sun stains the dunes "
             "red, the Autarch's Exotica heavy in your pack. You have plundered the "
@@ -3604,6 +3631,12 @@ WIN_WALKTHROUGH = [
     "take boots",
     "douse glowstone",
     "drop glowstone",  # the halls ahead light themselves
+    # The archivist's acquaintance and the dead king's days (the full-score
+    # detour: Memory is one quiet hall south, and the lattice lights itself).
+    "sneak south",
+    "talk to silas",
+    "x lattice",
+    "sneak north",
     "sneak east",
     "take gel",  # Hounds: gel
     "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
