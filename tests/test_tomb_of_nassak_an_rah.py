@@ -1354,6 +1354,33 @@ def test_the_whole_tomb_is_dark_without_a_light():
     assert "baboon-headed canopic jar" in " ".join(cap.texts(Channel.NARRATION))
 
 
+def test_the_canopic_hall_reads_its_own_progress():
+    """CCB: 'two stand empty' must not outlive the truth. The room tracks
+    occupancy, the per-plinth verdict, and the seal -- in the same round."""
+    game = _game()
+    canopic = game.locations["Hall of the Canopic Jars"]
+    game.relocate(game.player, canopic)
+    assert "two stand empty" in canopic.description
+    for spawn, jar in (
+        ("spawn of guts", "falcon jar"),
+        ("spawn of brain", "jackal jar"),
+    ):
+        it = game.characters[spawn].inventory[jar]
+        game.characters[spawn].remove_from_inventory(it)
+        game.player.add_to_inventory(it)
+    game.do_command("put falcon jar on falcon plinth")
+    assert "the fifth stands empty" in canopic.description
+    assert "One of the restored lights has turned white" in canopic.description
+    game.do_command("put jackal jar on jackal plinth")
+    assert "none stands empty" in canopic.description
+    assert "a red glitter remains on the treads" in canopic.description
+    assert "barred" not in canopic.description
+    # The listener leaves with the mantis jar.
+    game.do_command("take mantis jar")
+    game.do_command("wait")
+    assert "listening" not in canopic.description
+
+
 def test_the_plinths_read_true():
     """CCB: 'empty' only while empty -- and a plinth knows its own jar:
     the wrong jar reads crimson-unconvinced, the right one goes white."""
