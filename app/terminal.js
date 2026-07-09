@@ -335,7 +335,8 @@ function openInventory() {
 }
 
 function mapLayout(nodes, edges, here) {
-  // Columns by BFS depth from the current room: small graph, honest shape.
+  // PORTRAIT layout (the panel is tall and narrow): BFS depth from the
+  // current room grows DOWNWARD; rooms at the same depth sit side by side.
   const adj = new Map(nodes.map((n) => [n, []]));
   for (const e of edges) {
     adj.get(e.from)?.push(e.to);
@@ -350,13 +351,13 @@ function mapLayout(nodes, edges, here) {
     }
   }
   for (const n of nodes) if (!depth.has(n)) depth.set(n, 0);
-  const cols = new Map();
+  const rows = new Map();
   const pos = new Map();
   for (const n of nodes) {
     const d = depth.get(n);
-    const row = cols.get(d) ?? 0;
-    cols.set(d, row + 1);
-    pos.set(n, { x: 20 + d * 150, y: 26 + row * 52 });
+    const col = rows.get(d) ?? 0;
+    rows.set(d, col + 1);
+    pos.set(n, { x: 14 + col * 146, y: 24 + d * 78 });
   }
   return pos;
 }
@@ -366,11 +367,12 @@ function openMap() {
   const m = JSON.parse(api.panels()).map;
   panelMap.replaceChildren(el("h2", "", "THE EXPEDITION SO FAR"));
   const pos = mapLayout(m.nodes, m.edges, m.here);
-  const W = 20 + 150 * (Math.max(...[...pos.values()].map((p) => p.x - 20)) / 150 + 1);
-  const H = Math.max(...[...pos.values()].map((p) => p.y)) + 46;
+  const W = Math.max(...[...pos.values()].map((p) => p.x)) + 140;
+  const H = Math.max(...[...pos.values()].map((p) => p.y)) + 66;
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${Math.max(W, 320)} ${H}`);
+  svg.setAttribute("viewBox", `0 0 ${Math.max(W, 300)} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
   const sub = (name, attrs, cls) => {
     const q = document.createElementNS(NS, name);
     for (const [k, v] of Object.entries(attrs)) q.setAttribute(k, v);
@@ -385,10 +387,18 @@ function openMap() {
     const t = sub("text", { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 3 }, "map-label");
     t.textContent = e.dir;
   }
+  let stubTilt = -1;
   for (const st of m.stubs) {
     const a = center(st.from);
-    sub("line", { x1: a.x, y1: a.y + 10, x2: a.x + 26, y2: a.y + 30 }, "map-stub");
-    const t = sub("text", { x: a.x + 28, y: a.y + 38 }, "map-label");
+    stubTilt = -stubTilt; // alternate sides so stubs don't pile up
+    const dx = 34 * stubTilt;
+    sub("line", { x1: a.x, y1: a.y + 12, x2: a.x + dx, y2: a.y + 34 }, "map-stub");
+    const t = sub(
+      "text",
+      { x: a.x + dx + (stubTilt > 0 ? 2 : -2), y: a.y + 42 },
+      "map-label"
+    );
+    t.setAttribute("text-anchor", stubTilt > 0 ? "start" : "end");
     t.textContent = st.dir + "?";
   }
   for (const n of m.nodes) {
