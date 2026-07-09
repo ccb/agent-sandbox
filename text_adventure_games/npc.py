@@ -171,6 +171,22 @@ _JSON_TYPES = ("string", "integer", "number", "boolean")
 _MAX_SCOPE_ENUM = 20
 
 
+def _tool_name(verb: str) -> str:
+    """Sanitize a registry verb into a provider-valid tool name (issue #356).
+
+    Anthropic and OpenAI require tool names to match ``^[A-Za-z0-9_-]{1,64}$`` --
+    no spaces -- but multi-word verbs are keyed WITH spaces ("adopt goal", "ghost
+    touch", "take off"). Left as-is these would 400 the moment an agent runs on a
+    real key (the very mode #356 targets), even though the offline mock never
+    validates them. So each run of disallowed characters becomes ``_`` and the
+    result is length-capped. Registry keys never contain ``_`` themselves
+    (``action_name()`` strips it and explicit names use spaces), so
+    :func:`command_from_tool_call` recovers the original verb by matching the
+    registry key whose sanitized form equals the tool name."""
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", verb).strip("_")
+    return safe[:64] or "action"
+
+
 def _scope_enum(kind: str, parser, actor) -> list[str] | None:
     """In-scope entity names for a scope-category slot, or ``None`` when *kind*
     is a plain JSON type (not a scope category) or there's no actor to scope to.
@@ -235,7 +251,9 @@ def _build_action_tool(name, action, description, aliases, parser, actor, max_en
             "description": "the rest of the command, e.g. 'player with club'; '' if none",
         }
     return {
-        "name": name,
+        # Sanitized so multi-word verbs ("adopt goal") are valid provider tool
+        # names; command_from_tool_call recovers the registry verb from it.
+        "name": _tool_name(name),
         "description": desc,
         "parameters": {
             "type": "object",
@@ -320,9 +338,29 @@ def command_from_tool_call(name: str, args: dict, parser) -> str:
     if name == "choose_action":
         verb = (args.get("action") or "").strip()
         return command_from_args(verb, args, None)
-    action = parser.actions.get(name) if parser is not None else None
+    verb, action = _registry_verb(name, parser)
     schema = getattr(action, "ARGUMENTS_SCHEMA", None) if action is not None else None
-    return command_from_args(name, args, schema)
+    return command_from_args(verb, args, schema)
+
+
+def _registry_verb(tool_name: str, parser):
+    """Recover ``(verb, action)`` for a per-action tool name (issue #356).
+
+    The name may be a registry verb verbatim, or its sanitized form (see
+    :func:`_tool_name`) when the verb had spaces ("adopt_goal" for "adopt goal").
+    We match the registry key whose sanitized form equals *tool_name* so the
+    reassembled command uses the SPOKEN verb the parser routes on. Falls back to
+    ``(tool_name, None)`` when nothing matches, so an unregistered name still
+    assembles a best-effort command (the gate then rejects it)."""
+    if parser is None:
+        return tool_name, None
+    action = parser.actions.get(tool_name)
+    if action is not None:
+        return tool_name, action
+    for key, act in parser.actions.items():
+        if _tool_name(key) == tool_name:
+            return key, act
+    return tool_name, None
 
 
 def _parse_decision(
