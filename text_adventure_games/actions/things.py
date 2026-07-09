@@ -809,8 +809,9 @@ class Put(base.Action):
     def apply_effects(self):
         self.character.discard_item(self.item)
         self.holder.add_item(self.item)
+        verb = base.conjugate(self.character, "put", "puts")
         self.parser.ok(
-            f"{self.character.name.capitalize()} puts the {self.item.name} "
+            f"{self.character.name.capitalize()} {verb} the {self.item.name} "
             f"{self.holder.preposition()} the {self.holder.name}."
         )
 
