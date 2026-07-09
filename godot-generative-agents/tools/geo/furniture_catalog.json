@@ -633,13 +633,13 @@
     },
     "stove": {
       "sheet": "franuka",
-      "col": 8,
-      "row": 24,
-      "w": 3,
+      "col": 6,
+      "row": 23,
+      "w": 1,
       "h": 2,
       "category": "furniture",
-      "label": "kitchen stove / oven with backsplash",
-      "verified": false
+      "label": "kitchen stove / oven, dark counter range",
+      "verified": true
     },
     "fireplace_unlit": {
       "sheet": "franuka",
@@ -769,7 +769,7 @@
       "h": 1,
       "category": "prop",
       "label": "small cooking pot",
-      "verified": false
+      "verified": true
     },
     "chest": {
       "sheet": "franuka",
