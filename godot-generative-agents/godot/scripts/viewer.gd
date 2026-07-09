@@ -216,6 +216,7 @@ var _reconnect_delay := 1.0         # doubles per failure, capped; reset on conn
 var _retry_pending := false
 var _handshake_http: HTTPRequest    # GET /live (its own node: HTTPRequest is one-shot)
 var _events_http: HTTPRequest       # GET /events backfill
+var _reset_http: HTTPRequest = null
 var _live_buildings := {}           # Focus-dropdown entries discovered so far (a set)
 var _backend_run_state := ""        # ""/waiting/running/paused/finished/stopped
 var _quitting := false              # window close in progress (shutdown then quit)
@@ -531,6 +532,21 @@ func _apply_meta(meta: Dictionary) -> void:
 		_minimap.add_agent(pname, _agents[pname]["node"], tint)
 
 
+func _spawn_from_meta(meta: Dictionary) -> void:
+	# Spawn the cast + hand the (by-reference) frame buffer to the heatmap and
+	# social graph, then seed the run monitor + clock. Shared by the initial live
+	# handshake and the reset-follow path (#393) so a reset spawns identically.
+	_apply_meta(meta)
+	# The heatmap holds _frames BY REFERENCE, so the live appends flow into it --
+	# same hand-off the baked path does, just with an empty array now.
+	_heatmap.set_replay(_frames, _names, _tile_px)
+	# Same by-reference hand-off for the social graph; its seed view is meaningful
+	# right away, before the first frame ever arrives.
+	_social_graph.set_replay(_frames, _names, _relationships)
+	_hud_source.set_cast(_names)
+	_update_clock()
+
+
 # --- Live-client mode (issue #263) -----------------------------------------
 
 
@@ -555,6 +571,9 @@ func _start_live() -> void:
 	_events_http = HTTPRequest.new()
 	add_child(_events_http)
 	_events_http.request_completed.connect(_on_events_completed)
+	_reset_http = HTTPRequest.new()
+	add_child(_reset_http)
+	_reset_http.request_completed.connect(_on_reset_meta_completed)
 	_request_handshake()
 
 
@@ -594,15 +613,7 @@ func _on_live_handshake_completed(
 
 	# Spawn the cast once (a handshake retry after a hiccup must not re-spawn).
 	if _names.is_empty():
-		_apply_meta(meta)
-		# The heatmap holds _frames BY REFERENCE, so the live appends flow into
-		# it -- same hand-off the baked path does, just with an empty array now.
-		_heatmap.set_replay(_frames, _names, _tile_px)
-		# Same by-reference hand-off for the social graph; its seed view is
-		# meaningful right away, before the first frame ever arrives.
-		_social_graph.set_replay(_frames, _names, _relationships)
-		_hud_source.set_cast(_names)
-		_update_clock()
+		_spawn_from_meta(meta)
 	_panel.set_live_status("catching up…")
 	# Seed the sidebar's Start/Stop toggle from the handshake. A backend booted
 	# with --start-paused (the --brain llm default) is armed but has never
@@ -733,10 +744,69 @@ func _on_live_status(record: Dictionary) -> void:
 			_set_backend_run_state("finished")
 			_panel.set_live_status("run finished (POST /reset for a new day)")
 		"reset":
-			_panel.set_live_status("backend reset — reload the viewer to follow the new run")
+			_reset_for_new_run()
 		"stopped":
 			_set_backend_run_state("stopped")
 			_panel.set_live_status("backend stopped")
+
+
+func _reset_for_new_run() -> void:
+	# The backend reset into a new day (POST /reset appended a reason:"reset"
+	# record). Follow it in place: re-fetch the new run's meta, then (in the
+	# callback) tear down the old cast/frames and respawn. _last_cursor and the
+	# open socket stay put, so new-run frames (cursor > the reset record) keep
+	# flowing into the freshly-cleared _frames from step 0.
+	_panel.set_live_status("backend reset — following the new run…")
+	var err := _reset_http.request("%s/live" % _live_url, _live_headers())
+	if err != OK and err != ERR_BUSY:
+		push_warning("penn_replay: reset /live request failed (%d); retrying" % err)
+		_schedule_retry(_reset_for_new_run)
+
+
+func _on_reset_meta_completed(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	if code != 200:
+		push_warning("penn_replay: reset GET /live returned HTTP %d; retrying" % code)
+		_schedule_retry(_reset_for_new_run)
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY:
+		_schedule_retry(_reset_for_new_run)
+		return
+	var meta: Variant = (data as Dictionary).get("meta")
+	if typeof(meta) != TYPE_DICTIONARY:
+		push_warning("penn_replay: reset handshake carried no meta; retrying")
+		_schedule_retry(_reset_for_new_run)
+		return
+	_teardown_cast()
+	_spawn_from_meta(meta as Dictionary)
+	# Re-run the catch-up door so the playhead jumps to the new run's head, exactly
+	# as the initial join does (?since=_last_cursor is overlap-safe).
+	_request_backfill()
+	_panel.set_live_status("following the new run")
+
+
+func _teardown_cast() -> void:
+	# Free the current cast and reset the per-run view so a fresh meta respawns
+	# cleanly. Release the camera BEFORE freeing its target -- stop_following()
+	# clears _tracked_name via the follow_stopped signal. _last_cursor and the
+	# socket are intentionally left untouched.
+	_camera.stop_following()
+	for name in _names:
+		_agents[name]["node"].queue_free()
+		_agents[name]["trail"].queue_free()  # trail is parented to _trails, not node
+	_agents.clear()
+	_names.clear()
+	_persona_detail.clear()
+	_relationships = []
+	_minimap.clear()
+	_panel.clear_characters()
+	_frames.clear()  # in place -- keeps the heatmap/social by-reference handoff valid
+	_live_buildings.clear()
+	_live_started = false
+	_t = 0.0
+	_last_status_step = -1
 
 
 func _set_backend_run_state(state: String) -> void:
