@@ -329,11 +329,29 @@ async function main() {
   } catch (e) { /* fresh expedition */ }
 
   applySettings();
+
+  // The title holds until the player asks for the tomb (CCB): warm-up done,
+  // show the invitation and wait for a tap or a key before the opening scene.
+  boottext.textContent =
+    "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition\n\n" +
+    "[ tap or press any key to begin ]";
+  boottext.classList.add("ready");
+  await new Promise((begin) => {
+    const go = () => {
+      document.removeEventListener("pointerdown", go);
+      document.removeEventListener("keydown", go);
+      begin();
+    };
+    document.addEventListener("pointerdown", go);
+    document.addEventListener("keydown", go);
+  });
+
   render(api.boot(seed));
   if (hasAuto) {
     print("(an unfinished expedition is on file -- type RESTORE AUTO to resume it)", "blocked", true);
   }
   bootscreen.classList.add("done");
+  ensureAudio();
   sounds.boot();
   cmd.focus();
 }
