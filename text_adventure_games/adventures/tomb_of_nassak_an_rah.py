@@ -835,7 +835,10 @@ class Butcher(actions.Action):
         if zoxen is None:
             self.parser.fail("There is nothing here to butcher.")
             return False
-        if not any("blade" in n or "dagger" in n for n in self.player.carried_items()):
+        if not any(
+            "blade" in n or "dagger" in n or it.get_property("edged")
+            for n, it in self.player.carried_items().items()
+        ):
             self.parser.fail(
                 "Butchery wants an edge. Your hands alone won't part zox hide."
             )
@@ -954,12 +957,29 @@ class TossCentipede(actions.Action):
             "the shattered remains of the glass centipede",
             "A spray of translucent chitin across the stones, glittering "
             "like a burst chandelier. The venom dries to nothing in the "
-            "open air.",
+            "open air. One long splinter of carapace survived the fall "
+            "whole -- edged like a surgeon's regret.",
         )
         remains.set_property("gettable", False)
         remains.add_alias("remains")
         remains.add_alias("shattered centipede")
         exterior.add_item(remains)
+        # The fall that kills it forges a knife (CCB): one splinter of
+        # carapace survives whole, and it takes an edge nothing metal does.
+        shard = things.Item(
+            "crystal shard",
+            "a long shard of glass carapace, edged like a knife",
+            "A hand-length splinter of the centipede's carapace, clear as "
+            "water and edged on both sides. It cuts the light just holding "
+            "it. A knife by any honest measure.",
+        )
+        shard.set_property("gettable", True)
+        shard.set_property("is_weapon", True)
+        shard.set_property(Property.WIELDABLE, True)
+        shard.set_property("edged", True)  # butchery accepts it
+        shard.add_alias("carapace shard")
+        shard.add_alias("glass knife")
+        exterior.add_item(shard)
 
 
 class CrystalSeal(blocks.Block):
