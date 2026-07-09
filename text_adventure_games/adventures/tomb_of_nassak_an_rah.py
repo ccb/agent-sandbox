@@ -2452,8 +2452,11 @@ def build_game(seed=None):
     _hazard(
         game,
         youth,
-        danger=lambda g: perception.carries_light(g.player)
-        or _player_was_loud_in(g, youth, _QUIET),
+        danger=lambda g: not youth.get_property("bats_flown")
+        and (youth.get_property("bats_feeding") or 0) <= 0
+        and (
+            perception.carries_light(g.player) or _player_was_loud_in(g, youth, _QUIET)
+        ),
         warns=(
             "The rustle overhead deepens. Grit sifts down through your light; "
             "the whole vault has begun, gently, to move.",
@@ -2461,6 +2464,144 @@ def build_game(seed=None):
         limit=2,  # one warning -- the bats' patience is short
         harm=_bat_maul,
     )
+
+    # --- Getting rid of the bats (CCB): THROW THE DATES ----------------------
+    # Fruit on the air empties the vault. Thrown in an interior room, the
+    # colony streams there, eats, and ROOSTS -- sated and harmless, and the
+    # Hall of Youth is only a room now. Thrown under open sky, they strip the
+    # dates, circle the tomb for ten turns, and disperse for good. Either way
+    # the dates are spent -- the same dates the jackals would take as tribute.
+    _outdoors = (wreck, exterior, summit)
+
+    def _dates_thrown(g):
+        # Thrown OR set down: food on the floor is food on the floor. The
+        # colony answers wherever the dates come to rest -- including one
+        # room over, for a scavenger who throws them through a doorway.
+        return not youth.get_property("bats_flown") and any(
+            e.actor == g.player.name
+            and e.action in ("throw", "drop")
+            and "date" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _bats_follow(g):
+        here = next(
+            (room for room in g.locations.values() if "crate of dates" in room.items),
+            None,
+        )
+        if here is None:
+            return  # still in hand (a failed throw); the colony stays
+        dates = here.items["crate of dates"]
+        if here is youth:
+            # Fed at home (CCB): the colony falls on the dates and cares
+            # about nothing else for five rounds -- a bought window to
+            # cross the vault, light and all. Then the dates are gone,
+            # and the ceiling resumes its opinions.
+            here.remove_item(dates)
+            youth.set_property("bats_feeding", 6)  # spawn round burns one
+            g.parser.ok(
+                "The ceiling DETACHES. The whole colony falls on the dates "
+                "in a boiling carpet of wings, and for the moment nothing "
+                "in this room cares about you at all."
+            )
+            return
+        youth.set_property("bats_flown", True)
+        here.remove_item(dates)  # stripped to the palm-fibre
+        ceiling.examine_text = (
+            "The vault overhead hangs bare, guano-scarred, and silent. "
+            "Whatever roosted here has followed its stomach elsewhere."
+        )
+        ceiling.perceptible_by(
+            perception.Sense.HEARING,
+            "Silence overhead -- true silence, the first this room has "
+            "held in centuries.",
+        )
+        if here in _outdoors:
+            # 11: the trigger pass on the toss round itself burns one tick,
+            # so the wheel turns ten full turns AFTER the dates land.
+            here.set_property("_bat_wheel", 11)
+            wheel = _scenery(
+                here,
+                "wheel of bats",
+                "a wheel of bats, circling overhead",
+                "Thousands of bats turn overhead in a slow black gyre, "
+                "drunk on dates and daylight, unsure what to do with "
+                "either.",
+            )
+            wheel.add_alias("bats")
+            g.parser.ok(
+                "The mouths of the tomb EXHALE -- a river of leather "
+                "pouring into the open air. The colony strips the dates in "
+                "one boiling knot, and then rises, and circles, a slow "
+                "black wheel over the tomb."
+            )
+        else:
+            roost = _scenery(
+                here,
+                "roost of bats",
+                "a fresh roost of bats, folded and sated",
+                "The ceiling here seethes gently now: the colony, moved in "
+                "and fed, packed wing to wing and fast asleep. They have "
+                "no further opinions about your light.",
+            )
+            roost.add_alias("bats")
+            g.parser.ok(
+                "A sound like a tide through the halls -- and the colony "
+                "arrives, a river of leather that breaks over the dates "
+                "and strips them to the palm-fibre. Then, gorged, they "
+                "climb the walls and fold themselves to sleep. The Hall "
+                "of Youth is only a room now."
+            )
+
+    game.add_trigger("bats_follow_dates", _dates_thrown, _bats_follow)
+
+    def _wheel_turning(g):
+        loc = next(
+            (r for r in _outdoors if (r.get_property("_bat_wheel") or 0) > 0),
+            None,
+        )
+        return loc is not None
+
+    def _wheel_tick(g):
+        for room in _outdoors:
+            n = room.get_property("_bat_wheel") or 0
+            if n <= 0:
+                continue
+            n -= 1
+            room.set_property("_bat_wheel", n)
+            if n == 0:
+                if "wheel of bats" in room.items:
+                    room.remove_item(room.items["wheel of bats"])
+                g.parser.ok(
+                    "Overhead, the wheel of bats thins, breaks, and "
+                    "scatters toward the horizon's molten line. The tomb "
+                    "has one tenant fewer."
+                    if g.player.location in _outdoors
+                    else "Somewhere above the stone, a long dry rustle "
+                    "fades to nothing."
+                )
+
+    game.add_trigger("bat_wheel", _wheel_turning, _wheel_tick, repeatable=True)
+
+    def _feeding(g):
+        return (youth.get_property("bats_feeding") or 0) > 0
+
+    def _feeding_tick(g):
+        n = (youth.get_property("bats_feeding") or 0) - 1
+        youth.set_property("bats_feeding", n)
+        if n == 0 and g.player.location is youth:
+            g.parser.ok(
+                "The last of the dates is gone. Gorged, the colony climbs "
+                "back into the vault, wing over wing -- and resumes its "
+                "opinion of light."
+            )
+        elif n == 0:
+            g.parser.ok(
+                "From the boy's mouth of the tomb, a long rustle: the "
+                "feast below is over, and the vault refills."
+            )
+
+    game.add_trigger("bats_feeding", _feeding, _feeding_tick, repeatable=True)
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).

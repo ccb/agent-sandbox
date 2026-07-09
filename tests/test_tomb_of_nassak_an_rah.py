@@ -1491,6 +1491,86 @@ def test_fire_scours_the_centipede_with_the_growth():
     assert game.characters["glass centipede"].get_property("is_dead")
 
 
+def test_the_bats_follow_the_dates_and_roost_indoors():
+    """CCB: toss the dates in an interior room and the colony streams there,
+    eats, and roosts -- sated; the Hall of Youth becomes just a room (safe
+    to light)."""
+    game = _game()
+    game.do_command("in")
+    game.do_command("open crates")
+    game.do_command("take dates")
+    game.do_command("out")
+    game.relocate(game.player, game.locations["Hall of Hounds"])
+    cap = _texts(game)
+    game.do_command("drop dates")
+    youth = game.locations["Hall of Youth"]
+    assert youth.get_property("bats_flown")
+    assert "roost of bats" in game.locations["Hall of Hounds"].items
+    assert "crate of dates" not in game.locations["Hall of Hounds"].items
+    assert "only a room now" in " ".join(cap.texts(Channel.NARRATION))
+    # The vault is safe to light.
+    merchant = game.locations["The Caravan Wreck"].items["dead merchant"]
+    stone = merchant.contents["glowstone"]
+    merchant.remove_item(stone)
+    game.player.add_to_inventory(stone)
+    game.relocate(game.player, youth)
+    game.do_command("light glowstone")
+    for _ in range(3):
+        game.do_command("wait")
+    assert not any(w.name == "Bat-Mauled" for w in game.player.wounds)
+
+
+def test_dates_in_the_bat_room_buy_five_safe_rounds():
+    """CCB: dropped in the Hall of Youth itself, the colony swarms the dates
+    -- five rounds of feeding during which nothing attacks, light or no
+    light. Then the dates are gone and the ceiling resumes its opinions."""
+    game = _game()
+    game.do_command("in")
+    game.do_command("open crates")
+    game.do_command("take dates")
+    game.do_command("out")
+    merchant = game.locations["The Caravan Wreck"].items["dead merchant"]
+    stone = merchant.contents["glowstone"]
+    merchant.remove_item(stone)
+    game.player.add_to_inventory(stone)
+    youth = game.locations["Hall of Youth"]
+    game.relocate(game.player, youth)
+    game.do_command("light glowstone")
+    cap = _texts(game)
+    game.do_command("drop dates")
+    assert "boiling carpet" in " ".join(cap.texts(Channel.NARRATION))
+    wounds = len(game.player.wounds)
+    for _ in range(5):
+        game.do_command("look")  # lit, loud-adjacent, and untouched
+    assert len(game.player.wounds) == wounds
+    assert not youth.get_property("bats_flown")  # fed at home, not gone
+    game.do_command("look")
+    game.do_command("look")  # the vault has refilled: warn, then maul
+    assert any(w.name == "Bat-Mauled" for w in game.player.wounds)
+    assert "resumes its opinion" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_the_bats_disperse_after_ten_turns_outdoors():
+    """CCB: tossed under open sky, the colony strips the dates, circles the
+    tomb for ten turns, and disperses for good."""
+    game = _game()
+    game.do_command("in")
+    game.do_command("open crates")
+    game.do_command("take dates")
+    game.do_command("out")
+    cap = _texts(game)
+    game.do_command("drop dates")  # at the wreck: open sky
+    wreck = game.player.location
+    assert "wheel of bats" in wreck.items
+    assert game.locations["Hall of Youth"].get_property("bats_flown")
+    for _ in range(9):
+        game.do_command("wait")
+    assert "wheel of bats" in wreck.items  # still turning at nine
+    game.do_command("wait")
+    assert "wheel of bats" not in wreck.items
+    assert "scatters toward the horizon" in " ".join(cap.texts(Channel.NARRATION))
+
+
 def test_carried_food_draws_the_denned_pack_by_scent():
     """CCB: anything edible carried within two rooms of the pack's ground
     pulls them out -- no noise required; salt meat is its own summons."""
