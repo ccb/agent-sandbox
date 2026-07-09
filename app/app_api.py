@@ -107,9 +107,19 @@ def _suggestions():
     scene = _game.perceive(_game.player)
     nouns = []
     if scene.sight >= Sight.CLEAR:
-        nouns += [i.name for i in loc.items.values() if not i.get_property("is_hidden")]
+        for i in loc.items.values():
+            if i.get_property("is_hidden"):
+                continue
+            nouns.append(i.name)
+            # What's visibly inside/on it -- accessible_contents is the
+            # engine's own no-spoiler seam (CCB): closed holders yield
+            # nothing, and hidden-until-SEARCH items stay off the bar
+            # until the search actually reveals them.
+            nouns += list(i.accessible_contents().keys())
         nouns += [c.name for c in loc.characters.values() if c is not _game.player]
-    nouns += list(_game.player.carried_items().keys())
+    for it in _game.player.carried_items().values():
+        nouns.append(it.name)
+        nouns += list(it.accessible_contents().keys())
     seen, deduped = set(), []
     for n in nouns:
         if n not in seen:
