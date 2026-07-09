@@ -10,7 +10,7 @@ that, each going through the engine's precondition gate like any built-in action
   character so the exporter can render it as the on-screen action label.
 """
 
-from text_adventure_games.actions import base
+from text_adventure_games.actions import base, consume
 
 
 class Travel(base.Action):
@@ -87,3 +87,30 @@ class Act(base.Action):
     def apply_effects(self):
         self.character.set_property("activity", self.activity)
         return self.parser.ok(f"{self.character.name} is {self.activity}.")
+
+
+class DrinkPenn(consume.Drink):
+    """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
+    liquid tagged ``is_contaminated`` sets ``is_sick`` on the drinker and logs a
+    ``sickness`` GameEvent -- the measurable motivation signal the self-coding
+    experiment (#299) needs. Registered with the same "drink" action name, so it
+    overrides the built-in for this game only. No cure exists in this world:
+    that gap is deliberate (see the spec; upstreaming tracked in #464)."""
+
+    def apply_effects(self):
+        super().apply_effects()
+        if self.item.get_property("is_contaminated"):
+            self.character.set_property("is_sick", True)
+            self.parser.ok(
+                f"{self.character.name.capitalize()} clutches their stomach -- "
+                "that water was foul."
+            )
+            self.game.log_event(
+                self.character.name,
+                "sickness",
+                summary=(f"{self.character.name} got sick drinking {self.item.name}"),
+                payload={
+                    "item": self.item.name,
+                    "location": getattr(self.character.location, "name", None),
+                },
+            )
