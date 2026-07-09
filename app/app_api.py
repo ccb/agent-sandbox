@@ -119,9 +119,69 @@ def _suggestions():
     }
 
 
+_visited = set()
+
+
+def _note_visited():
+    if _game.player.location is not None:
+        _visited.add(_game.player.location.name)
+
+
 def _payload():
+    _note_visited()
     return json.dumps(
         {"events": _events(), "status": _status(), "suggestions": _suggestions()}
+    )
+
+
+def panel_data():
+    """The swipe panels (design: CCB): the INVENTORY as structure, and the
+    MAP of explored rooms only -- nodes are rooms the player has stood in,
+    arcs are their connections labeled with the direction of travel, and an
+    exit into the unexplored shows as a stub to '?'. Replay-friendly: the
+    visited set rebuilds from the journal on restore (rooms are re-stood-in)."""
+    player = _game.player
+    inventory = {
+        "carried": [
+            {"name": it.name, "description": it.description}
+            for it in player.carried_items().values()
+        ],
+        "worn": [
+            {"name": it.name, "description": it.description}
+            for it in player.worn.values()
+        ],
+        "wounds": [
+            {"name": w.name, "slots": w.slots, "description": w.description}
+            for w in player.wounds
+        ],
+        "slots": (
+            f"{player.slots_used()}/{player.slot_capacity}"
+            if getattr(player, "slot_capacity", None)
+            else None
+        ),
+    }
+    here = player.location.name if player.location else None
+    nodes = sorted(_visited)
+    edges, stubs, seen_pairs = [], [], set()
+    for name in nodes:
+        room = _game.locations.get(name)
+        if room is None:
+            continue
+        for direction, dest in room.connections.items():
+            label = str(getattr(direction, "value", direction))
+            if dest.name in _visited:
+                pair = frozenset((name, dest.name))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                edges.append({"from": name, "to": dest.name, "dir": label})
+            else:
+                stubs.append({"from": name, "dir": label})
+    return json.dumps(
+        {
+            "inventory": inventory,
+            "map": {"here": here, "nodes": nodes, "edges": edges, "stubs": stubs},
+        }
     )
 
 
@@ -133,6 +193,7 @@ def boot(seed):
     _game.parser.set_renderer(_cap)
     _store = _make_store()
     _game.save_store = _store
+    _visited.clear()
     _game.parser.parse_command("look")
     return _payload()
 
@@ -146,6 +207,7 @@ def command(text):
         _game.pending_restore = None
         restored, drift = saves.restore(tomb.build_game, pending)
         _game = restored
+        _rebuild_visited()
         _cap = CaptureRenderer()
         _game.parser.set_renderer(_cap)
         _game.save_store = _store
@@ -165,6 +227,21 @@ def command(text):
         # backgrounding must never lose a turn (design §2).
         _store.write("auto", saves.snapshot(_game))
     return _payload()
+
+
+def _rebuild_visited():
+    """After a restore, recover the explored set by replaying the journal on
+    a scratch build (deterministic, quiet, milliseconds)."""
+    _visited.clear()
+    scratch = tomb.build_game(seed=_game.rng_seed)
+    _visited.add(scratch.player.location.name)
+    from text_adventure_games.reporting import CaptureRenderer as _CR
+
+    scratch.parser.set_renderer(_CR())
+    for cmd in _game.journal:
+        scratch.do_command(cmd)
+        if scratch.player.location is not None:
+            _visited.add(scratch.player.location.name)
 
 
 def transcript():
