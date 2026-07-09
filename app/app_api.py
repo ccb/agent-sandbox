@@ -66,6 +66,9 @@ class _LocalStorageStore:
     def write(self, slot, blob):
         self._ls.setItem(self.PREFIX + str(slot), json.dumps(blob))
 
+    def clear(self, slot):
+        self._ls.removeItem(self.PREFIX + str(slot))
+
     def list(self):
         out = {}
         for slot in saves.SLOTS:
@@ -198,9 +201,26 @@ def boot(seed):
     return _payload()
 
 
+RESTART_WORDS = {"restart", "reload", "new game", "start over", "begin anew"}
+
+
 def command(text):
-    """One player turn. Owns the RESTORE contract and the every-turn autosave."""
+    """One player turn. Owns the RESTORE contract, the every-turn autosave,
+    and RESTART (a fresh expedition -- new seed, new teamster; the autosave
+    is cleared so the title screen doesn't offer the dead past back)."""
     global _game, _cap
+    if str(text).strip().lower() in RESTART_WORDS:
+        import time
+
+        try:
+            _store.clear("auto")
+        except Exception:
+            pass
+        payload = boot(int(time.time()) % 1000000)
+        _game.parser.ok(
+            "The sand takes the old story. A new expedition stands at the " "wreck."
+        )
+        return _payload()
     _game.do_command(str(text))
     pending = getattr(_game, "pending_restore", None)
     if pending is not None:

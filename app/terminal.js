@@ -247,7 +247,7 @@ function render(payloadJson, opts = {}) {
   if (s.game_over) {
     if (!s.won) { haptic("death"); sounds.damage(); }
     print(s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***", "echo", instant);
-    print("(type RESTORE to return to a saved position, or reload to start over)", "blocked", instant);
+    print("(type RESTORE to return to a saved position, or RESTART to begin anew)", "blocked", instant);
   }
 }
 
