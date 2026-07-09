@@ -136,7 +136,14 @@ def test_restart_begins_a_fresh_expedition():
     app_api.boot(0)
     app_api.command("north")
     assert app_api._store.read("auto") is not None
-    payload = json.loads(app_api.command("restart"))
+    ask = json.loads(app_api.command("restart"))
+    assert any("(y / n)" in e["text"] for e in ask["events"])  # confirmed first
+    assert ask["status"]["turn"] == 1  # nothing lost yet
+    stay = json.loads(app_api.command("n"))
+    assert any("continues" in e["text"] for e in stay["events"])
+    assert stay["status"]["room"] == "Tomb Exterior"  # unharmed
+    app_api.command("restart")
+    payload = json.loads(app_api.command("y"))
     assert payload["status"]["turn"] == 0
     assert payload["status"]["room"] == "The Caravan Wreck"
     assert app_api._store.read("auto") is None
