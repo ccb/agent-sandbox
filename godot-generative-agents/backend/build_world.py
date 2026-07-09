@@ -17,6 +17,7 @@ from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
 
 from .actions import Act, Travel
+from .parser import PennParser
 from .tiled_game import TiledGame
 
 # The cast and locations come from a world YAML (e.g. ``penn/world_data_upenn.yaml``).
@@ -178,6 +179,9 @@ def build_world(
         turn_mode="simultaneous",
         world_map=world_map,
     )
+
+    # Wire up the custom parser that fixes "ate" false positives and adds device verbs
+    game.set_parser(PennParser(game))
 
     # Place each persona in their home location (Game only auto-places the player).
     for spec in personas:
