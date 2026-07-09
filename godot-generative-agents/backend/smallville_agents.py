@@ -557,7 +557,16 @@ def maybe_converse(
         if state[name]["performing"] and not state[name]["path"]
     ]
     happened = 0
+    # An agent can hold only one conversation per step. In a room of 3+ settled
+    # residents find_conversation_pairs reports every eligible pair, so the same
+    # agent shows up in several (A-B and A-C) -- the engine deliberately leaves
+    # the pick to the caller. Take a first-come matching: once someone has
+    # conversed this step, skip any later pair that includes them, so no agent
+    # double-writes its memory / chat frame in one tick (#187).
+    spoken: set[str] = set()
     for a, b in convo.find_conversation_pairs(game, settled):
+        if a.name in spoken or b.name in spoken:
+            continue
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
@@ -576,6 +585,7 @@ def maybe_converse(
             continue
         cooldowns[key] = step
         happened += 1
+        spoken.update((a.name, b.name))  # both are now busy for this step (#187)
         # The frontend renders chat as a list of [speaker, line] pairs (see
         # main_script.html), so hand it the whole transcript. It persists (like
         # desc/reasoning) on state until the agent's next conversation.
