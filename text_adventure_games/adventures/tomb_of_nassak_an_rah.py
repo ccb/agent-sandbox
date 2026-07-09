@@ -1399,8 +1399,8 @@ def build_game(seed=None):
         "over every seam with creeping orange fungus. Three faces are carved in "
         "it: westward, the dead Autarch as a young boy; eastward, a helmed "
         "warrior; far up, an old man turned to the sky, orange tendrils weeping "
-        "from his open mouth. Each mouth is a door. The wind has been reading "
-        "these faces for aeons and keeps its findings to itself.",
+        "from his open mouth. Each mouth is a door. Wind and sand have been "
+        "scoring these faces for ages, and yet they remain intact somehow.",
     )
     youth = things.Location(
         "Hall of Youth",
@@ -3140,7 +3140,8 @@ def build_game(seed=None):
         canopic.set_property("seal_open", True)
         g.parser.ok(
             "As the last jar settles onto its plinth, the crimson light steadies to "
-            "white. The crystal seal sighs apart into motes, baring the stair up."
+            "white. The crystal seal sighs apart into motes, unblocking the "
+            "stair: the way up stands open."
         )
         g.award("seal", 20, "[+20 -- the seal answers the jars]")
 
