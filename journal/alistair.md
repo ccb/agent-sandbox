@@ -4,6 +4,181 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-09
+
+**Focus:** issue hygiene — reconcile open issues against what's actually merged
+
+**Done today:**
+- Audited every open GitHub issue against the real codebase (on both `main` and `origin/godot-ga-main`) to find work that shipped but was never closed. Root cause: GitHub only auto-closes `Closes #N` on merges to the **default branch** (`main`), so everything that lands on the long-lived **`godot-ga-main`** branch stays open by default.
+- Closed **9** merged-but-open issues, each with a closing comment linking its PR + merge commit: **#346 / #347 / #369** (backend retrieval-probe / plan / intervention endpoints, PRs #403 / #404 / #405), **#395** (Cohen/Alumni geo arenas, #401), **#407** (post-#399 seeding-path regression, #414), **#187** (converse-once-per-step, #419), **#390** (CI geo drift gate, #421), **#391** (`validate_tmj` wall-collision check, #416), **#394** (viewer surfaces dropped `kind:"engine"` records, #418).
+- Left **#113** open (excluded by request) and left genuinely-unfinished issues open.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Keep the open backlog honest: the live-quality track (#366, #368, #370–#372), the tool-calling track (#354–#359), the Penn-aware LLM planner (#397), and the backend-persistence set (#304–#307) are still open and unclaimed.
+
+## 2026-07-07
+
+**Focus:** harden the live seam under test, add a persona inspector, and land the resilient LLM client on `main`
+
+**Done today:**
+- **PR #406** (#392): moved the backend test suite into `godot-generative-agents/tests`, dropped the dead Smallville path, and hardened the live seam (46 → 55 tests). The hard-won ones are deterministic, in-process reproductions of WebSocket close codes (1008 policy / 1009 too-big / 1011 internal — 1011 needs an *atomic* over-retention engine-event burst, not just "stop reading"), `/events` ring-buffer eviction, and the reset-vs-tick generation drop, plus `_GameProxy` coverage.
+- **PR #410** (#408): persona **"State Details" inspector** — a Godot-native modal (ⓘ button / `P` key) showing traits + cognition knobs + action decomposition. Smallville-only knobs degrade to "n/a" on the Penn cast; a shared `persona_meta_entry()` enriches `meta.personas` so replay and live both feed it.
+- **PR #412**: open the viewer **maximized-windowed** instead of borderless-fullscreen — you can see the OS chrome and alt-tab out.
+- **PR #411** (docs): a Godot viewer run note + two slash commands wrapping the two halves — **`/run-viewer`** (frontend) and **`/serve-backend`** (mock or real-LLM sim).
+- **PR #342** (#260, → `main`): resilient LLM client — retries with exponential backoff, a per-call timeout, and API-key preflight. Owns its own retry loop with the SDK pinned to `max_retries=0` so behavior is ours, not the vendor's.
+- Filed #407 (seeding-path regression from the #399 move), #408 (persona inspector), #409 (keep Smallville's t=0 seed data).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- The Penn-aware LLM planner (#397) to let the model plan the campus day; live-mode pacing polish (#372).
+
+## 2026-07-06
+
+**Focus:** put a real LLM in the driver's seat — Claude Haiku walks the Penn cast end to end
+
+**Done today:**
+- **PR #396** (#261): the **live-LLM MVP** — Claude Haiku drives a 3-agent Penn cast end to end. A `llm:` block in the sim config declares the model; a per-request monitor streams one formatted line per LLM call to the terminal, the viewer HUD, and the web companion; a **budget gate** and a **Start gate** mean the sim doesn't run (or spend) until the viewer says go; closing the viewer shuts the backend down; loads a repo-root `.env`. Parked 4 of 7 personas for the MVP and added an icon toolbar to the sidebar. Real-key smoke verified.
+- **PR #373** (#264): the **run-monitor HUD** — cost meter, backend health light, and an emergency stop.
+- **PR #400** (#399): a **landing menu** + a backend/web/godot restructure — the game now opens to a menu where you pick a bundled replay (with a local-file picker) or point at a live backend URL, instead of hard-wiring one path.
+- Filed the follow-up set: CI geo drift gate (#390), `validate_tmj` wall-collision fix (#391), live-seam test hardening (#392), viewer reset-follow (#393), engine-feed records (#394), Cohen/Alumni geo arenas (#395), a Penn-aware planner (#397), and streaming the per-request monitor to viewers (#398).
+
+**Blockers / questions:**
+- none — the MVP runs on real keys. Cost/latency is the next frontier (see the #366–#372 track).
+
+**Next:**
+- Land the live-seam hardening (#392) and the persona inspector (#408); then the LLM planner (#397).
+
+## 2026-07-05
+
+**Focus:** build the live seam — a self-stepping backend and a viewer that follows it live
+
+**Done today:**
+- **PR #343** (#298, #344, #345, #348): the backend **agent-read family** — roster (`GET /agents`), memory with incremental fetch (`since_turn` / `kind` / `limit`), and knowledge/beliefs.
+- **PR #379** (#349, #262): backend **live mode** — a self-stepping loop (mock brain first, no LLM), a change feed that's WebSocket-push + HTTP catch-up, run-control endpoints, and usage reporting.
+- **PR #380** (#263, #297): Godot **live-client mode** — the viewer follows a running backend sim over HTTP + WebSocket instead of loading a replay once; `run_replay.sh` skips the bake gate in live mode.
+- Filed the **live-quality track** (#366–#372): concurrent per-agent decisions + adaptive tick pacing (#366), Anthropic prompt caching (#367), model tiering + cost attribution (#368), user interventions (#369), react-or-continue interruption (#370), multi-tick conversations (#371), viewer live-mode pacing (#372).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Swap the real LLM brain into the live loop (#261) and add the run HUD (#264).
+
+## 2026-07-04
+
+**Focus:** viewer analytics; spec out the live-API read surface and tool-calling
+
+**Done today:**
+- **PR #314** (#250): spotlight / filter replay agents by location.
+- **PR #308** (#247): a movement-heatmap pop-up showing where agents spend their time.
+- Filed the backend live-API read family — roster (#344), incremental memory fetch (#345), retrieval probe (#346), daily-plan (#347), knowledge (#348) — plus the mock-first stepping loop (#349).
+- Filed the **tool-calling track** (#354–#359): multi-tool calls → native `tool_use`/`tool_result` turns + bounded loop → auto-derived per-action schemas → validation/repair → cognition tools → per-call trace.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Implement the read family + stepping loop as the backbone of live mode (#262/#263).
+
+## 2026-07-03
+
+**Focus:** clear a red CI on `main`; plan durable live runs
+
+**Done today:**
+- **PR #311** (→ `main`): black-formatted 12 engine files to clear a red format-CI gate on `main`.
+- Filed the backend-persistence design set: a SQLite + JSONL hybrid store (#304), a pinned live data-contract — frame + memory + event feed (#305), run/session lifecycle & a durable registry that resumes across restarts (#306), and a live→replay export bridge (#307).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Viewer analytics (heatmap #247, location filter #250) before the live plumbing.
+
+## 2026-07-01
+
+**Focus:** land the backend unification on `main`
+
+**Done today:**
+- **PR #196** (#179, #185, #186, → `main`): unified the backend behind **one FastAPI HTTP API** — `GET /health`, `GET /world_state` (the typed `WorldState` snapshot), `POST /command` (advance one turn → change-feed events + new snapshot), OpenAPI at `/docs`. `create_app(game)` is game-agnostic; `run()` serves it. Security: loopback-only + unauthenticated by default, a 64 KiB body cap, and `run()` refuses a non-loopback bind without `SIM_API_TOKEN` (then requires a bearer token). This is the seam every out-of-process frontend now polls instead of baking its own data path.
+- **PR #195** (→ `main`): split frontend-specific config out into a `SmallvilleConfig` section so the shared config stays game-agnostic.
+- **PR #214** (→ `main`): documented the **`godot-ga-main` branch convention** in CLAUDE.md — godot/geo-only changes ride the long-lived branch; anything touching the shared engine still goes through `main`.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Now that the API is the single seam, wire live mode on top of it (the #262/#263 track).
+
+## 2026-06-30
+
+**Focus:** furnished interiors + a bigger, meeting cast
+
+**Done today:**
+- **PR #271**: walk agents through **Van Pelt's furnished interior**, room to room, not just past a facade.
+- **PR #272** (#265): scaled the Penn cast to **7** and staged **scripted meetups** so conversations actually fire when agents share a room.
+- Filed #270 (route Van Pelt's building entrance to the labeled Entrance room).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- The whole thing still replays a baked file — plan the jump to a live backend (the #266 epic).
+
+## 2026-06-29
+
+**Focus:** a big viewer day — sidebar, nameplates, interiors, tracking, minimap, trails, bubbles, fog; then file the live-LLM epic
+
+**Done today:**
+- **Sidebar & controls:** sim clock + zoom buttons (**#226**), playback controls / agent status / reset + day-night (**#236**), skinned it with the Cute Fantasy UI pack (**#237**), and kept the campus pannable out from under it (**#239**).
+- **Web companion:** built out the React companion — homepage, agent panel, prompt tools, docs, nav (**#198**).
+- **Labels & interiors:** floating building name-plates that fade in when zoomed out (**#238**), name-only character nameplates (**#241**), **door-gated, enterable building interiors** (**#240**), and made lawns un-walkable so agents stick to the sidewalks (**#243**).
+- **Tracking & navigation:** click an agent to track them (**#255**, #248), a synced bottom-right minimap with click-to-recentre (**#258**), a fading breadcrumb trail behind each agent (**#259**, #246), in-world speech/thought bubbles + conversation links (**#245**), and perception fog over the campus while tracking (**#267**).
+- **Housekeeping:** stop the replay clock when the steps run out (**#242**), re-bake nudge for `run_replay` + a stale-replay warning (**#244**).
+- **Filed the roadmap:** the viewer wishlist (#246–#254) and the **live real-LLM epic #266** with its components — real-LLM conversations (#257), LLM resilience (#260), backend live mode (#261), change feed + run control (#262), Godot live-client (#263), run HUD (#264), scheduled meetups (#265).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Furnished interiors (Van Pelt) and a bigger cast; then start executing the #266 live-mode epic.
+
+## 2026-06-28
+
+**Focus:** cut the long-lived Godot/geo branch and start iterating on it
+
+**Done today:**
+- Cut **`godot-ga-main`** from `main` — a long-lived integration branch so viewer/geo work (touching only `godot-generative-agents/` + `tools/geo/`) can iterate without full `main` review. (Convention documented later in #214.)
+- **PR #205**: removed the superseded wandering-sprite demo.
+- **PR #206**: a **headless smoke test** that loads every campus scene and checks its map painted (exit 0 = OK).
+- **PR #217** (geo): straight border roads + a grass margin on the campus edges.
+- **PR #224**: camera-track an agent from a character sidebar.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Flesh out the sidebar and start the viewer polish pass (nameplates, tracking, interiors).
+
+## 2026-06-26
+
+**Focus:** land the campus + prompt + web-viewer stack; take the first step of the backend unification
+
+**Done today:**
+- Landed **PR #166** (UPenn campus agent world) and **PR #150** (prompt management #145 + the `promptviz` chain visualizer) on `main` — the polish from the 6/24–6/25 push.
+- Opened + merged **PR #189**: view the Penn replay **in a browser** — a React + Vite shell around a Godot **Web (WASM)** export, with the replay JSON fetched at runtime.
+- Merged **PR #167** (#100): extracted the shared **`gen_agents` package** and folded in `SimulationConfig` — the first concrete step of the #179 backend unification.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Cut a long-lived branch for the Godot/geo work so it stops churning `main`; then the full backend unification (#179).
+
 ## 2026-06-25
 
 **Focus:** push the UPenn campus replay to a watchable state (camera, terrain, Williams Hall interior); land the prompt-management + visualizer stack; plan the backend unification
