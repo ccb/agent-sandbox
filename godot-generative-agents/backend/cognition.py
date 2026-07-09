@@ -114,7 +114,7 @@ class ScheduleMockClient(MockReActClient):
 
         Carrying over authored ``commands`` (#300): the engine's
         ``planning.Stop`` has no ``commands`` field, so any schedule that has been
-        through a ``Stop`` round-trip (``to_schedule_entry`` / `from_schedule_entry``,
+        through a ``Stop`` round-trip (``to_schedule_entry`` / ``from_schedule_entry``,
         e.g. every ``MockPlanner``/``LLMPlanner`` plan) silently drops the
         per-stop commands an author put in ``world_data.yaml`` / persona schedule.
         Rather than teach the engine's ``Stop`` about a backend-only field
@@ -228,6 +228,7 @@ def attach_agents(
     num_steps: int | None = None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
+    extra_action_names: list[str] | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -284,7 +285,15 @@ def attach_agents(
     into higher-level thoughts written back into the stream. With none -- the
     offline default -- no reflector is wired on, so reflection never fires and the
     replay stays byte-identical. ``run_simulation`` supplies one only for a real
-    (non-mock) provider, the same gate as the brain and planner."""
+    (non-mock) provider, the same gate as the brain and planner.
+
+    Pass ``extra_action_names`` (spec §3, #300) to widen every attached agent's
+    ``action_names`` beyond the authored-command verbs discovered on its own
+    schedule -- e.g. Penn's ``["get", "drink", "activate", "deactivate"]`` -- so a
+    *real* brain (a closed tool-calling enum) can choose those verbs even for a
+    persona whose schedule never authors a matching ``commands:`` entry. With
+    none -- the default, and what every Smallville caller still passes -- the verb
+    set is derived from authored commands alone, unchanged from before."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
@@ -307,9 +316,12 @@ def attach_agents(
         if reflector_client is not None:
             agent.reflector = LLMReflector(reflector_client)
         # The verbs the structured tool may offer; the mock ignores the enum but a
-        # well-formed schema keeps the seam honest for a real brain. Stops may
-        # author extra one-shot commands (#300) -- offer their verbs too, so the
-        # authored replay and a real brain see the same action space.
+        # well-formed schema keeps the seam honest for a real brain. Order:
+        # the base travel/perform, then any caller-supplied extra_action_names
+        # (spec §3, #300 -- e.g. Penn's device/drink verbs, so a real brain's
+        # closed enum can choose them even without an authored commands: stop),
+        # then whatever authored-command verbs remain (sorted), deduplicating
+        # while preserving that order.
         authored_verbs = sorted(
             {
                 cmd.split(" ", 1)[0]
@@ -317,7 +329,9 @@ def attach_agents(
                 for cmd in stop.get("commands") or []
             }
         )
-        agent.action_names = ["travel", "perform", *authored_verbs]
+        ordered = ["travel", "perform", *(extra_action_names or []), *authored_verbs]
+        seen: set[str] = set()
+        agent.action_names = [v for v in ordered if not (v in seen or seen.add(v))]
         char.set_agent(agent)
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
@@ -573,12 +587,17 @@ def remember_outcome(char, command: str, step: int) -> None:
         text = render("reflection", verb=verb, activity=activity)
         importance = 2.0
     elif verb == "drink":
-        # The contaminated-water effect (#300): DrinkPenn set is_sick during
-        # apply_effects, so the sickness lands as a HIGH-importance first-person
-        # memory -- the motivation signal the self-coding experiment (#299)
-        # retrieves. (No cure exists in this world yet; a still-sick agent that
-        # drinks again reinforces the memory, which is honest.)
-        sick = bool(char.get_property("is_sick"))
+        # The contaminated-water effect (#300): DrinkPenn sets a one-shot
+        # "just_sickened" marker during apply_effects, keyed off the
+        # sick/not-sick *transition* rather than the character's ongoing
+        # is_sick state (spec §4) -- so a still-sick agent drinking a clean
+        # liquid doesn't misattribute "terribly sick" to this drink. Only the
+        # drink that actually caused the sickness lands as the HIGH-importance
+        # first-person memory the self-coding experiment (#299) retrieves;
+        # consume the marker here so it doesn't leak into a later drink.
+        sick = bool(char.get_property("just_sickened"))
+        if sick:
+            char.set_property("just_sickened", False)
         text = render("reflection", verb=verb, item=rest.strip(), sick=sick)
         importance = 8.0 if sick else 2.0
     elif verb in ("get", "activate", "deactivate"):

@@ -55,5 +55,9 @@ rename, remove, or re-wire a template.**
 
 Jinja autoescaping is **off** (Prompty's default), so the apostrophes, em dashes,
 and double quotes in this text (`Isabella Rodriguez's apartment`, `— its`,
-`I did "..."`) reach memory raw rather than as HTML entities. The tests in
-`tests/test_prompt_templates.py` pin the exact rendered output and guard this.
+`I did "..."`) reach memory raw rather than as HTML entities. The root
+`tests/test_prompt_templates.py` only pins the shared *engine's* templates
+(`text_adventure_games/prompt_templates/`); the exact rendered output of these
+Smallville/Penn templates is pinned by the memory tests in
+`godot-generative-agents/tests/test_boil_water.py` (`remember_outcome`'s
+`reflection` renders), which guard this escaping behavior for this package.

@@ -279,6 +279,7 @@ def simulate(
     llm_client=None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
+    extra_action_names: list[str] | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -356,6 +357,9 @@ def simulate(
     (``{name: DailyPlan.to_primitive()}``) so the run can persist it; the exporter
     writes ``personas/<Name>/daily_plan.json`` so a downstream reader has it
     without re-calling the model. Also an out-parameter, for the same reason.
+
+    Pass ``extra_action_names`` (spec §3, #300) through to :func:`attach_agents` to
+    widen every agent's ``action_names`` beyond its own authored-command verbs.
     """
     # The world is injected: a caller passes its own personas + builder (e.g.
     # penn_world's perception-gated builder). The builder receives the world_map
@@ -385,6 +389,7 @@ def simulate(
         num_steps=num_steps,
         out_planner_sources=out_planner_sources,
         out_plans=out_plans,
+        extra_action_names=extra_action_names,
     )
     emoji = {p["name"]: p["emoji"] for p in personas}
     order = [p["name"] for p in personas]
