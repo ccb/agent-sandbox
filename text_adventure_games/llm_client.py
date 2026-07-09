@@ -1403,12 +1403,20 @@ def _mock_tool_call_result(command, reasoning, tools, seq):
                 }
             ],
         )
-    # N per-action tools: the tool NAME is the verb. Longest first so a
-    # multi-word verb ("ghost touch") wins over a shorter overlap.
-    for verb in sorted((t.get("name", "") for t in tools), key=len, reverse=True):
+    # N per-action tools: the tool NAME is the (possibly sanitized) verb. Recover
+    # the SPOKEN verb -- underscores back to spaces -- to match the brain's flat
+    # command, then echo back the tool's own name, exactly as a real provider
+    # does. Longest spoken verb first so a multi-word verb ("ghost touch") wins
+    # over a shorter overlap.
+    named = sorted(
+        ((t.get("name", ""), t.get("name", "").replace("_", " ")) for t in tools),
+        key=lambda pair: len(pair[1]),
+        reverse=True,
+    )
+    for tool_name, verb in named:
         if command == verb or command.startswith(verb + " "):
             rest = command[len(verb) :].strip()
-            tool = next(t for t in tools if t.get("name") == verb)
+            tool = next(t for t in tools if t.get("name") == tool_name)
             props = tool.get("parameters", {}).get("properties", {})
             arguments = {"reasoning": reasoning}
             # The mock brain only produces free-text verbs, so fill `arguments`
@@ -1418,7 +1426,7 @@ def _mock_tool_call_result(command, reasoning, tools, seq):
                 arguments["arguments"] = rest
             return ToolCallResult(
                 text=None,
-                tool_calls=[{"id": call_id, "name": verb, "arguments": arguments}],
+                tool_calls=[{"id": call_id, "name": tool_name, "arguments": arguments}],
             )
     return None
 
@@ -1568,7 +1576,10 @@ class MockReActClient(MockLlmClient):
                     # per-action tool_use is itself NAMED for the verb.
                     tool_name = block.get("name", "")
                     if tool_name and tool_name != "choose_action":
-                        verb = tool_name
+                        # A per-action tool_use is NAMED for the verb; undo the
+                        # provider-name sanitization (underscores -> spaces) so the
+                        # rebuilt command is the spoken verb the brain reflects on.
+                        verb = tool_name.replace("_", " ")
                     else:
                         verb = (args.get("action") or "").strip()
                     arguments = (args.get("arguments") or "").strip()

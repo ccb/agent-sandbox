@@ -1441,6 +1441,33 @@ def test_command_from_tool_call_handles_both_shapes():
     )
 
 
+def test_tools_for_names_are_provider_valid():
+    # Provider APIs require tool names to match ^[A-Za-z0-9_-]{1,64}$ (no spaces),
+    # but the registry keys multi-word verbs with spaces ("adopt goal", "take
+    # off"). Every derived tool name must be provider-valid or a real-key run 400s
+    # on its first decision -- the mode #356 exists for.
+    import re as _re
+
+    game, _, _ = _scope_scene()
+    for tool in tools_for(game.parser):
+        assert _re.fullmatch(
+            r"[A-Za-z0-9_-]{1,64}", tool["name"]
+        ), f"invalid provider tool name: {tool['name']!r}"
+
+
+def test_multiword_verb_tool_name_round_trips_through_routing():
+    # A multi-word default verb ("adopt goal") is exposed under a sanitized name,
+    # and command_from_tool_call recovers the SPOKEN verb so the assembled command
+    # still routes -- the sanitization is invisible to the parser.
+    game, _, _ = _scope_scene()
+    adopt = next(t for t in tools_for(game.parser) if t["name"] == "adopt_goal")
+    assert " " not in adopt["name"]  # sanitized for the provider wire
+    assert (
+        command_from_tool_call("adopt_goal", {"arguments": "be brave"}, game.parser)
+        == "adopt goal be brave"
+    )
+
+
 def test_mock_react_call_tools_answers_per_action_toolset():
     # The mock must answer the N-tools shape offline: it picks the tool NAMED for
     # the verb its brain chose and fills the free-text arguments.
