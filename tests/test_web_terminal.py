@@ -89,6 +89,46 @@ def test_transcript_is_shareable_text():
     assert "seed 3" in text and "> go north" in text
 
 
+def test_panel_data_maps_only_the_explored():
+    """The swipe-left map (CCB): nodes are rooms the player has stood in,
+    arcs carry the direction of travel, unexplored exits are stubs -- and
+    nothing beyond the frontier leaks (no spoiler room names)."""
+    app_api.boot(0)
+    for cmd in ("north", "up"):
+        app_api.command(cmd)
+    data = json.loads(app_api.panel_data())
+    m = data["map"]
+    assert set(m["nodes"]) == {"The Caravan Wreck", "Tomb Exterior", "The Summit"}
+    assert {"from": "The Caravan Wreck", "to": "Tomb Exterior", "dir": "north"} in m[
+        "edges"
+    ]
+    assert m["here"] == "The Summit"
+    assert any(st["dir"] == "in" for st in m["stubs"])  # the unexplored beckons
+    all_names = " ".join(m["nodes"])
+    assert "Hall of" not in all_names  # frontier rooms stay unspoiled
+
+
+def test_panel_data_inventory_shape():
+    app_api.boot(0)
+    app_api.command("search merchant")
+    app_api.command("take glowstone")
+    data = json.loads(app_api.panel_data())
+    inv = data["inventory"]
+    assert any(i["name"] == "glowstone" for i in inv["carried"])
+    assert inv["slots"] == "1/10"
+    assert inv["wounds"] == []
+
+
+def test_restore_rebuilds_the_explored_map():
+    app_api.boot(5)
+    for cmd in ("north", "save 1", "up"):
+        app_api.command(cmd)
+    app_api.command("restore 1")  # back to the exterior
+    m = json.loads(app_api.panel_data())["map"]
+    assert m["here"] == "Tomb Exterior"
+    assert "The Caravan Wreck" in m["nodes"]  # the journey survived the rebuild
+
+
 _AUDIT = r"""
 import sys
 from importlib.abc import MetaPathFinder
