@@ -19,6 +19,10 @@ struct TerminalView: UIViewRepresentable {
         // bounce or fight the keyboard.
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // Focusing the input makes WebKit scroll the page programmatically
+        // even with user scrolling off, shoving the status bar off-screen --
+        // the delegate pins the offset home.
+        webView.scrollView.delegate = context.coordinator
         if #available(iOS 16.4, *) {
             webView.isInspectable = true  // Safari > Develop, for debugging
         }
@@ -30,7 +34,14 @@ struct TerminalView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKScriptMessageHandler, UIScrollViewDelegate {
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if scrollView.contentOffset != .zero {
+                scrollView.contentOffset = .zero
+            }
+        }
+
+
         private let wound = UIImpactFeedbackGenerator(style: .medium)
         private let death = UINotificationFeedbackGenerator()
 
