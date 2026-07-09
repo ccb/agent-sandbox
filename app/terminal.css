@@ -17,8 +17,14 @@
 
 html, body {
   height: 100%;
+  -webkit-text-size-adjust: 100%;
   background: var(--bg);
   overscroll-behavior: none;
+  /* Nothing may paint past the right edge: iOS pans the visual viewport
+     to ANY painted overflow (off-canvas panels, an overlong status bar).
+     clip is stronger than hidden -- no scroll mechanism exists at all. */
+  overflow-x: clip;
+  width: 100%;
 }
 
 body, input {
@@ -47,12 +53,25 @@ body, input {
 #statusbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.35rem 0.25rem;
   border-bottom: 1px solid var(--phosphor-dim);
   color: var(--phosphor-bright);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   flex: 0 0 auto;
+}
+/* the room name yields; the score and buttons never wrap off-screen */
+#status-room {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#statusbar > span:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 #output {
@@ -111,6 +130,9 @@ body, input {
   border: none;
   outline: none;
   caret-color: var(--phosphor-bright);
+  /* iOS zooms the page toward any focused input under 16px -- the source
+     of the mystery pan/crop. 16px here, non-negotiable. */
+  font-size: 16px;
 }
 .prompt { color: var(--phosphor-bright); }
 
@@ -174,7 +196,13 @@ body.size-large, body.size-large input { font-size: 18px; }
 .panel.right { right: 0; border-left: 1px solid var(--phosphor-dim); transform: translateX(0); }
 .panel.hidden.left  { transform: translateX(-102%); }
 .panel.hidden.right { transform: translateX(102%); }
-.panel.hidden { pointer-events: none; }
+.panel.hidden {
+  pointer-events: none;
+  /* invisible AND unpaintable off-canvas (iOS pans to painted overflow);
+     the delay lets the slide-out finish before visibility snaps off */
+  visibility: hidden;
+  transition: transform 0.22s ease-out, visibility 0s 0.22s;
+}
 .panel h2 {
   color: var(--phosphor-bright);
   letter-spacing: 0.1em;
@@ -193,7 +221,14 @@ body.size-large, body.size-large input { font-size: 18px; }
   cursor: pointer;
   color: var(--phosphor-bright);
 }
-#panel-map svg { width: 100%; height: auto; }
+#panel-map { width: min(96vw, 30rem); }
+#panel-map svg {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  display: block;
+  margin-top: 0.4rem;
+}
 #panel-map .map-node rect { fill: none; stroke: var(--phosphor); }
 #panel-map .map-node.here rect { fill: rgba(77, 184, 255, 0.18); stroke: var(--phosphor-bright); }
 #panel-map .map-node text { fill: var(--phosphor-bright); font-size: 10px; }
