@@ -1106,8 +1106,9 @@ def _sphere_quieted(g):
         coffin.examine_text = (
             "A clouded glass sphere at the chamber's heart, its field "
             "failing. Past the cloud, nothing moves any more; the slow "
-            "churn has stopped. The seam at its equator is fine as a hair "
-            "-- made to be pried, never opened."
+            "churn has stopped. No handle or latch, but there is a seam "
+            "at its equator, fine as a hair -- it could be pried, with the "
+            "right tool."
         )
         sphere.description = (
             "A spherical chamber carved over every inch with funeral "
@@ -1771,8 +1772,9 @@ def build_game(seed=None):
         "the Autarch's anti-entropy coffin",
         "A clouded glass sphere at the chamber's heart, its field failing, its "
         "interior a slow orange churn. Past the cloud, shapes drift and turn "
-        "like fish under ice: bone, and things that were buried to be kept. The "
-        "seam at its equator is fine as a hair -- made to be pried, never opened.",
+        "like fish under ice: bone, and things that were buried to be kept. No "
+        "handle or latch, but there is a seam at its equator, fine as a hair "
+        "-- it could be pried, with the right tool.",
     )
     coffin.make_container()
     coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
