@@ -1,0 +1,37 @@
+# The iOS shell (design §1.2): generate the Xcode project with
+#   cd ios && xcodegen generate
+# The app is a WKWebView serving app/dist/ (built with --with-pyodide, so the
+# bundle is fully offline) through a custom tomb:// scheme, plus the haptics
+# bridge. ~3 Swift files, by design.
+name: TombOfNassakAnRah
+options:
+  bundleIdPrefix: edu.upenn.ccb
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  Tomb:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      # app/dist as a folder reference: the whole web terminal (wheel,
+      # vendored pyodide, HTML/JS/CSS) rides into the bundle as "dist/".
+      # Build it first: uv run python app/build_dist.py --with-pyodide
+      - path: ../app/dist
+        type: folder
+        buildPhase: resources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Tomb of Nassak An-Rah
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: edu.upenn.ccb.tomb
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO

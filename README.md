@@ -157,6 +157,13 @@ Optional env vars: `LLM_MODEL` (defaults: Anthropic → `claude-sonnet-4-2025051
 OpenAI → `gpt-4o-mini`), `LLM_NARRATION_STYLE` (a tone hint for the narrator),
 `LLM_BASE_URL` (for an OpenAI-compatible endpoint).
 
+Resilience knobs for call-heavy or unattended runs (issue #260): `LLM_MAX_RETRIES`
+(default `2`) retries transient 429/5xx/connection errors with exponential backoff
++ jitter; `LLM_API_TIMEOUT_SEC` (default `60`) bounds each call so a hung socket
+can't stall a run; `LLM_PREFLIGHT=1` validates the API key with one cheap live call
+at startup (off by default — a missing key already fails fast offline). The mock
+provider is unaffected — it needs no key, never retries, and stays offline.
+
 Then walk to the **Drawbridge** and loiter near the troll; with `LLM_VERBOSE=1`
 you'll see the prompts and the NPC's chosen commands in the terminal. Try
 natural-language commands too, e.g. *"give the fish to the troll."*

@@ -77,6 +77,10 @@ def _make_openai(fake_sdk):
     client._model = "gpt-4o-mini"
     client._verbose = False
     client._tokenizer = None
+    # Resilience attrs the real __init__ would set (issue #260). A no-op sleep
+    # keeps any retry test instant; RuntimeError("boom") stays non-retryable.
+    client._max_retries = 2
+    client._sleep = lambda *a, **k: None
     return client
 
 
@@ -85,6 +89,8 @@ def _make_anthropic(fake_sdk):
     client._client = fake_sdk
     client._model = "claude-sonnet-4-20250514"
     client._verbose = False
+    client._max_retries = 2
+    client._sleep = lambda *a, **k: None
     return client
 
 
@@ -170,7 +176,10 @@ def test_anthropic_call_tool_returns_input_and_forces_tool():
         "type": "tool",
         "name": "choose_action",
     }
-    assert fake.created_kwargs["system"] == "sys"
+    # The system prompt is sent as a cache_control block, not a bare string (#367).
+    assert fake.created_kwargs["system"] == [
+        {"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}
+    ]
     assert fake.created_kwargs["tools"][0]["input_schema"] == CHOOSE["parameters"]
 
 
@@ -374,6 +383,40 @@ def test_anthropic_chat_records_one_usage():
     assert client.chat([{"role": "user", "content": "hi"}]) == "growl player"
     assert len(ledger.records) == 1
     assert ledger.records[0].usage.output_tokens == 18
+
+
+def test_anthropic_chat_marks_system_prompt_cacheable():
+    # #367: chat() sends the system prompt as an ephemeral cache_control block so
+    # the stable persona prefix is written once and re-read cheaply thereafter.
+    response = SimpleNamespace(content=[SimpleNamespace(text="ok")])
+    fake = _FakeAnthropicSDK(response)
+    client = _make_anthropic(fake)
+
+    client.chat(
+        [
+            {"role": "system", "content": "You are a quiet gardener."},
+            {"role": "user", "content": "hi"},
+        ]
+    )
+
+    assert fake.created_kwargs["system"] == [
+        {
+            "type": "text",
+            "text": "You are a quiet gardener.",
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def test_anthropic_no_system_omits_the_field():
+    # No system message => no `system` kwarg at all (don't send an empty block).
+    response = SimpleNamespace(content=[SimpleNamespace(text="ok")])
+    fake = _FakeAnthropicSDK(response)
+    client = _make_anthropic(fake)
+
+    client.chat([{"role": "user", "content": "hi"}])
+
+    assert "system" not in fake.created_kwargs
 
 
 def test_anthropic_call_tool_records_cache_read_into_ledger_and_summary():
