@@ -58,6 +58,25 @@ def test_suggestions_thin_out_in_the_dark():
     assert room_only_nouns == []  # nothing of the room is offered unseen
 
 
+def test_revealed_contents_join_the_chips_only_once_seen():
+    """Items inside things reach the noun chips exactly when the player could
+    reach them -- after the SEARCH or OPEN that reveals them, never before
+    (CCB: early chips are spoilers)."""
+    app_api.boot(0)
+    sug = json.loads(app_api.command("look"))["suggestions"]
+    assert "glowstone" not in sug["nouns"]  # still hidden on the merchant
+    sug = json.loads(app_api.command("search merchant"))["suggestions"]
+    assert "glowstone" in sug["nouns"]  # the search revealed it
+    assert "waterskin" in sug["nouns"]
+    for cmd in ("take glowstone", "light glowstone", "in"):
+        sug = json.loads(app_api.command(cmd))["suggestions"]
+    assert "crates" in sug["nouns"]  # the lit hold shows the crates...
+    assert "crate of dates" not in sug["nouns"]  # ...but not inside them
+    sug = json.loads(app_api.command("open crates"))["suggestions"]
+    assert "crate of dates" in sug["nouns"]  # opening reveals the goods
+    assert "bolt of spider-silk" in sug["nouns"]
+
+
 def test_restore_flows_through_the_bridge():
     """command() owns the RESTORE contract: SAVE 1, move on, RESTORE 1 -- the
     payload after the restore is back at the save point."""
