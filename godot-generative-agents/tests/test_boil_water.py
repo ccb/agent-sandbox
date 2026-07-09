@@ -4,7 +4,7 @@ Spec: godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md
 """
 
 from backend.build_world import _normalize_personas, build_world
-from backend.actions import DrinkPenn
+from backend.actions import DrinkPenn, Activate, Deactivate
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -76,3 +76,30 @@ def test_clean_drink_has_no_sickness():
     assert game.parser.parse_command("drink cup of murky water", actor=char)
     assert not char.get_property("is_sick")
     assert not [e for e in game.events if e.action == "sickness"]
+
+
+def _stove():
+    stove = Item("stove", "a small electric stove", "A single coil burner.")
+    stove.set_property(Property.GETTABLE, False)
+    stove.set_property("is_device", True)
+    return stove
+
+
+def test_activate_and_deactivate_toggle_a_device():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    game.locations["Union"].add_item(_stove())
+    assert game.parser.parse_command("activate stove", actor=char)
+    stove = game.locations["Union"].items["stove"]
+    assert stove.get_property("is_on") is True
+    # Already on: the second activate fails at the precondition gate.
+    assert not game.parser.parse_command("activate stove", actor=char)
+    assert game.parser.parse_command("deactivate stove", actor=char)
+    assert stove.get_property("is_on") is False
+
+
+def test_activate_rejects_a_non_device():
+    game, char = _tiny_world(extra_actions=[Activate, Deactivate])
+    pot = Item("pot", "a cooking pot", "An empty steel pot.")
+    game.locations["Union"].add_item(pot)
+    assert not game.parser.parse_command("activate pot", actor=char)
+    assert not pot.get_property("is_on")
