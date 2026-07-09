@@ -1230,3 +1230,386 @@ def test_run_tool_loop_stops_when_no_tool_call():
     assert called == []  # execute never ran
     assert result.text == "just chatting"
     assert len(messages) == 1  # no turns appended
+
+
+# --- #356: per-action tool schemas from the action registry ---------------
+
+from text_adventure_games import actions
+from text_adventure_games.npc import (
+    command_from_args,
+    command_from_tool_call,
+    tools_for,
+)
+
+
+class _Wave(actions.Action):
+    """A tiny custom action declaring a typed ARGUMENTS_SCHEMA, used to prove a
+    game-defined action is exposed as a tool with no extra wiring and routes
+    through its own precondition gate."""
+
+    ACTION_NAME = "wave"
+    ACTION_DESCRIPTION = "Wave at someone here"
+    ACTION_ALIASES = ["greet"]
+    ARGUMENTS_SCHEMA = {
+        "target": {
+            "type": "character",
+            "description": "who to wave at",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        looker = actor if actor is not None else game.player
+        self.target = self.character_in_room(command, looker)
+
+    def check_preconditions(self):
+        return self.was_matched(self.target, "There is no one here to wave at.")
+
+    def apply_effects(self):
+        self.target.set_property("waved_at", True)
+        self.parser.ok(f"{self.actor.name} waves at {self.target.name}.")
+
+
+class _Survey(actions.Action):
+    """Custom action exercising all three scope-category slot kinds at once."""
+
+    ACTION_NAME = "survey"
+    ACTION_DESCRIPTION = "Survey the surroundings"
+    ARGUMENTS_SCHEMA = {
+        "who": {"type": "character", "description": "a person here"},
+        "what": {"type": "item", "description": "an item in reach"},
+        "way": {"type": "direction", "description": "an exit"},
+        "note": {"type": "string", "description": "free-form note"},
+    }
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+
+    def check_preconditions(self):
+        return True
+
+    def apply_effects(self):
+        self.parser.ok("surveyed")
+
+
+def _scope_scene():
+    """A hall (north -> yard) with the player, a friend here, a stranger away,
+    a lamp here, and a coin carried -- so scope enums have a known answer."""
+    hall = things.Location("Hall", "A stone hall.")
+    yard = things.Location("Yard", "A grassy yard.")
+    hall.add_connection("north", yard)
+    player = things.Character("player", "the player", "I explore.")
+    friend = things.Character("friend", "a friend", "I am friendly.")
+    stranger = things.Character("stranger", "a stranger", "I lurk elsewhere.")
+    lamp = things.Item("lamp", "a lamp", "A brass lamp.")
+    lamp.set_property("gettable", True)
+    coin = things.Item("coin", "a coin", "A gold coin.")
+    hall.add_item(lamp)
+    game = games.Game(hall, player, characters=[friend, stranger])
+    hall.add_character(friend)
+    yard.add_character(stranger)
+    player.add_to_inventory(coin)
+    return game, player, friend
+
+
+def test_tools_for_derives_one_tool_per_registered_action():
+    game, player, _ = _scope_scene()
+    tools = tools_for(game.parser)
+    names = {t["name"] for t in tools}
+    # Every registered verb becomes a tool, and the comma-sequence wrapper is
+    # the one thing dropped (it exists for the engine, not for an agent).
+    assert "go" in names and "get" in names and "wait" in names
+    assert "sequence" not in names
+    # Each tool is a normalized dict with an object parameter schema.
+    go = next(t for t in tools if t["name"] == "go")
+    assert go["parameters"]["type"] == "object"
+    assert "reasoning" in go["parameters"]["properties"]
+
+
+def test_tools_for_undeclared_action_uses_freetext_arguments():
+    # An action with no ARGUMENTS_SCHEMA (the built-ins) falls back to a single
+    # free-text `arguments` field -- the same contract choose_action used.
+    game, _, _ = _scope_scene()
+    tools = tools_for(game.parser)
+    go = next(t for t in tools if t["name"] == "go")
+    props = go["parameters"]["properties"]
+    assert props["arguments"]["type"] == "string"
+    assert go["parameters"]["required"] == []
+
+
+def test_tools_for_folds_aliases_into_description():
+    game, _, _ = _scope_scene()
+    game.parser.add_action(_Wave)
+    wave = next(t for t in tools_for(game.parser) if t["name"] == "wave")
+    assert "aliases: greet" in wave["description"]
+
+
+def test_tools_for_declared_schema_becomes_typed_slots_no_extra_wiring():
+    # Registering the action is the ONLY wiring -- it is then a tool with its
+    # declared slots and required list, derived straight from the registry.
+    game, _, _ = _scope_scene()
+    game.parser.add_action(_Wave)
+    wave = next(t for t in tools_for(game.parser) if t["name"] == "wave")
+    props = wave["parameters"]["properties"]
+    assert "target" in props and "arguments" not in props  # typed, not free text
+    assert wave["parameters"]["required"] == ["target"]
+
+
+def test_tools_for_scope_enum_offers_only_in_scope_entities():
+    # The #356 acceptance: a slot enum is populated from what the actor can
+    # currently see -- friend here (not the stranger away), the lamp + carried
+    # coin, and the single north exit.
+    game, player, _ = _scope_scene()
+    game.parser.add_action(_Survey)
+    survey = next(
+        t for t in tools_for(game.parser, actor=player) if t["name"] == "survey"
+    )
+    props = survey["parameters"]["properties"]
+    assert props["who"]["enum"] == ["friend"]  # stranger is in another room
+    assert props["what"]["enum"] == ["coin", "lamp"]
+    assert props["way"]["enum"] == ["north"]
+    # A plain-typed slot passes through untouched (no enum).
+    assert props["note"]["type"] == "string" and "enum" not in props["note"]
+
+
+def test_tools_for_no_actor_leaves_scope_slots_unconstrained():
+    # Without an actor there is no scope to read, so scope slots stay plain
+    # strings (the derivation still succeeds -- it just can't narrow them).
+    game, _, _ = _scope_scene()
+    game.parser.add_action(_Survey)
+    survey = next(t for t in tools_for(game.parser) if t["name"] == "survey")
+    assert "enum" not in survey["parameters"]["properties"]["who"]
+
+
+def test_tools_for_drops_enum_when_scope_exceeds_cap():
+    # A too-large scope drops the enum rather than truncating (which would make a
+    # valid entity unnameable) -- the slot degrades to free text.
+    game, player, _ = _scope_scene()
+    hall = player.location
+    for i in range(30):
+        it = things.Item(f"pebble{i}", "a pebble", "A small pebble.")
+        hall.add_item(it)
+    game.parser.add_action(_Survey)
+    survey = next(
+        t
+        for t in tools_for(game.parser, actor=player, max_enum=20)
+        if t["name"] == "survey"
+    )
+    assert "enum" not in survey["parameters"]["properties"]["what"]
+
+
+def test_tools_for_names_filter_and_unknown_verb_gets_generic_tool():
+    # `names` curates the set; a name with no registered action still gets a
+    # generic free-text tool, so action_names stays the authoritative menu.
+    game, _, _ = _scope_scene()
+    tools = tools_for(game.parser, names=["go", "growl"])
+    assert {t["name"] for t in tools} == {"go", "growl"}
+    growl = next(t for t in tools if t["name"] == "growl")
+    assert growl["parameters"]["properties"]["arguments"]["type"] == "string"
+
+
+def test_command_from_args_freetext_and_connectors():
+    # Undeclared -> "<verb> <arguments>".
+    assert command_from_args("go", {"arguments": "north"}, None) == "go north"
+    # Declared schema -> slots joined in order, each after its connector word.
+    schema = {
+        "target": {"type": "character"},
+        "weapon": {"type": "item", "connector": "with"},
+    }
+    cmd = command_from_args("attack", {"target": "player", "weapon": "club"}, schema)
+    assert cmd == "attack player with club"
+    # A missing optional slot is simply skipped.
+    assert command_from_args("attack", {"target": "player"}, schema) == "attack player"
+
+
+def test_command_from_tool_call_handles_both_shapes():
+    game, _, _ = _scope_scene()
+    game.parser.add_action(_Wave)
+    # choose_action fallback: verb in args['action'].
+    assert (
+        command_from_tool_call(
+            "choose_action", {"action": "go", "arguments": "north"}, game.parser
+        )
+        == "go north"
+    )
+    # per-action tool: verb IS the tool name, slots from ARGUMENTS_SCHEMA.
+    assert (
+        command_from_tool_call("wave", {"target": "friend"}, game.parser)
+        == "wave friend"
+    )
+
+
+def test_tools_for_names_are_provider_valid():
+    # Provider APIs require tool names to match ^[A-Za-z0-9_-]{1,64}$ (no spaces),
+    # but the registry keys multi-word verbs with spaces ("adopt goal", "take
+    # off"). Every derived tool name must be provider-valid or a real-key run 400s
+    # on its first decision -- the mode #356 exists for.
+    import re as _re
+
+    game, _, _ = _scope_scene()
+    for tool in tools_for(game.parser):
+        assert _re.fullmatch(
+            r"[A-Za-z0-9_-]{1,64}", tool["name"]
+        ), f"invalid provider tool name: {tool['name']!r}"
+
+
+def test_multiword_verb_tool_name_round_trips_through_routing():
+    # A multi-word default verb ("adopt goal") is exposed under a sanitized name,
+    # and command_from_tool_call recovers the SPOKEN verb so the assembled command
+    # still routes -- the sanitization is invisible to the parser.
+    game, _, _ = _scope_scene()
+    adopt = next(t for t in tools_for(game.parser) if t["name"] == "adopt_goal")
+    assert " " not in adopt["name"]  # sanitized for the provider wire
+    assert (
+        command_from_tool_call("adopt_goal", {"arguments": "be brave"}, game.parser)
+        == "adopt goal be brave"
+    )
+
+
+def test_mock_react_call_tools_answers_per_action_toolset():
+    # The mock must answer the N-tools shape offline: it picks the tool NAMED for
+    # the verb its brain chose and fills the free-text arguments.
+    client = MockReActClient()
+    tools = tools_for_stub("growl", "attack")
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": _DRAWBRIDGE_OBS},
+    ]
+    result = client.call_tools(messages, tools, tool_choice="any")
+    call = result.tool_calls[0]
+    assert call["name"] == "growl"  # the tool, not a choose_action wrapper
+    assert call["arguments"]["arguments"] == "player"
+
+
+def test_mock_react_call_tools_matches_multiword_verb_tool():
+    client = MockReActClient()
+    ghost_system = (
+        "You are an NPC in a text adventure game.\n"
+        "Persona: I am the ghost. I will haunt this dungeon."
+    )
+    haunted_obs = (
+        "DUNGEON\nCharacters here:\n * The player - a hero.\n"
+        "  Game: The ghost wails: Leave this place, mortal!\nTurn: 2"
+    )
+    messages = [
+        {"role": "system", "content": ghost_system},
+        {"role": "user", "content": haunted_obs},
+    ]
+    result = client.call_tools(messages, tools_for_stub("ghost touch", "haunt"))
+    call = result.tool_calls[0]
+    assert call["name"] == "ghost touch"  # multi-word verb kept whole
+    assert call["arguments"]["arguments"] == "player"
+
+
+def test_mock_react_call_tools_reconstructs_reflection_across_per_action_call():
+    # The prior tool_use is NAMED "attack" (no 'action' key), so the mock must
+    # read the verb from the block name to rebuild "attack player" and escalate.
+    client = MockReActClient()
+    base_obs = (
+        _DRAWBRIDGE_OBS + "\n  Game: Troll snarls and bares its teeth at The player."
+    )
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": base_obs},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "t1",
+                    "name": "attack",  # per-action tool, verb in the NAME
+                    "arguments": {"arguments": "player"},
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "troll doesn't have a weapon.",
+                    "is_error": True,
+                }
+            ],
+        },
+    ]
+    result = client.call_tools(messages, tools_for_stub("attack"))
+    call = result.tool_calls[0]
+    assert call["name"] == "attack"
+    assert call["arguments"]["arguments"] == "player with club"
+
+
+def test_mock_react_call_tools_declines_when_no_tool_matches_verb():
+    # The brain chooses "growl player" but only an "attack" tool is offered ->
+    # decline (None), so the caller can fall back to its single-tool path.
+    client = MockReActClient()
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": _DRAWBRIDGE_OBS},
+    ]
+    assert client.call_tools(messages, tools_for_stub("attack")) is None
+
+
+def tools_for_stub(*names):
+    """A minimal per-action toolset (free-text `arguments`) for mock tests."""
+    return [
+        {
+            "name": n,
+            "description": n,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {"type": "string"},
+                    "arguments": {"type": "string"},
+                },
+                "required": [],
+            },
+        }
+        for n in names
+    ]
+
+
+def test_custom_action_tool_routes_through_precondition_gate_unchanged():
+    # Acceptance #1: a game with a custom ARGUMENTS_SCHEMA action, driven by a
+    # mock that decides via that per-action tool, routes through the SAME
+    # precondition gate -- schemas shape the phrasing, the gate still decides.
+    # The friend NPC (in the hall with the player) waves at the player.
+    game, player, friend = _scope_scene()
+    game.parser.add_action(_Wave)
+
+    # A scripted per-action tool call: verb = tool NAME, typed slot filled.
+    good = {"tool_calls": [{"name": "wave", "arguments": {"target": "player"}}]}
+    client = MockLlmClient(tool_calls_responses=[good])
+    friend.set_behavior(make_react_behavior(client))
+
+    friend.take_turn(game)
+
+    # The custom action's effect applied -> it passed check_preconditions() after
+    # the per-action tool call assembled and routed "wave player".
+    assert player.get_property("waved_at") is True
+
+
+def test_custom_action_tool_precondition_still_gates_bad_target():
+    # Name a target that isn't here: the schema let the model *say* it, but the
+    # precondition gate still rejects the ACT (was_matched fails).
+    from text_adventure_games.npc import build_npc_context, decide_and_route
+
+    game, player, friend = _scope_scene()
+    game.parser.add_action(_Wave)
+
+    # 'ghost' is no one in the hall -> character_in_room returns None -> gate
+    # fails every attempt. A callable keeps returning the bad call for each retry.
+    def always_bad(messages, tools, tool_choice, max_tokens, temperature):
+        return {"tool_calls": [{"name": "wave", "arguments": {"target": "ghost"}}]}
+
+    client = MockLlmClient(tool_calls_responses=always_bad)
+    agent = LLMAgent(client, persona="I am friendly.")
+    agent.action_names = list(game.parser.actions)
+
+    acted = decide_and_route(friend, game, agent, build_npc_context(friend, game))
+
+    assert acted is False  # every attempt was gated, never routed to an effect
+    assert not player.get_property("waved_at")
