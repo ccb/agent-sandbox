@@ -138,3 +138,22 @@ def test_object_cells_share_one_arena_containment():
     )
     _, _, rows = ago.paint_objects(tmj, coll, arena, sector, _sector_names(), W, H)
     assert rows[0][3]  # arena name resolved (non-empty)
+
+
+def test_real_map_paint_matches_committed_matrix():
+    """The committed game-object CSVs are exactly what a re-run would paint --
+    catches hand-edit drift, and pins Fisher's ids byte-stable under the
+    multi-layer scan (#466)."""
+    with open(SRC_MAP) as fh:
+        tmj = json.load(fh)
+    coll, arena, sector = (
+        _flat("collision_maze.csv"),
+        _flat("arena_maze.csv"),
+        _flat("sector_maze.csv"),
+    )
+    new_coll, obj_maze, rows = ago.paint_objects(
+        tmj, coll, arena, sector, _sector_names(), W, H
+    )
+    assert new_coll == coll  # every use-tile already open in the committed maze
+    assert obj_maze == _flat("game_object_maze.csv")
+    assert [r for r in rows] == _blocks("game_object_blocks.csv")
