@@ -76,6 +76,10 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "activity": stop["activity"],
                     "emoji": stop.get("emoji", spec["emoji"]),
                     "steps": stop.get("steps"),  # None => stay for the rest of the day
+                    # Authored one-shot commands the mock brain replays at this
+                    # stop, one per decision, before settling into `perform`
+                    # (#300 -- e.g. "get ..." then "drink ..." at Houston Hall).
+                    "commands": list(stop.get("commands") or []),
                 }
                 for stop in spec["schedule"]
             ]
@@ -88,6 +92,7 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "activity": spec["activity"],
                     "emoji": spec["emoji"],
                     "steps": None,
+                    "commands": [],
                 }
             ]
     return personas

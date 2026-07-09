@@ -68,6 +68,8 @@ class ScheduleMockClient(MockReActClient):
         super().__init__(config, ledger=ledger)
         self.schedule = schedule
         self.stop_index = 0
+        # How many of the current stop's authored commands have been issued.
+        self._commands_used = 0
 
     @property
     def _stop(self) -> dict:
@@ -97,6 +99,7 @@ class ScheduleMockClient(MockReActClient):
         """Move to the next scheduled stop. Returns ``False`` if none remain."""
         if self.stop_index + 1 < len(self.schedule):
             self.stop_index += 1
+            self._commands_used = 0
             return True
         return False
 
@@ -121,6 +124,11 @@ class ScheduleMockClient(MockReActClient):
     def _choose(self, observation: str) -> str:
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
+        queued = self._stop.get("commands") or []
+        if self._commands_used < len(queued):
+            command = queued[self._commands_used]
+            self._commands_used += 1
+            return command
         return f"perform {self.activity}"
 
     # -- the two routes the agent layer may take; both defer to _choose --------
@@ -150,11 +158,12 @@ class ScheduleMockClient(MockReActClient):
         command = self._choose(observation)
         self.decisions.append({"command": command, "system": system})
         verb, _, rest = command.partition(" ")
-        reasoning = (
-            f"I'm on my way to {self.destination}."
-            if verb == "travel"
-            else f"I've arrived, so I'll get on with {self.activity}."
-        )
+        if verb == "travel":
+            reasoning = f"I'm on my way to {self.destination}."
+        elif verb == "perform":
+            reasoning = f"I've arrived, so I'll get on with {self.activity}."
+        else:
+            reasoning = f"While I'm here: {command}."
         result = {"reasoning": reasoning, "action": verb, "arguments": rest}
         # Zero-cost usage record (this override doesn't call super().call_tool),
         # so each persona's decision lands in the shared ledger.
@@ -266,8 +275,17 @@ def attach_agents(
         if reflector_client is not None:
             agent.reflector = LLMReflector(reflector_client)
         # The verbs the structured tool may offer; the mock ignores the enum but a
-        # well-formed schema keeps the seam honest for a real brain.
-        agent.action_names = ["travel", "perform"]
+        # well-formed schema keeps the seam honest for a real brain. Stops may
+        # author extra one-shot commands (#300) -- offer their verbs too, so the
+        # authored replay and a real brain see the same action space.
+        authored_verbs = sorted(
+            {
+                cmd.split(" ", 1)[0]
+                for stop in spec["schedule"]
+                for cmd in stop.get("commands") or []
+            }
+        )
+        agent.action_names = ["travel", "perform", *authored_verbs]
         char.set_agent(agent)
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
