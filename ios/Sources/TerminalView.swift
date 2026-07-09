@@ -1,6 +1,33 @@
 import SwiftUI
 import WebKit
 
+/// Remove the system `^ v (done)` accessory strip above the keyboard: it is
+/// redundant with the terminal's own chips and costs 44pt of tomb (CCB). The
+/// first responder inside a WKWebView is the private WKContentView, so we
+/// swap in a runtime subclass whose inputAccessoryView is nil -- the standard
+/// technique for accessory-free web views.
+private func removeInputAccessory(from webView: WKWebView) {
+    guard
+        let target = webView.scrollView.subviews.first(where: {
+            String(describing: type(of: $0)).hasPrefix("WKContent")
+        })
+    else { return }
+    let className = "NoAccessory_\(String(describing: type(of: target)))"
+    var cls: AnyClass? = NSClassFromString(className)
+    if cls == nil, let targetClass = object_getClass(target) {
+        cls = objc_allocateClassPair(targetClass, className, 0)
+        if let cls = cls {
+            let selector = #selector(getter: UIResponder.inputAccessoryView)
+            let block: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+            class_addMethod(
+                cls, selector, imp_implementationWithBlock(block), "@@:"
+            )
+            objc_registerClassPair(cls)
+        }
+    }
+    if let cls = cls { object_setClass(target, cls) }
+}
+
 /// The WKWebView that *is* the app: loads tomb://app/index.html through the
 /// bundled-dist scheme handler and services the two JS bridge messages
 /// (haptics on damage/death, the share sheet for transcripts).
@@ -26,6 +53,7 @@ struct TerminalView: UIViewRepresentable {
         if #available(iOS 16.4, *) {
             webView.isInspectable = true  // Safari > Develop, for debugging
         }
+        removeInputAccessory(from: webView)
         webView.load(URLRequest(url: URL(string: "tomb://app/index.html")!))
         return webView
     }
