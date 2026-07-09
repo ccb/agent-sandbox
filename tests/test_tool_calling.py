@@ -669,3 +669,564 @@ def test_pick_option_no_call_tool_uses_regex_unchanged():
     parser = _make_parser(ChatOnly())
     options = {"first": "A", "second": "B"}
     assert parser._pick_option("pick one", options, "first") == "A"
+
+
+# --- #354: plural call_tools (model chooses among several tools) ----------
+
+import json
+
+from text_adventure_games.llm_client import (
+    ToolCallResult,
+    run_tool_loop,
+    limit_context_length,
+    _anthropic_tool_choice,
+    _content_to_text,
+    _openai_tool_choice,
+)
+
+
+def test_openai_tool_choice_maps():
+    assert _openai_tool_choice("auto") == "auto"
+    assert _openai_tool_choice("any") == "required"
+    assert _openai_tool_choice({"name": "t"}) == {
+        "type": "function",
+        "function": {"name": "t"},
+    }
+
+
+def test_anthropic_tool_choice_maps():
+    assert _anthropic_tool_choice("auto") == {"type": "auto"}
+    assert _anthropic_tool_choice("any") == {"type": "any"}
+    assert _anthropic_tool_choice({"name": "t"}) == {"type": "tool", "name": "t"}
+
+
+def test_openai_call_tools_collects_multiple_calls():
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=None,
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="c1",
+                            function=SimpleNamespace(name="t1", arguments='{"x": 1}'),
+                        ),
+                        SimpleNamespace(
+                            id="c2",
+                            function=SimpleNamespace(name="t2", arguments='{"y": 2}'),
+                        ),
+                    ],
+                )
+            )
+        ]
+    )
+    fake = _FakeOpenAISDK(response)
+    client = _make_openai(fake)
+
+    result = client.call_tools(
+        [{"role": "user", "content": "hi"}],
+        [CHOOSE, SELECT_OPTION_TOOL, CHOOSE],
+        tool_choice="any",
+    )
+
+    assert fake.created_kwargs["tool_choice"] == "required"  # "any" -> required
+    assert len(fake.created_kwargs["tools"]) == 3
+    assert [c["id"] for c in result.tool_calls] == ["c1", "c2"]  # ALL, not just [0]
+    assert result.tool_calls[0] == {"id": "c1", "name": "t1", "arguments": {"x": 1}}
+    assert result.tool_calls[1]["arguments"] == {"y": 2}
+
+
+def test_anthropic_call_tools_collects_all_tool_use_blocks():
+    response = SimpleNamespace(
+        content=[
+            SimpleNamespace(type="text", text="thinking"),
+            SimpleNamespace(type="tool_use", id="u1", name="t1", input={"x": 1}),
+            SimpleNamespace(type="tool_use", id="u2", name="t2", input={"y": 2}),
+        ]
+    )
+    fake = _FakeAnthropicSDK(response)
+    client = _make_anthropic(fake)
+
+    result = client.call_tools(
+        [{"role": "user", "content": "hi"}],
+        [CHOOSE, SELECT_OPTION_TOOL, CHOOSE],
+        tool_choice="any",
+    )
+
+    assert fake.created_kwargs["tool_choice"] == {"type": "any"}
+    assert len(fake.created_kwargs["tools"]) == 3
+    assert [c["id"] for c in result.tool_calls] == ["u1", "u2"]  # both, not just first
+    assert result.tool_calls[0] == {"id": "u1", "name": "t1", "arguments": {"x": 1}}
+    assert result.text == "thinking"  # prose alongside the tool calls
+
+
+def test_openai_call_tools_no_calls_and_exception():
+    resp = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="hello", tool_calls=None))
+        ]
+    )
+    result = _make_openai(_FakeOpenAISDK(resp)).call_tools(
+        [{"role": "user", "content": "hi"}], [CHOOSE]
+    )
+    assert result.tool_calls == [] and result.text == "hello"
+    assert (
+        _make_openai(_RaisingOpenAISDK()).call_tools(
+            [{"role": "user", "content": "hi"}], [CHOOSE]
+        )
+        is None
+    )
+
+
+def test_anthropic_call_tools_no_calls_and_exception():
+    resp = SimpleNamespace(content=[SimpleNamespace(type="text", text="hello")])
+    result = _make_anthropic(_FakeAnthropicSDK(resp)).call_tools(
+        [{"role": "user", "content": "hi"}], [CHOOSE]
+    )
+    assert result.tool_calls == [] and result.text == "hello"
+    assert (
+        _make_anthropic(_RaisingAnthropicSDK()).call_tools(
+            [{"role": "user", "content": "hi"}], [CHOOSE]
+        )
+        is None
+    )
+
+
+def test_call_tools_records_one_usage_openai():
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=None,
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="c1",
+                            function=SimpleNamespace(name="t", arguments='{"a": 1}'),
+                        )
+                    ],
+                )
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=150, completion_tokens=7),
+    )
+    client = _make_openai(_FakeOpenAISDK(response))
+    ledger = _with_ledger(client)
+
+    client.call_tools([{"role": "user", "content": "hi"}], [CHOOSE], tool_choice="any")
+    assert len(ledger.records) == 1
+    assert ledger.records[0].usage.input_tokens == 150
+
+
+def test_call_tools_records_one_usage_anthropic():
+    response = SimpleNamespace(
+        content=[SimpleNamespace(type="tool_use", id="u", name="t", input={"a": 1})],
+        usage=SimpleNamespace(
+            input_tokens=90, output_tokens=4, cache_read_input_tokens=50
+        ),
+    )
+    client = _make_anthropic(_FakeAnthropicSDK(response))
+    client._model = "claude-haiku-4-5"
+    ledger = _with_ledger(client)
+
+    client.call_tools([{"role": "user", "content": "hi"}], [CHOOSE], tool_choice="any")
+    assert len(ledger.records) == 1
+    assert ledger.records[0].usage.cache_read_input_tokens == 50
+
+
+# --- call_tool stays a forced-single wrapper over call_tools --------------
+
+
+def test_call_tool_still_forces_single_via_call_tools_openai():
+    # The wrapper must produce the exact forced-single wire shape as before.
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="c1",
+                            function=SimpleNamespace(
+                                name="choose_action", arguments='{"action": "go"}'
+                            ),
+                        )
+                    ]
+                )
+            )
+        ]
+    )
+    fake = _FakeOpenAISDK(response)
+    assert _make_openai(fake).call_tool(
+        [{"role": "user", "content": "hi"}], CHOOSE
+    ) == {"action": "go"}
+    assert fake.created_kwargs["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "choose_action"},
+    }
+    assert len(fake.created_kwargs["tools"]) == 1
+
+
+# --- #354: MockLlmClient.call_tools ---------------------------------------
+
+
+def test_mock_call_tools_scripts_result_and_logs():
+    client = MockLlmClient(
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "choose_action", "arguments": {"action": "go"}}]}
+        ]
+    )
+    result = client.call_tools(
+        [{"role": "user", "content": "x"}], [CHOOSE], tool_choice="any"
+    )
+    assert isinstance(result, ToolCallResult)
+    assert result.tool_calls[0]["name"] == "choose_action"
+    assert result.tool_calls[0]["arguments"] == {"action": "go"}
+    assert result.tool_calls[0]["id"]  # a synthesized id fills in
+    assert client.tool_calls_log[0]["tool_choice"] == "any"
+
+
+def test_mock_call_tools_defaults_to_none():
+    assert MockLlmClient().call_tools([], [CHOOSE]) is None
+
+
+def test_mock_call_tools_callable():
+    def responder(messages, tools, tool_choice, max_tokens, temperature):
+        return ToolCallResult(
+            text=None, tool_calls=[{"id": "1", "name": "t", "arguments": {}}]
+        )
+
+    assert (
+        MockLlmClient(tool_calls_responses=responder)
+        .call_tools([], [CHOOSE])
+        .tool_calls[0]["name"]
+        == "t"
+    )
+
+
+def test_mock_call_tools_queue_separate_from_tool_responses():
+    # call_tool draws from tool_responses; call_tools from tool_calls_responses.
+    client = MockLlmClient(
+        tool_responses=[{"index": 0}],
+        tool_calls_responses=[{"tool_calls": [{"name": "a", "arguments": {}}]}],
+    )
+    assert client.call_tool([], SELECT_OPTION_TOOL) == {"index": 0}
+    assert client.call_tools([], [CHOOSE]).tool_calls[0]["name"] == "a"
+    assert len(client.tool_calls) == 1 and len(client.tool_calls_log) == 1
+
+
+# --- #354: MockReActClient.call_tools -------------------------------------
+
+
+def test_mock_react_call_tools_returns_one_choose_action_call():
+    client = MockReActClient()
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": _DRAWBRIDGE_OBS},
+    ]
+    result = client.call_tools(
+        messages, [build_choose_action_tool(["growl", "attack"])], tool_choice="any"
+    )
+    assert len(result.tool_calls) == 1
+    args = result.tool_calls[0]["arguments"]
+    assert args["action"] == "growl" and args["arguments"] == "player"
+    assert result.tool_calls[0]["name"] == "choose_action"
+
+
+def test_mock_react_call_tools_reconstructs_reflection_from_conversation():
+    # A loop-shaped conversation: base obs (troll snarled), then the failed
+    # 'attack player' tool_use + an is_error tool_result. The brain must
+    # reconstruct npc._reflect's string and escalate to 'attack player with club'.
+    client = MockReActClient()
+    base_obs = (
+        _DRAWBRIDGE_OBS + "\n  Game: Troll snarls and bares its teeth at The player."
+    )
+    messages = [
+        {"role": "system", "content": _TROLL_SYSTEM},
+        {"role": "user", "content": base_obs},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "t1",
+                    "name": "choose_action",
+                    "arguments": {"action": "attack", "arguments": "player"},
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "troll doesn't have a weapon.",
+                    "is_error": True,
+                }
+            ],
+        },
+    ]
+    result = client.call_tools(messages, [build_choose_action_tool(["attack"])])
+    args = result.tool_calls[0]["arguments"]
+    assert args["action"] == "attack" and args["arguments"] == "player with club"
+
+
+# --- #355: block-shaped message content translation ----------------------
+
+
+def test_content_to_text_flattens_blocks():
+    assert _content_to_text("plain") == "plain"
+    out = _content_to_text(
+        [
+            {"type": "text", "text": "hello"},
+            {"type": "tool_use", "id": "t", "name": "n", "arguments": {"a": 1}},
+            {
+                "type": "tool_result",
+                "tool_use_id": "t",
+                "content": "res",
+                "is_error": True,
+            },
+        ]
+    )
+    assert "hello" in out and "res" in out and '"a": 1' in out
+
+
+def test_anthropic_call_tools_translates_block_messages():
+    response = SimpleNamespace(content=[SimpleNamespace(type="text", text="ok")])
+    fake = _FakeAnthropicSDK(response)
+    client = _make_anthropic(fake)
+    messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "hi"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "t1",
+                    "name": "choose_action",
+                    "arguments": {"action": "go north"},
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "no exit",
+                    "is_error": True,
+                }
+            ],
+        },
+    ]
+    client.call_tools(messages, [CHOOSE], tool_choice="any")
+    sent = fake.created_kwargs["messages"]
+    assert sent[0] == {"role": "user", "content": "hi"}  # system lifted out
+    assert sent[1]["role"] == "assistant"
+    assert sent[1]["content"][0] == {
+        "type": "tool_use",
+        "id": "t1",
+        "name": "choose_action",
+        "input": {"action": "go north"},  # arguments -> input
+    }
+    assert sent[2]["content"][0] == {
+        "type": "tool_result",
+        "tool_use_id": "t1",
+        "content": "no exit",
+        "is_error": True,  # carried
+    }
+
+
+def test_openai_call_tools_translates_block_messages():
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="ok", tool_calls=None))
+        ]
+    )
+    fake = _FakeOpenAISDK(response)
+    client = _make_openai(fake)
+    messages = [
+        {"role": "user", "content": "hi"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "t1",
+                    "name": "choose_action",
+                    "arguments": {"action": "go north"},
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "no exit",
+                    "is_error": True,
+                }
+            ],
+        },
+    ]
+    client.call_tools(messages, [CHOOSE], tool_choice="auto")
+    sent = fake.created_kwargs["messages"]
+    assert sent[0] == {"role": "user", "content": "hi"}
+    assert sent[1]["role"] == "assistant"
+    assert sent[1]["tool_calls"][0]["id"] == "t1"
+    assert sent[1]["tool_calls"][0]["function"]["name"] == "choose_action"
+    # arguments serialized to a JSON string on the OpenAI wire
+    assert json.loads(sent[1]["tool_calls"][0]["function"]["arguments"]) == {
+        "action": "go north"
+    }
+    # tool_result -> role:"tool" message, is_error folded into the content
+    assert sent[2] == {
+        "role": "tool",
+        "tool_call_id": "t1",
+        "content": "Error: no exit",
+    }
+    assert fake.created_kwargs["tool_choice"] == "auto"
+
+
+def test_anthropic_rstrip_guarded_for_block_content():
+    # A list-content assistant turn must not crash (only string content is
+    # rstripped inline); text-block text is still rstripped for the assistant.
+    response = SimpleNamespace(content=[SimpleNamespace(type="text", text="ok")])
+    fake = _FakeAnthropicSDK(response)
+    client = _make_anthropic(fake)
+    messages = [
+        {"role": "assistant", "content": [{"type": "text", "text": "thinking...  "}]},
+        {"role": "user", "content": "go"},
+    ]
+    client.call_tools(messages, [CHOOSE])
+    assert fake.created_kwargs["messages"][0]["content"][0] == {
+        "type": "text",
+        "text": "thinking...",
+    }
+
+
+def test_limit_context_length_handles_block_content():
+    counter = lambda s: len(s.split())
+    messages = [
+        {"role": "user", "content": "one two three"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "t1", "name": "x", "arguments": {"k": "v"}}
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "some result text",
+                    "is_error": False,
+                }
+            ],
+        },
+    ]
+    assert limit_context_length(messages, 1000, counter) == messages  # all fit
+    assert (
+        limit_context_length(messages, 3, counter) == messages[-1:]
+    )  # tight -> newest
+
+
+# --- #355: run_tool_loop --------------------------------------------------
+
+
+def test_run_tool_loop_stops_on_done():
+    client = MockLlmClient(
+        tool_calls_responses=[
+            {"tool_calls": [{"id": "c1", "name": "act", "arguments": {"action": "go"}}]}
+        ]
+    )
+    calls = []
+
+    def execute(name, args):
+        calls.append((name, args))
+        return ("ok", False, True)  # terminal success
+
+    messages = [{"role": "user", "content": "start"}]
+    run_tool_loop(client, messages, [CHOOSE], execute, max_rounds=4)
+
+    assert len(client.tool_calls_log) == 1  # no wasted extra round-trip
+    assert calls == [("act", {"action": "go"})]
+    assert messages[-2]["role"] == "assistant"
+    assert messages[-2]["content"][0]["type"] == "tool_use"
+    assert messages[-1]["role"] == "user"
+    assert messages[-1]["content"][0]["type"] == "tool_result"
+
+
+def test_run_tool_loop_retries_on_is_error_then_succeeds():
+    client = MockLlmClient(
+        tool_calls_responses=[
+            {
+                "tool_calls": [
+                    {"id": "c1", "name": "act", "arguments": {"action": "bad"}}
+                ]
+            },
+            {
+                "tool_calls": [
+                    {"id": "c2", "name": "act", "arguments": {"action": "good"}}
+                ]
+            },
+        ]
+    )
+
+    def execute(name, args):
+        if args["action"] == "bad":
+            return ("nope", True, False)  # is_error -> retry in conversation
+        return ("ok", False, True)
+
+    messages = [{"role": "user", "content": "start"}]
+    run_tool_loop(client, messages, [CHOOSE], execute, max_rounds=4)
+
+    assert len(client.tool_calls_log) == 2
+    # Round 2's request carries round 1's tool_use + an is_error tool_result.
+    round2 = client.tool_calls_log[1]["messages"]
+    blocks = [b for m in round2 if isinstance(m["content"], list) for b in m["content"]]
+    assert any(
+        b["type"] == "tool_use" and b["arguments"] == {"action": "bad"} for b in blocks
+    )
+    assert any(
+        b["type"] == "tool_result" and b["is_error"] and b["content"] == "nope"
+        for b in blocks
+    )
+
+
+def test_run_tool_loop_caps_at_max_rounds():
+    def responder(messages, tools, tool_choice, max_tokens, temperature):
+        return {
+            "tool_calls": [{"id": "c", "name": "act", "arguments": {"action": "x"}}]
+        }
+
+    client = MockLlmClient(tool_calls_responses=responder)
+
+    def execute(name, args):
+        return ("fail", True, False)  # never succeeds
+
+    messages = [{"role": "user", "content": "start"}]
+    run_tool_loop(client, messages, [CHOOSE], execute, max_rounds=3)
+    assert len(client.tool_calls_log) == 3  # hard cap enforced
+
+
+def test_run_tool_loop_stops_when_no_tool_call():
+    client = MockLlmClient(
+        tool_calls_responses=[{"text": "just chatting", "tool_calls": []}]
+    )
+    called = []
+
+    def execute(name, args):
+        called.append(name)
+        return ("x", False, True)
+
+    messages = [{"role": "user", "content": "start"}]
+    result = run_tool_loop(client, messages, [CHOOSE], execute, max_rounds=4)
+    assert len(client.tool_calls_log) == 1
+    assert called == []  # execute never ran
+    assert result.text == "just chatting"
+    assert len(messages) == 1  # no turns appended
