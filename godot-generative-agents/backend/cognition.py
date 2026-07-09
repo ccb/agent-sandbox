@@ -540,6 +540,20 @@ def remember_outcome(char, command: str, step: int) -> None:
         activity = char.get_property("activity") or rest.strip()
         text = render("reflection", verb=verb, activity=activity)
         importance = 2.0
+    elif verb == "drink":
+        # The contaminated-water effect (#300): DrinkPenn set is_sick during
+        # apply_effects, so the sickness lands as a HIGH-importance first-person
+        # memory -- the motivation signal the self-coding experiment (#299)
+        # retrieves. (No cure exists in this world yet; a still-sick agent that
+        # drinks again reinforces the memory, which is honest.)
+        sick = bool(char.get_property("is_sick"))
+        text = render("reflection", verb=verb, item=rest.strip(), sick=sick)
+        importance = 8.0 if sick else 2.0
+    elif verb in ("get", "activate", "deactivate"):
+        # World-mutating one-shot verbs (#300): worth a normal-importance
+        # memory, unlike the 1.0 catch-all below.
+        text = render("reflection", verb=verb, command=command)
+        importance = 2.0
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
