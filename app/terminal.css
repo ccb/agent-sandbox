@@ -144,6 +144,60 @@ body.no-crt, body.no-crt input, body.no-crt #boottext { text-shadow: none; }
 body.size-small, body.size-small input { font-size: 13px; }
 body.size-large, body.size-large input { font-size: 18px; }
 
+/* the swipe panels: inventory (from the left) and the explored map (from
+   the right) -- terminal-styled sheets, dismissed by tap or counter-swipe */
+.bar-btn {
+  margin-left: 0.45rem;
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 3px;
+  padding: 0 0.45rem;
+  cursor: pointer;
+  color: var(--phosphor-bright);
+  text-transform: uppercase;
+}
+.panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: min(88vw, 26rem);
+  z-index: 6;
+  background: var(--bg);
+  padding: calc(env(safe-area-inset-top) + 1rem) 1rem 1rem;
+  overflow-y: auto;
+  transition: transform 0.22s ease-out;
+  border-color: var(--phosphor-dim);
+}
+.panel.left  { left: 0;  border-right: 1px solid var(--phosphor-dim); transform: translateX(0); }
+.panel.right { right: 0; border-left: 1px solid var(--phosphor-dim); transform: translateX(0); }
+.panel.hidden.left  { transform: translateX(-102%); }
+.panel.hidden.right { transform: translateX(102%); }
+.panel.hidden { pointer-events: none; }
+.panel h2 {
+  color: var(--phosphor-bright);
+  letter-spacing: 0.1em;
+  font-size: 1em;
+  margin-bottom: 0.6rem;
+}
+.panel .inv-item { margin-bottom: 0.35rem; }
+.panel .inv-wound { color: var(--blood); margin-bottom: 0.35rem; }
+.panel .inv-section { margin: 0.8rem 0 0.3rem; color: var(--phosphor-dim);
+  text-transform: uppercase; letter-spacing: 0.08em; }
+.panel .panel-close {
+  margin-top: 1rem;
+  border: 1px solid var(--phosphor-dim);
+  padding: 0.25rem 0.7rem;
+  display: inline-block;
+  cursor: pointer;
+  color: var(--phosphor-bright);
+}
+#panel-map svg { width: 100%; height: auto; }
+#panel-map .map-node rect { fill: none; stroke: var(--phosphor); }
+#panel-map .map-node.here rect { fill: rgba(77, 184, 255, 0.18); stroke: var(--phosphor-bright); }
+#panel-map .map-node text { fill: var(--phosphor-bright); font-size: 10px; }
+#panel-map .map-edge { stroke: var(--phosphor-dim); }
+#panel-map .map-label { fill: var(--phosphor-dim); font-size: 8px; text-transform: uppercase; }
+#panel-map .map-stub { stroke: var(--phosphor-dim); stroke-dasharray: 3 3; }
+
 /* the settings overlay: terminal-styled, not a system sheet */
 #gear {
   margin-left: 0.6rem;

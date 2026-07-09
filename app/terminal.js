@@ -285,6 +285,171 @@ cmd.addEventListener("keydown", (e) => {
 });
 document.addEventListener("pointerdown", ensureAudio, { once: true });
 
+/* ------------------------------------------------------- swipe panels */
+/* Swipe right -> the inventory (from the left edge). Swipe left -> the map
+   of EXPLORED rooms (from the right): nodes you have stood in, arcs labeled
+   with the direction of travel, dashed stubs where you haven't gone (CCB).
+   The i/m buttons in the status bar do the same for mouse-and-keyboard. */
+
+const panelInv = document.getElementById("panel-inv");
+const panelMap = document.getElementById("panel-map");
+
+function closePanels() {
+  panelInv.classList.add("hidden");
+  panelMap.classList.add("hidden");
+}
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text) node.textContent = text;
+  return node;
+}
+
+function closeButton() {
+  const b = el("span", "panel-close", "[ RESUME ]");
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); closePanels(); });
+  return b;
+}
+
+function openInventory() {
+  if (!api) return;
+  const data = JSON.parse(api.panels()).inventory;
+  panelInv.replaceChildren(el("h2", "", "PACK"));
+  const section = (title) => panelInv.appendChild(el("div", "inv-section", title));
+  if (!data.carried.length) panelInv.appendChild(el("div", "inv-item", "(nothing carried)"));
+  for (const it of data.carried) panelInv.appendChild(el("div", "inv-item", `* ${it.description}`));
+  if (data.worn.length) {
+    section("worn");
+    for (const it of data.worn) panelInv.appendChild(el("div", "inv-item", `* ${it.description}`));
+  }
+  if (data.wounds.length) {
+    section("wounds");
+    for (const w of data.wounds)
+      panelInv.appendChild(el("div", "inv-wound", `\u2665 ${w.name} (${w.slots}) - ${w.description}`));
+  }
+  if (data.slots) section(`slots ${data.slots}`);
+  panelInv.appendChild(closeButton());
+  panelMap.classList.add("hidden");
+  panelInv.classList.remove("hidden");
+}
+
+function mapLayout(nodes, edges, here) {
+  // Columns by BFS depth from the current room: small graph, honest shape.
+  const adj = new Map(nodes.map((n) => [n, []]));
+  for (const e of edges) {
+    adj.get(e.from)?.push(e.to);
+    adj.get(e.to)?.push(e.from);
+  }
+  const depth = new Map([[here ?? nodes[0], 0]]);
+  const queue = [here ?? nodes[0]];
+  while (queue.length) {
+    const n = queue.shift();
+    for (const m of adj.get(n) || []) {
+      if (!depth.has(m)) { depth.set(m, depth.get(n) + 1); queue.push(m); }
+    }
+  }
+  for (const n of nodes) if (!depth.has(n)) depth.set(n, 0);
+  const cols = new Map();
+  const pos = new Map();
+  for (const n of nodes) {
+    const d = depth.get(n);
+    const row = cols.get(d) ?? 0;
+    cols.set(d, row + 1);
+    pos.set(n, { x: 20 + d * 150, y: 26 + row * 52 });
+  }
+  return pos;
+}
+
+function openMap() {
+  if (!api) return;
+  const m = JSON.parse(api.panels()).map;
+  panelMap.replaceChildren(el("h2", "", "THE EXPEDITION SO FAR"));
+  const pos = mapLayout(m.nodes, m.edges, m.here);
+  const W = 20 + 150 * (Math.max(...[...pos.values()].map((p) => p.x - 20)) / 150 + 1);
+  const H = Math.max(...[...pos.values()].map((p) => p.y)) + 46;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${Math.max(W, 320)} ${H}`);
+  const sub = (name, attrs, cls) => {
+    const q = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) q.setAttribute(k, v);
+    if (cls) q.setAttribute("class", cls);
+    svg.appendChild(q);
+    return q;
+  };
+  const center = (n) => ({ x: pos.get(n).x + 62, y: pos.get(n).y + 14 });
+  for (const e of m.edges) {
+    const a = center(e.from), b = center(e.to);
+    sub("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, "map-edge");
+    const t = sub("text", { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 3 }, "map-label");
+    t.textContent = e.dir;
+  }
+  for (const st of m.stubs) {
+    const a = center(st.from);
+    sub("line", { x1: a.x, y1: a.y + 10, x2: a.x + 26, y2: a.y + 30 }, "map-stub");
+    const t = sub("text", { x: a.x + 28, y: a.y + 38 }, "map-label");
+    t.textContent = st.dir + "?";
+  }
+  for (const n of m.nodes) {
+    const p = pos.get(n);
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "map-node" + (n === m.here ? " here" : ""));
+    const rect = document.createElementNS(NS, "rect");
+    for (const [k, v] of Object.entries({ x: p.x, y: p.y, width: 124, height: 28, rx: 3 }))
+      rect.setAttribute(k, v);
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("x", p.x + 62);
+    label.setAttribute("y", p.y + 18);
+    label.setAttribute("text-anchor", "middle");
+    label.textContent = n.length > 22 ? n.slice(0, 21) + "\u2026" : n;
+    g.append(rect, label);
+    svg.appendChild(g);
+  }
+  panelMap.appendChild(svg);
+  panelMap.appendChild(el("div", "inv-section",
+    m.here ? `you are in ${m.here}` : ""));
+  panelMap.appendChild(closeButton());
+  panelInv.classList.add("hidden");
+  panelMap.classList.remove("hidden");
+}
+
+document.getElementById("btn-inv").addEventListener("pointerdown", (e) => {
+  e.preventDefault(); click();
+  panelInv.classList.contains("hidden") ? openInventory() : closePanels();
+});
+document.getElementById("btn-map").addEventListener("pointerdown", (e) => {
+  e.preventDefault(); click();
+  panelMap.classList.contains("hidden") ? openMap() : closePanels();
+});
+
+let swipe = null;
+output.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1)
+    swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+output.addEventListener("touchend", (e) => {
+  if (!swipe) return;
+  const dx = e.changedTouches[0].clientX - swipe.x;
+  const dy = e.changedTouches[0].clientY - swipe.y;
+  swipe = null;
+  if (Math.abs(dx) < 60 || Math.abs(dy) > 50) return;
+  if (dx > 0) openInventory();  // swipe right: the pack
+  else openMap();               // swipe left: the expedition so far
+}, { passive: true });
+for (const panel of [panelInv, panelMap]) {
+  panel.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 1)
+      swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  panel.addEventListener("touchend", (e) => {
+    if (!swipe) return;
+    const dx = e.changedTouches[0].clientX - swipe.x;
+    swipe = null;
+    if (Math.abs(dx) > 60) closePanels();  // counter-swipe dismisses
+  }, { passive: true });
+}
+
 /* -------------------------------------------------------------------- boot */
 
 async function main() {
@@ -317,6 +482,7 @@ async function main() {
   api = {
     command: (t) => pyodide.runPython(`app_api.command(${JSON.stringify(t)})`),
     boot: (seed) => pyodide.runPython(`app_api.boot(${seed})`),
+    panels: () => pyodide.runPython("app_api.panel_data()"),
   };
 
   // Seed: resume the autosave's seed when one exists (so RESTORE AUTO is
