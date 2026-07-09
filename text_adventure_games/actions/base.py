@@ -12,6 +12,29 @@ def conjugate(character, second: str, third: str) -> str:
     return second if character.name.lower() == "you" else third
 
 
+# action_name() keys for verbs that exist for the engine's own plumbing rather
+# than as something a player or agent would invoke, so they are left off both the
+# HELP listing and the derived agent toolset (issue #356).
+HIDDEN_ACTIONS = {ActionName.SEQUENCE}
+
+
+def registered_action_entries(parser):
+    """Yield ``(name, action, description, aliases)`` for every registered action.
+
+    This is the single walk over the parser's action registry shared by the HELP
+    listing and the tool schemas derived for a tool-calling agent (issue #356):
+    both need the same ``action_name() -> (ACTION_DESCRIPTION, ACTION_ALIASES)``
+    triple. Each caller applies its own visibility policy on top -- HELP hides
+    engine plumbing and NPC-only flavor verbs (it's a player's menu), while the
+    agent toolset keeps NPC verbs (an agent needs its own character's "growl")
+    and drops only the comma-sequence wrapper.
+    """
+    for name, action in parser.actions.items():
+        description = action.ACTION_DESCRIPTION or ""
+        aliases = list(getattr(action, "ACTION_ALIASES", None) or [])
+        yield name, action, description, aliases
+
+
 class Action(GatedEffect):
     """
     In the game, rather than allowing players to do anything, we have a
@@ -37,6 +60,30 @@ class Action(GatedEffect):
     ACTION_NAME: str | None = None
     ACTION_DESCRIPTION: str = None
     ACTION_ALIASES: list[str] = None
+
+    # Typed argument slots for this action's derived tool schema (issue #356).
+    # ``None`` (the default) means the action is offered to a tool-calling agent
+    # with a single free-text ``arguments`` field -- the parser splits it into
+    # entities exactly as for human input, so NO existing action needs changing
+    # (incremental adoption, no flag-day across the built-ins). An action opts
+    # into typed arguments by declaring a dict of slots, e.g.::
+    #
+    #     ARGUMENTS_SCHEMA = {
+    #         "target": {"type": "character", "description": "who to attack",
+    #                    "required": True},
+    #         "weapon": {"type": "item", "description": "what to attack with",
+    #                    "connector": "with"},
+    #     }
+    #
+    # A slot's ``type`` is either a JSON primitive ("string"/"integer"/...) or a
+    # scope category ("item"/"character"/"direction"): a scope slot is filled at
+    # decision time with an ``enum`` of the entities the actor can currently see
+    # (see ``npc.tools_for``). ``required`` marks a mandatory slot; ``connector``
+    # is a word placed before the value when the slots are reassembled into a
+    # command string ("attack" + target "player" + weapon "club" whose slot
+    # declares connector "with" -> "attack player with club"), which then routes
+    # through the precondition gate unchanged.
+    ARGUMENTS_SCHEMA: dict | None = None
 
     # Whether this verb is something the player issues, and so should appear in
     # the HELP listing. Defaults to True. NPC-only flavor actions (a troll's
@@ -434,10 +481,6 @@ class Help(Action):
     ACTION_DESCRIPTION = "List the commands you can use"
     ACTION_ALIASES = ["h", "commands", "?"]
 
-    # action_name() keys for verbs that exist for the engine's own plumbing
-    # rather than as something a player would type, so they're left off the list.
-    _HIDDEN = {ActionName.SEQUENCE}
-
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
 
@@ -446,11 +489,14 @@ class Help(Action):
 
     def apply_effects(self):
         entries = []
-        for name, action in self.parser.actions.items():
-            if name in self._HIDDEN or not action.PLAYER_VISIBLE:
+        # Shares the registry walk with the agent toolset (issue #356); HELP's
+        # own filter drops engine plumbing and NPC-only flavor verbs so the list
+        # stays a player's menu.
+        for name, action, description, aliases in registered_action_entries(
+            self.parser
+        ):
+            if name in HIDDEN_ACTIONS or not action.PLAYER_VISIBLE:
                 continue
-            description = action.ACTION_DESCRIPTION or ""
-            aliases = getattr(action, "ACTION_ALIASES", None) or []
             entries.append((name, description, aliases))
         entries.sort()
         # Align descriptions against the command NAMES only (capped) -- never
