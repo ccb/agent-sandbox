@@ -279,6 +279,7 @@ def simulate(
     llm_client=None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
+    out_events: list | None = None,
     extra_action_names: list[str] | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
@@ -357,6 +358,10 @@ def simulate(
     (``{name: DailyPlan.to_primitive()}``) so the run can persist it; the exporter
     writes ``personas/<Name>/daily_plan.json`` so a downstream reader has it
     without re-calling the model. Also an out-parameter, for the same reason.
+
+    Pass an ``out_events`` list to collect the run's full ``GameEvent`` log
+    (issue #467) as ``to_primitive()`` dicts — the #305 ``EventState`` shape
+    the bake artifacts persist and the live feed publishes.
 
     Pass ``extra_action_names`` (spec §3, #300) through to :func:`attach_agents` to
     widen every agent's ``action_names`` beyond its own authored-command verbs.
@@ -494,5 +499,11 @@ def simulate(
     if out_memories is not None:
         for name in order:
             out_memories[name] = memory_stream_for_persona(chars[name].agent)
+
+    # Hand back the run's full GameEvent log, if the caller asked for it
+    # (issue #467). Already-serialized EventState dicts, so bake artifacts
+    # and the live feed carry the identical record.
+    if out_events is not None:
+        out_events.extend(event.to_primitive() for event in game.events)
 
     return frames
