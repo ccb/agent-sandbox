@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/live_hud.gd" id="10_hud"]
 [ext_resource type="Script" path="res://scripts/persona_inspector.gd" id="11_inspector"]
 [ext_resource type="Script" path="res://scripts/social_graph_panel.gd" id="12_socgraph"]
+[ext_resource type="Script" path="res://scripts/snapshot_gallery.gd" id="13_snapgallery"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -107,3 +108,15 @@ layer = 13
 [node name="SocialGraphPanel" type="Control" parent="SocialGraphLayer"]
 visible = false
 script = ExtResource("12_socgraph")
+
+; Snapshot gallery pop-up (snapshot_gallery.gd, issue #253): the frame snapshots taken
+; this session (camera button / C key), each captioned with its world timestamp. On its
+; OWN CanvasLayer above the other modals (heatmap 11, inspector 12, social graph 13) —
+; same layering trick — so its dim covers everything and Esc closes it first. Hidden
+; until opened (the sidebar's Snapshots button); viewer.gd feeds it each capture.
+[node name="SnapshotLayer" type="CanvasLayer" parent="."]
+layer = 14
+
+[node name="SnapshotGallery" type="Control" parent="SnapshotLayer"]
+visible = false
+script = ExtResource("13_snapgallery")

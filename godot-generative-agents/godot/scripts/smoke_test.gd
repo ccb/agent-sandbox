@@ -29,7 +29,10 @@ func _ready() -> void:
 	# to count — it gets its own check (does it paint any buttons?) rather than a
 	# spot in SCENES, which would trip the tile-cells assertion.
 	failures += await _check_menu()
-	var checks := SCENES.size() + 1
+	# The snapshot gallery (issue #253) is a code-built pop-up, not a scene in SCENES;
+	# check that it builds and accepts snapshots (the capture path it feeds is GPU-only).
+	failures += _check_gallery()
+	var checks := SCENES.size() + 2
 	if failures == 0:
 		print("smoke_test: PASS — %d scene(s) OK" % checks)
 	else:
@@ -114,4 +117,35 @@ func _count_buttons(node: Node) -> int:
 		total += 1
 	for child in node.get_children():
 		total += _count_buttons(child)
+	return total
+
+
+# Returns 0 if the snapshot gallery (issue #253) builds and takes snapshots, 1 if not.
+# Pure UI — no GPU/render needed — so it runs headless like the rest of this test. It
+# builds the pop-up (_ready), adds two dummy captures, and asserts the count plus that a
+# clickable thumbnail (a TextureButton) was built for each. The actual pixel capture
+# needs a real renderer and is covered by the manual viewer check, not here.
+func _check_gallery() -> int:
+	var gallery: Node = load("res://scripts/snapshot_gallery.gd").new()
+	add_child(gallery)  # entering the tree runs _ready(), which builds the grid
+	var dummy := ImageTexture.create_from_image(Image.create_empty(1, 1, false, Image.FORMAT_RGBA8))
+	gallery.add_snapshot(dummy, "test time A")
+	gallery.add_snapshot(dummy, "test time B")
+	var n: int = gallery.count()
+	var thumbs := _count_texture_buttons(gallery)
+	gallery.queue_free()
+	if n != 2 or thumbs != 2:
+		printerr("  snapshot_gallery: expected 2 snapshots + 2 thumbnails, got %d + %d" % [n, thumbs])
+		return 1
+	print("  snapshot_gallery: OK (%d snapshots)" % n)
+	return 0
+
+
+# Thumbnails are TextureButtons (not plain Buttons), so _count_buttons misses them.
+func _count_texture_buttons(node: Node) -> int:
+	var total := 0
+	if node is TextureButton:
+		total += 1
+	for child in node.get_children():
+		total += _count_texture_buttons(child)
 	return total
