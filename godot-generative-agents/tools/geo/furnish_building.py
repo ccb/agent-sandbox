@@ -10,8 +10,8 @@ the ``.tmj``.
 
 Run order (documented in the PR too):
 
-    uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
-    uv run python tools/geo/furnish_building.py                          # furnish
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
+    uv run python godot-generative-agents/tools/geo/furnish_building.py                          # furnish
     # commit the updated .tmj
 
 The script is **idempotent**: it strips any interior tilesets / ``williams_*``

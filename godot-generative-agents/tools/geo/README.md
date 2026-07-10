@@ -1,4 +1,4 @@
-# `tools/geo` — real-world map → Tiled tilemap
+# `godot-generative-agents/tools/geo` — real-world map → Tiled tilemap
 
 Proof-of-concept for [#164](https://github.com/ccb/agent-sandbox/issues/164):
 import real-world map data (OpenStreetMap / GeoJSON) and turn it into a **Tiled**
@@ -15,15 +15,15 @@ The shipped example is the **University of Pennsylvania campus**
 > ## For LLMs / agents: use the tile catalog — do not guess tiles
 >
 > When furnishing, decorating, or parsing the tilemap, **resolve every tile
-> through `tools/geo/furniture_catalog.json`** — the single source of truth for
+> through `godot-generative-agents/tools/geo/furniture_catalog.json`** — the single source of truth for
 > "what tile is what" (name → sheet, `(col,row)`, `w×h`, category, label,
 > `verified`). **Never invent raw atlas coordinates or gids**; reference tiles by
 > their catalog **name** (`block_named("bookshelf")` / `tile_named("wall_brick")`
 > in `furnish_building.py`).
 >
-> **Prefer the active preset.** `tools/geo/tile_presets.json` holds the
+> **Prefer the active preset.** `godot-generative-agents/tools/geo/tile_presets.json` holds the
 > human-curated subsets a person chose for the LLM to use. Before picking tiles,
-> load the menu with `uv run python tools/geo/tile_presets.py --menu` (active
+> load the menu with `uv run python godot-generative-agents/tools/geo/tile_presets.py --menu` (active
 > preset) and **use only those tiles**; in code, `tile_presets.objects(name)`
 > returns the catalog filtered to a preset. If no preset is active, fall back to
 > the full catalog but still go through it by name.
@@ -36,13 +36,13 @@ The shipped example is the **University of Pennsylvania campus**
 ## Run
 
 ```bash
-uv run python tools/geo/osm_to_tiled.py                 # full campus (default)
-uv run python tools/geo/osm_to_tiled.py --area core     # small prototyping subset
-uv run python tools/geo/osm_to_tiled.py --area all      # both
-uv run python tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 art (not flat colours)
-uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
-uv run python tools/geo/osm_to_tiled.py --mpt 2         # finer grid (2 m per tile)
-uv run python tools/geo/osm_to_tiled.py --rotate none   # keep north up (skip grid alignment)
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py                 # full campus (default)
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core     # small prototyping subset
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area all      # both
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 art (not flat colours)
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --mpt 2         # finer grid (2 m per tile)
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --rotate none   # keep north up (skip grid alignment)
 ```
 
 By default the map is **rotated so the street grid lines up with the X/Y axes**
@@ -62,8 +62,8 @@ format that `backend/world_map.py` already loads — collision +
 sector/arena CSVs + block tables — derived from the same OSM features:
 
 ```bash
-uv run python tools/geo/osm_to_ville.py            # core area -> the_upenn matrix
-uv run python tools/geo/osm_to_ville.py --area campus
+uv run python godot-generative-agents/tools/geo/osm_to_ville.py            # core area -> the_upenn matrix
+uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area campus
 ```
 
 - **collision** = building footprints + water → walls; streets/paths/lawns walkable.
@@ -140,7 +140,7 @@ The `core` bbox was derived from the real street-centreline geometry in the camp
 OSM data (the Philadelphia grid is rotated ~8°, so the axis-aligned box is the
 tight rectangle that still contains all four bounding streets).
 
-## Outputs (`tools/geo/out/`)
+## Outputs (`godot-generative-agents/tools/geo/out/`)
 
 | File | What it is |
 |------|------------|
@@ -192,15 +192,15 @@ Three ways to look at / verify the catalog (all dev-only; the game and the
 furnish step never import them):
 
 - **Interactive web grid (recommended):**
-  `uv run python tools/geo/catalog_web.py --serve` opens a browser editor — flip
+  `uv run python godot-generative-agents/tools/geo/catalog_web.py --serve` opens a browser editor — flip
   each tile verified/unverified, browse **every** tile on all four sheets, click a
   cell to add a new entry, and **Save** writes straight back to
   `furniture_catalog.json`. Drop `--serve` to instead emit a portable
   `out/catalog.html` whose Save downloads an updated JSON.
 - **Static contact sheet:**
-  `uv run --with pillow python tools/geo/preview_catalog.py` renders
+  `uv run --with pillow python godot-generative-agents/tools/geo/preview_catalog.py` renders
   `out/furniture_catalog_preview.png`; `"verified": false` entries get a `?` badge.
-- **Coordinate finder:** `uv run --with pillow python tools/geo/region_grid.py
+- **Coordinate finder:** `uv run --with pillow python godot-generative-agents/tools/geo/region_grid.py
   <sheet.png> 16 [--cols c0 c1] [--rows r0 r1] [--scale N]` renders an enlarged,
   (col,row)-labeled grid of any sheet/region — handy for reading off coordinates
   before adding catalog entries.
@@ -217,7 +217,7 @@ the default). This is the save/load seam between human curation and the LLM:
   *active for LLM*, and **Save preset** (writes `tile_presets.json` in `--serve`,
   downloads it otherwise). "Preview LLM menu" shows exactly what the LLM will get.
 - **Consume it (the LLM side):**
-  `uv run python tools/geo/tile_presets.py --menu` prints the budget-aware tile
+  `uv run python godot-generative-agents/tools/geo/tile_presets.py --menu` prints the budget-aware tile
   menu (active preset, or `--menu NAME`) to paste into a furnishing prompt;
   `--list` shows presets, `--use NAME` sets the active one. In code,
   `tile_presets.objects(name)` returns the catalog filtered to the preset, so
@@ -257,11 +257,11 @@ Run it after the bake + Williams furnish (it's idempotent — recomputes every
 footprint from an invariant mask, so re-runs are byte-stable):
 
 ```bash
-uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
-uv run python tools/geo/osm_to_ville.py --area core --out godot-generative-agents/backend/penn/the_upenn
-uv run python tools/geo/furnish_building.py                          # Williams interior
-uv run python tools/geo/add_entrances.py                             # doors + interiors
-uv run python tools/geo/block_grass.py                               # lawns become un-walkable
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
+uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area core --out godot-generative-agents/backend/penn/the_upenn
+uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams interior
+uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors + interiors
+uv run python godot-generative-agents/tools/geo/block_grass.py                               # lawns become un-walkable
 uv run python godot-generative-agents/backend/penn/generate_building_labels.py
 LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 ```
@@ -285,8 +285,8 @@ are already walls (buildings, water) are left untouched. The grid lines up
 tile-for-tile with the `.tmj`, so its layers index the same cells as the matrix.
 
 ```bash
-uv run python tools/geo/block_grass.py --dry-run   # report, change nothing
-uv run python tools/geo/block_grass.py             # wall the lawns
+uv run python godot-generative-agents/tools/geo/block_grass.py --dry-run   # report, change nothing
+uv run python godot-generative-agents/tools/geo/block_grass.py             # wall the lawns
 ```
 
 Idempotent: grass is detected from the (unchanged) `landuse` layer, not from the
@@ -307,9 +307,9 @@ fill untouched:
 
 ```bash
 # A single brick wall ring (the thin edge line comes free from the ground_edges layer):
-uv run python tools/geo/wall_building.py --sector "Van Pelt Library" --wall wall_brick_red --reset-fill
-uv run python tools/geo/wall_building.py --sector "Houston Hall"     --color grey --reset-fill   # grey stone
-uv run python tools/geo/wall_building.py --seed 202,144 --sector "Fisher Fine Arts" --wall wall_brick_red --reset-fill
+uv run python godot-generative-agents/tools/geo/wall_building.py --sector "Van Pelt Library" --wall wall_brick_red --reset-fill
+uv run python godot-generative-agents/tools/geo/wall_building.py --sector "Houston Hall"     --color grey --reset-fill   # grey stone
+uv run python godot-generative-agents/tools/geo/wall_building.py --seed 202,144 --sector "Fisher Fine Arts" --wall wall_brick_red --reset-fill
 ```
 
 - It reads the same footprint the furnisher does (sector ∩ collision in the sim
@@ -350,8 +350,8 @@ terracotta, orange roof → brown). Footprints that already carry a deliberate w
 colours survive. Re-run safe.
 
 ```bash
-uv run python tools/geo/wall_all_buildings.py --dry-run   # list what it'd do
-uv run python tools/geo/wall_all_buildings.py             # apply
+uv run python godot-generative-agents/tools/geo/wall_all_buildings.py --dry-run   # list what it'd do
+uv run python godot-generative-agents/tools/geo/wall_all_buildings.py             # apply
 ```
 - It's idempotent: the perimeter is re-derived and only perimeter cells are
   rewritten, so it's safe to re-run after a fresh `osm_to_tiled.py` bake.
@@ -365,8 +365,8 @@ internal-integrity checks. Prints a grouped report; exits non-zero on any
 currently-accepted drift, e.g. Cohen/Alumni rooms drawn in the tmj but not yet
 wired into `add_entrances.ROOM_SUBDIVIDE`).
 
-    uv run python tools/geo/validate_tmj.py           # human report
-    uv run python tools/geo/validate_tmj.py --json    # findings as JSON
+    uv run python godot-generative-agents/tools/geo/validate_tmj.py           # human report
+    uv run python godot-generative-agents/tools/geo/validate_tmj.py --json    # findings as JSON
 
 `test_validate_tmj.py` runs it as a CI gate: all integrity checks must pass and
 no new error drift may appear beyond the baseline.

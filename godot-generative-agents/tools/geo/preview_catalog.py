@@ -2,8 +2,8 @@
 """Render a labeled contact sheet of furniture_catalog.json so you can SEE that
 every (col,row) actually points at the object its label claims.
 
-    uv run --with pillow python tools/geo/preview_catalog.py
-    # writes tools/geo/out/furniture_catalog_preview.png
+    uv run --with pillow python godot-generative-agents/tools/geo/preview_catalog.py
+    # writes godot-generative-agents/tools/geo/out/furniture_catalog_preview.png
 
 Why this exists: the catalog's coordinates were read off the Franuka sheets by
 eye. Entries marked "verified": false should be checked here before you trust

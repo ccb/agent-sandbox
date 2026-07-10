@@ -13,8 +13,8 @@ the real building.
 
 Run order:
 
-    uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
-    uv run python tools/geo/wall_building.py --sector "Van Pelt Library" # outline
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
+    uv run python godot-generative-agents/tools/geo/wall_building.py --sector "Van Pelt Library" # outline
     # commit the updated .tmj
 
 It is **idempotent**: the perimeter is re-derived from the footprint every run and

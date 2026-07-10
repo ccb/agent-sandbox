@@ -1,4 +1,4 @@
-# tools/geo/test_furnish_van_pelt.py
+# godot-generative-agents/tools/geo/test_furnish_van_pelt.py
 import copy, json, os
 import furnish_van_pelt as fv
 

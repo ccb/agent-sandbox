@@ -10,8 +10,8 @@ Van Pelt -- in its own ``fisher_*`` tile layers stacked above ``entrance_floor``
 so ``add_entrances.py`` (which strips only ``entrance_*`` layers) leaves them
 intact across runs.
 
-    uv run python tools/geo/furnish_fisher.py            # paint floor + walls
-    uv run python tools/geo/furnish_fisher.py --dry-run  # report, write nothing
+    uv run python godot-generative-agents/tools/geo/furnish_fisher.py            # paint floor + walls
+    uv run python godot-generative-agents/tools/geo/furnish_fisher.py --dry-run  # report, write nothing
 
 Paints two layers, both clipped to the walkable interior (the sector-34
 footprint minus its perimeter ring) so nothing lands on the brick ring:

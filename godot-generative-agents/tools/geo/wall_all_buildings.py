@@ -11,8 +11,8 @@ Buildings that already carry a deliberate wall (any Franuka brick or the grey
 stone frame from a previous run) are left untouched, so hand-matched colours
 (e.g. Houston's grey stone, Irvine's brown) are preserved. Re-run safe.
 
-    uv run python tools/geo/wall_all_buildings.py --dry-run   # list what it'd do
-    uv run python tools/geo/wall_all_buildings.py             # apply
+    uv run python godot-generative-agents/tools/geo/wall_all_buildings.py --dry-run   # list what it'd do
+    uv run python godot-generative-agents/tools/geo/wall_all_buildings.py             # apply
 """
 
 from __future__ import annotations

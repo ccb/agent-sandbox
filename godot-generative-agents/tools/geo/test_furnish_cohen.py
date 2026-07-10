@@ -1,10 +1,12 @@
-# tools/geo/test_furnish_cohen.py
+# godot-generative-agents/tools/geo/test_furnish_cohen.py
 import json
 import os
 
 import furnish_cohen as fc
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+REPO = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 TMJ = os.path.join(
     REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
 )

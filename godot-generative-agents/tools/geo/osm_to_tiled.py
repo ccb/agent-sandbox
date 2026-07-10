@@ -21,10 +21,10 @@ Zero third-party dependencies on purpose (only the Python stdlib, incl. zlib for
 PNG) so it runs anywhere `uv run python` does, no extra installs.
 
 Usage:
-    uv run python tools/geo/osm_to_tiled.py                 # Penn campus, cached fetch
-    uv run python tools/geo/osm_to_tiled.py --area core     # small prototyping subset
-    uv run python tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 tiles
-    uv run python tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py                 # Penn campus, cached fetch
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core     # small prototyping subset
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --theme urban   # real Kenney CC0 tiles
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --refresh       # re-download from Overpass
 
 Data (c) OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright).
 Urban tiles (c) Kenney, CC0 (https://kenney.nl/assets/rpg-urban-pack).

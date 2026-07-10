@@ -3,7 +3,7 @@
 the campus map as its own tile layers, stacked above entrance_floor. PICTURE
 ONLY -- the matrix (arenas / collision) is owned by add_entrances.py.
 
-    uv run python tools/geo/furnish_van_pelt.py
+    uv run python godot-generative-agents/tools/geo/furnish_van_pelt.py
 
 Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 Cells that fall outside Van Pelt's walkable interior (the throat-seam slivers)

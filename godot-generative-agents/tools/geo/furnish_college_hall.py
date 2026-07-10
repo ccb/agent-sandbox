@@ -9,8 +9,8 @@ layers the *detailed interior* on top of that carve, the same way
 tile layers stacked above ``entrance_floor`` so ``add_entrances.py`` (which
 strips only ``entrance_*`` layers) leaves them intact across runs.
 
-    uv run python tools/geo/furnish_college_hall.py            # paint the floor
-    uv run python tools/geo/furnish_college_hall.py --dry-run  # report, write nothing
+    uv run python godot-generative-agents/tools/geo/furnish_college_hall.py            # paint the floor
+    uv run python godot-generative-agents/tools/geo/furnish_college_hall.py --dry-run  # report, write nothing
 
 STAGE 1 (this version): the floor only. It fills the walkable interior (the
 sector-8 footprint minus its perimeter ring), so a floor tile can never land

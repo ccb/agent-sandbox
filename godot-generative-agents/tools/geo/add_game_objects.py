@@ -17,8 +17,8 @@ address `UPenn:<sector>:<arena>:<object>` resolves via world_map.py unchanged.
 Run LAST, after add_entrances.py, block_grass.py, block_furniture.py. No-ops if
 the `fisher_objects` layer is absent (Fisher objects not authored yet).
 
-    uv run python tools/geo/add_game_objects.py --dry-run
-    uv run python tools/geo/add_game_objects.py
+    uv run python godot-generative-agents/tools/geo/add_game_objects.py --dry-run
+    uv run python godot-generative-agents/tools/geo/add_game_objects.py
 """
 
 from __future__ import annotations

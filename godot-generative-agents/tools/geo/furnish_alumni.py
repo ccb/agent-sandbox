@@ -32,8 +32,8 @@ Walls use the same thin-line convention as furnish_irvine (a strip on the
 right/bottom edge; corner where both meet). All gids are read live from the
 tilesets so they can't desync into a red-X. Doorways are NOT carved.
 
-    uv run python tools/geo/furnish_alumni.py
-    uv run python tools/geo/furnish_alumni.py --dry-run  # report, write nothing
+    uv run python godot-generative-agents/tools/geo/furnish_alumni.py
+    uv run python godot-generative-agents/tools/geo/furnish_alumni.py --dry-run  # report, write nothing
 
 Idempotent: strips its own layers before re-inserting; backs up the .tmj first.
 """

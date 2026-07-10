@@ -14,9 +14,9 @@ block_grass.py.
 Idempotent: solidity is derived from the (unchanged) `*_furniture` layers, not
 from the collision it writes, so running twice is a no-op.
 
-    uv run python tools/geo/block_furniture.py --catalog   # list furniture gids
-    uv run python tools/geo/block_furniture.py --dry-run    # report, change nothing
-    uv run python tools/geo/block_furniture.py              # wall the furniture
+    uv run python godot-generative-agents/tools/geo/block_furniture.py --catalog   # list furniture gids
+    uv run python godot-generative-agents/tools/geo/block_furniture.py --dry-run    # report, change nothing
+    uv run python godot-generative-agents/tools/geo/block_furniture.py              # wall the furniture
 """
 
 from __future__ import annotations
