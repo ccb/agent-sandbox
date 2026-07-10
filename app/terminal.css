@@ -256,6 +256,8 @@ body.size-large, body.size-large input { font-size: 18px; }
 #panel-map .map-edge { stroke: var(--phosphor-dim); }
 #panel-map .map-label { fill: var(--phosphor-dim); font-size: 8px; text-transform: uppercase; }
 #panel-map .map-stub { stroke: var(--phosphor-dim); stroke-dasharray: 3 3; }
+#panel-map .map-node { cursor: pointer; }
+#panel-map .map-node:active rect { fill: rgba(77, 184, 255, 0.28); }
 
 /* the settings overlay: terminal-styled, not a system sheet */
 #gear {

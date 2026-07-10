@@ -118,13 +118,44 @@ def test_panel_data_maps_only_the_explored():
     data = json.loads(app_api.panel_data())
     m = data["map"]
     assert set(m["nodes"]) == {"The Caravan Wreck", "Tomb Exterior", "The Summit"}
-    assert {"from": "The Caravan Wreck", "to": "Tomb Exterior", "dir": "north"} in m[
-        "edges"
-    ]
+    assert {
+        "from": "The Caravan Wreck",
+        "to": "Tomb Exterior",
+        "dir": "north",
+        "back": "south",
+    } in m["edges"]
     assert m["here"] == "The Summit"
     assert any(st["dir"] == "in" for st in m["stubs"])  # the unexplored beckons
     all_names = " ".join(m["nodes"])
     assert "Hall of" not in all_names  # frontier rooms stay unspoiled
+
+
+def test_map_edges_name_both_sides_of_a_passage():
+    """Tap-to-walk needs the word each SIDE answers to (CCB: the map's
+    routes must parse): the canopic stairs are RIGHT STAIRS going down but
+    UP coming back, and the edge carries both."""
+    app_api.boot(0)
+    for cmd in (
+        "search merchant",
+        "take glowstone",
+        "light glowstone",
+        "north",
+        "north",
+        "north",
+        "up",
+        "right stairs",
+    ):
+        app_api.command(cmd)
+    m = json.loads(app_api.panel_data())["map"]
+    stairs = [
+        e
+        for e in m["edges"]
+        if {e["from"], e["to"]} == {"Hall of the Canopic Jars", "Hall of Hounds"}
+    ]
+    assert len(stairs) == 1
+    e = stairs[0]
+    names = {e["dir"], e["back"]}
+    assert "right stairs" in names and "up" in names  # asymmetric, both real
 
 
 def test_panel_data_inventory_shape():
