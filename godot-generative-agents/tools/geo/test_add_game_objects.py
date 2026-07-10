@@ -30,24 +30,28 @@ def _sector_names():
     return {r[0]: r[-1] for r in _blocks("sector_blocks.csv") if len(r) >= 3}
 
 
-def _fisher_interior_cell():
-    """A known walkable Fisher-sector cell we can drop a synthetic object on."""
-    sector = _flat("sector_maze.csv")
+# Fisher Fine Arts Library's sector id in the committed matrix. Lives here (its
+# only remaining user) since the generalization removed the production fallback.
+FISHER_SECTOR = "34"
+
+
+def _first_walkable_cell(maze_name, value):
+    """First cell whose ``maze_name`` entry equals *value* and is walkable —
+    a spot we can safely drop a synthetic test object on."""
+    grid = _flat(maze_name)
     coll = _flat("collision_maze.csv")
-    for i, s in enumerate(sector):
-        if s == ago.FISHER_SECTOR and coll[i] == "0":
+    for i, v in enumerate(grid):
+        if v == value and coll[i] == "0":
             return i % W, i // W
-    raise AssertionError("no walkable Fisher cell found")
+    raise AssertionError(f"no walkable cell with {maze_name} == {value}")
+
+
+def _fisher_interior_cell():
+    return _first_walkable_cell("sector_maze.csv", FISHER_SECTOR)
 
 
 def _houston_lobby_cell():
-    """A known walkable Houston-lobby cell (arena 1014) for a synthetic object."""
-    arena = _flat("arena_maze.csv")
-    coll = _flat("collision_maze.csv")
-    for i, a in enumerate(arena):
-        if a == "1014" and coll[i] == "0":
-            return i % W, i // W
-    raise AssertionError("no walkable Houston lobby cell found")
+    return _first_walkable_cell("arena_maze.csv", "1014")
 
 
 def _strip_object_layers(tmj):

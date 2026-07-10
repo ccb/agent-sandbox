@@ -106,6 +106,20 @@ def test_stamp_refuses_partial_sprite():
     assert sum(1 for v in data if v) == w * h and len(occ) == w * h
 
 
+def test_rerun_preserves_kitchen_strip():
+    # #466's hand-authored kitchen props live on houston_furniture, the layer
+    # apply_furniture() strips and rebuilds -- the preventive guard re-applies
+    # them from fh.KITCHEN_STRIP, so a rerun can't silently wipe the strip.
+    tmj = _fresh()
+    fh.apply(tmj, MATRIX)
+    fh.apply_walls(tmj, MATRIX)
+    fh.apply_furniture(tmj, MATRIX)
+    W = tmj["width"]
+    furn = next(L for L in tmj["layers"] if L.get("name") == fh.FURN_LAYER)
+    for (x, y), gid in fh.KITCHEN_STRIP.items():
+        assert furn["data"][y * W + x] == gid, (x, y)
+
+
 def test_idempotent():
     a = _fresh()
     fh.apply(a, MATRIX)
