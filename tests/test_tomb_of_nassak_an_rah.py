@@ -1119,6 +1119,66 @@ def test_every_organ_keeps_its_own_taste():
     assert "of offal" in falcon.contents["intestines"].get_property("taste")
 
 
+def test_fix_coffin_rehouses_the_king_and_renews_the_prayers():
+    """FIX COFFIN (CCB): shards + bones + silk + the anti-entropy field =
+    a whole coffin with the Autarch home in it; the chamber re-cuts every
+    spent prayer and adds the Prayer of Peaceful Slumber."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    coffin = sphere.items["coffin"]
+    coffin.set_property("pried", True)
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("fix coffin")  # the Horror still lives: refused
+    assert "starts with the Horror's ending" in " ".join(cap.texts(Channel.BLOCKED))
+    sphere.set_property("horror_dead", True)
+    tomb._sphere_aftermath(game, ash=True)  # bones adrift, ash hanging
+    game.do_command("fix coffin")  # no silk, no lashing: refused
+    assert "Silk" in " ".join(cap.texts(Channel.BLOCKED))
+    hold = game.locations["The Wagon's Hold"]
+    silk = hold.items["crates"].contents["bolt of spider-silk"]
+    hold.items["crates"].remove_item(silk)
+    game.player.add_to_inventory(silk)
+    prayers = sphere.items["prayers"]
+    prayers.set_property("balm_spent", True)
+    prayers.set_property("wrath_spent", True)
+    cap2 = _texts(game)
+    game.do_command("fix coffin")
+    text = " ".join(cap2.texts(Channel.NARRATION))
+    assert "glass eggshell" in text and "PRAYER OF PEACEFUL SLUMBER" in text
+    assert coffin.get_property("pried") is False and coffin.get_property("fixed")
+    assert "Autarch's bones" not in sphere.items  # re-housed
+    assert "bolt of spider-silk" not in game.player.carried_items()  # spent
+    assert not prayers.get_property("balm_spent")  # the chamber re-cut them
+    assert not prayers.get_property("wrath_spent")
+    assert prayers.get_property("slumber_known")
+    cap3 = _texts(game)
+    game.do_command("read prayers")
+    assert "PEACEFUL SLUMBER" in " ".join(cap3.texts(Channel.NARRATION))
+
+
+def test_the_slumber_prayer_wants_a_housed_king():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("say prayer of peaceful slumber")  # not carved yet
+    assert "No such line is carved here" in " ".join(cap.texts(Channel.BLOCKED))
+    # fix via the OLD LASHING (no silk in hand): the tie serves twice
+    coffin = sphere.items["coffin"]
+    coffin.set_property("pried", True)
+    coffin.set_property("tethered", True)
+    sphere.set_property("horror_dead", True)
+    tomb._sphere_aftermath(game, ash=False)
+    cap2 = _texts(game)
+    game.do_command("fix coffin")
+    assert "gentler purpose" in " ".join(cap2.texts(Channel.NARRATION))
+    game.do_command("say prayer of slumber")
+    assert "dreaming something kind" in coffin.examine_text  # beatific
+    game.do_command("say prayer of slumber")  # answered once
+    assert "smooth and unlettered" in " ".join(cap2.texts(Channel.BLOCKED))
+
+
 def test_the_core_buys_the_robes():
     """GIVE CORE TO SILAS (CCB): the item's own tease honored -- the robes
     change hands, the archivist gets his ending, and +5 marks it."""
