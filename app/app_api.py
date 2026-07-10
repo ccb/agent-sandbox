@@ -103,6 +103,15 @@ def _status():
     }
 
 
+def _reachable_contents(holder):
+    out, frontier = [], [holder]
+    while frontier:
+        for name, item in frontier.pop().accessible_contents().items():
+            out.append(name)
+            frontier.append(item)
+    return out
+
+
 def _suggestions():
     """Nouns the player could mean here -- perception-honest: room contents
     only when they can actually be seen; inventory and exits always."""
@@ -117,12 +126,13 @@ def _suggestions():
             # What's visibly inside/on it -- accessible_contents is the
             # engine's own no-spoiler seam (CCB): closed holders yield
             # nothing, and hidden-until-SEARCH items stay off the bar
-            # until the search actually reveals them.
-            nouns += list(i.accessible_contents().keys())
+            # until the search actually reveals them. Recursive, matching
+            # parser scope: an open jar on a plinth still offers its organ.
+            nouns += _reachable_contents(i)
         nouns += [c.name for c in loc.characters.values() if c is not _game.player]
     for it in _game.player.carried_items().values():
         nouns.append(it.name)
-        nouns += list(it.accessible_contents().keys())
+        nouns += _reachable_contents(it)
     seen, deduped = set(), []
     for n in nouns:
         if n not in seen:

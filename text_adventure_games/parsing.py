@@ -730,12 +730,18 @@ class Parser:
             items_in_scope[item_name] = character.worn[item_name]
         for item_name in character.wielded:
             items_in_scope[item_name] = character.wielded[item_name]
-        # Items inside an OPEN holder that is itself in scope are reachable too
-        # -- a blanket in a boat, a candle on a table, an item in a carried bag
-        # -- so they can be examined/referenced by name. One level deep.
-        for it in list(items_in_scope.values()):
-            for cname, citem in it.accessible_contents().items():
-                items_in_scope.setdefault(cname, citem)
+        # Items inside an OPEN holder that is itself in scope are reachable
+        # too -- a blanket in a boat, a candle on a table, an item in a
+        # carried bag. Recursive: an open jar standing on a plinth is two
+        # holders deep and still within arm's reach (CCB: 'taste brain' at
+        # the seal found nothing at one level).
+        frontier = list(items_in_scope.values())
+        while frontier:
+            holder = frontier.pop()
+            for cname, citem in holder.accessible_contents().items():
+                if cname not in items_in_scope:
+                    items_in_scope[cname] = citem
+                    frontier.append(citem)
         return items_in_scope
 
     def get_direction(self, command: str, location: Location = None) -> str:
