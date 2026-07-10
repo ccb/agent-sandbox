@@ -110,8 +110,20 @@ def roll_wound(character, roll=None, rng=None, game=None):
         return wounds, messages, False
 
     if row.name == "FATALITY":
-        character.set_property(Property.IS_DEAD, True)
-        messages.append(row.description)
+        # The kill keeps the ledger honest (CCB): the fatal blow lands as a
+        # real wound sized to every slot the body has left, so death always
+        # reads as wounds filling capacity -- never as bookkeeping magic.
+        cap = character.slot_capacity
+        slots_n = max(1, cap - character.wound_slots()) if cap else row.slots
+        wound = Wound(row.name, slots_n, row.description)
+        fatal, _ = character.add_wound(wound, rng=rng)
+        wounds.append(wound)
+        if game is not None:
+            game.parser.damage(f"{row.name} - {row.description}")
+        else:
+            messages.append(f"{row.name}: {row.description}")
+        if not fatal:  # no slot system configured: the row still kills outright
+            character.set_property(Property.IS_DEAD, True)
         return wounds, messages, True
 
     if row.name == "Bloody Mess":

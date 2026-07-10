@@ -377,7 +377,11 @@ class Inventory(base.Action):
             sections.append(wounds.rstrip("\n"))
         if char.slot_capacity is not None:
             gauge = f"Slots: {char.slots_used()}/{char.slot_capacity}"
-            if char.is_encumbered():
+            if char.get_property(Property.IS_DEAD):
+                # The post-mortem ledger (CCB): a corpse is past encumbrance;
+                # the gauge simply shows what filled it.
+                gauge += " -- the wounds took the last of you"
+            elif char.is_encumbered():
                 gauge += " -- ENCUMBERED (you clatter when you move, and cannot climb)"
             sections.append(gauge)
 
