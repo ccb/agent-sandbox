@@ -179,6 +179,21 @@ def test_restore_rebuilds_the_explored_map():
     assert "The Caravan Wreck" in m["nodes"]  # the journey survived the rebuild
 
 
+def test_the_dead_cannot_walk_but_can_restart():
+    """Post-mortem, the bridge refuses world commands (engine gate) while
+    the app-level RESTART confirmation still works."""
+    app_api.boot(0)
+    app_api._game.player.set_property("is_dead", True)
+    payload = json.loads(app_api.command("go north"))
+    assert payload["status"]["game_over"]
+    assert any(e["channel"] == "blocked" for e in payload["events"])
+    assert payload["status"]["room"] == "The Caravan Wreck"  # unmoved
+    payload = json.loads(app_api.command("restart"))
+    assert any("Begin a new expedition?" in e["text"] for e in payload["events"])
+    payload = json.loads(app_api.command("y"))
+    assert not payload["status"]["game_over"]  # a fresh expedition stands
+
+
 def test_restart_begins_a_fresh_expedition():
     """CCB: 'reload' at the death screen did nothing. RESTART (and its
     aliases) now boots a new seed and clears the autosave, so the title
