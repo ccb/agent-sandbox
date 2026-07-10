@@ -1077,6 +1077,12 @@ class Butcher(actions.Action):
         )
         meat.set_property(Property.EDIBLE, True)
         meat.set_property("smells_edible", True)  # the pack's nose (jackal scent)
+        meat.set_property(
+            Property.TASTE,
+            "of iron and brine -- zoxen are half salt by weight. Food, "
+            "honestly, and better bait: you are not the hungriest thing "
+            "down here.",
+        )
         meat.add_alias("meat")
         meat.add_alias("zox meat")
         meat.add_alias("haunch")
@@ -1516,6 +1522,18 @@ def build_game(seed=None):
         _good.add_alias(_name.split()[0])  # bale / crate / bolt
         if "dates" in _name:
             _good.set_property(Property.EDIBLE, True)
+            _good.set_property(
+                Property.TASTE,
+                "of honey and sun under the road-dust. Proper trail food -- "
+                "and anything in these halls with a nose will know you "
+                "carry it.",
+            )
+        if "saffron" in _name:
+            _good.set_property(
+                Property.TASTE,
+                "of bitter gold. A spice worth more than the wagon that "
+                "hauled it -- seasoning, not supper.",
+            )
         _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
         if "silk" in _name:
             _good.add_alias("silk")
@@ -2084,6 +2102,16 @@ def build_game(seed=None):
     )
     fungus.set_property("gettable", True)
     fungus.set_property(Property.EDIBLE, True)
+    # A LICK is a microdose (CCB): the taste rehearses the fungus's whole
+    # function -- and points, gently, at giving it away rather than eating it.
+    fungus.perceptible_by(
+        perception.Sense.TASTE,
+        "A crumb on the tongue, no more -- and warmth spreads outward from "
+        "it, and for one held breath everything in Vaarn seems to mean "
+        "well: the tomb, the dark, even you. Then it passes, and you miss "
+        "it. A whole dose would make fast friends of whoever ate it -- it "
+        "feels meant for someone lonelier than you.",
+    )
     fungus.set_property(
         Property.TASTE,
         "sweet, chemical, and companionable. For the next while "
@@ -3807,6 +3835,13 @@ def build_game(seed=None):
         "fibrous, faintly warm, and -- like everything the gel has ever "
         "touched -- ready to burn.",
     ).add_alias("growth")
+    chimney.items["orange growth"].perceptible_by(
+        perception.Sense.TASTE,
+        "You touch your tongue to the growth, briefly, like a fool. Orange "
+        "rot blooms across it and your throat itches for a long minute. "
+        "Whatever this fungus wants with a body, do not volunteer more of "
+        "yours.",
+    )
 
     # No grace rounds and no credit for a mask in your HAND (CCB): the air
     # itself is the hazard, so every round unmasked in the throat is a wound
