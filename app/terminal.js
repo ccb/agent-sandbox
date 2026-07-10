@@ -251,7 +251,8 @@ function render(payloadJson, opts = {}) {
   // the engine itself, with the RESTORE/RESTART hint in the refusal.
   if (s.game_over && !wasGameOver) {
     if (!s.won) { haptic("death"); sounds.damage(); }
-    print(s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***", "echo", instant);
+    const hinted = s.hints ? ` (${s.hints} hint${s.hints === 1 ? "" : "s"} taken)` : "";
+    print((s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***") + hinted, "echo", instant);
     print("(type RESTORE to return to a saved position, or RESTART to begin anew)", "blocked", instant);
   }
   wasGameOver = s.game_over;

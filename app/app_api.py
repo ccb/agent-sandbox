@@ -31,6 +31,7 @@ _store = None
 #: The accessory bar's verb row: curated, not exhaustive (HELP lists all).
 VERBS = [
     "look",
+    "hint",
     "examine",
     "take",
     "drop",
@@ -97,6 +98,7 @@ def _status():
         "max_score": _game.max_score,
         "game_over": _game.is_game_over(),
         "won": _game.is_won(),
+        "hints": _game.hints_taken,
     }
 
 
