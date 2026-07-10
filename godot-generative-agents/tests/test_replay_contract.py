@@ -12,6 +12,7 @@ Run from the repo root::
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -30,9 +31,13 @@ from backend.contract import (  # noqa: E402
 )
 from backend.contract_models import (  # noqa: E402
     AgentFrame,
+    LlmInfo,
     MemoryRecord,
     Meta,
+    PersonaMeta,
+    RelationshipEdge,
     Replay,
+    ScheduleStop,
 )
 from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
 from serve_penn import PennStepper  # noqa: E402
@@ -182,3 +187,42 @@ def test_live_meta_validates_against_contract():
     assert validated.schema_version == SCHEMA_VERSION
     assert validated.steps is None  # a live run doesn't know its length
     assert validated.llm is None  # default stepper runs the mock brain
+
+
+_REPLAY_TS = _REPO / "godot-generative-agents" / "web" / "src" / "types" / "replay.ts"
+
+# TS interface name -> its Pydantic twin. Field-name sets must match exactly
+# (optionality/types may differ -- TS marks historically-absent fields with ?).
+_TS_PAIRS = {
+    "ReplayMeta": Meta,
+    "Persona": PersonaMeta,
+    "ScheduleStop": ScheduleStop,
+    "RelationshipEdge": RelationshipEdge,
+    "LlmInfo": LlmInfo,
+    "AgentFrame": AgentFrame,
+    "MemoryRecord": MemoryRecord,
+    "Replay": Replay,
+}
+
+
+def _ts_interface_fields() -> dict[str, set[str]]:
+    src = _REPLAY_TS.read_text()
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)  # block comments
+    src = re.sub(r"//[^\n]*", "", src)  # line comments
+    fields = {}
+    for name, body in re.findall(r"export interface (\w+)\s*\{(.*?)\n\}", src, re.S):
+        fields[name] = set(re.findall(r"^\s*(\w+)\??:", body, re.M))
+    return fields
+
+
+def test_replay_ts_mirrors_contract_models():
+    # replay.ts is a MIRROR of the pinned contract, not the definition. This
+    # keeps the two in lock-step without a TS toolchain in CI.
+    interfaces = _ts_interface_fields()
+    for ts_name, model in _TS_PAIRS.items():
+        assert ts_name in interfaces, f"replay.ts is missing interface {ts_name}"
+        assert interfaces[ts_name] == set(model.model_fields), (
+            f"replay.ts {ts_name} drifted from {model.__name__}: "
+            f"ts-only={interfaces[ts_name] - set(model.model_fields)}, "
+            f"py-only={set(model.model_fields) - interfaces[ts_name]}"
+        )
