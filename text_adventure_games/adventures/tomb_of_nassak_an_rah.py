@@ -2563,7 +2563,7 @@ def build_game(seed=None):
             Butcher,
         ],
     )
-    game.max_score = 115
+    game.max_score = 130
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2727,13 +2727,15 @@ def build_game(seed=None):
             "What am I still missing?",
             [
                 "The score pays for light, water, wisdom spent, both jars, "
-                "the seal, the Horror -- and leaving alive.",
+                "the seal, the tomb's lesser hosts quelled, the Horror -- "
+                "and leaving alive.",
                 "READ LEDGER at the wreck; DRINK WATER on a wound; the "
                 "lattice remembers a dead king's days; Silas rewards a "
                 "civil TALK.",
-                "The full 115: threshold 5, first light 5, water 5, a "
+                "The full 130: threshold 5, first light 5, water 5, a "
                 "healed wound 5, the lattice memory 5, Silas's acquaintance "
-                "5, falcon jar 5, jackal jar 5, both Exotica 10, the seal "
+                "5, falcon jar 5, jackal jar 5, both Exotica 10, each spawn "
+                "quelled 5, the pack settled (paid or put down) 5, the seal "
                 "20, the Horror 25, and out alive 20.",
             ],
             resolved=lambda g: g.score >= g.max_score,
@@ -3581,6 +3583,17 @@ def build_game(seed=None):
         stone = inv.get("glowstone")
         if stone is not None and stone.get_property(Property.IS_LIT):
             g.award("first_light", 5, "[+5 -- light, learned]")
+        # The minor threats pay when QUELLED, by any means (CCB): a spawn
+        # dropped by blade or raked down by the bat-swarm, the pack paid
+        # its tribute or put down. The clever route and the bloody one
+        # score the same.
+        for sp, key in ((spawn_guts, "spawn_guts"), (spawn_brain, "spawn_brain")):
+            if sp.get_property("is_dead") or sp.get_property("is_unconscious"):
+                g.award(key, 5, f"[+5 -- the {sp.name} is quelled]")
+        if jackal_pack.get_property("is_dead") or any(
+            (h.get_property(f"_jk:{h.name}") or 0) <= -6 for h in _halls
+        ):
+            g.award("jackals_settled", 5, "[+5 -- the pack is settled]")
 
     game.add_trigger("score_beats", lambda g: True, _score_beats, repeatable=True)
 
