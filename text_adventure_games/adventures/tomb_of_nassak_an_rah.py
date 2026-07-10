@@ -3412,19 +3412,16 @@ def build_game(seed=None):
         "touched -- ready to burn.",
     ).add_alias("growth")
 
+    # No grace rounds and no credit for a mask in your HAND (CCB): the air
+    # itself is the hazard, so every round unmasked in the throat is a wound
+    # -- WEAR the respirator, or burn the growth out, or don't linger.
     _hazard(
         game,
         chimney,
-        danger=lambda g: not (
-            _is_holding(g.player, "respirator") or "respirator" in g.player.worn
-        ),
+        danger=lambda g: "respirator" not in g.player.worn,
         gate=lambda g: not chimney.get_property("burned"),
-        warns=(
-            "Each breath comes back smaller than it went out. The spores "
-            "settle on your lips and taste of orange rot.",
-            "Your lungs sear; the glow below swims and doubles. The chimney's "
-            "warmth has begun to feel like a mouth.",
-        ),
+        limit=1,
+        warns=(),  # unreachable at limit=1: the first breath IS the harm
         harm=_spore_sear,
     )
 
@@ -3500,7 +3497,7 @@ def build_game(seed=None):
             healed = g.player.heal_wound()
             g.parser.ok(
                 f"The water does what water does in Vaarn. The {healed.name.lower()} "
-                "troubles you less; something knits."
+                "troubles you less; a wound heals."
             )
             g.award("healed", 5, "[+5 -- water, spent wisely]")
         n = int(waterskin.get_property("portions") or 0)
@@ -4011,7 +4008,7 @@ WIN_WALKTHROUGH = [
     "take falcon jar",
     "attack spawn of brain with blade",  # its brother came to the noise: fell it too
     "take jackal jar",
-    "drink water",  # a glug; something knits (keep the blade: the coffin wants it)
+    "drink water",  # a glug; a wound heals (keep the blade: the coffin wants it)
     "drink water",  # another -- the brain got its thoughts in
     "drink water",  # the last ration; the skin runs dry
     "drop waterskin",  # travel light; the climbs refuse a full pack
