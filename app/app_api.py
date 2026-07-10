@@ -187,7 +187,16 @@ def panel_data():
                 if pair in seen_pairs:
                     continue
                 seen_pairs.add(pair)
-                edges.append({"from": name, "to": dest.name, "dir": label})
+                # Both sides of the passage, named exactly as each room
+                # names it -- the canopic stairs go UP one way and RIGHT
+                # STAIRS back, and the map's labels and click-to-walk
+                # routes must use the word that actually parses. ``back``
+                # is None for a one-way drop.
+                back = dest.get_direction(room)
+                back = str(getattr(back, "value", back)) if back else None
+                edges.append(
+                    {"from": name, "to": dest.name, "dir": label, "back": back}
+                )
             else:
                 stubs.append({"from": name, "dir": label})
     return json.dumps(
