@@ -882,9 +882,9 @@ class Game:
         Opt-in: probes stay out of games that don't want them, keeping the verb
         set (and HELP) lean. Call this in ``build_game`` for an adventure that
         tags things ``perceptible_by`` touch/hearing/smell. Idempotent."""
-        from .actions.senses import Feel, Listen, Smell
+        from .actions.senses import Feel, Listen, Smell, Taste
 
-        for action in (Feel, Listen, Smell):
+        for action in (Feel, Listen, Smell, Taste):
             self.parser.add_action(action)
 
     def describe(self) -> str:

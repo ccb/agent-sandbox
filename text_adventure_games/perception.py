@@ -29,6 +29,7 @@ class Sense(str, Enum):
     TOUCH = "touch"
     HEARING = "hearing"
     SMELL = "smell"
+    TASTE = "taste"
 
 
 #: Terse fallbacks when a thing is tagged perceptible by a sense but given no
@@ -37,6 +38,7 @@ GENERIC_SENSE_TEXT = {
     Sense.TOUCH: "You feel its plain, ordinary surface -- nothing more.",
     Sense.HEARING: "You hear nothing telling.",
     Sense.SMELL: "It has no notable smell.",
+    Sense.TASTE: "It tastes of nothing in particular.",
 }
 
 
