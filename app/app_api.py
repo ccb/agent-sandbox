@@ -38,6 +38,7 @@ VERBS = [
     "open",
     "search",
     "read",
+    "taste",
     "attack",
     "burn",
     "throw",

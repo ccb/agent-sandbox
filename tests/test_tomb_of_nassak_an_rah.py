@@ -1016,6 +1016,58 @@ def test_death_closes_the_parser_to_all_but_the_meta_verbs():
     assert "north" in " ".join(cap2.texts(Channel.NARRATION))
 
 
+def test_taste_is_the_cautious_cousin_of_eat():
+    """TASTE/LICK (CCB): reads flavor and function, verdicts edibility, and
+    never consumes -- and 'taste crate of dates' must not be swallowed by
+    the EAT keyword ('ate ' lives inside 'crate')."""
+    game = _game()
+    for cmd in (
+        "search merchant",
+        "take waterskin",
+        "take glowstone",
+        "light glowstone",
+        "in",
+        "open crates",
+        "take crate of dates",
+    ):
+        game.do_command(cmd)
+    cap = _texts(game)
+    game.do_command("taste crate of dates")
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "honey and sun" in text  # the flavor
+    assert "You could eat it." in text  # the edibility verdict
+    assert "crate of dates" in game.player.carried_items()  # NOT eaten
+    game.do_command("lick glowstone")  # the alias, and the not-food verdict
+    assert "not food" in " ".join(cap.texts(Channel.NARRATION))
+    cap2 = _texts(game)
+    game.do_command("taste waterskin")
+    assert "wealth goes" in " ".join(cap2.texts(Channel.NARRATION))
+    game.do_command("out")
+    teamster = next(  # the newbeast's name is rolled per seed
+        c for c in game.player.location.characters.values() if c is not game.player
+    )
+    cap3 = _texts(game)
+    game.do_command(f"lick {teamster.name}")
+    assert "not going to lick" in " ".join(cap3.texts(Channel.NARRATION))
+
+
+def test_a_lick_of_friends_fungus_is_a_microdose():
+    """The fungus's taste rehearses its whole function (CCB): the agreeable
+    warmth in miniature, a nudge toward giving it away -- and the pouch
+    survives the tasting."""
+    game = _game()
+    corpse = game.locations["The Summit"].items["ossified corpse"]
+    fungus = corpse.contents["friend's fungus"]
+    corpse.remove_item(fungus)
+    game.player.add_to_inventory(fungus)
+    cap = _texts(game)
+    game.do_command("lick fungus")
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "mean well" in text  # the effect, in miniature
+    assert "someone lonelier" in text  # the hint at what it is FOR
+    assert "friend's fungus" in game.player.carried_items()  # not consumed
+
+
 def test_drinking_water_mends_a_wound():
     game = _game()
     game.do_command("search merchant")

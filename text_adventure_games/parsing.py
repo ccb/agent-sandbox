@@ -218,6 +218,13 @@ class Parser:
             if first in actions.things.CRAFT_VERBS:
                 return ActionName.CRAFT
 
+        if "taste" in self.actions and (
+            command in ("taste", "lick") or command.startswith(("taste ", "lick "))
+        ):
+            # TASTE must outrank the consume keywords below: "taste crate of
+            # dates" contains "ate " and would otherwise EAT the crate.
+            return "taste"
+
         if command in ("hint", "hints") or command.startswith(("hint ", "hints ")):
             # The hint booklet takes its topic as free text ("hint light",
             # "hint score") that the verb keywords below would otherwise
