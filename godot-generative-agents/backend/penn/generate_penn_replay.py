@@ -30,6 +30,7 @@ import os
 # `backend` package now, so a plain import works -- no sys.path juggling. The
 # sibling `penn_world` import works because Python puts this script's own
 # directory on sys.path when it is run as a script.
+from backend.contract import SCHEMA_VERSION
 from backend.run_simulation import simulate
 from backend.cognition import DEFAULT_VISION_R
 from penn_world import (
@@ -188,6 +189,9 @@ def main() -> int:
     order = [p["name"] for p in pw.personas]
     replay = {
         "meta": {
+            # The pinned replay contract this file conforms to (#305) -- see
+            # backend/contract.py for the schema and the bump policy.
+            "schema_version": SCHEMA_VERSION,
             "tile_px": pw.world_map.tile_size,
             "width": pw.world_map.width,
             "height": pw.world_map.height,
