@@ -33,10 +33,14 @@ the same ``meta`` shape -- the two documented differences are exactly the
 **Versioning:** bump ``SCHEMA_VERSION`` on any breaking change (a field
 removed, renamed, or retyped). Additive optional fields do NOT bump it.
 
-**Field order is part of the contract.** The bake's ``json.dump`` serializes
-insertion order and #297's acceptance is a byte-identical replay file, so the
-tuples below pin the exact key order the emitters produce (and that any future
-writer -- the #304 store, the #307 exporter -- must reproduce).
+**Field order is part of the contract -- for the row shapes only.** The bake's
+``json.dump`` serializes insertion order and #297's acceptance is a
+byte-identical replay file, so the tuples below pin the exact key order of the
+per-step frame rows and memory rows (which any future writer -- the #304 store,
+the #307 exporter -- must reproduce; ``model_dump()`` on the matching models
+already does). ``meta`` key order is deliberately NOT pinned: the ``Meta``
+model's dump order differs from the bake's dict, and every reader looks meta
+keys up by name, never by position.
 
 This module is deliberately **stdlib-only**: the offline bake runs in the base
 install (no extras), where the Pydantic library does not exist. The enforcing
