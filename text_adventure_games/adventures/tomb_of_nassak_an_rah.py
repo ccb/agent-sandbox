@@ -1980,6 +1980,23 @@ def build_game(seed=None):
     )
     mantis_jar.contents["fungal eyes"].add_alias("eyes")
     baboon_jar.contents["lungs"].add_alias("lung")
+    # Each organ keeps its own taste (CCB) -- the shared preservative note
+    # in _canopic_jar is only the fallback.
+    baboon_jar.contents["lungs"].set_property(
+        Property.TASTE,
+        "of dust and cedar; they crackle faintly, like old paper. Whatever "
+        "they last breathed is four thousand years gone.",
+    )
+    human_jar.contents["liver"].set_property(
+        Property.TASTE,
+        "of bitter iron and resin -- the organ that kept the Autarch's "
+        "score. It is, God help you, edible.",
+    )
+    mantis_jar.contents["fungal eyes"].set_property(
+        Property.TASTE,
+        "of orange rot and salt, and your tongue itches where it touched. "
+        "You would swear, briefly, that the eyes taste you back.",
+    )
     for j in (baboon_jar, human_jar, mantis_jar):
         j.set_property("gettable", True)
         canopic.add_item(j)
@@ -2139,6 +2156,18 @@ def build_game(seed=None):
         "A sealed jar with a jackal's head. Something heavy rolls inside.",
         "brain",
         "the Autarch's shrivelled brain",
+    )
+    falcon_jar.contents["intestines"].set_property(
+        Property.TASTE,
+        "of offal -- cured, ancient, and unmistakably what it is. Food, "
+        "technically. Tribute, ideally: you are not the hungriest thing "
+        "in these halls.",
+    )
+    jackal_jar.contents["brain"].set_property(
+        Property.TASTE,
+        "of resin and long memory. Somewhere behind your teeth, for one "
+        "beat, a thought that is not yours: blue sand, and a mother's "
+        "voice. Swallowing more would be somebody's biography.",
     )
 
     spawn_guts = things.Character(
@@ -2497,6 +2526,11 @@ def build_game(seed=None):
         "dark: light is dear, and attention dearer.",
     )
     glowstone.set_property(Property.FLAMMABLE, True)
+    glowstone.set_property(
+        Property.TASTE,
+        "like a nine-volt battery: a flat electric fizz that finds every "
+        "filling you own. Not food. Possibly not polite.",
+    )
     glowstone.add_alias(
         "stone"
     )  # no "lantern" alias: the Ulfire Lantern owns that word

@@ -827,7 +827,9 @@ class Open(base.Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to open something")
-        scope = {**self.character.location.items, **self.character.inventory}
+        # Full parser scope, not just the room's top level: a jar standing
+        # on a plinth (or a box in a carried bag) can be opened where it sits.
+        scope = self.parser.get_items_in_scope(self.character)
         self.item = self.parser.match_item(command, scope, hint="thing to open")
 
     def check_preconditions(self) -> bool:
@@ -868,7 +870,7 @@ class Close(base.Action):
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.character = self.acting_character(command, hint="wants to close something")
-        scope = {**self.character.location.items, **self.character.inventory}
+        scope = self.parser.get_items_in_scope(self.character)
         self.item = self.parser.match_item(command, scope, hint="thing to close")
 
     def check_preconditions(self) -> bool:
