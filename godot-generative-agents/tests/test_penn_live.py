@@ -164,6 +164,7 @@ def test_stepper_meta_shape():
     stepper = PennStepper(num_steps=5, world=build_penn_world())
     meta = stepper.meta()
     assert set(meta) == {
+        "schema_version",
         "tile_px",
         "width",
         "height",
