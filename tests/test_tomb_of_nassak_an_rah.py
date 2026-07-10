@@ -992,6 +992,9 @@ def test_death_closes_the_parser_to_all_but_the_meta_verbs():
     that leave the ended story intact still answer."""
     game = _game()
     game.do_command("north")
+    from text_adventure_games.slots import Wound
+
+    game.player.add_wound(Wound("Bloody Gash", 1, "..."))
     game.player.set_property("is_dead", True)
     assert game.is_game_over()
     cap = _texts(game)
@@ -1003,9 +1006,11 @@ def test_death_closes_the_parser_to_all_but_the_meta_verbs():
     blocked = " ".join(cap.texts(Channel.BLOCKED))
     assert "Death has this expedition now" in blocked
     assert "RESTORE" in blocked and "RESTART" in blocked
-    game.do_command("inventory")  # even free actions are the living's
-    game.do_command("look")
+    game.do_command("look")  # the living's verbs are refused
     assert game.player.location.name == here
+    cap_inv = _texts(game)
+    game.do_command("inventory")  # ...but the final ledger stays readable
+    assert "Wounds" in " ".join(cap_inv.texts(Channel.NARRATION))
     cap2 = _texts(game)
     game.do_command("script")  # the record survives the death
     assert "north" in " ".join(cap2.texts(Channel.NARRATION))
