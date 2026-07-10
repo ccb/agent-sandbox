@@ -810,6 +810,22 @@ ledger, so a HUD renders $0.00 instead of erroring. `max_cost_usd` /
 `remaining_budget_usd` appear only when the ledger was armed with a cost
 ceiling (#183); `over_budget` flips when the kill-switch trips.
 
+**Reading the two cache fields (#367).** `cache_creation_input_tokens` counts
+tokens *written* to the prompt cache (billed ~1.25× input); `cache_read_input_tokens`
+counts tokens *read back* from it (billed ~0.1×). Anthropic caches the stable
+request prefix — an agent's system message (persona + rules) plus its tool
+schema — so on a steady cast you'd expect the first call per agent to write and
+every later one to read. Both stay **0** on the current Penn cast, and that's
+correct, not a bug: prompt caching silently declines any prefix below the model's
+minimum cacheable length (Haiku 4.5: 4096 tokens), and these personas render to
+~200 tokens — ~20× under the floor. The `cache_control` marker is wired in
+(`llm_client._cacheable_system`) and dormant; it starts writing/reading the day
+the stable prefix grows past the floor (a richer persona, or a shared world/rules
+preamble in the system block). To check *before* a run whether caching will fire,
+and to prove the wiring end-to-end once a prefix does clear the floor, use
+`backend/penn/cache_prefix_check.py` (offline go/no-go table; `--live` makes two
+real calls and asserts write→read).
+
 ## Status codes
 
 | Status | When                                                                                  |
