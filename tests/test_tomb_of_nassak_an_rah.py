@@ -986,6 +986,31 @@ def test_open_grammar_agrees_in_number():
     assert crates.contents["crate of dates"].to_be() == "is"
 
 
+def test_death_closes_the_parser_to_all_but_the_meta_verbs():
+    """The dead do not walk (CCB): once the game is over, every world
+    command is refused with the RESTORE/RESTART hint; only the meta verbs
+    that leave the ended story intact still answer."""
+    game = _game()
+    game.do_command("north")
+    game.player.set_property("is_dead", True)
+    assert game.is_game_over()
+    cap = _texts(game)
+    here = game.player.location.name
+    turn = game.turn
+    game.do_command("go south")
+    assert game.player.location.name == here  # the corpse stays put
+    assert game.turn == turn  # and time does not pass for it
+    blocked = " ".join(cap.texts(Channel.BLOCKED))
+    assert "Death has this expedition now" in blocked
+    assert "RESTORE" in blocked and "RESTART" in blocked
+    game.do_command("inventory")  # even free actions are the living's
+    game.do_command("look")
+    assert game.player.location.name == here
+    cap2 = _texts(game)
+    game.do_command("script")  # the record survives the death
+    assert "north" in " ".join(cap2.texts(Channel.NARRATION))
+
+
 def test_drinking_water_mends_a_wound():
     game = _game()
     game.do_command("search merchant")
