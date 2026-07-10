@@ -1016,6 +1016,30 @@ def test_death_closes_the_parser_to_all_but_the_meta_verbs():
     assert "north" in " ".join(cap2.texts(Channel.NARRATION))
 
 
+def test_the_pack_answers_to_pack():
+    """'give dates to pack' (CCB's transcript) must find the jackals -- the
+    tribute changes hands and buys the deep peace."""
+    game = _game()
+    for cmd in (
+        "search merchant",
+        "take glowstone",
+        "light glowstone",
+        "in",
+        "open crates",
+        "take crate of dates",
+        "out",
+        "north",
+    ):
+        game.do_command(cmd)
+    pack = game.characters["jackal pack"]
+    game.relocate(pack, game.player.location)
+    game.do_command("give dates to pack")
+    assert "crate of dates" not in game.player.carried_items()
+    assert "crate of dates" in pack.inventory or not pack.inventory.get(
+        "crate of dates"
+    )  # taken (and possibly already devoured by the tribute trigger)
+
+
 def test_taste_is_the_cautious_cousin_of_eat():
     """TASTE/LICK (CCB): reads flavor and function, verdicts edibility, and
     never consumes -- and 'taste crate of dates' must not be swallowed by

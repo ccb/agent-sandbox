@@ -2183,7 +2183,7 @@ def build_game(seed=None):
         "eyes do sums -- you, minus what you carry, minus what you bleed. It "
         "is not you they want."
     )
-    for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
+    for _a in ("jackals", "jackal", "pack", "pack of jackals", "pthalo-jackals"):
         jackal_pack.add_alias(_a)
     # A PACK does not drop to one swing (the vigor system, CCB): three blows
     # thin it to nothing.
