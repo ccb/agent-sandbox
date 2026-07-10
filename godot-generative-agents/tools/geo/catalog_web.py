@@ -30,7 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import tile_presets
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 MAPS = os.path.join(REPO, "godot-generative-agents", "godot", "maps")
 CATALOG_PATH = os.path.join(HERE, "furniture_catalog.json")
 WALKABLE_PATH = os.path.join(HERE, "walkable_furniture.json")

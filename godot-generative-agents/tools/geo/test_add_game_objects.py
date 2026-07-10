@@ -4,7 +4,7 @@ import os
 import add_game_objects as ago
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SRC_MATRIX = os.path.join(
     REPO, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
 )

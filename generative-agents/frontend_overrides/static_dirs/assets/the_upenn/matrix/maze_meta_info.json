@@ -1,0 +1,7 @@
+{
+ "world_name": "UPenn",
+ "maze_width": 175,
+ "maze_height": 124,
+ "sq_tile_size": 16,
+ "special_constraint": ""
+}

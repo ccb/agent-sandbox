@@ -417,7 +417,7 @@ def patch_world_data(path: str, pad: int) -> None:
 # --------------------------------------------------------------------------- #
 def main() -> int:
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     gg = os.path.join(repo, "godot-generative-agents")
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter

@@ -3,7 +3,7 @@ import copy, json, os
 import furnish_van_pelt as fv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 MAP = os.path.join(
     REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
 )

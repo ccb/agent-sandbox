@@ -167,7 +167,7 @@ def interior_cells(tmj):
     )
     entrance = {(i % W, i // W) for i, v in enumerate(ef["data"]) if v} if ef else set()
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     sector_path = os.path.join(
         repo,
         "godot-generative-agents",
@@ -444,7 +444,7 @@ def apply(tmj):
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--tmj",

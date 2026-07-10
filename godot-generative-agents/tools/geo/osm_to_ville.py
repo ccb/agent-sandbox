@@ -69,7 +69,7 @@ WORLD_NAME = "UPenn"
 ARENA_NAME = "grounds"  # OSM has no rooms; every building gets one generic arena
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_GA = os.path.normpath(os.path.join(_HERE, "..", "..", "generative-agents"))
+_GA = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "generative-agents"))
 DEFAULT_OUT = os.path.join(
     _GA, "frontend_overrides", "static_dirs", "assets", "the_upenn"
 )

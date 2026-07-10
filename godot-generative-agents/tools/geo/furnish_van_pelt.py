@@ -112,7 +112,7 @@ def apply(tmj, asset, matrix_dir):
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
