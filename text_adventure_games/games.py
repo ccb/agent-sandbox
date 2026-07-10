@@ -92,6 +92,13 @@ class Game:
         self.score = 0
         self.max_score = 0
         self._scored_keys = set()
+        # InvisiClues-style progressive hints (hints.py): registered topics,
+        # per-topic reveal depth, and the honesty counter games may stamp on
+        # the final score. Progress replays from the journal (HINT is a
+        # journaled free action), so saves keep what was revealed.
+        self.hints = []
+        self.hint_progress = {}
+        self.hints_taken = 0
 
         # Add player to game and put them on starting point
         self.characters = {}
@@ -262,6 +269,8 @@ class Game:
                 "inv",
                 "i",
                 "score",
+                "hint",
+                "hints",
             ):
                 self.parser.fail(
                     (
@@ -292,6 +301,11 @@ class Game:
                 getattr(last, "FREE_ACTION", False)
                 and not self.config.engine.meta_actions_cost_turns
             ):
+                # A JOURNALED free action costs no turn but must survive the
+                # (seed, journal) replay -- HINT reveals, e.g., would silently
+                # vanish from a restored game otherwise.
+                if getattr(last, "JOURNALED", False):
+                    self.journal.append(command)
                 return success
             # A turn-consuming success enters the journal (a comma-sequence
             # journals part by part via the recursion above, so a replay of
@@ -747,6 +761,17 @@ class Game:
             self.do_command(command)
             if self.is_game_over():
                 break
+
+    def add_hint(self, hint):
+        """Register a :class:`~text_adventure_games.hints.Hint` topic on the
+        HINT menu. Order of registration is menu order."""
+        self.hints.append(hint)
+
+    def scored(self, key) -> bool:
+        """Whether :meth:`award` has already paid *key* -- the public face of
+        the idempotence set, for predicates (hints, triggers) that gate on
+        a milestone having happened."""
+        return key in self._scored_keys
 
     def award(self, key, points, msg=None):
         """Add *points* to the score once per *key* (idempotent), optionally
