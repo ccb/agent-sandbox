@@ -248,12 +248,21 @@ class Game:
             return all(results) if results else False
 
         # A finished game closes the parser (CCB: the dead were still walking).
-        # Only the meta verbs that leave the ended story intact pass: RESTORE
-        # a save, SCRIPT the record -- and RESTART, for shells that offer it
-        # above this loop.
+        # Only verbs that leave the ended story intact pass: RESTORE a save,
+        # SCRIPT the record, RESTART (for shells that offer it above this
+        # loop) -- and the read-only ledger (INVENTORY, SCORE), so the final
+        # accounting of wounds and slots can be studied post-mortem.
         if self.is_game_over():
             first = command.strip().split(" ", 1)[0].lower()
-            if first not in ("restore", "script", "restart"):
+            if first not in (
+                "restore",
+                "script",
+                "restart",
+                "inventory",
+                "inv",
+                "i",
+                "score",
+            ):
                 self.parser.fail(
                     (
                         "The story has ended. "

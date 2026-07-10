@@ -164,9 +164,16 @@ def test_roll_wound_specials():
     _, msgs, _ = roll_wound(game.player, roll=2, rng=rng)
     assert "pebble" not in game.player.inventory
     assert "smashed beyond use" in msgs[0]
-    # 20: FATALITY.
-    _, msgs, fatal = roll_wound(game.player, roll=20)
+    # 20: FATALITY -- lands as a REAL wound filling every remaining slot
+    # (CCB: the accounting must add up), so death always reads as wounds
+    # filling capacity.
+    capacity = game.player.slot_capacity
+    before = game.player.wound_slots()
+    w, msgs, fatal = roll_wound(game.player, roll=20)
     assert fatal and game.player.get_property("is_dead")
+    assert game.player.wound_slots() == capacity  # the gauge is exactly full
+    assert w[0].name == "FATALITY" and w[0].slots == capacity - before
+    assert any(x.name == "FATALITY" for x in game.player.wounds)  # in the ledger
 
 
 # --- display ------------------------------------------------------------------
