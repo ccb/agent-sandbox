@@ -54,5 +54,5 @@ SCHEMA_VERSION = "1.0"
 # One persona's per-step entry (penn_world.replay_frame_entry), in emitted order.
 AGENT_FRAME_FIELDS = ("x", "y", "act", "e", "reasoning", "chat", "memories")
 
-# One memory-stream entry (smallville_agents.memories_for_frame), in emitted order.
+# One memory-stream entry (cognition.memories_for_frame), in emitted order.
 MEMORY_RECORD_FIELDS = ("kind", "importance", "text", "created_turn")
