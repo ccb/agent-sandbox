@@ -1,29 +1,76 @@
-// Shape of godot-generative-agents/maps/penn_replay.json, written by
-// backend/penn/generate_penn_replay.py and played by scripts/viewer.gd. The browser
-// shell serves a copy at /replay/penn_replay.json (see web/public/replay/).
+// MIRROR of the pinned replay data-contract (#305). The source of truth is
+// backend/contract.py (schema prose + SCHEMA_VERSION + pinned field order) and
+// backend/contract_models.py (the enforcing Pydantic models); a Python test
+// (tests/test_replay_contract.py) asserts these interfaces stay field-for-field
+// in lock-step, so edit the Python side first.
 //
-// The Godot canvas already consumes this file itself; these types are here so the
-// upcoming agent-info companion panels can read the SAME data, type-safe.
+// Shape of penn_replay.json, written by backend/penn/generate_penn_replay.py
+// and played by scripts/viewer.gd; the live handshake (GET /live) serves the
+// same meta shape minus `steps`, plus a live-only `llm`. Fields marked ? are
+// absent from replay files baked before the field existed.
 
 export interface Persona {
   name: string;
   emoji: string;
+  /** Persona blurb for the State Details inspector (issue #408). */
+  persona?: string;
+  /** Home address, e.g. "UPenn:Fisher-Hassenfeld". */
+  home?: string;
+  /** The authored day plan (normalized stops). */
+  schedule?: ScheduleStop[];
+}
+
+/** One stop of a persona's authored day plan. */
+export interface ScheduleStop {
+  place: string;
+  activity: string;
+  emoji: string;
+  /** Steps to stay; null = remains for the rest of the day. */
+  steps: number | null;
+}
+
+/** One t=0 seed social-graph edge (viewer's social-graph pop-up, #252). */
+export interface RelationshipEdge {
+  a: string;
+  b: string;
+  kind: string;
+  /** 1..5. */
+  closeness: number;
+  description: string;
+}
+
+/** What is driving the cast on a live run (null under the mock brain). */
+export interface LlmInfo {
+  provider: string;
+  model: string;
 }
 
 export interface ReplayMeta {
+  /** The contract version this file conforms to (backend/contract.py). */
+  schema_version?: string;
   /** Pixels per tile (16 for the campus map). */
   tile_px: number;
   /** Map size in tiles. */
   width: number;
   height: number;
-  /** Number of steps (== frames.length). */
+  /** Number of steps (== frames.length). Absent on the LIVE meta (a running
+   * sim doesn't know its length up front). */
   steps: number;
   /** In-game seconds represented by one step (for a wall-clock label). */
   sec_per_step: number;
+  /** Sim-start wall clock, "YYYY-MM-DD HH:MM:SS". */
+  start?: string;
+  /** Perception radius (tiles) -- the viewer's tracking-fog radius. */
+  vision_r?: number;
   personas: Persona[];
+  /** The t=0 seed social graph. */
+  relationships?: RelationshipEdge[];
+  /** LIVE meta only: the model driving the cast (never in a baked file). */
+  llm?: LlmInfo | null;
 }
 
-/** One persona's state at a single step. */
+/** One persona's state at a single step. Key order is pinned by
+ * backend/contract.py AGENT_FRAME_FIELDS (byte-identity, #297). */
 export interface AgentFrame {
   /** Tile coordinates. */
   x: number;
@@ -32,55 +79,35 @@ export interface AgentFrame {
   act: string;
   /** Activity emoji ("pronunciatio"). */
   e: string;
-  /**
-   * The reasoning behind this step's action (issue #163). The mock brain leaves
-   * a short templated line; a real-LLM run fills in genuine reasoning. Optional
-   * so an older replay JSON (which omits it) still type-checks.
-   */
+  /** The reasoning behind this step's action (issue #163); templated under the
+   * mock brain, genuine under a real LLM. */
   reasoning?: string | null;
-  /**
-   * The agent's current conversation as `[speaker, line]` pairs, or null when
-   * not talking. Always null under the mock brain (conversation is gated on a
-   * real model).
-   */
+  /** Current conversation as [speaker, line] pairs, or null when not talking. */
   chat?: [string, string][] | null;
-  /**
-   * The memories retrieval surfaced for *this* decision — the card's compact
-   * "Memories retrieved" shorthand (issue #163). A subset of the agent's full
-   * `memory_streams`; it only changes at the agent's decision points and carries
-   * forward unchanged in between. Populated even under the mock brain (retrieval
-   * runs regardless; the mock just ignores the block when deciding). Optional so
-   * an older replay JSON still type-checks.
-   */
+  /** The memories retrieval surfaced for THIS decision (issue #163) -- a
+   * subset of memory_streams; carries forward unchanged between decisions. */
   memories?: MemoryRecord[] | null;
 }
 
 /** A step: persona name -> that persona's state. */
 export type Frame = Record<string, AgentFrame>;
 
-/**
- * One entry in a persona's memory stream (issue #163). Mirrors the UI-ready dict
- * the Smallville exporter / `memory_stream_for_persona` produce.
- */
+/** One entry in a persona's memory stream (issue #163). */
 export interface MemoryRecord {
-  /** "observation" | "plan" | "reflection" | "chat" — the panel colour-codes it. */
+  /** "observation" | "plan" | "reflection" | "chat" -- the panel colour-codes it. */
   kind: string;
-  /** The memory text itself. */
-  text: string;
-  /** The step at which the memory formed (its position on the replay's time axis). */
-  created_turn: number;
   /** Poignancy / importance (kept quiet beside the text). */
   importance: number;
+  /** The memory text itself. */
+  text: string;
+  /** The step at which the memory formed. */
+  created_turn: number;
 }
 
 export interface Replay {
   meta: ReplayMeta;
   frames: Frame[];
-  /**
-   * Per-persona full memory stream, written by backend/penn/generate_penn_replay.py. The
-   * companion panel filters each agent's records to `created_turn <= step` to show
-   * the history accrued so far. Optional: a replay generated before this field
-   * existed simply has no memory history to show.
-   */
+  /** Per-persona full memory stream; the companion panel filters each agent's
+   * records to created_turn <= step. Absent from very old replays. */
   memory_streams?: Record<string, MemoryRecord[]>;
 }
