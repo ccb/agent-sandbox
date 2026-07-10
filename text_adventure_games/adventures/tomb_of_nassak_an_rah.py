@@ -712,6 +712,133 @@ class TieSilk(actions.Action):
         )
 
 
+class FixCoffin(actions.Action):
+    """FIX COFFIN (CCB): once the Fungal Horror is destroyed, gather the
+    orbiting shards around the Autarch's drifting bones, wrap the whole in
+    spider-silk, and let the sphere's anti-entropy field fuse the cracks.
+    The chamber answers the kindness: every spoken prayer is re-cut into
+    the walls, and a NEW line rises -- the Prayer of Peaceful Slumber."""
+
+    ACTION_NAME = "fix coffin"
+    ACTION_DESCRIPTION = (
+        "Re-house the Autarch: gather the shards, wrap them in silk, let "
+        "the field fuse them"
+    )
+    ACTION_ALIASES = [
+        "fix the coffin",
+        "repair coffin",
+        "repair the coffin",
+        "rebuild coffin",
+        "rebuild the coffin",
+        "restore coffin",
+        "restore the coffin",
+        "reassemble coffin",
+        "gather shards",
+        "gather the shards",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "coffin" not in loc.items:
+            self.parser.fail("There's no coffin here to fix.")
+            return False
+        coffin = loc.items["coffin"]
+        bones_adrift = "Autarch's bones" in loc.items
+        if not coffin.get_property("pried") and not bones_adrift:
+            self.parser.fail("The coffin is whole, and its tenant housed.")
+            return False
+        if not loc.get_property("horror_dead"):
+            self.parser.fail(
+                "Not while the thing that wore him still lives. The fixing "
+                "of this room starts with the Horror's ending."
+            )
+            return False
+        if (
+            "bolt of spider-silk" not in self.player.carried_items()
+            and not coffin.get_property("tethered")
+        ):
+            self.parser.fail(
+                "The pieces want holding while the field thinks -- "
+                "something long, light, and stronger than it looks. Silk."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        coffin = loc.items["coffin"]
+        silk = self.player.carried_items().get("bolt of spider-silk")
+        if silk is not None:
+            self.player.discard_item(silk)
+            wrap = (
+                "A wrap of spider-silk, paid out arm over arm, holds the "
+                "puzzle closed."
+            )
+        else:  # the old lashing, re-purposed
+            coffin.set_property("tethered", False)
+            wrap = (
+                "The lashing you tied for the prying serves a gentler "
+                "purpose now, drawn tight around the whole."
+            )
+        pried = coffin.get_property("pried")
+        gather = (
+            "You gather the orbiting shards out of the air one by one and "
+            "fit them around the Autarch's drifting bones -- a glass "
+            "eggshell reassembled in zero gravity around its king. "
+            if pried
+            else "You open the seam the field left soft, gather the "
+            "Autarch's drifting bones, and settle them home among their "
+            "wrappings. "
+        )
+        bones = loc.items.get("Autarch's bones")
+        if bones is not None:
+            loc.remove_item(bones)
+        coffin.set_property("pried", False)
+        coffin.set_property("is_closed", True)
+        coffin.set_property("fixed", True)
+        coffin.description = "the Autarch's anti-entropy coffin, made whole"
+        coffin.examine_text = (
+            "The glass sphere hangs whole at the chamber's heart, its "
+            "equator seamless -- you know where the cracks were, and cannot "
+            "find them. Past the clearing cloud, Nassak An-Rah lies "
+            "re-housed among his wrappings, composed, the gold wire at his "
+            "joints at rest."
+        )
+        desc = (
+            "A spherical chamber carved over every inch with funeral "
+            "prayers, and nothing in it obeys the ground. The coffin hangs "
+            "whole at the dead centre, seam sealed, the Autarch re-housed "
+            "within; the chamber is quiet in the way of a made bed."
+        )
+        if "drift of ash" in loc.items:
+            desc += " The ash of the Horror turns in its slow orbit, out of respect."
+        loc.description = desc
+        loc.dim_description = (
+            "A spherical chamber, weightless and quiet. A whole dark shape "
+            "hangs at the centre, and nothing in the room is broken."
+        )
+        prayers = loc.items.get("prayers")
+        if prayers is not None:
+            for key in ("balm", "wrath", "mending"):
+                prayers.set_property(key + "_spent", False)
+            prayers.set_property("slumber_known", True)
+            prayers.set_property("read_text", _prayers_text(prayers))
+        self.parser.ok(
+            gather + wrap + " Then the chamber does what it was built to "
+            "do: the anti-entropy field leans on the cracks until they "
+            "remember being whole, seams closing like water under the "
+            "silk, and the coffin hangs at the centre of its sphere as if "
+            "nothing had ever presumed to open it. Along the walls, the "
+            "answered prayers rise again out of the smooth stone, re-cut "
+            "-- and beneath them a NEW line, deeper than the rest: the "
+            "PRAYER OF PEACEFUL SLUMBER."
+        )
+
+
 class PryCoffin(actions.Action):
     """Pry open the Autarch's anti-entropy coffin in the zero-g Burial Sphere to
     claim the Exotica. Prying wants two things: an ANCHOR (the magnetic boots
@@ -812,17 +939,25 @@ class PryCoffin(actions.Action):
 def _prayers_text(prayers):
     """The carvings' READ text, kept current as the chamber answers each
     prayer: a spoken prayer's line goes smooth and unlettered."""
-    entries = (
+    entries = [
         ("balm", "the PRAYER OF BALM, for the mourner's hurts"),
         (
             "wrath",
-            "the PRAYER OF WRATH, a word the Autarchs kept for what would " "not die",
+            "the PRAYER OF WRATH, a word the Autarchs kept for what would not die",
         ),
         (
             "mending",
             "the PRAYER OF MENDING, for vessels broken before their time",
         ),
-    )
+    ]
+    if prayers.get_property("slumber_known"):
+        entries.append(
+            (
+                "slumber",
+                "the PRAYER OF PEACEFUL SLUMBER, new-cut and deepest, for a "
+                "king put properly to bed",
+            )
+        )
     live = [text for key, text in entries if not prayers.get_property(key + "_spent")]
     spent = [key.upper() for key, _ in entries if prayers.get_property(key + "_spent")]
     parts = [
@@ -889,6 +1024,8 @@ class SayPrayer(actions.Action):
             self.which = "wrath"
         elif "mend" in self.command:
             self.which = "mending"
+        elif any(w in self.command for w in ("slumber", "sleep", "peaceful")):
+            self.which = "slumber"
         else:
             self.which = None
 
@@ -940,6 +1077,20 @@ class SayPrayer(actions.Action):
                     "The coffin is whole."
                 )
                 return False
+        if self.which == "slumber":
+            if not self.prayers.get_property("slumber_known"):
+                self.parser.fail(
+                    "No such line is carved here -- not yet. The chamber "
+                    "cuts new prayers only for new kindnesses."
+                )
+                return False
+            coffin = self.player.location.items.get("coffin")
+            if coffin is None or not coffin.get_property("fixed"):
+                self.parser.fail(
+                    "The Prayer of Peaceful Slumber wants a king properly "
+                    "housed to say it over."
+                )
+                return False
         return True
 
     def apply_effects(self):
@@ -975,6 +1126,23 @@ class SayPrayer(actions.Action):
                     "char and drop away where it lands; the Fungal Horror "
                     "is smaller than it was."
                 )
+        elif self.which == "slumber":
+            coffin = loc.items["coffin"]
+            coffin.examine_text = (
+                "The glass sphere hangs whole at the chamber's heart. Past "
+                "the clearing cloud, Nassak An-Rah lies among his "
+                "wrappings, and his face -- you would swear it -- has "
+                "untightened: the look of a man dreaming something kind, "
+                "four thousand years into a good night's sleep."
+            )
+            self.parser.ok(
+                "You say the Prayer of Peaceful Slumber, and the chamber "
+                "says it back so softly it is almost a hum. Through the "
+                "clouded glass the Autarch's face lets go of some ancient "
+                "argument; what settles over it is beatific, the rest he "
+                "built this whole blue mountain hoping for. The prayers on "
+                "the walls seem, briefly, less like grief."
+            )
         else:  # mending
             coffin = loc.items["coffin"]
             coffin.set_property("pried", False)
@@ -2631,6 +2799,7 @@ def build_game(seed=None):
         custom_actions=[
             Sneak,
             Burn,
+            FixCoffin,
             PryCoffin,
             SayPrayer,
             TieSilk,
