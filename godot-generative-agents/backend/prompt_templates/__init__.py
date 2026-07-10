@@ -1,11 +1,11 @@
-"""In-repo prompt management for the Smallville port (issue #145).
+"""In-repo prompt management for the generative-agents port (issue #145).
 
 The generative-agents port drives every persona with a deterministic mock
-(``smallville_agents.SmallvilleMockClient``), so there is no live model prompt to
+(``cognition.ScheduleMockClient``), so there is no live model prompt to
 manage here. What there *is* -- and what this package centralizes -- is the
 agent's generated **memory and belief text**: the day's plan, the first-person
 record of each action it takes, and the places it knows up front. Those strings
-used to be inline f-strings in ``smallville_agents.py`` and ``seed.py``; they now
+used to be inline f-strings in ``cognition.py`` and ``seed.py``; they now
 live as ``.prompty`` files next to this module: YAML frontmatter (name,
 description, documented inputs, a sample) followed by a Jinja2 template body.
 

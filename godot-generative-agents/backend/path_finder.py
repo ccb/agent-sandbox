@@ -5,7 +5,7 @@ https://github.com/joonspk-research/generative_agents (Apache-2.0;
 Author: Joon Sung Park, joonspk@stanford.edu).
 
 We keep only the breadth-first ``path_finder`` (and its helper
-``path_finder_v2``) because that is all the Smallville port needs: given a
+``path_finder_v2``) because that is all this port needs: given a
 collision grid and two tiles, return the tile-by-tile path between them so the
 frontend can animate a believable walk instead of a straight line through walls.
 

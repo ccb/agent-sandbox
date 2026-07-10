@@ -1,10 +1,10 @@
-"""LLM brains for the Smallville cast.
+"""LLM brains for the generative-agents cast.
 
-By default the port uses no live LLM: each persona is driven by a
-:class:`SmallvilleMockClient` -- a subclass of the engine's
+By default the sim uses no live LLM: each persona is driven by a
+:class:`ScheduleMockClient` -- a subclass of the engine's
 ``MockReActClient`` (provider ``"mock"``) that keeps the same client interface
 the agent layer calls (``chat`` / ``call_tool``) but swaps the Action-Castle
-decision logic for a tiny, deterministic Smallville brain:
+decision logic for a tiny, deterministic schedule-following brain:
 
 * If the agent is not yet at its destination, it decides ``"travel to <dest>"``.
 * Once there, it decides ``"perform <activity>"``.
@@ -14,9 +14,9 @@ hands the agent (``describe_for`` puts the current location name on the first
 line), so the decision genuinely flows through the engine's observe -> decide
 seam -- it's just a stand-in for a model, exactly as ``MockReActClient`` is.
 
-A real model can take over those decisions (NEXT-STEPS Phase A): pass an
-``llm_client`` to :func:`attach_agents` and it becomes each agent's brain, while a
-``SmallvilleMockClient`` stays on ``agent.schedule`` to pace the day. With none, the
+A real model can take over those decisions: pass an ``llm_client`` to
+:func:`attach_agents` and it becomes each agent's brain, while a
+``ScheduleMockClient`` stays on ``agent.schedule`` to pace the day. With none, the
 mock is both brain and schedule driver and the replay is byte-identical.
 """
 
@@ -40,7 +40,6 @@ CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
 
 from . import seed
-from .build_world import LOCATION_NAMES
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -48,11 +47,11 @@ from .prompt_templates import render
 # Generative Agents ``vision_r`` cognition knob (their per-agent scratch.json).
 # Paired with a TiledGame (build_world(world_map=...)), this turns map proximity
 # into co-presence: residents within 8 tiles perceive each other and nearby
-# objects. A persona may override it with a ``vision_r`` key in world_data.yaml.
-SMALLVILLE_VISION_R = 8
+# objects. A persona may override it with a ``vision_r`` key in the world YAML.
+DEFAULT_VISION_R = 8
 
 
-class SmallvilleMockClient(MockReActClient):
+class ScheduleMockClient(MockReActClient):
     """Deterministic mock LLM that walks a persona through a *schedule* of stops.
 
     A schedule is an ordered list of ``{place, activity, emoji, steps}`` stops
@@ -108,7 +107,7 @@ class SmallvilleMockClient(MockReActClient):
         has already executed or is performing -- everything up to and including
         ``stop_index`` -- so the index stays valid and only the upcoming tail
         differs. The mock never calls this (its day is static); it exists for the
-        revision seam a real planner drives (``smallville_agents.maybe_revise_plan``).
+        revision seam a real planner drives (``cognition.maybe_revise_plan``).
         """
         self.schedule = schedule
 
@@ -179,8 +178,9 @@ def attach_agents(
     *,
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
-    vision_r: int = SMALLVILLE_VISION_R,
+    vision_r: int = DEFAULT_VISION_R,
     planner_client=None,
+    location_names=None,
     reflector_client=None,
     llm_client=None,
     clock=None,
@@ -191,7 +191,8 @@ def attach_agents(
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
     ``characters`` maps name -> Character (from :func:`build_world.build_world`);
-    ``personas`` is the metadata list (``build_world.PERSONAS``). Pass a shared
+    ``personas`` is the normalized metadata list (from
+    :func:`build_world.load_world_data`). Pass a shared
     ``ledger`` so every persona's LLM calls accumulate in one place for a
     per-agent cost summary (usage.py); omit it and each client keeps its own.
 
@@ -222,11 +223,14 @@ def attach_agents(
     replays the authored schedule, so the replay stays byte-identical. The agent
     and its memory are built and seeded *before* the planner runs, so a generative
     planner reasons over the same t=0 memory the agent will. If the model returns
-    nothing usable, the agent falls back to the static schedule.
+    nothing usable, the agent falls back to the static schedule. The planner
+    validates its stops against ``location_names`` (the world's valid places);
+    pass the set explicitly, or leave it ``None`` to derive it from the personas'
+    homes + scheduled places.
 
     Pass an ``llm_client`` (NEXT-STEPS Phase A) to make each agent's travel/perform
     *decisions* through a real model: it becomes the agent's brain (``agent.decide``
-    -> ``llm_client``), while a deterministic ``SmallvilleMockClient`` stays on
+    -> ``llm_client``), while a deterministic ``ScheduleMockClient`` stays on
     ``agent.schedule`` to pace the day (``advance``/``steps``/``emoji``). With none,
     that same mock client is *also* the brain -- ``agent.llm_client is
     agent.schedule`` -- so decisions are deterministic and the replay is
@@ -246,12 +250,12 @@ def attach_agents(
     )
     for spec in personas:
         char = characters[spec["name"]]
-        # The schedule driver: a deterministic SmallvilleMockClient that owns the
+        # The schedule driver: a deterministic ScheduleMockClient that owns the
         # day's pacing (advance()/steps/emoji and the current stop). The decision
-        # brain is a real LLM client when one is supplied (Phase A), else the
-        # schedule client itself -- so by default agent.llm_client IS agent.schedule
-        # (one object), keeping decisions deterministic and the replay byte-identical.
-        schedule = SmallvilleMockClient(spec["schedule"], ledger=ledger)
+        # brain is a real LLM client when one is supplied, else the schedule client
+        # itself -- so by default agent.llm_client IS agent.schedule (one object),
+        # keeping decisions deterministic and the replay byte-identical.
+        schedule = ScheduleMockClient(spec["schedule"], ledger=ledger)
         brain = llm_client if llm_client is not None else schedule
         # Build the agent first so its memory exists and can be seeded before a
         # planner reasons over it. The planner (below) commits the schedule it wants.
@@ -304,8 +308,12 @@ def attach_agents(
         # replace_schedule re-commits the same list. An LLM that returns nothing
         # usable (empty plan) falls back to the static schedule so the sim is safe.
         if planner_client is not None:
+            plan_locations = location_names or frozenset(
+                {p["home"] for p in personas}
+                | {stop["place"] for p in personas for stop in p["schedule"]}
+            )
             planner = LLMPlanner(
-                planner_client, LOCATION_NAMES, clock=clock, num_steps=num_steps
+                planner_client, plan_locations, clock=clock, num_steps=num_steps
             )
             plan = planner.generate(persona=spec, memory=agent.memory)
             if plan.stops:
@@ -320,7 +328,7 @@ def attach_agents(
             plan = planner.generate(persona=spec, memory=agent.memory)
             source = "mock"
         # Record where each agent's plan came from so the caller can report how many
-        # were genuinely model-generated vs. fell back (run_simulation.main prints it).
+        # were genuinely model-generated vs. fell back.
         if out_planner_sources is not None:
             out_planner_sources[spec["name"]] = source
         # Hand back the generated plan (as JSON-safe primitives) so the run can
@@ -340,7 +348,7 @@ def attach_agents(
 def observe_and_decide(game, char, step: int, retrieval=None):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
-    The Smallville step loop (``run_simulation.simulate``) calls the engine's
+    The step loop (``run_simulation.simulate``) calls the engine's
     decision seam directly rather than going through ``react_behavior``, so the
     perceive -> retrieve -> augment wiring that the ReAct loop does for free
     (issue #75) is reproduced here, composing the same public memory API:

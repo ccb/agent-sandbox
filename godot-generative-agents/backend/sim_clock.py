@@ -1,6 +1,6 @@
 """Map the sim's step counter onto clock time (issue #83, NEXT-STEPS Phase D §10).
 
-Smallville runs on a fine, continuous-ish clock -- one step is ``sec_per_step``
+The sim runs on a fine, continuous-ish clock -- one step is ``sec_per_step``
 seconds (10 by default), and the run starts at a real ``start_dt`` -- while plans
 are authored in *clock time* (hours of the day). :class:`SimClock` is the single
 conversion between the two, so "plan in hours" and "drive in steps" never drift

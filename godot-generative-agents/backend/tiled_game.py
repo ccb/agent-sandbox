@@ -1,4 +1,4 @@
-"""A Smallville ``Game`` whose "nearby" means tile distance, not room hops.
+"""A ``Game`` whose "nearby" means tile distance, not room hops.
 
 Issue #80 gave the engine a single visibility seam --
 ``Game.perceivable_locations(character)`` -- that decides which locations a
@@ -6,10 +6,10 @@ character can perceive each turn (its agents/objects/events are then folded into
 memory by ``AgentMemory.perceive``). The engine's default walks the room
 *connection* graph out to ``character.vision_r`` hops.
 
-That graph is the wrong notion of distance for Smallville: ``build_world`` wires
+That graph is the wrong notion of distance for a tile world: ``build_world`` wires
 each arena to the hub with a one-way ``to <name>`` exit (no reverse), so from any
 arena the room graph goes nowhere -- the default would only ever return the
-current arena. Smallville's real proximity lives on the 140x100 tile map
+current arena. The world's real proximity lives on the tile map
 (``world_map.py``). This is exactly the case the seam was built to be overridden
 for (issue #82): :class:`TiledGame` answers "what's nearby" with **tile
 distance**, so two residents standing near each other *on the map* perceive each
@@ -54,7 +54,7 @@ class TiledGame(games.Game):
             return [loc]
         # Perf note (#106): this scans every location once per call, and the step
         # loop calls it once per acting agent per tick -- so perception is
-        # O(agents x locations) per tick. Totally fine at Smallville's scale
+        # O(agents x locations) per tick. Totally fine at this sim's scale
         # (~25 agents, ~20 arenas); `tile_gap` is O(1) on precomputed bounding
         # boxes. If a future map ever has thousands of locations, index the
         # arenas spatially (e.g. a tile grid / bucket by region) instead of this
