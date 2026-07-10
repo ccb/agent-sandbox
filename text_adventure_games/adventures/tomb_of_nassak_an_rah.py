@@ -2639,7 +2639,7 @@ def build_game(seed=None):
             Butcher,
         ],
     )
-    game.max_score = 135
+    game.max_score = 140
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2808,10 +2808,11 @@ def build_game(seed=None):
                 "READ LEDGER at the wreck; DRINK WATER on a wound; the "
                 "lattice remembers a dead king's days; Silas rewards a "
                 "civil TALK.",
-                "The full 135: threshold 5, first light 5, water 5, a "
+                "The full 140: threshold 5, first light 5, water 5, a "
                 "healed wound 5, the lattice memory 5, Silas's acquaintance "
                 "5, falcon jar 5, jackal jar 5, the dagger 5, the manifold "
-                "box 5, the Friend's Fungus 5, each spawn quelled 5, the "
+                "box 5, the Friend's Fungus 5, the archivist made whole 5, "
+                "each spawn quelled 5, the "
                 "pack settled (paid or put down) 5, the seal 20, the Horror "
                 "25, and out alive 20.",
             ],
@@ -4009,6 +4010,63 @@ def build_game(seed=None):
 
     game.add_trigger("silas_fungus", _silas_dosed, _silas_mellows, repeatable=False)
 
+    # GIVE CORE TO SILAS (CCB): the item's own tease -- 'Silas would trade
+    # his robes for it' -- honored. The Seeker's reading is finished; the
+    # stated price is paid; the chain finally has an ending.
+    monk_robes = things.Item(
+        "yellow monk's robes",
+        "the yellow robes of a Seeker of Eyeless Wisdom",
+        "Plain-woven and dust-hemmed, yellow so the road shows on them: the "
+        "rule of a mendicant order that reads the dead where they kept "
+        "their own records. Given freely exactly once -- when a Seeker's "
+        "reading is done.",
+    )
+    monk_robes.set_property(Property.WEARABLE, True)
+    monk_robes.set_property("wear_slot", "body")
+    monk_robes.add_alias("robes")
+    monk_robes.add_alias("yellow robes")
+    monk_robes.add_alias("monk's robes")
+
+    def _core_given(g):
+        return "ego-core" in silas.inventory and not silas.get_property("core_traded")
+
+    def _core_trade(g):
+        silas.set_property("core_traded", True)
+        g.player.add_to_inventory(monk_robes)
+        silas.description = (
+            "a gaunt synthetic archivist, bare-chassised, wholly given to "
+            "his reading"
+        )
+        silas.examine_text = (
+            "The synth without his robes: a lattice of dust-dulled alloy, "
+            "unbothered by the cold, the ego-core held to his chest the way "
+            "a man holds water in the desert. The bright threads of the "
+            "lattice spool around him in patterns like thought."
+        )
+        silas.talk_text = (
+            '"He was afraid," Silas says, not looking up from the core. '
+            '"Under the jars and the seal and all this keeping -- afraid '
+            "that to be forgotten was to have never been. Most of what he "
+            "chose to keep is ordinary: bread, an argument, rain on a fig "
+            "tree, a daughter counting to a hundred. Four centuries of a "
+            'man practicing goodbye. I will finish it for him."'
+        )
+        g.parser.ok(
+            "Silas goes still the way only a machine can, every thread of "
+            "the lattice hanging mid-spool. He takes the ego-core in both "
+            'hands, the way a man takes water in the desert. "A thousand '
+            'years I have read this tomb from its margins," he says. "You '
+            'have just handed me the author." He unknots the yellow robes '
+            "and folds them over your arm, unasked -- the rule of his "
+            'order, and the stated price, paid in full. "When he is whole, '
+            "we will speak him aloud once, and let him go. You will have "
+            "finished a king, scavenger. Wear the yellow; you have earned "
+            'the dust it shows."'
+        )
+        g.award("archivist", 5, "[+5 -- the archivist made whole]")
+
+    game.add_trigger("silas_core", _core_given, _core_trade, repeatable=False)
+
     # Water mends (the canon short rest is "a quick sit-down, with a glug of
     # water"): drinking the waterskin heals the most recent wound.
     def _drank_water(g):
@@ -4360,9 +4418,13 @@ def build_game(seed=None):
     ego_core = things.Item(
         "ego-core",
         "An-Rah's ego-core",
-        "A spindle of smoke-grey memory-crystal, heavier than it looks and "
-        "warmer than it should be: Nassak An-Rah, or what he chose to keep of "
-        "himself. Silas would trade his robes for it.",
+        "A spindle of smoke-grey memory-crystal that has not fully agreed "
+        "to be in this room: look away and back and it hangs at a slightly "
+        "different angle than you left it, and its faint shadow falls "
+        "against the light. Heavier than it looks, warmer than it should "
+        "be. Nassak An-Rah -- or what he chose to keep of himself, stored "
+        "where geometry could not evict him. Silas would trade his robes "
+        "for it.",
     )
     ego_core.add_alias("core")
 
@@ -4378,12 +4440,24 @@ def build_game(seed=None):
         manifold_box.set_property("compartment_found", True)
         g.player.add_to_inventory(ego_core)
         g.parser.ok(
-            "The ulfire light soaks through the manifold box's gilded walls, "
-            "and its true interior opens to your eye: a compartment three "
-            "times larger than the box that holds it, empty except for a "
-            "spindle of grey crystal hanging in the middle of that impossible "
-            "room. You reach in along the angle of the light and draw out "
-            "An-Rah's ego-core."
+            "Under the ninth colour, the manifold box stops pretending. Its "
+            "gilded walls go glassy, then merely ADVISORY -- and the "
+            "interior opens away from you: not a compartment but a hall, "
+            "receding along a direction the tomb does not otherwise have. "
+            "The geometry in there has stopped agreeing with the geometry "
+            "out here. Corners count wrong. Parallel edges meet, twice, "
+            "somewhere behind you. The vanishing point sits over your own "
+            "shoulder, and the far end of that unlit hall is a pace away "
+            "and a province away, in the manner of stars. There, hanging "
+            "where every wrong angle converges, a spindle of smoke-grey "
+            "crystal turns without turning, its shadow falling UP the "
+            "light. You reach in. Your arm bends along an angle that has "
+            "no name; your hand goes cold as television static, in a place "
+            "your eyes decline to file. Your fingers close on it anyway. "
+            "You draw out An-Rah's ego-core, your arm comes back honest, "
+            "and the hall folds itself away like a sentence ending -- "
+            "leaving the box merely gilded, merely small, and very "
+            "slightly heavier than the room it keeps."
         )
 
     game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
@@ -4574,6 +4648,9 @@ WIN_WALKTHROUGH = [
     "take manifold box",
     "sneak down",  # Sphere -> Canopic
     "sneak left stairs",  # -> Memory
+    "give fungus to silas",  # the lonely archivist hands over the lantern
+    "light ulfire lantern",  # ...which opens the manifold box's true interior
+    "give core to silas",  # the stated price: his robes, and an ending (+5)
     "sneak south",
     "sneak south",  # escape -> WIN
 ]

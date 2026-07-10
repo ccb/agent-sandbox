@@ -617,7 +617,7 @@ def test_ulfire_light_reveals_the_ego_core_in_the_manifold_box():
     game.do_command("light lantern")  # the very specific angle
     assert "ego-core" in game.player.inventory
     assert (
-        "compartment three times larger"
+        "a direction the tomb does not otherwise have"
         in " ".join(cap.texts(Channel.NARRATION)).lower()
     )
 
@@ -1031,7 +1031,7 @@ def test_minor_threats_pay_when_quelled_by_any_means():
     game.do_command("look")
     assert game.scored("spawn_guts") and game.scored("spawn_brain")
     assert game.score == before + 10
-    assert game.max_score == 135
+    assert game.max_score == 140
 
 
 def test_the_pack_answers_to_pack():
@@ -1117,6 +1117,46 @@ def test_every_organ_keeps_its_own_taste():
         if it.name == "falcon jar"
     )
     assert "of offal" in falcon.contents["intestines"].get_property("taste")
+
+
+def test_the_core_buys_the_robes():
+    """GIVE CORE TO SILAS (CCB): the item's own tease honored -- the robes
+    change hands, the archivist gets his ending, and +5 marks it."""
+    game = _game()
+    _sate_pack(game)
+    silas = game.characters["Silas"]
+    memory = game.locations["Hall of Memory"]
+    game.relocate(game.player, memory)
+    # run the whole chain by hand: fungus -> lantern -> core -> trade
+    corpse = game.locations["The Summit"].items["ossified corpse"]
+    fungus = corpse.contents["friend's fungus"]
+    corpse.remove_item(fungus)
+    game.player.add_to_inventory(fungus)
+    game.do_command("give fungus to silas")
+    assert "ulfire lantern" in game.player.inventory  # the mellowed gift
+    box = (
+        game.locations["Burial Sphere of Nassak An-Rah"]
+        .items["coffin"]
+        .contents["manifold box"]
+    )
+    game.player.add_to_inventory(box)
+    cap = _texts(game)
+    game.do_command("light ulfire lantern")
+    reveal = " ".join(cap.texts(Channel.NARRATION))
+    assert "ego-core" in game.player.inventory
+    assert "hall" in reveal and "television static" in reveal  # hypergeometry
+    before = game.score
+    cap2 = _texts(game)
+    game.do_command("give core to silas")
+    text = " ".join(cap2.texts(Channel.NARRATION))
+    assert "handed me the author" in text
+    assert "yellow monk's robes" in game.player.carried_items()
+    assert game.score == before + 5 and game.scored("archivist")
+    game.do_command("wear robes")
+    assert "yellow monk's robes" in game.player.worn
+    cap3 = _texts(game)
+    game.do_command("talk to silas")
+    assert "practicing goodbye" in " ".join(cap3.texts(Channel.NARRATION))
 
 
 def test_a_lick_of_friends_fungus_is_a_microdose():
@@ -2101,5 +2141,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 135 == game.max_score
+    assert game.score == 140 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
