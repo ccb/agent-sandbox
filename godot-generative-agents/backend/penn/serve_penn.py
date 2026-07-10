@@ -47,7 +47,7 @@ from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.sim_config import CognitionConfig
-from backend.smallville_agents import attach_agents
+from backend.cognition import attach_agents
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
@@ -88,8 +88,8 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
 
     Note what is intentionally NOT configurable here: the daily planner. The
     authored YAML schedules (and the rendezvous routing built on them) stay in
-    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` currently
-    validates stops against the *Smallville* location names, and a generated
+    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` validates
+    stops against the world's location names, and a generated
     schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
     is follow-up work; decide/converse/reflect are the model's here.
     """

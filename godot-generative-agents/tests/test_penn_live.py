@@ -36,7 +36,7 @@ from penn_world import (  # noqa: E402
 )
 from serve_penn import LiveMeetingInjector, PennStepper, _GameProxy  # noqa: E402
 
-VISION_R = 8  # SMALLVILLE_VISION_R; the fog radius the viewer draws
+VISION_R = 8  # cognition.DEFAULT_VISION_R; the fog radius the viewer draws
 
 
 # ------------------------------------------------------- build_penn_world

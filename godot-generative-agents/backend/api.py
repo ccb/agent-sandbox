@@ -1,8 +1,8 @@
 """Headless HTTP API that drives a :class:`~text_adventure_games.games.Game`
 from an out-of-process front-end (issue #179, unifying #177).
 
-This is the project's **one canonical backend seam**: a 2D/Godot renderer, the
-Smallville/Phaser viewer, or the web inspection companion all poll the *same*
+This is the project's **one canonical backend seam**: a 2D/Godot renderer or the
+web inspection companion poll the *same*
 endpoints here rather than each embedding Python or baking its own data dump. The
 engine and any LLM stay server-side; the frontend just reads JSON.
 
@@ -99,7 +99,7 @@ from text_adventure_games.reporting import JSONRenderer
 
 from .env import load_dotenv
 from .live import EventLog, LiveRunController, SimStepper, run_loop
-from .smallville_agents import (
+from .cognition import (
     kind_counts_for_persona,
     memories_for_frame,
     memory_stream_for_persona,
@@ -229,7 +229,7 @@ class WorldEventResponse(BaseModel):
 class MemoryEntry(BaseModel):
     """One formed memory, in the exact wire shape the replay bake emits.
 
-    This is ``smallville_agents.memories_for_frame``'s dict -- the same four
+    This is ``cognition.memories_for_frame``'s dict -- the same four
     fields that ``penn_replay.json``'s ``memory_streams`` block and the
     frontend's ``replay.ts`` ``MemoryRecord`` carry. It is a lean projection of
     the engine's fuller ``MemoryRecord`` (``text_adventure_games/memory.py``);
@@ -397,7 +397,7 @@ class LiveStatusResponse(BaseModel):
     the feed (#262/#263).
 
     ``meta`` is the stepper's own ``meta()`` blob, passed through opaquely --
-    for the Penn/Smallville worlds it is the replay-meta shape (``tile_px``,
+    for the Penn world it is the replay-meta shape (``tile_px``,
     ``width``/``height``, ``personas`` with emoji, ...), so a live viewer
     spawns its agents exactly the way the baked-replay loader does. ``cursor``
     is the newest change-feed cursor; a client that starts its backfill at
@@ -517,7 +517,7 @@ def create_app(
     """Build the FastAPI app serving *game*.
 
     *game* is any engine :class:`~text_adventure_games.games.Game` -- Action
-    Castle, a benchmark task, or the live Penn/Smallville sim -- so this one app
+    Castle, a benchmark task, or the live Penn sim -- so this one app
     is the seam for every world. If *auth_token* is set, every request must carry
     ``Authorization: Bearer <token>``; left ``None`` (the loopback-only default)
     the API is open. Access to *game* is serialized with a lock, since FastAPI
@@ -1270,7 +1270,7 @@ def run(
 def _demo_game():
     """A tiny two-room world so ``python -m backend.api`` is runnable with no
     assets -- enough to exercise the contract and ``/docs``. Real worlds (the
-    Penn/Smallville sim) are served by passing your own ``Game`` to :func:`run`.
+    Penn sim) are served by passing your own ``Game`` to :func:`run`.
 
     The gardener NPC carries three hand-seeded memories (the same
     ``AgentMemory`` a live LLM agent accrues into) so

@@ -1,40 +1,39 @@
-"""The asset-path constants survive the #399 package move (issue #407).
+"""The Penn asset-path constants resolve correctly and the matrix exists (issue #407).
 
-``backend/`` moved to ``godot-generative-agents/backend/`` in #399, but the
-Smallville (``the_ville``) and Penn (``the_upenn``) assets it reads still live
-under the **repo-root** ``generative-agents/`` tree. Each constant derives its
-location from ``__file__``; a one-``dirname`` computation was correct while
-``backend/`` sat at the repo root, but after the move it silently resolved to a
-nonexistent ``godot-generative-agents/generative-agents/`` -- so seeding read a
-missing path and no-op'd without a word (the graceful-degradation branch that is
-meant only for a fresh checkout without the ~38 MB upstream assets).
+The ``the_upenn`` map assets moved with the backend into
+``godot-generative-agents/backend/penn/the_upenn`` (#399) and are tracked in git.
+``penn_world`` derives their location from ``__file__``; these guard the *resolved*
+paths so a future move can't silently repoint them at a nonexistent directory -- the
+#407 failure mode, where seeding read a missing path and no-op'd without a word.
 
-These guard the *resolved* locations so the same silent breakage can't recur.
-Fully offline; the ``the_upenn`` matrix is tracked, so its existence check is
+Fully offline; the ``the_upenn`` matrix is tracked, so the existence checks are
 stable in CI.
 """
 
 import os
+import sys
+from pathlib import Path
 
-from backend import run_simulation, run_upenn
+# The Penn sim modules run as scripts (no package); import them off the sim dir,
+# the way the scripts import each other (see test_penn_live).
+_SIM_DIR = Path(__file__).resolve().parents[1] / "backend" / "penn"
+sys.path.insert(0, str(_SIM_DIR))
 
-# tests/ -> godot-generative-agents/ -> repo root
-_REPO_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
-_GA = os.path.join(_REPO_ROOT, "generative-agents")
-# The exact wrong location the #407 regression produced.
-_STALE = os.path.join("godot-generative-agents", "generative-agents")
+import penn_world  # noqa: E402
 
-
-def test_ville_constants_resolve_under_repo_root_generative_agents():
-    for path in (run_simulation.DEFAULT_VILLE_DIR, run_simulation.DEFAULT_STORAGE):
-        assert path.startswith(_GA + os.sep), path
-        assert _STALE not in path, f"#407 regression: {path}"
+_BACKEND_PENN = str(_SIM_DIR)
 
 
-def test_upenn_matrix_resolves_under_generative_agents_and_exists():
-    assert run_upenn.UPENN_DIR.startswith(_GA + os.sep), run_upenn.UPENN_DIR
-    assert _STALE not in run_upenn.UPENN_DIR
+def test_upenn_dir_resolves_under_backend_penn_and_exists():
+    # Robust to the #399 move: the constant is derived from penn_world's __file__,
+    # so it must land inside .../godot-generative-agents/backend/penn/the_upenn.
+    assert penn_world.UPENN_DIR.startswith(_BACKEND_PENN + os.sep), penn_world.UPENN_DIR
     # the_upenn matrix is committed, so this stays green offline / in CI.
-    assert os.path.isdir(os.path.join(run_upenn.UPENN_DIR, "matrix"))
+    assert os.path.isdir(os.path.join(penn_world.UPENN_DIR, "matrix"))
+
+
+def test_world_data_resolves_and_exists():
+    assert penn_world.WORLD_DATA.startswith(
+        _BACKEND_PENN + os.sep
+    ), penn_world.WORLD_DATA
+    assert os.path.isfile(penn_world.WORLD_DATA)

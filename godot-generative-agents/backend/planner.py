@@ -1,14 +1,14 @@
-"""Smallville planners (issue #83, NEXT-STEPS Phase D).
+"""Daily planners (issue #83, NEXT-STEPS Phase D).
 
 The engine defines *what a plan is* and *how it is manipulated*
-(``text_adventure_games.planning``); this module is the Smallville-specific
+(``text_adventure_games.planning``); this module is the sim-specific
 *cognition* that fills one in, behind the engine's :class:`Planner` protocol.
 
 Two implementations are planned, mirroring the brain split in
-``smallville_agents.py`` (mock vs. real LLM):
+``cognition.py`` (mock vs. real LLM):
 
 * :class:`MockPlanner` -- **the default, offline, deterministic planner.** It
-  reproduces a persona's hand-authored ``world_data.yaml`` schedule exactly, so a
+  reproduces a persona's hand-authored world-YAML schedule exactly, so a
   default ``run_simulation`` produces byte-identical ``movement/*.json``. The YAML
   schedules become the mock's *fixture* rather than the only source of truth.
 * :class:`LLMPlanner` -- generates and revises real day -> hourly -> minute plans
@@ -53,7 +53,7 @@ class MockPlanner:
 
         The arguments the :class:`~text_adventure_games.planning.Planner` protocol
         passes (identity / memory / clock) are accepted but ignored -- the mock
-        plans from the fixture alone, the way the current ``SmallvilleMockClient``
+        plans from the fixture alone, the way the current ``ScheduleMockClient``
         decides from location alone.
         """
         return DailyPlan(stops=list(self._stops))
@@ -161,7 +161,7 @@ class LLMPlanner:
     Drives the three-level decomposition through structured tool calls on an
     engine ``LlmClient``: day outline -> hourly -> minute stops, each conditioned
     on the level above. ``revise`` re-runs the minute level given the trigger; the
-    step loop (:func:`smallville_agents.maybe_revise_plan`) re-anchors the executed
+    step loop (:func:`cognition.maybe_revise_plan`) re-anchors the executed
     prefix, so this planner only has to propose a sensible full-day stop list.
 
     Robust by construction: a missing or malformed tool result degrades to an

@@ -74,10 +74,12 @@ uv run python tools/geo/osm_to_ville.py --area campus
   interiors).
 
 Output lands in the tracked `generative-agents/frontend_overrides/static_dirs/assets/the_upenn/`
-(setup.sh rsyncs it into `frontend/`). Then run the existing sim on the real campus:
+(setup.sh rsyncs it into `frontend/`). Then bake a replay for the Godot viewer to
+render the real campus (or serve it live — see `godot-generative-agents/README.md`):
 
 ```bash
-cd generative-agents && uv run python -m backend.run_upenn   # 3 personas walk Penn
+# from the repo root -- bakes godot/maps/penn_replay.json for "Play the bundled replay":
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --steps 400
 ```
 
 ## Themes (the tile art)

@@ -14,7 +14,7 @@ import json
 import os
 import shutil
 
-# Smallville's clock: one step is 10 seconds of in-game time.
+# The sim's clock: one step is 10 seconds of in-game time.
 SEC_PER_STEP = 10
 MAZE_NAME = "the_ville"
 
@@ -93,7 +93,7 @@ def write_simulation(
     ``plans`` (``{persona_name: DailyPlan.to_primitive()}``, from
     ``simulate(out_plans=...)``) is each agent's generated daily plan; we write it
     to ``personas/<Name>/daily_plan.json`` so the plan a run used is an inspectable
-    artifact (``backend.compare_plans`` reads it back, no model calls). Returns the
+    artifact a reader can load back without any model calls. Returns the
     sim folder path.
     """
     sim_dir = os.path.join(storage_root, sim_code)

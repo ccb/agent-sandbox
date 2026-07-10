@@ -1,7 +1,7 @@
 {
-  "chain": "smallville",
-  "label": "Smallville",
-  "description": "A Smallville persona's day with a live LLM: generate a plan (day -> hourly -> minute), seed beliefs + plan into memory, then each step perceive, retrieve, decide, maybe converse, remember, and periodically reflect. Click a node to read its prompt. With the default mock brain the blue prompts aren't sent (the mock decides from location alone), but the green memory text is still written.",
+  "chain": "cognition",
+  "label": "Cognition",
+  "description": "A persona's day with a live LLM: generate a plan (day -> hourly -> minute), seed beliefs + plan into memory, then each step perceive, retrieve, decide, maybe converse, remember, and periodically reflect. Click a node to read its prompt. With the default mock brain the blue prompts aren't sent (the mock decides from location alone), but the green memory text is still written.",
   "elements": {
     "nodes": [
       {
@@ -60,7 +60,7 @@
           "label": "Seed day plan",
           "kind": "narrate",
           "template": "plan_memory",
-          "description": "smallville_agents.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
+          "description": "cognition.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
           "fired": false
         }
       },
@@ -110,7 +110,7 @@
           "label": "Remember (reflection)",
           "kind": "narrate",
           "template": "reflection",
-          "description": "smallville_agents.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
+          "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
           "fired": false
         }
       },
@@ -368,7 +368,7 @@
       "label": "Seed day plan",
       "kind": "narrate",
       "template": "plan_memory",
-      "description": "smallville_agents.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
+      "description": "cognition.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
       "frontmatter": {
         "name": "plan_memory",
         "description": "The day's PLAN memory seeded onto each Smallville persona at t=0 (backend/smallville_agents.py, attach_agents). It is the agent's own private intention -- \"go to <destination> and <activity>\", plus the day's full itinerary -- distinct from its persona, so retrieval has the agent's whole plan to surface from turn 0 and the PLAN memory kind is exercised. The deterministic mock brain never reads it (it decides from location alone); real retrieval would surface it.",
@@ -458,7 +458,7 @@
         }
       },
       "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\n{%- endif %}\n",
-      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Isabella Rodriguez. I run Hobbs Cafe and love bringing people together.\nGoals:\nShort-term:\n  - open the cafe and welcome the morning regulars\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>"
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nGoals:\nShort-term:\n  - work on the studio model in Meyerson Hall\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>"
     },
     "dialogue": {
       "id": "dialogue",
@@ -486,14 +486,14 @@
         }
       },
       "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\nYou are in a conversation. Reply with the single line you say next, in character. Keep it to a sentence or two. If the conversation has reached a natural end, say a brief goodbye.\n",
-      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Isabella Rodriguez. I run Hobbs Cafe and love bringing people together.\nYou are in a conversation. Reply with the single line you say next, in character. Keep it to a sentence or two. If the conversation has reached a natural end, say a brief goodbye."
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nYou are in a conversation. Reply with the single line you say next, in character. Keep it to a sentence or two. If the conversation has reached a natural end, say a brief goodbye."
     },
     "remember": {
       "id": "remember",
       "label": "Remember (reflection)",
       "kind": "narrate",
       "template": "reflection",
-      "description": "smallville_agents.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
+      "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
       "frontmatter": {
         "name": "reflection",
         "description": "A persona's own successful action, recorded as a first-person observation memory (backend/smallville_agents.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, or a quoted fallback for any other command. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",

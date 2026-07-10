@@ -31,7 +31,7 @@ Role attribution: the planner and reflector get their own client (and view),
 so a static role is exact. The brain client is shared between *decide* and
 *converse*, so its view is bound to the client's live ``context`` dict
 (:meth:`RoleTaggedLedger.bind_context`) and the two call sites in
-``run_simulation.step`` / ``smallville_agents.maybe_converse`` stamp
+``run_simulation.step`` / ``cognition.maybe_converse`` stamp
 ``{"role": ...}`` into that context along with the actor/turn they already
 set. ``record_call`` reads the context synchronously inside the call frame, so
 the role the view resolves is always the current call's.
