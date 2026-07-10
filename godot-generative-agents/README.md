@@ -152,6 +152,13 @@ and more-recent conversations, and `←`/`→` flips to the authored t=0 **seed
 relationships** (the `relationships:` block in `world_data_upenn.yaml`) so you can
 compare who *started out* knowing whom against who actually met during the day.
 
+You can also **snapshot the campus** as it plays (issue #253): the sidebar's camera
+button (or `C`) grabs the current view — UI chrome hidden, so it's the bare
+campus + agents — and stamps it with the world time. The stacked-photos button opens
+a **gallery** of every snapshot taken this session, each captioned with its timestamp;
+click one to enlarge it (`←`/`→` to browse, `Esc` to close). Snapshots live in memory
+for the session — saving them to disk is a separate follow-up.
+
 ### Live mode — follow a running sim (issue #263)
 
 The same scene can **follow a live simulation over real HTTP + WebSocket**
