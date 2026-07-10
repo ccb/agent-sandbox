@@ -32,7 +32,6 @@ from collections import Counter
 
 WORLD = "UPenn"
 OBJECT_LAYER_SUFFIX = "_objects"
-FISHER_SECTOR = "34"
 GAME_OBJECT_BASE = 100000
 
 
