@@ -22,6 +22,22 @@ class Travel(base.Action):
 
     ACTION_NAME = "travel"
     ACTION_DESCRIPTION = "Travel to a named location in town"
+    # Typed tool slot (issues #356/#485): a tool-calling brain fills a
+    # ``destination`` field instead of writing free text, and the ``connector``
+    # reassembles its pick as ``"travel to <destination>"`` -- the same phrasing
+    # the schedule mock emits, so :meth:`_match_destination` parses both
+    # identically. The slot stays ``type: string`` because the engine's scope
+    # kinds (item / character / direction) don't cover "any named location in
+    # town"; :func:`cognition.action_tools_for` narrows it to an enum of the
+    # world's real location names at decision time.
+    ARGUMENTS_SCHEMA = {
+        "destination": {
+            "type": "string",
+            "description": "the exact name of the location to travel to",
+            "connector": "to",
+            "required": True,
+        },
+    }
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
@@ -65,6 +81,18 @@ class Act(base.Action):
 
     ACTION_NAME = "perform"
     ACTION_DESCRIPTION = "Perform an activity at the current location"
+    # Typed tool slot (issues #356/#485). The activity is genuinely free text --
+    # it becomes the on-screen action label verbatim -- so the slot carries a
+    # description rather than an enum, and reassembles as
+    # ``"perform <activity>"``.
+    ARGUMENTS_SCHEMA = {
+        "activity": {
+            "type": "string",
+            "description": "the activity to do here, as a short present-tense "
+            "phrase, e.g. 'reading in the stacks'",
+            "required": True,
+        },
+    }
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
