@@ -1,7 +1,7 @@
 # A small University of Pennsylvania cast for the generative-agents sim, walking
 # the REAL campus. The map is derived from OpenStreetMap by
-# tools/geo/osm_to_ville.py (the_upenn matrix). Each building now has a walkable
-# interior reached through a single door (tools/geo/add_entrances.py), so each
+# godot-generative-agents/tools/geo/osm_to_ville.py (the_upenn matrix). Each building now has a walkable
+# interior reached through a single door (godot-generative-agents/tools/geo/add_entrances.py), so each
 # location's `address` is the building's "UPenn:<building>:lobby" INTERIOR address
 # -- "study in Van Pelt Library" walks the agent in through the door rather than
 # stopping at the edge. (The matrix still has "UPenn:<building>:grounds" for the
@@ -20,7 +20,7 @@
 #   location differs from the stop's place; starting at the hub makes stop 1 a real
 #   trip inside.)
 #
-# Van Pelt Library is furnished into 25 navigable rooms (tools/geo/furnish_van_pelt.py
+# Van Pelt Library is furnished into 25 navigable rooms (godot-generative-agents/tools/geo/furnish_van_pelt.py
 # + add_entrances.py, #268), each its own arena address "UPenn:Van Pelt Library:<room>".
 # So instead of stopping in the lobby, the cast below sends its Van Pelt stops to
 # specific rooms: a location like "Van Pelt — Moelis Reading Room" carries the address

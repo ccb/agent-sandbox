@@ -25,7 +25,7 @@ Paths below are relative to the Godot project (`godot/`) unless noted.
 The game opens on a **landing menu** — the front door where you pick how to enter
 the viewer (a replay, a local replay file, or a live backend). Behind it, two scenes
 render the same campus — the academic core block (34th–36th × Spruce–Walnut), built
-from OpenStreetMap data by the repo's geo tool (`tools/geo/osm_to_tiled.py`) and
+from OpenStreetMap data by the repo's geo tool (`godot-generative-agents/tools/geo/osm_to_tiled.py`) and
 drawn with **Kenney's RPG Urban Pack (CC0)**:
 
 - **`scenes/main_menu.tscn`** — the **front door** (the default scene): choose *Watch
@@ -66,14 +66,14 @@ the Penn agent simulation* below.
 to render the full campus instead of the 34th–38th × Spruce–Walnut core subset:
 
 ```bash
-uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
-cp tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/godot/maps/
-cp tools/geo/out/tilemap_packed.png    godot-generative-agents/godot/maps/
+uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # Kenney CC0 map + sheet
+cp godot-generative-agents/tools/geo/out/upenn_core_urban.tmj  godot-generative-agents/godot/maps/
+cp godot-generative-agents/tools/geo/out/tilemap_packed.png    godot-generative-agents/godot/maps/
 
 # Post-processes that the committed map bakes in (re-run after a fresh bake, in
 # this order — both edit maps/upenn_core_urban.tmj in place and are re-run safe):
-uv run python tools/geo/wall_all_buildings.py                        # brick wall every building
-uv run python tools/geo/furnish_building.py --sector "Williams Hall" # open the roof + furnish
+uv run python godot-generative-agents/tools/geo/wall_all_buildings.py                        # brick wall every building
+uv run python godot-generative-agents/tools/geo/furnish_building.py --sector "Williams Hall" # open the roof + furnish
 ```
 
 The committed `maps/upenn_core_urban.tmj` already includes those two post-processes
@@ -137,7 +137,7 @@ uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --ste
 The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
 (the cast — 3 active personas while the live-LLM MVP keeps runs cheap; 4 more are
 parked in comments, ready to uncomment) and `the_upenn/` (the OSM-derived navigation
-grid from `tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
+grid from `godot-generative-agents/tools/geo/osm_to_ville.py`). The agent *engine* (deciding, pathfinding) is
 the surrounding `backend` package, so this is the same simulation that runs there —
 just rendered here instead of in Phaser. `scripts/viewer.gd` eases each persona
 tile-to-tile along the path the sim chose, with a name + activity label above each
