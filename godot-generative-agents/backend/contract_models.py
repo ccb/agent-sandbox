@@ -99,7 +99,9 @@ class Meta(_ContractModel):
 
 
 class Replay(_ContractModel):
-    """The whole baked file: what #307's exporter emits."""
+    """The whole baked file: what #307's exporter emits. (Frame/memory row key
+    order is contract-pinned and preserved by ``model_dump()``; meta key order
+    is not part of the contract -- readers look meta up by name.)"""
 
     meta: Meta
     frames: list[dict[str, AgentFrame]]
