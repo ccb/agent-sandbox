@@ -227,6 +227,7 @@ var _quitting := false              # window close in progress (shutdown then qu
 @onready var _heatmap = $HeatmapLayer/HeatmapPanel  # heatmap_panel.gd heatmap pop-up
 @onready var _inspector = $PersonaInspectorLayer/PersonaInspector  # persona_inspector.gd
 @onready var _social_graph = $SocialGraphLayer/SocialGraphPanel  # social_graph_panel.gd
+@onready var _gallery = $SnapshotLayer/SnapshotGallery  # snapshot_gallery.gd snapshot pop-up
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
@@ -274,6 +275,13 @@ func _ready() -> void:
 	# button (or the G key) toggles it, and it's fed the replay + seed edges after load.
 	_panel.social_graph_requested.connect(_toggle_social_graph)
 	_social_graph.close_requested.connect(_close_social_graph)
+
+	# Snapshot capture + gallery pop-up (issue #253): the camera button (or C) captures
+	# the current campus view into the gallery; the gallery button toggles the pop-up of
+	# captures taken this session. Both live only in memory (no file export yet).
+	_panel.snapshot_requested.connect(_take_snapshot)
+	_panel.gallery_requested.connect(_toggle_gallery)
+	_gallery.close_requested.connect(_close_gallery)
 
 	# Persona State Details inspector (issue #408): the sidebar's ⓘ button opens it
 	# per agent; the P key opens it for whoever's tracked; its close button / a click
@@ -1204,6 +1212,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Toggle the social-graph pop-up (issue #252).
 			_toggle_social_graph()
 			get_viewport().set_input_as_handled()
+		KEY_C:
+			# Capture the current campus view into the snapshot gallery (issue #253).
+			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
+			_take_snapshot()
+			get_viewport().set_input_as_handled()
 		KEY_P:
 			# Toggle the State Details inspector for the tracked agent (issue #408) --
 			# unless the social graph is above it (layer 13 > 12): opening a modal
@@ -1216,8 +1229,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			# Close the topmost open modal first (their CanvasLayer stacking order:
-			# social graph 13 > inspector 12 > heatmap 11).
-			if _social_graph.visible:
+			# gallery 14 > social graph 13 > inspector 12 > heatmap 11).
+			if _gallery.visible:
+				_close_gallery()
+				get_viewport().set_input_as_handled()
+			elif _social_graph.visible:
 				_close_social_graph()
 				get_viewport().set_input_as_handled()
 			elif _inspector.visible:
@@ -1230,7 +1246,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			# While a pop-up is open, LEFT/RIGHT cycle its view (camera keyboard-pan is
 			# suppressed meanwhile, so the arrows don't also scroll the map). The
 			# topmost view-cycling modal wins, matching the Esc order above.
-			if _social_graph.visible:
+			if _gallery.visible:
+				# Browse snapshots when enlarged; a no-op in the grid view.
+				_gallery.nav_detail(-1 if event.keycode == KEY_LEFT else 1)
+				get_viewport().set_input_as_handled()
+			elif _social_graph.visible:
 				_social_graph.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
 				get_viewport().set_input_as_handled()
 			elif _heatmap.visible:
@@ -1291,6 +1311,59 @@ func _close_social_graph() -> void:
 	_social_graph.visible = false
 	# Restore keyboard pan unless another arrow-stealing modal is still open.
 	_camera.keyboard_enabled = not _heatmap.visible
+
+
+func _take_snapshot() -> void:
+	# Capture the current campus view into the gallery (issue #253). Skip while a modal is
+	# open: its full-screen dim would darken the shot, and the C hotkey fires even when a
+	# modal's backdrop has swallowed the sidebar button.
+	if _heatmap.visible or _inspector.visible or _social_graph.visible or _gallery.visible:
+		return
+	# Label it with the world time on screen right now (the sidebar clock's value).
+	var label := _format_sim_time(int(_t / step_seconds) * _sec_per_step)
+	# Hide the UI chrome (sidebar + minimap + run-monitor HUD) so the shot is the bare
+	# campus + agents; the world overlays (fog, name-plates, bubbles, trails) stay put.
+	# Wait one drawn frame so the hidden chrome is out of the framebuffer before read-back.
+	$UI.visible = false
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	$UI.visible = true
+	_gallery.add_snapshot(ImageTexture.create_from_image(img), label)
+	_flash()
+
+
+func _flash() -> void:
+	# A brief white flash — the "photo taken" cue. Added AFTER the capture, on the
+	# top-most layer, so it never lands in the shot itself; fades out then frees itself.
+	var flash := ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.5)
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$SnapshotLayer.add_child(flash)
+	var tween := create_tween()
+	tween.tween_property(flash, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(flash.queue_free)
+
+
+func _toggle_gallery() -> void:
+	if _gallery.visible:
+		_close_gallery()
+	else:
+		_open_gallery()
+
+
+func _open_gallery() -> void:
+	# Open on the grid view (reset so it never reopens mid-detail). Suppress the camera's
+	# keyboard pan so LEFT/RIGHT browse snapshots instead of scrolling the map.
+	_gallery.reset()
+	_gallery.visible = true
+	_camera.keyboard_enabled = false
+
+
+func _close_gallery() -> void:
+	_gallery.visible = false
+	# Restore keyboard pan unless another modal that steals it is still open.
+	_camera.keyboard_enabled = not (_heatmap.visible or _social_graph.visible or _inspector.visible)
 
 
 func _open_inspector(name: String) -> void:

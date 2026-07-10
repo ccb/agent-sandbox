@@ -37,6 +37,12 @@ signal heatmap_requested
 # The "Social graph" button was pressed (open/close the who-talked-to-whom pop-up,
 # issue #252). Same contract as heatmap_requested: a toggle request (G does the same).
 signal social_graph_requested
+# The "Snapshot" (camera) button was pressed: capture the current campus view (issue
+# #253). The viewer does the capture; C does the same.
+signal snapshot_requested
+# The "Snapshots" (gallery) button was pressed: open/close the pop-up of captures taken
+# this session. A toggle request, like heatmap_requested/social_graph_requested.
+signal gallery_requested
 # The Focus dropdown changed: spotlight only agents in this building ("" = All, no
 # filter). The viewer dims everyone elsewhere and glides the camera to the building.
 signal filter_changed(location: String)
@@ -122,6 +128,62 @@ const GRAPH_ROWS: PackedStringArray = [
 	"......#bwb#.....",
 	"......#bbb#.....",
 	".......###......",
+	"................",
+]
+
+# No camera glyph in the pack either (issue #253), so the Snapshot button gets the same
+# hand-drawn treatment: a little camera body with a blue lens + a viewfinder bump, in
+# the pack's dark outline.
+const CAMERA_PALETTE := {
+	"#": Color("181425"),  # outline
+	"b": Color("c0cbdc"),  # camera body (light steel)
+	"l": Color("0099db"),  # lens (pack blue)
+	"w": Color("8de6ff"),  # lens highlight
+}
+const CAMERA_ROWS: PackedStringArray = [
+	"................",
+	"................",
+	"...####.........",
+	"...#bb#.........",
+	".##############.",
+	".#bbbbbbbbbbbb#.",
+	".#bbb######bbb#.",
+	".#bbb#wwll#bbb#.",
+	".#bbb#wlll#bbb#.",
+	".#bbb#llll#bbb#.",
+	".#bbb#llll#bbb#.",
+	".#bbb######bbb#.",
+	".#bbbbbbbbbbbb#.",
+	".##############.",
+	"................",
+	"................",
+]
+
+# The Snapshots (gallery) button: two overlapping photos (a framed sky + sun + hills),
+# so it reads as "the pictures you took", distinct from the single-shot camera above.
+const GALLERY_PALETTE := {
+	"#": Color("181425"),  # outline
+	"a": Color("8b9bb4"),  # the photo behind (dimmer)
+	"p": Color("a7d8ff"),  # front photo sky
+	"w": Color("fee761"),  # sun
+	"m": Color("3e8948"),  # hills
+}
+const GALLERY_ROWS: PackedStringArray = [
+	"................",
+	"....##########..",
+	"....#aaaaaaaa#..",
+	"....#aaaaaaaa#..",
+	"....#aaaaaaaa#..",
+	"..##########a#..",
+	"..#pppppwwp#a#..",
+	"..#pppppppp#a#..",
+	"..#pppppppp###..",
+	"..#pppppppp#....",
+	"..#ppmmmmpp#....",
+	"..#pmmmmmmp#....",
+	"..##########....",
+	"................",
+	"................",
 	"................",
 ]
 
@@ -217,6 +279,21 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_graph_icon(), "Social graph — who has talked to whom, up to now (G)",
 		func() -> void: social_graph_requested.emit()))
+
+	# A second row for the capture tools (snapshot + its gallery, issue #253), kept off
+	# the controls row above so the icons stay finger-sized in the 300px sidebar.
+	var capture_row := HBoxContainer.new()
+	capture_row.add_theme_constant_override("separation", 6)
+	col.add_child(capture_row)
+
+	# Snapshot: the hand-drawn camera glyph (CAMERA_ROWS). viewer.gd does the capture.
+	capture_row.add_child(_icon_button(
+		_camera_icon(), "Snapshot — capture the current campus view (C)",
+		func() -> void: snapshot_requested.emit()))
+	# Snapshots gallery: the hand-drawn stacked-photos glyph (GALLERY_ROWS).
+	capture_row.add_child(_icon_button(
+		_gallery_icon(), "Snapshots — the captures taken this session",
+		func() -> void: gallery_requested.emit()))
 
 	# Playback controls: a transport row (pause/resume beside the step counter),
 	# a seekable timeline, and a speed picker.
@@ -319,6 +396,14 @@ static func _flame_icon() -> Texture2D:
 static func _graph_icon() -> Texture2D:
 	# Rasterize the GRAPH_ROWS bitmap at the same size/scale as the sheet glyphs.
 	return _bitmap_icon(GRAPH_ROWS, GRAPH_PALETTE)
+
+
+static func _camera_icon() -> Texture2D:
+	return _bitmap_icon(CAMERA_ROWS, CAMERA_PALETTE)
+
+
+static func _gallery_icon() -> Texture2D:
+	return _bitmap_icon(GALLERY_ROWS, GALLERY_PALETTE)
 
 
 static func _bitmap_icon(rows: PackedStringArray, palette: Dictionary) -> Texture2D:
