@@ -615,6 +615,15 @@ func clear_active() -> void:
 	_refresh()
 
 
+func clear_characters() -> void:
+	# Remove every character row (the run reset; the cast is about to respawn).
+	# Distinct from clear_active(), which only drops the current selection.
+	for name in _rows:
+		_rows[name]["row"].queue_free()
+	_rows.clear()
+	_active = ""
+
+
 func toggle_track(name: String) -> void:
 	# Public entry point for an out-of-panel trigger — e.g. clicking the agent's
 	# sprite on the map. Behaves exactly like pressing that character's Track button
