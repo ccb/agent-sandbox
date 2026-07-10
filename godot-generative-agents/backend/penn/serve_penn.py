@@ -43,6 +43,7 @@ import argparse
 import os
 
 from backend.api import run
+from backend.contract import SCHEMA_VERSION
 from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
@@ -378,6 +379,9 @@ class PennStepper:
         viewer spawns agents exactly the way the file loader does."""
         wm = self.world.world_map
         return {
+            # The pinned replay contract this blob conforms to (#305), kept in
+            # lock-step with the bake's meta so baked and live can't drift (#297).
+            "schema_version": SCHEMA_VERSION,
             "tile_px": wm.tile_size,
             "width": wm.width,
             "height": wm.height,

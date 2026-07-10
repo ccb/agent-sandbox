@@ -1177,3 +1177,30 @@ Deferred (don't expect these yet):
 [`tests/test_api.py`](../tests/test_api.py) — they exercise every status code and
 the security posture above. The architecture rationale is in the repo's
 `CLAUDE.md` ("Backend HTTP API").*
+
+## The replay data-contract (#305)
+
+The replay schema — `meta` / `AgentFrame` / `MemoryRecord` / the whole
+`penn_replay.json` — is pinned in two backend modules:
+
+- **`backend/contract.py`** — the schema prose, `SCHEMA_VERSION`, and the
+  pinned field orders (`AGENT_FRAME_FIELDS`, `MEMORY_RECORD_FIELDS`). Field
+  order is part of the contract: the bake's `json.dump` serializes insertion
+  order and #297's acceptance is a byte-identical replay. Deliberately
+  **stdlib-only** so the base-env bake can import it (pydantic only arrives
+  with the `server`/`llm` extras).
+- **`backend/contract_models.py`** — the enforcing Pydantic models
+  (`extra="forbid"`). One `Meta` covers both surfaces: the bake knows `steps`
+  and has no `llm`; a live run is the reverse.
+
+Both emitters — `penn/generate_penn_replay.py` and the live
+`serve_penn.PennStepper.meta()` — stamp `schema_version` as `meta`'s first
+key. **Bump `SCHEMA_VERSION` on any breaking change** (field removed, renamed,
+retyped); additive optional fields don't bump it.
+
+`web/src/types/replay.ts` is a **mirror**, not the definition —
+`tests/test_replay_contract.py` holds the two field-for-field in lock-step,
+alongside conformance tests that validate the real bake output and live meta.
+The #304 RunStore (`frames.jsonl` lines = dicts validating as
+`dict[str, AgentFrame]`) and the #307 live-run exporter (emits a `Replay`)
+construct against these models.
