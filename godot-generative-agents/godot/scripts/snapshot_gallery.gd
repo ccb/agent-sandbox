@@ -19,7 +19,7 @@ const BACKDROP_COLOR := Color(0.06, 0.07, 0.10, 0.82)
 const INK := Color(0.94, 0.92, 0.88)
 const INK_DIM := Color(0.74, 0.72, 0.68)
 # Grid thumbnail size (16:9, the window's aspect) and how many per row.
-const THUMB := Vector2(300, 169)
+const THUMB := Vector2(340, 191)
 const COLUMNS := 3
 
 # One entry per capture: {texture: Texture2D, label: String}. Full-resolution textures
@@ -122,7 +122,7 @@ func _ready() -> void:
 	_detail_image = TextureRect.new()
 	_detail_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_detail_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_detail_image.custom_minimum_size = Vector2(1120, 630)
+	_detail_image.custom_minimum_size = Vector2(1280, 720)
 	_detail.add_child(_detail_image)
 
 	_detail_caption = Label.new()
