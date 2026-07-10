@@ -842,22 +842,42 @@ def test_breaking_the_hound_tank_spills_the_cyborg_hounds():
 
 
 def test_the_chimney_is_passable_but_the_spores_scar_your_lungs():
-    """Two warnings, then a Seared Lungs wound per round of lingering -- death
-    only when the wounds fill your slots."""
+    """No grace: EVERY unmasked round in the throat is a Seared Lungs wound
+    (CCB) -- death only when the wounds fill your slots."""
     game = _game()
     _embark(game)
     game.characters["glass centipede"].set_property("is_unconscious", True)
     game.do_command("up")  # -> Summit
     game.do_command("in")  # into the fungal chimney -- passable, not blocked
     assert game.player.location.name == "The Fungal Chimney"
-    assert not game.is_game_over()  # first breath: a warning
-    game.do_command("look")  # second warning
-    assert not game.is_game_over() and not game.player.wounds
-    game.do_command("look")  # now the spores wound
     assert not game.is_game_over()
-    assert any(w.name == "Seared Lungs" for w in game.player.wounds)
+    wounds = lambda g: sum(1 for w in g.player.wounds if w.name == "Seared Lungs")
+    assert wounds(game) == 1  # the first breath already burns
+    game.do_command("look")  # linger a round: another wound
+    assert wounds(game) == 2 and not game.is_game_over()
     game.do_command("out")  # leaving stops the harm
+    n = wounds(game)
+    game.do_command("look")  # a round on the summit: no new searing
+    assert wounds(game) == n
     assert not game.is_game_over()
+
+
+def test_a_held_respirator_does_not_seal_lungs():
+    """The mask works WORN, not carried (CCB: 'if I am not wearing a
+    respirator') -- and worn, it holds for as long as you care to linger."""
+    game = _game()
+    _embark(game)
+    game.characters["glass centipede"].set_property("is_unconscious", True)
+    _hand(game, "Hall of Warriors", "amber cylinder", "respirator")
+    game.do_command("up")
+    game.do_command("in")  # holding the mask in a hand: the spores don't care
+    assert any(w.name == "Seared Lungs" for w in game.player.wounds)
+    game.do_command("out")
+    game.do_command("wear respirator")
+    game.do_command("in")
+    game.do_command("look")
+    game.do_command("look")  # three masked rounds: the seal holds
+    assert sum(1 for w in game.player.wounds if w.name == "Seared Lungs") == 1
 
 
 def test_drinking_water_mends_a_wound():
@@ -871,7 +891,7 @@ def test_drinking_water_mends_a_wound():
     cap = _texts(game)
     game.do_command("drink water")
     assert not game.player.wounds  # the glug of water mends
-    assert "something knits" in " ".join(cap.texts(Channel.NARRATION)).lower()
+    assert "a wound heals" in " ".join(cap.texts(Channel.NARRATION)).lower()
 
 
 def test_overloaded_scavenger_cannot_make_the_climb():
