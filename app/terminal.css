@@ -250,7 +250,7 @@ body.size-large, body.size-large input { font-size: 18px; }
   display: block;
   margin-top: 0.4rem;
 }
-#panel-map .map-node rect { fill: none; stroke: var(--phosphor); }
+#panel-map .map-node rect { fill: var(--bg); stroke: var(--phosphor); }
 #panel-map .map-node.here rect { fill: rgba(77, 184, 255, 0.18); stroke: var(--phosphor-bright); }
 #panel-map .map-node text { fill: var(--phosphor-bright); font-size: 10px; }
 #panel-map .map-edge { stroke: var(--phosphor-dim); }
