@@ -533,6 +533,7 @@ class Burn(actions.Action):
         elif target == "chimney":
             chimney_loc = self.game.locations["The Fungal Chimney"]
             chimney_loc.set_property("burned", True)
+            _chimney_burned_out(self.game)
             if loc is chimney_loc:
                 # Lit from INSIDE the shaft: it works, and it costs you --
                 # you are standing in the thing you just made a flue.
@@ -1368,6 +1369,47 @@ def _sphere_quieted(g):
             g,
             "A rotten half-light, dimming: the coffin's glow no longer "
             "stirs, and the carved prayers read as texture, not words.",
+        )
+
+
+def _chimney_burned_out(g):
+    """The burn is PERMANENT (CCB: the growth must not return): the room, its
+    half-light, and the growth itself all read as aftermath from now on. The
+    shaft keeps a faint glow -- the carved prayers far below -- so the gloom
+    stays gloom, not blindness."""
+    chimney = g.locations["The Fungal Chimney"]
+    chimney.description = (
+        "A vertical throat scoured black, bare rock and crumbling char from "
+        "throat to crown, dropping from the summit toward a glow of carved "
+        "prayers far below. The air is only air now, and cool."
+    )
+    chimney.dim_description = (
+        "A black, bare shaft; char flakes away under your hands. The air is "
+        "only air, and cool."
+    )
+    for veil in chimney.veils:
+        if isinstance(veil, perception.Gloom):
+            veil._blurb = (
+                "The shaft is dark and quiet, rimmed faintly from below by "
+                "the glow of carved prayers. Char, and cool air."
+            )
+    growth = chimney.items.get("orange growth")
+    if growth is not None:
+        chimney.remove_item(growth)
+    if "charred growth" not in chimney.items:
+        stub = _scenery(
+            chimney,
+            "charred growth",
+            "the charred stubble of the burned growth",
+            "Black wisps and crumbling char, packed in the seams where the "
+            "growth was. Nothing left to burn, and nothing left breathing.",
+        )
+        stub.add_alias("growth")
+        stub.add_alias("char")
+        stub.add_alias("stubble")
+        stub.perceptible_by(
+            perception.Sense.TASTE,
+            "Char. It tastes of a fire that has finished its work.",
         )
 
 
@@ -2597,7 +2639,7 @@ def build_game(seed=None):
             Butcher,
         ],
     )
-    game.max_score = 130
+    game.max_score = 135
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2766,11 +2808,12 @@ def build_game(seed=None):
                 "READ LEDGER at the wreck; DRINK WATER on a wound; the "
                 "lattice remembers a dead king's days; Silas rewards a "
                 "civil TALK.",
-                "The full 130: threshold 5, first light 5, water 5, a "
+                "The full 135: threshold 5, first light 5, water 5, a "
                 "healed wound 5, the lattice memory 5, Silas's acquaintance "
-                "5, falcon jar 5, jackal jar 5, both Exotica 10, each spawn "
-                "quelled 5, the pack settled (paid or put down) 5, the seal "
-                "20, the Horror 25, and out alive 20.",
+                "5, falcon jar 5, jackal jar 5, the dagger 5, the manifold "
+                "box 5, the Friend's Fungus 5, each spawn quelled 5, the "
+                "pack settled (paid or put down) 5, the seal 20, the Horror "
+                "25, and out alive 20.",
             ],
             resolved=lambda g: g.score >= g.max_score,
         ),
@@ -3612,8 +3655,14 @@ def build_game(seed=None):
             g.award("falcon_jar", 5, "[+5 -- the falcon jar]")
         if "jackal jar" in inv:
             g.award("jackal_jar", 5, "[+5 -- the jackal jar]")
-        if "synth-hunting dagger" in inv and "manifold box" in inv:
-            g.award("exotica", 10, "[+10 -- the Autarch's Exotica, both]")
+        # Each Exotica pays on ITS OWN find (CCB: no waiting for the pair),
+        # and the Friend's Fungus pays when claimed from the mystic's hands.
+        if "synth-hunting dagger" in inv:
+            g.award("dagger", 5, "[+5 -- the synth-hunting dagger]")
+        if "manifold box" in inv:
+            g.award("box", 5, "[+5 -- the manifold box]")
+        if "friend's fungus" in inv:
+            g.award("fungus", 5, "[+5 -- the Friend's Fungus, claimed]")
         stone = inv.get("glowstone")
         if stone is not None and stone.get_property(Property.IS_LIT):
             g.award("first_light", 5, "[+5 -- light, learned]")
@@ -4511,6 +4560,8 @@ WIN_WALKTHROUGH = [
     "sneak south",
     "sneak south",  # Canopic -> Exterior (dark and quiet through the Youth)
     "up",
+    "search corpse",  # the mystic's hands hold the Friend's Fungus...
+    "take fungus",  # ...claimed BEFORE the burn consumes it (+5)
     "burn corpse",  # Summit: cleanse the root
     "down",
     "sneak north",

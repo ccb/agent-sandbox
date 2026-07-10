@@ -1031,7 +1031,7 @@ def test_minor_threats_pay_when_quelled_by_any_means():
     game.do_command("look")
     assert game.scored("spawn_guts") and game.scored("spawn_brain")
     assert game.score == before + 10
-    assert game.max_score == 130
+    assert game.max_score == 135
 
 
 def test_the_pack_answers_to_pack():
@@ -2058,10 +2058,17 @@ def test_burning_the_chimney_growth_clears_the_spores():
     game.player.add_to_inventory(gel)
     game.relocate(game.player, game.locations["The Fungal Chimney"])
     game.do_command("burn growth")
-    assert game.locations["The Fungal Chimney"].get_property("burned")
+    chimney = game.locations["The Fungal Chimney"]
+    assert chimney.get_property("burned")
     for _ in range(4):  # linger unmasked: the spores are gone
         game.do_command("look")
     assert not any(w.name == "Seared Lungs" for w in game.player.wounds)
+    # ...and the burn is PERMANENT (CCB): the growth does not return.
+    assert "orange growth" not in chimney.items
+    assert "charred growth" in chimney.items
+    assert "scoured black" in chimney.description
+    assert "spores" not in chimney.description
+    assert "char" in chimney.dim_description
 
 
 def test_the_gel_economy_refills_and_regrets():
@@ -2094,5 +2101,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 130 == game.max_score
+    assert game.score == 135 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
