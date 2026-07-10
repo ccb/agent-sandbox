@@ -8,11 +8,11 @@ Presets are created/edited visually in the web UI (catalog_web.py) and saved to
 tile_presets.json. This module loads them and renders the **LLM-facing menu** —
 the compact, budget-aware tile list you paste into (or feed) a furnishing prompt.
 
-    uv run python tools/geo/tile_presets.py --list            # all presets
-    uv run python tools/geo/tile_presets.py --menu            # active preset -> LLM menu
-    uv run python tools/geo/tile_presets.py --menu classroom  # a specific preset
-    uv run python tools/geo/tile_presets.py --use classroom   # set the active preset
-    uv run python tools/geo/tile_presets.py --delete classroom
+    uv run python godot-generative-agents/tools/geo/tile_presets.py --list            # all presets
+    uv run python godot-generative-agents/tools/geo/tile_presets.py --menu            # active preset -> LLM menu
+    uv run python godot-generative-agents/tools/geo/tile_presets.py --menu classroom  # a specific preset
+    uv run python godot-generative-agents/tools/geo/tile_presets.py --use classroom   # set the active preset
+    uv run python godot-generative-agents/tools/geo/tile_presets.py --delete classroom
 
 In furnishing code, `objects(name)` returns the filtered catalog dict (only the
 preset's tiles), so block_named()/tile_named() can be restricted to the preset.

@@ -1,8 +1,10 @@
-# tools/geo/test_validate_tmj.py
+# godot-generative-agents/tools/geo/test_validate_tmj.py
 import os
 import validate_tmj as v
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+REPO = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 TMJ = os.path.join(
     REPO, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
 )

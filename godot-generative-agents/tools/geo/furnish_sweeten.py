@@ -10,8 +10,8 @@ own ``sweeten_floor`` tile layer stacked above ``entrance_floor`` so
 ``add_entrances.py`` (which strips only ``entrance_*`` layers) leaves it intact
 across runs.
 
-    uv run python tools/geo/furnish_sweeten.py            # paint the floor
-    uv run python tools/geo/furnish_sweeten.py --dry-run  # report, write nothing
+    uv run python godot-generative-agents/tools/geo/furnish_sweeten.py            # paint the floor
+    uv run python godot-generative-agents/tools/geo/furnish_sweeten.py --dry-run  # report, write nothing
 
 The floor fills the walkable interior (the sector-27 footprint minus its 1-tile
 perimeter ring), so a floor tile can never land on the wall ring or outside the

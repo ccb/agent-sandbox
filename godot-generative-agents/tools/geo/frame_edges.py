@@ -27,9 +27,9 @@ What this does (all four edges):
 
 Run order (each step feeds the next; commit the updated artifacts):
 
-    uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
-    uv run python tools/geo/furnish_building.py                          # furnish Williams
-    uv run python tools/geo/frame_edges.py                               # THIS -- run last
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
+    uv run python godot-generative-agents/tools/geo/furnish_building.py                          # furnish Williams
+    uv run python godot-generative-agents/tools/geo/frame_edges.py                               # THIS -- run last
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py    # re-bake the replay
 
 Why last: it shifts whole layers, so the ``williams_*`` layers furnish_building added
@@ -79,7 +79,7 @@ DECOR_IMG_W, DECOR_IMG_H = 112, 192
 # (sheet index -> weight) for the scatter. Greenery is common, flowers are accents,
 # the mushroom is rare. Every entry is a single-tile sprite with a grass/transparent
 # base (NOT a flowerpot version), so it sits on the lawn cleanly. Indices verified by
-# eye against the sheet (see tools/geo while picking).
+# eye against the sheet (see godot-generative-agents/tools/geo while picking).
 PLANT_WEIGHTS = {
     0: 6,
     1: 6,

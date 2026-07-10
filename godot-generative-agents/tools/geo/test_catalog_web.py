@@ -1,7 +1,7 @@
 """Tests for the furniture-solidity server-side additions in catalog_web.py.
 
 Run:
-    cd tools/geo && uv run pytest test_catalog_web.py -q
+    cd godot-generative-agents/tools/geo && uv run pytest test_catalog_web.py -q
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-# Make sure tools/geo is importable when run from repo root
+# Make sure godot-generative-agents/tools/geo is importable when run from repo root
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)

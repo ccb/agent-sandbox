@@ -6,8 +6,8 @@ rooms drawn in the tmj present in the matrix block map, do the ids follow the
 add_entrances scheme, is the tmj internally well-formed? It never edits either
 side -- it prints a grouped report and exits non-zero on un-baselined errors.
 
-    uv run python tools/geo/validate_tmj.py            # human report
-    uv run python tools/geo/validate_tmj.py --json     # findings as JSON
+    uv run python godot-generative-agents/tools/geo/validate_tmj.py            # human report
+    uv run python godot-generative-agents/tools/geo/validate_tmj.py --json     # findings as JSON
 """
 
 from __future__ import annotations

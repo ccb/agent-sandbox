@@ -43,9 +43,9 @@ it is safe to re-run and safe to run after a fresh ``osm_to_tiled.py`` bake +
 
 Run order::
 
-    uv run python tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
-    uv run python tools/geo/furnish_building.py                          # Williams
-    uv run python tools/geo/add_entrances.py                             # doors!
+    uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake map
+    uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams
+    uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors!
     uv run python godot-generative-agents/backend/penn/generate_building_labels.py
     uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
     # then commit the updated .tmj + matrix CSVs

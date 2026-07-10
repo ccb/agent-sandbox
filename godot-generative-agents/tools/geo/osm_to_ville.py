@@ -39,8 +39,8 @@ there, so a headless run needs no `setup.sh`:
     generative-agents/frontend_overrides/static_dirs/assets/the_upenn/
 
 Usage:
-    uv run python tools/geo/osm_to_ville.py              # core area (default)
-    uv run python tools/geo/osm_to_ville.py --area campus
+    uv run python godot-generative-agents/tools/geo/osm_to_ville.py              # core area (default)
+    uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area campus
 """
 
 from __future__ import annotations

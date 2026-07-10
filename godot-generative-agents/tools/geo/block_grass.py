@@ -18,8 +18,8 @@ tile-for-tile with the .tmj, so the layers index the same cells as the matrix.
 Re-run safe and idempotent: grass is detected from the (unchanged) `landuse`
 layer, not from the collision it writes, so running twice is a no-op.
 
-    uv run python tools/geo/block_grass.py --dry-run   # report, change nothing
-    uv run python tools/geo/block_grass.py             # wall the lawns
+    uv run python godot-generative-agents/tools/geo/block_grass.py --dry-run   # report, change nothing
+    uv run python godot-generative-agents/tools/geo/block_grass.py             # wall the lawns
 """
 
 from __future__ import annotations

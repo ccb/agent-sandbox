@@ -8,8 +8,8 @@ Cohen Hall is sector ``7`` (``UPenn:Claudia Cohen Hall``), with lobby arena
 ``add_entrances.py`` (which strips only ``entrance_*`` layers) leaves it intact
 across runs.
 
-    uv run python tools/geo/furnish_cohen.py            # paint the floor
-    uv run python tools/geo/furnish_cohen.py --dry-run  # report, write nothing
+    uv run python godot-generative-agents/tools/geo/furnish_cohen.py            # paint the floor
+    uv run python godot-generative-agents/tools/geo/furnish_cohen.py --dry-run  # report, write nothing
 
 The floor fills the walkable interior (the sector-7 footprint minus its 1-tile
 perimeter ring), so a floor tile can never land on the wall ring or outside the

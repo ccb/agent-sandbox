@@ -2,8 +2,8 @@
 """Interactive web grid for the tile catalog: verify entries, browse the FULL
 packs, and add new tiles — all in the browser.
 
-    uv run python tools/geo/catalog_web.py            # write out/catalog.html (open it)
-    uv run python tools/geo/catalog_web.py --serve    # live: edits Save back to the JSON
+    uv run python godot-generative-agents/tools/geo/catalog_web.py            # write out/catalog.html (open it)
+    uv run python godot-generative-agents/tools/geo/catalog_web.py --serve    # live: edits Save back to the JSON
 
 Two panels:
   1. "Catalog" — every named object as a card you can flip verified/unverified.
@@ -92,7 +92,7 @@ def furniture_solidity_rows(catalog: dict) -> list:
     Each dict: {gid, sheet, col, row, count, walkable}.
     Reuses block_furniture helpers — does not re-derive gids.
     """
-    import block_furniture as bf  # lazy import; tools/geo must be on sys.path
+    import block_furniture as bf  # lazy import; godot-generative-agents/tools/geo must be on sys.path
 
     tmj = json.load(open(TMJ))
     counts = bf.furniture_gid_counts(tmj)
@@ -628,7 +628,7 @@ async function save(){
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download='furniture_catalog.json'; a.click();
-    toast('downloaded — replace tools/geo/furniture_catalog.json');
+    toast('downloaded — replace godot-generative-agents/tools/geo/furniture_catalog.json');
   }
 }
 function revert(){ if(!confirm('Discard local edits and reload the saved file?'))return;
@@ -700,7 +700,7 @@ async function saveWalkable(){
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download='walkable_furniture.json'; a.click();
-    toast('downloaded — replace tools/geo/walkable_furniture.json');
+    toast('downloaded — replace godot-generative-agents/tools/geo/walkable_furniture.json');
   }
 }
 let _t; function toast(m){const e=document.getElementById('toast'); e.textContent=m;
@@ -766,7 +766,7 @@ async function persistPresets(){
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download='tile_presets.json'; a.click();
-    toast('downloaded — replace tools/geo/tile_presets.json');
+    toast('downloaded — replace godot-generative-agents/tools/geo/tile_presets.json');
   }
 }
 // LLM tile menu (mirrors tile_presets.py --menu)

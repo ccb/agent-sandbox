@@ -2,7 +2,7 @@
 """Render an enlarged, coordinate-labeled grid of a tile sheet (or a sub-region)
 so a human/LLM can read off exact (col,row) for cataloging.
 
-    uv run --with pillow python tools/geo/region_grid.py <sheet> <tile_px> \
+    uv run --with pillow python godot-generative-agents/tools/geo/region_grid.py <sheet> <tile_px> \
         [--cols c0 c1] [--rows r0 r1] [--scale N] [--out path]
 
 Axis labels run along the top (cols) and left (rows); a faint grid separates
