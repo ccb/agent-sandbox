@@ -175,6 +175,9 @@ def test_baked_replay_validates_against_contract(tmp_path):
 
 def test_live_meta_validates_against_contract():
     meta = PennStepper(num_steps=2, world=build_penn_world()).meta()
+    # Raw-dict check: the model's schema_version default would mask a dropped
+    # key, so pin presence AND first position on the emitted dict itself.
+    assert next(iter(meta)) == "schema_version"
     validated = Meta.model_validate(meta)
     assert validated.schema_version == SCHEMA_VERSION
     assert validated.steps is None  # a live run doesn't know its length
