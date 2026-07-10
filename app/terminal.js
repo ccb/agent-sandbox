@@ -328,6 +328,13 @@ const panelMap = document.getElementById("panel-map");
 function closePanels() {
   panelInv.classList.add("hidden");
   panelMap.classList.add("hidden");
+  // Empty the panels once they have slid away: iOS WebKit can otherwise
+  // show STALE painted content (ghost room labels) from the previous
+  // render when the layer comes back (CCB's phantom 'Tomb Exterior').
+  setTimeout(() => {
+    if (panelInv.classList.contains("hidden")) panelInv.replaceChildren();
+    if (panelMap.classList.contains("hidden")) panelMap.replaceChildren();
+  }, 260);
 }
 
 function el(tag, cls, text) {
@@ -465,12 +472,18 @@ function openMap() {
   const m = JSON.parse(api.panels()).map;
   panelMap.replaceChildren(el("h2", "", "THE EXPEDITION SO FAR"));
   const pos = mapLayout(m.nodes, m.edges, m.here);
-  const W = Math.max(...[...pos.values()].map((p) => p.x)) + 140;
-  const H = Math.max(...[...pos.values()].map((p) => p.y)) + 66;
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${Math.max(W, 300)} ${H}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
+  // The viewBox is set AFTER drawing, from the true extent of everything
+  // drawn -- stub labels overshoot the node grid and were getting cropped.
+  const box = { x0: 0, y0: 0, x1: 300, y1: 80 };
+  const ext = (x, y, padX = 0, padY = 0) => {
+    box.x0 = Math.min(box.x0, x - padX);
+    box.y0 = Math.min(box.y0, y - padY);
+    box.x1 = Math.max(box.x1, x + padX);
+    box.y1 = Math.max(box.y1, y + padY);
+  };
   const sub = (name, attrs, cls) => {
     const q = document.createElementNS(NS, name);
     for (const [k, v] of Object.entries(attrs)) q.setAttribute(k, v);
@@ -485,13 +498,16 @@ function openMap() {
   const edgeLabel = (a, b, word) => {
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    const t = sub(
-      "text",
-      { x: a.x + dx * 0.33 - (dy / len) * 9, y: a.y + dy * 0.33 + (dx / len) * 9 + 3 },
-      "map-label"
-    );
+    // Step just past the edge of the label's own box (66 wide, 18 tall at
+    // the worst angle), clamped so two-ended labels can't cross the middle.
+    const clear = Math.abs(dx / len) * 66 + Math.abs(dy / len) * 18 + 10;
+    const f = Math.min(0.42, clear / len);
+    const lx = a.x + dx * f - (dy / len) * 9;
+    const ly = a.y + dy * f + (dx / len) * 9 + 3;
+    const t = sub("text", { x: lx, y: ly }, "map-label");
     t.setAttribute("text-anchor", "middle");
     t.textContent = word;
+    ext(lx, ly, 30, 10);
   };
   for (const e of m.edges) {
     const a = center(e.from), b = center(e.to);
@@ -519,6 +535,7 @@ function openMap() {
       v[0] > 0 ? "start" : v[0] < 0 ? "end" : "middle"
     );
     t.textContent = st.dir + "?";
+    ext(bx, by, 64, 16);
   }
   for (const n of m.nodes) {
     const p = pos.get(n);
@@ -533,6 +550,8 @@ function openMap() {
     label.setAttribute("text-anchor", "middle");
     label.textContent = n.length > 22 ? n.slice(0, 21) + "\u2026" : n;
     g.append(rect, label);
+    ext(p.x, p.y);
+    ext(p.x + 124, p.y + 28);
     // Tap a room to walk back to it: the explored route lands in the input
     // as "go X, go Y" for the player to review and send (CCB's user ask).
     g.addEventListener("pointerdown", (ev) => {
@@ -546,6 +565,10 @@ function openMap() {
     });
     svg.appendChild(g);
   }
+  svg.setAttribute(
+    "viewBox",
+    `${box.x0 - 8} ${box.y0 - 8} ${box.x1 - box.x0 + 16} ${box.y1 - box.y0 + 16}`
+  );
   panelMap.appendChild(svg);
   panelMap.appendChild(el("div", "inv-section",
     m.here ? `you are in ${m.here} -- tap a room to walk back to it` : ""));
