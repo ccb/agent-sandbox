@@ -11,6 +11,8 @@ Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_replay_contract.py -v
 """
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,7 +34,8 @@ from backend.contract_models import (  # noqa: E402
     Meta,
     Replay,
 )
-from penn_world import replay_frame_entry  # noqa: E402
+from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
+from serve_penn import PennStepper  # noqa: E402
 
 # A minimal raw frame in the shape simulate()/step() hand to replay_frame_entry.
 _SAMPLE_RAW = {
@@ -145,3 +148,34 @@ def test_replay_shape_validates():
             "memory_streams": {"Diego Torres": _SAMPLE_RAW["memories"]},
         }
     )
+
+
+def test_baked_replay_validates_against_contract(tmp_path):
+    # Run the REAL bake (3 mock steps) and validate the file it writes -- the
+    # emitter itself is under test, not a copy of its dict.
+    out = tmp_path / "penn_replay.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(_SIM_DIR / "generate_penn_replay.py"),
+            "--steps",
+            "3",
+            "--out",
+            str(out),
+        ],
+        check=True,
+    )
+    replay = Replay.model_validate(json.loads(out.read_text()))
+    assert replay.meta.schema_version == SCHEMA_VERSION
+    assert replay.meta.steps == len(replay.frames)
+    assert replay.meta.llm is None  # the bake runs the mock brain
+    # First key of meta on the wire is the version marker.
+    assert next(iter(json.loads(out.read_text())["meta"])) == "schema_version"
+
+
+def test_live_meta_validates_against_contract():
+    meta = PennStepper(num_steps=2, world=build_penn_world()).meta()
+    validated = Meta.model_validate(meta)
+    assert validated.schema_version == SCHEMA_VERSION
+    assert validated.steps is None  # a live run doesn't know its length
+    assert validated.llm is None  # default stepper runs the mock brain
