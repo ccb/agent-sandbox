@@ -280,8 +280,24 @@ function submit() {
   if (!text || !api) return;
   cmd.value = "";
   flushTypewriter();
-  const anchor = print("> " + text, "echo", true);
-  render(api.command(text));
+  // A comma chains commands ("go east, go south" -- the map's tap-to-walk
+  // routes, or typed by hand). Each step runs as its own turn; a blocked
+  // step abandons the rest, so a shifted tomb never walks you blind.
+  const steps = text.split(",").map((s) => s.trim()).filter(Boolean);
+  let anchor = null;
+  for (const step of steps) {
+    const echo = print("> " + step, "echo", true);
+    anchor = anchor ?? echo;
+    const payload = api.command(step);
+    render(payload);
+    if (
+      steps.length > 1 &&
+      JSON.parse(payload).events.some((ev) => ev.channel === "blocked")
+    ) {
+      print("(the way is barred -- the rest of the route is abandoned)", "blocked", true);
+      break;
+    }
+  }
   // Read from the TOP of the turn (CCB): the echoed command pins to the
   // top of the view and the player scrolls down at their own pace.
   output.scrollTop = Math.max(0, anchor.offsetTop - 4);
@@ -349,32 +365,99 @@ function openInventory() {
   panelInv.classList.remove("hidden");
 }
 
+/* Compass geometry: where each direction PLACES the far room, in grid cells.
+   North is up, west is left; up/down and in/out lean diagonally (the old
+   IF-mapper convention) so they read apart from north/south. Odd passages
+   ("left stairs") have no vector and take the nearest free diagonal. */
+const DIR_VEC = {
+  north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0],
+  northeast: [1, -1], northwest: [-1, -1], southeast: [1, 1], southwest: [-1, 1],
+  up: [1, -1], down: [-1, 1], in: [1, 1], inside: [1, 1],
+  out: [-1, -1], outside: [-1, -1],
+};
+const DIR_OPP = {
+  north: "south", south: "north", east: "west", west: "east",
+  northeast: "southwest", southwest: "northeast",
+  northwest: "southeast", southeast: "northwest",
+  up: "down", down: "up", in: "out", out: "in",
+  inside: "outside", outside: "inside",
+};
+
 function mapLayout(nodes, edges, here) {
-  // PORTRAIT layout (the panel is tall and narrow): BFS depth from the
-  // current room grows DOWNWARD; rooms at the same depth sit side by side.
+  // COMPASS-TRUE layout: BFS out from the current room, placing each new
+  // room in the cell its direction actually points to, so the geometry
+  // never argues with the labels. An occupied cell pushes the room further
+  // out along the same bearing.
   const adj = new Map(nodes.map((n) => [n, []]));
   for (const e of edges) {
-    adj.get(e.from)?.push(e.to);
-    adj.get(e.to)?.push(e.from);
+    // The layout bearing comes from whichever side speaks compass: the
+    // canopic stairs are "right stairs" one way but "up" the other, and
+    // one honest bearing is enough to draw the line true.
+    const v = DIR_VEC[e.dir] || (DIR_VEC[e.back] || []).map((c) => -c);
+    adj.get(e.from)?.push({ to: e.to, vec: v.length ? v : null });
+    adj.get(e.to)?.push({ to: e.from, vec: v.length ? v.map((c) => -c) : null });
   }
-  const depth = new Map([[here ?? nodes[0], 0]]);
-  const queue = [here ?? nodes[0]];
+  const start = here ?? nodes[0];
+  const grid = new Map([[start, [0, 0]]]);
+  const key = (x, y) => `${Math.round(x * 2)},${Math.round(y * 2)}`;
+  const taken = new Set([key(0, 0)]);
+  const place = (from, vec) => {
+    const [fx, fy] = grid.get(from);
+    const tries = vec
+      ? [1, 2, 3, 4].map((k) => [fx + vec[0] * k, fy + vec[1] * k])
+      : [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]
+          .map(([dx, dy]) => [fx + dx, fy + dy]);
+    for (const [x, y] of tries) if (!taken.has(key(x, y))) return [x, y];
+    return [fx + 5, fy + 5];
+  };
+  const queue = [start];
   while (queue.length) {
     const n = queue.shift();
-    for (const m of adj.get(n) || []) {
-      if (!depth.has(m)) { depth.set(m, depth.get(n) + 1); queue.push(m); }
+    for (const hop of adj.get(n) || []) {
+      if (grid.has(hop.to)) continue;
+      const p = place(n, hop.vec);
+      grid.set(hop.to, p);
+      taken.add(key(p[0], p[1]));
+      queue.push(hop.to);
     }
   }
-  for (const n of nodes) if (!depth.has(n)) depth.set(n, 0);
-  const rows = new Map();
+  let parked = 0;
+  for (const n of nodes) if (!grid.has(n)) grid.set(n, [parked++, 3]);
+  const xs = [...grid.values()].map((p) => p[0]);
+  const ys = [...grid.values()].map((p) => p[1]);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
   const pos = new Map();
-  for (const n of nodes) {
-    const d = depth.get(n);
-    const col = rows.get(d) ?? 0;
-    rows.set(d, col + 1);
-    pos.set(n, { x: 14 + col * 146, y: 24 + d * 78 });
-  }
+  for (const [n, [x, y]] of grid)
+    pos.set(n, { x: 14 + (x - minX) * 150, y: 24 + (y - minY) * 92 });
   return pos;
+}
+
+function mapRoute(m, target) {
+  // Shortest explored path from HERE to the tapped room, as the commands
+  // that actually walk it -- each hop uses the word its own side of the
+  // passage answers to ("right stairs" down, "up" back). One-way passages
+  // (back: null) are never walked backward.
+  const adj = new Map(m.nodes.map((n) => [n, []]));
+  for (const e of m.edges) {
+    adj.get(e.from)?.push({ to: e.to, cmd: e.dir });
+    if (e.back) adj.get(e.to)?.push({ to: e.from, cmd: e.back });
+  }
+  const prev = new Map([[m.here, null]]);
+  const queue = [m.here];
+  while (queue.length) {
+    const n = queue.shift();
+    if (n === target) break;
+    for (const hop of adj.get(n) || [])
+      if (!prev.has(hop.to)) {
+        prev.set(hop.to, { from: n, cmd: hop.cmd });
+        queue.push(hop.to);
+      }
+  }
+  if (!prev.has(target)) return null;
+  const route = [];
+  for (let n = target; prev.get(n); n = prev.get(n).from)
+    route.unshift(prev.get(n).cmd);
+  return route;
 }
 
 function openMap() {
@@ -396,24 +479,45 @@ function openMap() {
     return q;
   };
   const center = (n) => ({ x: pos.get(n).x + 62, y: pos.get(n).y + 14 });
+  // An edge label sits a third of the way out from ITS OWN room, nudged off
+  // the line, so each end reads as "leave this room that way". The reverse
+  // is labeled only when it answers to a different word than the opposite.
+  const edgeLabel = (a, b, word) => {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const t = sub(
+      "text",
+      { x: a.x + dx * 0.33 - (dy / len) * 9, y: a.y + dy * 0.33 + (dx / len) * 9 + 3 },
+      "map-label"
+    );
+    t.setAttribute("text-anchor", "middle");
+    t.textContent = word;
+  };
   for (const e of m.edges) {
     const a = center(e.from), b = center(e.to);
     sub("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, "map-edge");
-    const t = sub("text", { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 3 }, "map-label");
-    t.textContent = e.dir;
+    edgeLabel(a, b, e.dir);
+    if (e.back && e.back !== DIR_OPP[e.dir]) edgeLabel(b, a, e.back);
   }
   let stubTilt = -1;
   for (const st of m.stubs) {
     const a = center(st.from);
-    stubTilt = -stubTilt; // alternate sides so stubs don't pile up
-    const dx = 34 * stubTilt;
-    sub("line", { x1: a.x, y1: a.y + 12, x2: a.x + dx, y2: a.y + 34 }, "map-stub");
+    let v = DIR_VEC[st.dir];
+    if (!v) {
+      stubTilt = -stubTilt; // odd directions alternate sides, un-piled
+      v = [0.6 * stubTilt, 0.6];
+    }
+    const bx = a.x + v[0] * 88, by = a.y + v[1] * 42;
+    sub("line", { x1: a.x, y1: a.y, x2: bx, y2: by }, "map-stub");
     const t = sub(
       "text",
-      { x: a.x + dx + (stubTilt > 0 ? 2 : -2), y: a.y + 42 },
+      { x: bx + Math.sign(v[0]) * 4, y: by + (v[1] >= 0 ? 12 : -6) },
       "map-label"
     );
-    t.setAttribute("text-anchor", stubTilt > 0 ? "start" : "end");
+    t.setAttribute(
+      "text-anchor",
+      v[0] > 0 ? "start" : v[0] < 0 ? "end" : "middle"
+    );
     t.textContent = st.dir + "?";
   }
   for (const n of m.nodes) {
@@ -429,11 +533,22 @@ function openMap() {
     label.setAttribute("text-anchor", "middle");
     label.textContent = n.length > 22 ? n.slice(0, 21) + "\u2026" : n;
     g.append(rect, label);
+    // Tap a room to walk back to it: the explored route lands in the input
+    // as "go X, go Y" for the player to review and send (CCB's user ask).
+    g.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      click();
+      if (n === m.here || !m.here) { closePanels(); return; }
+      const route = mapRoute(m, n);
+      if (!route) return; // unreachable through explored passages
+      cmd.value = route.map((d) => "go " + d).join(", ");
+      closePanels();
+    });
     svg.appendChild(g);
   }
   panelMap.appendChild(svg);
   panelMap.appendChild(el("div", "inv-section",
-    m.here ? `you are in ${m.here}` : ""));
+    m.here ? `you are in ${m.here} -- tap a room to walk back to it` : ""));
   panelMap.appendChild(closeButton());
   panelInv.classList.add("hidden");
   panelMap.classList.remove("hidden");
