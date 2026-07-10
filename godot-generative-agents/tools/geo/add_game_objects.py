@@ -127,7 +127,7 @@ def paint_objects(tmj, collision, arena, sector, sector_names, W, H):
 
 def main() -> int:
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--tmj",

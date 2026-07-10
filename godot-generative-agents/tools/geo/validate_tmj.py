@@ -814,7 +814,7 @@ def _load_baseline(path):
 
 def main(argv=None) -> int:
     here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(here))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
