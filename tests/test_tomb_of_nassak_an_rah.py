@@ -1079,8 +1079,8 @@ def test_taste_is_the_cautious_cousin_of_eat():
     assert "honey and sun" in text  # the flavor
     assert "You could eat it." in text  # the edibility verdict
     assert "crate of dates" in game.player.carried_items()  # NOT eaten
-    game.do_command("lick glowstone")  # the alias, and the not-food verdict
-    assert "not food" in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("lick glowstone")  # the alias -- and CCB's battery
+    assert "nine-volt battery" in " ".join(cap.texts(Channel.NARRATION))
     cap2 = _texts(game)
     game.do_command("taste waterskin")
     assert "wealth goes" in " ".join(cap2.texts(Channel.NARRATION))
@@ -1091,6 +1091,32 @@ def test_taste_is_the_cautious_cousin_of_eat():
     cap3 = _texts(game)
     game.do_command(f"lick {teamster.name}")
     assert "not going to lick" in " ".join(cap3.texts(Channel.NARRATION))
+
+
+def test_every_organ_keeps_its_own_taste():
+    """Each canopic organ tastes distinct (CCB) -- the intestines taste of
+    OFFAL -- and an open jar standing on a plinth is still within reach of
+    the tongue (parser scope recurses through nested open holders)."""
+    game = _game()
+    canopic = game.locations["Hall of the Canopic Jars"]
+    brain_spawn = game.characters["spawn of brain"]
+    jar = brain_spawn.inventory["jackal jar"]
+    brain_spawn.remove_from_inventory(jar)
+    plinth = canopic.items["jackal plinth"]
+    plinth.add_item(jar)  # jar ON plinth, brain IN jar: two holders deep
+    game.relocate(game.player, canopic)
+    game.do_command("open jackal jar")  # reachable through the plinth too
+    cap = _texts(game)
+    game.do_command("taste brain")
+    assert "resin and long memory" in " ".join(cap.texts(Channel.NARRATION))
+    # and the coil (CCB: 'the intestines should taste offal')
+    falcon = next(
+        it
+        for c in game.characters.values()
+        for it in list(c.inventory.values()) + list(c.worn.values())
+        if it.name == "falcon jar"
+    )
+    assert "of offal" in falcon.contents["intestines"].get_property("taste")
 
 
 def test_a_lick_of_friends_fungus_is_a_microdose():
