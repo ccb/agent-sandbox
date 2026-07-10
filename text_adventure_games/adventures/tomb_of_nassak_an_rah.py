@@ -807,6 +807,219 @@ class PryCoffin(actions.Action):
         _sphere_aftermath(self.game, ash=False)
 
 
+def _prayers_text(prayers):
+    """The carvings' READ text, kept current as the chamber answers each
+    prayer: a spoken prayer's line goes smooth and unlettered."""
+    entries = (
+        ("balm", "the PRAYER OF BALM, for the mourner's hurts"),
+        (
+            "wrath",
+            "the PRAYER OF WRATH, a word the Autarchs kept for what would " "not die",
+        ),
+        (
+            "mending",
+            "the PRAYER OF MENDING, for vessels broken before their time",
+        ),
+    )
+    live = [text for key, text in entries if not prayers.get_property(key + "_spent")]
+    spent = [key.upper() for key, _ in entries if prayers.get_property(key + "_spent")]
+    parts = [
+        "Line over line, wall over wall -- most of it is names, titles, and "
+        "grief in the old liturgical hand."
+    ]
+    if live:
+        parts.append(
+            "Three lines are cut deeper than the rest, ringed to be spoken "
+            "aloud, and the chamber answers each ONCE: "
+            + "; ".join(live)
+            + ". To speak one: SAY PRAYER OF BALM."
+            if len(live) == 3
+            else "Of the three ringed prayers, these still wait to be spoken: "
+            + "; ".join(live)
+            + "."
+        )
+    if spent:
+        parts.append(
+            "Where the "
+            + " and the ".join("PRAYER OF " + k for k in spent)
+            + " stood, the stone is smooth and unlettered now; the chamber "
+            "has answered."
+        )
+    if not live:
+        parts.append("The chamber owes nothing more.")
+    return " ".join(parts)
+
+
+class SayPrayer(actions.Action):
+    """SAY one of the Burial Sphere's carved funeral prayers (CCB): the
+    chamber was carved to be read aloud from every direction at once, and it
+    answers each of its three prayers exactly once. BALM closes a wound;
+    WRATH strikes the Fungal Horror like a blow; MENDING calls the shattered
+    coffin's glass back into one piece."""
+
+    ACTION_NAME = "say prayer"
+    ACTION_DESCRIPTION = "Say one of the carved funeral prayers aloud"
+    ACTION_ALIASES = [
+        "say prayers",
+        "say the prayers",
+        "recite prayer",
+        "recite prayers",
+        "pray",
+        "say prayer of balm",
+        "say balm prayer",
+        "say healing prayer",
+        "say prayer of wrath",
+        "say wrath prayer",
+        "say attack prayer",
+        "say prayer of mending",
+        "say mending prayer",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+        loc = self.player.location
+        self.prayers = loc.items.get("prayers") if loc else None
+        if "balm" in self.command or "heal" in self.command:
+            self.which = "balm"
+        elif "wrath" in self.command or "attack" in self.command:
+            self.which = "wrath"
+        elif "mend" in self.command:
+            self.which = "mending"
+        else:
+            self.which = None
+
+    def check_preconditions(self) -> bool:
+        if self.prayers is None:
+            self.parser.fail(
+                "Nothing here is carved to be answered. The funeral prayers "
+                "are cut into the Burial Sphere, and they listen only there."
+            )
+            return False
+        if self.which is None:
+            self.parser.fail(
+                "The carvings ring three prayers to be spoken (READ PRAYERS "
+                "to study them): SAY PRAYER OF BALM, SAY PRAYER OF WRATH, or "
+                "SAY PRAYER OF MENDING."
+            )
+            return False
+        if self.prayers.get_property(self.which + "_spent"):
+            self.parser.fail(
+                f"Where the Prayer of {self.which.capitalize()} was carved, "
+                "the stone is smooth and unlettered. The chamber has "
+                "answered it once, and owes nothing more."
+            )
+            return False
+        if self.which == "balm" and not self.player.wounds:
+            self.parser.fail(
+                "You shape the first syllable of the Prayer of Balm and the "
+                "carvings do not warm to it. You are unhurt; the chamber "
+                "will not spend its grace on whole flesh."
+            )
+            return False
+        if self.which == "wrath":
+            horror = self.game.characters.get("fungal horror")
+            if (
+                horror is None
+                or horror.get_property("is_dead")
+                or horror.location is not self.player.location
+            ):
+                self.parser.fail(
+                    "The Prayer of Wrath wants a target the Autarchs feared, "
+                    "and nothing before you answers that description."
+                )
+                return False
+        if self.which == "mending":
+            coffin = self.player.location.items.get("coffin")
+            if coffin is None or not coffin.get_property("pried"):
+                self.parser.fail(
+                    "The Prayer of Mending finds no broken vessel to close. "
+                    "The coffin is whole."
+                )
+                return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        if self.which == "balm":
+            healed = self.player.heal_wound()
+            self.parser.ok(
+                "You say the Prayer of Balm, and the chamber says it back "
+                "from every direction at once, a round of carved voices "
+                "closing over you like warm water. The "
+                f"{healed.name.lower()} troubles you no more."
+            )
+        elif self.which == "wrath":
+            horror = self.game.characters["fungal horror"]
+            vigor = int(horror.get_property("vigor") or 0) - 1
+            if vigor <= 0:
+                horror.set_property("vigor", 0)
+                # The engine's KO contract: the horror_struck trigger converts
+                # this to the death it really is at the end of the round.
+                horror.set_property("is_unconscious", True)
+                self.parser.ok(
+                    "You say the Prayer of Wrath and the whole chamber says "
+                    "it with you -- a word with an edge on it, kept a "
+                    "thousand years for exactly this. It goes through the "
+                    "Fungal Horror like heat through frost: the coil lets go "
+                    "of everything it holds, all at once."
+                )
+            else:
+                horror.set_property("vigor", vigor)
+                self.parser.ok(
+                    "You say the Prayer of Wrath and the chamber says it "
+                    "with you, a word with an edge on it. Ropes of fungus "
+                    "char and drop away where it lands; the Fungal Horror "
+                    "is smaller than it was."
+                )
+        else:  # mending
+            coffin = loc.items["coffin"]
+            coffin.set_property("pried", False)
+            coffin.set_property("is_closed", True)
+            coffin.description = "the Autarch's anti-entropy coffin, made whole again"
+            coffin.examine_text = (
+                "The glass sphere hangs whole at the chamber's heart again, "
+                "its equator seamless -- the shards remembered their places "
+                "and the places closed. The keeping is over; it is a "
+                "reliquary now, clouded and quiet."
+            )
+            dead = loc.get_property("horror_dead")
+            desc = (
+                "A spherical chamber carved over every inch with funeral "
+                "prayers, and nothing in it obeys the ground. The coffin "
+                "hangs whole again at the dead centre, seam sealed, glass "
+                "clouded and still."
+            )
+            if "Autarch's bones" in loc.items:
+                desc += (
+                    " The Autarch's bones drift around it in slow orbits, "
+                    "gold wire glinting at the joints."
+                )
+            if "drift of ash" in loc.items:
+                desc += " The ash of the Horror hangs in the air like a held breath."
+            if not dead:
+                desc += (
+                    " The light in the chamber is the Fungal Horror itself, "
+                    "coiled and moving."
+                )
+            loc.description = desc
+            loc.dim_description = (
+                "A spherical chamber, weightless and quiet. A whole dark "
+                "shape hangs at the centre; pale shapes drift around it in "
+                "the half-dark."
+            )
+            self.parser.ok(
+                "You say the Prayer of Mending, and the chamber takes it up "
+                "in a thousand carved voices. The orbiting glass remembers "
+                "its places: shard streams home to shard along old "
+                "symmetries, seams closing like water, until the coffin "
+                "hangs whole at the heart of the chamber."
+            )
+        self.prayers.set_property(self.which + "_spent", True)
+        self.prayers.set_property("read_text", _prayers_text(self.prayers))
+
+
 class Butcher(actions.Action):
     """BUTCHER ZOXEN (CCB): with a blade in hand, the dead draught-beasts at
     the wreck become trail food -- two cuts before the sand claims the rest.
@@ -1821,6 +2034,20 @@ def build_game(seed=None):
         "handle or latch, but there is a seam at its equator, fine as a hair "
         "-- it could be pried, with the right tool.",
     )
+    prayers = _scenery(
+        sphere,
+        "prayers",
+        "the funeral prayers, carved over every inch of the chamber",
+        "Carved to be read from every direction at once. READ them to study "
+        "the lines; three of them are rung to be SAID aloud.",
+    )
+    prayers.add_alias("prayer")
+    prayers.add_alias("funeral prayers")
+    prayers.add_alias("carvings")
+    prayers.add_alias("carved prayers")
+    prayers.set_property("read_text", _prayers_text(prayers))
+    prayers.add_command_hint("read prayers")
+
     coffin.make_container()
     coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
     # The failing anti-entropy field still counts as a lock: SEARCH (which
@@ -2300,6 +2527,7 @@ def build_game(seed=None):
             Sneak,
             Burn,
             PryCoffin,
+            SayPrayer,
             TieSilk,
             Refill,
             TossCentipede,
