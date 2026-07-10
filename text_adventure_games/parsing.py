@@ -218,6 +218,12 @@ class Parser:
             if first in actions.things.CRAFT_VERBS:
                 return ActionName.CRAFT
 
+        if command in ("hint", "hints") or command.startswith(("hint ", "hints ")):
+            # The hint booklet takes its topic as free text ("hint light",
+            # "hint score") that the verb keywords below would otherwise
+            # swallow ("light" in command -> LIGHT).
+            return "hint"
+
         if (
             command.startswith("say ")
             or command.startswith("speak ")

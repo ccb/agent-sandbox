@@ -24,6 +24,7 @@ from text_adventure_games import (
     vaarn_chargen,
 )
 from text_adventure_games.enums import Property
+from text_adventure_games.hints import Hint
 from text_adventure_games.slots import Wound, roll_wound
 
 # Wound rolls draw from a module RNG so tests can seed it.
@@ -2544,6 +2545,173 @@ def build_game(seed=None):
     # for a hand-held demo/classroom run; the wreck's tutorial items carry
     # their hints ("open pack", "light glowstone", "read ledger") for that mode.
     game.give_hints = False
+
+    # --- The hint booklet (InvisiClues style; engine hints.py) --------------
+    # Question-based, met-before-listed, one level deeper per ask: level 1
+    # restates what the fiction already said, level 2 names the thing, level
+    # 3 is walkthrough-grade. Solved puzzles leave the menu; HINT costs no
+    # turn but is journaled, and the final score owns up to hints taken.
+    for _h in (
+        Hint(
+            "light",
+            "How am I supposed to see anything in there?",
+            [
+                "The caravan did not die carrying nothing.",
+                "SEARCH the dead merchant. Traders of the Tomblands carry "
+                "their own light.",
+                "TAKE GLOWSTONE, then LIGHT GLOWSTONE -- and DOUSE it when "
+                "the dark is the safer company.",
+            ],
+            resolved=lambda g: g.scored("first_light"),
+        ),
+        Hint(
+            "bats",
+            "What do I do about the bats?",
+            [
+                "They hate your light. They love something else more.",
+                "The caravan's crates hold what a starving colony wants far "
+                "more than your scalp.",
+                "THROW DATES (or drop the crate). In the Hall of Youth the "
+                "colony feasts -- five quiet rounds. Carried to another "
+                "room, it follows and ROOSTS there for good. Under open "
+                "sky, it wheels and scatters.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: bool(youth.get_property("bats_flown")),
+        ),
+        Hint(
+            "jackals",
+            "How do I get past the pthalo-jackals?",
+            [
+                "They are scavengers, not sentries. Scavengers can be paid.",
+                "Think about what a jackal wants, and what this expedition "
+                "is carrying (or could butcher) that smells like it.",
+                "Carry the CRATE OF DATES (or BUTCHER ZOXEN at the wreck for "
+                "haunches) and let the pack take its tribute; a real toll "
+                "buys a long peace. Steel works too, three blows' worth.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: jackal_pack.get_property("is_dead")
+            or any((h.get_property(f"_jk:{h.name}") or 0) < 0 for h in _halls),
+        ),
+        Hint(
+            "spawn",
+            "The things in the jars keep finding me.",
+            [
+                "They have no eyes. Ask yourself what they are using instead.",
+                "Walking SOUNDS like something in these halls -- the arrival "
+                "line says so. There is a quieter way to move.",
+                "SNEAK <direction> to move silently. If you must fight them, "
+                "make your racket in the Canopic hall, where the mantis jar "
+                "sings them to you on your own terms.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: spawn_guts.get_property("is_dead")
+            and spawn_brain.get_property("is_dead"),
+        ),
+        Hint(
+            "seal",
+            "How do I open the crimson seal on the stair?",
+            [
+                "Five plinths, three jars. The room is telling you its own "
+                "inventory.",
+                "The falcon and jackal jars were carried off. One walks the "
+                "halls on a spawn's shoulders; one waits among the dead "
+                "guards.",
+                "Take the FALCON JAR from the fallen spawn and the JACKAL "
+                "JAR from the Hall of Warriors, then PUT each ON its "
+                "matching plinth. The seal answers the jars.",
+            ],
+            available=lambda g: canopic.has_been_visited,
+            resolved=lambda g: bool(canopic.get_property("seal_open")),
+        ),
+        Hint(
+            "cylinders",
+            "What is in the burial cylinders?",
+            [
+                "Kit outlasts its owners. These owners were guards.",
+                "BREAK them -- but read the colors first: one holds a mask, "
+                "one holds boots, and the orange one holds a bloom you do "
+                "not want in your lungs.",
+                "BREAK AMBER CYLINDER for the respirator (WEAR IT FIRST), "
+                "then BREAK ORANGE CYLINDER for the plasma-igniter, and "
+                "BREAK VIRIDIAN CYLINDER for the magnetic boots.",
+            ],
+            available=lambda g: warriors.has_been_visited,
+            resolved=lambda g: all(
+                c not in warriors.items
+                for c in ("amber cylinder", "viridian cylinder", "orange cylinder")
+            ),
+        ),
+        Hint(
+            "spores",
+            "The orange spores are searing my lungs.",
+            [
+                "The fungus is the air itself. You need to change one of " "the two.",
+                "An Autarchy respirator was buried with the guards -- WORN, "
+                "not held. Or remember that everything the gel has touched "
+                "is ready to burn.",
+                "WEAR RESPIRATOR (amber cylinder, Hall of Warriors) -- or "
+                "douse the growth with gel and BURN GROWTH to clear the "
+                "chimney for good. Standing outside it first is wise.",
+            ],
+            available=lambda g: chimney.has_been_visited
+            or bool(warriors.get_property("spores_vented")),
+            resolved=lambda g: bool(chimney.get_property("burned"))
+            or "respirator" in game.player.worn,
+        ),
+        Hint(
+            "coffin",
+            "How do I open the Autarch's coffin?",
+            [
+                "Nothing in the sphere holds you down. Prying wants bracing, "
+                "and the seam wants an edge.",
+                "A guard was buried with boots that grip, and the merchant "
+                "carried silk strong enough to lash a coffin still.",
+                "WEAR MAGNETIC BOOTS (or TIE SILK TO COFFIN), then PRY "
+                "COFFIN with the prismatic blade in hand. The blade will "
+                "not survive the coffin -- and what sleeps inside will "
+                "mind the knock.",
+            ],
+            available=lambda g: sphere.has_been_visited,
+            resolved=lambda g: bool(coffin.get_property("pried"))
+            or bool(sphere.get_property("horror_dead")),
+        ),
+        Hint(
+            "horror",
+            "How do I kill the Fungal Horror?",
+            [
+                "Watch it for one round doing nothing. What you see it do "
+                "is the whole problem.",
+                "Steel is a treadmill: it knits faster than you cut. "
+                "Everything the embalming gel touches is ready to burn -- "
+                "and the chamber itself was carved to take your side.",
+                "THROW GEL AT HORROR, then BURN HORROR with the igniter or "
+                "glowstone spark -- ablaze, it cannot mend, so keep "
+                "cutting. The carved PRAYER OF WRATH is a free blow, and "
+                "the PRAYER OF BALM will close a wound mid-fight.",
+            ],
+            available=lambda g: horror.location is sphere,
+            resolved=lambda g: bool(horror.get_property("is_dead")),
+        ),
+        Hint(
+            "score",
+            "What am I still missing?",
+            [
+                "The score pays for light, water, wisdom spent, both jars, "
+                "the seal, the Horror -- and leaving alive.",
+                "READ LEDGER at the wreck; DRINK WATER on a wound; the "
+                "lattice remembers a dead king's days; Silas rewards a "
+                "civil TALK.",
+                "The full 115: threshold 5, first light 5, water 5, a "
+                "healed wound 5, the lattice memory 5, Silas's acquaintance "
+                "5, falcon jar 5, jackal jar 5, both Exotica 10, the seal "
+                "20, the Horror 25, and out alive 20.",
+            ],
+            resolved=lambda g: g.score >= g.max_score,
+        ),
+    ):
+        game.add_hint(_h)
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
