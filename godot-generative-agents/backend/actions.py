@@ -1,6 +1,6 @@
-"""Custom engine actions for the Smallville port.
+"""Custom engine actions for the generative-agents port.
 
-Smallville is a map you travel across, not a compass maze, and agents spend most
+The world is a map you travel across, not a compass maze, and agents spend most
 of their time *doing an activity* in place. Two small ``Action`` subclasses model
 that, each going through the engine's precondition gate like any built-in action:
 

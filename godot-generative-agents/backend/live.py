@@ -64,7 +64,7 @@ class SimStepper(Protocol):
     def meta(self) -> dict:
         """The handshake blob ``GET /live`` serves. Opaque to the backend.
 
-        For the Penn/Smallville viewers this is the replay-meta shape --
+        For the Penn viewer this is the replay-meta shape --
         ``{tile_px, width, height, sec_per_step, start, vision_r,
         personas: [{name, emoji}]}`` -- so a live client spawns agents exactly
         the way the baked ``penn_replay.json`` loader does."""
