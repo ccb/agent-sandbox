@@ -1016,6 +1016,24 @@ def test_death_closes_the_parser_to_all_but_the_meta_verbs():
     assert "north" in " ".join(cap2.texts(Channel.NARRATION))
 
 
+def test_minor_threats_pay_when_quelled_by_any_means():
+    """+5 per spawn down and +5 for the pack settled (CCB) -- and the
+    tribute route earns the jackal points just as surely as steel."""
+    game = _game()
+    _sate_pack(game)  # the tribute path: ledgers at deep peace
+    game.do_command("look")  # a round for the score trigger
+    assert game.scored("jackals_settled")
+    guts = game.characters["spawn of guts"]
+    guts.set_property("is_unconscious", True)  # a blade's KO counts
+    brain = game.characters["spawn of brain"]
+    brain.set_property("is_dead", True)  # so does the bat-swarm's kill
+    before = game.score
+    game.do_command("look")
+    assert game.scored("spawn_guts") and game.scored("spawn_brain")
+    assert game.score == before + 10
+    assert game.max_score == 130
+
+
 def test_the_pack_answers_to_pack():
     """'give dates to pack' (CCB's transcript) must find the jackals -- the
     tribute changes hands and buys the deep peace."""
@@ -2050,5 +2068,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 115 == game.max_score
+    assert game.score == 130 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
