@@ -1,4 +1,4 @@
-"""Seed Smallville personas with their t=0 social structure and world knowledge.
+"""Seed generative-agents personas with their t=0 social structure and world knowledge.
 
 The upstream ``the_ville_n25`` data ships two bootstrap files per resident that the
 port folds onto the engine's existing agent seams (issue #79):

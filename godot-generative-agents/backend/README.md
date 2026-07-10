@@ -12,7 +12,7 @@ it's imported as the top-level `backend` package via the editable install, so
 > This document is the human-readable endpoint reference. The interactive,
 > machine-readable contract is auto-served at **`/docs`** (Swagger UI) and
 > **`/openapi.json`** whenever the server is running — that is the source of truth
-> GDScript (Godot) and TS/JS (Phaser, companion) clients generate against. This
+> GDScript (Godot) and TS/JS (companion) clients generate against. This
 > page exists so you can read the whole API end-to-end without first starting it.
 
 It documents the API as shipped in PR #196 (issues #179, #186, #185) — the
@@ -101,7 +101,7 @@ app = create_app(game, auth_token="s3cret", max_body_bytes=64 * 1024)
 ```
 
 `create_app(game)` is **game-agnostic** — the same app serves Action Castle, a
-benchmark task, or the live Penn/Smallville sim. Access to the game is serialized
+benchmark task, or the live Penn sim. Access to the game is serialized
 with a lock, since FastAPI runs the sync handlers in a thread pool and
 `POST /command` mutates state.
 
@@ -257,7 +257,7 @@ Returns the memory stream the named agent has formed **so far** (issue #298) —
 readable mid-run, without waiting for any end-of-run export. This is the live
 counterpart of the `memory_streams` block a baked replay file carries: the
 `memories` list is produced by the same formatter
-(`backend/smallville_agents.py::memory_stream_for_persona`), so a live fetch and
+(`backend/cognition.py::memory_stream_for_persona`), so a live fetch and
 a bake of the same run can never drift apart. See
 [The memory stream](#the-memory-stream) for the data model.
 
@@ -735,7 +735,7 @@ The handshake a live client reads once before following the feed:
 ```
 
 `meta` is the stepper's own `meta()` blob, passed through opaquely — for the
-Penn/Smallville worlds it is the replay-meta shape, so a live viewer spawns its
+Penn world it is the replay-meta shape, so a live viewer spawns its
 agents exactly the way the baked-replay loader does. Always answers: with no
 stepper it reports `enabled: false` (and `meta: null`), so a frontend can
 cheaply probe whether live mode exists.
@@ -908,7 +908,7 @@ Each entry in `memories` is one formed memory (`MemoryEntry`):
 
 This one shape appears, byte-identical, in three places — the wire stays in
 lock-step because all three come from the same formatter
-(`backend/smallville_agents.py::memories_for_frame`):
+(`backend/cognition.py::memories_for_frame`):
 
 1. **this endpoint's** `memories` list (live, mid-run);
 2. a baked replay's **`memory_streams[name]`** block
@@ -1067,7 +1067,7 @@ Issue #186. The defaults are tuned for **local development**:
 
 ## CORS
 
-So the local Godot/Phaser/companion frontends can call the API from a browser
+So the local Godot/companion frontends can call the API from a browser
 without it being open to arbitrary sites, CORS is scoped to **localhost origins
 only**: any `http(s)://localhost` or `http(s)://127.0.0.1` origin (any port), for
 the `GET` and `POST` methods.

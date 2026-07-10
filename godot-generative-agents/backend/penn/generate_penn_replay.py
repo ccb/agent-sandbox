@@ -31,7 +31,7 @@ import os
 # sibling `penn_world` import works because Python puts this script's own
 # directory on sys.path when it is run as a script.
 from backend.run_simulation import simulate
-from backend.smallville_agents import SMALLVILLE_VISION_R
+from backend.cognition import DEFAULT_VISION_R
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
@@ -168,7 +168,7 @@ def main() -> int:
     )
 
     # `simulate` fills this with each persona's *full* memory stream (the same
-    # UI-ready dicts the Smallville exporter writes). The agent-info companion
+    # UI-ready dicts the exporter writes). The agent-info companion
     # panel renders it as a per-agent "memory history" that grows over the
     # replay; the per-frame `reasoning`/`chat` below feed that agent's card.
     # Under the mock brain reasoning is a stub and chat is null, but travel/
@@ -198,7 +198,7 @@ def main() -> int:
             # so the viewer can draw the matching "perception fog" when tracking an
             # agent. Personas don't override it in world_data_upenn.yaml, so the
             # global default describes every agent.
-            "vision_r": SMALLVILLE_VISION_R,
+            "vision_r": DEFAULT_VISION_R,
             # name/emoji drive the sprite + sidebar; persona/home/schedule feed the
             # State Details inspector modal (viewer.gd, issue #408). See
             # penn_world.persona_meta_entry -- the projection the live server shares.
@@ -221,7 +221,7 @@ def main() -> int:
     # dialogue, but only across the frames where the participants are actually
     # standing together (see _inject_scripted_conversations). No-op if the world
     # has no `meetings` block.
-    _inject_scripted_conversations(replay, pw.meetings, SMALLVILLE_VISION_R)
+    _inject_scripted_conversations(replay, pw.meetings, DEFAULT_VISION_R)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as fh:

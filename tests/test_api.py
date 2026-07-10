@@ -25,7 +25,7 @@ from backend.api import (  # noqa: E402
     run,
     run_command,
 )
-from backend.smallville_agents import (  # noqa: E402
+from backend.cognition import (  # noqa: E402
     memories_for_frame,
     memory_stream_for_persona,
 )

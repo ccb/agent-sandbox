@@ -34,18 +34,22 @@ def _find_repo_root(start: Path) -> Path:
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 # Put the repo root on the path so `backend.prompt_templates` (used by the
-# smallville chain) imports even when this script is run by file path.
+# cognition chain) imports even when this script is run by file path.
 sys.path.insert(0, str(REPO_ROOT))
 
 from text_adventure_games.promptviz.app import _graph_elements  # noqa: E402
 from text_adventure_games.promptviz.spec import ChainSpec, load_spec  # noqa: E402
 from text_adventure_games.promptviz.templates import node_prompt  # noqa: E402
 
-# Chain specs to dump. action_castle ships inside promptviz; smallville lives
-# with the generative-agents backend.
+# Chain specs to dump. action_castle ships inside promptviz; the cognition chain
+# lives with the generative-agents backend.
 SPECS = [
     REPO_ROOT / "text_adventure_games" / "promptviz" / "chains" / "action_castle.yaml",
-    REPO_ROOT / "backend" / "promptviz_chains" / "smallville.yaml",
+    REPO_ROOT
+    / "godot-generative-agents"
+    / "backend"
+    / "promptviz_chains"
+    / "cognition.yaml",
 ]
 # Template packages to catalog for the Prompts reader. Each exposes render() and
 # holds its .prompty files alongside its __init__.

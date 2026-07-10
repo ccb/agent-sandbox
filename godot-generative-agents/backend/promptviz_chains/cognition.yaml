@@ -1,21 +1,21 @@
-# Prompt-chain spec for the generative-agents (Smallville) app.
+# Prompt-chain spec for the generative-agents cognition (the UPenn campus sim).
 #
 # Run the visualizer from the repo root (backend is an installed package):
 #
 #   python -m text_adventure_games.promptviz.app \
-#     --spec backend/promptviz_chains/smallville.yaml
+#     --spec backend/promptviz_chains/cognition.yaml
 #
 # This chain spans BOTH template packages: the gen-agents memory/belief templates
 # (`backend.prompt_templates`, the default below) AND the engine cognition a
-# Smallville persona reuses once a live LLM is wired in (`text_adventure_games.
+# persona reuses once a live LLM is wired in (`text_adventure_games.
 # prompt_templates`, set per-node via `templates:`). Nodes whose box is green hold
 # agent-generated *memory* text (the mock writes them and never calls a model);
 # blue boxes are *real model prompts* that fire only with a live client
 # (LLM_PROVIDER set): the daily planner (#83), the decision brain (#168), periodic
 # reflection (#84), and dialogue (#86).
-name: smallville
+name: cognition
 description: >-
-  A Smallville persona's day with a live LLM: generate a plan (day -> hourly ->
+  A persona's day with a live LLM: generate a plan (day -> hourly ->
   minute), seed beliefs + plan into memory, then each step perceive, retrieve,
   decide, maybe converse, remember, and periodically reflect. Click a node to read
   its prompt. With the default mock brain the blue prompts aren't sent (the mock
@@ -71,7 +71,7 @@ nodes:
     kind: narrate
     template: plan_memory
     description: >-
-      smallville_agents.attach_agents() -- the day's PLAN memory (destination +
+      cognition.attach_agents() -- the day's PLAN memory (destination +
       whole-day itinerary), seeded at t=0. Memory text (no model call).
 
   - id: perceive
@@ -98,8 +98,8 @@ nodes:
       client it chooses travel/perform via the engine's npc_decision prompt. The
       default mock ignores this prompt and decides from the current location.
     example_vars:
-      persona: I am Isabella Rodriguez. I run Hobbs Cafe and love bringing people together.
-      goals_block: "Short-term:\n  - open the cafe and welcome the morning regulars"
+      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
+      goals_block: "Short-term:\n  - work on the studio model in Meyerson Hall"
       include_instruction: true
       reasoning_label: "Reasoning:"
       action_label: "Action:"
@@ -115,7 +115,7 @@ nodes:
       each speaks a line in turn via the engine's npc_dialogue prompt. Real model
       call (live client only).
     example_vars:
-      persona: I am Isabella Rodriguez. I run Hobbs Cafe and love bringing people together.
+      persona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.
       goals_block: ""
 
   - id: remember
@@ -123,7 +123,7 @@ nodes:
     kind: narrate
     template: reflection
     description: >-
-      smallville_agents.remember_outcome() -- the persona's own action, recorded as
+      cognition.remember_outcome() -- the persona's own action, recorded as
       a first-person observation memory. Memory text (no model call).
 
   - id: reflect

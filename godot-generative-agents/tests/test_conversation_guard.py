@@ -9,7 +9,7 @@ agent converses twice in one tick and double-writes its memory / chat frame.
 Offline: scripted talkers, a hand-built two-tile game, no assets or brain.
 """
 
-from backend.smallville_agents import maybe_converse
+from backend.cognition import maybe_converse
 from text_adventure_games.games import Game
 from text_adventure_games.npc import ScriptedAgent
 from text_adventure_games.things import Character, Location

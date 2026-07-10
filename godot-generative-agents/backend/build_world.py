@@ -1,21 +1,16 @@
-"""Build the Smallville world as a ``text_adventure_games`` game.
+"""Build a ``text_adventure_games`` game from world data (personas + places).
 
-This is the "uses our library" half of the port: Smallville's places become
-engine ``Location``s, the cast become ``Character``s carrying first-person
-persona text (lifted from the upstream ``scratch.json`` profiles), and the two
-custom actions (:mod:`actions`) are registered so agents can ``travel`` and
-``perform`` through the normal precondition gate.
+This is the "uses our library" half of the generative-agents port: a world's
+places become engine ``Location``s, its cast become ``Character``s carrying
+first-person persona text, and the two custom actions (:mod:`actions`) let
+agents ``travel`` and ``perform`` through the normal precondition gate.
 
-The world is fully data-driven: every persona is one entry in :data:`PERSONAS`
-and every place one entry in :data:`_LOCATIONS`, both defined in
-``world_data.yaml``. We model the whole upstream ``the_ville_n25`` cast -- all
-25 residents -- each waking at home and heading to where they spend their day
-(the cafe owner to her cafe, students to the college, the bartender to the pub,
-and so on). Adding a 26th resident is just another YAML entry; adding a new
-place is one more location.
+The builder is world-agnostic -- it takes a ``(personas, locations)`` pair and
+constructs the game. The project's primary world is the **UPenn campus**, loaded
+and patched by :mod:`penn.penn_world` (it reads ``world_data_upenn.yaml`` via
+:func:`load_world_data` and hands the normalized pair to :func:`build_world`).
+Any world authored in the same YAML shape builds the same way.
 """
-
-from pathlib import Path
 
 import yaml
 from text_adventure_games.things.characters import Character
@@ -24,36 +19,14 @@ from text_adventure_games.things.locations import Location
 from .actions import Act, Travel
 from .tiled_game import TiledGame
 
-_WORLD_DATA_PATH = Path(__file__).with_name("world_data.yaml")
-
-
-def _load_world_data() -> tuple[list[dict], list[dict]]:
-    with _WORLD_DATA_PATH.open(encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data["personas"], data["locations"]
-
-
-def load_world_data(path) -> tuple[list[dict], list[dict]]:
-    """Load + normalize an alternate world YAML (same shape as world_data.yaml).
-
-    Returns ``(personas, locations)`` with every persona given a uniform
-    ``schedule`` (see :func:`_normalize_personas`). Lets a different world -- e.g.
-    the UPenn campus (``world_data_upenn.yaml``) -- be built with
-    :func:`build_world` without touching the default the_ville globals.
-    """
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return _normalize_personas(data["personas"]), data["locations"]
-
-
-# The cast and locations live in world_data.yaml. Each persona entry has:
+# The cast and locations come from a world YAML (e.g. ``penn/world_data_upenn.yaml``).
+# Each persona entry has:
 #   name        display name (also picks the sprite: "John Lin" -> John_Lin.png)
-#   home        the location they wake in (must be a name in _LOCATIONS)
+#   home        the location they wake in (must be a name in the locations list)
 #   persona     the first-person identity the agent reasons as (innate traits +
-#               background, condensed from the upstream scratch.json profile)
+#               background)
 #   emoji       the default pronunciatio bubble shown above the sprite
-#   start_tile  the [x, y] tile they spawn on -- matches the base sim's
-#               environment/0.json so the frontend places them exactly as upstream
+#   start_tile  the [x, y] tile they spawn on -- so the frontend places them exactly
 #
 # A persona's *day* is given one of two ways:
 #   schedule    an ordered list of stops the agent works through over the run.
@@ -64,18 +37,24 @@ def load_world_data(path) -> tuple[list[dict], list[dict]]:
 #               memory evolve: every stop adds new travel/perform memories and
 #               lets co-located residents perceive each other.
 #   destination/activity
-#               a single place + activity (the upstream-style one-stop day). The
-#               inactive 25-resident roster uses this; _normalize_personas turns it
-#               into a one-stop schedule so the step loop has a single code path.
+#               a single place + activity (a one-stop day). _normalize_personas
+#               turns it into a one-stop schedule so the step loop has one path.
 #
-# Each location entry has name, description, address (Smallville tile address or
-# null for the hub), and optionally hub: true for the town center.
-_ALL_PERSONAS, _LOCATIONS = _load_world_data()
+# Each location entry has name, description, address (the tile-map address or null
+# for the hub), and optionally hub: true for the world's center.
 
-# The valid place names a plan may target. A generated planner (issue #83,
-# :class:`backend.planner.LLMPlanner`) validates its stops against this so a
-# hallucinated location is dropped before it reaches the parser.
-LOCATION_NAMES = frozenset(loc["name"] for loc in _LOCATIONS)
+
+def load_world_data(path) -> tuple[list[dict], list[dict]]:
+    """Load + normalize a world YAML into ``(personas, locations)``.
+
+    Every persona is given a uniform ``schedule`` (see :func:`_normalize_personas`)
+    so downstream code has a single path. ``path`` points at a YAML with
+    ``personas:`` and ``locations:`` lists -- e.g. the UPenn campus
+    (``world_data_upenn.yaml``). The result is what :func:`build_world` expects.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return _normalize_personas(data["personas"]), data["locations"]
 
 
 def _normalize_personas(personas: list[dict]) -> list[dict]:
@@ -113,51 +92,40 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
     return personas
 
 
-_normalize_personas(_ALL_PERSONAS)
-
-# Active cast size. The full 25-resident roster still loads from world_data.yaml
-# (nothing is deleted) -- we just run a smaller subset so the demo's per-agent
-# memory/reasoning panels stay readable. Set this to len(_ALL_PERSONAS) to run
-# the whole town again. The first 5 are a deliberate mix: Isabella + Maria share
-# Hobbs Cafe and Klaus + Ayesha share Oak Hill College, so co-located agents
-# perceive and remember each other, while Wolfgang heads to the park alone.
-MAX_ACTIVE_PERSONAS = 5
-# The full normalized roster, exposed so the runner can honor a configured
-# ``num_agents`` (SimulationConfig.smallville) by slicing a different number of residents.
-ALL_PERSONAS = _ALL_PERSONAS
-PERSONAS = _ALL_PERSONAS[:MAX_ACTIVE_PERSONAS]
-
-
 def build_world(
     world_map=None,
     personas: list[dict] | None = None,
     locations_data: list[dict] | None = None,
 ):
-    """Construct the Smallville game.
+    """Construct a generative-agents game from a world's personas + locations.
 
     Returns ``(game, characters)`` where ``characters`` maps persona name ->
-    :class:`Character`. Agents are *not* attached here (see
-    :mod:`smallville_agents`); the caller wires those onto each character.
+    :class:`Character`. Agents are *not* attached here (see :mod:`backend.cognition`);
+    the caller wires those onto each character.
+
+    ``personas`` and ``locations_data`` are required -- pass the normalized pair
+    from :func:`load_world_data` (the UPenn campus, or any world in the same
+    shape). ``personas`` must already carry a ``schedule`` (load_world_data does
+    this), or building fails on the schedule checks below.
 
     Pass a :class:`~backend.world_map.WorldMap` to make "who/what is nearby"
     tile-distance based (issue #82): the game is a :class:`TiledGame`, so an
     agent with ``vision_r > 0`` perceives residents/objects in arenas within that
-    many tiles. With no ``world_map`` (the default) perception falls back to the
-    current room, so callers that don't need proximity are unaffected.
-
-    ``personas``/``locations_data`` default to the module's the_ville cast, so
-    existing callers and tests are unchanged. Pass an alternate pair (from
-    :func:`load_world_data`) to build a different world -- e.g. the UPenn campus.
+    many tiles. With no ``world_map`` perception falls back to the current room,
+    so callers that don't need proximity are unaffected.
     """
-    personas = personas if personas is not None else PERSONAS
-    locations_data = locations_data if locations_data is not None else _LOCATIONS
+    if personas is None or locations_data is None:
+        raise ValueError(
+            "build_world requires personas and locations_data -- load them with "
+            "load_world_data(path) (e.g. penn/world_data_upenn.yaml)."
+        )
 
     locations: dict[str, Location] = {}
     hub = None
     for spec in locations_data:
         loc = Location(spec["name"], spec["description"])
-        # Plain attribute (not a bool property): the Smallville address this
-        # engine location resolves to on the tile map.
+        # Plain attribute (not a bool property): the tile-map address this engine
+        # location resolves to.
         loc.tile_address = spec["address"]
         locations[spec["name"]] = loc
         if spec.get("hub"):
@@ -189,7 +157,7 @@ def build_world(
     # A silent observer stands in as the engine's required "player". It never
     # acts; every persona is an NPC driven by its agent.
     observer = Character(
-        "Observer", "A silent observer of the town.", "I quietly watch Smallville."
+        "Observer", "A silent observer of the world.", "I quietly watch the world."
     )
 
     characters: dict[str, Character] = {}

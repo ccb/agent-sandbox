@@ -1,10 +1,10 @@
-"""Spatial bridge between our graph-based engine and Smallville's tile grid.
+"""Spatial bridge between our graph-based engine and a world's tile grid.
 
 Our ``text_adventure_games`` engine is a graph of named ``Location``s; the
-Generative Agents frontend, by contrast, animates sprites on a 140x100 tile
-grid and needs an ``(x, y)`` tile for every character every step. ``WorldMap``
-loads the upstream ``the_ville`` maze data (the same CSVs the original backend
-read) and answers two questions the exporter needs:
+Generative Agents frontend, by contrast, animates sprites on a tile grid and
+needs an ``(x, y)`` tile for every character every step. ``WorldMap`` loads a
+world's maze data (the CSV matrix the frontend also renders -- the UPenn campus
+is ``the_upenn``) and answers two questions the frame builder needs:
 
 * **Where is an address?** ``tiles_for("the Ville:Hobbs Cafe:cafe")`` -> the set
   of tiles that belong to that world:sector:arena[:object] address.
@@ -24,12 +24,12 @@ from . import path_finder
 
 
 class WorldMap:
-    """Loads the_ville's maze CSVs and resolves addresses to tiles + paths."""
+    """Loads a world's maze CSVs and resolves addresses to tiles + paths."""
 
-    def __init__(self, the_ville_dir: str):
-        """``the_ville_dir`` points at ``.../assets/the_ville`` (which contains
-        the ``matrix/`` folder of maze + special-block CSVs)."""
-        matrix = os.path.join(the_ville_dir, "matrix")
+    def __init__(self, world_dir: str):
+        """``world_dir`` points at a world's asset root (e.g. ``.../the_upenn``),
+        which contains the ``matrix/`` folder of maze + special-block CSVs."""
+        matrix = os.path.join(world_dir, "matrix")
         meta = _load_json(os.path.join(matrix, "maze_meta_info.json"))
         self.width = int(meta["maze_width"])
         self.height = int(meta["maze_height"])
@@ -106,7 +106,7 @@ class WorldMap:
         0 if they are the same address or their tiles touch/overlap; otherwise
         the number of tiles between them, counting diagonals as one step (so a
         ``vision_r`` of N covers an (2N+1)x(2N+1) square, matching upstream
-        Smallville's tile vision). Returns a large sentinel when either address
+        Generative Agents' tile vision). Returns a large sentinel when either address
         has no tiles (e.g. a home that's only ever a label), so it never reads as
         "nearby". Uses the precomputed bounding boxes, exact for the roughly
         rectangular arenas and slightly generous for irregular footprints."""
