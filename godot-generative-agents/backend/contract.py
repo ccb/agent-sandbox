@@ -23,7 +23,9 @@ and played by the Godot viewer) is::
         ]
       },
       "frames": [ {persona_name: AgentFrame}, ... ],   # one dict per step
-      "memory_streams": {persona_name: [MemoryRecord, ...]}
+      "memory_streams": {persona_name: [MemoryRecord, ...]},
+      "events": [EventState, ...]      # the GameEvent run record (#467) --
+                                       #   absent from replays baked before it
     }
 
 The live handshake (``GET /live`` -> ``serve_penn.PennStepper.meta()``) serves
@@ -56,3 +58,7 @@ AGENT_FRAME_FIELDS = ("x", "y", "act", "e", "reasoning", "chat", "memories")
 
 # One memory-stream entry (cognition.memories_for_frame), in emitted order.
 MEMORY_RECORD_FIELDS = ("kind", "importance", "text", "created_turn")
+
+# One event-log entry (text_adventure_games.events.GameEvent.to_primitive), in
+# emitted order — the run record #467 persists into the replay's "events" key.
+EVENT_STATE_FIELDS = ("turn", "actor", "action", "summary", "payload")

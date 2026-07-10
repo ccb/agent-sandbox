@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.contract import (
     AGENT_FRAME_FIELDS,
+    EVENT_STATE_FIELDS,
     MEMORY_RECORD_FIELDS,
     SCHEMA_VERSION,
 )
@@ -69,6 +70,19 @@ class LlmInfo(_ContractModel):
     model: str
 
 
+class EventState(_ContractModel):
+    """One GameEvent log entry (#467's run record) — the verbatim shape of
+    ``text_adventure_games.events.GameEvent.to_primitive()``. Field order ==
+    EVENT_STATE_FIELDS. ``payload`` is event-specific structured detail (e.g. a
+    sickness cause) and deliberately stays an open dict."""
+
+    turn: int
+    actor: str
+    action: str
+    summary: str
+    payload: dict
+
+
 class AgentFrame(_ContractModel):
     """One persona at one step. Field order == AGENT_FRAME_FIELDS (#297)."""
 
@@ -106,8 +120,10 @@ class Replay(_ContractModel):
     meta: Meta
     frames: list[dict[str, AgentFrame]]
     memory_streams: dict[str, list[MemoryRecord]] | None = None
+    events: list[EventState] | None = None  # the #467 run record; absent pre-#467
 
 
 # Sanity: the pinned orders and the models can never drift from each other.
 assert tuple(AgentFrame.model_fields) == AGENT_FRAME_FIELDS
 assert tuple(MemoryRecord.model_fields) == MEMORY_RECORD_FIELDS
+assert tuple(EventState.model_fields) == EVENT_STATE_FIELDS
