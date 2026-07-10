@@ -127,6 +127,12 @@ FORCED_DOORS = {
     # A north-side entrance at the top-left of the (combined) Sweeten Alumni
     # Building, mirroring the auto-placed east door at the top-right.
     "Sweeten Alumni Building": [{(15, 97), (16, 97), (17, 97)}],
+    # Van Pelt's front door (#270): a 3-tile opening in the south perimeter
+    # directly below the labeled `Entrance` room (rect [95,60,136,65] in
+    # van_pelt_interior.json). Verified to open north through the lobby into the
+    # Entrance room arena (13015), so an agent entering the library arrives at the
+    # front Entrance instead of the auto-carved east door into the Moelis reading room.
+    "Van Pelt Library": [{(114, 67), (115, 67), (116, 67)}],
 }
 
 # Perimeter cells to re-close AFTER door-carving, keyed by building name. Mirrors
@@ -135,6 +141,10 @@ FORCED_DOORS = {
 # subdivide_rooms only writes interior walls, so a perimeter closure must live here.
 FORCED_CLOSED = {
     "Sweeten Alumni Building": {(46, 99)},
+    # Seal Van Pelt's auto-carved east door (east perimeter x156, rows 56-58) into
+    # the Moelis Family Grand Reading Room, leaving the south Entrance door (above)
+    # as the single building entrance (#270).
+    "Van Pelt Library": {(156, 56), (156, 57), (156, 58)},
 }
 
 

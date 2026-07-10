@@ -104,6 +104,29 @@ def test_every_room_arena_reachable_from_a_door(tmp_path):
         assert str(rid) in reached, f"room arena {rid} unreachable through the door"
 
 
+def test_van_pelt_entrance_routes_to_south_entrance_room(tmp_path):
+    """#270: Van Pelt's single door is the south opening at the front `Entrance`
+    room (arena 13015), not the auto-carved east door into Moelis."""
+    mdir = _run(str(tmp_path))
+    coll = _read_flat(os.path.join(mdir, "maze", "collision_maze.csv"))
+    arena = _read_flat(os.path.join(mdir, "maze", "arena_maze.csv"))
+
+    def walkable(x, y):
+        return coll[y * W + x] == "0"
+
+    # The old east door into the Moelis reading room (x156, rows 56-58) is sealed.
+    for y in (56, 57, 58):
+        assert not walkable(156, y), f"east door cell (156,{y}) should be walled"
+
+    # The south front door at the Entrance is open...
+    for x in (114, 115, 116):
+        assert walkable(x, 67), f"south door cell ({x},67) should be open"
+
+    # ...and it leads north through the lobby into the Entrance room arena (13015).
+    assert walkable(115, 66) and walkable(115, 65), "door must connect inward"
+    assert arena[65 * W + 115] == "13015", "cell above the lobby is the Entrance room"
+
+
 def test_idempotent(tmp_path):
     mdir = _run(str(tmp_path))
     a = open(os.path.join(mdir, "maze", "arena_maze.csv")).read()
