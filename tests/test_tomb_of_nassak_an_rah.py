@@ -880,6 +880,112 @@ def test_a_held_respirator_does_not_seal_lungs():
     assert sum(1 for w in game.player.wounds if w.name == "Seared Lungs") == 1
 
 
+def test_the_prayers_read_and_the_balm_answers_once():
+    """The sphere's carvings hold three prayers (CCB): READ lists them, an
+    unnamed SAY asks which, BALM refuses whole flesh, heals a wound once,
+    and the answered line goes smooth."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("read prayers")
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "PRAYER OF BALM" in text
+    assert "PRAYER OF WRATH" in text
+    assert "PRAYER OF MENDING" in text
+    game.do_command("say prayers")  # unnamed: the carvings list the choices
+    assert "SAY PRAYER OF BALM" in " ".join(cap.texts(Channel.BLOCKED))
+    game.do_command("say prayer of balm")  # unhurt: refused, not spent
+    assert "whole flesh" in " ".join(cap.texts(Channel.BLOCKED))
+    from text_adventure_games.slots import Wound
+
+    game.player.add_wound(Wound("Bloody Gash", 1, "..."))
+    game.do_command("say prayer of balm")
+    assert not game.player.wounds  # the chamber closes the wound
+    game.do_command("say prayer of balm")  # answered once, never again
+    assert "smooth and unlettered" in " ".join(cap.texts(Channel.BLOCKED))
+    cap2 = _texts(game)
+    game.do_command("read prayers")
+    assert "BALM" in " ".join(cap2.texts(Channel.NARRATION))  # named as spent
+
+
+def test_the_wrath_prayer_strikes_the_horror():
+    """WRATH is a blow: it chips the Horror's vigor mid-fight, and as the
+    final blow it kills through the engine's KO contract. Without a target
+    it is refused, unspent."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("say prayer of wrath")  # nothing to smite: refused
+    assert "nothing before you" in " ".join(cap.texts(Channel.BLOCKED))
+    horror = game.characters["fungal horror"]
+    game.relocate(horror, sphere)
+    horror.set_property("vigor", 3)
+    game.do_command("say prayer of wrath")
+    # one blow landed (the Horror knits +1 on its own turn, acid answers)
+    assert "smaller than it was" in " ".join(cap.texts(Channel.NARRATION))
+    assert not horror.get_property("is_dead")
+    game.do_command("say prayer of wrath")  # once only
+    assert "smooth and unlettered" in " ".join(cap.texts(Channel.BLOCKED))
+
+
+def test_the_wrath_prayer_can_land_the_final_blow():
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    game.relocate(game.player, sphere)
+    horror = game.characters["fungal horror"]
+    game.relocate(horror, sphere)
+    horror.set_property("vigor", 1)
+    game.do_command("say prayer of wrath")
+    assert horror.get_property("is_dead")  # horror_struck converts the KO
+    assert sphere.get_property("horror_dead")
+    assert game.score >= 25  # the Horror bounty pays either way
+
+
+def test_the_mending_prayer_restores_the_coffin():
+    """MENDING re-seals the burst coffin (CCB): pried becomes whole, the
+    descriptions follow, and an unbroken coffin refuses the prayer."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    game.relocate(game.player, sphere)
+    cap = _texts(game)
+    game.do_command("say prayer of mending")  # nothing broken yet
+    assert "The coffin is whole" in " ".join(cap.texts(Channel.BLOCKED))
+    sphere.set_property("horror_dead", True)
+    coffin = sphere.items["coffin"]
+    coffin.set_property("pried", True)
+    game.do_command("say prayer of mending")
+    assert coffin.get_property("pried") is False
+    assert "whole" in coffin.examine_text
+    assert "whole again" in sphere.description
+    assert "hangs whole" in " ".join(cap.texts(Channel.NARRATION))
+
+
+def test_prayers_listen_only_in_the_sphere():
+    game = _game()
+    cap = _texts(game)
+    game.do_command("say prayer of balm")  # at the wreck: nothing carved
+    assert "Burial Sphere" in " ".join(cap.texts(Channel.BLOCKED))
+
+
+def test_open_grammar_agrees_in_number():
+    """'The crates ARE open' (CCB) -- and heads of 'of' phrases stay
+    singular ('crate of dates')."""
+    game = _game()
+    for cmd in ("search merchant", "take glowstone", "light glowstone", "in"):
+        game.do_command(cmd)
+    cap = _texts(game)
+    game.do_command("open crates")
+    assert "The crates are open." in " ".join(cap.texts(Channel.NARRATION))
+    game.do_command("open crates")
+    assert "The crates are already open." in " ".join(cap.texts(Channel.BLOCKED))
+    crates = game.locations["The Wagon's Hold"].items["crates"]
+    assert crates.to_be() == "are"
+    assert crates.contents["crate of dates"].to_be() == "is"
+
+
 def test_drinking_water_mends_a_wound():
     game = _game()
     game.do_command("search merchant")
