@@ -227,6 +227,8 @@ function haptic(kind) {
   try { window.webkit.messageHandlers.haptic.postMessage(kind); } catch (e) {}
 }
 
+let wasGameOver = false;
+
 function render(payloadJson, opts = {}) {
   const payload = JSON.parse(payloadJson);
   const instant = opts.instant || payload.events.length > 10;
@@ -244,11 +246,15 @@ function render(payloadJson, opts = {}) {
   statusRoom.textContent = (s.room || "").toUpperCase();
   statusScore.textContent = `${s.score}/${s.max_score}   T:${s.turn}`;
   renderChips(payload.suggestions);
-  if (s.game_over) {
+  // The banner marks the MOMENT the game ends, not every payload after it
+  // (CCB: it was reprinting each turn). Post-mortem commands are refused by
+  // the engine itself, with the RESTORE/RESTART hint in the refusal.
+  if (s.game_over && !wasGameOver) {
     if (!s.won) { haptic("death"); sounds.damage(); }
     print(s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***", "echo", instant);
     print("(type RESTORE to return to a saved position, or RESTART to begin anew)", "blocked", instant);
   }
+  wasGameOver = s.game_over;
 }
 
 function chip(word, cls, withSpace) {

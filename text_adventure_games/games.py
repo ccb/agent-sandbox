@@ -247,6 +247,24 @@ class Game:
                 results.append(self.do_command(part))
             return all(results) if results else False
 
+        # A finished game closes the parser (CCB: the dead were still walking).
+        # Only the meta verbs that leave the ended story intact pass: RESTORE
+        # a save, SCRIPT the record -- and RESTART, for shells that offer it
+        # above this loop.
+        if self.is_game_over():
+            first = command.strip().split(" ", 1)[0].lower()
+            if first not in ("restore", "script", "restart"):
+                self.parser.fail(
+                    (
+                        "The story has ended. "
+                        if self.is_won()
+                        else "Death has this expedition now. "
+                    )
+                    + "Type RESTORE to return to a saved position, or "
+                    "RESTART to begin anew."
+                )
+                return False
+
         # The player is the subject of any command entered here, so pass them as
         # the explicit actor. This keeps the event log correct even when the
         # command names another character (e.g. "attack troll") — without it the
