@@ -799,10 +799,10 @@ class Put(base.Action):
             )
             return False
         if not self.holder.is_open():
-            self.parser.fail(f"The {self.holder.name} is closed.")
+            self.parser.fail(f"The {self.holder.name} {self.holder.to_be()} closed.")
             return False
         if not self.holder.has_space():
-            self.parser.fail(f"The {self.holder.name} is full.")
+            self.parser.fail(f"The {self.holder.name} {self.holder.to_be()} full.")
             return False
         return True
 
@@ -833,7 +833,7 @@ class Open(base.Action):
             self.parser.fail(f"You can't open the {self.item.name}.")
             return False
         if not self.item.get_property("is_closed"):
-            self.parser.fail(f"The {self.item.name} is already open.")
+            self.parser.fail(f"The {self.item.name} {self.item.to_be()} already open.")
             return False
         return True
 
@@ -841,7 +841,7 @@ class Open(base.Action):
         self.item.set_property("is_closed", False)
         # Item-subject phrasing reads right for any actor -- "You opens the
         # pack" (player named "you") was ungrammatical. Same fix as Light/Douse.
-        message = f"The {self.item.name} is open."
+        message = f"The {self.item.name} {self.item.to_be()} open."
         # Reveal what's inside so the player learns what they can take, rather
         # than having to guess (the contents are now reachable by GET).
         contents = [
@@ -874,14 +874,16 @@ class Close(base.Action):
             self.parser.fail(f"You can't close the {self.item.name}.")
             return False
         if self.item.get_property("is_closed"):
-            self.parser.fail(f"The {self.item.name} is already closed.")
+            self.parser.fail(
+                f"The {self.item.name} {self.item.to_be()} already closed."
+            )
             return False
         return True
 
     def apply_effects(self):
         self.item.set_property("is_closed", True)
         # Item-subject phrasing, matching Open (and Light/Douse).
-        self.parser.ok(f"The {self.item.name} is closed.")
+        self.parser.ok(f"The {self.item.name} {self.item.to_be()} closed.")
 
 
 class Unlock_Door(base.Action):
