@@ -74,19 +74,19 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      # The tools/geo suite validates the authored UPenn tmj against the
+      # The godot-generative-agents/tools/geo suite validates the authored UPenn tmj against the
       # generative-agents matrix. It's self-contained — stdlib + sibling geo
       # modules, no engine/backend imports — and reads the tracked tmj + matrix,
       # so it runs offline on the pinned interpreter; no need for the py matrix
       # above (the tooling is Python-version-agnostic). `dev` is only for pytest.
       - run: uv sync --extra dev --locked
       - name: pytest tools/geo suite
-        run: uv run --no-sync pytest tools/geo/ -q
+        run: uv run --no-sync pytest godot-generative-agents/tools/geo/ -q
       # The drift gate (#390): validate_tmj compares the authored map against the
       # matrix the sim walks and exits non-zero on any error not already in
-      # tools/geo/validate_tmj_baseline.json — so a tmj⇄matrix desync fails CI
+      # godot-generative-agents/tools/geo/validate_tmj_baseline.json — so a tmj⇄matrix desync fails CI
       # with a readable report instead of silently landing (the exact class of
       # breakage #413 had to clean up after the #399/#400 restructure). Keep the
       # baseline empty (or shrinking) as drifts are resolved.
       - name: validate_tmj drift gate
-        run: uv run --no-sync python tools/geo/validate_tmj.py
+        run: uv run --no-sync python godot-generative-agents/tools/geo/validate_tmj.py

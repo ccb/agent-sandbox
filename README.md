@@ -55,7 +55,7 @@ text_adventure_games/      The engine (the shared framework)
 notebooks/                 Notebooks: HW1 "Action Castle" onboarding + framework demos
 tests/                     Pytest suite (agent layer, ReAct live game, NPC behaviors)
 godot-generative-agents/   Godot 2D frontend + UPenn campus replay  (work lands on the
-tools/geo/                 OSM → tilemap map-generation tooling       godot-ga-main branch; see ONBOARDING §6)
+  tools/geo/               OSM → tilemap map-generation tooling       godot-ga-main branch; see ONBOARDING §6)
 FEATURE-ROADMAP.md         Technical specs for the framework features to build
 ROADMAP.md                 The summer plan: phases, who owns what
 ONBOARDING.md              Start here on day one

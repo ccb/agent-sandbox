@@ -156,7 +156,8 @@ or a live URL) and **`/serve-backend`** (serve the sim, mock or real-LLM).
   in `prompt_templates/README.md`** and pin its exact output in
   `tests/test_prompt_templates.py`.
 - Feature branches → PR → `main`. **Exception — the `godot-ga-main` branch:** a
-  change that touches *only* `godot-generative-agents/` and/or `tools/geo/` goes on
+  change that touches *only* `godot-generative-agents/` (which now includes the
+  map-generation tooling under `godot-generative-agents/tools/geo/`) goes on
   the long-lived `godot-ga-main` branch instead — branch off it and target your PR at
   it (reviewed by the Godot/geo owners, @aking526 + @0frankie, not the full `main`
   review). Anything touching the shared engine library (`text_adventure_games/`,

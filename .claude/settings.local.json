@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(python -m pytest tests/test_base.py -v)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)",
+      "Bash(git fetch *)",
+      "Bash(gh api *)",
+      "Bash(xargs git show --stat --format='merge: %s')",
+      "Bash(/Users/alistairking/Projects/purm-2026/agent-sandbox/venv/bin/python -c \"import nbformat, jupyter; print\\('nbformat ok'\\)\")",
+      "Bash(/Users/alistairking/Projects/purm-2026/agent-sandbox/venv/bin/python *)",
+      "Bash(git mv *)",
+      "Bash(git -C /Users/alistairking/Projects/purm-2026/agent-sandbox fetch origin)",
+      "Bash(git -C /Users/alistairking/Projects/purm-2026/agent-sandbox status)",
+      "Bash(git -C /Users/alistairking/Projects/purm-2026/agent-sandbox log --oneline main..HEAD)",
+      "Bash(git -C /Users/alistairking/Projects/purm-2026/agent-sandbox diff main...HEAD --stat)",
+      "Bash(git -C /Users/alistairking/Projects/purm-2026/agent-sandbox checkout main)",
+      "Bash(git pull *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import json,sys; [print\\(p['number'], p['state'], \\(p.get\\('mergedAt'\\) or '-'\\), p['headRefName'], '|', p['title']\\) for p in json.load\\(sys.stdin\\)]\")",
+      "Bash(git check-ignore *)",
+      "Bash(git merge *)",
+      "Bash(git ls-remote *)",
+      "Bash(uv --version)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(git rev-list *)",
+      "Bash(git worktree *)",
+      "Bash(git ls-tree *)"
+    ]
+  }
+}
