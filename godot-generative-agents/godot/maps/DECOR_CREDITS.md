@@ -20,6 +20,6 @@ relative to the `.tmj`).
 projects; may be modified; **may not be redistributed or resold, even if modified.**
 Included here only as a game asset for this research project.
 
-The plants are stamped by `tools/geo/frame_edges.py`, which registers this sheet as
+The plants are stamped by `godot-generative-agents/tools/geo/frame_edges.py`, which registers this sheet as
 a `.tmj` tileset and scatters a weighted mix of its single-tile plants through the
 framed grass margin. See that script's header for the run order.
