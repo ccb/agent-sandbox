@@ -279,6 +279,17 @@
        <span class="attach">Attaches: the title screen; arriving at the Tomb Exterior.</span></p>
   </section>
 
+  <section>
+    <div class="slate"><h2>17-B &mdash; THE APPROACH, THE OLD MAN</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="ext1b" viewBox="0 0 640 400" aria-label="The approach, crowned by the skyward face"></svg>
+    </div>
+    <p class="spec">The same dusk and the same small walker &mdash; but the crown of the
+       monolith is the old man in profile, turned to the sky, mouth open, the orange
+       weeping out of it in slow curls. His sentence continues underground.
+       <span class="attach">Alternate for 17.</span></p>
+  </section>
+
 
 
 
@@ -2570,6 +2581,105 @@
       skull.setAttribute("stroke", buzzing && (t % 2) ? "#ff5a5a" : PH);
       bzzt.textContent = buzzing ? "BZZT." : "";
       typeOn(foot, "PLEASE REMOVE ALL ORGANS BEFORE INTERMENT.", T, 160, 1.8);
+    });
+  }
+
+
+  /* ---------------- 17-B: the approach, crowned by the old man ---------------- */
+  {
+    const svg = document.getElementById("ext1b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    const XDOTS = stipple(svg, "dots-ext1b", PH, .8);
+    el(svg, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
+      "stroke-width": 1.4, opacity: .8 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "20,296 70,282 120,294 150,288 190,297" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "470,297 520,286 560,292 610,283 640,294" });
+    el(svg, "rect", { x: 0, y: 301, width: 640, height: 99, fill: XDOTS, opacity: .35 });
+    for (let i = 0; i < 14; i++)
+      el(svg, "line", { x1: 30 + (i * 97) % 610, y1: 318 + (i * 37) % 70,
+        x2: 36 + (i * 97) % 610, y2: 316 + (i * 37) % 70, stroke: PH_DIM });
+    const cloud = el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .6,
+      points: "0,0" });
+    // THE MONOLITH, crowned by the old man in profile, face to the sky:
+    // back of skull, brow, nose pointed UP, the OPEN MOUTH, chin -- then
+    // the flanks as before (the boy carved into the west edge)
+    el(svg, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "286,104 290,74 300,62 314,58 " +                     // the skull's back rise
+      "320,64 326,60 " +                                    // the brow
+      "332,40 338,52 340,58 " +                             // the NOSE, skyward
+      "344,62 344,76 352,78 354,66 " +                      // the open mouth
+      "362,68 368,80 " +                                    // lips and chin
+      "372,110 360,190 358,246 354,300 " +                  // the east fall
+      "286,300 " +
+      "282,250 288,214 " +
+      "278,196 284,188 276,180 286,172 282,162 " +          // THE BOY, west
+      "288,140 " });
+    el(svg, "path", { d: "M 322 66 Q 326 70 330 67", fill: "none",
+      stroke: PH_DIM });                                    // the closed eye, skyward
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:               // the warrior
+      "358,150 350,158 354,168 348,176 356,184" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "312,84 316,140 308,200 314,260" });
+    // the door: the baby's face, as in 17
+    el(svg, "circle", { cx: 320, cy: 252, r: 26, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(svg, "path", { d: "M 306 246 Q 311 250 316 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(svg, "path", { d: "M 324 246 Q 329 250 334 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(svg, "line", { x1: 320, y1: 252, x2: 318, y2: 258, stroke: PH_DIM });
+    el(svg, "path", { d: "M 311 300 L 311 276 Q 320 264 329 276 L 329 300 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.5 });
+    // the orange, WEEPING from the open mouth: tapered ropes, curling up
+    const tendrils = Array.from({ length: 4 }, () =>
+      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
+        stroke: FUNGUS, "stroke-width": 1.3 }));
+    // the scavenger
+    const sBody = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    const sHead = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT });
+    const sLegs = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    const thought = label(svg, 0, 0, 9, PH_DIM);
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      tendrils.forEach((n, i) => {
+        const rx = 345 + i * 2.5, ry = 70, a0 = -Math.PI / 2 + (i - 1.5) * .5;
+        const w = Math.sin(t * .18 + i * 1.7);
+        const c = [[rx, ry]];
+        for (let k = 1; k <= 4; k++) {
+          const a = a0 + Math.sin(t * .12 + k + i * 2) * .28 + (i - 1.5) * .12 * k;
+          const r = k * (9 + ((t * .5 + i * 4) % 6));
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r]);
+        }
+        const W = [4.5, 3.6, 2.6, 1.5, .6];
+        const L = [], R = [];
+        for (let k = 0; k < c.length; k++) {
+          const [x0, y0] = c[Math.max(0, k - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          L.push(`${c[k][0] - dy / len * W[k]},${c[k][1] + dx / len * W[k]}`);
+          R.push(`${c[k][0] + dy / len * W[k]},${c[k][1] - dx / len * W[k]}`);
+        }
+        n.setAttribute("points", L.concat(R.reverse()).join(" "));
+      });
+      const cx = ((t * .7) % 760) - 60;
+      cloud.setAttribute("points",
+        `${cx},110 ${cx + 24},102 ${cx + 52},106 ${cx + 78},100 ${cx + 96},110`);
+      const wx = Math.min(214, 60 + Math.floor(T * 1.2));
+      const standing = wx >= 214;
+      const step = standing ? 0 : (t % 4 < 2 ? 3 : -3);
+      const sy = 336;
+      sHead.setAttribute("cx", wx + 106); sHead.setAttribute("cy", sy - 15);
+      sBody.setAttribute("points", `${wx + 106},${sy - 12} ${wx + 106},${sy - 4}`);
+      sLegs.setAttribute("points",
+        `${wx + 103 + step * .4},${sy + 4} ${wx + 106},${sy - 4} ${wx + 109 - step * .4},${sy + 4}`);
+      thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
+      thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
+      typeOn(foot, "HIS SENTENCE CONTINUES UNDERGROUND.", T, 168, 1.4);
     });
   }
 
