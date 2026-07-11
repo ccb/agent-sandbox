@@ -3382,6 +3382,20 @@ def build_game(seed=None):
             "walls of faint constellations, and nothing else legible."
         )
     )
+    # Silas at his reading (card 09): a title plate on ARRIVING in the Hall
+    # of Memory -- but only when you can actually see him (the hall is gloom;
+    # a dark arrival doesn't burn the card, and EXAMINE SILAS remains the
+    # backstop cue once a light is raised).
+    memory.set_property(
+        "figure",
+        lambda g: (
+            "silas"
+            if "Silas" in memory.characters
+            and not g.characters["Silas"].get_property("is_dead")
+            and perception.sight_for(g.player, memory)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     memory.dim_description = (
         "A hall lit only by the lattice itself -- drifts of pale glimmer "
         "crawling the walls, each point a day someone else lived. Between "

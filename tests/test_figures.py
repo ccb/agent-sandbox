@@ -197,3 +197,24 @@ def test_arriving_at_the_tomb_cues_the_approach_above_the_description():
     g.do_command("go south")
     g.do_command("go north")  # returning does not re-draw it
     assert cap.texts(Channel.FIGURE).count("ext1c") == 1
+
+
+def test_entering_the_hall_of_memory_cues_silas_only_when_lit():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    memory = g.locations["Hall of Memory"]
+    neighbor, direction = next(
+        (loc, d)
+        for loc in g.locations.values()
+        for d, dest in loc.connections.items()
+        if dest is memory
+    )
+    word = str(getattr(direction, "value", direction))
+    g.relocate(g.player, neighbor)
+    g.do_command(f"go {word}")  # in the gloom: the card keeps
+    assert "silas" not in cap.texts(Channel.FIGURE)
+    g.relocate(g.player, neighbor)
+    g.do_command("light glowstone")
+    g.do_command(f"go {word}")  # lit: Silas at his reading, above the text
+    assert "silas" in cap.texts(Channel.FIGURE)
