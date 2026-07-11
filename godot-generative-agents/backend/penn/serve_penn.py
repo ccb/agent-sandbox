@@ -330,6 +330,7 @@ class PennStepper:
             self.world.personas,
             ledger=self._recording_ledger("decide"),
             vision_r=self.cog.vision_r,
+            cognition_tools=self.cog.cognition_tools,
             num_steps=self.num_steps,
             # The #261 swap: with a real client every agent's decide (and its
             # conversation lines) go through the model, and reflection passes

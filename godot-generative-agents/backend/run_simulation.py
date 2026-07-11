@@ -301,9 +301,11 @@ def simulate(
     only *which* memories surface changes.
 
     Pass an optional ``cognition`` (:class:`sim_config.CognitionConfig`) to set the
-    perception radius (``vision_r``) and conversation pacing; ``None`` uses today's
-    defaults. ``vision_r`` only changes co-presence under a TiledGame, and
-    conversation is a no-op under the mock brain, so the mock replay is unchanged.
+    perception radius (``vision_r``), conversation pacing, and the cognition-tools
+    flag (``cognition_tools``, issue #512 -- a real brain may consult its memory /
+    beliefs / plan before deciding); ``None`` uses today's defaults. ``vision_r``
+    only changes co-presence under a TiledGame, and conversation and the cognition
+    tools are no-ops under the mock brain, so the mock replay is unchanged.
 
     Pass ``relationships_csv`` / ``base_personas_dir`` (the upstream bootstrap
     assets) to seed each persona at t=0 -- relationships into memory, partial
@@ -387,6 +389,7 @@ def simulate(
         relationships_csv=relationships_csv,
         base_personas_dir=base_personas_dir,
         vision_r=cog.vision_r,
+        cognition_tools=cog.cognition_tools,
         planner_client=planner_client,
         reflector_client=reflector_client,
         llm_client=llm_client,
