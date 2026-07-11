@@ -176,6 +176,13 @@ class Go(base.Action):
             self.game.game_over_description = to_loc.description
             self.parser.ok(to_loc.description)
         else:
+            # A location may carry a ``figure``: its card draws ABOVE the room
+            # description -- a title plate for the arrival, not a footnote
+            # (CCB). Same contract as the Examine hook: once per game, player
+            # only, callable(game) -> key for state-dependent cards.
+            if is_main_player:
+                fig = to_loc.get_property("figure")
+                self.game.show_figure(fig(self.game) if callable(fig) else fig)
             action = base.Describe(self.game, command=self.command)
             action()
 
