@@ -1635,16 +1635,22 @@
   // 16: THE FALCON JAR -- the coil, turning
   jarCard("jar-falcon", "THE FALCON JAR (THE COIL, CURED)",
     (P) => {
+      // a proper falcon: compact skull, slim neck, and a strongly
+      // decurved hook of a beak with the tomial notch
       el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-        "252,118 258,86 240,62 208,56 184,66 170,84 " +
-        "158,92 166,98 176,108 172,118" });                  // skull, and the hook
-      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
-        points: "170,84 158,92 152,102 162,104 168,98" });   // the hooked beak
-      el(P.svg, "polyline", { fill: "none", stroke: PH_DIM,
-        points: "180,78 206,84 224,80" });                   // the eye-stripe
-      P.eye = el(P.svg, "circle", { cx: 196, cy: 76, r: 3, fill: PH_BRIGHT });
-      P.lid = el(P.svg, "line", { x1: 190, y1: 76, x2: 202, y2: 76,
-        stroke: PH_DIM, "stroke-width": 5, opacity: 0 });    // the nictitating blink
+        "238,118 244,94 236,72 214,60 192,64 182,72 " +      // crown to the cere
+        "170,76 160,84 156,94 " +                            // the hook, curving down
+        "162,98 168,94 " +                                   // ...and back under
+        "174,99 178,96 " +                                   // the tomial tooth
+        "192,102 204,108 208,118" });                        // jaw, chin, slim throat
+      el(P.svg, "line", { x1: 182, y1: 78, x2: 172, y2: 82,
+        stroke: PH_DIM });                                   // the cere line
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+        points: "198,84 202,98" });                          // the malar teardrop
+      P.eye = el(P.svg, "circle", { cx: 198, cy: 78, r: 3.2, fill: PH_BRIGHT });
+      el(P.svg, "circle", { cx: 198, cy: 78, r: 5.2, fill: "none", stroke: PH_DIM });
+      P.lid = el(P.svg, "line", { x1: 192, y1: 78, x2: 205, y2: 78,
+        stroke: PH_DIM, "stroke-width": 6, opacity: 0 });    // the nictitating blink
     },
     (P) => {
       el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
@@ -1652,7 +1658,7 @@
       P.coil = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 });
     },
     [
-      { at: [155, 98], text: "BEAK: CEREMONIAL, STILL SHARP" },
+      { at: [158, 92], text: "BEAK: CEREMONIAL, STILL SHARP" },
       { at: [221, 198], text: "CONTENTS: THE COIL. TRIBUTE, IDEALLY" },
       { at: [220, 118], text: "LAST WORN AS A HELM, BY SOMETHING BLIND" },
     ],
