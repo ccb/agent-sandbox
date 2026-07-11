@@ -160,14 +160,37 @@
   </section>
 
   <section>
-    <div class="slate"><h2>10 &mdash; SYNTH-HOUND</h2><span class="kind">LITHO / BESTIARY, WALKING</span></div>
+    <div class="slate"><h2>10 &mdash; SYNTH-HOUND</h2><span class="kind">LITHO / PRESERVED SPECIMEN</span></div>
     <div class="screen">
-      <svg id="hound" viewBox="0 0 640 360" aria-label="Synth-hound field entry"></svg>
+      <svg id="hound" viewBox="0 0 640 360" aria-label="Synth-hound preserved in the gel tank"></svg>
     </div>
-    <p class="spec">A coursing unit long out of warranty: goggled eye, needle teeth, someone
-       else's heraldry cut into the panels, a whip tail for balance &mdash; still walking,
-       because no one ever told it to stop. Same gait engine as the jackal, opposite
-       heading. <span class="attach">Attaches: the Hall of Hounds; a bestiary card.</span></p>
+    <p class="spec">Dead, and kept that way: a coursing unit suspended in the luminous
+       embalming gel behind the plexiglas, goggled eye dark, piston legs limp, drifting
+       by millimetres on the tank's own slow currents. Bubbles on the step clock.
+       <span class="attach">Attaches: the Hall of Hounds tank; EXAMINE HOUNDS.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>11 &mdash; THE BURIAL SPHERE</h2><span class="kind">LITHO / CHAMBER 6, TENANTED</span></div>
+    <div class="screen">
+      <svg id="sphere" viewBox="0 0 640 420" aria-label="The burial sphere in cross-section"></svg>
+    </div>
+    <p class="spec">The anti-entropy chamber in cross-section, after the 2e plate: the fungus
+       descending the chimney throat in strands, the glass coffin floating at dead centre,
+       and inside it the orange tenant WRITHING at the pace of a slow breath. Dust and
+       bone-chips drift; the carved prayers ring the wall.
+       <span class="attach">Attaches: entering the sphere; EXAMINE COFFIN, before the pry.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>12 &mdash; FRIEND'S FUNGUS</h2><span class="kind">LITHO / PHARMACOPOEIA</span></div>
+    <div class="screen">
+      <svg id="fungus" viewBox="0 0 640 360" aria-label="Friend's fungus, a pink mushroom cluster"></svg>
+    </div>
+    <p class="spec">A pink cluster, soft and faintly warm: agreeability radiating off the caps
+       in quantized rings, spores drifting up, and &mdash; briefly, if you watch &mdash; small
+       smiles among the motes. The Autarchy fed it to guests of state.
+       <span class="attach">Attaches: SEARCH CORPSE at the Summit; TASTE FUNGUS (the microdose).</span></p>
   </section>
 </div>
 
@@ -453,43 +476,58 @@
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "FAUNA / DESERT / CAUTIOUS, CLEVER, HUNGRY";
     // the jackal, from the 2e reference: prowling LEFT, head low, ears
-    // swept back, grin bared, brush tail trailing -- mid-stride.
+    // swept back, grin bared, brush tail trailing -- and SWAYING as it goes
     const JDOTS = stipple(svg, "dots-jackal", PH, 1);
+    const BODY = [];
+    const B = (name, attrs) => { const n = el(svg, name, attrs); BODY.push(n); return n; };
     // top contour: nose -> stop -> skull -> ears -> shoulder -> hip -> tail base
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
       "108,154 120,146 138,140 150,134 158,130 " +
       "162,128 152,84 172,110 " +          // ear one, swept back
       "178,112 198,80 212,108 " +          // ear two
       "232,116 268,112 306,120 352,124 392,130 412,142 416,150" });
     // underside: jaw -> throat -> chest -> belly -> flank
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
       "108,154 112,166 128,172 152,170 182,158 216,150 242,162 258,184 " +
       "308,190 350,188 372,176 396,160" });
     // the grin, zigzag, bared
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
       points: "114,160 119,167 124,159 129,167 134,159 139,166 144,161 149,167" });
     // the eye: yellow, slanted, and frankly doing sums
-    el(svg, "polygon", { points: "138,138 147,133 156,138 147,142",
+    B("polygon", { points: "138,138 147,133 156,138 147,142",
       fill: "#ffd76a", stroke: "#ffd76a", "stroke-width": 1 });
-    el(svg, "circle", { cx: 149, cy: 138, r: 1.7, fill: BG });
-    // the hackles: a serrated crest of fur riding the spine, tallest at
-    // the shoulder (after the reference's hatched coat)
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.1, points:
-      "214,122 220,108 226,118 232,104 238,113 246,100 252,110 260,98 " +
-      "266,108 274,99 282,110 290,102 298,114 306,106 314,117 322,110 " +
-      "330,120 338,113 346,122 354,116 362,124 370,119 378,127 386,123 394,131" });
+    B("circle", { cx: 149, cy: 138, r: 1.7, fill: BG });
+    // the coat: FUR now, not spikes -- fine paired strokes leaning back
+    // along the spine, longest over the neck and shoulder
+    const SPINE = [
+      [216, 121], [226, 118], [236, 115], [246, 113], [256, 112], [266, 112],
+      [278, 113], [290, 116], [302, 119], [314, 120], [326, 121], [338, 122],
+      [350, 124], [362, 125], [374, 127], [386, 129],
+    ];
+    SPINE.forEach(([x, y], i) => {
+      const len = i < 6 ? 10 - i : 5;
+      B("line", { x1: x, y1: y, x2: x - 4, y2: y - len, stroke: PH,
+        "stroke-width": 1 });
+      B("line", { x1: x + 5, y1: y + 1, x2: x + 1, y2: y - len + 2,
+        stroke: PH_DIM, "stroke-width": 1 });
+    });
     // the brush tail, low and trailing, halftoned
-    el(svg, "polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
+    B("polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
       "416,150 448,180 490,214 526,232 542,242 524,246 480,228 440,198 408,164" });
-    // the legs, WALKING: a lateral-sequence gait on the step clock, each
-    // limb a shoulder/hip -> knee -> foot chain recomputed per tick
+    // the legs, WALKING and no longer sticks: a rounded THIGH stroke into a
+    // finer SHIN, far pair dimmed for depth, all on the gait clock
     const LEGS = [
-      { ax: 250, ay: 178, ph: 0.0, w: 1.6, knee: -9 },   // near fore
-      { ax: 262, ay: 182, ph: 0.5, w: 1.0, knee: -9 },   // far fore
-      { ax: 370, ay: 178, ph: 0.55, w: 1.6, knee: 12 },  // near hind (hocked)
-      { ax: 396, ay: 160, ph: 0.05, w: 1.0, knee: 12 },  // far hind
+      { ax: 250, ay: 178, ph: 0.0, near: 1, knee: -9 },   // near fore
+      { ax: 262, ay: 182, ph: 0.5, near: 0, knee: -9 },   // far fore
+      { ax: 370, ay: 178, ph: 0.55, near: 1, knee: 12 },  // near hind (hocked)
+      { ax: 396, ay: 160, ph: 0.05, near: 0, knee: 12 },  // far hind
     ].map(cfg => Object.assign(cfg, {
-      n: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": cfg.w }),
+      thigh: el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 5.5 : 3.6, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
+      shin: el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 2.6 : 1.8, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
     }));
     // the ground: a band of ticks sliding rightward under the walk
     const gGround = document.createElementNS(NS, "g");
@@ -520,14 +558,21 @@
       const T = t % 150;
       doWipe(T);
       typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
+      // the prowl: the body BOBS and the shoulders ROLL over planted feet
+      const bob = [0, 1, 2, 1, 0, -1, -2, -1][t % 8] * .8;
+      const roll = ((t % 16) < 8 ? 1 : -1) * 0.7;
+      const TR = `translate(0 ${bob}) rotate(${roll} 270 170)`;
+      BODY.forEach(n => n.setAttribute("transform", TR));
       // the walk: sixteen poses per stride, feet planted or swinging
       LEGS.forEach(L => {
         const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const ay = L.ay + bob;
         const fx = L.ax - 34 + 20 * Math.cos(th);
         const fy = 274 - Math.max(0, Math.sin(th)) * 12;
-        const kx = (L.ax + fx) / 2 + L.knee, ky = (L.ay + fy) / 2 + 8;
-        L.n.setAttribute("points",
-          `${L.ax},${L.ay} ${kx},${ky} ${fx},${fy} ${fx - 9},${fy + 2}`);
+        const kx = (L.ax + fx) / 2 + L.knee, ky = (ay + fy) / 2 + 8;
+        L.thigh.setAttribute("points", `${L.ax},${ay} ${kx},${ky}`);
+        L.shin.setAttribute("points",
+          `${kx},${ky} ${fx},${fy} ${fx - 9},${fy + 2}`);
       });
       gGround.setAttribute("transform", `translate(${(t * 4) % 16}, 0)`);
       const c = CALLS[Math.floor(T / 22) % CALLS.length];
@@ -911,15 +956,29 @@
     EDGES.forEach(([a, b]) => el(svg, "line", { x1: NODES[a][0], y1: NODES[a][1],
       x2: NODES[b][0], y2: NODES[b][1], stroke: PH_DIM }));
     NODES.forEach(([x, y]) => el(svg, "circle", { cx: x, cy: y, r: 1.8, fill: PH }));
-    // the bright threads, spooling toward his fingertips
+    // the bright threads: lattice -> fingertips -> up the forearm -> UNDER
+    // the sleeve (unseen) -> re-emerging at the neck to walk the skull's
+    // panel circuits, ending behind the eye. The robe segments are the gap.
     const HAND = [450, 202];
-    const PATHS = [
-      [NODES[19], NODES[14], NODES[9], NODES[2], HAND],
-      [NODES[5], NODES[6], NODES[7], NODES[2], HAND],
-      [NODES[16], NODES[12], NODES[8], NODES[2], HAND],
+    const EXT = [
+      HAND, [404, 210], [356, 213], [322, 216],   // hand, wrist, forearm, sleeve
+      [268, 194], [228, 172],                     // under the robe: UNSEEN
+      [206, 162], [201, 144], [214, 128], [224, 106], [231, 132],  // the circuits
     ];
-    const pulses = PATHS.map((path, i) => ({
-      path, off: i * 23,
+    const EXT_HIDDEN = new Set([3, 4]);           // the segments beneath the cloth
+    const PATHS = [
+      [NODES[19], NODES[14], NODES[9], NODES[2]],
+      [NODES[5], NODES[6], NODES[7], NODES[2]],
+      [NODES[16], NODES[12], NODES[8], NODES[2]],
+    ].map(base => {
+      const path = base.concat(EXT);
+      const baseSegs = base.length; // lattice + approach segments, all visible
+      const hidden = new Set([...EXT_HIDDEN].map(k => k + baseSegs));
+      return { path, hidden };
+    });
+    let eyeArrival = false;
+    const pulses = PATHS.map((pp, i) => ({
+      ...pp, off: i * 37,
       dot: el(svg, "circle", { cx: 0, cy: 0, r: 2.4, fill: PH_BRIGHT }),
       tail: el(svg, "line", { x1: 0, y1: 0, x2: 0, y2: 0, stroke: PH_BRIGHT,
         "stroke-width": 1.4 }),
@@ -942,16 +1001,22 @@
       doWipe(T);
       typeOn(hdr, "SILAS (SYNTHETIC ARCHIVIST, VIGOR 2)", T, 4, 1.4);
       eye.setAttribute("opacity", (t % 34) < 31 ? 1 : .15);   // the long blink
+      eye.setAttribute("r", eyeArrival ? 3.8 : 2.6);          // a day, arriving
+      eye.setAttribute("fill", eyeArrival ? "#ffd76a" : PH_BRIGHT);
       port.setAttribute("opacity", (t % 34) < 31 ? .6 : 1);
+      eyeArrival = false;
       pulses.forEach(p => {
-        const segs = p.path.length - 1, total = segs * 12;
-        const k = (t + p.off) % total, si = Math.floor(k / 12), f = (k % 12) / 12;
+        const segs = p.path.length - 1, total = segs * 7;
+        const k = (t + p.off) % total, si = Math.floor(k / 7), f = (k % 7) / 7;
         const [ax, ay] = p.path[si], [bx, by] = p.path[si + 1];
         const x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+        const seen = p.hidden.has(si) ? 0 : 1;  // beneath the robe: unseen
+        p.dot.setAttribute("opacity", seen); p.tail.setAttribute("opacity", seen);
         p.dot.setAttribute("cx", x); p.dot.setAttribute("cy", y);
         p.tail.setAttribute("x1", ax + (bx - ax) * Math.max(0, f - .4));
         p.tail.setAttribute("y1", ay + (by - ay) * Math.max(0, f - .4));
         p.tail.setAttribute("x2", x); p.tail.setAttribute("y2", y);
+        if (si === segs - 1) eyeArrival = true;  // a day, arriving
       });
       const c = CALLS[Math.floor(T / 30) % CALLS.length];
       if (T > 14) {
@@ -966,105 +1031,323 @@
   }
 
 
-  /* ---------------- 10: the synth-hound ---------------- */
+  /* ---------------- 10: the synth-hound, preserved ---------------- */
   {
     const svg = document.getElementById("hound");
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "MACHINA / MASTERLESS / STILL COURSING";
-    const HDOTS = stipple(svg, "dots-hound", PH, 1.3);
-    // facing RIGHT, head held low: hip hump -> back slope -> descending neck
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "168,124 186,108 216,104 252,116 292,132 330,146 366,162 404,180 420,186" });
-    // the head: long tapered muzzle, needle teeth at the tip
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "420,186 470,196 540,224 528,236 470,220 436,210 424,204 420,186" });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1,
-      points: "492,216 497,226 502,214 507,226 512,216 517,227 522,218" }); // needles
-    const eye = el(svg, "circle", { cx: 452, cy: 199, r: 8, fill: "none",
-      stroke: PH_BRIGHT, "stroke-width": 1.6 });                 // the goggle
-    const pupil = el(svg, "circle", { cx: 454, cy: 200, r: 3, fill: PH_BRIGHT });
-    el(svg, "polyline", { fill: "none", stroke: PH_DIM,          // antennae, swept
-      points: "432,184 468,144" });
-    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points: "426,182 452,138" });
-    // the underline: throat -> chest -> belly tuck -> hip
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "424,204 396,204 356,196 330,186 300,178 258,182 220,186 192,182 172,160 168,124" });
-    // the dark hindquarter, stippled dense (after the reference's dipped hip)
-    el(svg, "polygon", { fill: HDOTS, stroke: PH, "stroke-width": 1.2, points:
-      "168,124 186,108 216,104 232,116 226,150 212,178 192,182 172,160" });
-    // someone else's heraldry, cut into the flank
-    el(svg, "polygon", { points: "268,150 284,150 276,164", fill: PH, "fill-opacity": .8 });
-    el(svg, "circle", { cx: 300, cy: 160, r: 5, fill: PH, "fill-opacity": .8 });
-    el(svg, "rect", { x: 316, y: 158, width: 26, height: 5, fill: PH, "fill-opacity": .8 });
-    el(svg, "polyline", { points: "254,168 262,168 258,164 258,172", stroke: PH, fill: "none" });
-    // rivets along the spine seam
-    [232, 262, 292, 322, 352].forEach(x =>
-      el(svg, "circle", { cx: x, cy: 128 + (x - 232) * .16, r: 1.3, fill: PH_DIM }));
-    // the whip tail (redrawn per tick: it sways)
-    const tail = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.3 });
-    // legs: the jackal's gait engine, mirrored for the opposite heading
-    const LEGS = [
-      { ax: 330, ay: 184, ph: 0.0, w: 1.6, knee: 9 },    // near fore
-      { ax: 318, ay: 180, ph: 0.5, w: 1.0, knee: 9 },    // far fore
-      { ax: 196, ay: 180, ph: 0.55, w: 1.6, knee: -12 }, // near hind
-      { ax: 182, ay: 176, ph: 0.05, w: 1.0, knee: -12 }, // far hind
-    ].map(cfg => Object.assign(cfg, {
-      n: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": cfg.w }),
-      j: el(svg, "circle", { r: 2, fill: "none", stroke: PH_DIM }),  // exposed joint
-    }));
-    const gGround = document.createElementNS(NS, "g");
-    for (let x = 44; x < 600; x += 16) {
-      const l = document.createElementNS(NS, "line");
-      l.setAttribute("x1", x); l.setAttribute("y1", 302);
-      l.setAttribute("x2", x + 7); l.setAttribute("y2", 302);
-      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
-    }
-    svg.appendChild(gGround);
-    // callouts + the pursuit ledger
+    cls.textContent = "MACHINA / HALL OF HOUNDS / IN GEL";
+    // THE TANK: plexiglas, corner bolts, the gel a luminous stipple field
+    const GEL = stipple(svg, "gel-hound", PH, .9);
+    el(svg, "rect", { x: 36, y: 52, width: 568, height: 252, fill: GEL,
+      stroke: PH, "stroke-width": 2 });
+    [[44,60],[596,60],[44,296],[596,296]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 2.2, fill: "none", stroke: PH_DIM }));
+    el(svg, "line", { x1: 96, y1: 60, x2: 66, y2: 296, stroke: PH_BRIGHT,
+      opacity: .18, "stroke-width": 6 });                    // the glass glare
+    // THE SPECIMEN, floating: everything in one group so it drifts whole
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    const H = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); gg.appendChild(n); return n; };
+    // spine line: hip hump -> back -> descending neck (nose-down drift)
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "188,142 206,126 236,122 272,132 312,146 352,160 392,176 418,188" });
+    // the head: tapered muzzle, needle teeth, DARK goggle
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "418,188 462,198 524,224 512,236 462,222 434,212 422,206 418,188" });
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1,
+      points: "480,218 485,228 490,216 495,228 500,218 505,229 510,220" });
+    H("circle", { cx: 450, cy: 201, r: 8, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.6 });                // the goggle, unlit
+    H("circle", { cx: 452, cy: 202, r: 3, fill: PH_DIM, opacity: .35 });
+    H("polyline", { fill: "none", stroke: PH_DIM, points: "430,186 458,152" });
+    H("polyline", { fill: "none", stroke: PH_DIM, points: "424,184 442,146" });
+    // underline + belly
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "422,206 394,208 356,202 330,192 298,186 258,190 222,194 200,190 186,168 188,142" });
+    // ROBOT PARTS: vertebra ticks, shoulder actuator, hip cylinder, access
+    // hatch, a neck hose, rivet rows -- Autarchy pattern, piston-hocked
+    [[368,168],[378,172],[388,177],[398,182]].forEach(([x, y]) =>
+      H("line", { x1: x, y1: y - 4, x2: x - 3, y2: y + 4, stroke: PH_DIM }));
+    H("circle", { cx: 318, cy: 172, r: 9, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    H("circle", { cx: 318, cy: 172, r: 3, fill: "none", stroke: PH_DIM });   // shoulder
+    H("rect", { x: 196, y: 150, width: 30, height: 16, fill: "none",
+      stroke: PH, "stroke-width": 1.3 });                    // the hip cylinder
+    H("line", { x1: 204, y1: 150, x2: 204, y2: 166, stroke: PH_DIM });
+    H("rect", { x: 262, y: 154, width: 24, height: 14, fill: "none",
+      stroke: PH_DIM });                                     // the access hatch
+    H("circle", { cx: 266, cy: 157, r: 1, fill: PH_DIM });
+    H("circle", { cx: 266, cy: 165, r: 1, fill: PH_DIM });
+    H("polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3",
+      points: "420,204 400,226 368,224 344,212" });          // the neck hose
+    [242, 272, 302, 332].forEach(x =>
+      H("circle", { cx: x, cy: 140 + (x - 242) * .2, r: 1.2, fill: PH_DIM }));
+    // heraldry, someone else's, cut into the flank
+    H("polygon", { points: "252,166 268,166 260,180", fill: PH, "fill-opacity": .7 });
+    H("circle", { cx: 286, cy: 174, r: 5, fill: PH, "fill-opacity": .7 });
+    // the LIMP legs: piston thighs into strut shins, hanging as the gel holds
+    // them -- nothing walks here
+    [[330,192,338,232,330,268],[314,190,306,228,312,264],
+     [206,192,216,230,206,266],[192,188,184,224,190,262]].forEach(([ax,ay,kx,ky,fx,fy], i) => {
+      const near = i % 2 === 0;
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 4.6 : 3, opacity: near ? 1 : .5,
+        points: `${ax},${ay} ${kx},${ky}` });
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 2.2 : 1.6, opacity: near ? 1 : .5,
+        points: `${kx},${ky} ${fx},${fy} ${fx + 7},${fy + 4}` });
+      H("circle", { cx: kx, cy: ky, r: 2.4, fill: "none", stroke: PH_DIM });
+      H("line", { x1: (ax + kx) / 2 - 3, y1: (ay + ky) / 2,
+        x2: (ax + kx) / 2 + 3, y2: (ay + ky) / 2, stroke: PH_DIM }); // piston collar
+    });
+    // the tail: a segmented cable, drifting
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.3, points:
+      "190,158 158,176 136,206 130,240" });
+    [[172,166],[146,190],[133,222]].forEach(([x, y]) =>
+      H("line", { x1: x - 3, y1: y - 3, x2: x + 3, y2: y + 3, stroke: PH_DIM }));
+    // bubbles, rising through the gel on the step clock
+    const bubbles = Array.from({ length: 7 }, (_, i) =>
+      ({ q: el(svg, "circle", { cx: 80 + i * 78, cy: 0, r: 1.8, fill: "none",
+        stroke: PH, opacity: .7 }), phase: i * 41 }));
+    // callouts + the preservation ledger
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
-    const call = label(svg, 16, 62, 10, PH);
+    const call = label(svg, 16, 48, 10, PH);
     const CALLS = [
-      { at: [452, 199], text: "EYE: GOGGLED, PATIENT" },
-      { at: [507, 222], text: "TEETH: NEEDLES, FOR HOLDING" },
-      { at: [300, 160], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
-      { at: [128, 262], text: "TAIL: A WHIP, FOR BALANCE" },
+      { at: [450, 201], text: "EYE: DARK, AND BEST LEFT SO" },
+      { at: [286, 174], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
+      { at: [211, 158], text: "HIP: PISTON-HOCKED, AUTARCHY PATTERN" },
+      { at: [130, 240], text: "TAIL: A CABLE. THE LEASH RING IS GONE" },
     ];
-    label(svg, 24, 334, 10, PH_DIM).textContent = "PURSUIT";
+    label(svg, 24, 334, 10, PH_DIM).textContent = "PRESERVATION";
     const cells = Array.from({ length: 10 }, (_, i) =>
-      el(svg, "rect", { x: 92 + i * 18, y: 324, width: 14, height: 12, fill: PH, "fill-opacity": .08 }));
-    const verdict = label(svg, 290, 334, 10, FUNGUS);
+      el(svg, "rect", { x: 128 + i * 18, y: 324, width: 14, height: 12,
+        fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 330, 334, 10, FUNGUS);
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
       const T = t % 160;
       doWipe(T);
-      typeOn(hdr, "SYNTH-HOUND (COURSING UNIT R7-13)", T, 4, 1.4);
-      // the walk, mirrored: forward is +x now
-      LEGS.forEach(L => {
-        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
-        const fx = L.ax + 34 - 20 * Math.cos(th);
-        const fy = 300 - Math.max(0, Math.sin(th)) * 12;
-        const kx = (L.ax + fx) / 2 + L.knee, ky = (L.ay + fy) / 2 + 8;
-        L.n.setAttribute("points",
-          `${L.ax},${L.ay} ${kx},${ky} ${fx},${fy} ${fx + 9},${fy + 2}`);
-        L.j.setAttribute("cx", kx); L.j.setAttribute("cy", ky);
-      });
-      gGround.setAttribute("transform", `translate(${-(t * 4) % 16}, 0)`);
-      const sway = ((t % 8) < 4 ? 1 : -1) * 5;             // the whip, balancing
-      tail.setAttribute("points",
-        `170,140 138,178 ${118 + sway},224 ${132 + sway * 2},272`);
-      pupil.setAttribute("opacity", (t % 22) < 19 ? 1 : .2); // the patient blink
-      const c = CALLS[Math.floor(T / 26) % CALLS.length];
+      typeOn(hdr, "SYNTH-HOUND (PRESERVED SPECIMEN)", T, 4, 1.4);
+      // the drift: millimetres, on the tank's own slow currents
+      const drift = [0, 1, 2, 3, 3, 2, 1, 0, -1, -2, -3, -2, -1, 0][Math.floor(t / 4) % 14];
+      gg.setAttribute("transform",
+        `translate(0 ${drift * 1.1}) rotate(${drift * .35} 320 190)`);
+      bubbles.forEach(b => b.q.setAttribute("cy", 296 - ((t * 2 + b.phase) % 236)));
+      const c = CALLS[Math.floor(T / 28) % CALLS.length];
       if (T > 14) {
-        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 190,66 196,66`);
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 170,52 176,52`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
-      const on = Math.min(10, Math.floor(Math.max(0, T - 20) / 11));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity",
+        i < 10 ? .8 : .08));                                 // four thousand years, holding
+      typeOn(verdict, "FOUR THOUSAND YEARS, HOLDING. DO NOT LIGHT THE GEL.", T, 90, 1.6);
+    });
+  }
+
+
+  /* ---------------- 11: the burial sphere ---------------- */
+  {
+    const svg = document.getElementById("sphere");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CHAMBER 6 / ZERO-G / TENANTED";
+    const CDOTS = stipple(svg, "dots-sphere", PH, .9);
+    // the chimney throat, descending into the crown
+    el(svg, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    // THE SPHERE: the chamber wall, and the prayers ringing it
+    el(svg, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(svg, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });          // the carved prayers
+    for (let a = 0; a < 24; a++) {                            // read from every
+      const th = a * Math.PI / 12;                            // direction at once
+      el(svg, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(svg, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });                    // the aperture below
+    const six = label(svg, 424, 300, 64, PH_DIM);            // the plate's numeral
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // the fungus, descending the throat in strands (redrawn per tick: it sways)
+    const strands = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    // THE COFFIN, floating at dead centre, clouded
+    const gCof = document.createElementNS(NS, "g"); svg.appendChild(gCof);
+    const coffin = document.createElementNS(NS, "ellipse");
+    for (const [k, v] of Object.entries({ cx: 320, cy: 232, rx: 52, ry: 30,
+      fill: CDOTS, stroke: PH_BRIGHT, "stroke-width": 1.8 })) coffin.setAttribute(k, v);
+    gCof.appendChild(coffin);
+    el(svg, "line", { x1: 268, y1: 232, x2: 372, y2: 232, stroke: PH_DIM,
+      "stroke-dasharray": "2 4" });                          // the hairline seam
+    // THE TENANT: a dark knot and four orange tendrils, writhing
+    const knot = document.createElementNS(NS, "circle");
+    for (const [k, v] of Object.entries({ cx: 320, cy: 234, r: 13, fill: FUNGUS,
+      "fill-opacity": .28, stroke: FUNGUS, "stroke-width": 1.4 })) knot.setAttribute(k, v);
+    gCof.appendChild(knot);
+    const tendrils = Array.from({ length: 4 }, () => {
+      const n = document.createElementNS(NS, "polyline");
+      n.setAttribute("fill", "none"); n.setAttribute("stroke", FUNGUS);
+      n.setAttribute("stroke-width", 1.6); gCof.appendChild(n); return n;
+    });
+    // dust and bone-chips, drifting on their own slow orbits
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    // callouts + the breath
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [320, 96], text: "THROAT: THE FUNGUS COMES DOWN IT" },
+      { at: [268, 232], text: "SEAM: FINE AS A HAIR. IT COULD BE PRIED" },
+      { at: [320, 234], text: "TENANT: COILED, AT THE PACE OF A SLOW BREATH" },
+      { at: [204, 310], text: "PRAYERS: READ FROM EVERY DIRECTION AT ONCE" },
+    ];
+    label(svg, 24, 396, 10, PH_DIM).textContent = "THE CHURN";
+    const breath = label(svg, 110, 396, 10, FUNGUS);
+    const foot = label(svg, 420, 396, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      // the breath: the knot swells and settles, the coffin glow with it
+      const br = [0, 1, 2, 3, 4, 4, 3, 2, 1, 0][Math.floor(t / 3) % 10];
+      knot.setAttribute("r", 12 + br);
+      coffin.setAttribute("stroke-width", 1.4 + br * .18);
+      breath.textContent = "(" + "~".repeat(3 + br) + ")";
+      // the tenant writhes: four tendrils, re-coiled each tick
+      tendrils.forEach((n, i) => {
+        const a0 = i * Math.PI / 2 + t * .09;
+        const w = Math.sin(t * .5 + i * 1.7) * 5;
+        const pts = [1, 2, 3].map(k => {
+          const r = 10 + k * (8 + br * .8);
+          const a = a0 + w * .02 * k + Math.sin(t * .3 + k + i) * .18;
+          return `${320 + Math.cos(a) * r},${234 + Math.sin(a) * r * .55}`;
+        });
+        n.setAttribute("points", `320,234 ` + pts.join(" "));
+      });
+      // the strands sway in the throat
+      strands.forEach((n, i) => {
+        const sw = Math.sin(t * .22 + i * 2.1) * 5;
+        n.setAttribute("points",
+          `${306 + i * 14},46 ${306 + i * 14 + sw},96 ` +
+          `${312 + i * 8 + sw},150 ${318 + i * 2},202`);
+      });
+      // the drifting chips: slow, quantized orbits inside the wall
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "PRY IT, AND IT WILL MIND.", T, 120, 1.6);
+    });
+  }
+
+
+  /* ---------------- 12: friend's fungus ---------------- */
+  {
+    const svg = document.getElementById("fungus");
+    const PINK = "#ff8ad8";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "SUMMIT / STATE GIFT";
+    const PDOTS = stipple(svg, "dots-pink", PINK, 1.1);
+    // the mound it grows from
+    el(svg, "ellipse", { cx: 320, cy: 306, rx: 120, ry: 14, fill: PDOTS,
+      stroke: PH_DIM });
+    // the cluster: one tall, two middling, two buttons -- angular litho caps
+    const shroom = (cx, capY, capW, stemW, spot) => {
+      el(svg, "polygon", { points:
+        `${cx - stemW},304 ${cx + stemW},304 ${cx + stemW - 2},${capY + 12} ${cx - stemW + 2},${capY + 12}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.4 });
+      el(svg, "polygon", { points:
+        `${cx - capW},${capY + 14} ${cx - capW * .55},${capY - 8} ${cx},${capY - 16} ` +
+        `${cx + capW * .55},${capY - 8} ${cx + capW},${capY + 14}`,
+        fill: PDOTS, stroke: PINK, "stroke-width": 1.6 });
+      for (let g = 1; g < 4; g++)                     // the gills beneath
+        el(svg, "line", { x1: cx - capW + g * (capW / 2), y1: capY + 13,
+          x2: cx - capW + g * (capW / 2) + 3, y2: capY + 6, stroke: PH_DIM });
+      if (spot) [[-capW * .4, -2], [capW * .3, -8], [0, 4]].forEach(([dx, dy]) =>
+        el(svg, "circle", { cx: cx + dx, cy: capY + dy, r: 2.2, fill: BG,
+          stroke: PINK, "stroke-width": 1 }));
+      return [cx, capY - 16];                         // the apex, for the rings
+    };
+    const apexes = [
+      shroom(320, 190, 62, 9, true),
+      shroom(238, 250, 38, 6, true),
+      shroom(398, 258, 34, 6, false),
+      shroom(280, 288, 16, 3.5, false),
+      shroom(362, 292, 14, 3, false),
+    ];
+    // agreeability, radiating: two staggered rings per big cap
+    const rings = [];
+    apexes.slice(0, 3).forEach(([x, y], i) => {
+      for (let k = 0; k < 2; k++)
+        rings.push({ x, y: y - 4, off: i * 9 + k * 14,
+          q: el(svg, "circle", { cx: x, cy: y - 4, r: 8, fill: "none",
+            stroke: PINK, "stroke-width": 1.2 }) });
+    });
+    // spores, rising with a sway -- and among them, briefly, small smiles
+    const spores = Array.from({ length: 9 }, (_, i) =>
+      ({ x: 240 + (i * 53) % 180, ph: i * 31,
+         q: el(svg, "circle", { r: 1.4, fill: PINK, opacity: .8 }) }));
+    const smiles = [[262, 150], [352, 120], [312, 96]].map(([x, y], i) =>
+      ({ off: i * 40, q: el(svg, "path", { d:
+        `M ${x - 5} ${y} Q ${x} ${y + 6} ${x + 5} ${y}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.3 }) }));
+    // callouts + the agreeability gauge
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [320, 176], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
+      { at: [238, 236], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
+      { at: [398, 246], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
+      { at: [320, 306], text: "KEPT IN THE MYSTIC'S CLASPED HANDS" },
+    ];
+    label(svg, 24, 334, 10, PH_DIM).textContent = "AGREEABILITY";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 128 + i * 18, y: 324, width: 14, height: 12,
+        fill: PINK, "fill-opacity": .08 }));
+    const foot = label(svg, 400, 334, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "FRIEND'S FUNGUS (PINK, HALLUCINOGENIC)", T, 4, 1.4);
+      rings.forEach(r => {
+        const k = ((t + r.off) % 28) / 28;             // out, fading, again
+        r.q.setAttribute("r", 8 + k * 44);
+        r.q.setAttribute("opacity", Math.max(0, .8 - k));
+      });
+      spores.forEach(sp => {
+        const k = (t * 2 + sp.ph) % 220;
+        sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .25) * 7);
+        sp.q.setAttribute("cy", 290 - k);
+        sp.q.setAttribute("opacity", k > 200 ? 0 : .8);
+      });
+      smiles.forEach(sm =>                             // they mean well
+        sm.q.setAttribute("opacity", ((t + sm.off) % 80) < 12 ? .9 : 0));
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 448,58 454,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const on = Math.min(10, Math.floor(T / 14));
       cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
-      verdict.textContent = on >= 10 ? "LURE LOST. WAITING. (IT CAN WAIT LONGER THAN YOU.)" :
-        on >= 6 ? "COURSE: REACQUIRED" : "";
+      typeOn(foot, "MEANT FOR SOMEONE LONELIER THAN YOU.", T, 140, 1.6);
     });
   }
 
