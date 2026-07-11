@@ -111,7 +111,10 @@ class Go(base.Action):
         to_loc = self.location.connections[self.direction]
         self.game.relocate(self.character, to_loc)
         if is_main_player:
-            self.has_been_visited = True
+            # On the LOCATION (a long-lived bug set it on this Action object,
+            # so the flag never stuck and everything gated on it -- visit-gated
+            # hints, the approach card -- stayed dark forever).
+            to_loc.has_been_visited = True
 
         # An encumbered mover clatters (slots.py): their movement is a real
         # sound, heard here and one room out -- listeners, reactions, and any
