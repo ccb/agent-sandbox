@@ -2307,7 +2307,7 @@ def build_game(seed=None):
         "The two lower mouths gape as doorways. From the elder's mouth -- a "
         "chimney -- bright orange tendrils and fungal vines sprout, webbing "
         "down over the stone, shifting drowsily in the red light of the sun.",
-    )
+    ).set_property("figure", "ext1c")
     # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
     # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
     # them without a light (perception Layer 2). The ceiling's *visual* text is
@@ -2332,6 +2332,7 @@ def build_game(seed=None):
         "with roosting bats, packed wing to wing, thousands of them -- and "
         "the nearest have already let go of the stone.",
     )
+    ceiling.set_property("figure", "bats-c")  # RESIDENTS (THOUSANDS)
     ceiling.perceptible_by(
         perception.Sense.HEARING,
         "You can't see a thing, but the vault overhead seethes -- a dry, "
@@ -2458,7 +2459,10 @@ def build_game(seed=None):
         "cylinders",
         "four plexiglas burial cylinders",
         _cylinders_examine,
-    ).set_property("figure", "cylinders")
+    ).set_property(
+        "figure",
+        lambda g: "cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders",
+    )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
     # top of the plinth carvings and the memory crystals).
@@ -2530,6 +2534,7 @@ def build_game(seed=None):
         ),
     ).make_surface(capacity=1)
     falcon_plinth.set_property("gettable", False)
+    falcon_plinth.set_property("figure", "canopic-c")
     jackal_plinth = things.Item(
         "jackal plinth",
         "an empty plinth carved with a jackal",
@@ -2549,6 +2554,7 @@ def build_game(seed=None):
         ),
     ).make_surface(capacity=1)
     jackal_plinth.set_property("gettable", False)
+    jackal_plinth.set_property("figure", "canopic-c")
     canopic.add_item(falcon_plinth)
     canopic.add_item(jackal_plinth)
     dagger = things.Item(
@@ -3715,6 +3721,8 @@ def build_game(seed=None):
                     g.parser.ok(warn_text)
                 else:
                     attack(g)
+                    # the fight close-up lands with the first blow (dedup'd)
+                    g.show_figure("guts-b" if spawn is spawn_guts else "spawn-b")
             # No decay while you share its room: it heard you once, and it is
             # still listening. Only distance (handled above) lets it settle.
 
@@ -4164,9 +4172,13 @@ def build_game(seed=None):
         # dropped by blade or raked down by the bat-swarm, the pack paid
         # its tribute or put down. The clever route and the bloody one
         # score the same.
-        for sp, key in ((spawn_guts, "spawn_guts"), (spawn_brain, "spawn_brain")):
+        for sp, key, card in (
+            (spawn_guts, "spawn_guts", "guts-c"),
+            (spawn_brain, "spawn_brain", "spawn-c"),
+        ):
             if sp.get_property("is_dead") or sp.get_property("is_unconscious"):
                 g.award(key, 5, f"[+5 -- the {sp.name} is quelled]")
+                g.show_figure(card)  # the felled beat; the jar, claimable
         if jackal_pack.get_property("is_dead") or any(
             (h.get_property(f"_jk:{h.name}") or 0) <= -6 for h in _halls
         ):
@@ -4471,6 +4483,15 @@ def build_game(seed=None):
         _canopic_desc_update(g)  # the room reads open THIS round, not next
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
+
+    # The approach (card 17-C): the graven head, cued the first time the
+    # player stands before it -- and by EXAMINE TOMB, whichever comes first.
+    game.add_trigger(
+        "approach_figure",
+        lambda g: g.locations["Tomb Exterior"].has_been_visited,
+        lambda g: g.show_figure("ext1c"),
+        repeatable=False,
+    )
 
     # --- The Friend's Fungus chain (design doc §13; optional, no score) ------
     # fungus (corpse) -> GIVE to Silas -> the Ulfire Lantern -> LIGHT it while

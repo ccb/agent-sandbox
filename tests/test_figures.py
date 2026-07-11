@@ -184,3 +184,12 @@ def test_the_bridge_carries_figure_events():
     payload = json.loads(app_api.command("examine glowstone"))
     figs = [e for e in payload["events"] if e["channel"] == "figure"]
     assert [e["text"] for e in figs] == ["glowstone"]
+
+
+def test_arriving_at_the_tomb_cues_the_approach():
+    g, cap = _game()
+    g.do_command("go north")
+    assert "ext1c" in cap.texts(Channel.FIGURE)
+    g.do_command("go south")
+    g.do_command("go north")  # returning does not re-draw it
+    assert cap.texts(Channel.FIGURE).count("ext1c") == 1
