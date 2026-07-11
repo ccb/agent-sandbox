@@ -1558,13 +1558,91 @@ class Butcher(actions.Action):
         meat.add_alias("zox meat")
         meat.add_alias("haunch")
         self.player.location.add_item(meat)
+        if cut == 1:
+            # The first cut catches the blood too (CCB): zoxen are half
+            # water by weight, and in Vaarn that is the better half.
+            blood = things.Item(
+                "zox blood",
+                "zox blood, caught warm (2 doses)",
+                "Zox blood, thick and dark, caught before the sand could "
+                "claim it. Half water by weight, like everything about a "
+                "zox. Two honest doses; it would keep better in a skin.",
+            )
+            blood.set_property(Property.DRINKABLE, True)
+            blood.set_property("portions", 2)
+            blood.set_property("gettable", True)
+            blood.set_property(
+                Property.TASTE,
+                "of hot metal and brine, with an aftertaste of long roads. "
+                "In Vaarn, this counts as a drink.",
+            )
+            blood.add_alias("blood")
+            self.player.location.add_item(blood)
         self.parser.ok(
             "You open the nearer zox along the flank the sand hasn't "
             "claimed and carve loose a haunch. Road-butchery: quick, "
-            "ungentle, honest."
+            "ungentle, honest. The blood you catch before the sand can "
+            "have it: two dark doses, warm as the day was."
             if cut == 1
             else "You take a second haunch, leaner than the first. The road "
             "will have what's left by morning."
+        )
+
+
+class DecantBlood(actions.Action):
+    """POUR the caught zox blood into the waterskin (CCB): half water by
+    weight, so it stores as rations -- drink later, heal later. The blood's
+    remaining doses become waterskin rations and the vessel is discarded."""
+
+    ACTION_NAME = "pour blood"
+    ACTION_DESCRIPTION = "Pour the zox blood into the waterskin to keep it"
+    ACTION_ALIASES = [
+        "pour blood into waterskin",
+        "pour zox blood into waterskin",
+        "pour blood in waterskin",
+        "put blood in waterskin",
+        "put zox blood in waterskin",
+        "store blood in waterskin",
+        "decant blood",
+        "pour blood into skin",
+    ]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = game.player
+        carried = self.player.carried_items()
+        here = self.player.location.items if self.player.location else {}
+        self.blood = carried.get("zox blood") or here.get("zox blood")
+        self.skin = carried.get("waterskin") or here.get("waterskin")
+
+    def check_preconditions(self) -> bool:
+        if self.blood is None:
+            self.parser.fail("You have no blood to pour.")
+            return False
+        if self.skin is None:
+            self.parser.fail("Nothing here will hold it -- the waterskin is elsewhere.")
+            return False
+        if int(self.blood.get_property("portions") or 0) <= 0:
+            self.parser.fail("The blood is spent; only the stain remains.")
+            return False
+        return True
+
+    def apply_effects(self):
+        doses = int(self.blood.get_property("portions") or 0)
+        rations = int(self.skin.get_property("portions") or 0) + doses
+        self.skin.set_property("portions", rations)
+        self.skin.description = (
+            f"a waterskin with {rations} ration{'s' if rations != 1 else ''}"
+        )
+        owner = self.blood.location or self.player
+        if self.blood.name in self.player.carried_items():
+            self.player.discard_item(self.blood)
+        elif self.player.location and self.blood.name in self.player.location.items:
+            self.player.location.remove_item(self.blood)
+        self.parser.ok(
+            f"You decant the blood into the waterskin, brine and all -- "
+            f"{doses} dose{'s' if doses != 1 else ''} the sand will never "
+            f"see. The skin holds {rations} rations now, none of them shy."
         )
 
 
@@ -3161,6 +3239,7 @@ def build_game(seed=None):
             Refill,
             TossCentipede,
             Butcher,
+            DecantBlood,
         ],
     )
     game.max_score = 145
@@ -4658,6 +4737,36 @@ def build_game(seed=None):
             )
 
     game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
+
+    # Zox blood mends the same way (CCB): half water by weight, and the
+    # better half at that. Each dose heals the most recent wound.
+    def _drank_blood(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "blood" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _blood_mends(g):
+        if g.player.wounds:
+            healed = g.player.heal_wound()
+            g.parser.ok(
+                f"The blood goes down like a meal and a drink at once. The "
+                f"{healed.name.lower()} troubles you less; a wound heals."
+            )
+        blood = g.player.carried_items().get("zox blood") or (
+            g.player.location.items.get("zox blood") if g.player.location else None
+        )
+        if blood is not None:
+            n = int(blood.get_property("portions") or 0)
+            blood.description = (
+                "a smear of zox blood, spent"
+                if n <= 0
+                else f"zox blood, caught warm ({n} dose{'s' if n != 1 else ''})"
+            )
+
+    game.add_trigger("blood_mends", _drank_blood, _blood_mends, repeatable=True)
 
     # Drinking the GEL is legal and inadvisable (design doc §17.1).
     def _drank_gel(g):
