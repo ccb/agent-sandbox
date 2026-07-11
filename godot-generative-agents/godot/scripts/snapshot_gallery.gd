@@ -6,8 +6,10 @@ extends Control
 ## taken at, and a click enlarges one to fill the panel (Back returns to the grid).
 ##
 ## Pure UI, built in code, modelled on social_graph_panel.gd / heatmap_panel.gd -- it
-## knows nothing about the sim. Snapshots live only in memory for the session (there's
-## no file export yet -- that's a separate, lower-priority follow-up).
+## knows nothing about the sim. Snapshots live in memory for the session; the detail
+## view's Save PNG (and the grid's desktop-only Save all) export them via
+## scripts/snapshot_export.gd (issue #488 -- desktop writes to Pictures/penn-snapshots,
+## the web build downloads). Clip export (GIF/MP4) stays a #488 follow-up.
 
 ## Emitted when the user asks to close the pop-up (the close button, or a click on the
 ## dimmed backdrop outside the panel). viewer.gd hides us and restores the camera.
@@ -22,11 +24,14 @@ const INK_DIM := Color(0.74, 0.72, 0.68)
 const THUMB := Vector2(340, 191)
 const COLUMNS := 3
 
+const SnapshotExport := preload("res://scripts/snapshot_export.gd")
+
 # One entry per capture: {texture: Texture2D, label: String}. Full-resolution textures
 # kept in memory; a demo takes a handful.
 # ponytail: unbounded session list; cap or downscale if a long demo run bloats memory.
 var _shots: Array = []
 var _detail_index := -1  # which snapshot the detail view shows, or -1 in the grid view
+var _last_saved_path := ""  # the detail view's last successful save, for Reveal
 
 # Widgets, built in _ready().
 var _title: Label
@@ -36,6 +41,11 @@ var _empty: Label
 var _detail: VBoxContainer
 var _detail_image: TextureRect
 var _detail_caption: Label
+var _save_btn: Button
+var _reveal_btn: Button
+var _save_status: Label
+var _save_all_btn: Button
+var _grid_status: Label
 
 
 func _ready() -> void:
@@ -80,6 +90,19 @@ func _ready() -> void:
 	_title.add_theme_font_size_override("font_size", 24)
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(_title)
+
+	# Grid-view export status ("3 saved -> ...") sits left of the buttons.
+	_grid_status = Label.new()
+	_grid_status.add_theme_color_override("font_color", INK_DIM)
+	_grid_status.add_theme_font_size_override("font_size", 13)
+	title_row.add_child(_grid_status)
+
+	_save_all_btn = Button.new()
+	_save_all_btn.text = "Save all"
+	_save_all_btn.tooltip_text = "Save every snapshot as a PNG (Pictures/penn-snapshots)"
+	_save_all_btn.focus_mode = Control.FOCUS_NONE
+	_save_all_btn.pressed.connect(_save_all)
+	title_row.add_child(_save_all_btn)
 
 	var close_btn := Button.new()
 	close_btn.text = "Close  ✕"
@@ -131,12 +154,38 @@ func _ready() -> void:
 	_detail_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail.add_child(_detail_caption)
 
+	# Save / Reveal / Back on one centered row; the status line under it says
+	# where the PNG went (issue #488).
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_detail.add_child(btn_row)
+
+	_save_btn = Button.new()
+	_save_btn.text = "Save PNG"
+	_save_btn.focus_mode = Control.FOCUS_NONE
+	_save_btn.pressed.connect(_save_current)
+	btn_row.add_child(_save_btn)
+
+	_reveal_btn = Button.new()
+	_reveal_btn.text = "Reveal in Finder"
+	_reveal_btn.focus_mode = Control.FOCUS_NONE
+	_reveal_btn.visible = false
+	_reveal_btn.pressed.connect(_reveal_last)
+	btn_row.add_child(_reveal_btn)
+
 	var back_btn := Button.new()
 	back_btn.text = "‹  Back to all"
 	back_btn.focus_mode = Control.FOCUS_NONE
-	back_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	back_btn.pressed.connect(_show_grid)
-	_detail.add_child(back_btn)
+	btn_row.add_child(back_btn)
+
+	_save_status = Label.new()
+	_save_status.add_theme_color_override("font_color", INK_DIM)
+	_save_status.add_theme_font_size_override("font_size", 13)
+	_save_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_save_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_detail.add_child(_save_status)
 
 	_show_grid()
 
@@ -200,6 +249,13 @@ func _show_grid() -> void:
 	_grid_scroll.visible = not _shots.is_empty()
 	_empty.visible = _shots.is_empty()
 	_title.text = "Snapshots  (%d)" % _shots.size()
+	# Save all is a grid-view, desktop-only affordance (N programmatic browser
+	# downloads trip popup blockers). Statuses reset on every view switch and
+	# new capture so a stale "saved" claim never lingers over a different shot.
+	_save_all_btn.visible = not _shots.is_empty() and not OS.has_feature("web")
+	_grid_status.text = ""
+	_save_status.text = ""
+	_reveal_btn.visible = false
 
 
 func _show_detail(i: int) -> void:
@@ -214,12 +270,59 @@ func _show_detail(i: int) -> void:
 	_empty.visible = false
 	_detail.visible = true
 	_title.text = "Snapshot  %d / %d" % [i + 1, _shots.size()]
+	# Entering the detail view (or arrowing to a different shot) drops any
+	# stale save status: it described a different snapshot.
+	_save_all_btn.visible = false
+	_grid_status.text = ""
+	_save_status.text = ""
+	_reveal_btn.visible = false
 
 
 func _on_backdrop_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		close_requested.emit()
 		accept_event()
+
+
+func _save_current() -> void:
+	# Export the shown snapshot (issue #488). The capture index keeps the file
+	# name deterministic, so re-saving a shot overwrites its earlier file.
+	if _detail_index == -1:
+		return
+	var shot: Dictionary = _shots[_detail_index]
+	var path: String = SnapshotExport.save(
+		shot["texture"], _detail_index, shot["label"])
+	if path == "":
+		_save_status.text = "save failed — see console"
+		_reveal_btn.visible = false
+		return
+	_last_saved_path = path
+	_save_status.text = "saved → %s" % path
+	# The browser surfaces its own download UI; revealing is a desktop thing.
+	_reveal_btn.visible = not OS.has_feature("web")
+
+
+func _reveal_last() -> void:
+	if _last_saved_path != "":
+		OS.shell_show_in_file_manager(_last_saved_path)
+
+
+func _save_all() -> void:
+	# Export every shot through the same helper (desktop only; the button is
+	# hidden on web). Partial failure names the count; details are on the
+	# console via the helper's push_error.
+	var saved := 0
+	var dir := ""
+	for i in _shots.size():
+		var shot: Dictionary = _shots[i]
+		var path: String = SnapshotExport.save(shot["texture"], i, shot["label"])
+		if path != "":
+			saved += 1
+			dir = path.get_base_dir()
+	if saved == _shots.size() and saved > 0:
+		_grid_status.text = "%d saved → %s" % [saved, dir]
+	else:
+		_grid_status.text = "%d of %d saved — see console" % [saved, _shots.size()]
 
 
 func _make_panel_style() -> StyleBoxFlat:
