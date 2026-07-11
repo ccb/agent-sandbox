@@ -704,6 +704,11 @@ async function main() {
 
   applySettings();
 
+  // Let the phosphor actually warm (CCB): on a fast cache the loading
+  // beat blinks past, so the warming screen holds a moment longer before
+  // the title takes over.
+  await new Promise((r) => setTimeout(r, 1500));
+
   // The title holds until the player asks for the tomb (CCB). When an
   // unfinished expedition is on file, the CHOICE lives here on the title
   // screen -- continue it, or begin anew -- not as a banner in the story.
