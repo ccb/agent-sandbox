@@ -32,6 +32,7 @@ const BAR_GAP := 4       # gap between an agent's plan and actual bars
 const ROW_GAP := 14      # gap between agents
 const NAME_W := 150.0    # left column for agent names
 const CURSOR_COLOR := Color(0.95, 0.30, 0.20)
+const GUTTER_LABEL_COLOR := Color(1, 1, 1, 0.55)  # dim "planned"/"actual" tags
 
 var _frames: Array = []          # by reference from the viewer
 var _names: Array = []
@@ -188,6 +189,12 @@ func _draw_canvas() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, NAME_W - 8, font_size)
 		var plan_y := top + 18
 		var actual_y := plan_y + BAR_H + BAR_GAP
+		# Tag each bar in the name gutter — without these the pair is ambiguous
+		# (tooltips are the only other cue). Right-aligned, clear of the name line.
+		_canvas.draw_string(font, Vector2(0, plan_y + 11), "planned",
+			HORIZONTAL_ALIGNMENT_RIGHT, NAME_W - 12, 11, GUTTER_LABEL_COLOR)
+		_canvas.draw_string(font, Vector2(0, actual_y + 11), "actual",
+			HORIZONTAL_ALIGNMENT_RIGHT, NAME_W - 12, 11, GUTTER_LABEL_COLOR)
 		# Planned ribbon: full width, known up front.
 		var segs: Array = _planned_of(name, axis)
 		if segs.is_empty():
