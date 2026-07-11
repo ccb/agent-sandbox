@@ -337,11 +337,17 @@ func add_engine_event(event: Dictionary) -> void:
 	## prose is neutralized so a stray "[" can't corrupt the RichTextLabel.
 	var text := String(event.get("text", "")).strip_edges().replace("\n", " ")
 	if text.is_empty():
+		# game_event rows (#467) carry their prose in `summary`, not `text` —
+		# fall back so the run record renders instead of vanishing (#502).
+		text = String(event.get("summary", "")).strip_edges().replace("\n", " ")
+	if text.is_empty():
 		return
 	if text.length() > 80:
 		text = text.substr(0, 79) + "…"
 	text = text.replace("[", "[lb]")
-	var channel := String(event.get("channel", "event"))
+	# game_event rows carry no `channel`; label them by their record kind so the
+	# row reads "t42 · game_event · <summary>" rather than a generic "event".
+	var channel := String(event.get("channel", event.get("kind", "event")))
 	var turn: Variant = event.get("turn")
 	var when := "t%s" % str(turn) if turn != null else "-"
 	_push_row(
