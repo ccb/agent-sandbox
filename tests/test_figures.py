@@ -55,8 +55,8 @@ def test_examine_cues_a_things_card():
     g.player.add_to_inventory(stone)
     g.do_command("examine glowstone")
     assert cap.texts(Channel.FIGURE) == ["glowstone"]
-    g.do_command("examine glowstone")  # once per game, not per look
-    assert cap.texts(Channel.FIGURE) == ["glowstone"]
+    g.do_command("examine glowstone")  # an explicit look always re-earns it
+    assert cap.texts(Channel.FIGURE) == ["glowstone", "glowstone"]
 
 
 def test_npc_examines_draw_nothing():
@@ -281,3 +281,13 @@ def test_look_replays_the_rooms_card():
     assert cap.texts(Channel.FIGURE).count("ext1c") == 2
     g.do_command("look east")  # surveying an exit is not a look-around
     assert cap.texts(Channel.FIGURE).count("ext1c") == 2
+
+
+def test_taking_a_carded_item_draws_it_once():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")  # the acquisition is the moment
+    assert cap.texts(Channel.FIGURE) == ["glowstone"]
+    g.do_command("drop glowstone")
+    g.do_command("take glowstone")  # re-pocketing is not
+    assert cap.texts(Channel.FIGURE) == ["glowstone"]

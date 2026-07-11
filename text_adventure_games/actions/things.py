@@ -108,6 +108,12 @@ class Get(base.Action):
                 " Your pack is full to the last slot: you move with a clatter "
                 "now, and climbing is out of the question."
             )
+        # Taking a thing with a card draws it (CCB): the acquisition is the
+        # moment. Deduped -- a card already met (an ambush, an examine)
+        # doesn't replay just for the pocketing; EXAMINE re-earns it.
+        if self.character is self.game.player:
+            fig = self.item.get_property("figure")
+            self.game.show_figure(fig(self.game) if callable(fig) else fig)
         self.parser.ok(description)
 
 
@@ -526,13 +532,15 @@ class Examine(base.Action):
             self.parser.ok("You don't see anything special.")
             return
         # A thing may carry a ``figure`` property: the key of an illustration
-        # card that a close look cues (once per game -- show_figure dedupes).
-        # A callable(game) -> key|None picks by live state (an autarch at rest
-        # draws differently than one hollowed out). Player looks only: an NPC
-        # examining doesn't draw on the player's screen.
+        # card that a close look cues. FORCED (CCB): an explicit examine
+        # always re-earns the card, like LOOK does for rooms -- take/arrival/
+        # ambush cues stay once-per-game. A callable(game) -> key|None picks
+        # by live state (an autarch at rest draws differently than one
+        # hollowed out). Player looks only: an NPC examining doesn't draw on
+        # the player's screen.
         if self.character is self.game.player:
             fig = target.get_property("figure")
-            self.game.show_figure(fig(self.game) if callable(fig) else fig)
+            self.game.show_figure(fig(self.game) if callable(fig) else fig, force=True)
 
 
 class Throw(base.Action):

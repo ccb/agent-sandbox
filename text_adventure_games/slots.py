@@ -97,16 +97,28 @@ def roll_wound(character, roll=None, rng=None, game=None):
     row = WOUND_TABLE[max(1, min(20, roll)) - 1]
     messages, wounds = [], []
 
+    def _say(line):
+        """Every table outcome is harm and speaks in the damage voice (CCB):
+        red on the terminal, one consistent channel. Without a game (bare
+        mechanical use) the line rides the messages list as before."""
+        if game is not None:
+            game.parser.damage(line)
+        else:
+            messages.append(line)
+
     if row.name == "Damaged Item":
         pool = list(character.inventory.values())
         if pool:
             item = rng.choice(pool)
             character.remove_from_inventory(item)
-            messages.append(
-                f"The blow lands on your pack: the {item.name} is smashed beyond use."
+            _say(
+                f"{row.name} - The blow lands on your pack: the {item.name} "
+                "is smashed beyond use."
             )
         else:
-            messages.append("The blow lands on your pack, which is mercifully empty.")
+            _say(
+                f"{row.name} - The blow lands on your pack, which is mercifully empty."
+            )
         return wounds, messages, False
 
     if row.name == "FATALITY":
@@ -136,7 +148,7 @@ def roll_wound(character, roll=None, rng=None, game=None):
         return wounds, messages, fatal
 
     if row.name == "Just a Scratch":
-        messages.append(row.description)
+        _say(f"{row.name} - {row.description}")
         return wounds, messages, False
 
     fatal, dropped = character.add_wound(
@@ -150,7 +162,7 @@ def roll_wound(character, roll=None, rng=None, game=None):
     else:
         messages.append(f"{row.name}: {row.description}")
     for item in dropped:
-        messages.append(f"Your grip fails: the {item.name} spills from your pack.")
+        _say(f"Your grip fails: the {item.name} spills from your pack.")
     if fatal:
-        messages.append("Your body has no room left to be hurt in. You are dead.")
+        _say("Your body has no room left to be hurt in. You are dead.")
     return wounds, messages, fatal
