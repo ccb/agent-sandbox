@@ -290,6 +290,39 @@
   </section>
 
   <section>
+    <div class="slate"><h2>18 &mdash; THE SEAL ANSWERS THE JARS</h2><span class="kind">LITHO / THE SOLVE</span></div>
+    <div class="screen">
+      <svg id="seal" viewBox="0 0 640 400" aria-label="The seal answers the jars"></svg>
+    </div>
+    <p class="spec">The win-beat: five plinths, two standing empty and blinking; the missing
+       jars slide home from off-frame, attendance ticks up, and the crimson seal &mdash;
+       runes turning &mdash; steadies to white and parts into drifting motes over the open
+       arch. <span class="attach">Attaches: PUT JAR ON PLINTH, the last one.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>19 &mdash; THE OSSIFIED MYSTIC</h2><span class="kind">LITHO / THE SUMMIT</span></div>
+    <div class="screen">
+      <svg id="mystic" viewBox="0 0 640 400" aria-label="The ossified mystic"></svg>
+    </div>
+    <p class="spec">The lotus-postured stone man at the summit, pouch still in his clasped
+       hands, orange fronds running from his eyes and mouth down into the flue &mdash;
+       until the flame starts at his face and walks every frond down the hole. The network
+       dies at its root. <span class="attach">Attaches: BURN CORPSE.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>20 &mdash; THE GLASS CENTIPEDE</h2><span class="kind">LITHO / HAZARD</span></div>
+    <div class="screen">
+      <svg id="centipede" viewBox="0 0 640 360" aria-label="The glass centipede"></svg>
+    </div>
+    <p class="spec">Drawn only as the light catches it: between dashes, nothing but stray
+       prismatic glints along an empty corridor &mdash; then the whole outline flashes,
+       four feet of it, already somewhere else. The VISIBILITY gauge is honest about your
+       chances. <span class="attach">Attaches: the corridor encounter.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
     <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
     <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
@@ -364,6 +397,17 @@
     <p class="spec">The story beat: the spawn goes down into its own skirt of tendrils, and
        the falcon jar topples forward, bounces once, and settles upright &mdash; waiting to
        be claimed for the plinth. <span class="attach">Attaches: felling the spawn; the falcon jar award.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>21 &mdash; THE EPITAPH</h2><span class="kind">LITHO / OREGON TRAIL</span></div>
+    <div class="screen">
+      <svg id="epitaph" viewBox="0 0 640 400" aria-label="The epitaph"></svg>
+    </div>
+    <p class="spec">The Trail's most famous screen, for the death gate: a granite stone on
+       thin ground, the cause of death carved fresh each loop, the score owned up to, and
+       something leathery circling overhead. In-game the cause line is dynamic.
+       <span class="attach">Attaches: the death screen; pairs with 00.</span></p>
   </section>
 </div>
 
@@ -2889,6 +2933,301 @@
     });
   }
 
+
+
+  /* ---------------- 18: the seal answers the jars ---------------- */
+  {
+    const svg = document.getElementById("seal");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF THE CANOPIC JARS / THE SOLVE";
+    const JDOTS = stipple(svg, "dots-seal", PH, .9);
+    const CRIM = "#ff3b57", WHITE = "#eaf6ff";
+    const arch = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.8,
+      d: "M 246 316 L 246 170 Q 320 108 394 170 L 394 316" });
+    const PLINTHS = [128, 224, 320, 416, 512];
+    PLINTHS.forEach(cx => {
+      el(svg, "polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4,
+        points: `${cx - 28},344 ${cx + 28},344 ${cx + 22},316 ${cx - 22},316` });
+      el(svg, "line", { x1: cx - 24, y1: 316, x2: cx + 24, y2: 316,
+        stroke: PH, "stroke-width": 1.6 });
+    });
+    const jar = () => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const put = (name, attrs) => { const n = document.createElementNS(NS, name);
+        for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+      put("rect", { x: -14, y: -58, width: 28, height: 56, rx: 6,
+        fill: JDOTS, stroke: PH, "stroke-width": 1.5 });
+      put("path", { d: "M -14 -58 Q 0 -78 14 -58", fill: BG,
+        stroke: PH, "stroke-width": 1.5 });
+      put("line", { x1: -14, y1: -58, x2: 14, y2: -58, stroke: PH });
+      put("circle", { cx: -5, cy: -66, r: 1.4, fill: PH });
+      put("circle", { cx: 5, cy: -66, r: 1.4, fill: PH });
+      put("line", { x1: -7, y1: -30, x2: 7, y2: -30, stroke: PH_DIM });
+      return g;
+    };
+    [0, 2, 4].forEach(i => jar().setAttribute("transform",
+      `translate(${PLINTHS[i]} 316)`));
+    const m1 = jar(), m2 = jar();
+    const blinks = [1, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 18, y: 250,
+      width: 36, height: 64, fill: "none", stroke: PH_DIM,
+      "stroke-dasharray": "4 3" }));
+    // the seal itself
+    const sealRing = el(svg, "circle", { cx: 320, cy: 170, r: 54, fill: "none",
+      stroke: CRIM, "stroke-width": 2 });
+    const inner = el(svg, "circle", { cx: 320, cy: 170, r: 38, fill: "none",
+      stroke: CRIM, "stroke-width": 1.2 });
+    const runes = Array.from({ length: 8 }, () =>
+      el(svg, "line", { stroke: CRIM, "stroke-width": 1.6 }));
+    const motes = Array.from({ length: 14 }, () =>
+      el(svg, "circle", { r: 2, fill: WHITE, opacity: 0 }));
+    const att = label(svg, 24, 390, 10, PH_DIM);
+    const foot = label(svg, 380, 390, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    const q6 = x => Math.round(x / 6) * 6;
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      typeOn(hdr, "THE SEAL ANSWERS THE JARS", T, 4, 1.4);
+      const x1 = T < 60 ? -60 : q6(-60 + Math.min(1, (T - 60) / 40) * 284);
+      const x2 = T < 80 ? 700 : q6(700 - Math.min(1, (T - 80) / 44) * 284);
+      m1.setAttribute("transform", `translate(${x1} 316)`);
+      m2.setAttribute("transform", `translate(${x2} 316)`);
+      const in1 = x1 >= 218, in2 = x2 <= 422;
+      blinks[0].setAttribute("opacity", !in1 && t % 6 < 3 ? .8 : 0);
+      blinks[1].setAttribute("opacity", !in2 && t % 6 < 3 ? .8 : 0);
+      att.textContent = `ATTENDANCE: ${3 + in1 + in2} OF 5`;
+      // crimson while short-handed; white when answered; then motes
+      const col = T < 130 ? CRIM : T < 138 ? "#ff9aa8" : T < 146 ? "#ffd9de" : WHITE;
+      const gone = T >= 150;
+      [sealRing, inner].forEach(n => { n.setAttribute("stroke", col);
+        n.setAttribute("opacity", gone ? 0 : 1); });
+      const rot = T < 130 ? t * .12 : 15.6;
+      runes.forEach((n, i) => {
+        const a = i * Math.PI / 4 + rot;
+        n.setAttribute("x1", 320 + Math.cos(a) * 40); n.setAttribute("y1", 170 + Math.sin(a) * 40);
+        n.setAttribute("x2", 320 + Math.cos(a) * 52); n.setAttribute("y2", 170 + Math.sin(a) * 52);
+        n.setAttribute("stroke", col); n.setAttribute("opacity", gone ? 0 : 1);
+      });
+      sealRing.setAttribute("stroke-width", T < 130 ? 1.5 + (t % 6) / 4 : 2);
+      motes.forEach((n, i) => {
+        if (!gone) { n.setAttribute("opacity", 0); return; }
+        const a = i * Math.PI * 2 / 14, r = (T - 150) * 2.2;
+        n.setAttribute("cx", 320 + Math.cos(a) * r);
+        n.setAttribute("cy", 170 + Math.sin(a) * r - (T - 150) * .6);
+        n.setAttribute("opacity", Math.max(0, 1 - r / 110));
+      });
+      arch.setAttribute("stroke", gone ? PH_BRIGHT : PH_DIM);
+      typeOn(foot, "THE DOOR STOPS ARGUING.", T, 152, 1.6);
+    });
+  }
+
+  /* ---------------- 19: the ossified mystic ---------------- */
+  {
+    const svg = document.getElementById("mystic");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE SUMMIT / STONE / HOST";
+    const MDOTS = stipple(svg, "dots-mystic", PH, .85);
+    const CHAR2 = "#4a2a14", FLAME = "#ffd76a";
+    el(svg, "line", { x1: 40, y1: 322, x2: 600, y2: 322, stroke: PH, "stroke-width": 1.4 });
+    // the flue mouth
+    el(svg, "ellipse", { cx: 560, cy: 322, rx: 36, ry: 10, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });
+    [546, 560, 574].forEach(x =>
+      el(svg, "line", { x1: x, y1: 328, x2: x, y2: 350, stroke: PH_DIM }));
+    // the sitter: four thousand years of posture
+    el(svg, "path", { d: "M 180 292 Q 250 260 320 292 Q 250 322 180 292 Z",
+      fill: MDOTS, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "path", { d: "M 196 292 Q 214 276 232 288", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 268 288 Q 286 276 304 292", fill: "none", stroke: PH_DIM });
+    el(svg, "polygon", { points: "214,158 286,158 292,280 208,280",
+      fill: MDOTS, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "214,168 202,212 232,248" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "286,168 298,212 268,248" });
+    el(svg, "rect", { x: 238, y: 240, width: 24, height: 15, rx: 3,
+      fill: MDOTS, stroke: PH, "stroke-width": 1.3 });         // the pouch
+    el(svg, "circle", { cx: 250, cy: 247, r: 2, fill: FUNGUS });
+    el(svg, "circle", { cx: 250, cy: 134, r: 21, fill: MDOTS,
+      stroke: PH, "stroke-width": 1.6 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "224,196 246,204 240,224" });                    // a crack
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points: "276,166 268,184" });
+    const eyes = [[242, 129], [258, 129]].map(([x, y]) =>
+      el(svg, "ellipse", { cx: x, cy: y, rx: 3.4, ry: 2.2, fill: FUNGUS }));
+    el(svg, "path", { d: "M 243 148 Q 250 153 257 148", fill: "none",
+      stroke: PH, "stroke-width": 1.3 });
+    const FRONDS = [[242, 127, -1], [258, 127, 1], [246, 150, 0], [255, 149, 2]];
+    const HX = 556, HY = 316;
+    const fpts = (f, t) => {
+      const [x0, y0, ph] = FRONDS[f], pts = [];
+      for (let q = 0; q <= 9; q++) {
+        const u = q / 9;
+        pts.push([x0 + (HX - x0) * u,
+          y0 + (HY - y0) * u - Math.sin(u * Math.PI) * (52 + ph * 11)
+          + Math.sin(t * .3 + u * 5 + ph) * 4.5 * u]);
+      }
+      return pts;
+    };
+    const live = FRONDS.map(() => el(svg, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    const dead = FRONDS.map(() => el(svg, "polyline",
+      { fill: "none", stroke: CHAR2, "stroke-width": 2 }));
+    const tips = FRONDS.map(() => el(svg, "circle", { r: 3.2, fill: FLAME, opacity: 0 }));
+    const motes = Array.from({ length: 6 }, () =>
+      el(svg, "circle", { r: 1.6, fill: FUNGUS, opacity: 0 }));
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 240;
+      doWipe(T);
+      typeOn(hdr, "THE OSSIFIED MYSTIC", T, 4, 1.4);
+      const ub = Math.max(0, Math.min(1, (T - 120) / 70));    // the flame's progress
+      FRONDS.forEach((_, f) => {
+        const pts = fpts(f, t);
+        const cut = Math.min(9, Math.floor(ub * 9 + f * .4));
+        dead[f].setAttribute("points",
+          pts.slice(0, cut + 1).map(p2 => p2.join(",")).join(" "));
+        live[f].setAttribute("points",
+          pts.slice(cut).map(p2 => p2.join(",")).join(" "));
+        const burning = ub > 0 && ub < 1;
+        tips[f].setAttribute("opacity", burning && t % 3 ? .95 : 0);
+        tips[f].setAttribute("cx", pts[cut][0]); tips[f].setAttribute("cy", pts[cut][1]);
+      });
+      motes.forEach((n, j) => {
+        if (T >= 120) { n.setAttribute("opacity", 0); return; }
+        const pts = fpts(j % 4, t);
+        const q = Math.floor(((t * 2 + j * 33) % 90) / 10);
+        n.setAttribute("cx", pts[q][0]); n.setAttribute("cy", pts[q][1] - 4);
+        n.setAttribute("opacity", .8);
+      });
+      eyes.forEach(n => n.setAttribute("fill", ub > .06 ? CHAR2 : FUNGUS));
+      foot.textContent = "";
+      if (T < 120) typeOn(foot, "FOUR THOUSAND YEARS OF SITTING STILL.", T, 30, 1.6);
+      else typeOn(foot, "THE NETWORK DIES AT ITS ROOT.", T, 132, 1.6);
+    });
+  }
+
+  /* ---------------- 20: the glass centipede ---------------- */
+  {
+    const svg = document.getElementById("centipede");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HAZARD / SILICA / QUICK";
+    el(svg, "line", { x1: 0, y1: 316, x2: 640, y2: 316, stroke: PH, "stroke-width": 1.4 });
+    for (let x = 30; x < 640; x += 74)                        // rubble on the floor
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+        points: `${x},316 ${x + 6},308 ${x + 13},316` });
+    const GLASS = "#cfefff";
+    const wave = x => 286 + Math.sin(x * .018) * 16;
+    const DASH = [[28, 36], [64, 72], [104, 112], [144, 152]];
+    const adv = T => DASH.reduce((a, [s2, e2]) =>
+      a + Math.max(0, Math.min(T, e2) - s2) * 20, 0);
+    const segs = Array.from({ length: 16 }, () => el(svg, "ellipse",
+      { rx: 8, ry: 5, fill: "none", stroke: GLASS, "stroke-width": 1.3, opacity: 0 }));
+    const legs = Array.from({ length: 32 }, () => el(svg, "line",
+      { stroke: "#9fd9f2", "stroke-width": 1, opacity: 0 }));
+    const feelers = [0, 1].map(() => el(svg, "line",
+      { stroke: GLASS, "stroke-width": 1.2, opacity: 0 }));
+    const glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS].map(c =>
+      el(svg, "circle", { r: 1.5, fill: c, opacity: 0 }));
+    label(svg, 24, 350, 10, PH_DIM).textContent = "VISIBILITY";
+    const cells = Array.from({ length: 6 }, (_, i) =>
+      el(svg, "rect", { x: 110 + i * 16, y: 340, width: 12, height: 11,
+        fill: GLASS, "fill-opacity": .08 }));
+    const foot = label(svg, 630, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 176;
+      doWipe(T);
+      typeOn(hdr, "THE GLASS CENTIPEDE", T, 4, 1.4);
+      const hx = -40 + adv(T);
+      const seen = DASH.some(([s2, e2]) => T >= s2 && T < e2 + 3);
+      segs.forEach((n, i) => {
+        const x = hx - i * 13, y = wave(x);
+        n.setAttribute("cx", x); n.setAttribute("cy", y);
+        n.setAttribute("opacity", seen && x > -20 && x < 660 ? .9 - i * .02 : 0);
+        [0, 1].forEach(k => {
+          const L2 = legs[i * 2 + k];
+          L2.setAttribute("x1", x - 3 + k * 6); L2.setAttribute("y1", y + 4);
+          L2.setAttribute("x2", x - 6 + k * 12); L2.setAttribute("y2", y + 13);
+          L2.setAttribute("opacity", seen && x > -20 && x < 660 ? .7 : 0);
+        });
+      });
+      feelers.forEach((n, k) => {
+        n.setAttribute("x1", hx + 6); n.setAttribute("y1", wave(hx) - 2);
+        n.setAttribute("x2", hx + 20); n.setAttribute("y2", wave(hx) - 10 + k * 12);
+        n.setAttribute("opacity", seen ? .9 : 0);
+      });
+      glints.forEach((n, j) => {                              // stray refraction, between
+        const gi = (Math.floor(t / 2) * 7 + j * 5) % 16;
+        const x = hx - gi * 13;
+        n.setAttribute("cx", x + ((t + j) % 3) - 1); n.setAttribute("cy", wave(x) + ((t * j) % 5) - 2);
+        n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 1 && x > 0 && x < 640 ? .9 : 0);
+      });
+      const on = seen ? 6 : (t % 7 === 0 ? 1 : 0);
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      typeOn(foot, "FOUR FEET OF GLASS. FASTER THAN THE EYE WANTS TO ALLOW.", T, 20, 1.8);
+    });
+  }
+
+  /* ---------------- 21: the epitaph ---------------- */
+  {
+    const svg = document.getElementById("epitaph");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "OREGON TRAIL / GRANITE / YOURS";
+    const EDOTS = stipple(svg, "dots-epitaph", PH, .8);
+    el(svg, "line", { x1: 60, y1: 330, x2: 580, y2: 330, stroke: PH, "stroke-width": 1.4 });
+    [[150, 328], [446, 326], [488, 329]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 3, fill: "none", stroke: PH_DIM }));
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "430,330 426,318 430,322 432,314 434,322 438,318 436,330" });
+    el(svg, "path", { d: "M 240 330 L 240 160 Q 320 96 400 160 L 400 330 Z",
+      fill: EDOTS, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "path", { d: "M 252 330 L 252 166 Q 320 110 388 166 L 388 330",
+      fill: "none", stroke: PH_DIM });
+    const line = (y, size, color) => {
+      const n = label(svg, 320, y, size, color);
+      n.setAttribute("text-anchor", "middle"); return n;
+    };
+    const L1 = line(196, 10, PH), L2 = line(222, 12, PH_BRIGHT);
+    const L3 = line(250, 8, PH), L4 = line(276, 8, PH_DIM);
+    const score = label(svg, 320, 356, 10, PH); score.setAttribute("text-anchor", "middle");
+    const press = label(svg, 320, 382, 10, PH_DIM); press.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 624, 356, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const bat = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.3 });
+    const CAUSES = ["THE SHAFT BECAME A FLUE", "TAKEN BY THE PACK",
+      "THE SPORES FORMED AN OPINION", "ARGUED WITH THE FLOOR. LOST."];
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "THE EPITAPH", T, 4, 1.4);
+      L1.textContent = T > 20 ? "HERE LIES" : "";
+      L2.textContent = T > 40 ? "A SCAVENGER" : "";
+      L3.textContent = T > 60 ? CAUSES[Math.floor(t / 200) % 4] : "";
+      L4.textContent = T > 80 ? "4,000 YRS + 6 DAYS" : "";
+      typeOn(score, "SCORE: 45 OF 145 -- HINTS TAKEN: 3", T, 96, 1.8);
+      press.textContent = T > 130 && t % 8 < 4 ? "PRESS ENTER TO TRY AGAIN" : "";
+      typeOn(foot, "THE TOMB KEEPS YOU.", T, 140, 1.6);
+      const a = t * .05;                                      // something leathery
+      const bx = 320 + Math.cos(a) * 150, by = 84 + Math.sin(a * 2) * 14;
+      const up = t % 4 < 2 ? -7 : 5;
+      bat.setAttribute("d", `M ${bx - 11} ${by} Q ${bx - 5} ${by + up} ${bx} ${by} ` +
+        `Q ${bx + 5} ${by + up} ${bx + 11} ${by}`);
+    });
+  }
 
 })();
 </script>
