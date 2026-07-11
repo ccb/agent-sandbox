@@ -70,6 +70,17 @@
   </header>
 
   <section>
+    <div class="slate"><h2>00 &mdash; THE ROAD TO GNOMON</h2><span class="kind">LITHO / OREGON TRAIL</span></div>
+    <div class="screen">
+      <svg id="road" viewBox="0 0 640 400" aria-label="The road to Gnomon"></svg>
+    </div>
+    <p class="spec">The opening, played as the Trail: the wind-wagon creaking along the dune
+       line, wheels turning in steps, the party roster keeping its ledger &mdash; until
+       moonset updates every line at once and the wagon heels over into the tableau the
+       game begins on. <span class="attach">Attaches: the title screen; NEW EXPEDITION.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
     <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
     <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
@@ -118,13 +129,14 @@
   </section>
 
   <section>
-    <div class="slate"><h2>05-C &mdash; BATS: ONE BAT, PORTRAIT</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="slate"><h2>05-C &mdash; BATS: THE RESIDENTS</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="bats-c" viewBox="0 0 640 360" aria-label="A single bat, hanging"></svg>
     </div>
     <p class="spec">One of the eleven hundred, hanging folded among its neighbors: wing
        membranes with the finger bones showing through, breathing slow &mdash; and as the
-       LIGHT gauge fills, one eye opens.
+       LIGHT gauge fills its last four beats, every pair of red eyes opens, one
+       resident per beat.
        <span class="attach">Companion to 05 (the individual).</span></p>
   </section>
 
@@ -221,6 +233,17 @@
        aperture, a grin of carved teeth (one missing) &mdash; and the sockets FULL of the
        orange, pulsing, with sprigs of it testing the air. The ropes still work the bust.
        <span class="attach">Alternate for 13 (the ending nobody wanted).</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>13-D &mdash; THE HORROR, ABLAZE</h2><span class="kind">LITHO / THE FIGHT</span></div>
+    <div class="screen">
+      <svg id="autarch-d" viewBox="0 0 640 420" aria-label="The Horror, ablaze"></svg>
+    </div>
+    <p class="spec">13-C on fire: flame working the whole bust, embers rising, the sockets
+       burning bright &mdash; and the ropes charring from orange to burnt umber as the
+       VIGOR gauge drains. Ablaze, it cannot mend.
+       <span class="attach">Attaches: BURN HORROR; the boss fight.</span></p>
   </section>
 
   <section>
@@ -2278,7 +2301,28 @@
     const earA = inB("polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
     const earB = inB("polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
     inB("polyline", { fill: "none", stroke: PH_DIM, points: "306,244 312,248 318,244" });
-    const eye = el(svg, "circle", { cx: 306, cy: 234, r: 2.4, fill: PH_BRIGHT, opacity: 0 });
+    // every resident gets two glowing red eyes; they open on the last beats
+    const RED = "#ff5252";
+    const pair = (x1, y1, x2, y2, r) => {
+      const g = document.createElementNS(NS, "g");
+      g.setAttribute("opacity", 0); svg.appendChild(g);
+      [[x1, y1], [x2, y2]].forEach(([x, y]) => {
+        const halo = document.createElementNS(NS, "circle");
+        halo.setAttribute("cx", x); halo.setAttribute("cy", y);
+        halo.setAttribute("r", r * 2.2); halo.setAttribute("fill", RED);
+        halo.setAttribute("fill-opacity", .3); g.appendChild(halo);
+        const core = document.createElementNS(NS, "circle");
+        core.setAttribute("cx", x); core.setAttribute("cy", y);
+        core.setAttribute("r", r); core.setAttribute("fill", RED); g.appendChild(core);
+      });
+      return g;
+    };
+    const eyes = [                                            // left to right, star last
+      pair(244 - 3.2, 70 + 121 * .62, 244 + 3.2, 70 + 121 * .62, 1.6),
+      pair(398 - 3.6, 70 + 121 * .7, 398 + 3.6, 70 + 121 * .7, 1.8),
+      pair(438 - 2.6, 70 + 121 * .5, 438 + 2.6, 70 + 121 * .5, 1.3),
+      pair(306, 234, 318, 234, 2.4),
+    ];
     label(svg, 24, 334, 10, PH_DIM).textContent = "LIGHT";
     const cells = Array.from({ length: 10 }, (_, i) =>
       el(svg, "rect", { x: 84 + i * 16, y: 324, width: 12, height: 11,
@@ -2288,7 +2332,7 @@
     clock(t => {
       const T = t % 160;
       doWipe(T);
-      typeOn(hdr, "RESIDENT, HALL OF YOUTH (ONE OF MANY)", T, 4, 1.4);
+      typeOn(hdr, "RESIDENTS, HALL OF YOUTH (THOUSANDS)", T, 4, 1.4);
       const br = [0, 1, 2, 2, 1, 0][Math.floor(t / 4) % 6];   // the breath
       body.setAttribute("transform", `translate(0 ${br * .8})`);
       const tw = T > 118 ? 4 : 0;                             // the ears hear it
@@ -2296,7 +2340,8 @@
       earB.setAttribute("points", `318,248 ${326 + tw},274 322,254`);
       const on = Math.min(10, Math.floor(T / 12));
       cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
-      eye.setAttribute("opacity", T > 118 ? 1 : 0);           // one eye opens
+      // the last four beats of the gauge: eyes open, pair by pair
+      eyes.forEach((g, i) => g.setAttribute("opacity", on >= 7 + i ? 1 : 0));
       foot.textContent = T > 118 ? "OPINION OF LIGHT: FORMING." : "";
     });
   }
@@ -2439,6 +2484,245 @@
       thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
       thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
       typeOn(foot, "HIS SENTENCE CONTINUES UNDERGROUND.", T, 168, 1.4);
+    });
+  }
+
+
+  /* ---------------- 00: the road to Gnomon ---------------- */
+  {
+    const svg = document.getElementById("road");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const pace = label(svg, 624, 24, 10, PH_DIM); pace.setAttribute("text-anchor", "end");
+    pace.textContent = "PACE: DESPERATE / RATIONS: SPOKEN FOR / WEATHER: CACKLEMAW";
+    // the dunes
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "0,236 90,228 180,240 300,226 420,238 540,228 640,236" });
+    el(svg, "line", { x1: 0, y1: 268, x2: 640, y2: 268, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 0, y1: 269, x2: 640, y2: 269, stroke: FUNGUS, opacity: .4 });
+    // THE WAGON, whole: hoops, bed, wheels, yoke, zoxen, driver
+    const gW = document.createElementNS(NS, "g"); svg.appendChild(gW);
+    const W = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); gW.appendChild(n); return n; };
+    W("line", { x1: 96, y1: 240, x2: 214, y2: 240, stroke: PH, "stroke-width": 2 }); // the bed
+    for (let i = 0; i < 4; i++)                                          // the ribs
+      W("path", { d: `M ${106 + i * 26} 240 Q ${119 + i * 26} 198 ${132 + i * 26} 240`,
+        fill: "none", stroke: PH, "stroke-width": 1.4 });
+    W("polyline", { fill: "none", stroke: PH_DIM,
+      points: "104,214 128,206 158,204 188,206 210,214" });              // the canvas line
+    const wheels = [[122, 254], [196, 254]].map(([x, y]) => {
+      W("circle", { cx: x, cy: y, r: 14, fill: "none", stroke: PH, "stroke-width": 1.6 });
+      return { x, y, spokes: [0, 1, 2].map(() =>
+        W("line", { stroke: PH_DIM, "stroke-width": 1.2 })) };
+    });
+    W("line", { x1: 214, y1: 244, x2: 252, y2: 250, stroke: PH, "stroke-width": 1.4 }); // yoke
+    // the zoxen, plodding
+    const zox = [[258, 238], [292, 240]].map(([x, y]) => ({
+      x, y,
+      body: W("ellipse", { cx: x + 12, cy: y, rx: 16, ry: 9, fill: "none",
+        stroke: PH, "stroke-width": 1.5 }),
+      head: W("polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        points: `${x + 26},${y - 4} ${x + 36},${y} ${x + 34},${y + 6}` }),
+      legs: W("polyline", { fill: "none", stroke: PH, "stroke-width": 1.4 }),
+    }));
+    const driver = W("g", {});
+    const dv = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); driver.appendChild(n); return n; };
+    dv("circle", { cx: 208, cy: 222, r: 3.4, fill: PH_BRIGHT });
+    dv("polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.3,
+      points: "208,226 208,236 202,240" });
+    // the roster
+    const R = [
+      { y: 80,  a: "MERCHANT ......... WITH THE WAGON", b: "MERCHANT ......... LOST (MOONSET)" },
+      { y: 102, a: "ZOXEN x2 ......... PULLING",        b: "ZOXEN x2 ......... LOST" },
+      { y: 124, a: "TEAMSTER ......... DRIVING",        b: "TEAMSTER ......... FLED SOUTH" },
+      { y: 146, a: "YOU .............. NOT YET HERE",   b: "YOU .............. INCOMING" },
+    ].map(r => ({ ...r, n: label(svg, 24, r.y, 10, PH) }));
+    const flee = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT, opacity: 0 });
+    const foot = label(svg, 320, 384, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 260;
+      doWipe(T);
+      typeOn(hdr, "THE ROAD TO GNOMON", T, 4, 1.4);
+      const fallen = T >= 130;
+      const wx = fallen ? 200 : Math.floor(T * 1.6);
+      gW.setAttribute("transform",
+        `translate(${wx} 0)` + (fallen ? " rotate(-11 200 254)" : ""));
+      wheels.forEach(w => w.spokes.forEach((sp, i) => {
+        const a = (fallen ? 0 : t * .5) + i * Math.PI / 3;
+        sp.setAttribute("x1", w.x - Math.cos(a) * 12); sp.setAttribute("y1", w.y - Math.sin(a) * 12);
+        sp.setAttribute("x2", w.x + Math.cos(a) * 12); sp.setAttribute("y2", w.y + Math.sin(a) * 12);
+      }));
+      zox.forEach((z, i) => {
+        if (!fallen) {
+          const st = ((t + i * 2) % 4 < 2) ? 4 : -4;
+          z.legs.setAttribute("points",
+            `${z.x + 2 + st},268 ${z.x + 4},248 ${z.x + 10},248 ${z.x + 10 - st},268 ` +
+            `${z.x + 18 + st},268 ${z.x + 18},248 ${z.x + 24},248 ${z.x + 24 - st},268`);
+          z.body.setAttribute("transform", ""); z.head.setAttribute("transform", "");
+          z.head.setAttribute("opacity", 1);
+        } else {                                    // arranged by the wind, as if asleep
+          z.legs.setAttribute("points",
+            `${z.x - 2},262 ${z.x + 8},264 ${z.x + 18},262 ${z.x + 28},264`);
+          const down = `translate(0 14) rotate(8 ${z.x + 12} ${z.y})`;
+          z.body.setAttribute("transform", down);
+          z.head.setAttribute("transform", down);
+          z.head.setAttribute("opacity", .4);
+        }
+      });
+      driver.setAttribute("opacity", fallen ? 0 : 1);
+      if (fallen && T < 170) {                      // the teamster, fleeing south
+        flee.setAttribute("opacity", 1);
+        flee.setAttribute("cx", 420 + (T - 130) * 3);
+        flee.setAttribute("cy", 280 + (T - 130) * 2.4);
+      } else flee.setAttribute("opacity", 0);
+      R.forEach((r, i) => {
+        if (!fallen) typeOn(r.n, r.a, T, 16 + i * 14, 1.6);
+        else { r.n.textContent = r.b; r.n.setAttribute("fill", i === 3 ? PH_BRIGHT : PH_DIM); }
+      });
+      typeOn(foot, "THE ROAD TO GNOMON IS WALKED ONLY BY THE DESPERATE. PROVEN AGAIN.",
+        T, 176, 1.7);
+    });
+  }
+
+  /* ---------------- 13-D: the Horror, ablaze ---------------- */
+  {
+    const svg = document.getElementById("autarch-d");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / BONE / BURNING";
+    const ADOTS = stipple(svg, "dots-autarchd", PH, .9);
+    const ODOTS = stipple(svg, "dots-oranged", FUNGUS, 1.2);
+    const YELLOW = "#ffd76a", CHAR = [74, 42, 20];             // burnt umber, as rgb
+    const ORANGE = [255, 154, 60];
+    const mix = (a, b, k) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",")})`;
+    const CX = 320, CY = 180;
+    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      el(svg, "polygon", { fill: PH, "fill-opacity": .35, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        opacity: .55, points: pts.join(" ") });
+    });
+    el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,214 370,236 364,258 276,258 270,236 260,214 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    el(svg, "ellipse", { cx: 296, cy: 188, rx: 14, ry: 10, fill: ODOTS,
+      stroke: PH, "stroke-width": 1.4 });
+    el(svg, "ellipse", { cx: 344, cy: 188, rx: 14, ry: 10, fill: ODOTS,
+      stroke: PH, "stroke-width": 1.4 });
+    const glowL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 6, ry: 4,
+      fill: YELLOW, "fill-opacity": .6 });
+    const glowR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 6, ry: 4,
+      fill: YELLOW, "fill-opacity": .6 });
+    el(svg, "path", { d: "M 320 204 L 312 230 Q 320 238 328 230 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 240, x2: 346, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 252, x2: 346, y2: 252, stroke: PH, "stroke-width": 1.4 });
+    for (let x = 294; x <= 346; x += 6.5)
+      el(svg, "line", { x1: x, y1: 240, x2: x, y2: 252, stroke: PH });
+    el(svg, "rect", { x: 320.5, y: 240.5, width: 5.5, height: 11, fill: BG });
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
+        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    // THE ROPES (charring) and THE FIRE (working the bust)
+    const ROOTS = [
+      [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
+      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
+      [288, 338, 2.2], [352, 338, .9],
+    ];
+    const tendrils = ROOTS.map(() =>
+      el(svg, "polygon", { "fill-opacity": .3, "stroke-width": 1.4 }));
+    const FROOTS = [[250, 262], [300, 260], [352, 262], [396, 258], [270, 130],
+      [366, 132], [230, 300], [412, 298], [320, 118]];
+    const flames = FROOTS.map(() =>
+      el(svg, "polygon", { stroke: "none" }));
+    const embers = Array.from({ length: 8 }, (_, i) =>
+      ({ x: 240 + i * 22, ph: i * 31, q: el(svg, "circle", { r: 1.6, fill: YELLOW }) }));
+    label(svg, 24, 410, 10, PH_DIM).textContent = "VIGOR";
+    const cells = Array.from({ length: 5 }, (_, i) =>
+      el(svg, "rect", { x: 76 + i * 18, y: 400, width: 14, height: 12,
+        fill: FUNGUS, "fill-opacity": .8 }));
+    const foot = label(svg, 400, 410, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "THE HORROR, ABLAZE", T, 4, 1.4);
+      const burn = Math.max(0, Math.min(1, (T - 20) / 140));  // the charring
+      tendrils.forEach((n, i) => {
+        const k = Math.max(0, Math.min(1, burn * 1.4 - i * .06));
+        const col = mix(ORANGE, CHAR, k);
+        n.setAttribute("fill", col); n.setAttribute("stroke", col);
+        const [rx, ry, a0] = ROOTS[i];
+        const calm = 1 - k * .75;                             // burnt ropes slow
+        const w = Math.sin(t * .4 * calm + i * 1.9);
+        const c = [[rx, ry]];
+        for (let q = 1; q <= 4; q++) {
+          const a = a0 + Math.sin(t * .25 * calm + q * 1.2 + i) * .3 * calm
+            + w * .04 * q + k * .25 * (ry > 230 ? 1 : .3);    // and they sag
+          const r = q * (13 + ((t + i * 5) % 12) * calm);
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
+        }
+        const W2 = [6, 4.8, 3.4, 1.9, .7];
+        const L = [], R2 = [];
+        for (let q = 0; q < c.length; q++) {
+          const [x0, y0] = c[Math.max(0, q - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, q + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          L.push(`${c[q][0] - dy / len * W2[q]},${c[q][1] + dx / len * W2[q]}`);
+          R2.push(`${c[q][0] + dy / len * W2[q]},${c[q][1] - dx / len * W2[q]}`);
+        }
+        n.setAttribute("points", L.concat(R2.reverse()).join(" "));
+      });
+      flames.forEach((f, i) => {                              // the fire, working
+        const [fx, fy] = FROOTS[i];
+        const h = 16 + ((t * 7 + i * 13) % 17) + burn * 10;
+        const wob = Math.sin(t * .9 + i * 2.2) * 5;
+        f.setAttribute("points",
+          `${fx - 7},${fy} ${fx + wob * .4},${fy - h * .55} ${fx + wob},${fy - h} ` +
+          `${fx + 4 + wob * .3},${fy - h * .5} ${fx + 8},${fy}`);
+        f.setAttribute("fill", (t + i) % 3 ? FUNGUS : YELLOW);
+        f.setAttribute("fill-opacity", .5 + ((t + i) % 2) * .3);
+      });
+      embers.forEach(e2 => {
+        const k = (t * 3 + e2.ph) % 160;
+        e2.q.setAttribute("cx", e2.x + Math.sin((t + e2.ph) * .3) * 8);
+        e2.q.setAttribute("cy", 260 - k);
+        e2.q.setAttribute("opacity", k > 140 ? 0 : .9);
+      });
+      glowL.setAttribute("fill-opacity", .4 + ((t % 4) / 4) * .4);
+      glowR.setAttribute("fill-opacity", .4 + (((t + 2) % 4) / 4) * .4);
+      const vig = 5 - Math.min(5, Math.floor(burn * 5.5));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < vig ? .8 : .08));
+      foot.textContent = vig === 0 ? "IT DOES NOT CLOSE AGAIN." : "";
+      if (vig > 0) typeOn(foot, "ABLAZE, IT CANNOT MEND. KEEP CUTTING.", T, 40, 1.6);
     });
   }
 
