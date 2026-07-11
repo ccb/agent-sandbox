@@ -39,6 +39,7 @@ var _detail := {}                # name -> persona meta (schedule lives here)
 var _step := 0                   # current playback step (show_up_to)
 var _place_color := {}           # place name -> Color, from schedule order
 var _planned := {}               # name -> Array of planned segments
+var _planned_axis := -1          # axis the _planned cache was built at (invalidate when it grows)
 var _slots := {}                 # name -> cached actual_slots
 var _slots_at := -1              # _frames.size() the cache was built at
 var _panel: PanelContainer
@@ -108,6 +109,7 @@ func set_replay(frames: Array, names: Array, persona_detail: Dictionary) -> void
 	# shared by planned segments and actual slots so pairs read instantly.
 	_place_color.clear()
 	_planned.clear()
+	_planned_axis = -1
 	for name in _names:
 		for stop in _schedule_of(String(name)):
 			var place := String((stop as Dictionary).get("place", ""))
@@ -217,6 +219,12 @@ func _draw_canvas() -> void:
 
 
 func _planned_of(name: String, axis: int) -> Array:
+	# The axis grows in live mode (axis_len tracks the frame count), and the
+	# segments' start/len are laid out against it — a cache built for an older,
+	# smaller axis would draw shrunken ribbons, so re-lay-out on any change.
+	if axis != _planned_axis:
+		_planned.clear()
+		_planned_axis = axis
 	if not _planned.has(name):
 		_planned[name] = DayPlanModel.planned_segments(_schedule_of(name), axis)
 	return _planned[name]
