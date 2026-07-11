@@ -353,3 +353,16 @@ body.size-large, body.size-large input { font-size: 18px; }
     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
 }
 body.no-crt #output .figure::after { display: none; }
+
+/* the boot screen is a CRT too: it sits above #scanlines (DOM order), so it
+   carries its own scanline + vignette dressing, riding the same master switch */
+#bootscreen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
+}
+body.no-crt #bootscreen::after { display: none; }

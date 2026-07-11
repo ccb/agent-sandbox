@@ -3751,9 +3751,9 @@ def build_game(seed=None):
                     g.show_figure("guts-a" if spawn is spawn_guts else "spawn-a")
                     g.parser.ok(warn_text)
                 else:
-                    attack(g)
-                    # the fight close-up lands with the first blow (dedup'd)
+                    # the close-up plays FIRST, then the blow lands (CCB)
                     g.show_figure("guts-b" if spawn is spawn_guts else "spawn-b")
+                    attack(g)
             # No decay while you share its room: it heard you once, and it is
             # still listening. Only distance (handled above) lets it settle.
 
@@ -3872,14 +3872,12 @@ def build_game(seed=None):
         if not _floor_light(g):
             youth.set_property("_mob", 0)
             return
-        (
+        if g.player.location in (youth, exterior, memory, hounds):
+            g.show_figure("bats-c")  # the card plays first, then the swarm
             g.parser.ok(
                 "In the Hall of Youth, the swarm pours down onto the light where "
                 "it lies, a screaming wheel around a still point."
             )
-            if g.player.location in (youth, exterior, memory, hounds)
-            else None
-        )
         youth.set_property("_mob", (youth.get_property("_mob") or 0) + 1)
         # Anything on the floor beside the light takes the swarm.
         for sp in (spawn_guts, spawn_brain):
@@ -4070,6 +4068,7 @@ def build_game(seed=None):
             if step is not None:
                 g.relocate(jackal_pack, step)
                 if step is here:
+                    g.show_figure("jackal")  # the card plays first
                     g.parser.ok(
                         "The pack comes through the doorway at a lope, "
                         "unhurried, sure of you."
@@ -4857,6 +4856,7 @@ def build_game(seed=None):
             centipede.set_property("sprung", True)
             if centipede.location is not chimney:
                 g.relocate(centipede, chimney)
+            g.show_figure("centipede")  # the card plays first
             g.parser.ok(
                 "The growth beside you bends wrong -- and four feet of glass "
                 "uncoils out of it, faster than the eye wants to allow."
