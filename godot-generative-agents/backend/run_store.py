@@ -26,11 +26,15 @@ from __future__ import annotations
 import json
 import secrets
 import sqlite3
+import struct
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from backend.cognition import memories_for_frame
 from backend.contract import AGENT_FRAME_FIELDS
+from backend.sim_config import RetrievalConfig
+from text_adventure_games.memory import AgentMemory, MemoryRecord
 
 # godot-generative-agents/runs/ -- the default home for run artifacts
 # (git-ignored), resolved relative to this package, never the CWD.
@@ -196,6 +200,168 @@ class RunStore:
         if not path.exists():
             raise KeyError(f"unknown run id: {run_id}")
         return path
+
+    # --- memories ---------------------------------------------------------------
+
+    def record_memories(self, run_id: str, agent: str, records: list[dict]) -> None:
+        """Persist engine ``MemoryRecord.to_primitive()`` dicts for *agent*.
+
+        Idempotent per record id (INSERT OR IGNORE), so a retried tick or an
+        overlapping sync writes each row exactly once. Scoring/projection
+        fields become columns; the rest of the record rides ``extra`` so it
+        rehydrates losslessly; an embedding (when present) packs to
+        little-endian float32s.
+        """
+        rows = []
+        for rec in records:
+            emb = rec.get("embedding")
+            packed = struct.pack("<%df" % len(emb), *emb) if emb else None
+            extra = {
+                k: v
+                for k, v in rec.items()
+                if k
+                not in ("id", "kind", "importance", "created_turn", "text", "embedding")
+            }
+            rows.append(
+                (
+                    run_id,
+                    agent,
+                    int(rec["id"]),
+                    str(rec["kind"]),
+                    float(rec["importance"]),
+                    int(rec["created_turn"]),
+                    rec["text"],
+                    packed,
+                    json.dumps(extra, ensure_ascii=False),
+                )
+            )
+        with self._db() as con:
+            con.executemany(
+                "INSERT OR IGNORE INTO memories"
+                " (run_id, agent, record_id, kind, importance, created_turn,"
+                "  text, embedding, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+
+    def last_memory_id(self, run_id: str, agent: str) -> int:
+        """Highest persisted engine record id for *agent*, or -1 when none --
+        the incremental-sync cursor."""
+        with self._db() as con:
+            row = con.execute(
+                "SELECT MAX(record_id) AS m FROM memories"
+                " WHERE run_id = ? AND agent = ?",
+                (run_id, agent),
+            ).fetchone()
+        return -1 if row["m"] is None else int(row["m"])
+
+    def memories_for(
+        self,
+        run_id: str,
+        agent: str,
+        *,
+        kind: str | None = None,
+        since_turn: int | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """The lean wire projection (#305 MemoryRecord fields), record order.
+
+        What the #307 exporter writes as ``memory_streams`` and the future
+        #306 endpoints serve; matches ``cognition.memory_stream_for_persona``
+        exactly (importance rounded to one decimal).
+        """
+        sql = (
+            "SELECT kind, importance, text, created_turn FROM memories"
+            " WHERE run_id = ? AND agent = ?"
+        )
+        vals: list = [run_id, agent]
+        if kind is not None:
+            sql += " AND kind = ?"
+            vals.append(kind)
+        if since_turn is not None:
+            sql += " AND created_turn >= ?"
+            vals.append(int(since_turn))
+        sql += " ORDER BY record_id"
+        if limit is not None:
+            sql += " LIMIT ?"
+            vals.append(int(limit))
+        with self._db() as con:
+            rows = con.execute(sql, vals).fetchall()
+        return [
+            {
+                "kind": r["kind"],
+                "importance": round(float(r["importance"]), 1),
+                "text": r["text"],
+                "created_turn": int(r["created_turn"]),
+            }
+            for r in rows
+        ]
+
+    def query_memories(
+        self,
+        run_id: str,
+        agent: str,
+        query: str,
+        turn: int,
+        *,
+        retrieval: RetrievalConfig | None = None,
+        embedding_client=None,
+    ) -> list[dict]:
+        """Top-k memories for *query* at *turn*, scored exactly like the sim.
+
+        Rehydrates the stored rows into engine ``MemoryRecord``s and delegates
+        to ``AgentMemory.retrieve`` -- the recency x importance x relevance
+        scoring stays defined in one place. ``touch=False``: a store query is
+        read-only and never bumps recency. Keyword relevance by default; pass
+        an ``embedding_client`` for semantic scoring over stored embeddings.
+        Returns lean projections of the winners.
+        """
+        rc = retrieval if retrieval is not None else RetrievalConfig()
+        memory = AgentMemory(owner=agent, embedding_client=embedding_client)
+        memory.records = [
+            MemoryRecord.from_primitive(rec)
+            for rec in self._full_records(run_id, agent)
+        ]
+        top = memory.retrieve(
+            query,
+            turn,
+            max_records=rc.max_records,
+            token_budget=rc.token_budget,
+            decay=rc.recency_decay,
+            alpha_recency=rc.alpha_recency,
+            alpha_importance=rc.alpha_importance,
+            alpha_relevance=rc.alpha_relevance,
+            touch=False,
+        )
+        return memories_for_frame(top)
+
+    def _full_records(self, run_id: str, agent: str) -> list[dict]:
+        # The lossless to_primitive() dicts back out of columns + extra + blob.
+        with self._db() as con:
+            rows = con.execute(
+                "SELECT * FROM memories WHERE run_id = ? AND agent = ?"
+                " ORDER BY record_id",
+                (run_id, agent),
+            ).fetchall()
+        records = []
+        for row in rows:
+            rec = json.loads(row["extra"])
+            emb = row["embedding"]
+            rec.update(
+                {
+                    "id": int(row["record_id"]),
+                    "kind": row["kind"],
+                    "importance": float(row["importance"]),
+                    "created_turn": int(row["created_turn"]),
+                    "text": row["text"],
+                    "embedding": (
+                        list(struct.unpack("<%df" % (len(emb) // 4), emb))
+                        if emb is not None
+                        else None
+                    ),
+                }
+            )
+            records.append(rec)
+        return records
 
 
 def _validate_frame(frame: dict) -> None:
