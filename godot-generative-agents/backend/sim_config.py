@@ -103,6 +103,12 @@ class CognitionConfig:
     conversation_max_exchanges: int = (
         6  # max back-and-forth lines per conversation (CONVERSATION_MAX_EXCHANGES)
     )
+    # Cognition tools (issue #512; the sim-level mirror of the engine's
+    # AgentConfig.cognition_tools, #358): when True, a real supplied brain may
+    # consult recall / query_knowledge / read_plan before picking its action
+    # (cognition.decide_with_action_tools) and before each dialogue line (the
+    # engine's converse path). Default False keeps every run byte-identical.
+    cognition_tools: bool = False
 
 
 @dataclass

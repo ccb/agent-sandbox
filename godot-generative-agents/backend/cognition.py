@@ -24,9 +24,11 @@ import json
 from dataclasses import replace
 
 from text_adventure_games import conversation as convo
-from text_adventure_games.llm_client import MockReActClient
+from text_adventure_games.llm_client import MockReActClient, run_tool_loop
 from text_adventure_games.npc import (
+    COGNITION_BUDGET,
     LLMAgent,
+    cognition_toolset,
     command_from_tool_call,
     format_observation_with_memories,
     maybe_reflect,
@@ -242,6 +244,7 @@ def attach_agents(
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     extra_action_names: list[str] | None = None,
+    cognition_tools: bool = False,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -306,7 +309,15 @@ def attach_agents(
     *real* brain (a closed tool-calling enum) can choose those verbs even for a
     persona whose schedule never authors a matching ``commands:`` entry. With
     none -- the default, and what every Smallville caller still passes -- the verb
-    set is derived from authored commands alone, unchanged from before."""
+    set is derived from authored commands alone, unchanged from before.
+
+    Pass ``cognition_tools=True`` (issue #512, mirroring the engine's
+    ``AgentConfig.cognition_tools``, #358) to stamp the engine flag on every
+    agent: a real supplied brain may then ``recall`` / ``query_knowledge`` /
+    ``read_plan`` before picking its action (:func:`decide_with_action_tools`)
+    and before each dialogue line (the engine's converse path picks the flag up
+    with no further wiring here). The default ``False`` -- and the mock brain,
+    which never reaches either tool loop -- keeps the run byte-identical."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
@@ -323,6 +334,12 @@ def attach_agents(
         # Build the agent first so its memory exists and can be seeded before a
         # planner reasons over it. The planner (below) commits the schedule it wants.
         agent = LLMAgent(brain, persona=char.persona, embedding_client=embedding_client)
+        # Cognition tools (issue #512): the engine flag both the decide seam
+        # below and the engine's converse path read. Stamped (not passed to the
+        # constructor) to match how the rest of this function decorates the
+        # agent (schedule, planner, plan).
+        if cognition_tools:
+            agent.cognition_tools = True
         # Periodic reflection (issue #84): an LLMReflector when a real client is
         # supplied, else None -- so the offline mock run never reflects and the
         # replay stays byte-identical. The threshold rides on AgentConfig's default.
@@ -491,6 +508,19 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     attribution (one ``role: decide`` row per persona per tick) identical to
     the ``choose_action`` path this replaces.
 
+    With ``agent.cognition_tools`` on (issue #512; stamped by
+    :func:`attach_agents`, mirroring the engine's #358 flag), the single round
+    becomes a bounded ``run_tool_loop``: the engine's ``recall`` /
+    ``query_knowledge`` / ``read_plan`` are offered alongside the action tools,
+    so the brain can consult its own memory / beliefs / plan *before* picking a
+    verb instead of only seeing the engine-pushed retrieve-on-observation paste
+    (which stays -- a deliberate double-pay, documented on the engine flag).
+    The first action-tool call is terminal and takes the same
+    ``command_from_tool_call`` route below, so the precondition gate is never
+    bypassed; each retrieval is an extra ``role: decide`` request inside this
+    tick (up to ``COGNITION_BUDGET`` of them, refused past the budget), billed
+    to the same ambient attribution the step loop stamped.
+
     Returns the command string, or ``None`` when the model declined or errored
     -- the caller then falls back to ``agent.decide()``.
     """
@@ -506,9 +536,55 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
         {"role": "system", "content": agent._structured_system_message()},
         {"role": "user", "content": observation},
     ]
+    tools = action_tools_for(game, char)
+    if getattr(agent, "cognition_tools", False):
+        cog_tools, cognition_execute = cognition_toolset(
+            agent,
+            knowledge=getattr(char, "knowledge", None),
+            turn=getattr(game, "turn", 0),
+            trace=lambda text: game.parser.agent_reasoning(char.name, text),
+        )
+        # A registered action verb keeps priority over a same-named cognition
+        # tool (duplicate tool names would be rejected by real providers) --
+        # the same collision filter as the engine's _decide_and_route_loop.
+        offered = {t["name"] for t in tools}
+        cog_tools = [t for t in cog_tools if t["name"] not in offered]
+        if cog_tools:
+            cog_names = {t["name"] for t in cog_tools}
+            state = {"command": None}
+
+            def execute(name, args):
+                if name in cog_names:
+                    # A cognition call continues the loop (done=False); the
+                    # toolset's execute owns the result, including the
+                    # over-budget is_error refusal.
+                    return cognition_execute(name, args)
+                if state["command"] is None:
+                    # The first action pick is the decision (providers list
+                    # calls in the order the model made them).
+                    picked = args or {}
+                    agent.last_reasoning = (
+                        picked.get("reasoning") or ""
+                    ).strip() or None
+                    state["command"] = command_from_tool_call(name, picked, game.parser)
+                # Terminal: the step loop owns routing + failure handling,
+                # exactly as on the single-round path below.
+                return ("Done.", False, True)
+
+            run_tool_loop(
+                agent.llm_client,
+                messages,
+                tools + cog_tools,
+                execute,
+                max_rounds=1 + COGNITION_BUDGET,
+                tool_choice="any",
+                max_tokens=agent.max_tokens,
+                temperature=agent.temperature,
+            )
+            return state["command"] or None
     result = agent.llm_client.call_tools(
         messages,
-        action_tools_for(game, char),
+        tools,
         tool_choice="any",
         max_tokens=agent.max_tokens,
         temperature=agent.temperature,
