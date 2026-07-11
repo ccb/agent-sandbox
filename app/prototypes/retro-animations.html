@@ -592,6 +592,1678 @@
       }
     }
 
+  /* ---------------- 04: PTHALO-JACKAL ---------------- */
+  {
+    const svg = document.getElementById("jackal");
+    el(svg, "rect", { x:0, y:0, width:640, height:360, fill: BG });
+    el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FAUNA / DESERT / CAUTIOUS, CLEVER, HUNGRY";
+    // the jackal, from the 2e reference: prowling LEFT, head low, ears
+    // swept back, grin bared, brush tail trailing -- and SWAYING as it goes
+    const JDOTS = stipple(svg, "dots-jackal", PH, 1);
+    const BODY = [];
+    const B = (name, attrs) => { const n = el(svg, name, attrs); BODY.push(n); return n; };
+    // top contour: nose -> stop -> skull -> ears -> shoulder -> hip -> tail base
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "108,154 120,146 138,140 150,134 158,130 " +
+      "162,128 152,84 172,110 " +          // ear one, swept back
+      "178,112 198,80 212,108 " +          // ear two
+      "232,116 268,112 306,120 352,124 392,130 412,142 416,150" });
+    // underside: jaw -> throat -> chest -> belly -> flank
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "108,154 112,166 128,172 152,170 182,158 216,150 242,162 258,184 " +
+      "308,190 350,188 372,176 396,160" });
+    // the grin, zigzag, bared
+    B("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
+      points: "114,160 119,167 124,159 129,167 134,159 139,166 144,161 149,167" });
+    // the eye: yellow, slanted, and frankly doing sums
+    B("polygon", { points: "138,138 147,133 156,138 147,142",
+      fill: "#ffd76a", stroke: "#ffd76a", "stroke-width": 1 });
+    B("circle", { cx: 149, cy: 138, r: 1.7, fill: BG });
+    // the coat: FUR now, not spikes -- fine paired strokes leaning back
+    // along the spine, longest over the neck and shoulder
+    const SPINE = [
+      [216, 121], [226, 118], [236, 115], [246, 113], [256, 112], [266, 112],
+      [278, 113], [290, 116], [302, 119], [314, 120], [326, 121], [338, 122],
+      [350, 124], [362, 125], [374, 127], [386, 129],
+    ];
+    SPINE.forEach(([x, y], i) => {
+      const len = i < 6 ? 10 - i : 5;
+      B("line", { x1: x, y1: y, x2: x - 4, y2: y - len, stroke: PH,
+        "stroke-width": 1 });
+      B("line", { x1: x + 5, y1: y + 1, x2: x + 1, y2: y - len + 2,
+        stroke: PH_DIM, "stroke-width": 1 });
+    });
+    // the brush tail, low and trailing, halftoned
+    B("polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
+      "416,150 448,180 490,214 526,232 542,242 524,246 480,228 440,198 408,164" });
+    // the legs, WALKING and no longer sticks: a rounded THIGH stroke into a
+    // finer SHIN, far pair dimmed for depth, all on the gait clock
+    const LEGS = [
+      { ax: 250, ay: 178, ph: 0.0, near: 1, knee: -9 },   // near fore
+      { ax: 262, ay: 182, ph: 0.5, near: 0, knee: -9 },   // far fore
+      { ax: 370, ay: 178, ph: 0.55, near: 1, knee: 12 },  // near hind (hocked)
+      { ax: 396, ay: 160, ph: 0.05, near: 0, knee: 12 },  // far hind
+    ].map(cfg => Object.assign(cfg, {
+      thigh: el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 5.5 : 3.6, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
+      shin: el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": cfg.near ? 2.6 : 1.8, "stroke-linecap": "round",
+        opacity: cfg.near ? 1 : .5 }),
+    }));
+    // the ground: a band of ticks sliding rightward under the walk
+    const gGround = document.createElementNS(NS, "g");
+    for (let x = 44; x < 600; x += 16) {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 276);
+      l.setAttribute("x2", x + 7); l.setAttribute("y2", 276);
+      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
+    }
+    svg.appendChild(gGround);
+    // cycling callouts with leader lines
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 90, 10, PH);
+    call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [148, 139], text: "EYES: DOING SUMS" },
+      { at: [310, 122], text: "COAT: PTHALO No.9" },
+      { at: [108, 154], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
+      { at: [526, 232], text: "EXIT: ALWAYS PREPARED" },
+    ];
+    // the PATIENCE gauge
+    label(svg, 24, 322, 10, PH_DIM).textContent = "PATIENCE";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 100 + i * 18, y: 312, width: 14, height: 12, fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 300, 322, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
+      // the prowl: the body BOBS and the shoulders ROLL over planted feet
+      const bob = [0, 1, 2, 1, 0, -1, -2, -1][t % 8] * .8;
+      const roll = ((t % 16) < 8 ? 1 : -1) * 0.7;
+      const TR = `translate(0 ${bob}) rotate(${roll} 270 170)`;
+      BODY.forEach(n => n.setAttribute("transform", TR));
+      // the walk: sixteen poses per stride, feet planted or swinging
+      LEGS.forEach(L => {
+        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const ay = L.ay + bob;
+        const fx = L.ax - 34 + 20 * Math.cos(th);
+        const fy = 274 - Math.max(0, Math.sin(th)) * 12;
+        const kx = (L.ax + fx) / 2 + L.knee, ky = (ay + fy) / 2 + 8;
+        L.thigh.setAttribute("points", `${L.ax},${ay} ${kx},${ky}`);
+        L.shin.setAttribute("points",
+          `${kx},${ky} ${fx},${fy} ${fx - 9},${fy + 2}`);
+      });
+      gGround.setAttribute("transform", `translate(${(t * 4) % 16}, 0)`);
+      const c = CALLS[Math.floor(T / 22) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,86 448,86`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
+      verdict.textContent = left === 0
+        ? "TRIBUTE ACCEPTED: PEACE, PURCHASED DEEP"
+        : left <= 3 ? "ADVICE: PRODUCE THE DATES" : "";
+    });
+  }
+
+  /* ---------------- 05: the wheel of bats ---------------- */
+  {
+    const cv = document.getElementById("bats"), ctx = cv.getContext("2d");
+    const N = 40, bats = Array.from({ length: N }, (_, i) => ({
+      ph: (i / N) * Math.PI * 2, r: 46 + (i * 37 % 34), wob: (i * 13 % 7) - 3 }));
+    clock(t => {
+      const T = t % 200, wheeling = T < 150, scatter = (T - 150) / 50;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      // the tomb, far below, minimal
+      ctx.strokeStyle = PH_DIM; ctx.shadowColor = PH; ctx.shadowBlur = 4;
+      ctx.strokeRect(290, 210, 60, 70);
+      ctx.beginPath(); ctx.moveTo(305, 280); ctx.lineTo(305, 258); ctx.lineTo(318, 258);
+      ctx.lineTo(318, 280); ctx.stroke();
+      // the horizon's molten line
+      ctx.strokeStyle = FUNGUS; ctx.beginPath(); ctx.moveTo(0, 281); ctx.lineTo(640, 281); ctx.stroke();
+      // the wheel
+      ctx.strokeStyle = PH; ctx.shadowBlur = 6; ctx.lineWidth = 1.4;
+      const a0 = T * .35;
+      for (const b of bats) {
+        let x, y;
+        if (wheeling) {
+          x = 320 + Math.cos(a0 + b.ph) * (b.r + b.wob * Math.sin(T * .7 + b.ph));
+          y = 120 + Math.sin(a0 + b.ph) * (b.r * .42);
+        } else {
+          x = 320 + Math.cos(b.ph) * (b.r + scatter * 420);
+          y = 120 + Math.sin(b.ph) * (b.r * .42) + scatter * (b.ph > Math.PI ? -30 : 60) * .4;
+        }
+        const flap = ((t + b.wob) % 4 < 2) ? 3.5 : 1.2;
+        ctx.globalAlpha = wheeling ? 1 : Math.max(0, 1 - scatter);
+        ctx.beginPath();
+        ctx.moveTo(x - 4, y - flap); ctx.lineTo(x, y); ctx.lineTo(x + 4, y - flap);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText(wheeling ? "TURN " + (Math.floor(T / 15) + 1) + " OF 10" :
+        "TOWARD THE HORIZON'S MOLTEN LINE", 18, 288);
+    });
+  }
+
+  /* ---------------- 06: the burial cylinders ---------------- */
+  {
+    const svg = document.getElementById("cylinders");
+    const AMBER = "#ffd06a", VIRIDIAN = "#4ee0a8";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF WARRIORS / GUARD ISSUE / GEL-KEPT";
+    const CYLS = [
+      { cx: 105, hue: AMBER,    name: "AMBER",    note: "AMBER: A RESPIRATOR, STILL SEALED" },
+      { cx: 245, hue: VIRIDIAN, name: "VIRIDIAN", note: "VIRIDIAN: MAGNETIC BOOTS, GUARD ISSUE" },
+      { cx: 385, hue: FUNGUS,   name: "ORANGE",   note: "ORANGE: A PLASMA-IGNITER -- AND A BLOOM" },
+      { cx: 525, hue: PH_DIM,   name: "BURST",    note: "BURST: KIT OUTLASTS ITS OWNERS", burst: true },
+    ];
+    const groups = CYLS.map((c, i) => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const put = (n, a) => { const q = document.createElementNS(NS, n);
+        for (const k in a) q.setAttribute(k, a[k]); g.appendChild(q); return q; };
+      const gel = stipple(svg, "gel" + i, c.hue, 1);
+      if (!c.burst) {
+        put("rect", { x: c.cx - 32, y: 130, width: 64, height: 186, fill: gel });
+        put("line", { x1: c.cx - 34, y1: 122, x2: c.cx - 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("line", { x1: c.cx + 34, y1: 122, x2: c.cx + 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 122, rx: 34, ry: 9, fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        // the tenant, at an attention no order will relieve
+        put("circle", { cx: c.cx, cy: 165, r: 7, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("polyline", { points: `${c.cx-11},178 ${c.cx+11},178 ${c.cx+8},240 ${c.cx+6},296 ` +
+          `${c.cx-6},296 ${c.cx-8},240 ${c.cx-11},178`, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("line", { x1: c.cx - 9, y1: 196, x2: c.cx + 7, y2: 212, stroke: PH_DIM });
+        put("line", { x1: c.cx + 9, y1: 196, x2: c.cx - 7, y2: 212, stroke: PH_DIM });
+        if (c.name === "ORANGE") // the bloom, veining like pressed flowers
+          [[-22, 300, -14, 250, -20, 214], [0, 306, 4, 262, -2, 226], [20, 300, 14, 246, 22, 208]]
+            .forEach(v => put("polyline", { points:
+              `${c.cx+v[0]},${v[1]} ${c.cx+v[2]},${v[3]} ${c.cx+v[4]},${v[5]}`,
+              fill: "none", stroke: FUNGUS, "stroke-width": 1 }));
+      } else {
+        // the burst one: a jagged stump, shards, the spill, the slumped dead
+        put("polyline", { points: `${c.cx-34},318 ${c.cx-34},236 ${c.cx-22},252 ${c.cx-12},230 ` +
+          `${c.cx},248 ${c.cx+12},226 ${c.cx+22},250 ${c.cx+34},232 ${c.cx+34},318`,
+          fill: "none", stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        put("ellipse", { cx: c.cx, cy: 336, rx: 52, ry: 8, fill: gel, stroke: "none" });
+        [[-48, 300, -40, 290], [44, 306, 52, 296], [40, 316, 50, 314]].forEach(v =>
+          put("line", { x1: c.cx + v[0], y1: v[1], x2: c.cx + v[2], y2: v[3], stroke: PH_BRIGHT }));
+        put("polyline", { points: `${c.cx-20},306 ${c.cx-6},296 ${c.cx+10},304 ${c.cx+20},298`,
+          fill: "none", stroke: PH_DIM, "stroke-width": 1.6 }); // the slump
+      }
+      const cap = label(svg, c.cx, 362, 10, c.hue); cap.setAttribute("text-anchor", "middle");
+      cap.textContent = c.name;
+      return { g, c };
+    });
+    // bubbles, on the step clock (the gel is alive enough to breathe)
+    const bubbles = [];
+    groups.forEach(({ c }, i) => {
+      if (c.burst) return;
+      for (let b = 0; b < 3; b++) {
+        const q = el(svg, "circle", { cx: c.cx + (b - 1) * 12, cy: 300, r: 2, fill: "none",
+          stroke: c.hue, opacity: .8 });
+        bubbles.push({ q, phase: i * 31 + b * 57 });
+      }
+    });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE BURIAL CYLINDERS", T, 4, 1.4);
+      groups.forEach(({ g }, i) => g.setAttribute("opacity", T > 10 + i * 7 ? 1 : 0));
+      bubbles.forEach(b => b.q.setAttribute("cy", 300 - ((t * 3 + b.phase) % 156)));
+      const k = Math.floor(T / 26) % CYLS.length;
+      if (T > 40) {
+        const c = CYLS[k];
+        callLead.setAttribute("points", `${c.cx},116 ${c.cx},58 448,58`);
+        call.textContent = c.note;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "BREAK AMBER FIRST. WEAR WHAT YOU FIND.", T, 120, 1.6);
+    });
+  }
+
+  /* ---------------- 08: the glowstone (interactive) ---------------- */
+  {
+    const cv = document.getElementById("glowstone"), ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    // the shard: an irregular faceted lump, hand-plotted
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    let lit = false, k = 0, lastT = 0;
+    function draw(t) {
+      lastT = t;
+      // the glow steps toward its target, one increment per tick
+      k = Math.max(0, Math.min(6, k + (lit ? 1 : -1)));
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const kk = k / 6;
+      if (kk > 0) { // the LIGHT: a radial wash of warm yellow, then the rings
+        const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+        halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+        halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+        halo.addColorStop(1, "rgba(255,215,106,0)");
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+        for (let r = 1; r <= k; r++) { // concentric rings, quantized, fading out
+          ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
+          ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+      const mix = kk > .5 ? YELLOW : kk > 0 ? PH : PH_DIM;
+      ctx.strokeStyle = mix; ctx.lineWidth = 1.6;
+      ctx.shadowColor = mix; ctx.shadowBlur = 4 + k * 4;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // the switch
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = lit ? YELLOW : PH_DIM;
+      ctx.fillRect(lit ? 322 : 274, 242, 44, 14);
+      ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the ledger: attention, accruing
+      const att = Math.round(kk * 10);
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 18, 288);
+      ctx.textAlign = "right";
+      ctx.fillText(lit ? "> LIGHT GLOWSTONE" : "> DOUSE GLOWSTONE", 622, 288);
+      ctx.textAlign = "left";
+      ctx.fillStyle = kk === 1 ? YELLOW : PH_DIM;
+      ctx.fillText(kk === 1 ? "LIGHT IS DEAR; ATTENTION DEARER" : "", 18, 24);
+    }
+    cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
+    clock(t => { if (t && t % 48 === 0) lit = !lit; draw(t); }); // it demos itself
+  }
+
+
+  /* ---------------- 09: Silas, the synthetic archivist ---------------- */
+  {
+    const svg = document.getElementById("silas");
+    const YELLOW = "#ffd76a";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "EYELESS WISDOM / MENDICANT";
+    const RDOTS = stipple(svg, "dots-silas", YELLOW, 1);
+    // THE ROBE, properly draped: peaked hood, shoulder caps, corded waist,
+    // an A-line fall of folds to a dusted hem -- yellow so the dust shows
+    el(svg, "polygon", { points:
+      "198,80 226,92 240,114 246,152 252,172 " +      // hood front, to shoulder
+      "262,186 268,214 258,222 " +                    // the sleeve's upper reach
+      "252,240 250,330 134,330 " +                    // robe front, hem
+      "128,244 140,186 156,150 166,108",              // the back fall
+      fill: RDOTS, stroke: YELLOW, "stroke-width": 1.6 });
+    // fold lines, falling from the shoulders
+    [[172, 190, 162, 328], [196, 196, 192, 330], [220, 198, 224, 330]].forEach(f =>
+      el(svg, "polyline", { fill: "none", stroke: YELLOW, "stroke-width": .8,
+        opacity: .6, points: `${f[0]},${f[1]} ${f[2]},${f[3]}` }));
+    // the cord at the waist, knotted, ends hanging
+    el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2,
+      points: "138,240 250,236" });
+    el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1,
+      points: "206,238 202,262 208,280" });
+    el(svg, "rect", { x: 134, y: 322, width: 116, height: 8, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 3" });   // the dust hem
+    // THE HOOD'S INTERIOR, and the plated skull in profile (after the ref:
+    // panel plates, a deep socketed eye, the ear ring, a grilled mouth)
+    el(svg, "polygon", { points: "202,88 232,100 242,130 238,160 212,170 192,150 190,112",
+      fill: BG, stroke: "none" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "198,148 194,122 204,106 222,102 236,112 242,126 " +   // the cranium dome
+      "240,134 246,140 242,146 " +                           // brow step, nose flat
+      "236,150 238,162 224,168 208,166 200,158 198,148" });  // lip, jaw, home
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "202,112 222,106 236,118" });                  // plate seam one
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "196,132 212,128 220,132" });                  // plate seam two
+    el(svg, "circle", { cx: 208, cy: 110, r: 1.3, fill: PH_DIM });
+    el(svg, "circle", { cx: 228, cy: 110, r: 1.3, fill: PH_DIM });
+    el(svg, "circle", { cx: 230, cy: 132, r: 6.5, fill: BG,
+      stroke: PH_DIM, "stroke-width": 1.4 });                // the deep socket
+    const eye = el(svg, "circle", { cx: 231, cy: 132, r: 2.6, fill: PH_BRIGHT });
+    el(svg, "circle", { cx: 201, cy: 144, r: 6, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.3 });                // the ear ring
+    el(svg, "circle", { cx: 201, cy: 144, r: 1.2, fill: PH_DIM });
+    [[233, 152], [237, 154], [231, 158]].forEach(([x, y]) => // the mouth grille
+      el(svg, "line", { x1: x, y1: y, x2: x + 5, y2: y + 1, stroke: PH_DIM }));
+    const port = el(svg, "circle", { cx: 210, cy: 172, r: 2.8, fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.3 });                // beneath the jaw
+    // THE SLEEVE, wide and draped, and the bare synth forearm out of it
+    el(svg, "polygon", { points: "258,184 322,206 316,232 254,220",
+      fill: RDOTS, stroke: YELLOW, "stroke-width": 1.4 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "322,208 398,200" });                          // forearm strut, upper
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "318,226 398,214" });                          // forearm strut, lower
+    el(svg, "line", { x1: 348, y1: 205, x2: 348, y2: 221, stroke: PH_DIM }); // a coupling
+    el(svg, "circle", { cx: 402, cy: 207, r: 4.5, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });                    // the wrist joint
+    // THE HAND, fully outlined: a plated palm and four jointed fingers
+    el(svg, "polygon", { points: "406,200 422,196 428,206 424,216 408,216",
+      fill: "none", stroke: PH, "stroke-width": 1.4 });      // the palm plate
+    [[422,197,444,188,447,192,424,203],
+     [426,203,452,199,453,204,427,208],
+     [426,209,450,211,449,216,425,213],
+     [423,214,442,222,440,226,421,218]].forEach(q =>
+      el(svg, "polygon", { points: `${q[0]},${q[1]} ${q[2]},${q[3]} ${q[4]},${q[5]} ${q[6]},${q[7]}`,
+        fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.1 }));
+    [[422,200],[426,205],[426,211],[422,216]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 1.3, fill: PH }));  // the knuckles
+    // the lattice: a crystal net on the right wall
+    const NODES = [];
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 5; r++)
+      NODES.push([452 + c * 50 + (r % 2) * 14, 78 + r * 62]);
+    const EDGES = [];
+    NODES.forEach(([x, y], i) => NODES.forEach(([X, Y], j) => {
+      if (j > i && Math.hypot(X - x, Y - y) < 78) EDGES.push([i, j]);
+    }));
+    EDGES.forEach(([a, b]) => el(svg, "line", { x1: NODES[a][0], y1: NODES[a][1],
+      x2: NODES[b][0], y2: NODES[b][1], stroke: PH_DIM }));
+    NODES.forEach(([x, y]) => el(svg, "circle", { cx: x, cy: y, r: 1.8, fill: PH }));
+    // the bright threads: lattice -> fingertips -> up the forearm -> UNDER
+    // the sleeve (unseen) -> re-emerging at the neck to walk the skull's
+    // panel circuits, ending behind the eye. The robe segments are the gap.
+    const HAND = [450, 202];
+    const EXT = [
+      HAND, [404, 210], [356, 213], [322, 216],   // hand, wrist, forearm, sleeve
+      [268, 194], [228, 172],                     // under the robe: UNSEEN
+      [206, 162], [201, 144], [214, 128], [224, 106], [231, 132],  // the circuits
+    ];
+    const EXT_HIDDEN = new Set([3, 4]);           // the segments beneath the cloth
+    const PATHS = [
+      [NODES[19], NODES[14], NODES[9], NODES[2]],
+      [NODES[5], NODES[6], NODES[7], NODES[2]],
+      [NODES[16], NODES[12], NODES[8], NODES[2]],
+    ].map(base => {
+      const path = base.concat(EXT);
+      const baseSegs = base.length; // lattice + approach segments, all visible
+      const hidden = new Set([...EXT_HIDDEN].map(k => k + baseSegs));
+      return { path, hidden };
+    });
+    let eyeArrival = false;
+    const pulses = PATHS.map((pp, i) => ({
+      ...pp, off: i * 37,
+      dot: el(svg, "circle", { cx: 0, cy: 0, r: 2.4, fill: PH_BRIGHT }),
+      tail: el(svg, "line", { x1: 0, y1: 0, x2: 0, y2: 0, stroke: PH_BRIGHT,
+        "stroke-width": 1.4 }),
+    }));
+    // callouts + the ledger of remembered days
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [190, 270], text: "ROBES: YELLOW, SO THE DUST SHOWS" },
+      { at: [448, 202], text: "FINGERTIPS: THE RIGHT KIND" },
+      { at: [210, 172], text: "PORT: BENEATH THE JAW. FUNGUS-READY" },
+      { at: [231, 132], text: "EYES: OPTIONAL, PER THE ORDER" },
+    ];
+    label(svg, 16, 372, 10, PH_DIM).textContent = "THE AUTARCH, IN ORDER:";
+    const ledger = label(svg, 190, 372, 10, YELLOW);
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "SILAS (SYNTHETIC ARCHIVIST, VIGOR 2)", T, 4, 1.4);
+      eye.setAttribute("opacity", (t % 34) < 31 ? 1 : .15);   // the long blink
+      eye.setAttribute("r", eyeArrival ? 3.8 : 2.6);          // a day, arriving
+      eye.setAttribute("fill", eyeArrival ? "#ffd76a" : PH_BRIGHT);
+      port.setAttribute("opacity", (t % 34) < 31 ? .6 : 1);
+      eyeArrival = false;
+      pulses.forEach(p => {
+        const segs = p.path.length - 1, total = segs * 7;
+        const k = (t + p.off) % total, si = Math.floor(k / 7), f = (k % 7) / 7;
+        const [ax, ay] = p.path[si], [bx, by] = p.path[si + 1];
+        const x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+        const seen = p.hidden.has(si) ? 0 : 1;  // beneath the robe: unseen
+        p.dot.setAttribute("opacity", seen); p.tail.setAttribute("opacity", seen);
+        p.dot.setAttribute("cx", x); p.dot.setAttribute("cy", y);
+        p.tail.setAttribute("x1", ax + (bx - ax) * Math.max(0, f - .4));
+        p.tail.setAttribute("y1", ay + (by - ay) * Math.max(0, f - .4));
+        p.tail.setAttribute("x2", x); p.tail.setAttribute("y2", y);
+        if (si === segs - 1) eyeArrival = true;  // a day, arriving
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 150,66 146,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const days = Math.min(10, Math.floor(T / 18));
+      ledger.textContent = "#".repeat(days) + ".".repeat(10 - days) +
+        (days === 10 ? "  (NEVER QUITE DONE)" : "");
+      typeOn(foot, "A MAN IS NOT DONE DYING UNTIL HE IS DONE BEING REMEMBERED.", T, 130, 1.8);
+    });
+  }
+
+
+  /* ---------------- 10: the synth-hound, preserved ---------------- */
+  {
+    const svg = document.getElementById("hound");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "MACHINA / HALL OF HOUNDS / IN GEL";
+    // THE TANK: plexiglas, corner bolts, the gel a luminous stipple field
+    const GEL = stipple(svg, "gel-hound", PH, .9);
+    el(svg, "rect", { x: 36, y: 52, width: 568, height: 252, fill: GEL,
+      stroke: PH, "stroke-width": 2 });
+    [[44,60],[596,60],[44,296],[596,296]].forEach(([x, y]) =>
+      el(svg, "circle", { cx: x, cy: y, r: 2.2, fill: "none", stroke: PH_DIM }));
+    el(svg, "line", { x1: 96, y1: 60, x2: 66, y2: 296, stroke: PH_BRIGHT,
+      opacity: .18, "stroke-width": 6 });                    // the glass glare
+    // THE SPECIMEN, floating: everything in one group so it drifts whole
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    const H = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); gg.appendChild(n); return n; };
+    // the specimen, SLEEK: a racing hound's silhouette -- arched loin,
+    // deep chest, hard belly tuck, long neck, narrow muzzle, ears folded
+    // back along the skull (rose ears, not antennae)
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "196,138 226,124 262,126 300,136 348,158 396,178 " +   // croup to skull
+      "492,212" });                                          // the long taper to the nose
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "492,212 486,222 448,210 424,202 412,196 " +           // jaw, back to throat
+      "392,190 356,196 330,206 " +                           // the DEEP chest
+      "282,176 244,170 214,166 " +                           // the tuck, and the waist
+      "196,158 190,150 196,138" });                          // the rear, closed
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1,
+      points: "458,210 463,218 468,208 473,218 478,210 483,219" }); // needle teeth
+    // the ears: small triangles folded back along the neck
+    H("polygon", { points: "396,178 376,162 390,172", fill: PH,
+      "fill-opacity": .5, stroke: PH, "stroke-width": 1.2 });
+    H("polygon", { points: "404,182 388,164 400,176", fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.1 });
+    H("circle", { cx: 428, cy: 193, r: 7, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.6 });                // the goggle, unlit
+    H("circle", { cx: 430, cy: 194, r: 2.6, fill: PH_DIM, opacity: .35 });
+    // ROBOT PARTS: vertebra ticks down the neck, shoulder actuator, hip
+    // cylinder, access hatch, a throat hose -- Autarchy pattern
+    [[352,161],[364,166],[376,171],[388,176]].forEach(([x, y]) =>
+      H("line", { x1: x, y1: y - 4, x2: x - 3, y2: y + 4, stroke: PH_DIM }));
+    H("circle", { cx: 306, cy: 162, r: 8, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    H("circle", { cx: 306, cy: 162, r: 2.6, fill: "none", stroke: PH_DIM }); // shoulder
+    H("rect", { x: 200, y: 138, width: 24, height: 13, fill: "none",
+      stroke: PH, "stroke-width": 1.3 });                    // the hip cylinder
+    H("line", { x1: 207, y1: 138, x2: 207, y2: 151, stroke: PH_DIM });
+    H("rect", { x: 254, y: 146, width: 20, height: 11, fill: "none",
+      stroke: PH_DIM });                                     // the access hatch
+    H("circle", { cx: 258, cy: 149, r: .9, fill: PH_DIM });
+    H("polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3",
+      points: "414,198 396,216 366,210 344,202" });          // the throat hose
+    [242, 268, 294].forEach(x =>
+      H("circle", { cx: x, cy: 136 + (x - 242) * .18, r: 1.1, fill: PH_DIM }));
+    // heraldry, someone else's, on the flank
+    H("polygon", { points: "262,164 276,164 269,176", fill: PH, "fill-opacity": .7 });
+    H("circle", { cx: 292, cy: 172, r: 4, fill: PH, "fill-opacity": .7 });
+    // the LIMP legs: long and fine, piston thighs into strut shins, hanging
+    [[322,204,332,244,326,282],[306,198,298,236,304,274],
+     [214,166,226,208,216,250],[200,162,192,202,198,244]].forEach(([ax,ay,kx,ky,fx,fy], i) => {
+      const near = i % 2 === 0;
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 4 : 2.8, opacity: near ? 1 : .5,
+        points: `${ax},${ay} ${kx},${ky}` });
+      H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": near ? 2 : 1.5, opacity: near ? 1 : .5,
+        points: `${kx},${ky} ${fx},${fy} ${fx + 6},${fy + 4}` });
+      H("circle", { cx: kx, cy: ky, r: 2.2, fill: "none", stroke: PH_DIM });
+      H("line", { x1: (ax + kx) / 2 - 3, y1: (ay + ky) / 2,
+        x2: (ax + kx) / 2 + 3, y2: (ay + ky) / 2, stroke: PH_DIM }); // piston collar
+    });
+    // the tail: a long fine cable, drifting low
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2, points:
+      "192,150 156,166 132,196 126,232" });
+    [[170,158],[142,182],[128,214]].forEach(([x, y]) =>
+      H("line", { x1: x - 3, y1: y - 3, x2: x + 3, y2: y + 3, stroke: PH_DIM }));
+    // bubbles, rising through the gel on the step clock
+    const bubbles = Array.from({ length: 7 }, (_, i) =>
+      ({ q: el(svg, "circle", { cx: 80 + i * 78, cy: 0, r: 1.8, fill: "none",
+        stroke: PH, opacity: .7 }), phase: i * 41 }));
+    // callouts + the preservation ledger
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 48, 10, PH);
+    const CALLS = [
+      { at: [428, 193], text: "EYE: DARK, AND BEST LEFT SO" },
+      { at: [292, 172], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
+      { at: [212, 144], text: "HIP: PISTON-HOCKED, AUTARCHY PATTERN" },
+      { at: [126, 232], text: "TAIL: A CABLE. THE LEASH RING IS GONE" },
+    ];
+    label(svg, 24, 334, 10, PH_DIM).textContent = "PRESERVATION";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 128 + i * 18, y: 324, width: 14, height: 12,
+        fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 330, 334, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (PRESERVED SPECIMEN)", T, 4, 1.4);
+      // the drift: millimetres, on the tank's own slow currents
+      const drift = [0, 1, 2, 3, 3, 2, 1, 0, -1, -2, -3, -2, -1, 0][Math.floor(t / 4) % 14];
+      gg.setAttribute("transform",
+        `translate(0 ${drift * 1.1}) rotate(${drift * .35} 320 190)`);
+      bubbles.forEach(b => b.q.setAttribute("cy", 296 - ((t * 2 + b.phase) % 236)));
+      const c = CALLS[Math.floor(T / 28) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 170,52 176,52`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      cells.forEach((r, i) => r.setAttribute("fill-opacity",
+        i < 10 ? .8 : .08));                                 // four thousand years, holding
+      typeOn(verdict, "FOUR THOUSAND YEARS, HOLDING. DO NOT LIGHT THE GEL.", T, 90, 1.6);
+    });
+  }
+
+
+  /* ---------------- 12: friend's fungus ---------------- */
+  {
+    const svg = document.getElementById("fungus");
+    const PINK = "#ff5fd7";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "SUMMIT / STATE GIFT";
+    const PDOTS = stipple(svg, "dots-pink", PINK, 1.2);
+    // the mound it grows from
+    el(svg, "ellipse", { cx: 320, cy: 302, rx: 110, ry: 13, fill: PDOTS,
+      stroke: PH_DIM });
+    // the cluster: one tall, two middling, two buttons -- angular litho caps
+    const shroom = (cx, capY, capW, stemW, spot) => {
+      el(svg, "polygon", { points:
+        `${cx - stemW},304 ${cx + stemW},304 ${cx + stemW - 2},${capY + 12} ${cx - stemW + 2},${capY + 12}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.4 });
+      el(svg, "polygon", { points:
+        `${cx - capW},${capY + 14} ${cx - capW * .55},${capY - 8} ${cx},${capY - 16} ` +
+        `${cx + capW * .55},${capY - 8} ${cx + capW},${capY + 14}`,
+        fill: PDOTS, stroke: PINK, "stroke-width": 1.6 });
+      for (let g = 1; g < 4; g++)                     // the gills beneath
+        el(svg, "line", { x1: cx - capW + g * (capW / 2), y1: capY + 13,
+          x2: cx - capW + g * (capW / 2) + 3, y2: capY + 6, stroke: PH_DIM });
+      if (spot) [[-capW * .4, -2], [capW * .3, -8], [0, 4]].forEach(([dx, dy]) =>
+        el(svg, "circle", { cx: cx + dx, cy: capY + dy, r: 2.2, fill: BG,
+          stroke: PINK, "stroke-width": 1 }));
+      return [cx, capY - 16];                         // the apex, for the rings
+    };
+    const apexes = [
+      shroom(320, 168, 36, 6, true),     // tall and slender now
+      shroom(250, 214, 24, 4.5, true),
+      shroom(392, 224, 22, 4, false),
+      shroom(286, 268, 11, 2.6, false),
+      shroom(356, 274, 10, 2.4, false),
+    ];
+
+    // agreeability, radiating: two staggered rings per big cap
+    const rings = [];
+    apexes.slice(0, 3).forEach(([x, y], i) => {
+      for (let k = 0; k < 2; k++)
+        rings.push({ x, y: y - 4, off: i * 9 + k * 14,
+          q: el(svg, "circle", { cx: x, cy: y - 4, r: 8, fill: "none",
+            stroke: PINK, "stroke-width": 1.2 }) });
+    });
+    // spores, rising with a sway -- and among them, briefly, small smiles
+    const spores = Array.from({ length: 9 }, (_, i) =>
+      ({ x: 240 + (i * 53) % 180, ph: i * 31,
+         q: el(svg, "circle", { r: 1.4, fill: PINK, opacity: .8 }) }));
+    const smiles = [[262, 150], [352, 120], [312, 96]].map(([x, y], i) =>
+      ({ off: i * 40, q: el(svg, "path", { d:
+        `M ${x - 5} ${y} Q ${x} ${y + 6} ${x + 5} ${y}`,
+        fill: "none", stroke: PINK, "stroke-width": 1.3 }) }));
+    // callouts + the agreeability gauge
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [320, 154], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
+      { at: [250, 200], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
+      { at: [392, 212], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
+      { at: [320, 302], text: "KEPT IN THE MYSTIC'S CLASPED HANDS" },
+    ];
+    label(svg, 24, 334, 10, PH_DIM).textContent = "AGREEABILITY";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 128 + i * 18, y: 324, width: 14, height: 12,
+        fill: PINK, "fill-opacity": .08 }));
+    const foot = label(svg, 400, 334, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "FRIEND'S FUNGUS (PINK, HALLUCINOGENIC)", T, 4, 1.4);
+      rings.forEach(r => {
+        const k = ((t + r.off) % 28) / 28;             // out, fading, again
+        r.q.setAttribute("r", 8 + k * 44);
+        r.q.setAttribute("opacity", Math.max(0, .8 - k));
+      });
+      spores.forEach(sp => {
+        const k = (t * 2 + sp.ph) % 220;
+        sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .25) * 7);
+        sp.q.setAttribute("cy", 290 - k);
+        sp.q.setAttribute("opacity", k > 200 ? 0 : .85);
+      });
+      smiles.forEach(sm =>                             // they mean well
+        sm.q.setAttribute("opacity", ((t + sm.off) % 80) < 12 ? .9 : 0));
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 448,58 454,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const on = Math.min(10, Math.floor(T / 14));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      typeOn(foot, "MEANT FOR SOMEONE LONELIER THAN YOU.", T, 140, 1.6);
+    });
+  }
+
+
+  /* ---------------- 13: the Autarch ---------------- */
+  {
+    const svg = document.getElementById("autarch");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / STONE / PATIENT";
+    const ADOTS = stipple(svg, "dots-autarch", PH, .9);
+    // THE HALO, as carved: a disc edged with flame-spikes, lightning bolts
+    // cut into its field, the whole thing stepping like a lighthouse
+    const CX = 320, CY = 180;
+    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    const spikes = Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      return el(svg, "polygon", { fill: PH, "fill-opacity": .45, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    const bolts = Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      return el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": 1.6, points: pts.join(" ") });
+    });
+    // THE FACE: cracked stone, stippled, hollow-eyed
+    el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,224 366,258 274,258 260,224 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>                                   // the knit cap rows
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "300,158 306,180 298,204" });                  // a crack
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "352,150 346,176 354,196 348,214" });          // another
+    // the eyes, CLOSED at last: soft lids where the hollows were
+    el(svg, "path", { d: "M 284 190 Q 296 197 308 190", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(svg, "path", { d: "M 332 190 Q 344 197 356 190", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(svg, "path", { d: "M 286 183 Q 296 179 306 183", fill: "none",
+      stroke: PH_DIM });                                     // the softened brows
+    el(svg, "path", { d: "M 334 183 Q 344 179 354 183", fill: "none",
+      stroke: PH_DIM });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "318,196 316,222 310,230 330,230 324,222 322,196" }); // the nose
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "306,244 334,244" });
+    el(svg, "path", { d: "M 298 240 Q 304 234 310 240", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 330 240 Q 336 234 342 240", fill: "none", stroke: PH_DIM });
+    // THE BEARD: rows of court curls, shimmering downward as if being read
+    const curls = [];
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      curls.push({ r, q: el(svg, "circle", {
+        cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13, r: 4.4,
+        fill: "none", stroke: PH, "stroke-width": 1.1 }) });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });             // the collar band
+    // the shoulders
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "NASSAK AN-RAH (AT REST)", T, 4, 1.4);
+      // one slow breath through the whole stone; nothing else moves
+      const br = [0, 1, 2, 3, 4, 5, 6, 6, 5, 4, 3, 2, 1, 0][Math.floor(t / 4) % 14] / 6;
+      spikes.forEach(sp => sp.setAttribute("fill-opacity", .3 + br * .2));
+      bolts.forEach(b => { b.setAttribute("opacity", .4 + br * .25);
+        b.setAttribute("stroke", PH); b.setAttribute("stroke-width", 1.6); });
+      curls.forEach(c => c.q.setAttribute("opacity", .5 + br * .3));
+      typeOn(foot, "DREAMING SOMETHING KIND, FOUR THOUSAND YEARS IN.", T, 130, 1.8);
+    });
+  }
+
+  /* ---------------- 14-16: the jars, close up ---------------- */
+  function jarCard(id, title, drawHead, drawInside, CALLS, footText, tick) {
+    const svg = document.getElementById(id);
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 300, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const JD = stipple(svg, id + "-dots", PH, 1);
+    // the jar, large, at the left: body, throat, and the head as stopper
+    el(svg, "polygon", { points: "150,270 290,270 272,120 168,120",
+      fill: JD, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "line", { x1: 162, y1: 140, x2: 278, y2: 140, stroke: PH_DIM });
+    const parts = { svg, JD, hx: 220, hy: 118 };             // stopper origin
+    drawHead(parts);
+    drawInside(parts);
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 64, 10, PH); call.setAttribute("text-anchor", "end");
+    const foot = label(svg, 430, 286, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 300, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, title, T, 4, 1.4);
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,60 448,60`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, footText, T, 110, 1.6);
+      tick(t, T, parts);
+    });
+  }
+
+  // 14: THE MANTIS JAR -- split, budding, listening
+  jarCard("jar-mantis", "THE MANTIS JAR (SPLIT, LISTENING)",
+    (P) => {
+      el(P.svg, "polygon", { points: "180,64 260,64 224,118 216,118 180,64",
+        fill: P.JD, stroke: PH, "stroke-width": 1.6 });      // the head, point DOWN
+      P.eyeL = el(P.svg, "circle", { cx: 192, cy: 76, r: 8, fill: "none", stroke: PH_BRIGHT });
+      P.eyeR = el(P.svg, "circle", { cx: 248, cy: 76, r: 8, fill: "none", stroke: PH_BRIGHT });
+      [[-3,-2],[2,3],[3,-3]].forEach(([dx, dy]) => {
+        el(P.svg, "circle", { cx: 192 + dx, cy: 76 + dy, r: 1, fill: PH });
+        el(P.svg, "circle", { cx: 248 + dx, cy: 76 + dy, r: 1, fill: PH });
+      });
+      el(P.svg, "line", { x1: 214, y1: 108, x2: 226, y2: 108, stroke: PH_DIM }); // the mouthparts
+      P.antL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
+      P.antR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
+    },
+    (P) => {
+      P.crack = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6 });
+      el(P.svg, "circle", { cx: 236, cy: 196, r: 6, fill: FUNGUS,
+        "fill-opacity": .4, stroke: FUNGUS });               // the bud in the split
+      P.rings = Array.from({ length: 3 }, () =>
+        el(P.svg, "circle", { cx: 220, cy: 96, r: 10, fill: "none",
+          stroke: PH_BRIGHT, opacity: 0 }));
+      label(P.svg, 24, 286, 10, PH_DIM).textContent = "SONG";
+      P.cells = Array.from({ length: 8 }, (_, i) =>
+        el(P.svg, "rect", { x: 66 + i * 15, y: 276, width: 11, height: 11,
+          fill: FUNGUS, "fill-opacity": .08 }));
+    },
+    [
+      { at: [248, 76], text: "EYES: COMPOUND. THE FACETS STILL COUNT" },
+      { at: [232, 190], text: "THE SPLIT: SOMETHING BUDS IN IT" },
+      { at: [220, 96], text: "IT AMPLIFIES. MAKE NO SOUND HERE" },
+    ],
+    "IT LISTENS. THEN IT SINGS.",
+    (t, T, P) => {
+      const tw = (t % 14) < 3 ? 6 : 0;                       // the twitch
+      P.antL.setAttribute("points", `188,64 ${176 - tw},38 ${170 - tw},26`);
+      P.antR.setAttribute("points", `252,64 ${264 + tw},40 ${272 + tw},28`);
+      const cw = Math.floor((t % 40) / 8);                   // the crack creeps
+      P.crack.setAttribute("points",
+        `226,122 ${230 + cw},160 ${224 + cw},198 ${232 + cw * 2},240`);
+      const singing = (T % 80) > 62;
+      P.rings.forEach((r, i) => {
+        const k = singing ? ((t * 2 + i * 9) % 28) / 28 : 1;
+        r.setAttribute("r", 10 + k * 60);
+        r.setAttribute("opacity", singing ? Math.max(0, .8 - k) : 0);
+      });
+      const on = Math.min(8, Math.floor((T % 80) / 9));
+      P.cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+    });
+
+  // 15: THE JACKAL JAR -- the brain, strangely
+  jarCard("jar-jackal", "THE JACKAL JAR (THE BRAIN, STRANGELY)",
+    (P) => {
+      P.earL = el(P.svg, "polygon", { fill: PH, "fill-opacity": .4,
+        stroke: PH, "stroke-width": 1.4 });
+      P.earR = el(P.svg, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "196,118 190,96 202,78 232,72 254,84 " +
+        "268,92 284,100 280,108 262,108 244,112 236,118" }); // skull to long snout
+      el(P.svg, "circle", { cx: 232, cy: 88, r: 2.4, fill: PH_BRIGHT });
+      el(P.svg, "line", { x1: 282, y1: 104, x2: 288, y2: 106, stroke: PH_DIM });
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      P.brain = el(P.svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5,
+        d: "M 190 210 Q 182 196 190 186 Q 196 176 208 176 Q 214 168 226 172 " +
+           "Q 238 168 246 178 Q 258 182 256 196 Q 262 208 250 216 Q 242 226 " +
+           "228 222 Q 214 228 204 220 Q 192 220 190 210 Z " +   // the lobed outline
+           "M 222 172 Q 218 190 224 200 Q 220 210 224 222 " +   // the fissure
+           "M 196 192 Q 204 188 202 198 M 198 208 Q 208 204 206 214 " +
+           "M 208 182 Q 214 186 210 192 " +                     // gyri, left
+           "M 236 184 Q 230 190 238 194 M 244 198 Q 236 204 244 210 " +
+           "M 232 212 Q 240 216 234 221" });                    // gyri, right
+      P.pulses = Array.from({ length: 2 }, () =>
+        el(P.svg, "circle", { cx: 221, cy: 198, r: 8, fill: "none",
+          stroke: FUNGUS, opacity: 0 }));
+    },
+    [
+      { at: [202, 60], text: "EARS: STILL LISTENING" },
+      { at: [221, 198], text: "CONTENTS: HIS THOUGHTS, JARRED" },
+      { at: [284, 100], text: "TASTE: SOMEBODY'S BIOGRAPHY" },
+    ],
+    "APPETITES AND THOUGHTS, JARRED SEPARATELY. BOTH GOT UP.",
+    (t, T, P) => {
+      const tw = (t % 22) < 3 ? 8 : 0;                       // one ear pricks
+      P.earL.setAttribute("points", `202,80 ${188 - tw},34 214,70`);
+      P.earR.setAttribute("points", `226,74 ${240 + tw / 2},30 246,68`);
+      P.pulses.forEach((q, i) => {                            // a thought, not yours
+        const k = ((t * 2 + i * 14) % 30) / 30;
+        q.setAttribute("r", 8 + k * 34);
+        q.setAttribute("opacity", Math.max(0, .7 - k));
+      });
+    });
+
+  // 16: THE FALCON JAR -- the coil, turning
+  jarCard("jar-falcon", "THE FALCON JAR (THE COIL, CURED)",
+    (P) => {
+      // a proper falcon: compact skull, slim neck, and a strongly
+      // decurved hook of a beak with the tomial notch
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "238,118 244,94 236,72 214,60 192,64 182,72 " +      // crown to the cere
+        "170,76 160,84 156,94 " +                            // the hook, curving down
+        "162,98 168,94 " +                                   // ...and back under
+        "174,99 178,96 " +                                   // the tomial tooth
+        "192,102 204,108 208,118" });                        // jaw, chin, slim throat
+      el(P.svg, "line", { x1: 182, y1: 78, x2: 172, y2: 82,
+        stroke: PH_DIM });                                   // the cere line
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+        points: "198,84 202,98" });                          // the malar teardrop
+      P.eye = el(P.svg, "circle", { cx: 198, cy: 78, r: 3.2, fill: PH_BRIGHT });
+      el(P.svg, "circle", { cx: 198, cy: 78, r: 5.2, fill: "none", stroke: PH_DIM });
+      P.lid = el(P.svg, "line", { x1: 192, y1: 78, x2: 205, y2: 78,
+        stroke: PH_DIM, "stroke-width": 6, opacity: 0 });    // the nictitating blink
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      P.coil = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 });
+    },
+    [
+      { at: [158, 92], text: "BEAK: CEREMONIAL, STILL SHARP" },
+      { at: [221, 198], text: "CONTENTS: THE COIL. TRIBUTE, IDEALLY" },
+      { at: [220, 118], text: "LAST WORN AS A HELM, BY SOMETHING BLIND" },
+    ],
+    "FOOD, TECHNICALLY. TRIBUTE, IDEALLY.",
+    (t, T, P) => {
+      P.lid.setAttribute("opacity", (t % 26) < 3 ? .9 : 0);  // the slow blink
+      const a0 = t * .06;                                    // the coil, by degrees
+      const pts = Array.from({ length: 26 }, (_, k) => {
+        const a = a0 + k * .5, r = 4 + k * 1.35;
+        return `${221 + Math.cos(a) * r},${198 + Math.sin(a) * r * .75}`;
+      });
+      P.coil.setAttribute("points", pts.join(" "));
+    });
+
+
+  /* ---------------- 17: exterior, the approach ---------------- */
+  {
+    const svg = document.getElementById("ext1");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    const XDOTS = stipple(svg, "dots-ext1", PH, .8);
+    // the horizon's molten line, the mesas, the scrub
+    el(svg, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
+      "stroke-width": 1.4, opacity: .8 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "20,296 70,282 120,294 150,288 190,297" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "470,297 520,286 560,292 610,283 640,294" });
+    el(svg, "rect", { x: 0, y: 301, width: 640, height: 99, fill: XDOTS, opacity: .35 });
+    for (let i = 0; i < 14; i++)
+      el(svg, "line", { x1: 30 + (i * 97) % 610, y1: 318 + (i * 37) % 70,
+        x2: 36 + (i * 97) % 610, y2: 316 + (i * 37) % 70, stroke: PH_DIM });
+    const cloud = el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .6,
+      points: "0,0" });
+    // THE MONOLITH: profile faces carved into its flanks (the boy west,
+    // the warrior east), a door no taller than a person
+    el(svg, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "284,72 322,58 356,66 360,120 356,190 358,246 354,300 " +   // crown, east edge
+      "286,300 " +
+      "282,250 288,214 " +
+      "278,196 284,188 276,180 286,172 282,162 " +                // THE BOY, west
+      "288,140 284,110 " });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:               // the warrior
+      "356,150 348,158 352,168 346,176 354,184" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "310,80 314,140 306,200 312,260" });                // a weather seam
+    // the western face at ground level: the Autarch as a BABY, carved
+    // soft and round, eyes closed -- and his open mouth is the door
+    el(svg, "circle", { cx: 320, cy: 252, r: 26, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });                        // the face
+    el(svg, "path", { d: "M 306 246 Q 311 250 316 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });                        // closed eye
+    el(svg, "path", { d: "M 324 246 Q 329 250 334 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });                        // closed eye
+    el(svg, "line", { x1: 320, y1: 252, x2: 318, y2: 258, stroke: PH_DIM }); // the nose
+    el(svg, "path", { d: "M 302 240 Q 306 232 312 236", fill: "none",
+      stroke: PH_DIM });                                         // a soft brow
+    el(svg, "path", { d: "M 328 236 Q 334 232 338 240", fill: "none",
+      stroke: PH_DIM });
+    el(svg, "path", { d: "M 311 300 L 311 276 Q 320 264 329 276 L 329 300 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.5 });              // the mouth, a door
+    // the tendrils, curling off the crown (re-drawn per tick: they sway)
+    const tendrils = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 }));
+    // the scavenger, the size of a word
+    const scav = document.createElementNS(NS, "g"); svg.appendChild(scav);
+    const sBody = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    const sHead = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT });
+    const sLegs = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    const thought = label(svg, 0, 0, 9, PH_DIM);
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      tendrils.forEach((n, i) => {                                // the crown curls
+        const bx = 300 + i * 20, sway = Math.sin(t * .12 + i * 2) * 6;
+        const pts = Array.from({ length: 7 }, (_, k) => {
+          const a = -Math.PI / 2 + k * .5 * (i % 2 ? 1 : -1) + sway * .02 * k;
+          const r = 8 + k * 5;
+          return `${bx + Math.cos(a) * r * .8 + sway * k * .12},${62 - k * 7 + Math.sin(a) * r * .3}`;
+        });
+        n.setAttribute("points", `${bx},${64 + i * 2} ` + pts.join(" "));
+      });
+      const cx = ((t * .7) % 760) - 60;                          // one patient cloud
+      cloud.setAttribute("points",
+        `${cx},110 ${cx + 24},102 ${cx + 52},106 ${cx + 78},100 ${cx + 96},110`);
+      // the walk: approach, then stand, then look up
+      const wx = Math.min(214, 60 + Math.floor(T * 1.2));
+      const standing = wx >= 214;
+      const step = standing ? 0 : (t % 4 < 2 ? 3 : -3);
+      const sy = 336;
+      sHead.setAttribute("cx", wx + 106); sHead.setAttribute("cy", sy - 15 - (standing ? 1 : 0));
+      sBody.setAttribute("points", `${wx + 106},${sy - 12} ${wx + 106},${sy - 4}`);
+      sLegs.setAttribute("points",
+        `${wx + 103 + step * .4},${sy + 4} ${wx + 106},${sy - 4} ${wx + 109 - step * .4},${sy + 4}`);
+      thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
+      thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
+      typeOn(foot, "ETONNANT.", T, 170, .8);
+    });
+  }
+
+  /* ---------------- 23-25: the spawn of brain, three takes ---------------- */
+  // the body: a risen brain -- bumpy lobed outline with gyri, stippled
+  function brainBody(svg, g, cx, cy, rx, ry, DOTS) {
+    const ing = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+    let d = `M ${cx - rx} ${cy}`;
+    const N = 12;
+    for (let i = 1; i <= N; i++) {
+      const a0 = Math.PI + (i - .5) * 2 * Math.PI / N, a1 = Math.PI + i * 2 * Math.PI / N;
+      const bump = 1.18 + (i % 3) * .06;
+      d += ` Q ${cx + Math.cos(a0) * rx * bump} ${cy + Math.sin(a0) * ry * bump}` +
+           ` ${cx + Math.cos(a1) * rx} ${cy + Math.sin(a1) * ry}`;
+    }
+    ing("path", { d: d + " Z", fill: DOTS, stroke: FUNGUS, "stroke-width": 1.7 });
+    // the gyri: S-squiggles scattered through the mass
+    [[-.5,-.4],[.1,-.55],[.55,-.3],[-.6,.15],[0,.05],[.55,.25],[-.3,.5],[.25,.55]]
+      .forEach(([fx, fy], i) => {
+        const x = cx + fx * rx, y = cy + fy * ry, s2 = 10 + (i % 3) * 3;
+        ing("path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.2, d:
+          `M ${x - s2} ${y} Q ${x - s2 / 2} ${y - s2} ${x} ${y} Q ${x + s2 / 2} ${y + s2} ${x + s2} ${y}` });
+      });
+  }
+  // the jar head, worn: tall ears, long snout, one carved eye
+  function jarHead(svg, g, hx, hy) {
+    const ing = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+    const earL = ing("polygon", { fill: PH, "fill-opacity": .4, stroke: PH,
+      "stroke-width": 1.3 });
+    const earR = ing("polygon", { fill: "none", stroke: PH, "stroke-width": 1.3 });
+    ing("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      `${hx - 16},${hy + 34} ${hx - 20},${hy + 12} ${hx - 12},${hy - 6} ` +
+      `${hx + 8},${hy - 12} ${hx + 24},${hy - 4} ${hx + 60},${hy + 10} ` +
+      `${hx + 56},${hy + 18} ${hx + 22},${hy + 12} ${hx + 12},${hy + 18} ${hx + 16},${hy + 34}` });
+    ing("circle", { cx: hx + 8, cy: hy + 2, r: 2.2, fill: PH_BRIGHT });
+    // the pale neck band
+    ing("polyline", { fill: "none", stroke: PH_DIM, points:
+      `${hx - 14},${hy + 26} ${hx + 2},${hy + 30} ${hx + 14},${hy + 26}` });
+    return { earL, earR, hx, hy };
+  }
+  function prickEars(H, tw) {
+    H.earL.setAttribute("points",
+      `${H.hx - 14},${H.hy - 4} ${H.hx - 22 - tw * .4},${H.hy - 46 - tw} ${H.hx - 2},${H.hy - 10}`);
+    H.earR.setAttribute("points",
+      `${H.hx + 2},${H.hy - 10} ${H.hx + 4 + tw * .3},${H.hy - 44 - tw} ${H.hx + 16},${H.hy - 8}`);
+  }
+  // a wading-bird leg: hip -> backward knee -> shank -> splayed toes
+  function birdLeg(nT, nS, hipx, hipy, k, lift) {
+    const kx = hipx + 6 + k * 6, ky = hipy + 42 - lift * .4;
+    const fx = hipx - 8 + k * 26, fy = 308 - lift;
+    nT.setAttribute("points", `${hipx},${hipy} ${kx},${ky}`);
+    nS.setAttribute("points",
+      `${kx},${ky} ${fx},${fy} ${fx - 10},${fy + 4} M0,0`.replace(" M0,0", "") +
+      ` ${fx},${fy} ${fx + 10},${fy + 4} ${fx},${fy} ${fx + 2},${fy + 6}`);
+  }
+
+  // 23: THE LISTENER
+  {
+    const svg = document.getElementById("spawn-a");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "sa-dots", PH, 1.2);
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    const legT1 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 3.4,
+      "stroke-linecap": "round" });
+    const legS1 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const legT2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .5 });
+    const legS2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
+    birdLeg(legT1, legS1, 300, 236, 0, 0);
+    birdLeg(legT2, legS2, 336, 232, .8, 0);
+    brainBody(svg, gg, 320, 190, 78, 62, stipple(svg, "sa-orange", FUNGUS, 1.2));
+    const H = jarHead(svg, gg, 312, 90);
+    // the fungal fringe at the neck
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "290,132 296,142 302,132 310,144 318,132 326,142 334,130 342,140 350,132" })
+      .setAttribute("transform", "translate(0,0)");
+    const ripL = Array.from({ length: 2 }, () => el(svg, "path", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.4, opacity: 0 }));
+    const ripR = Array.from({ length: 2 }, () => el(svg, "path", { fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.4, opacity: 0 }));
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    for (let x = 60; x < 600; x += 16)
+      el(svg, "line", { x1: x, y1: 312, x2: x + 7, y2: 312, stroke: PH_DIM });
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (IT HEARD THAT)", T, 4, 1.4);
+      const phase = Math.floor(T / 40) % 4;                    // sounds alternate sides
+      const side = phase === 1 ? -1 : phase === 3 ? 1 : 0;
+      const lean = side * 5;
+      gg.setAttribute("transform", `rotate(${lean} 320 300)`);
+      prickEars(H, side !== 0 ? 8 : 0);
+      [[ripL, 70, -1], [ripR, 570, 1]].forEach(([rips, x, dir]) => {
+        rips.forEach((r, i) => {
+          const on = (dir === -1 && side === -1) || (dir === 1 && side === 1);
+          const k = ((t * 2 + i * 10) % 24) / 24;
+          r.setAttribute("d", `M ${x + dir * 14 * (1 + k)} 186 ` +
+            `Q ${x + dir * (26 + k * 26)} 206 ${x + dir * 14 * (1 + k)} 226`);
+          r.setAttribute("opacity", on ? Math.max(0, .9 - k) : 0);
+        });
+      });
+      typeOn(foot, "NO EYES UNDER THE JAR. IT DOES NOT NEED THEM.", T, 112, 1.6);
+    });
+  }
+
+  // 24: MID-STEP -- the head holds level while everything else jounces
+  {
+    const svg = document.getElementById("spawn-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "sb-dots", PH, 1.2);
+    const legT1 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 3.4,
+      "stroke-linecap": "round" });
+    const legS1 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const legT2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .5 });
+    const legS2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
+    const gBody = document.createElementNS(NS, "g"); svg.appendChild(gBody);
+    brainBody(svg, gBody, 320, 190, 78, 62, stipple(svg, "sb-orange", FUNGUS, 1.2));
+    const gHead = document.createElementNS(NS, "g"); svg.appendChild(gHead);
+    const H = jarHead(svg, gHead, 312, 90);
+    prickEars(H, 0);
+    const gGround = document.createElementNS(NS, "g");
+    for (let x = 44; x < 600; x += 16) {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 312);
+      l.setAttribute("x2", x + 7); l.setAttribute("y2", 312);
+      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
+    }
+    svg.appendChild(gGround);
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (MID-STEP)", T, 4, 1.4);
+      const th = (t % 16) / 16 * Math.PI * 2;
+      birdLeg(legT1, legS1, 300, 236, Math.cos(th) * .8,
+        Math.max(0, Math.sin(th)) * 20);
+      birdLeg(legT2, legS2, 336, 232, Math.cos(th + Math.PI) * .8,
+        Math.max(0, Math.sin(th + Math.PI)) * 20);
+      const jounce = [0, 2, 4, 2, 0, 2, 4, 2][t % 8];          // the body takes it
+      gBody.setAttribute("transform",
+        `translate(0 ${jounce}) rotate(${jounce - 2} 320 190)`);
+      gHead.setAttribute("transform", "translate(0 0)");        // the head refuses to
+      gGround.setAttribute("transform", `translate(${-(t * 4) % 16} 0)`);
+      typeOn(foot, "THE HEAD HOLDS LEVEL. THE REST NEGOTIATES.", T, 104, 1.6);
+    });
+  }
+
+  // 25: FELLED -- as the game finds it
+  {
+    const svg = document.getElementById("spawn-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "sc-dots", PH, 1.2);
+    for (let x = 60; x < 600; x += 16)
+      el(svg, "line", { x1: x, y1: 292, x2: x + 7, y2: 292, stroke: PH_DIM });
+    // the body, down: the brain mass squashed against the ground
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    brainBody(svg, gg, 300, 246, 88, 44, stipple(svg, "sc-orange", FUNGUS, 1.2));
+    // the legs, where the stride left them
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 3,
+      "stroke-linecap": "round", points: "356,244 408,232 446,252" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      points: "446,252 486,246 496,252 486,258 446,258" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 2.6,
+      "stroke-linecap": "round", opacity: .6, points: "344,268 390,276 428,270" });
+    // the jar, rolled to its side, rocking itself still
+    const gJar = document.createElementNS(NS, "g"); svg.appendChild(gJar);
+    const jh = jarHead(svg, gJar, 0, 0);
+    prickEars(jh, 0);
+    // the last thoughts, pulsing out and fading
+    const pulses = Array.from({ length: 2 }, () =>
+      el(svg, "circle", { cx: 300, cy: 240, r: 10, fill: "none",
+        stroke: FUNGUS, opacity: 0 }));
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF BRAIN (AS FOUND)", T, 4, 1.4);
+      const settle = Math.max(0, 1 - T / 50);                  // the rocking dies
+      const rock = Math.sin(t * .55) * 14 * settle;
+      gJar.setAttribute("transform",
+        `translate(150 258) rotate(${78 + rock} 0 20)`);
+      pulses.forEach((q, i) => {                               // the thought, winding down
+        const k = ((t * 2 + i * 12) % 26) / 26;
+        const strength = Math.max(0, 1 - T / 110);
+        q.setAttribute("r", 10 + k * 34);
+        q.setAttribute("opacity", Math.max(0, (.7 - k) * strength));
+      });
+      typeOn(foot, "FELLED MID-STEP. THE JAR ROLLED TO ITS SIDE.", T, 120, 1.6);
+    });
+  }
+
+
+  /* ---------------- 26-28: the spawn of guts, three takes ---------------- */
+  // the gut palette: phosphor greens, one shade per organ (CCB); the
+  // falcon jar stays blue
+  const G_COLLAR = "#49e08b", G_ARM = "#6fe762", G_SKIRT = "#3ed4a4",
+        G_DRIP = "#aaffcc", G_DIM = "#2c8f5e";
+  let _gutN = 0;
+  // the falcon-jar helm: a tall cone with the falcon's head at the peak
+  function gutsHelm(g) {
+    const ing = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+    ing("polygon", { points: "292,118 348,118 336,52 306,52", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    ing("line", { x1: 300, y1: 92, x2: 341, y2: 92, stroke: PH_DIM });
+    ing("polyline", { fill: "none", stroke: PH, "stroke-width": 1.5, points:
+      "306,52 308,38 318,28 332,28 342,36 " +               // the dome
+      "358,46 346,50 340,46 " +                             // the SHARP hook, down and back
+      "334,52 322,52 336,52" });                            // jaw home
+    ing("circle", { cx: 328, cy: 36, r: 1.8, fill: PH_BRIGHT });
+  }
+  // the face and collar: eye-cluster over a torus of gut
+  function gutsFace(svg, DOTS) {
+    el(svg, "polygon", { points: "288,118 352,118 358,158 344,176 296,176 282,156",
+      fill: DOTS, stroke: PH, "stroke-width": 1.5 });
+    const eyes = [[306,134,5],[322,130,6],[338,136,5],[300,148,4],[316,146,7],
+      [334,150,4],[322,162,4]].map(([x, y, r]) => ({
+        ball: el(svg, "circle", { cx: x, cy: y, r, fill: BG, stroke: PH_BRIGHT,
+          "stroke-width": 1.3 }),
+        pupil: el(svg, "circle", { cx: x + 1, cy: y + 1, r: r * .4, fill: PH }),
+      }));
+    // the collar: a fat ring of gut, scalloped, green, inclined to drip
+    const GD = stipple(svg, "gutdots" + (_gutN++), G_COLLAR, 1.1);
+    el(svg, "ellipse", { cx: 320, cy: 190, rx: 62, ry: 24, fill: GD,
+      stroke: G_COLLAR, "stroke-width": 1.7 });
+    el(svg, "ellipse", { cx: 320, cy: 186, rx: 34, ry: 12, fill: BG,
+      stroke: G_DIM });
+    const scallops = el(svg, "polyline", { fill: "none", stroke: G_DIM, points:
+      Array.from({ length: 9 }, (_, k) =>
+        `${262 + k * 15},${210 + (k % 2) * 5}`).join(" ") });
+    return eyes;
+  }
+  // the tendril skirt: re-drawn per tick, always moving
+  function gutsSkirt(svg, n) {
+    return Array.from({ length: n }, (_, i) =>
+      ({ x0: 284 + i * 12, ph: i * 1.3,
+         q: el(svg, "polyline", { fill: "none", stroke: G_SKIRT,
+           "stroke-width": i % 2 ? 1.6 : 2.4 }) }));
+  }
+  function skirtTick(skirt, t, droop) {
+    skirt.forEach(s2 => {
+      const w1 = Math.sin(t * .3 + s2.ph) * 7, w2 = Math.sin(t * .22 + s2.ph * 2) * 10;
+      s2.q.setAttribute("points",
+        `${s2.x0},206 ${s2.x0 + w1},${240 + droop} ` +
+        `${s2.x0 - w2},${272 + droop} ${s2.x0 + w2 * .6},${300 + droop} ` +
+        `${s2.x0 + w2 * .6 + 8},${302 + droop}`);
+    });
+  }
+  // the gut-arm: an INTESTINE, rooted at the collar and reaching the floor
+  // -- a continuous tube with transverse creases (haustra), ending pooled
+  function gutsArm(svg) {
+    const C = [[266, 192], [238, 200], [212, 220], [196, 250], [192, 280], [198, 302]];
+    const wall = (side) => {
+      const pts = C.map(([x, y], k) => {
+        const [x0, y0] = C[Math.max(0, k - 1)], [x1, y1] = C[Math.min(C.length - 1, k + 1)];
+        const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+        const w2 = 10 - k * .6;
+        return `${x - dy / len * w2 * side},${y + dx / len * w2 * side}`;
+      });
+      el(svg, "polyline", { fill: "none", stroke: G_ARM, "stroke-width": 1.6,
+        points: pts.join(" ") });
+      return pts;
+    };
+    const L = wall(1), R = wall(-1);
+    // the haustral creases: paired arcs across the tube, every half-segment
+    for (let k = 0; k < C.length - 1; k++) {
+      for (const f of [0.33, 0.66, 1]) {
+        const x = C[k][0] + (C[k + 1][0] - C[k][0]) * f;
+        const y = C[k][1] + (C[k + 1][1] - C[k][1]) * f;
+        const dx = C[k + 1][0] - C[k][0], dy = C[k + 1][1] - C[k][1];
+        const len = Math.hypot(dx, dy) || 1, w2 = 9 - k * .6;
+        el(svg, "path", { fill: "none", stroke: G_DIM, d:
+          `M ${x - dy / len * w2} ${y + dx / len * w2} ` +
+          `Q ${x + dx / len * 4} ${y + dy / len * 4} ` +
+          `${x + dy / len * w2} ${y - dx / len * w2}` });
+      }
+    }
+    // the end, pooled on the floor
+    el(svg, "ellipse", { cx: 202, cy: 306, rx: 15, ry: 5.5, fill: "none",
+      stroke: G_ARM, "stroke-width": 1.5 });
+    el(svg, "ellipse", { cx: 214, cy: 310, rx: 24, ry: 4, fill: "none",
+      stroke: G_DIM });
+    return [];
+  }
+
+  // 26: THE SWAY
+  {
+    const svg = document.getElementById("guts-a");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "ga-dots", PH, 1.2);
+    for (let x = 60; x < 600; x += 16)
+      el(svg, "line", { x1: x, y1: 314, x2: x + 7, y2: 314, stroke: PH_DIM });
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    const armSegs = gutsArm(gg);
+    const skirt = gutsSkirt(gg, 6);
+    gutsFace(gg, DOTS);
+    gutsHelm(gg);
+    // the drip
+    const drips = Array.from({ length: 5 }, (_, i) =>
+      ({ x: 270 + i * 24, ph: i * 29, q: el(svg, "line", { stroke: G_DRIP,
+        "stroke-width": 1.4, opacity: .8 }) }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 64, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [322, 40], text: "HELM: THE FALCON JAR. THE PLINTH WANTS IT" },
+      { at: [322, 146], text: "EYES: DECORATIVE. IT HUNTS BY EAR" },
+      { at: [370, 190], text: "COLLAR: GUT, RECENTLY PROMOTED" },
+      { at: [214, 260], text: "ARM: A HOSE WITH OPINIONS" },
+    ];
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (SWAYING TOWARD EVERY SOUND)", T, 4, 1.3);
+      gg.setAttribute("transform",
+        `rotate(${Math.round(Math.sin(t * .09) * 3) * 1.4} 320 310)`);
+      skirtTick(skirt, t, 0);
+      drips.forEach(d => {
+        const k = (t * 5 + d.ph) % 110;
+        d.q.setAttribute("x1", d.x); d.q.setAttribute("x2", d.x);
+        d.q.setAttribute("y1", 206 + k); d.q.setAttribute("y2", 212 + k);
+        d.q.setAttribute("opacity", k > 100 ? 0 : .8);
+      });
+      const c = CALLS[Math.floor(T / 28) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,60 448,60`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "WHATEVER YOU JUST DID, IT HEARD.", T, 112, 1.6);
+    });
+  }
+
+  // 27: THE DRIP -- the face, closer than anyone wants
+  {
+    const svg = document.getElementById("guts-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "gb-dots", PH, 1.2);
+    const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
+    gg.setAttribute("transform", "translate(-320 -110) scale(2)");
+    const eyes = gutsFace(gg, DOTS);
+    gutsHelm(gg);
+    const ring = gg.querySelector("ellipse");                 // the collar, pulsing
+    const drips = Array.from({ length: 7 }, (_, i) =>
+      ({ x: 200 + i * 44, ph: i * 23, q: el(svg, "line", { stroke: G_DRIP,
+        "stroke-width": 1.8 }),
+        splat: el(svg, "polyline", { fill: "none", stroke: G_DIM,
+          points: "0,0", opacity: 0 }) }));
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (DETAIL. SORRY.)", T, 4, 1.4);
+      eyes.forEach((e, i) => {                                // out-of-sequence blinks
+        const open = ((t + i * 7) % 30) > 4;
+        e.pupil.setAttribute("opacity", open ? 1 : 0);
+        e.ball.setAttribute("fill", open ? BG : PH_DIM);
+      });
+      drips.forEach(d => {
+        const k = (t * 6 + d.ph) % 130;
+        d.q.setAttribute("x1", d.x); d.q.setAttribute("x2", d.x);
+        d.q.setAttribute("y1", 270 + k * .5); d.q.setAttribute("y2", 280 + k * .5);
+        d.q.setAttribute("opacity", k > 120 ? 0 : .85);
+        const landed = k > 116;
+        d.splat.setAttribute("points",
+          `${d.x - 7},342 ${d.x - 2},338 ${d.x + 3},342 ${d.x + 8},339`);
+        d.splat.setAttribute("opacity", landed ? .8 : 0);
+      });
+      typeOn(foot, "THE EYES ARE ORNAMENTAL. THE HUNGER IS NOT.", T, 100, 1.6);
+    });
+  }
+
+  // 28: THE CLAIM -- it goes down, the jar survives
+  {
+    const svg = document.getElementById("guts-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const DOTS = stipple(svg, "gc-dots", PH, 1.2);
+    for (let x = 60; x < 600; x += 16)
+      el(svg, "line", { x1: x, y1: 314, x2: x + 7, y2: 314, stroke: PH_DIM });
+    const gBody = document.createElementNS(NS, "g"); svg.appendChild(gBody);
+    gutsArm(gBody);
+    const skirt = gutsSkirt(gBody, 6);
+    gutsFace(gBody, DOTS);
+    const gHelm = document.createElementNS(NS, "g"); svg.appendChild(gHelm);
+    gutsHelm(gHelm);
+    const prize = label(svg, 452, 260, 10, FUNGUS);
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "SPAWN OF GUTS (THE CLAIM)", T, 4, 1.4);
+      const down = Math.max(0, Math.min(1, (T - 60) / 20));   // it goes down
+      gBody.setAttribute("transform",
+        `translate(0 ${down * 80}) rotate(${down * 8} 320 310)`);
+      gBody.setAttribute("opacity", 1 - down * .35);
+      skirtTick(skirt, T < 60 ? t : 0, down * 26);
+      // the helm topples forward, bounces once, settles upright
+      let hx = 0, hy = 0, rot = 0;
+      if (T >= 60) {
+        const k = Math.min(1, (T - 60) / 26);
+        rot = k * 92 - (T > 86 && T < 96 ? (96 - T) : 0) * 2; // the bounce
+        hx = k * 120; hy = k * 190;
+        if (T > 100) { rot = 0; hx = 128; hy = 196; }         // upright, waiting
+      }
+      gHelm.setAttribute("transform", `translate(${hx} ${hy}) rotate(${rot} 320 118)`);
+      prize.textContent = T > 112 ? "[+5 -- THE FALCON JAR]" : "";
+      typeOn(foot, "THE JAR IS OWED TO A PLINTH TWO FLOORS UP.", T, 130, 1.6);
+    });
+  }
+
+
+  /* ---------------- 13-C: the Autarch, hollowed ---------------- */
+  {
+    const svg = document.getElementById("autarch-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / BONE / CLAIMED";
+    const ADOTS = stipple(svg, "dots-autarchc", PH, .9);
+    const ODOTS = stipple(svg, "dots-orangec", FUNGUS, 1.2);
+    const CX = 320, CY = 180;
+    // the halo, carvings still
+    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      el(svg, "polygon", { fill: PH, "fill-opacity": .35, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        opacity: .55, points: pts.join(" ") });
+    });
+    // THE SKULL: the same stone, worn honest
+    el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,214 370,236 364,258 276,258 270,236 260,214 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    // the sockets, FULL of the orange
+    const sockL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 14, ry: 10,
+      fill: ODOTS, stroke: PH, "stroke-width": 1.4 });
+    const sockR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 14, ry: 10,
+      fill: ODOTS, stroke: PH, "stroke-width": 1.4 });
+    const glowL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 6, ry: 4,
+      fill: FUNGUS, "fill-opacity": .5 });
+    const glowR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 6, ry: 4,
+      fill: FUNGUS, "fill-opacity": .5 });
+    // sprigs, testing the air out of each socket
+    const sprigs = [[296, 188, -2.2], [300, 186, -.9], [344, 188, -.6], [340, 186, -2.6]]
+      .map(() => el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    const SPRIG_AT = [[296, 190, -2.4], [302, 186, -.8], [344, 190, -.7], [338, 186, -2.5]];
+    // the nasal aperture, and the cheek hollows
+    el(svg, "path", { d: "M 320 204 L 312 230 Q 320 238 328 230 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "path", { d: "M 276 214 Q 284 224 292 218", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 348 218 Q 356 224 364 214", fill: "none", stroke: PH_DIM });
+    // THE GRIN: carved teeth, one gone
+    el(svg, "line", { x1: 294, y1: 240, x2: 346, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 252, x2: 346, y2: 252, stroke: PH, "stroke-width": 1.4 });
+    for (let x = 294; x <= 346; x += 6.5)
+      el(svg, "line", { x1: x, y1: 240, x2: x, y2: 252, stroke: PH });
+    el(svg, "rect", { x: 320.5, y: 240.5, width: 5.5, height: 11, fill: BG }); // the gap
+    // the beard: curl-rows, filled, still
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
+        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    // the ropes, as in 13-B
+    const ROOTS = [
+      [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
+      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
+      [288, 338, 2.2], [352, 338, .9],
+    ];
+    const tendrils = ROOTS.map(() =>
+      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
+        stroke: FUNGUS, "stroke-width": 1.4 }));
+    const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "NASSAK AN-RAH (HOLLOWED)", T, 4, 1.4);
+      const br = [.35, .45, .55, .65, .55, .45][Math.floor(t / 3) % 6]; // the sockets pulse
+      glowL.setAttribute("fill-opacity", br);
+      glowR.setAttribute("fill-opacity", br);
+      sprigs.forEach((n, i) => {                                       // the sprigs test the air
+        const [sx, sy, a0] = SPRIG_AT[i];
+        const pts = [1, 2, 3].map(k => {
+          const a = a0 + Math.sin(t * .3 + k + i * 2) * .35;
+          const r = k * (5 + ((t + i * 7) % 8) * .6);
+          return `${sx + Math.cos(a) * r},${sy + Math.sin(a) * r}`;
+        });
+        n.setAttribute("points", `${sx},${sy} ` + pts.join(" "));
+      });
+      tendrils.forEach((n, i) => {                                     // the ropes
+        const [rx, ry, a0] = ROOTS[i];
+        const w = Math.sin(t * .4 + i * 1.9);
+        const c = [[rx, ry]];
+        for (let k = 1; k <= 4; k++) {
+          const a = a0 + Math.sin(t * .25 + k * 1.2 + i) * .3 + w * .04 * k;
+          const r = k * (13 + ((t + i * 5) % 12));
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
+        }
+        const W = [6, 4.8, 3.4, 1.9, .7];
+        const L = [], R = [];
+        for (let k = 0; k < c.length; k++) {
+          const [x0, y0] = c[Math.max(0, k - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len * W[k], ny = dx / len * W[k];
+          L.push(`${c[k][0] + nx},${c[k][1] + ny}`);
+          R.push(`${c[k][0] - nx},${c[k][1] - ny}`);
+        }
+        n.setAttribute("points", L.concat(R.reverse()).join(" "));
+      });
+      typeOn(foot, "THE STONE WEARS TO THE SKULL. THE SKULL WEARS ORANGE.", T, 130, 1.8);
+    });
+  }
+
+
+  /* ---------------- 17-B: the approach, crowned by the old man ---------------- */
+  {
+    const svg = document.getElementById("ext1b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    const XDOTS = stipple(svg, "dots-ext1b", PH, .8);
+    el(svg, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
+      "stroke-width": 1.4, opacity: .8 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "20,296 70,282 120,294 150,288 190,297" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "470,297 520,286 560,292 610,283 640,294" });
+    el(svg, "rect", { x: 0, y: 301, width: 640, height: 99, fill: XDOTS, opacity: .35 });
+    for (let i = 0; i < 14; i++)
+      el(svg, "line", { x1: 30 + (i * 97) % 610, y1: 318 + (i * 37) % 70,
+        x2: 36 + (i * 97) % 610, y2: 316 + (i * 37) % 70, stroke: PH_DIM });
+    const cloud = el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .6,
+      points: "0,0" });
+    // THE MONOLITH, crowned by the old man in profile, face to the sky:
+    // back of skull, brow, nose pointed UP, the OPEN MOUTH, chin -- then
+    // the flanks as before (the boy carved into the west edge)
+    el(svg, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "286,104 290,74 300,62 314,58 " +                     // the skull's back rise
+      "320,64 326,60 " +                                    // the brow
+      "332,40 338,52 340,58 " +                             // the NOSE, skyward
+      "344,62 344,76 352,78 354,66 " +                      // the open mouth
+      "362,68 368,80 " +                                    // lips and chin
+      "372,110 360,190 358,246 354,300 " +                  // the east fall
+      "286,300 " +
+      "282,250 288,214 " +
+      "278,196 284,188 276,180 286,172 282,162 " +          // THE BOY, west
+      "288,140 " });
+    el(svg, "path", { d: "M 322 66 Q 326 70 330 67", fill: "none",
+      stroke: PH_DIM });                                    // the closed eye, skyward
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:               // the warrior
+      "358,150 350,158 354,168 348,176 356,184" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "312,84 316,140 308,200 314,260" });
+    // the door: the baby's face, as in 17
+    el(svg, "circle", { cx: 320, cy: 252, r: 26, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(svg, "path", { d: "M 306 246 Q 311 250 316 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(svg, "path", { d: "M 324 246 Q 329 250 334 246", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    el(svg, "line", { x1: 320, y1: 252, x2: 318, y2: 258, stroke: PH_DIM });
+    el(svg, "path", { d: "M 311 300 L 311 276 Q 320 264 329 276 L 329 300 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.5 });
+    // the orange, WEEPING from the open mouth: tapered ropes, curling up
+    const tendrils = Array.from({ length: 4 }, () =>
+      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
+        stroke: FUNGUS, "stroke-width": 1.3 }));
+    // the scavenger
+    const sBody = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    const sHead = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT });
+    const sLegs = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    const thought = label(svg, 0, 0, 9, PH_DIM);
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      tendrils.forEach((n, i) => {
+        const rx = 345 + i * 2.5, ry = 70, a0 = -Math.PI / 2 + (i - 1.5) * .5;
+        const w = Math.sin(t * .18 + i * 1.7);
+        const c = [[rx, ry]];
+        for (let k = 1; k <= 4; k++) {
+          const a = a0 + Math.sin(t * .12 + k + i * 2) * .28 + (i - 1.5) * .12 * k;
+          const r = k * (9 + ((t * .5 + i * 4) % 6));
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r]);
+        }
+        const W = [4.5, 3.6, 2.6, 1.5, .6];
+        const L = [], R = [];
+        for (let k = 0; k < c.length; k++) {
+          const [x0, y0] = c[Math.max(0, k - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          L.push(`${c[k][0] - dy / len * W[k]},${c[k][1] + dx / len * W[k]}`);
+          R.push(`${c[k][0] + dy / len * W[k]},${c[k][1] - dx / len * W[k]}`);
+        }
+        n.setAttribute("points", L.concat(R.reverse()).join(" "));
+      });
+      const cx = ((t * .7) % 760) - 60;
+      cloud.setAttribute("points",
+        `${cx},110 ${cx + 24},102 ${cx + 52},106 ${cx + 78},100 ${cx + 96},110`);
+      const wx = Math.min(214, 60 + Math.floor(T * 1.2));
+      const standing = wx >= 214;
+      const step = standing ? 0 : (t % 4 < 2 ? 3 : -3);
+      const sy = 336;
+      sHead.setAttribute("cx", wx + 106); sHead.setAttribute("cy", sy - 15);
+      sBody.setAttribute("points", `${wx + 106},${sy - 12} ${wx + 106},${sy - 4}`);
+      sLegs.setAttribute("points",
+        `${wx + 103 + step * .4},${sy + 4} ${wx + 106},${sy - 4} ${wx + 109 - step * .4},${sy + 4}`);
+      thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
+      thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
+      typeOn(foot, "HIS SENTENCE CONTINUES UNDERGROUND.", T, 168, 1.4);
+    });
+  }
+
+
   /* ---------------- 03-C: the canopic system, supine ---------------- */
   {
     const svg = document.getElementById("canopic-c");
@@ -988,7 +2660,6 @@
       typeOn(foot, "AS THE TOMBWRIGHTS LEFT THEM. NOTHING HAS COME SCAVENGING. YET.", T, 120, 1.6);
     });
   }
-
 
   /* ---------------- 17-C: the approach, old man crown, thin curls ---------------- */
   {
