@@ -1051,61 +1051,64 @@
     const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
     const H = (name, attrs) => { const n = document.createElementNS(NS, name);
       for (const k in attrs) n.setAttribute(k, attrs[k]); gg.appendChild(n); return n; };
-    // spine line: hip hump -> back -> descending neck (nose-down drift)
+    // the specimen, SLEEK: a racing hound's silhouette -- arched loin,
+    // deep chest, hard belly tuck, long neck, narrow muzzle, ears folded
+    // back along the skull (rose ears, not antennae)
     H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "188,142 206,126 236,122 272,132 312,146 352,160 392,176 418,188" });
-    // the head: tapered muzzle, needle teeth, DARK goggle
+      "196,138 226,124 262,126 300,136 348,158 396,178 " +   // croup to skull
+      "492,212" });                                          // the long taper to the nose
     H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "418,188 462,198 524,224 512,236 462,222 434,212 422,206 418,188" });
+      "492,212 486,222 448,210 424,202 412,196 " +           // jaw, back to throat
+      "392,190 356,196 330,206 " +                           // the DEEP chest
+      "282,176 244,170 214,166 " +                           // the tuck, and the waist
+      "196,158 190,150 196,138" });                          // the rear, closed
     H("polyline", { fill: "none", stroke: PH, "stroke-width": 1,
-      points: "480,218 485,228 490,216 495,228 500,218 505,229 510,220" });
-    H("circle", { cx: 450, cy: 201, r: 8, fill: "none",
+      points: "458,210 463,218 468,208 473,218 478,210 483,219" }); // needle teeth
+    // the ears: small triangles folded back along the neck
+    H("polygon", { points: "396,178 376,162 390,172", fill: PH,
+      "fill-opacity": .5, stroke: PH, "stroke-width": 1.2 });
+    H("polygon", { points: "404,182 388,164 400,176", fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.1 });
+    H("circle", { cx: 428, cy: 193, r: 7, fill: "none",
       stroke: PH_DIM, "stroke-width": 1.6 });                // the goggle, unlit
-    H("circle", { cx: 452, cy: 202, r: 3, fill: PH_DIM, opacity: .35 });
-    H("polyline", { fill: "none", stroke: PH_DIM, points: "430,186 458,152" });
-    H("polyline", { fill: "none", stroke: PH_DIM, points: "424,184 442,146" });
-    // underline + belly
-    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "422,206 394,208 356,202 330,192 298,186 258,190 222,194 200,190 186,168 188,142" });
-    // ROBOT PARTS: vertebra ticks, shoulder actuator, hip cylinder, access
-    // hatch, a neck hose, rivet rows -- Autarchy pattern, piston-hocked
-    [[368,168],[378,172],[388,177],[398,182]].forEach(([x, y]) =>
+    H("circle", { cx: 430, cy: 194, r: 2.6, fill: PH_DIM, opacity: .35 });
+    // ROBOT PARTS: vertebra ticks down the neck, shoulder actuator, hip
+    // cylinder, access hatch, a throat hose -- Autarchy pattern
+    [[352,161],[364,166],[376,171],[388,176]].forEach(([x, y]) =>
       H("line", { x1: x, y1: y - 4, x2: x - 3, y2: y + 4, stroke: PH_DIM }));
-    H("circle", { cx: 318, cy: 172, r: 9, fill: "none", stroke: PH, "stroke-width": 1.4 });
-    H("circle", { cx: 318, cy: 172, r: 3, fill: "none", stroke: PH_DIM });   // shoulder
-    H("rect", { x: 196, y: 150, width: 30, height: 16, fill: "none",
+    H("circle", { cx: 306, cy: 162, r: 8, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    H("circle", { cx: 306, cy: 162, r: 2.6, fill: "none", stroke: PH_DIM }); // shoulder
+    H("rect", { x: 200, y: 138, width: 24, height: 13, fill: "none",
       stroke: PH, "stroke-width": 1.3 });                    // the hip cylinder
-    H("line", { x1: 204, y1: 150, x2: 204, y2: 166, stroke: PH_DIM });
-    H("rect", { x: 262, y: 154, width: 24, height: 14, fill: "none",
+    H("line", { x1: 207, y1: 138, x2: 207, y2: 151, stroke: PH_DIM });
+    H("rect", { x: 254, y: 146, width: 20, height: 11, fill: "none",
       stroke: PH_DIM });                                     // the access hatch
-    H("circle", { cx: 266, cy: 157, r: 1, fill: PH_DIM });
-    H("circle", { cx: 266, cy: 165, r: 1, fill: PH_DIM });
+    H("circle", { cx: 258, cy: 149, r: .9, fill: PH_DIM });
     H("polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3",
-      points: "420,204 400,226 368,224 344,212" });          // the neck hose
-    [242, 272, 302, 332].forEach(x =>
-      H("circle", { cx: x, cy: 140 + (x - 242) * .2, r: 1.2, fill: PH_DIM }));
-    // heraldry, someone else's, cut into the flank
-    H("polygon", { points: "252,166 268,166 260,180", fill: PH, "fill-opacity": .7 });
-    H("circle", { cx: 286, cy: 174, r: 5, fill: PH, "fill-opacity": .7 });
-    // the LIMP legs: piston thighs into strut shins, hanging as the gel holds
-    // them -- nothing walks here
-    [[330,192,338,232,330,268],[314,190,306,228,312,264],
-     [206,192,216,230,206,266],[192,188,184,224,190,262]].forEach(([ax,ay,kx,ky,fx,fy], i) => {
+      points: "414,198 396,216 366,210 344,202" });          // the throat hose
+    [242, 268, 294].forEach(x =>
+      H("circle", { cx: x, cy: 136 + (x - 242) * .18, r: 1.1, fill: PH_DIM }));
+    // heraldry, someone else's, on the flank
+    H("polygon", { points: "262,164 276,164 269,176", fill: PH, "fill-opacity": .7 });
+    H("circle", { cx: 292, cy: 172, r: 4, fill: PH, "fill-opacity": .7 });
+    // the LIMP legs: long and fine, piston thighs into strut shins, hanging
+    [[322,204,332,244,326,282],[306,198,298,236,304,274],
+     [214,166,226,208,216,250],[200,162,192,202,198,244]].forEach(([ax,ay,kx,ky,fx,fy], i) => {
       const near = i % 2 === 0;
       H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
-        "stroke-width": near ? 4.6 : 3, opacity: near ? 1 : .5,
+        "stroke-width": near ? 4 : 2.8, opacity: near ? 1 : .5,
         points: `${ax},${ay} ${kx},${ky}` });
       H("polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
-        "stroke-width": near ? 2.2 : 1.6, opacity: near ? 1 : .5,
-        points: `${kx},${ky} ${fx},${fy} ${fx + 7},${fy + 4}` });
-      H("circle", { cx: kx, cy: ky, r: 2.4, fill: "none", stroke: PH_DIM });
+        "stroke-width": near ? 2 : 1.5, opacity: near ? 1 : .5,
+        points: `${kx},${ky} ${fx},${fy} ${fx + 6},${fy + 4}` });
+      H("circle", { cx: kx, cy: ky, r: 2.2, fill: "none", stroke: PH_DIM });
       H("line", { x1: (ax + kx) / 2 - 3, y1: (ay + ky) / 2,
         x2: (ax + kx) / 2 + 3, y2: (ay + ky) / 2, stroke: PH_DIM }); // piston collar
     });
-    // the tail: a segmented cable, drifting
-    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.3, points:
-      "190,158 158,176 136,206 130,240" });
-    [[172,166],[146,190],[133,222]].forEach(([x, y]) =>
+    // the tail: a long fine cable, drifting low
+    H("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2, points:
+      "192,150 156,166 132,196 126,232" });
+    [[170,158],[142,182],[128,214]].forEach(([x, y]) =>
       H("line", { x1: x - 3, y1: y - 3, x2: x + 3, y2: y + 3, stroke: PH_DIM }));
     // bubbles, rising through the gel on the step clock
     const bubbles = Array.from({ length: 7 }, (_, i) =>
@@ -1115,10 +1118,10 @@
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 16, 48, 10, PH);
     const CALLS = [
-      { at: [450, 201], text: "EYE: DARK, AND BEST LEFT SO" },
-      { at: [286, 174], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
-      { at: [211, 158], text: "HIP: PISTON-HOCKED, AUTARCHY PATTERN" },
-      { at: [130, 240], text: "TAIL: A CABLE. THE LEASH RING IS GONE" },
+      { at: [428, 193], text: "EYE: DARK, AND BEST LEFT SO" },
+      { at: [292, 172], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
+      { at: [212, 144], text: "HIP: PISTON-HOCKED, AUTARCHY PATTERN" },
+      { at: [126, 232], text: "TAIL: A CABLE. THE LEASH RING IS GONE" },
     ];
     label(svg, 24, 334, 10, PH_DIM).textContent = "PRESERVATION";
     const cells = Array.from({ length: 10 }, (_, i) =>
@@ -1270,14 +1273,8 @@
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "SUMMIT / STATE GIFT";
     const PDOTS = stipple(svg, "dots-pink", PINK, 1.2);
-    // THE BAGGIE: an Autarchy zip-seal pouch, drawn first so the cluster
-    // sits inside it; the glare and zipper go on top later
-    el(svg, "polygon", { points: "212,152 428,152 438,320 202,320",
-      fill: "none", stroke: PH, "stroke-width": 1.5 });
-    el(svg, "polygon", { points: "216,124 424,124 428,152 212,152",
-      fill: "none", stroke: PH_DIM });                       // the lip above the seal
-    // the mound it grows from, bagged
-    el(svg, "ellipse", { cx: 320, cy: 302, rx: 104, ry: 12, fill: PDOTS,
+    // the mound it grows from
+    el(svg, "ellipse", { cx: 320, cy: 302, rx: 110, ry: 13, fill: PDOTS,
       stroke: PH_DIM });
     // the cluster: one tall, two middling, two buttons -- angular litho caps
     const shroom = (cx, capY, capW, stemW, spot) => {
@@ -1303,15 +1300,7 @@
       shroom(286, 268, 11, 2.6, false),
       shroom(356, 274, 10, 2.4, false),
     ];
-    // the plastic, over everything: zipper teeth and a long glare
-    el(svg, "line", { x1: 212, y1: 152, x2: 428, y2: 152, stroke: PH_BRIGHT,
-      "stroke-width": 2 });
-    for (let x = 218; x < 426; x += 9)
-      el(svg, "line", { x1: x, y1: 148, x2: x, y2: 156, stroke: PH_DIM });
-    el(svg, "line", { x1: 240, y1: 160, x2: 226, y2: 308, stroke: PH_BRIGHT,
-      opacity: .16, "stroke-width": 6 });                    // the glare
-    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .5,
-      points: "402,170 390,236 398,296" });                  // a crease
+
     // agreeability, radiating: two staggered rings per big cap
     const rings = [];
     apexes.slice(0, 3).forEach(([x, y], i) => {
@@ -1332,7 +1321,6 @@
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
     const CALLS = [
-      { at: [320, 152], text: "SEAL: AUTARCHY ZIP-PATTERN. STILL AIRTIGHT" },
       { at: [320, 154], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
       { at: [250, 200], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
       { at: [392, 212], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
@@ -1354,10 +1342,10 @@
         r.q.setAttribute("opacity", Math.max(0, .8 - k));
       });
       spores.forEach(sp => {
-        const k = (t * 2 + sp.ph) % 150;                     // they pool at the seal
+        const k = (t * 2 + sp.ph) % 220;
         sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .25) * 7);
-        sp.q.setAttribute("cy", 290 - Math.min(k, 132));
-        sp.q.setAttribute("opacity", k > 138 ? 0 : .85);
+        sp.q.setAttribute("cy", 290 - k);
+        sp.q.setAttribute("opacity", k > 200 ? 0 : .85);
       });
       smiles.forEach(sm =>                             // they mean well
         sm.q.setAttribute("opacity", ((t + sm.off) % 80) < 12 ? .9 : 0));
