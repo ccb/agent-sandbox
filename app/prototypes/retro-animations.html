@@ -111,7 +111,7 @@
     <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
     <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
     <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
-       horizon's molten line &mdash; and resets. Sixty strokes, one ellipse, per-bat jitter.
+       horizon's molten line &mdash; and resets. Forty strokes, one ellipse, per-bat jitter.
        <span class="attach">Attaches: the dates-under-open-sky beat; a death card.</span></p>
   </section>
 </div>
@@ -195,11 +195,38 @@
         return [320 + x * s, 172 + y * s];
       });
       drawEdges(ctx, pts, E, PH, 8);
-      const hue = (t * 30) % 360; // the prismatic gleam, stepping the spectrum
-      drawEdges(ctx, pts, GLEAM, `hsl(${hue} 90% 70%)`, 12);
-      ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      // THE ANGLE: once per turn the flat catches the light, and the blade
+      // does what prisms do on album covers.
+      const phase = ((a / Math.PI) % 2 + 2) % 2;          // 0..2, one turn
+      const k = Math.max(0, 1 - Math.abs(phase - 1.5) / 0.22); // the window
+      const kq = Math.round(k * 6) / 6;                    // quantized, of course
+      const hit = pts[m + 1];                              // the mid facet
+      if (kq > 0) {
+        // the incoming beam, white, from the dark
+        ctx.strokeStyle = PH_BRIGHT; ctx.lineWidth = 2;
+        ctx.shadowColor = PH_BRIGHT; ctx.shadowBlur = 10; ctx.globalAlpha = kq;
+        ctx.beginPath(); ctx.moveTo(0, hit[1] - 70); ctx.lineTo(hit[0], hit[1]); ctx.stroke();
+        // the fan: six bands, diverging to the right edge
+        const HUES = [0, 30, 55, 120, 210, 275];
+        HUES.forEach((h, i) => {
+          const y1 = hit[1] - 46 + i * 16, y2 = y1 + 16;
+          ctx.fillStyle = `hsl(${h} 95% 60%)`;
+          ctx.globalAlpha = kq * .5; ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.moveTo(hit[0], hit[1]);
+          ctx.lineTo(640, y1); ctx.lineTo(640, y2);
+          ctx.closePath(); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        drawEdges(ctx, pts, GLEAM, PH_BRIGHT, 14);
+      } else {
+        const hue = (t * 30) % 360; // between angles: the gleam idles
+        drawEdges(ctx, pts, GLEAM, `hsl(${hue} 90% 70%)`, 12);
+      }
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
       ctx.fillText("EDGE: BENDS LIGHT", 18, 340);
-      ctx.fillText("HILT: SNAPS ONCE", 500, 340);
+      ctx.fillText(kq > 0 ? "REFRACTION: THE ANGLE" : "HILT: SNAPS ONCE", 490, 340);
     });
   }
 
@@ -278,10 +305,16 @@
         P(`${cx-6},262 ${cx-13},252`); P(`${cx+6},262 ${cx+13},252`); // antennae
         P(`${cx},284 ${cx},290`);
       } else if (kind === "FALCON") {
-        P(`${cx+8},290 ${cx+10},268 ${cx},258 ${cx-10},262 ${cx-14},272 ` +
-          `${cx-20},278 ${cx-12},280 ${cx-14},287 ${cx-7},283 ${cx-5},290`); // skull + hooked beak
-        P(`${cx-9},269 ${cx+1},273`);                                // the eye-stripe
-        dot(cx-3, 267);
+        // a raptor displayed: wings outstretched, head turned aside
+        P(`${cx-3},268 ${cx-14},261 ${cx-27},258 ${cx-23},264 ${cx-18},263 ` +
+          `${cx-14},268 ${cx-10},267 ${cx-5},273`);                  // left wing, stepped feathers
+        P(`${cx+3},268 ${cx+14},261 ${cx+27},258 ${cx+23},264 ${cx+18},263 ` +
+          `${cx+14},268 ${cx+10},267 ${cx+5},273`);                  // right wing
+        P(`${cx-4},270 ${cx},264 ${cx+4},270 ${cx},281 ${cx-4},270`); // the body
+        P(`${cx},264 ${cx-3},259 ${cx-8},257 ${cx-12},260 ${cx-7},261`); // head aside, hooked beak
+        P(`${cx-3},281 ${cx-5},290`); P(`${cx},282 ${cx},290`);
+        P(`${cx+3},281 ${cx+5},290`);                                 // the tail fan
+        dot(cx-6, 258);
       } else { // JACKAL
         P(`${cx-9},272 ${cx-13},258 ${cx-4},268`);                   // ear
         P(`${cx+3},268 ${cx+7},258 ${cx+10},272`);                   // ear
@@ -390,7 +423,7 @@
   /* ---------------- 05: the wheel of bats ---------------- */
   {
     const cv = document.getElementById("bats"), ctx = cv.getContext("2d");
-    const N = 60, bats = Array.from({ length: N }, (_, i) => ({
+    const N = 40, bats = Array.from({ length: N }, (_, i) => ({
       ph: (i / N) * Math.PI * 2, r: 46 + (i * 37 % 34), wob: (i * 13 % 7) - 3 }));
     clock(t => {
       const T = t % 200, wheeling = T < 150, scatter = (T - 150) / 50;
