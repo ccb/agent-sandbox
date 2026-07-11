@@ -27,8 +27,10 @@ from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient
 from text_adventure_games.npc import (
     LLMAgent,
+    command_from_tool_call,
     format_observation_with_memories,
     maybe_reflect,
+    tools_for,
 )
 from text_adventure_games.reflection import LLMReflector
 from text_adventure_games.usage import UsageLedger, record_call
@@ -40,6 +42,7 @@ CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
 
 from . import seed
+from .actions import Travel
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -49,6 +52,16 @@ from .prompt_templates import render
 # into co-presence: residents within 8 tiles perceive each other and nearby
 # objects. A persona may override it with a ``vision_r`` key in the world YAML.
 DEFAULT_VISION_R = 8
+
+# Per-action decide (issue #485): the cap on how many location names travel's
+# ``destination`` enum may list. Mirrors the engine's discipline for scope
+# enums (``npc._MAX_SCOPE_ENUM``): past the cap the enum is DROPPED, never
+# truncated -- truncating would make a valid venue unnameable -- and the slot
+# degrades to free text. The Penn campus has 14 named locations, comfortably
+# under it; a world with more venues should raise this at the call site (tool
+# definitions count against context, so don't raise it casually) rather than
+# silently lose the enum.
+DECIDE_MAX_ENUM = 20
 
 
 class ScheduleMockClient(MockReActClient):
@@ -409,6 +422,108 @@ def attach_agents(
         )
 
 
+def _use_action_tools(agent) -> bool:
+    """True when a decide tick should take the per-action tool path (#485).
+
+    Two conditions, both required:
+
+    * **A real brain was supplied.** :func:`attach_agents` wires ``brain =
+      llm_client if llm_client is not None else schedule`` -- so with no
+      supplied client the brain IS the pacing :class:`ScheduleMockClient` (the
+      very same object). Checking identity against ``agent.schedule`` is
+      therefore exactly "was an ``llm_client`` passed", the same real-client
+      gate ``serve_penn.resolve_llm`` applies to the reflector. A naive
+      ``hasattr(brain, "call_tools")`` alone would NOT do: ScheduleMockClient
+      *inherits* ``call_tools`` from ``MockReActClient`` but only scripts the
+      singular ``call_tool``, so the default offline run would wander onto a
+      route its brain doesn't drive -- and the mock replay must stay
+      byte-identical.
+    * **The brain speaks the plural route.** A chat-only client or a legacy
+      callable keeps the classic ``agent.decide()`` path unchanged.
+    """
+    brain = getattr(agent, "llm_client", None)
+    return (
+        brain is not None
+        and brain is not getattr(agent, "schedule", None)
+        and hasattr(brain, "call_tools")
+    )
+
+
+def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
+    """One typed tool per verb this agent may choose, scoped to *char* (#485).
+
+    The engine derives the tools (``npc.tools_for``, issue #356): each verb in
+    the agent's ``action_names`` becomes its own tool, typed by the action's
+    ``ARGUMENTS_SCHEMA``. One port-specific enrichment on top: the engine's
+    scope kinds (item / character / direction) can't describe travel's "any
+    named location in town" -- the campus is wired hub-and-spoke purely so the
+    engine discovers every location, not as a compass maze -- so the enum of
+    destinations is filled in here, from the same ``game.locations`` the
+    :class:`~backend.actions.Travel` action matches a command against. The
+    menu and the precondition gate can therefore never disagree about which
+    venues exist.
+    """
+    agent = char.agent
+    tools = tools_for(
+        game.parser, actor=char, names=agent.action_names, max_enum=max_enum
+    )
+    destinations = sorted(game.locations)
+    if len(destinations) > max_enum:
+        return tools  # too many venues to enumerate: the slot stays free text
+    for tool in tools:
+        if tool["name"] == Travel.ACTION_NAME:
+            prop = tool["parameters"]["properties"].get("destination")
+            if prop is not None:
+                prop["enum"] = destinations
+    return tools
+
+
+def decide_with_action_tools(game, char, observation: str) -> str | None:
+    """One per-action tool-calling round: the #485 decide path for a real brain.
+
+    Offers the per-verb tools with ``tool_choice="any"`` (the model must pick a
+    verb) and reassembles the returned call into a command string via the
+    engine's ``command_from_tool_call`` -- which then re-enters the parser's
+    precondition gate in the step loop exactly as a free-text decision would.
+    Deliberately a single round (no ``run_tool_loop`` retry): the step loop
+    already owns failure handling (plan revision on a gate miss), and one
+    request per decide keeps the live tick's call count, latency, and ledger
+    attribution (one ``role: decide`` row per persona per tick) identical to
+    the ``choose_action`` path this replaces.
+
+    Returns the command string, or ``None`` when the model declined or errored
+    -- the caller then falls back to ``agent.decide()``.
+    """
+    agent = char.agent
+    # Same reset contract as LLMAgent.decide(): reasoning is per-call, and the
+    # per-action tools carry no duration estimate.
+    agent.last_reasoning = None
+    agent.last_duration = None
+    messages = [
+        # The same system message LLMAgent's structured path sends (persona +
+        # goals, no free-text format instruction -- the tool schema is the
+        # output contract), so swapping tool shapes never changes the prompt.
+        {"role": "system", "content": agent._structured_system_message()},
+        {"role": "user", "content": observation},
+    ]
+    result = agent.llm_client.call_tools(
+        messages,
+        action_tools_for(game, char),
+        tool_choice="any",
+        max_tokens=agent.max_tokens,
+        temperature=agent.temperature,
+    )
+    if result is None or not result.tool_calls:
+        return None
+    # One action per tick: if the model called several tools, the first is its
+    # primary pick (providers list calls in the order the model made them).
+    call = result.tool_calls[0]
+    args = call.get("arguments") or {}
+    agent.last_reasoning = (args.get("reasoning") or "").strip() or None
+    command = command_from_tool_call(call["name"], args, game.parser)
+    return command or None
+
+
 def observe_and_decide(game, char, step: int, retrieval=None):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
@@ -433,7 +548,10 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     retrieval scoring (weights / decay / how many memories surface); ``None``
     uses :meth:`AgentMemory.retrieve`'s defaults -- identical to today.
 
-    Returns the chosen command string, or ``None``.
+    The decide itself takes one of two routes: a real supplied brain gets the
+    per-action typed tools (:func:`decide_with_action_tools`, issue #485),
+    while the default mock -- and any fallback -- goes through the classic
+    ``agent.decide()`` seam. Returns the chosen command string, or ``None``.
     """
     agent = char.agent
     if not agent.memory.owner:
@@ -458,6 +576,16 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     # attribute on our own LLMAgent instance -- the engine class is untouched.
     agent.last_retrieved = relevant
     observation = format_observation_with_memories(base, relevant)
+    # Per-action tools (issue #485): a real supplied brain picks between typed
+    # per-verb tools -- travel's destination an enum of real venue names --
+    # instead of filling the single free-text choose_action schema. A decline
+    # (or an API error) falls back to the classic decide() path below, so an
+    # outage degrades exactly as before. The default mock run never enters
+    # this branch (see _use_action_tools) and stays byte-identical.
+    if _use_action_tools(agent):
+        command = decide_with_action_tools(game, char, observation)
+        if command:
+            return command
     return agent.decide(observation)
 
 
