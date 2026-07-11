@@ -876,9 +876,15 @@
       k = Math.max(0, Math.min(6, k + (lit ? 1 : -1)));
       ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
       const kk = k / 6;
-      if (kk > 0) { // concentric halo, quantized
-        for (let r = 1; r <= k; r++) {
-          ctx.strokeStyle = YELLOW; ctx.globalAlpha = .16 * kk;
+      if (kk > 0) { // the LIGHT: a radial wash of warm yellow, then the rings
+        const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+        halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+        halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+        halo.addColorStop(1, "rgba(255,215,106,0)");
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+        for (let r = 1; r <= k; r++) { // concentric rings, quantized, fading out
+          ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
           ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
         }
         ctx.globalAlpha = 1;
