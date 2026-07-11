@@ -29,7 +29,7 @@ The pieces:
 
 * :class:`PennStepper` -- implements the ``backend.live.SimStepper`` protocol by
   reconstructing ``simulate()``'s pre-loop setup (the same reconstruction
-  ``generative-agents/tests/test_step_seam.py`` pins) and driving the extracted
+  ``godot-generative-agents/tests/test_penn_live.py`` pins) and driving the extracted
   one-tick ``step()`` seam (#296) per ``tick()``. Frames come out in the exact
   replay schema the bake writes (``penn_world.replay_frame_entry``), so every
   viewer feature -- bubbles, links, trails, minimap, heatmap -- works unchanged.
