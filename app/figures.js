@@ -2228,7 +2228,7 @@
     const foot = label(svg, 320, 384, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 400, 2, 10);
     clock(t => {
-      const T = t % 260;
+      const T = Math.min(t, 259); // a title card: plays once, holds the tableau
       doWipe(T);
       typeOn(hdr, "ROAD TO GNOMON", T, 4, 1.4);
       const fallen = T >= 130;
@@ -2621,8 +2621,11 @@
     const press = label(svg, 320, 382, 10, PH_DIM); press.setAttribute("text-anchor", "middle");
     const foot = label(svg, 624, 356, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const bat = el(svg, "path", { fill: "none", stroke: PH, "stroke-width": 1.3 });
-    const CAUSES = ["THE SHAFT BECAME A FLUE", "TAKEN BY THE PACK",
-      "THE SPORES FORMED AN OPINION", "ARGUED WITH THE FLOOR. LOST."];
+    // In the game the terminal fills this in at death (score, hints, the
+    // wound that did it); standalone, the stone stays honest and carves
+    // neither a fake score nor an invented cause.
+    const CTX = (typeof window !== "undefined" && window.TombFigures
+      && window.TombFigures.context) || {};
     const doWipe = wipe(svg, 640, 400, 2, 10);
     clock(t => {
       const T = t % 200;
@@ -2630,9 +2633,12 @@
       typeOn(hdr, "THE EPITAPH", T, 4, 1.4);
       L1.textContent = T > 20 ? "HERE LIES" : "";
       L2.textContent = T > 40 ? "A SCAVENGER" : "";
-      L3.textContent = T > 60 ? CAUSES[Math.floor(t / 200) % 4] : "";
+      L3.textContent = T > 60 && CTX.cause
+        ? String(CTX.cause).toUpperCase().slice(0, 30) : "";
       L4.textContent = T > 80 ? "4,000 YRS + 6 DAYS" : "";
-      typeOn(score, "SCORE: 45 OF 145 -- HINTS TAKEN: 3", T, 96, 1.8);
+      if (CTX.score != null)
+        typeOn(score, "SCORE: " + CTX.score + " OF " + CTX.max
+          + " -- HINTS TAKEN: " + (CTX.hints || 0), T, 96, 1.8);
       press.textContent = T > 130 && t % 8 < 4 ? "PRESS ENTER TO TRY AGAIN" : "";
       typeOn(foot, "THE TOMB KEEPS YOU.", T, 140, 1.6);
       const a = t * .05;                                      // something leathery

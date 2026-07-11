@@ -777,12 +777,17 @@ class Game:
         a milestone having happened."""
         return key in self._scored_keys
 
-    def show_figure(self, key):
+    def show_figure(self, key, force=False):
         """Cue the illustration card *key*, once per game (repeats are no-ops,
         so re-examining a thing doesn't re-draw its card). Purely cosmetic:
         surfaces without a card registry ignore the FIGURE channel, and the
-        set rebuilds on journal replay because the cueing commands re-run."""
-        if not key or key in self.figures_shown:
+        set rebuilds on journal replay because the cueing commands re-run.
+
+        ``force=True`` re-shows a spent key: for once-only STORY BEATS (an
+        ambush springing, a first blow landing) that must play even when an
+        earlier examine already drew the creature's card. The caller owns
+        making sure the beat itself can't repeat."""
+        if not key or (key in self.figures_shown and not force):
             return
         self.figures_shown.add(key)
         self.parser.figure(key)

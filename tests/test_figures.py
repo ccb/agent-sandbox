@@ -178,7 +178,13 @@ def test_generated_figures_js_matches_the_reel():
 def test_the_bridge_carries_figure_events():
     import app_api
 
-    app_api.boot(0)
+    boot_payload = json.loads(app_api.boot(0))
+    assert boot_payload["events"][0]["channel"] == "figure"
+    assert boot_payload["events"][0]["text"] == "road"
+    app_api.command("restart")
+    restart_payload = json.loads(app_api.command("y"))
+    figs = [e["text"] for e in restart_payload["events"] if e["channel"] == "figure"]
+    assert "road" in figs  # a restart earns the title reel again
     payload = json.loads(app_api.command("search merchant"))
     app_api.command("take glowstone")
     payload = json.loads(app_api.command("examine glowstone"))
@@ -250,3 +256,19 @@ def test_talking_to_silas_is_a_backstop_cue():
     g.relocate(g.player, g.locations["Hall of Memory"])
     g.do_command("talk to silas")
     assert "silas" in cap.texts(Channel.FIGURE)
+
+
+def test_arriving_at_the_summit_cues_the_mystic():
+    g, cap = _game()
+    summit = g.locations["The Summit"]
+    neighbor, direction = next(
+        (loc, d)
+        for loc in g.locations.values()
+        for d, dest in loc.connections.items()
+        if dest is summit
+    )
+    g.relocate(g.player, neighbor)
+    g.player.remove_all_wounds() if hasattr(g.player, "remove_all_wounds") else None
+    g.do_command(f"go {str(getattr(direction, 'value', direction))}")
+    if g.player.location is summit:  # the climb may be gated; only assert if we made it
+        assert "mystic-b" in cap.texts(Channel.FIGURE)

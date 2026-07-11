@@ -230,6 +230,7 @@ def boot(seed):
     _store = _make_store()
     _game.save_store = _store
     _visited.clear()
+    _game.show_figure("road")  # the Trail card opens every fresh expedition
     _game.parser.parse_command("look")
     return _payload()
 
@@ -248,6 +249,9 @@ def _do_restart():
     except Exception:
         pass
     boot(int(time.time()) % 1000000)
+    # boot()'s own payload (the look, the Trail card) is discarded above, so
+    # re-cue the card for THIS response: a restart earns the title reel too.
+    _game.show_figure("road", force=True)
     _game.parser.ok(
         "The sand takes the old story. A new expedition stands at the wreck."
     )

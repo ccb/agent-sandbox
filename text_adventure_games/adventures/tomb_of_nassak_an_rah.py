@@ -2616,6 +2616,16 @@ def build_game(seed=None):
     coffin.set_property(
         "figure", "sphere-b"
     )  # PryCoffin (boots-gated) is the only way in
+    # ...and as a title plate on ARRIVAL (the chamber is gloom: a dark entry
+    # keeps the card). After the mend, arrivals show the Autarch at rest.
+    sphere.set_property(
+        "figure",
+        lambda g: (
+            ("autarch" if coffin.get_property("fixed") else "sphere-b")
+            if perception.sight_for(g.player, sphere)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     # The failing anti-entropy field still counts as a lock: SEARCH (which
     # rummages open ordinary closed containers) must not bypass the pry puzzle.
     coffin.set_property(Property.IS_LOCKED, True)
@@ -2637,6 +2647,9 @@ def build_game(seed=None):
     corpse.make_surface()
     corpse.set_property("reveals_on_examine", True)
     corpse.set_property("figure", "mystic-b")
+    # ...and the same card as a title plate on first ARRIVING at the Summit
+    # (open sky at sunset: no sight gate needed).
+    summit.set_property("figure", "mystic-b")
     corpse.set_property(
         "contents_relation", "Nested in the hollow of its clasped hands you find"
     )
@@ -3468,6 +3481,7 @@ def build_game(seed=None):
                 "closes over the light. THE END.",
             )
         else:
+            g.show_figure("bats-c")  # the residents, eyes opening
             g.parser.ok(
                 "The bats drop in a wheeling rake of claws -- your scalp and "
                 "hands pay for the light. (You are mauled; douse it, or feed "
@@ -3747,12 +3761,19 @@ def build_game(seed=None):
                 spawn.set_property(key, n)
                 if n == 1:
                     # the card first, then the warning (CCB): the sway is
-                    # what you SEE as it swings toward your noise
-                    g.show_figure("guts-a" if spawn is spawn_guts else "spawn-a")
+                    # what you SEE as it swings toward your noise -- forced,
+                    # so a spent examine key cannot mute the beat
+                    g.show_figure(
+                        "guts-a" if spawn is spawn_guts else "spawn-a", force=True
+                    )
                     g.parser.ok(warn_text)
                 else:
-                    # the close-up plays FIRST, then the blow lands (CCB)
-                    g.show_figure("guts-b" if spawn is spawn_guts else "spawn-b")
+                    # the close-up plays FIRST, then the blow lands (CCB);
+                    # forced on the FIRST blow only (later blows do not spam)
+                    g.show_figure(
+                        "guts-b" if spawn is spawn_guts else "spawn-b",
+                        force=(n == 2),
+                    )
                     attack(g)
             # No decay while you share its room: it heard you once, and it is
             # still listening. Only distance (handled above) lets it settle.
@@ -3917,6 +3938,7 @@ def build_game(seed=None):
     game.add_trigger("bat_mobbing", lambda g: True, _bat_mobbing, repeatable=True)
 
     def _jackal_maul(g):
+        g.show_figure("jackal", force=True)  # a story beat: always plays
         g.parser.ok("The pack takes its due before you can raise an arm.")
         _, messages, fatal = roll_wound(g.player, rng=_RNG, game=g)
         for m in messages:
@@ -4856,7 +4878,7 @@ def build_game(seed=None):
             centipede.set_property("sprung", True)
             if centipede.location is not chimney:
                 g.relocate(centipede, chimney)
-            g.show_figure("centipede")  # the card plays first
+            g.show_figure("centipede", force=True)  # a story beat: always plays
             g.parser.ok(
                 "The growth beside you bends wrong -- and four feet of glass "
                 "uncoils out of it, faster than the eye wants to allow."
