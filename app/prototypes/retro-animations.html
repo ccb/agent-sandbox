@@ -1546,14 +1546,15 @@
   // 14: THE MANTIS JAR -- split, budding, listening
   jarCard("jar-mantis", "THE MANTIS JAR (SPLIT, LISTENING)",
     (P) => {
-      el(P.svg, "polygon", { points: "180,118 260,118 220,64 180,118",
-        fill: P.JD, stroke: PH, "stroke-width": 1.6 });      // the triangle head
-      P.eyeL = el(P.svg, "circle", { cx: 198, cy: 102, r: 8, fill: "none", stroke: PH_BRIGHT });
-      P.eyeR = el(P.svg, "circle", { cx: 242, cy: 102, r: 8, fill: "none", stroke: PH_BRIGHT });
+      el(P.svg, "polygon", { points: "180,64 260,64 224,118 216,118 180,64",
+        fill: P.JD, stroke: PH, "stroke-width": 1.6 });      // the head, point DOWN
+      P.eyeL = el(P.svg, "circle", { cx: 192, cy: 76, r: 8, fill: "none", stroke: PH_BRIGHT });
+      P.eyeR = el(P.svg, "circle", { cx: 248, cy: 76, r: 8, fill: "none", stroke: PH_BRIGHT });
       [[-3,-2],[2,3],[3,-3]].forEach(([dx, dy]) => {
-        el(P.svg, "circle", { cx: 198 + dx, cy: 102 + dy, r: 1, fill: PH });
-        el(P.svg, "circle", { cx: 242 + dx, cy: 102 + dy, r: 1, fill: PH });
+        el(P.svg, "circle", { cx: 192 + dx, cy: 76 + dy, r: 1, fill: PH });
+        el(P.svg, "circle", { cx: 248 + dx, cy: 76 + dy, r: 1, fill: PH });
       });
+      el(P.svg, "line", { x1: 214, y1: 108, x2: 226, y2: 108, stroke: PH_DIM }); // the mouthparts
       P.antL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
       P.antR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
     },
@@ -1570,15 +1571,15 @@
           fill: FUNGUS, "fill-opacity": .08 }));
     },
     [
-      { at: [220, 80], text: "EYES: COMPOUND. THE FACETS STILL COUNT" },
+      { at: [248, 76], text: "EYES: COMPOUND. THE FACETS STILL COUNT" },
       { at: [232, 190], text: "THE SPLIT: SOMETHING BUDS IN IT" },
       { at: [220, 96], text: "IT AMPLIFIES. MAKE NO SOUND HERE" },
     ],
     "IT LISTENS. THEN IT SINGS.",
     (t, T, P) => {
       const tw = (t % 14) < 3 ? 6 : 0;                       // the twitch
-      P.antL.setAttribute("points", `206,70 ${188 - tw},40 ${180 - tw},30`);
-      P.antR.setAttribute("points", `234,70 ${252 + tw},42 ${262 + tw},32`);
+      P.antL.setAttribute("points", `188,64 ${176 - tw},38 ${170 - tw},26`);
+      P.antR.setAttribute("points", `252,64 ${264 + tw},40 ${272 + tw},28`);
       const cw = Math.floor((t % 40) / 8);                   // the crack creeps
       P.crack.setAttribute("points",
         `226,122 ${230 + cw},160 ${224 + cw},198 ${232 + cw * 2},240`);
