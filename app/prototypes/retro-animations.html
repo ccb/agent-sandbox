@@ -81,12 +81,13 @@
   </section>
 
   <section>
-    <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
-    <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
-    <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
-       does not otherwise have. Inner cell dimmed by <b>w</b>-depth. This cannot be modeled
-       from an illustration, because that is the joke.
-       <span class="attach">Attaches: EXAMINE MANIFOLD BOX, the ulfire reveal.</span></p>
+    <div class="slate"><h2>17-C &mdash; THE APPROACH, THIN CURLS</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="ext1c" viewBox="0 0 640 400" aria-label="The approach, old man crown with thin curls"></svg>
+    </div>
+    <p class="spec">17-B's monolith &mdash; the old man's profile, mouth open to the sky &mdash;
+       but wearing 17's original tendrils: thin wandering curls instead of ropes, rising
+       out of the mouth like handwriting. <span class="attach">Alternate for 17.</span></p>
   </section>
 
   <section>
@@ -247,6 +248,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>13-E &mdash; THE HORROR, ABLAZE, FIRELIT</h2><span class="kind">LITHO / THE FIGHT</span></div>
+    <div class="screen">
+      <svg id="autarch-e" viewBox="0 0 640 420" aria-label="The Horror, ablaze, firelit"></svg>
+    </div>
+    <p class="spec">13-D with the fire doing more of the drawing: a wider spray of sparks
+       thrown left and right of the body, and yellow reflections licking across the blue
+       linework of the mask, crown, and carvings as the flames catch them.
+       <span class="attach">Alternate for 13-D.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>14 &mdash; THE MANTIS JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="jar-mantis" viewBox="0 0 640 300" aria-label="The mantis jar, close up"></svg>
@@ -278,13 +290,12 @@
   </section>
 
   <section>
-    <div class="slate"><h2>17-C &mdash; THE APPROACH, THIN CURLS</h2><span class="kind">LITHO / VARIANT</span></div>
-    <div class="screen">
-      <svg id="ext1c" viewBox="0 0 640 400" aria-label="The approach, old man crown with thin curls"></svg>
-    </div>
-    <p class="spec">17-B's monolith &mdash; the old man's profile, mouth open to the sky &mdash;
-       but wearing 17's original tendrils: thin wandering curls instead of ropes, rising
-       out of the mouth like handwriting. <span class="attach">Alternate for 17.</span></p>
+    <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
+    <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
+    <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
+       does not otherwise have. Inner cell dimmed by <b>w</b>-depth. This cannot be modeled
+       from an illustration, because that is the joke.
+       <span class="attach">Attaches: EXAMINE MANIFOLD BOX, the ulfire reveal.</span></p>
   </section>
 
 
@@ -2725,6 +2736,159 @@
       if (vig > 0) typeOn(foot, "ABLAZE, IT CANNOT MEND. KEEP CUTTING.", T, 40, 1.6);
     });
   }
+
+  /* ---------------- 13-E: the Horror, ablaze, firelit ---------------- */
+  {
+    const svg = document.getElementById("autarch-e");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / BONE / FIRELIT";
+    const ADOTS = stipple(svg, "dots-autarche", PH, .9);
+    const ODOTS = stipple(svg, "dots-orangee", FUNGUS, 1.2);
+    const YELLOW = "#ffd76a", CHAR = [74, 42, 20];             // burnt umber, as rgb
+    const ORANGE = [255, 154, 60];
+    const mix = (a, b, k) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",")})`;
+    const CX = 320, CY = 180;
+    const ring = el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    const spikes = Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      return el(svg, "polygon", { fill: PH, "fill-opacity": .35, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    const curls = Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      return el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        opacity: .55, points: pts.join(" ") });
+    });
+    const skull = el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,214 370,236 364,258 276,258 270,236 260,214 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    el(svg, "ellipse", { cx: 296, cy: 188, rx: 14, ry: 10, fill: ODOTS,
+      stroke: PH, "stroke-width": 1.4 });
+    el(svg, "ellipse", { cx: 344, cy: 188, rx: 14, ry: 10, fill: ODOTS,
+      stroke: PH, "stroke-width": 1.4 });
+    const glowL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 6, ry: 4,
+      fill: YELLOW, "fill-opacity": .6 });
+    const glowR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 6, ry: 4,
+      fill: YELLOW, "fill-opacity": .6 });
+    el(svg, "path", { d: "M 320 204 L 312 230 Q 320 238 328 230 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 240, x2: 346, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 252, x2: 346, y2: 252, stroke: PH, "stroke-width": 1.4 });
+    for (let x = 294; x <= 346; x += 6.5)
+      el(svg, "line", { x1: x, y1: 240, x2: x, y2: 252, stroke: PH });
+    el(svg, "rect", { x: 320.5, y: 240.5, width: 5.5, height: 11, fill: BG });
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
+        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    // THE ROPES (charring) and THE FIRE (working the bust)
+    const ROOTS = [
+      [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
+      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
+      [288, 338, 2.2], [352, 338, .9],
+    ];
+    const tendrils = ROOTS.map(() =>
+      el(svg, "polygon", { "fill-opacity": .3, "stroke-width": 1.4 }));
+    const FROOTS = [[250, 262], [300, 260], [352, 262], [396, 258], [270, 130],
+      [366, 132], [230, 300], [412, 298], [320, 118]];
+    const flames = FROOTS.map(() =>
+      el(svg, "polygon", { stroke: "none" }));
+    const embers = Array.from({ length: 22 }, (_, i) => {
+      const x = 184 + i * 13;
+      return { x, ph: i * 23, dir: (x < 320 ? -1 : 1) * (.35 + (i % 5) * .4),
+        q: el(svg, "circle", { r: i % 3 ? 1.4 : 2.1,
+          fill: i % 4 ? YELLOW : FUNGUS }) };
+    });
+    label(svg, 24, 410, 10, PH_DIM).textContent = "VIGOR";
+    const cells = Array.from({ length: 5 }, (_, i) =>
+      el(svg, "rect", { x: 76 + i * 18, y: 400, width: 14, height: 12,
+        fill: FUNGUS, "fill-opacity": .8 }));
+    const foot = label(svg, 400, 410, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 200;
+      doWipe(T);
+      typeOn(hdr, "THE HORROR, ABLAZE", T, 4, 1.4);
+      const burn = Math.max(0, Math.min(1, (T - 20) / 140));  // the charring
+      tendrils.forEach((n, i) => {
+        const k = Math.max(0, Math.min(1, burn * 1.4 - i * .06));
+        const col = mix(ORANGE, CHAR, k);
+        n.setAttribute("fill", col); n.setAttribute("stroke", col);
+        const [rx, ry, a0] = ROOTS[i];
+        const calm = 1 - k * .75;                             // burnt ropes slow
+        const w = Math.sin(t * .4 * calm + i * 1.9);
+        const c = [[rx, ry]];
+        for (let q = 1; q <= 4; q++) {
+          const a = a0 + Math.sin(t * .25 * calm + q * 1.2 + i) * .3 * calm
+            + w * .04 * q + k * .25 * (ry > 230 ? 1 : .3);    // and they sag
+          const r = q * (13 + ((t + i * 5) % 12) * calm);
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
+        }
+        const W2 = [6, 4.8, 3.4, 1.9, .7];
+        const L = [], R2 = [];
+        for (let q = 0; q < c.length; q++) {
+          const [x0, y0] = c[Math.max(0, q - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, q + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          L.push(`${c[q][0] - dy / len * W2[q]},${c[q][1] + dx / len * W2[q]}`);
+          R2.push(`${c[q][0] + dy / len * W2[q]},${c[q][1] - dx / len * W2[q]}`);
+        }
+        n.setAttribute("points", L.concat(R2.reverse()).join(" "));
+      });
+      flames.forEach((f, i) => {                              // the fire, working
+        const [fx, fy] = FROOTS[i];
+        const h = 16 + ((t * 7 + i * 13) % 17) + burn * 10;
+        const wob = Math.sin(t * .9 + i * 2.2) * 5;
+        f.setAttribute("points",
+          `${fx - 7},${fy} ${fx + wob * .4},${fy - h * .55} ${fx + wob},${fy - h} ` +
+          `${fx + 4 + wob * .3},${fy - h * .5} ${fx + 8},${fy}`);
+        f.setAttribute("fill", (t + i) % 3 ? FUNGUS : YELLOW);
+        f.setAttribute("fill-opacity", .5 + ((t + i) % 2) * .3);
+      });
+      embers.forEach(e2 => {                                // sparks, thrown wide
+        const k = (t * 3 + e2.ph) % 200;
+        e2.q.setAttribute("cx", e2.x + e2.dir * k * .55 + Math.sin((t + e2.ph) * .35) * 9);
+        e2.q.setAttribute("cy", 282 - k * 1.05);
+        e2.q.setAttribute("opacity", k > 168 ? 0 : .5 + ((t + e2.ph) % 3) * .25);
+      });
+      spikes.forEach((n, i) => {                              // firelight on the crown
+        const lit = ((t * 2 + i * 5) % 17) < 4;
+        n.setAttribute("stroke", lit ? YELLOW : PH);
+        n.setAttribute("fill", lit ? YELLOW : PH);
+      });
+      curls.forEach((n, i) =>
+        n.setAttribute("stroke", ((t * 2 + i * 7) % 13) < 3 ? YELLOW : PH));
+      skull.setAttribute("stroke", (t % 9) < 2 ? YELLOW : PH); // and on the mask
+      ring.setAttribute("stroke", ((t + 4) % 9) < 2 ? YELLOW : PH_DIM);
+      glowL.setAttribute("fill-opacity", .4 + ((t % 4) / 4) * .4);
+      glowR.setAttribute("fill-opacity", .4 + (((t + 2) % 4) / 4) * .4);
+      const vig = 5 - Math.min(5, Math.floor(burn * 5.5));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < vig ? .8 : .08));
+      foot.textContent = vig === 0 ? "IT DOES NOT CLOSE AGAIN." : "";
+      if (vig > 0) typeOn(foot, "ABLAZE, IT CANNOT MEND. KEEP CUTTING.", T, 40, 1.6);
+    });
+  }
+
 
 })();
 </script>
