@@ -302,3 +302,11 @@ def test_lighting_up_in_the_dark_earns_the_look():
     assert "silas" in cap.texts(Channel.FIGURE)  # the room's card, via the look
     joined = " ".join(cap.texts(Channel.NARRATION))
     assert "Lattices of memory-crystal" in joined  # and its full description
+
+
+def test_examining_the_tomb_shows_the_elevations():
+    g, cap = _game()
+    g.do_command("go north")  # arrival: the approach (ext1c)
+    g.do_command("x tomb")  # the close look: the surveyor's sheet
+    figs = cap.texts(Channel.FIGURE)
+    assert figs == ["ext1c", "ext1e"]

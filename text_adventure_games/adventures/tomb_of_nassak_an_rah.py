@@ -2421,7 +2421,9 @@ def build_game(seed=None):
         "The two lower mouths gape as doorways. From the elder's mouth -- a "
         "chimney -- bright orange tendrils and fungal vines sprout, webbing "
         "down over the stone, shifting drowsily in the red light of the sun.",
-    ).set_property("figure", "ext1c")
+    ).set_property(
+        "figure", "ext1e"
+    )  # X TOMB: the surveyor's elevations
     # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
     # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
     # them without a light (perception Layer 2). The ceiling's *visual* text is
