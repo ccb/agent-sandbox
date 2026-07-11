@@ -48,16 +48,16 @@ var _legend: Label
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var backdrop := ColorRect.new()
 	backdrop.color = BACKDROP_COLOR
-	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.gui_input.connect(_on_backdrop_input)
 	add_child(backdrop)
 
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Clicks in the margin around the panel fall through to the backdrop.
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
@@ -116,6 +116,8 @@ func set_replay(frames: Array, names: Array, persona_detail: Dictionary) -> void
 			if not _place_color.has(place):
 				_place_color[place] = PLACE_PALETTE[_place_color.size() % PLACE_PALETTE.size()]
 	var legend := PackedStringArray()
+	# Godot Dictionaries iterate in insertion order, so the legend lists places
+	# in first-appearance order — the same order the palette was assigned.
 	for place in _place_color:
 		legend.append("■ %s" % place)
 	legend.append("■ off-plan / other (grey); faded = walking there")
@@ -252,6 +254,8 @@ func _on_canvas_input(event: InputEvent) -> void:
 	var x := (event as InputEventMouseButton).position.x
 	if x < _bars_x():
 		return
+	# The axis can outrun the frames (a plan longer than the bake) — clamp the
+	# seek to steps that actually exist.
 	var step := clampi(roundi((x - _bars_x()) / _bars_w() * _axis()), 0,
 		maxi(_frames.size() - 1, 0))
 	seek_requested.emit(step)
