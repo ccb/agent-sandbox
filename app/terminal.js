@@ -230,6 +230,7 @@ function haptic(kind) {
 }
 
 let wasGameOver = false;
+let lastWound = null; // the most recent wound's name, for the epitaph's cause line
 
 /* An illustration card, drawn inline in the transcript. The engine cues
    these on the "figure" channel (a card KEY, not prose); the registry in
@@ -265,7 +266,10 @@ function render(payloadJson, opts = {}) {
     const prefix = ev.channel === "damage" ? "♥ " :
                    ev.channel === "blocked" ? "✗ " : "";
     print(prefix + ev.text, cls, instant);
-    if (ev.channel === "damage") { haptic("damage"); sounds.damage(); }
+    if (ev.channel === "damage") {
+      lastWound = (ev.text.split(" - ")[0] || "").trim() || lastWound;
+      haptic("damage"); sounds.damage();
+    }
     if (ev.channel === "blocked") sounds.blocked();
   }
   const s = payload.status;
@@ -276,7 +280,15 @@ function render(payloadJson, opts = {}) {
   // (CCB: it was reprinting each turn). Post-mortem commands are refused by
   // the engine itself, with the RESTORE/RESTART hint in the refusal.
   if (s.game_over && !wasGameOver) {
-    if (!s.won) showFigure("epitaph"); // the Trail's tombstone, client-cued
+    if (!s.won) {
+      // the Trail's tombstone, client-cued -- with the REAL ledger carved
+      // in: the score, the hints owned up to, and the wound that did it
+      if (window.TombFigures)
+        window.TombFigures.context = {
+          score: s.score, max: s.max_score, hints: s.hints, cause: lastWound,
+        };
+      showFigure("epitaph");
+    }
     if (!s.won) { haptic("death"); sounds.damage(); }
     const hinted = s.hints ? ` (${s.hints} hint${s.hints === 1 ? "" : "s"} taken)` : "";
     print((s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***") + hinted, "echo", instant);
@@ -738,10 +750,9 @@ async function main() {
       try { localStorage.removeItem("tomb_save_auto"); } catch (e) {}
       seed = Date.now() % 1000000;
     }
+    // The Trail card rides the boot payload itself (app_api cues it), so
+    // fresh boots and RESTARTs open the same way.
     render(api.boot(seed));
-    // A fresh expedition opens on the Trail card, above the first look
-    // (a resumed one rejoins the story mid-stride, no title reel).
-    showFigure("road", { prepend: true });
   }
   output.scrollTop = 0; // the expedition reads from the top (CCB)
   bootscreen.classList.add("done");

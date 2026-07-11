@@ -15,6 +15,7 @@ static host for the web version.
 
 import glob
 import json
+import time
 import os
 import shutil
 import subprocess
@@ -82,6 +83,16 @@ def main() -> int:
     if os.path.exists(reel):
         os.makedirs(os.path.join(DIST, "animations"), exist_ok=True)
         shutil.copy(reel, os.path.join(DIST, "animations", "index.html"))
+    # Cache-bust the static assets: browsers and GH Pages hold terminal.css
+    # and the scripts long enough to hide fresh fixes behind stale copies.
+    stamp = str(int(time.time()))
+    idx = os.path.join(DIST, "index.html")
+    with open(idx) as fh:
+        html = fh.read()
+    for name in ("terminal.css", "terminal.js", "figures.js"):
+        html = html.replace(f'{name}"', f'{name}?v={stamp}"')
+    with open(idx, "w") as fh:
+        fh.write(html)
     manifest = {"wheel": wheel}
     if with_pyodide:
         _vendor_pyodide()
