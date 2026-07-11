@@ -118,34 +118,14 @@
   </section>
 
   <section>
-    <div class="slate"><h2>05-B &mdash; BATS: THE DARK ROOM</h2><span class="kind">LITHO / JUMP-SCARE</span></div>
-    <div class="screen">
-      <svg id="bats-b" viewBox="0 0 640 360" aria-label="The Hall of Youth, dark"></svg>
-    </div>
-    <p class="spec">The hall as the game meets it: black, with only the probe-senses arriving
-       as text &mdash; then a glowstone blooms for two seconds, the statues and the seething
-       ceiling exist, and the card cuts back to black: MISTAKE.
-       <span class="attach">Alternate for 05 (the interior).</span></p>
-  </section>
-
-  <section>
     <div class="slate"><h2>05-C &mdash; BATS: ONE BAT, PORTRAIT</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="bats-c" viewBox="0 0 640 360" aria-label="A single bat, hanging"></svg>
     </div>
-    <p class="spec">One of the eleven hundred, hanging folded: wing membranes with the finger
-       bones showing through, breathing slow &mdash; and as the LIGHT gauge fills, one eye
-       opens. <span class="attach">Alternate for 05 (the individual).</span></p>
-  </section>
-
-  <section>
-    <div class="slate"><h2>05-D &mdash; BATS: EVACUATION DIAGRAM</h2><span class="kind">LITHO / SAFETY CARD</span></div>
-    <div class="screen">
-      <svg id="bats-d" viewBox="0 0 640 360" aria-label="In the event of light"></svg>
-    </div>
-    <p class="spec">A safety-card parody: IN THE EVENT OF LIGHT, the colony's dive paths in
-       numbered arrows, the marked safe route along the wall &mdash; and step three typing
-       itself out: you are the exit. <span class="attach">Alternate for 05 (the briefing).</span></p>
+    <p class="spec">One of the eleven hundred, hanging folded among its neighbors: wing
+       membranes with the finger bones showing through, breathing slow &mdash; and as the
+       LIGHT gauge fills, one eye opens.
+       <span class="attach">Companion to 05 (the individual).</span></p>
   </section>
 
   <section>
@@ -2251,51 +2231,6 @@
   }
 
 
-  /* ---------------- 05-B: bats, the dark room ---------------- */
-  {
-    const svg = document.getElementById("bats-b");
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
-    // THE SCENE, waiting in the dark: statues, and the ceiling
-    const scene = document.createElementNS(NS, "g"); svg.appendChild(scene);
-    const inS = (name, attrs) => { const n = document.createElementNS(NS, name);
-      for (const k in attrs) n.setAttribute(k, attrs[k]); scene.appendChild(n); return n; };
-    const bloom = inS("circle", { cx: 320, cy: 250, r: 200, fill: "#ffd76a",
-      opacity: .08 });
-    [200, 320, 440].forEach(x => {                            // the boy-statues
-      inS("polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-        `${x - 20},310 ${x - 14},240 ${x - 8},226 ${x},220 ${x + 8},226 ` +
-        `${x + 14},240 ${x + 20},310` });
-      inS("circle", { cx: x, cy: 210, r: 11, fill: "none", stroke: PH, "stroke-width": 1.5 });
-    });
-    inS("path", { d: "M 40 88 Q 320 30 600 88 L 600 40 L 40 40 Z",
-      fill: stipple(svg, "bd-dots", PH, 1.3), stroke: PH, "stroke-width": 1.5 });
-    for (let x = 70; x < 590; x += 24)                        // the hanging rows
-      inS("polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
-        points: `${x},${86 - (x % 48) / 8} ${x - 3},${98} ${x + 3},${98}` });
-    for (let x = 84; x < 580; x += 31)                        // the eyes, glinting
-      inS("circle", { cx: x, cy: 92, r: 1, fill: PH_BRIGHT });
-    const senses = [
-      label(svg, 320, 120, 11, PH_DIM),
-      label(svg, 320, 160, 11, PH_DIM),
-      label(svg, 320, 200, 11, PH_DIM),
-    ];
-    senses.forEach(t => t.setAttribute("text-anchor", "middle"));
-    const verdict = label(svg, 320, 250, 13, "#ff5a5a");
-    verdict.setAttribute("text-anchor", "middle");
-    clock(t => {
-      const T = t % 200;
-      const lit = T >= 120 && T < 146;
-      scene.setAttribute("opacity", lit ? 1 : 0);
-      bloom.setAttribute("r", lit ? 120 + (T - 120) * 14 : 0);
-      if (!lit) {
-        typeOn(senses[0], "YOU FEEL: COLD STONE. A WAY NORTH, A WAY SOUTH.", T, 8, 1.4);
-        typeOn(senses[1], "YOU HEAR: LEATHER. ABOVE YOU. SEETHING.", T, 42, 1.4);
-        typeOn(senses[2], "YOU SMELL: GUANO, AND OLD DATES.", T, 76, 1.4);
-        typeOn(verdict, T >= 146 ? "MISTAKE." : "", T, 150, 1.2);
-      } else senses.concat(verdict).forEach(n => n.textContent = "");
-    });
-  }
-
   /* ---------------- 05-C: one bat, portrait ---------------- */
   {
     const svg = document.getElementById("bats-c");
@@ -2306,6 +2241,27 @@
       points: "220,64 300,58 340,60 420,66" });               // the rock lip
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
       points: "308,60 306,74 312,70 316,74 314,60" });        // the gripping feet
+    // the neighbors: more of the eleven hundred, folded and dimmer
+    [[244, .62, .55], [398, .7, .6], [438, .5, .4]].forEach(([cx, sc, op]) => {
+      const g = document.createElementNS(NS, "g");
+      g.setAttribute("opacity", op); svg.appendChild(g);
+      const put = (name, attrs) => { const n = document.createElementNS(NS, name);
+        for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+      put("polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 1.2,
+        points: `${cx - 2},62 ${cx - 4},70 ${cx + 4},70 ${cx + 2},62` });
+      put("path", { d: `M ${cx - 2},70 Q ${cx - 18 * sc},${70 + 42 * sc} ` +
+        `${cx - 10 * sc},${70 + 96 * sc} Q ${cx - 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx - 2},70`,
+        fill: "none", stroke: PH, "stroke-width": 1.3 });
+      put("path", { d: `M ${cx + 2},70 Q ${cx + 18 * sc},${70 + 42 * sc} ` +
+        `${cx + 10 * sc},${70 + 96 * sc} Q ${cx + 4 * sc},${70 + 112 * sc} ${cx},${70 + 116 * sc} L ${cx + 2},70`,
+        fill: "none", stroke: PH, "stroke-width": 1.3 });
+      put("circle", { cx, cy: 70 + 124 * sc, r: 9 * sc, fill: "none",
+        stroke: PH, "stroke-width": 1.2 });
+      put("polygon", { points: `${cx - 6 * sc},${70 + 128 * sc} ${cx - 10 * sc},${70 + 146 * sc} ` +
+        `${cx - 2 * sc},${70 + 132 * sc}`, fill: "none", stroke: PH_DIM });
+      put("polygon", { points: `${cx + 6 * sc},${70 + 128 * sc} ${cx + 10 * sc},${70 + 146 * sc} ` +
+        `${cx + 2 * sc},${70 + 132 * sc}`, fill: "none", stroke: PH_DIM });
+    });
     const body = el(svg, "g", {});
     const inB = (name, attrs) => { const n = document.createElementNS(NS, name);
       for (const k in attrs) n.setAttribute(k, attrs[k]); body.appendChild(n); return n; };
@@ -2344,53 +2300,6 @@
       foot.textContent = T > 118 ? "OPINION OF LIGHT: FORMING." : "";
     });
   }
-
-  /* ---------------- 05-D: bats, evacuation diagram ---------------- */
-  {
-    const svg = document.getElementById("bats-d");
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
-    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    // the hall in cross-section
-    el(svg, "rect", { x: 60, y: 60, width: 520, height: 250, fill: "none",
-      stroke: PH, "stroke-width": 1.6 });
-    el(svg, "rect", { x: 60, y: 60, width: 520, height: 26,
-      fill: stipple(svg, "ev-dots", PH, 1.2), stroke: "none" });
-    for (let x = 76; x < 570; x += 22)                        // the colony, filed
-      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.1,
-        points: `${x},86 ${x - 3},96 ${x + 3},96` });
-    const lamp = el(svg, "circle", { cx: 320, cy: 296, r: 4, fill: "#ffd76a", opacity: .2 });
-    // the dive paths, numbered
-    const dives = [
-      "M 200 96 Q 180 200 300 290", "M 320 96 Q 320 210 320 284",
-      "M 440 96 Q 460 200 340 290",
-    ].map(d => el(svg, "path", { d, fill: "none", stroke: PH_BRIGHT,
-      "stroke-width": 1.6, "stroke-dasharray": "7 5", opacity: 0 }));
-    // the safe route, and the crouching scavenger
-    el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-dasharray": "4 4",
-      points: "72,300 140,300 200,300" });
-    el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.3,
-      points: "96,300 102,290 110,292 114,300" });            // crouched, sensible
-    el(svg, "circle", { cx: 104, cy: 286, r: 2.4, fill: PH_BRIGHT });
-    label(svg, 74, 322, 9, FUNGUS).textContent = "SAFE ROUTE (WALL, DARK, QUIET)";
-    const steps = [label(svg, 340, 130, 10, PH), label(svg, 340, 150, 10, PH),
-      label(svg, 340, 170, 10, PH)];
-    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
-    const doWipe = wipe(svg, 640, 360, 2, 10);
-    clock(t => {
-      const T = t % 170;
-      doWipe(T);
-      typeOn(hdr, "IN THE EVENT OF LIGHT (HALL OF YOUTH)", T, 4, 1.4);
-      lamp.setAttribute("opacity", T > 30 ? (t % 4 < 2 ? 1 : .5) : .2);
-      dives.forEach((d2, i) => d2.setAttribute("opacity", T > 44 + i * 8 ? .9 : 0));
-      dives.forEach(d2 => d2.setAttribute("stroke-dashoffset", -(t * 3) % 24));
-      typeOn(steps[0], "1. THE LIGHT IS NOTICED.", T, 34, 1.6);
-      typeOn(steps[1], "2. THE CEILING FILES ITS OBJECTION.", T, 60, 1.6);
-      typeOn(steps[2], "3. YOU ARE THE EXIT.", T, 92, 1.6);
-      typeOn(foot, "DOUSE THE STONE, OR PAY IN DATES.", T, 126, 1.6);
-    });
-  }
-
 
   /* ---------------- 06-B: the burial cylinders, intact ---------------- */
   {
