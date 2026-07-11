@@ -26,11 +26,13 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.contract import (  # noqa: E402
     AGENT_FRAME_FIELDS,
+    EVENT_STATE_FIELDS,
     MEMORY_RECORD_FIELDS,
     SCHEMA_VERSION,
 )
 from backend.contract_models import (  # noqa: E402
     AgentFrame,
+    EventState,
     LlmInfo,
     MemoryRecord,
     Meta,
@@ -39,6 +41,7 @@ from backend.contract_models import (  # noqa: E402
     Replay,
     ScheduleStop,
 )
+from text_adventure_games.events import GameEvent  # noqa: E402
 from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
 from serve_penn import PennStepper  # noqa: E402
 
@@ -201,8 +204,20 @@ _TS_PAIRS = {
     "LlmInfo": LlmInfo,
     "AgentFrame": AgentFrame,
     "MemoryRecord": MemoryRecord,
+    "EventState": EventState,
     "Replay": Replay,
 }
+
+
+def test_event_state_field_order_matches_emitter():
+    # Three-way lock like the frame/memory rows: the constant, the model, and
+    # the real emitter (GameEvent.to_primitive) all agree — so the #467 run
+    # record ("events" in the replay, kind:"game_event" rows on the live feed)
+    # validates against the contract the moment its emitter lands.
+    assert tuple(EventState.model_fields) == EVENT_STATE_FIELDS
+    sample = GameEvent(3, "Diego Torres", "drink", "felt ill", {"cause": "raw water"})
+    assert tuple(sample.to_primitive().keys()) == EVENT_STATE_FIELDS
+    EventState.model_validate(sample.to_primitive())
 
 
 def _ts_interface_fields() -> dict[str, set[str]]:
