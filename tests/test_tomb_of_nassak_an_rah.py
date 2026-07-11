@@ -204,13 +204,14 @@ def test_unstatted_creatures_still_drop_in_one():
 
 
 def test_the_teamster_tells_the_story_and_decamps():
-    """CCB: the teamster is a GENERATED newbeast (a different one each
-    expedition, rolled on Issue 1's spark tables), and once she has said
-    her piece she decamps south along the trail, out of the game."""
+    """CCB's pick: the teamster is CRITCH, the golden new-hyena, every
+    expedition -- and once she has said her piece she decamps south along
+    the trail, out of the game."""
     game = _game()
     wreck = game.locations["The Caravan Wreck"]
     teamster = next(c for c in wreck.characters.values() if "teamster" in c.description)
-    assert teamster.name != "Worry"  # rolled, not canned
+    assert teamster.name == "Critch"  # chosen, not rolled
+    assert "cracked clean across the smile" in teamster.examine_text
     cap = _texts(game)
     game.do_command("talk to teamster")
     said = " ".join(cap.texts(Channel.NARRATION)).lower()
@@ -221,14 +222,42 @@ def test_the_teamster_tells_the_story_and_decamps():
     assert "sets off south along the trail" in " ".join(cap.texts(Channel.NARRATION))
 
 
-def test_different_seeds_meet_different_teamsters():
+def test_every_seed_meets_critch():
     names = set()
-    for seed in range(6):
+    for seed in range(4):
         game = tomb.build_game(seed=seed)
         wreck = game.locations["The Caravan Wreck"]
         t = next(c for c in wreck.characters.values() if "teamster" in c.description)
-        names.add((t.name, t.description))
-    assert len(names) >= 3  # the spark tables are doing the casting
+        names.add(t.name)
+    assert names == {"Critch"}  # one face for the caravan, every time
+
+
+def test_examine_self_is_the_chargen_easter_egg():
+    """EXAMINE SELF (CCB): once per expedition the scavenger discovers who
+    they have been all along; every later look finds the same self, and a
+    (seed, journal) replay remembers the face."""
+    game = _game()
+    cap = _texts(game)
+    game.do_command("x self")
+    first = " ".join(cap.texts(Channel.NARRATION))
+    assert "You take stock of yourself" in first
+    assert "You are" in first  # one of the hundred selves
+    i = game.player.get_property("_self_index")
+    assert i is not False and i is not None
+    cap2 = _texts(game)
+    game.do_command("examine self")
+    again = " ".join(cap2.texts(Channel.NARRATION))
+    assert "You remain, on inspection, yourself." in again
+    assert game.player.get_property("_self_index") == i  # rolled once only
+    # the roll survives the save replay
+    game2 = tomb.build_game(seed=0)
+    game2.parser.set_renderer(CaptureRenderer())
+    game2.replay(list(game.journal))
+    assert game2.player.get_property("_self_index") == i
+    # and the aliases do not hijack other examines
+    cap3 = _texts(game)
+    game.do_command("examine merchant")
+    assert "composed" in " ".join(cap3.texts(Channel.NARRATION))
 
 
 def test_smoke_tour_traverses_every_room_cleanly():
