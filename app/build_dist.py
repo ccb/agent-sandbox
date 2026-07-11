@@ -66,6 +66,11 @@ def main() -> int:
     wheel = os.path.basename(wheels[-1])
     for name in ("index.html", "terminal.css", "terminal.js", "app_api.py"):
         shutil.copy(os.path.join(HERE, name), DIST)
+    # the animation-prototype reel ships as a shareable subpage
+    reel = os.path.join(HERE, "prototypes", "retro-animations.html")
+    if os.path.exists(reel):
+        os.makedirs(os.path.join(DIST, "animations"), exist_ok=True)
+        shutil.copy(reel, os.path.join(DIST, "animations", "index.html"))
     manifest = {"wheel": wheel}
     if with_pyodide:
         _vendor_pyodide()
