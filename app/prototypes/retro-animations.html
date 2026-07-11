@@ -109,6 +109,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>03-C &mdash; THE CANOPIC SYSTEM, SUPINE</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="canopic-c" viewBox="0 0 640 400" aria-label="The canopic system, patient supine"></svg>
+    </div>
+    <p class="spec">The procedure as the table sees it: the patient lying flat above the jar
+       row, trimmed at the shoulders, organs descending one by one. No buzzer; the
+       tombwrights had steadier hands.
+       <span class="attach">Alternate for 03.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>04 &mdash; GUIDE CARD: PTHALO-JACKAL</h2><span class="kind">LITHO / CREATURE ENTRY</span></div>
     <div class="screen">
       <svg id="jackal" viewBox="0 0 640 360" aria-label="Pthalo-jackal field entry"></svg>
@@ -194,6 +205,16 @@
   </section>
 
   <section>
+    <div class="slate"><h2>11-B &mdash; THE BURIAL SPHERE, UPRIGHT</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="sphere-b" viewBox="0 0 640 420" aria-label="The burial sphere, coffin upright"></svg>
+    </div>
+    <p class="spec">The same chamber, but the coffin floats UPRIGHT &mdash; a standing glass
+       egg with a vertical hairline seam, the tenant coiling tall inside it, the fungus
+       strands meeting its crown. <span class="attach">Alternate for 11.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>12 &mdash; FRIEND'S FUNGUS</h2><span class="kind">LITHO / PHARMACOPOEIA</span></div>
     <div class="screen">
       <svg id="fungus" viewBox="0 0 640 360" aria-label="Friend's fungus, a pink mushroom cluster"></svg>
@@ -256,17 +277,6 @@
        the cutaway, the coil of cured intestines turning by degrees. Last worn as a helm by
        the spawn of guts. <span class="attach">Attaches: EXAMINE FALCON JAR; the tribute economy.</span></p>
   </section>
-
-  <section>
-    <div class="slate"><h2>16-B &mdash; FALCON JAR, DISPLAYED</h2><span class="kind">LITHO / ALTERNATE</span></div>
-    <div class="screen">
-      <svg id="jar-falcon-b" viewBox="0 0 640 300" aria-label="Falcon jar, wings displayed"></svg>
-    </div>
-    <p class="spec">The whole bird as the stopper: a falcon displayed, wings spread wide with
-       stepped feathers, tail fanned over the throat of the jar, beating by slow quantized
-       degrees. <span class="attach">Alternate for 16.</span></p>
-  </section>
-
 
   <section>
     <div class="slate"><h2>17 &mdash; EXTERIOR, TAKE ONE: THE APPROACH</h2><span class="kind">LITHO / SCENE</span></div>
@@ -1874,69 +1884,6 @@
     });
   }
 
-  /* ---------------- 16-B / 16-C: the falcon, whole-bird ---------------- */
-  function falconJarAlt(id, title, foot, drawBird, tick) {
-    const svg = document.getElementById(id);
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 300, fill: BG });
-    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    const JD = stipple(svg, id + "-dots", PH, 1);
-    el(svg, "polygon", { points: "170,280 330,280 312,150 188,150",
-      fill: JD, stroke: PH, "stroke-width": 1.8 });
-    el(svg, "line", { x1: 182, y1: 168, x2: 318, y2: 168, stroke: PH_DIM });
-    const P = { svg, JD };
-    drawBird(P);
-    const ftr = label(svg, 440, 286, 10, FUNGUS); ftr.setAttribute("text-anchor", "middle");
-    const doWipe = wipe(svg, 640, 300, 2, 10);
-    clock(t => {
-      const T = t % 150;
-      doWipe(T);
-      typeOn(hdr, title, T, 4, 1.4);
-      typeOn(ftr, foot, T, 100, 1.6);
-      tick(t, T, P);
-    });
-  }
-
-  // a wing: shoulder -> tip with a stepped trailing edge, drawn per tick so
-  // it can beat; dir = -1 left, +1 right; lift raises the tip
-  function wingPts(sx, sy, dir, span, lift) {
-    const tipx = sx + dir * span, tipy = sy - 26 - lift;
-    const back = [];
-    for (let k = 4; k >= 1; k--) {
-      const fx = sx + dir * span * (k / 4.6);
-      const fy = tipy + 20 + (4 - k) * 7 - lift * (k / 6);
-      back.push(`${fx},${fy}`);
-      back.push(`${fx - dir * span * .06},${fy - 6}`);
-    }
-    return `${sx},${sy} ${sx + dir * span * .4},${sy - 20 - lift * .6} ` +
-      `${tipx},${tipy} ` + back.join(" ") + ` ${sx},${sy + 8}`;
-  }
-
-  falconJarAlt("jar-falcon-b", "THE FALCON JAR (DISPLAYED)",
-    "WINGS OUT: THE POSTURE OF OWNERSHIP.",
-    (P) => {
-      P.wingL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
-      P.wingR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
-      // the body, upright on the jar throat
-      el(P.svg, "polygon", { points: "236,148 264,148 262,108 250,96 238,110",
-        fill: P.JD, stroke: PH, "stroke-width": 1.6 });          // breast and shoulders
-      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-        "250,96 258,84 252,72 238,70 228,78 " +
-        "220,82 216,90 222,93 226,90 230,94 236,92 242,98" });   // head, hook, jaw
-      P.eye = el(P.svg, "circle", { cx: 240, cy: 80, r: 2.8, fill: PH_BRIGHT });
-      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-        points: "240,82 243,92" });                              // the teardrop
-      [[-8, 0], [0, 2], [8, 0]].forEach(([dx, dy]) =>            // the tail fan
-        el(P.svg, "line", { x1: 250 + dx * .4, y1: 148, x2: 250 + dx, y2: 176 + dy,
-          stroke: PH, "stroke-width": 1.2 }));
-    },
-    (t, T, P) => {
-      const lift = [0, 4, 9, 13, 9, 4][Math.floor(t / 4) % 6];   // the slow beat
-      P.wingL.setAttribute("points", wingPts(236, 118, -1, 130, lift));
-      P.wingR.setAttribute("points", wingPts(264, 118, 1, 130, lift));
-      P.eye.setAttribute("opacity", (t % 26) < 23 ? 1 : .2);
-    });
-
   /* ---------------- 23-25: the spawn of brain, three takes ---------------- */
   // the body: a risen brain -- bumpy lobed outline with gyri, stippled
   function brainBody(svg, g, cx, cy, rx, ry, DOTS) {
@@ -2680,6 +2627,200 @@
       thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
       thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
       typeOn(foot, "HIS SENTENCE CONTINUES UNDERGROUND.", T, 168, 1.4);
+    });
+  }
+
+
+  /* ---------------- 03-C: the canopic system, supine ---------------- */
+  {
+    const svg = document.getElementById("canopic-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "RITES / PROCEDURE / SUPINE";
+    // THE PATIENT, lying flat: the standing drawing rotated onto the table,
+    // narrowed slightly through the shoulders
+    const gP = document.createElementNS(NS, "g");
+    gP.setAttribute("transform",
+      "rotate(90 320 150) translate(320 0) scale(.86 1) translate(-320 0)");
+    svg.appendChild(gP);
+    const inP = (name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); gP.appendChild(n); return n; };
+    inP("polyline", { fill: "none", stroke: PH, "stroke-width": 1.8, points:
+      "312,94 274,106 250,148 244,164 258,168 276,138 280,192 " +
+      "284,220 292,268 284,274 302,274 306,224 320,224 334,224 " +
+      "338,274 356,274 348,268 356,220 360,192 364,138 382,168 " +
+      "396,164 390,148 366,106 328,94" });
+    inP("circle", { cx: 320, cy: 72, r: 22, fill: "none", stroke: PH, "stroke-width": 1.8 });
+    inP("circle", { cx: 320, cy: 78, r: 3.5, fill: PH_DIM });
+    const ORGANS = {};
+    ORGANS.BRAIN = inP("path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 308 62 Q 312 54 320 56 Q 328 52 332 60 Q 336 66 330 68 " +
+         "M 312 64 Q 316 60 318 66 M 324 60 Q 328 64 326 68" });
+    ORGANS.EYES = inP("g", {});
+    [[312, 76], [328, 76]].forEach(([x, y]) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 3.4);
+      c.setAttribute("fill", "none"); c.setAttribute("stroke", PH_DIM);
+      c.setAttribute("stroke-width", 1.4); ORGANS.EYES.appendChild(c);
+    });
+    ORGANS.LUNGS = inP("path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 314 112 Q 300 116 298 138 Q 298 150 308 150 Q 314 146 314 132 Z " +
+         "M 326 112 Q 340 116 342 138 Q 342 150 332 150 Q 326 146 326 132 Z" });
+    ORGANS.LIVER = inP("path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 300 160 L 338 158 Q 344 166 336 172 L 306 174 Q 298 168 300 160 Z" });
+    ORGANS.INTESTINES = inP("path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.5,
+      d: "M 304 186 Q 320 180 336 186 Q 340 194 324 194 Q 306 192 306 200 " +
+         "Q 322 206 336 200 Q 340 210 322 212 Q 306 212 308 218 Q 322 222 334 218" });
+    // where each organ ENDS UP on screen (the patient transform, applied)
+    const TX = (x, y) => [320 - (y - 150), 150 + (x - 320) * .86];
+    const SEQ = [
+      { key: "LUNGS", at: TX(320, 132), jar: 0, name: "LUNGS", head: "BABOON" },
+      { key: "LIVER", at: TX(320, 166), jar: 1, name: "LIVER", head: "HUMAN" },
+      { key: "EYES", at: TX(320, 76), jar: 2, name: "EYES", head: "MANTIS" },
+      { key: "INTESTINES", at: TX(320, 200), jar: 3, name: "INTESTINES", head: "FALCON" },
+      { key: "BRAIN", at: TX(320, 62), jar: 4, name: "BRAIN", head: "JACKAL" },
+    ];
+    const jars = SEQ.map((o, i) => {
+      const jx = 70 + i * 125;
+      el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
+        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
+      headGlyph(svg, o.head, jx);
+      const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
+      const who = label(svg, jx, 386, 9, PH_DIM); who.setAttribute("text-anchor", "middle");
+      return { jx, cap, who, o };
+    });
+    const lead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const payload = el(svg, "circle", { r: 3.2, fill: PH_BRIGHT, opacity: 0 });
+    const foot = label(svg, 320, 62, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "THE CANOPIC SYSTEM (SUPINE)", T, 4, 1.4);
+      const step = Math.floor((T - 20) / 28), f = ((T - 20) % 28) / 28;
+      SEQ.forEach((o, i) => {
+        const active = i === step && T >= 20;
+        ORGANS[o.key].setAttribute("stroke", active ? PH_BRIGHT : PH_DIM);
+        if (o.key === "EYES")
+          [...ORGANS.EYES.children].forEach(c =>
+            c.setAttribute("stroke", active ? PH_BRIGHT : PH_DIM));
+        if (active) {
+          const j = jars[i];
+          lead.setAttribute("points", `${o.at[0]},${o.at[1]} ${j.jx},${o.at[1] + 40} ${j.jx},292`);
+          payload.setAttribute("cx", o.at[0] + (j.jx - o.at[0]) * f);
+          payload.setAttribute("cy", o.at[1] + (292 - o.at[1]) * f);
+          payload.setAttribute("opacity", 1);
+          if (f > .55) { typeOn(j.cap, o.name, T, 20 + i * 28 + 16, 1.6);
+                         typeOn(j.who, o.head, T, 20 + i * 28 + 20, 1.6); }
+        }
+      });
+      if (step > 4 || T < 20) { lead.setAttribute("points", ""); payload.setAttribute("opacity", 0); }
+      typeOn(foot, "THE TOMBWRIGHTS HAD STEADIER HANDS.", T, 160, 1.8);
+    });
+  }
+
+
+  /* ---------------- 11-B: the burial sphere, coffin upright ---------------- */
+  {
+    const svg = document.getElementById("sphere-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CHAMBER 6 / ZERO-G / TENANTED";
+    const CDOTS = stipple(svg, "dots-sphereb", PH, .9);
+    el(svg, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(svg, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(svg, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(svg, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(svg, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(svg, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    const strands = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    // THE COFFIN, upright: a standing glass egg, seam running vertical
+    const gCof = document.createElementNS(NS, "g"); svg.appendChild(gCof);
+    const coffin = document.createElementNS(NS, "ellipse");
+    for (const [k, v] of Object.entries({ cx: 320, cy: 232, rx: 30, ry: 52,
+      fill: CDOTS, stroke: PH_BRIGHT, "stroke-width": 1.8 })) coffin.setAttribute(k, v);
+    gCof.appendChild(coffin);
+    el(svg, "line", { x1: 320, y1: 180, x2: 320, y2: 284, stroke: PH_DIM,
+      "stroke-dasharray": "2 4" });                          // the seam, vertical
+    const knot = document.createElementNS(NS, "circle");
+    for (const [k, v] of Object.entries({ cx: 320, cy: 234, r: 13, fill: FUNGUS,
+      "fill-opacity": .28, stroke: FUNGUS, "stroke-width": 1.4 })) knot.setAttribute(k, v);
+    gCof.appendChild(knot);
+    const tendrils = Array.from({ length: 9 }, (_, i) => {
+      const under = i >= 5;
+      const n = document.createElementNS(NS, "polyline");
+      n.setAttribute("fill", "none"); n.setAttribute("stroke", FUNGUS);
+      n.setAttribute("stroke-width", under ? 1.1 : 1.6);
+      n.setAttribute("opacity", under ? .45 : 1);
+      gCof.appendChild(n); return n;
+    });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [320, 96], text: "THROAT: THE FUNGUS COMES DOWN IT" },
+      { at: [320, 180], text: "SEAM: VERTICAL, FINE AS A HAIR" },
+      { at: [320, 234], text: "TENANT: COILED TALL, BREATHING SLOW" },
+      { at: [204, 310], text: "PRAYERS: READ FROM EVERY DIRECTION AT ONCE" },
+    ];
+    label(svg, 24, 396, 10, PH_DIM).textContent = "THE CHURN";
+    const breath = label(svg, 110, 396, 10, FUNGUS);
+    const foot = label(svg, 420, 396, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      const br = [0, 1, 2, 3, 4, 4, 3, 2, 1, 0][Math.floor(t / 3) % 10];
+      knot.setAttribute("r", 12 + br);
+      coffin.setAttribute("stroke-width", 1.4 + br * .18);
+      breath.textContent = "(" + "~".repeat(3 + br) + ")";
+      tendrils.forEach((n, i) => {                           // coiling TALL
+        const under = i >= 5;
+        const a0 = i * (Math.PI * 2 / (under ? 4 : 5)) + t * (under ? -.06 : .09);
+        const w = Math.sin(t * .5 + i * 1.7) * 5;
+        const reach = under ? .8 : 1;
+        const pts = [1, 2, 3, 4].map(k => {
+          const r = (8 + k * (7 + br * .8)) * reach;
+          const a = a0 + w * .02 * k + Math.sin(t * .3 + k * 1.3 + i) * .22;
+          return `${320 + Math.cos(a) * r * .55},${234 + Math.sin(a) * r}`;
+        });
+        n.setAttribute("points", `320,234 ` + pts.join(" "));
+      });
+      strands.forEach((n, i) => {
+        const sw = Math.sin(t * .22 + i * 2.1) * 5;
+        n.setAttribute("points",
+          `${306 + i * 14},46 ${306 + i * 14 + sw},96 ` +
+          `${312 + i * 8 + sw},140 ${318 + i * 2},178`);     // meeting the crown
+      });
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "PRY IT, AND IT WILL MIND.", T, 120, 1.6);
     });
   }
 
