@@ -74,6 +74,9 @@ const MISC_GLYPHS := preload("res://Cute_Fantasy_UI/UI/UI_Icons.png")
 const GLYPH_CELL := 16   # the sheets' cell size, px
 const GLYPH_SCALE := 2   # 16 px cells → 32 px button icons
 
+# The event-marker strip that sits directly above the timeline (issue #249).
+const TimelineMarkers := preload("res://scripts/timeline_markers.gd")
+
 # The pack has no flame either, so Heatmap's glyph is drawn here pixel by pixel
 # in the pack's own palette (its dark outline + its orange→yellow ramp, sampled
 # from the plus/bolt glyphs), one string per row, so it sits next to the sheet
@@ -192,6 +195,7 @@ var _play: Button                   # play/pause toggle (icon set by set_playing
 # Pause/play glyphs, dark-brown row of the sheet (matches the theme's text).
 var _icon_pause := _pack_icon(BUTTON_GLYPHS, 0, 1)
 var _icon_play := _pack_icon(BUTTON_GLYPHS, 1, 1)
+var _markers_strip: Control            # event ticks above the timeline (#249)
 var _scrubber: HSlider              # timeline; value is the current frame index
 var _speed_row: HBoxContainer       # the Speed picker row (hidden in live mode)
 var _col: VBoxContainer             # the sidebar's main column (set_live adds rows)
@@ -311,6 +315,13 @@ func _ready() -> void:
 	_step_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_step_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_transport_row.add_child(_step_label)
+
+	# Event markers sit directly above the timeline they annotate (issue #249).
+	# Clicks re-emit as ordinary seeks, so the viewer needs no new plumbing.
+	_markers_strip = TimelineMarkers.new()
+	_markers_strip.marker_clicked.connect(
+		func(step: int) -> void: seek_requested.emit(step))
+	col.add_child(_markers_strip)
 
 	_scrubber = HSlider.new()
 	_scrubber.min_value = 0
@@ -529,6 +540,7 @@ func set_live(live: bool) -> void:
 	# to scrub to; set_progress keeps the step label current instead) and the
 	# Speed picker (the backend sets the pace, not the viewer).
 	_scrubber.visible = not live
+	_markers_strip.visible = not live
 	_speed_row.visible = not live
 	if live and _live_badge == null:
 		_live_badge = Label.new()
@@ -596,6 +608,13 @@ func set_progress(step: int, total: int) -> void:
 	_step_label.text = "step %d / %d" % [step, total]
 
 
+func set_timeline_markers(markers: Array, total: int) -> void:
+	# The replay's "interesting moments" (issue #249), collected once at load by
+	# viewer.gd via replay_markers.gd. `total` is the last frame index, matching
+	# the scrubber's max, so ticks align with the grabber's travel.
+	_markers_strip.set_markers(markers, total)
+
+
 func _on_scrubber_changed(value: float) -> void:
 	if _updating_scrubber:
 		return  # playback moved the slider, not the user
@@ -649,6 +668,9 @@ func _refresh() -> void:
 	# row.modulate): the tracked one is tinted and its button reads "Untrack", the rest
 	# read "Track"; a row the filter dimmed fades out. Dim wins over the track tint, so a
 	# tracked agent who is filtered out still reads as "not in the focused building".
+	# Tracking narrows the marker strip to that agent's storyline (issue #249);
+	# _refresh() is already the single place every tracking change funnels into.
+	_markers_strip.set_filter(_active)
 	for n in _rows:
 		var r: Dictionary = _rows[n]
 		var is_active: bool = n == _active
