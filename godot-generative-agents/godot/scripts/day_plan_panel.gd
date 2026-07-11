@@ -255,6 +255,13 @@ func _slot_color(slot: Dictionary) -> Color:
 
 
 func _on_canvas_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		# Godot resolves tooltips on the hovered control itself (the parent walk
+		# stops at any MOUSE_FILTER_STOP control, i.e. this canvas — a root-level
+		# _get_tooltip override is never reached), so keep the canvas's
+		# tooltip_text tracking whatever segment is under the cursor.
+		_canvas.tooltip_text = _canvas_tooltip((event as InputEventMouseMotion).position)
+		return
 	if not (event is InputEventMouseButton and event.pressed
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
 		return
@@ -267,12 +274,6 @@ func _on_canvas_input(event: InputEvent) -> void:
 		maxi(_frames.size() - 1, 0))
 	seek_requested.emit(step)
 	_canvas.accept_event()
-
-
-func _get_tooltip(at_position: Vector2) -> String:
-	# Anchored on the whole pop-up Control; translate into canvas space.
-	var pos := at_position - _canvas.get_global_rect().position + get_global_rect().position
-	return _canvas_tooltip(pos)
 
 
 func _canvas_tooltip(pos: Vector2) -> String:
@@ -291,8 +292,9 @@ func _canvas_tooltip(pos: Vector2) -> String:
 			for i in segs.size():
 				var seg: Dictionary = segs[i]
 				if step >= int(seg["start"]) and step < int(seg["start"]) + int(seg["len"]):
-					return "%d. %s @ %s — %d steps" % [i + 1,
-						String(seg["activity"]), String(seg["place"]), int(seg["len"])]
+					return "planned stop %d/%d: %s @ %s (steps %d–%d)" % [i + 1,
+						segs.size(), String(seg["activity"]), String(seg["place"]),
+						int(seg["start"]), int(seg["start"]) + int(seg["len"]) - 1]
 			return ""
 		if pos.y >= actual_y and pos.y < actual_y + BAR_H:
 			var slots: Array = _slots.get(name, [])
@@ -301,12 +303,14 @@ func _canvas_tooltip(pos: Vector2) -> String:
 			var slot: Dictionary = slots[step]
 			match String(slot["kind"]):
 				"transit":
-					return "walking to %s" % String(slot["place"])
+					return "actual, step %d: walking to %s" % [step, String(slot["place"])]
 				"at":
-					return "at %s" % String(slot["place"])
+					return "actual, step %d: at %s" % [step, String(slot["place"])]
 				_:
 					var b := String(slot["place"])
-					return "off-plan: %s" % b if b != "" else "off-plan"
+					if b != "":
+						return "actual, step %d: off-plan — %s" % [step, b]
+					return "actual, step %d: off-plan" % step
 	return ""
 
 
