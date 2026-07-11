@@ -118,6 +118,10 @@ const FOG_COLOR := Color(0.16, 0.17, 0.21, 0.72)
 const SPOTLIGHT_DIM_ALPHA := 0.35
 const TRAIL_DIM_ALPHA := 0.18
 
+# Marker collection for the timeline strip (issue #249) — also the single home
+# of the act-address building parser (_building_of delegates to it).
+const ReplayMarkers := preload("res://scripts/replay_markers.gd")
+
 var _tile_px := 16
 var _sec_per_step := 10
 var _start_unix := 0
@@ -467,6 +471,13 @@ func _load_replay_from_text(text: String) -> void:
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
 	_memory_streams = data.get("memory_streams", {})
+
+	# The timeline's "interesting moments" (issue #249): game events (#476 —
+	# this is the baked events key's first consumer), chat onsets, reflections,
+	# arrivals. One scan at load; live mode never gets here (no scrubber).
+	_panel.set_timeline_markers(
+		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", [])),
+		maxi(_frames.size() - 1, 0))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -1140,14 +1151,9 @@ func _tile_to_world(x: int, y: int) -> Vector2:
 
 
 func _building_of(act: String) -> String:
-	# The building an agent is in, from its `act` string. `act` is
-	# "<activity> @ UPenn:<Building>:<area>"; we want the middle "<Building>" segment.
-	# Returns "" if the address is missing or malformed.
-	var halves := act.split(" @ ")
-	if halves.size() < 2:
-		return ""
-	var addr := halves[1].split(":")
-	return addr[1] if addr.size() > 1 else ""
+	# The building an agent is in, from its `act` string. The parsing moved to
+	# replay_markers.gd (issue #249) so marker labels and the viewer can't drift.
+	return ReplayMarkers.building_of(act)
 
 
 func _update_trail(trail: Line2D, name: String, step: int, head: Vector2) -> void:
