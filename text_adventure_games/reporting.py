@@ -53,6 +53,7 @@ class Channel(Enum):
     AGENT_ACTION = "agent_action"  # ReAct chosen command
     AGENT_REFLECTION = "agent_reflection"  # ReAct "Reflect" after a failure
     SYSTEM = "system"  # turn header, clock, meta-command, game-over
+    FIGURE = "figure"  # an illustration cue: text is a card KEY, not prose
 
 
 # The agent's private ReAct trace -- never enters command_history, and the
@@ -187,6 +188,8 @@ class PlainRenderer(Renderer):
             return self._wrap(f"⚔ {m.text}")
         if c is Channel.COMMAND:
             return f"> {m.text}"
+        if c is Channel.FIGURE:
+            return f"[figure: {m.text}]"  # a key, not prose; VERBOSE-only
         return self._wrap(m.text)  # NARRATION, NPC_NARRATION, BLOCKED, SYSTEM
 
 

@@ -64,7 +64,18 @@ def main() -> int:
         print("no wheel produced", file=sys.stderr)
         return 1
     wheel = os.path.basename(wheels[-1])
-    for name in ("index.html", "terminal.css", "terminal.js", "app_api.py"):
+    # figures.js regenerates from the reel every build (single source of truth)
+    sys.path.insert(0, HERE)
+    import gen_figures
+
+    gen_figures.generate()
+    for name in (
+        "index.html",
+        "terminal.css",
+        "terminal.js",
+        "app_api.py",
+        "figures.js",
+    ):
         shutil.copy(os.path.join(HERE, name), DIST)
     # the animation-prototype reel ships as a shareable subpage
     reel = os.path.join(HERE, "prototypes", "retro-animations.html")

@@ -776,6 +776,7 @@ class Burn(actions.Action):
             horror = self.game.characters["fungal horror"]
             was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
+            self.game.show_figure("autarch-e")
             horror.set_property("gel_doused", False)
             tool = _spark_name(self.player)
             if was_doused:
@@ -1137,6 +1138,7 @@ class FixCoffin(actions.Action):
             "-- and beneath them a NEW line, deeper than the rest: the "
             "PRAYER OF PEACEFUL SLUMBER."
         )
+        self.game.show_figure("autarch")
 
 
 class PryCoffin(actions.Action):
@@ -1779,6 +1781,7 @@ def _sphere_aftermath(g, ash):
         bones.add_alias("bones")
         bones.add_alias("skeleton")
         bones.add_alias("autarch")
+        bones.set_property("figure", "autarch-c")
     if ash and "drift of ash" not in sphere.items:
         ash_item = _scenery(
             sphere,
@@ -1888,6 +1891,13 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     and the organ is edible, God help you, or feedable to things that eat."""
     jar = things.Item(name, description, examine_text).make_container()
     jar.set_property("is_closed", True)
+    fig = {
+        "mantis jar": "jar-mantis",
+        "jackal jar": "jar-jackal",
+        "falcon jar": "jar-falcon",
+    }.get(name)
+    if fig:
+        jar.set_property("figure", fig)
     organ = things.Item(organ_name, organ_desc, organ_desc)
     organ.set_property("gettable", True)
     organ.set_property(Property.EDIBLE, True)
@@ -2386,6 +2396,7 @@ def build_game(seed=None):
     hound_pile.set_property("slots", 3)
     hound_pile.add_alias("hound")
     hound_pile.add_alias("dog")
+    hound_pile.set_property("figure", "hound")
     # SEARCH the hound and its chest gives up a second fire-starter (design
     # doc §17.1) -- the corpse-searching habit pays out a third time.
     servo = things.Item(
@@ -2447,7 +2458,7 @@ def build_game(seed=None):
         "cylinders",
         "four plexiglas burial cylinders",
         _cylinders_examine,
-    )
+    ).set_property("figure", "cylinders")
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
     # top of the plinth carvings and the memory crystals).
@@ -2556,6 +2567,7 @@ def build_game(seed=None):
         "hypergeometric, and heavier inside than out.",
     )
     manifold_box.add_alias("box")
+    manifold_box.set_property("figure", "tesseract")
     coffin = _scenery(
         sphere,
         "coffin",
@@ -2581,7 +2593,10 @@ def build_game(seed=None):
     prayers.add_command_hint("read prayers")
 
     coffin.make_container()
-    coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
+    coffin.set_property("is_closed", True)
+    coffin.set_property(
+        "figure", "sphere-b"
+    )  # PryCoffin (boots-gated) is the only way in
     # The failing anti-entropy field still counts as a lock: SEARCH (which
     # rummages open ordinary closed containers) must not bypass the pry puzzle.
     coffin.set_property(Property.IS_LOCKED, True)
@@ -2602,6 +2617,7 @@ def build_game(seed=None):
     corpse.add_alias("mystic")
     corpse.make_surface()
     corpse.set_property("reveals_on_examine", True)
+    corpse.set_property("figure", "mystic-b")
     corpse.set_property(
         "contents_relation", "Nested in the hollow of its clasped hands you find"
     )
@@ -2613,6 +2629,7 @@ def build_game(seed=None):
         "and stays that way for hours. The mystic was holding it when he turned "
         "to stone -- for himself, or for whatever came up the mountain.",
     )
+    fungus.set_property("figure", "fungus")
     fungus.set_property("gettable", True)
     fungus.set_property(Property.EDIBLE, True)
     # A LICK is a microdose (CCB): the taste rehearses the fungus's whole
@@ -2676,6 +2693,7 @@ def build_game(seed=None):
         "intestine -- though even that doesn't quite get it -- wearing the "
         "falcon canopic jar on top like a hat. It sways toward any sound."
     )
+    spawn_guts.set_property("figure", "guts-a")
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
         "spawn of brain",
@@ -2687,6 +2705,7 @@ def build_game(seed=None):
         "worn as a hat. It has no eyes and does not appear to want any; it "
         "twitches toward every noise, precise as a metronome."
     )
+    spawn_brain.set_property("figure", "spawn-a")
     spawn_brain.add_to_inventory(jackal_jar)
     warriors.add_character(spawn_guts)
     hounds.add_character(spawn_brain)
@@ -2710,6 +2729,7 @@ def build_game(seed=None):
     )
     for _a in ("jackals", "jackal", "pack", "pack of jackals", "pthalo-jackals"):
         jackal_pack.add_alias(_a)
+    jackal_pack.set_property("figure", "jackal")
     # A PACK does not drop to one swing (the vigor system, CCB): three blows
     # thin it to nothing.
     jackal_pack.set_property("vigor", 3)
@@ -2735,6 +2755,15 @@ def build_game(seed=None):
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
     horror.set_property("no_catch", True)  # a coil has no hands
+    # Its card follows its state: the coil in the coffin, or the bust ablaze.
+    horror.set_property(
+        "figure",
+        lambda g: (
+            "autarch-e"
+            if g.characters["fungal horror"].get_property("ablaze")
+            else "sphere-b"
+        ),
+    )
     horror.set_property("vigor", 5)
     horror.set_property(
         "struck_text",
@@ -2759,6 +2788,7 @@ def build_game(seed=None):
     )
     for _a in ("centipede", "glass"):
         centipede.add_alias(_a)
+    centipede.set_property("figure", "centipede")
     den.add_character(centipede)
 
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
@@ -2773,6 +2803,7 @@ def build_game(seed=None):
     blade.set_property(Property.WIELDABLE, True)
     blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
+    blade.set_property("figure", "blade")
 
     # Endgame gear: a plasma-igniter and magnetic boots (more guard kit), and a
     # flask of flammable embalming gel from the hound tank.
@@ -2889,6 +2920,7 @@ def build_game(seed=None):
         "lattice in slow bright threads. Patient, courteous, elsewhere. Now "
         "and then his lips move -- circular glyphs, no sound."
     )
+    silas.set_property("figure", "silas")
     _silas_speech = (
         'Silas speaks without turning. "Scavenger. You walk in a house of '
         "memory; mind what you wake. Two of the Autarch's organs have got up and "
@@ -3030,6 +3062,7 @@ def build_game(seed=None):
     glowstone.add_alias(
         "stone"
     )  # no "lantern" alias: the Ulfire Lantern owns that word
+    glowstone.set_property("figure", "glowstone")
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
     glowstone.set_property(Property.IS_HIDDEN, True)
@@ -3491,6 +3524,7 @@ def build_game(seed=None):
                 "either.",
             )
             wheel.add_alias("bats")
+            wheel.set_property("figure", "bats")
             g.parser.ok(
                 "The mouths of the tomb EXHALE -- a river of leather "
                 "pouring into the open air. The colony strips the dates in "
@@ -3507,6 +3541,7 @@ def build_game(seed=None):
                 "no further opinions about your light.",
             )
             roost.add_alias("bats")
+            roost.set_property("figure", "bats-c")
             g.parser.ok(
                 "A sound like a tide through the halls -- and the colony "
                 "arrives, a river of leather that breaks over the dates "
@@ -4426,6 +4461,7 @@ def build_game(seed=None):
 
     def _open_seal(g):
         canopic.set_property("seal_open", True)
+        g.show_figure("seal")
         g.parser.ok(
             "As the last jar settles onto its plinth, the crimson light steadies to "
             "white. The crystal seal sighs apart into motes, unblocking the "

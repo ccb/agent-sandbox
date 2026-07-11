@@ -524,6 +524,15 @@ class Examine(base.Action):
             )
         else:
             self.parser.ok("You don't see anything special.")
+            return
+        # A thing may carry a ``figure`` property: the key of an illustration
+        # card that a close look cues (once per game -- show_figure dedupes).
+        # A callable(game) -> key|None picks by live state (an autarch at rest
+        # draws differently than one hollowed out). Player looks only: an NPC
+        # examining doesn't draw on the player's screen.
+        if self.character is self.game.player:
+            fig = target.get_property("figure")
+            self.game.show_figure(fig(self.game) if callable(fig) else fig)
 
 
 class Throw(base.Action):
