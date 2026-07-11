@@ -1,3 +1,39 @@
+## 2026-07-10
+**Focus:** landed the whole reconciled PR queue on `godot-ga-main` (nine merges over the #481/#482 base moves), closed out the delivered issues, then shipped two viewer timeline features — event markers (#249, **PR #508**, merged) and the day-plans ribbon pop-up (#251, **PR #509**, CI green).
+
+**Done today:**
+- Merged the queue in dependency order — **#468/#463/#480/#484/#501/#465/#476/#478/#507** — each rebase-reconciled over the #481 backend refactor + #482 tools move (rename-carries into `cognition.py`/`tools/geo`, cell-level three-way splices of the single-line `collision_maze.csv`); the boil-water arc is now end-to-end on `godot-ga-main` (verbs → run-record events → props → HUD rows). Closed the delivered issues (#270/#300/#305/#393/#466/#467/#502, later #249) and deleted the nine merged branches, local + remote.
+- Review pass on #476/#478 produced two fixes that landed same-day: **#501** pinned `EventState` + the replay `events` key into the #305 contract before #476 could drift it, and **#507** taught the live HUD to render `kind:"game_event"` rows via a `summary` fallback (filed as #502).
+- Shipped #249 (**PR #508**): colored click-to-seek markers above the scrubber (game events / chat onsets / reflections / arrivals — arrival = the `"walking to "` act prefix disappearing, since travel acts already carry the destination address), plus the repo's **first headless GDScript unit tests**, wired into `run_smoke_test.sh` with a parse-error sentinel (Godot exits 0 on `--script` parse errors). Then #251 (**PR #509**): day-plans pop-up pairing each agent's authored schedule against what they actually did — planned↔actual paired exactly by learning place→address from the walking legs, no heuristics; subagent reviews caught two plan-authored bugs (stale planned-segment cache under a growing live axis; anchors-only preset leaving the modal a 0-size rect).
+
+**Blockers / questions:**
+- **PR #509** needs the manual visual pass before merge — look hardest at the modal itself (centered, dimmed, click-outside closes): that's exactly where the final review's Critical sat.
+- **PR #496** (untrack the committed `.godot/` cache + close the `.gitignore` gaps) is ready but deliberately held; until it merges, the editor cache stays tracked on `godot-ga-main`.
+- #464 (lift the Penn-local verbs into the engine) stays gated on the Thursday #446 verb-API discussion.
+
+**Next:**
+- Eyeball + merge **#509**, close #251 — then a fresh bake gets both timeline features in one viewer session.
+- Start #304 (persistence layer for live runs) — next in the chosen #305 → #304 → #307 chain toward saving/replaying live LLM runs.
+- #397 (Penn-aware LLM day planner) after that; the new ribbon renders whatever it writes into `schedule`, so plan quality becomes visible at a glance.
+
+## 2026-07-09
+**Focus:** shipped the boil-water scenario end-to-end (#300/#466/#467 → **PRs #465/#476/#478**), and cleared a second `godot-ga-main` wave — the #367 cache `--live` verifier (**PR #463**), Van Pelt entrance routing (**PR #468**), and the viewer reset-follow (#393).
+
+**Done today:**
+- Landed the #300 world half (**PR #465** → `godot-ga-main`): `DrinkPenn` sickens on `requires_boiling` + not `is_boiled` (one-shot `just_sickened` marker, `sickness` GameEvent, importance-8.0 memory), `activate`/`deactivate` device verbs, Houston Hall stocked with sink/stove/pot/cups, and mock-brain replay of authored per-stop `commands:` (Sofia's dinner stop). Two engine bugs found and worked around backend-locally (parser `"ate "` substring mis-route, `Stop` round-trip dropping `commands`) — itemized on #464; verb list posted to #446.
+- Two boil-water follow-ups on #465: the GameEvent log persisted into run records (#467, **PR #476**) — replay `events` key + `events.json` + a live `kind:"game_event"` feed, so #299 counts sickness events straight from the record; and the kitchen props on the map (#466, **PR #478**) — `UPenn:Houston Hall:lobby:{sink,stove,pot}` routable at the game-object tier, `add_game_objects.py` generalized to all `*_objects` layers (Fisher byte-identical; smoke + validator + 129 geo / 63 godot / 1342 root green).
+- Cleared a second `godot-ga-main` wave (brainstorm→spec→plan→subagent-driven each): the #367 cache tripwire gained a `--live` write→read verifier + repo-`.env` load + a backend-README cache-fields note (**PR #463**, CI green); Van Pelt's entrance rerouted from the auto-carved east door (into the Moelis reading room) to a south door at the front `Entrance` room via `add_entrances` `FORCED_DOORS`/`FORCED_CLOSED` + a surgical tmj edit (**PR #468**, CI green); and the live viewer now auto-follows a `POST /reset` in place — teardown + respawn keeping `_last_cursor`/socket (#393, reviewed, manual eyeball pending).
+
+**Blockers / questions:**
+- All three PRs need review — order matters: #465 first, then #476 (stacked, auto-retargets on merge) and #478 land independently; a fresh replay bake for Thursday only makes sense after they merge.
+- The viewer's HUD doesn't *render* `game_event` rows yet (its generic engine rows draw only `text`-bearing records) — the feed carries them fine; on-screen surfacing is a one-liner in `add_engine_event`, #302/#264 territory.
+- A `furnish_houston.py` rerun strips and rebuilds `houston_furniture`, silently wiping the hand-painted strip — pinned by a tmj sprite test + a warning comment for now; teaching the furnish script to place the strip from the (now-verified) catalog entries is open.
+
+**Next:**
+- Thursday #446 meeting: verb-API discussion; the #464 engine-upstreaming list (device verbs, drink effect, parser fix, `Stop` extensions) is gated on it.
+- After #465 + #478 merge: the 5-line follow-up routing Sofia's dinner stop to `UPenn:Houston Hall:lobby:sink`, then a fresh replay bake to watch her walk to the sink and get sick on screen.
+- Start #301 — the self-coding seam. The success condition is already pinned: a self-coded boil only has to set `is_boiled` (`test_boiled_water_is_safe_to_drink`), and its `sickness` events are now countable straight from the run record.
+
 ## 2026-07-08
 **Focus:** cleared the ready `godot-ga-main` PR queue and verified #367 prompt caching end-to-end (offline predictor + live Haiku run).
 
