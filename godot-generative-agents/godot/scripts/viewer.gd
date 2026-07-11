@@ -164,6 +164,10 @@ var _last_heat_step := -1
 var _last_graph_step := -1
 var _relationships: Array = []
 
+# Step the day-plans pop-up last drew (same push-on-change contract as the
+# heatmap/social graph, issue #251).
+var _last_plan_step := -1
+
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
 # with a link drawn between the pair for the length of the exchange. See
@@ -233,6 +237,7 @@ var _quitting := false              # window close in progress (shutdown then qu
 @onready var _inspector = $PersonaInspectorLayer/PersonaInspector  # persona_inspector.gd
 @onready var _social_graph = $SocialGraphLayer/SocialGraphPanel  # social_graph_panel.gd
 @onready var _gallery = $SnapshotLayer/SnapshotGallery  # snapshot_gallery.gd snapshot pop-up
+@onready var _day_plans = $DayPlanLayer/DayPlanPanel  # day_plan_panel.gd pop-up (#251)
 @onready var _building_labels = $BuildingLabels  # building_labels.gd (for center_of)
 
 
@@ -280,6 +285,13 @@ func _ready() -> void:
 	# button (or the G key) toggles it, and it's fed the replay + seed edges after load.
 	_panel.social_graph_requested.connect(_toggle_social_graph)
 	_social_graph.close_requested.connect(_close_social_graph)
+
+	# Day-plans pop-up (issue #251): the sidebar calendar button (or T) toggles
+	# it; ribbon clicks seek through the same path as the scrubber (_on_seek
+	# already ignores seeks in live mode).
+	_panel.day_plans_requested.connect(_toggle_day_plans)
+	_day_plans.close_requested.connect(_close_day_plans)
+	_day_plans.seek_requested.connect(_on_seek)
 
 	# Snapshot capture + gallery pop-up (issue #253): the camera button (or C) captures
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
@@ -508,6 +520,10 @@ func _load_replay_from_text(text: String) -> void:
 	# meta carried, so it can accumulate conversations up to any step on demand.
 	_social_graph.set_replay(_frames, _names, _relationships)
 
+	# And to the day-plans pop-up (issue #251): schedules from the meta's
+	# persona detail, actuals derived from the same by-reference frame buffer.
+	_day_plans.set_replay(_frames, _names, _persona_detail)
+
 	# Tell the run monitor's source who the cast is, so its per-actor spend
 	# attribution matches the real ledger's by_actor rollup.
 	_hud_source.set_cast(_names)
@@ -554,6 +570,9 @@ func _spawn_from_meta(meta: Dictionary) -> void:
 	# Same by-reference hand-off for the social graph; its seed view is meaningful
 	# right away, before the first frame ever arrives.
 	_social_graph.set_replay(_frames, _names, _relationships)
+	# Day-plans pop-up: same by-reference hand-off, so live frames flow into
+	# the actual ribbons as they arrive (planned is known from the meta now).
+	_day_plans.set_replay(_frames, _names, _persona_detail)
 	_hud_source.set_cast(_names)
 	_update_clock()
 
@@ -1288,6 +1307,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Toggle the social-graph pop-up (issue #252).
 			_toggle_social_graph()
 			get_viewport().set_input_as_handled()
+		KEY_T:
+			# Toggle the day-plans pop-up (issue #251).
+			_toggle_day_plans()
+			get_viewport().set_input_as_handled()
 		KEY_C:
 			# Capture the current campus view into the snapshot gallery (issue #253).
 			# _take_snapshot no-ops if a modal is open, so this is safe to fire always.
@@ -1305,8 +1328,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			# Close the topmost open modal first (their CanvasLayer stacking order:
-			# gallery 14 > social graph 13 > inspector 12 > heatmap 11).
-			if _gallery.visible:
+			# day plans 15 > gallery 14 > social graph 13 > inspector 12 > heatmap 11).
+			if _day_plans.visible:
+				_close_day_plans()
+				get_viewport().set_input_as_handled()
+			elif _gallery.visible:
 				_close_gallery()
 				get_viewport().set_input_as_handled()
 			elif _social_graph.visible:
@@ -1389,11 +1415,35 @@ func _close_social_graph() -> void:
 	_camera.keyboard_enabled = not _heatmap.visible
 
 
+func _toggle_day_plans() -> void:
+	if _day_plans.visible:
+		_close_day_plans()
+	else:
+		_open_day_plans()
+
+
+func _open_day_plans() -> void:
+	# Show plans against progress up to the step on screen right now; playback
+	# keeps running behind the pop-up (it live-updates via _process). No
+	# camera-keyboard suppression: this pop-up has no arrow-key views.
+	if not _frames.is_empty():
+		var last := maxi(_frames.size() - 1, 0)
+		var i := mini(int(_t / step_seconds), last)
+		_last_plan_step = i
+		_day_plans.show_up_to(i)
+	_day_plans.visible = true
+
+
+func _close_day_plans() -> void:
+	_day_plans.visible = false
+
+
 func _take_snapshot() -> void:
 	# Capture the current campus view into the gallery (issue #253). Skip while a modal is
 	# open: its full-screen dim would darken the shot, and the C hotkey fires even when a
 	# modal's backdrop has swallowed the sidebar button.
-	if _heatmap.visible or _inspector.visible or _social_graph.visible or _gallery.visible:
+	if _heatmap.visible or _inspector.visible or _social_graph.visible \
+			or _gallery.visible or _day_plans.visible:
 		return
 	# Label it with the world time on screen right now (the sidebar clock's value).
 	var label := _format_sim_time(int(_t / step_seconds) * _sec_per_step)
@@ -1560,6 +1610,12 @@ func _process(delta: float) -> void:
 	if _social_graph.visible and i != _last_graph_step:
 		_last_graph_step = i
 		_social_graph.show_up_to(i)
+
+	# Same for the day-plans pop-up: the actual ribbons + cursor advance as the
+	# playhead crosses each step while it's open.
+	if _day_plans.visible and i != _last_plan_step:
+		_last_plan_step = i
+		_day_plans.show_up_to(i)
 
 	for name in _names:
 		var a: Dictionary = _frames[i][name]
