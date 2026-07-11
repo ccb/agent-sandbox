@@ -234,6 +234,87 @@
        the cutaway, the coil of cured intestines turning by degrees. Last worn as a helm by
        the spawn of guts. <span class="attach">Attaches: EXAMINE FALCON JAR; the tribute economy.</span></p>
   </section>
+
+  <section>
+    <div class="slate"><h2>16-B &mdash; FALCON JAR, DISPLAYED</h2><span class="kind">LITHO / ALTERNATE</span></div>
+    <div class="screen">
+      <svg id="jar-falcon-b" viewBox="0 0 640 300" aria-label="Falcon jar, wings displayed"></svg>
+    </div>
+    <p class="spec">The whole bird as the stopper: a falcon displayed, wings spread wide with
+       stepped feathers, tail fanned over the throat of the jar, beating by slow quantized
+       degrees. <span class="attach">Alternate for 16.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>16-C &mdash; FALCON JAR, MANTLING</h2><span class="kind">LITHO / ALTERNATE</span></div>
+    <div class="screen">
+      <svg id="jar-falcon-c" viewBox="0 0 640 300" aria-label="Falcon jar, mantling"></svg>
+    </div>
+    <p class="spec">The falcon MANTLING: wings curved down around the jar's shoulders the way
+       a falcon shields a kill &mdash; and once a loop, when the annotation asks about
+       tribute, the mantle flares. <span class="attach">Alternate for 16.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>17 &mdash; EXTERIOR, TAKE ONE: THE APPROACH</h2><span class="kind">LITHO / SCENE</span></div>
+    <div class="screen">
+      <svg id="ext1" viewBox="0 0 640 400" aria-label="The tomb exterior, approached"></svg>
+    </div>
+    <p class="spec">The Moebius composition: a vast dusk, the monolith alone on the horizon's
+       molten line, tendrils curling off its crown &mdash; and a scavenger the size of a
+       word, walking toward the door, then stopping to look up.
+       <span class="attach">Attaches: the title screen; arriving at the Tomb Exterior.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>18 &mdash; EXTERIOR, TAKE TWO: THE FACES</h2><span class="kind">LITHO / ANNOTATED</span></div>
+    <div class="screen">
+      <svg id="ext2" viewBox="0 0 640 400" aria-label="The tomb exterior, annotated"></svg>
+    </div>
+    <p class="spec">The Hunt slab, front-on and Guide-carded: fungus channels creeping the
+       stone in steps, the summit plume breathing, wind-sand streaking past, and the
+       callouts working through the three carved mouths.
+       <span class="attach">Attaches: EXAMINE TOMB; the exterior look.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>19 &mdash; EXTERIOR, TAKE THREE: THE SURVEY</h2><span class="kind">WIREFRAME / ROTATING</span></div>
+    <div class="screen"><canvas id="ext3" width="640" height="400"></canvas></div>
+    <p class="spec">The slab as a turning survey wireframe, mouths framed on their faces,
+       fungus seams in orange, a height ruler &mdash; and the caption naming whichever face
+       swings toward you. <span class="attach">Attaches: the map panel's exterior node; a chapter card.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>20 &mdash; HOUND, TAKE ONE: THE PROWL</h2><span class="kind">LITHO / ALIVE</span></div>
+    <div class="screen">
+      <svg id="hound-a" viewBox="0 0 640 360" aria-label="Synth-hound prowling"></svg>
+    </div>
+    <p class="spec">The reference posture, alive: hindquarters raised, spine plunging, the low
+       head SWEEPING the ground side to side as it reads scent, one forepaw lifting and
+       setting on the step clock. <span class="attach">Alternate for 10 (the living version).</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>21 &mdash; HOUND, TAKE TWO: THE SCAN</h2><span class="kind">LITHO / SENSOR</span></div>
+    <div class="screen">
+      <svg id="hound-b" viewBox="0 0 640 360" aria-label="Synth-hound scanning"></svg>
+    </div>
+    <p class="spec">Frozen in the stalk while a dashed sensor fan sweeps the ground ahead of
+       its nose; each thing the cone crosses lights and names itself &mdash; old bone,
+       older money, and lastly you. <span class="attach">Alternate for 10 (the hunting version).</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>22 &mdash; HOUND, TAKE THREE: THE ASSEMBLY</h2><span class="kind">LITHO / BLUEPRINT</span></div>
+    <div class="screen">
+      <svg id="hound-c" viewBox="0 0 640 360" aria-label="Synth-hound assembling"></svg>
+    </div>
+    <p class="spec">After the sketchbook page: the unit as an exploded diagram, parts flying
+       in and docking in numbered order &mdash; rump, spine, skull, legs, heraldry,
+       antennae &mdash; and when the last one seats, the eye pings once.
+       <span class="attach">Alternate for 10 (the diagram version).</span></p>
+  </section>
 </div>
 
 <script>
@@ -1608,10 +1689,15 @@
     (P) => {
       el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
         stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
-      P.brain = el(P.svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6,
-        d: "M 196 214 Q 190 186 210 178 Q 232 170 246 186 Q 256 200 244 214 " +
-           "Q 228 226 210 220 Q 200 218 196 214 M 212 182 Q 220 196 214 212 " +
-           "M 228 178 Q 238 194 230 212" });
+      P.brain = el(P.svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5,
+        d: "M 190 210 Q 182 196 190 186 Q 196 176 208 176 Q 214 168 226 172 " +
+           "Q 238 168 246 178 Q 258 182 256 196 Q 262 208 250 216 Q 242 226 " +
+           "228 222 Q 214 228 204 220 Q 192 220 190 210 Z " +   // the lobed outline
+           "M 222 172 Q 218 190 224 200 Q 220 210 224 222 " +   // the fissure
+           "M 196 192 Q 204 188 202 198 M 198 208 Q 208 204 206 214 " +
+           "M 208 182 Q 214 186 210 192 " +                     // gyri, left
+           "M 236 184 Q 230 190 238 194 M 244 198 Q 236 204 244 210 " +
+           "M 232 212 Q 240 216 234 221" });                    // gyri, right
       P.pulses = Array.from({ length: 2 }, () =>
         el(P.svg, "circle", { cx: 221, cy: 198, r: 8, fill: "none",
           stroke: FUNGUS, opacity: 0 }));
@@ -1673,6 +1759,513 @@
       });
       P.coil.setAttribute("points", pts.join(" "));
     });
+
+
+  /* ---------------- 17: exterior, the approach ---------------- */
+  {
+    const svg = document.getElementById("ext1");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    const XDOTS = stipple(svg, "dots-ext1", PH, .8);
+    // the horizon's molten line, the mesas, the scrub
+    el(svg, "line", { x1: 0, y1: 300, x2: 640, y2: 300, stroke: FUNGUS,
+      "stroke-width": 1.4, opacity: .8 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "20,296 70,282 120,294 150,288 190,297" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "470,297 520,286 560,292 610,283 640,294" });
+    el(svg, "rect", { x: 0, y: 301, width: 640, height: 99, fill: XDOTS, opacity: .35 });
+    for (let i = 0; i < 14; i++)
+      el(svg, "line", { x1: 30 + (i * 97) % 610, y1: 318 + (i * 37) % 70,
+        x2: 36 + (i * 97) % 610, y2: 316 + (i * 37) % 70, stroke: PH_DIM });
+    const cloud = el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .6,
+      points: "0,0" });
+    // THE MONOLITH: profile faces carved into its flanks (the boy west,
+    // the warrior east), a door no taller than a person
+    el(svg, "polygon", { fill: XDOTS, stroke: PH, "stroke-width": 1.8, points:
+      "284,72 322,58 356,66 360,120 356,190 358,246 354,300 " +   // crown, east edge
+      "286,300 " +
+      "282,250 288,214 " +
+      "278,196 284,188 276,180 286,172 282,162 " +                // THE BOY, west
+      "288,140 284,110 " });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:               // the warrior
+      "356,150 348,158 352,168 346,176 354,184" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "310,80 314,140 306,200 312,260" });                // a weather seam
+    el(svg, "rect", { x: 312, y: 274, width: 16, height: 26, fill: BG,
+      stroke: PH, "stroke-width": 1.3 });                        // the door
+    // the tendrils, curling off the crown (re-drawn per tick: they sway)
+    const tendrils = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 }));
+    // the scavenger, the size of a word
+    const scav = document.createElementNS(NS, "g"); svg.appendChild(scav);
+    const sBody = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    const sHead = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT });
+    const sLegs = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    const thought = label(svg, 0, 0, 9, PH_DIM);
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 220;
+      doWipe(T);
+      tendrils.forEach((n, i) => {                                // the crown curls
+        const bx = 300 + i * 20, sway = Math.sin(t * .12 + i * 2) * 6;
+        const pts = Array.from({ length: 7 }, (_, k) => {
+          const a = -Math.PI / 2 + k * .5 * (i % 2 ? 1 : -1) + sway * .02 * k;
+          const r = 8 + k * 5;
+          return `${bx + Math.cos(a) * r * .8 + sway * k * .12},${62 - k * 7 + Math.sin(a) * r * .3}`;
+        });
+        n.setAttribute("points", `${bx},${64 + i * 2} ` + pts.join(" "));
+      });
+      const cx = ((t * .7) % 760) - 60;                          // one patient cloud
+      cloud.setAttribute("points",
+        `${cx},110 ${cx + 24},102 ${cx + 52},106 ${cx + 78},100 ${cx + 96},110`);
+      // the walk: approach, then stand, then look up
+      const wx = Math.min(214, 60 + Math.floor(T * 1.2));
+      const standing = wx >= 214;
+      const step = standing ? 0 : (t % 4 < 2 ? 3 : -3);
+      const sy = 336;
+      sHead.setAttribute("cx", wx + 106); sHead.setAttribute("cy", sy - 15 - (standing ? 1 : 0));
+      sBody.setAttribute("points", `${wx + 106},${sy - 12} ${wx + 106},${sy - 4}`);
+      sLegs.setAttribute("points",
+        `${wx + 103 + step * .4},${sy + 4} ${wx + 106},${sy - 4} ${wx + 109 - step * .4},${sy + 4}`);
+      thought.setAttribute("x", wx + 114); thought.setAttribute("y", sy - 22);
+      thought.textContent = standing && (T % 20) > 8 ? ". . ." : "";
+      typeOn(foot, "ETONNANT.", T, 170, .8);
+    });
+  }
+
+  /* ---------------- 18: exterior, the faces ---------------- */
+  {
+    const svg = document.getElementById("ext2");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "AZURE STONE / THREE MOUTHS / WEBBED";
+    const SD = stipple(svg, "dots-ext2", PH, 1);
+    // the slab, front-on, crowned by the old man turned to the sky
+    el(svg, "polygon", { fill: SD, stroke: PH, "stroke-width": 1.8, points:
+      "236,96 404,96 416,180 412,280 408,356 232,356 228,280 224,180" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "276,96 284,78 298,68 316,64 334,70 342,82 352,96" });      // the skyward face
+    el(svg, "circle", { cx: 306, cy: 78, r: 2, fill: BG, stroke: PH_DIM });
+    el(svg, "ellipse", { cx: 318, cy: 88, rx: 5, ry: 3, fill: BG, stroke: PH });
+    const plume = el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 });
+    // the boy (west) and the warrior (east), mouths dark
+    el(svg, "polyline", { fill: "none", stroke: PH, points:
+      "252,232 262,226 258,240 266,246 256,254 264,262" });        // the boy's profile
+    el(svg, "ellipse", { cx: 262, cy: 274, rx: 8, ry: 11, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });                          // his mouth-door
+    el(svg, "polyline", { fill: "none", stroke: PH, points:
+      "388,224 378,228 384,240 376,248 386,254 380,262" });        // the helmed warrior
+    el(svg, "ellipse", { cx: 380, cy: 276, rx: 8, ry: 11, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    // the fungus channels, creeping the stone in steps
+    const veins = Array.from({ length: 4 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.2 }));
+    const VPATHS = [
+      [[318, 96], [312, 140], [322, 186], [310, 232], [318, 278], [308, 320]],
+      [[262, 120], [274, 160], [264, 204], [276, 250], [268, 300]],
+      [[382, 128], [370, 168], [382, 214], [372, 262], [380, 308]],
+      [[298, 110], [340, 150], [332, 200], [352, 246]],
+    ];
+    const wind = Array.from({ length: 3 }, (_, i) =>
+      el(svg, "line", { y1: 120 + i * 90, y2: 118 + i * 90, stroke: PH_DIM,
+        "stroke-dasharray": "10 6", opacity: 0 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [262, 274], text: "WEST: THE BOY. HIS MOUTH IS A DOOR" },
+      { at: [380, 276], text: "EAST: THE WARRIOR. HIS MOUTH IS A DOOR" },
+      { at: [318, 88], text: "SKYWARD: THE OLD MAN, MID-SENTENCE" },
+      { at: [312, 200], text: "THE WEB: ORANGE, PATIENT, EVERYWHERE" },
+    ];
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "THE TOMB OF NASSAK AN-RAH (EXTERIOR)", T, 4, 1.4);
+      const puff = [0, 2, 4, 5, 4, 2][Math.floor(t / 3) % 6];      // the plume breathes
+      plume.setAttribute("points",
+        `318,86 314,${70 - puff} 322,${58 - puff} 314,${44 - puff} 322,${32 - puff}`);
+      veins.forEach((v, i) => {                                    // the creep
+        const path = VPATHS[i];
+        const n = 1 + Math.floor(((t + i * 17) % 72) / 12);
+        v.setAttribute("points",
+          path.slice(0, Math.min(n + 1, path.length)).map(p => p.join(",")).join(" "));
+      });
+      wind.forEach((w, i) => {                                     // the scouring
+        const on = ((t + i * 23) % 60) < 10;
+        w.setAttribute("opacity", on ? .7 : 0);
+        const x = 640 - ((t * 24) % 760);
+        w.setAttribute("x1", x); w.setAttribute("x2", x + 90);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 150,66 156,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "AND YET THE FACES REMAIN INTACT, SOMEHOW.", T, 130, 1.8);
+    });
+  }
+
+  /* ---------------- 19: exterior, the survey ---------------- */
+  {
+    const cv = document.getElementById("ext3"), ctx = cv.getContext("2d");
+    const V = [], E = [], F = [], SEAM = [];
+    const box = (x0,x1,y0,y1,z0,z1, tgt) => {
+      const n = V.length;
+      for (const x of [x0,x1]) for (const y of [y0,y1]) for (const z of [z0,z1]) V.push([x,y,z]);
+      [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
+        .forEach(([a,b]) => tgt.push([n+a, n+b]));
+    };
+    box(-.8, .8, -1.7, 1.7, -.4, .4, E);                          // the slab
+    const frame = (pts, tgt) => { const n = V.length; pts.forEach(p => V.push(p));
+      for (let i = 0; i < pts.length; i++) tgt.push([n+i, n+(i+1)%pts.length]); };
+    frame([[-.81,.4,-.2],[-.81,.4,.2],[-.81,1.2,.2],[-.81,1.2,-.2]], F);   // the boy
+    frame([[.81,.3,-.2],[.81,.3,.2],[.81,1.1,.2],[.81,1.1,-.2]], F);      // the warrior
+    frame([[-.3,-1.71,-.2],[.3,-1.71,-.2],[.3,-1.71,.2],[-.3,-1.71,.2]], F); // the elder
+    // fungus seams, webbing the west face
+    [[-.8,-1.2,.1],[-.5,-.4,.3],[-.7,.4,-.1],[-.4,1.2,.2]].forEach((p, i, arr) => {
+      if (i) { const n = V.length; V.push(arr[i-1], p); SEAM.push([n, n+1]); }
+    });
+    const FACES = ["THE BLANK NORTH", "THE WARRIOR (EAST MOUTH)",
+                   "THE BLANK SOUTH", "THE BOY (WEST MOUTH)"];
+    clock(t => {
+      const a = (t % 288) * Math.PI / 144;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const pts = V.map(([x, y, z]) => {
+        [x, z] = rot(x, z, a);
+        const s = 205 / (4.6 - z);
+        return [320 + x * s, 190 + y * s];
+      });
+      drawEdges(ctx, pts, E, PH, 8);
+      drawEdges(ctx, pts, F, PH_BRIGHT, 6);
+      drawEdges(ctx, pts, SEAM, FUNGUS, 6);
+      ctx.shadowBlur = 0;
+      // the survey furniture: a height ruler, and the facing caption
+      ctx.strokeStyle = PH_DIM; ctx.fillStyle = PH_DIM;
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.beginPath(); ctx.moveTo(70, 96); ctx.lineTo(70, 286); ctx.stroke();
+      for (let y = 96; y <= 286; y += 38) {
+        ctx.beginPath(); ctx.moveTo(66, y); ctx.lineTo(74, y); ctx.stroke();
+      }
+      ctx.fillText("30 FT", 44, 92);
+      ctx.fillText("SKYWARD: THE OLD MAN", 470, 92);
+      const q = Math.floor(((a + Math.PI / 4) / (Math.PI / 2))) % 4;
+      ctx.fillStyle = FUNGUS;
+      ctx.fillText("NOW FACING: " + FACES[q], 18, 380);
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("EACH MOUTH IS A DOOR", 470, 380);
+    });
+  }
+
+
+  /* ---------------- 16-B / 16-C: the falcon, whole-bird ---------------- */
+  function falconJarAlt(id, title, foot, drawBird, tick) {
+    const svg = document.getElementById(id);
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 300, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const JD = stipple(svg, id + "-dots", PH, 1);
+    el(svg, "polygon", { points: "170,280 330,280 312,150 188,150",
+      fill: JD, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "line", { x1: 182, y1: 168, x2: 318, y2: 168, stroke: PH_DIM });
+    const P = { svg, JD };
+    drawBird(P);
+    const ftr = label(svg, 440, 286, 10, FUNGUS); ftr.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 300, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, title, T, 4, 1.4);
+      typeOn(ftr, foot, T, 100, 1.6);
+      tick(t, T, P);
+    });
+  }
+
+  // a wing: shoulder -> tip with a stepped trailing edge, drawn per tick so
+  // it can beat; dir = -1 left, +1 right; lift raises the tip
+  function wingPts(sx, sy, dir, span, lift) {
+    const tipx = sx + dir * span, tipy = sy - 26 - lift;
+    const back = [];
+    for (let k = 4; k >= 1; k--) {
+      const fx = sx + dir * span * (k / 4.6);
+      const fy = tipy + 20 + (4 - k) * 7 - lift * (k / 6);
+      back.push(`${fx},${fy}`);
+      back.push(`${fx - dir * span * .06},${fy - 6}`);
+    }
+    return `${sx},${sy} ${sx + dir * span * .4},${sy - 20 - lift * .6} ` +
+      `${tipx},${tipy} ` + back.join(" ") + ` ${sx},${sy + 8}`;
+  }
+
+  falconJarAlt("jar-falcon-b", "THE FALCON JAR (DISPLAYED)",
+    "WINGS OUT: THE POSTURE OF OWNERSHIP.",
+    (P) => {
+      P.wingL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
+      P.wingR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
+      // the body, upright on the jar throat
+      el(P.svg, "polygon", { points: "236,148 264,148 262,108 250,96 238,110",
+        fill: P.JD, stroke: PH, "stroke-width": 1.6 });          // breast and shoulders
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "250,96 258,84 252,72 238,70 228,78 " +
+        "220,82 216,90 222,93 226,90 230,94 236,92 242,98" });   // head, hook, jaw
+      P.eye = el(P.svg, "circle", { cx: 240, cy: 80, r: 2.8, fill: PH_BRIGHT });
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+        points: "240,82 243,92" });                              // the teardrop
+      [[-8, 0], [0, 2], [8, 0]].forEach(([dx, dy]) =>            // the tail fan
+        el(P.svg, "line", { x1: 250 + dx * .4, y1: 148, x2: 250 + dx, y2: 176 + dy,
+          stroke: PH, "stroke-width": 1.2 }));
+    },
+    (t, T, P) => {
+      const lift = [0, 4, 9, 13, 9, 4][Math.floor(t / 4) % 6];   // the slow beat
+      P.wingL.setAttribute("points", wingPts(236, 118, -1, 130, lift));
+      P.wingR.setAttribute("points", wingPts(264, 118, 1, 130, lift));
+      P.eye.setAttribute("opacity", (t % 26) < 23 ? 1 : .2);
+    });
+
+  falconJarAlt("jar-falcon-c", "THE FALCON JAR (MANTLING)",
+    "IT SHIELDS THE COIL THE WAY A FALCON SHIELDS A KILL.",
+    (P) => {
+      P.wingL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
+      P.wingR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5 });
+      el(P.svg, "polygon", { points: "234,150 266,150 264,112 250,100 236,114",
+        fill: P.JD, stroke: PH, "stroke-width": 1.6 });
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "250,100 244,88 232,84 222,90 216,98 222,102 228,99 234,103 240,101 244,106" });
+      P.eye = el(P.svg, "circle", { cx: 234, cy: 92, r: 2.8, fill: PH_BRIGHT });
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+        points: "234,94 237,103" });
+      el(P.svg, "rect", { x: 206, y: 190, width: 88, height: 62, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });            // the coil window
+      P.coil = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.7 });
+      P.ask = label(P.svg, 470, 70, 10, PH);
+    },
+    (t, T, P) => {
+      const asking = (T % 75) > 58;
+      const flare = asking ? 16 : 0;                             // the mantle flares
+      // mantling: wings curve DOWN around the jar shoulders (negative lift,
+      // tips pulled low and inward)
+      const mant = (sx, dir) =>
+        `${sx},118 ${sx + dir * 66},${112 - flare} ${sx + dir * 104},${150 - flare * 1.4} ` +
+        `${sx + dir * 112},${196 - flare * 2} ${sx + dir * 96},${206 - flare * 2} ` +
+        `${sx + dir * 84},${172 - flare} ${sx + dir * 52},${138 - flare * .5} ${sx},128`;
+      P.wingL.setAttribute("points", mant(238, -1));
+      P.wingR.setAttribute("points", mant(262, 1));
+      P.ask.textContent = asking ? "TRIBUTE?" : "";
+      const a0 = t * .05;
+      const pts = Array.from({ length: 22 }, (_, k) => {
+        const a = a0 + k * .5, r = 3 + k * 1.25;
+        return `${250 + Math.cos(a) * r},${221 + Math.sin(a) * r * .7}`;
+      });
+      P.coil.setAttribute("points", pts.join(" "));
+      P.eye.setAttribute("opacity", (t % 26) < 23 ? 1 : .2);
+    });
+
+  /* ---------------- 20-22: the hound, three takes ---------------- */
+  // the shared stalk pose (after the sketch): rump high, spine plunging,
+  // head low. Returns the pieces a take needs to animate.
+  function houndPose(svg, JD) {
+    el(svg, "polygon", { fill: JD, stroke: PH, "stroke-width": 1.4, points:
+      "150,150 162,112 186,98 210,100 224,116 218,146 204,168 172,170" }); // the rump
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "210,100 246,110 288,130 330,156 372,184 404,208" });     // the plunge
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "404,224 380,214 356,204 300,172 240,164 218,150" });     // throat to belly
+    // heraldry at the shoulder
+    el(svg, "rect", { x: 262, y: 138, width: 26, height: 6, fill: PH, "fill-opacity": .7 });
+    el(svg, "polygon", { points: "296,140 308,140 302,152", fill: PH, "fill-opacity": .7 });
+    el(svg, "circle", { cx: 322, cy: 156, r: 4, fill: PH, "fill-opacity": .7 });
+    el(svg, "polyline", { points: "250,152 258,152 254,148 254,156", stroke: PH, fill: "none" });
+    // hind legs, long and nearly vertical
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 4.4, points: "192,166 202,230" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 2.2, points: "202,230 194,266 202,308 214,310" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 3, opacity: .5, points: "174,164 180,226" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 1.6, opacity: .5, points: "180,226 172,262 180,304 192,306" });
+    el(svg, "circle", { cx: 202, cy: 230, r: 2.4, fill: "none", stroke: PH_DIM });
+    // the standing foreleg
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 3.8, points: "352,200 360,252" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+      "stroke-width": 2, points: "360,252 356,306 368,308" });
+    el(svg, "circle", { cx: 360, cy: 252, r: 2.4, fill: "none", stroke: PH_DIM });
+    // ground
+    for (let x = 60; x < 600; x += 16)
+      el(svg, "line", { x1: x, y1: 312, x2: x + 7, y2: 312, stroke: PH_DIM });
+    return {
+      // the head+neck, redrawn per tick (it sweeps); the lifted paw likewise
+      neck: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6 }),
+      eye: el(svg, "circle", { r: 5.5, fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4 }),
+      antA: el(svg, "polyline", { fill: "none", stroke: PH_DIM }),
+      antB: el(svg, "polyline", { fill: "none", stroke: PH_DIM }),
+      pawT: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 3.4 }),
+      pawS: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 1.9 }),
+    };
+  }
+  function houndHead(Q, sway, dip) {
+    const hx = 404 + sway, hy = 208 + dip;
+    Q.neck.setAttribute("points",
+      `404,208 ${hx + 24},${hy + 14} ${hx + 88},${hy + 40} ${hx + 82},${hy + 50} ` +
+      `${hx + 34},${hy + 32} ${hx + 16},${hy + 26} 404,224`);
+    Q.eye.setAttribute("cx", hx + 34); Q.eye.setAttribute("cy", hy + 20);
+    Q.antA.setAttribute("points", `${hx + 22},${hy + 10} ${hx + 14},${hy - 40}`);
+    Q.antB.setAttribute("points", `${hx + 32},${hy + 13} ${hx + 28},${hy - 42}`);
+  }
+  function houndPaw(Q, k) { // k 0..1: lifted -> planted
+    const kx = 322 + k * 8, ky = 240 + k * 24;
+    Q.pawT.setAttribute("points", `334,196 ${kx},${ky}`);
+    Q.pawS.setAttribute("points",
+      `${kx},${ky} ${kx - 16 + k * 10},${ky + 22 + k * 40} ${kx - 6 + k * 10},${ky + 26 + k * 42}`);
+  }
+
+  // 20: THE PROWL -- the head sweeps, the paw steps
+  {
+    const svg = document.getElementById("hound-a");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const Q = houndPose(svg, stipple(svg, "ha-dots", PH, 1.2));
+    label(svg, 24, 344, 10, PH_DIM).textContent = "SCENT";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 92 + i * 16, y: 334, width: 12, height: 11,
+        fill: FUNGUS, "fill-opacity": .08 }));
+    const foot = label(svg, 420, 344, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (COURSING UNIT, AWAKE)", T, 4, 1.4);
+      const sway = Math.round(Math.sin(t * .14) * 3) * 5;        // the read, quantized
+      const dip = Math.abs(Math.round(Math.sin(t * .07) * 2)) * 4;
+      houndHead(Q, sway, dip);
+      houndPaw(Q, [1, 1, .6, .2, 0, 0, .3, .7][Math.floor(t / 5) % 8]); // the step
+      const on = Math.min(10, Math.floor(T / 13));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      typeOn(foot, "IT HAS YOUR NUMBER. IT IS PATIENT ABOUT IT.", T, 110, 1.6);
+    });
+  }
+
+  // 21: THE SCAN -- a sensor fan works the ground ahead
+  {
+    const svg = document.getElementById("hound-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const Q = houndPose(svg, stipple(svg, "hb-dots", PH, 1.2));
+    houndHead(Q, 0, 6); houndPaw(Q, 0);                          // frozen mid-stalk
+    const rays = Array.from({ length: 3 }, () =>
+      el(svg, "line", { stroke: PH_BRIGHT, "stroke-dasharray": "5 4", opacity: .7 }));
+    const TGT = [
+      { x: 548, a: .72, name: "OLD BONE", q: null },
+      { x: 584, a: .58, name: "OLDER MONEY", q: null },
+      { x: 618, a: .47, name: "FRESH: YOU", q: null },
+    ];
+    TGT.forEach(g => { g.q = el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      "stroke-width": 1.6, points: `${g.x - 5},308 ${g.x},300 ${g.x + 5},308` }); });
+    const hit = label(svg, 624, 62, 10, FUNGUS); hit.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (SCANNING)", T, 4, 1.4);
+      const NX = 490, NY = 252;                                  // the nose
+      const sweep = .45 + (Math.sin(t * .11) + 1) * .17;         // .45 .. .79
+      rays.forEach((r, i) => {
+        const a = sweep + (i - 1) * .05;
+        r.setAttribute("x1", NX); r.setAttribute("y1", NY);
+        r.setAttribute("x2", NX + Math.cos(a) * 150);
+        r.setAttribute("y2", NY + Math.sin(a) * 150 * .42);
+      });
+      let seen = "";
+      TGT.forEach(g => {
+        const lit = Math.abs(sweep - g.a) < .05;
+        g.q.setAttribute("stroke", lit ? FUNGUS : PH_DIM);
+        if (lit) seen = g.name;
+      });
+      hit.textContent = seen;
+    });
+  }
+
+  // 22: THE ASSEMBLY -- parts dock in numbered order, then the eye pings
+  {
+    const svg = document.getElementById("hound-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const CD = stipple(svg, "hc-dots", PH, 1.2);
+    const mk = () => { const g = document.createElementNS(NS, "g"); svg.appendChild(g); return g; };
+    const ing = (g, name, attrs) => { const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]); g.appendChild(n); return n; };
+    const PARTS = [];
+    const part = (dx, dy, tag, draw) => { const g = mk(); draw(g);
+      PARTS.push({ g, dx, dy, tag }); };
+    part(-220, -60, "1 RUMP", g => ing(g, "polygon", { fill: CD, stroke: PH,
+      "stroke-width": 1.4, points:
+      "150,150 162,112 186,98 210,100 224,116 218,146 204,168 172,170" }));
+    part(180, -120, "2 SPINE", g => {
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+        points: "210,100 246,110 288,130 330,156 372,184 404,208" });
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+        points: "404,224 356,204 300,172 240,164 218,150" });
+    });
+    part(200, 60, "3 SKULL", g => {
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "404,208 428,222 492,248 486,258 438,240 420,234 404,224" });
+      ing(g, "circle", { cx: 438, cy: 228, r: 5.5, fill: "none",
+        stroke: PH_BRIGHT, "stroke-width": 1.4 });
+      ing(g, "polyline", { fill: "none", stroke: PH_DIM, points: "426,218 418,168" });
+      ing(g, "polyline", { fill: "none", stroke: PH_DIM, points: "436,221 432,166" });
+    });
+    part(-120, 140, "4 HIND", g => {
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 4.4, points: "192,166 202,230" });
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 2.2, points: "202,230 194,266 202,308 214,310" });
+    });
+    part(120, 140, "5 FORE", g => {
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 3.8, points: "352,200 360,252" });
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 2, points: "360,252 356,306 368,308" });
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 3.4, points: "334,196 328,246" });
+      ing(g, "polyline", { fill: "none", stroke: PH, "stroke-linecap": "round",
+        "stroke-width": 1.9, points: "328,246 314,270 324,274" });
+    });
+    part(0, -160, "6 MARKS", g => {
+      ing(g, "rect", { x: 262, y: 138, width: 26, height: 6, fill: PH, "fill-opacity": .7 });
+      ing(g, "polygon", { points: "296,140 308,140 302,152", fill: PH, "fill-opacity": .7 });
+      ing(g, "circle", { cx: 322, cy: 156, r: 4, fill: PH, "fill-opacity": .7 });
+    });
+    const tags = PARTS.map(({ tag }, i) =>
+      label(svg, 40 + i * 100, 340, 10, PH_DIM));
+    const ping = el(svg, "circle", { cx: 438, cy: 228, r: 6, fill: "none",
+      stroke: PH_BRIGHT, opacity: 0 });
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "COURSING UNIT R7-13 (ASSEMBLY ORDER)", T, 4, 1.4);
+      PARTS.forEach((p, i) => {
+        const k = Math.max(0, Math.min(1, (T - (14 + i * 16)) / 10));
+        p.g.setAttribute("transform",
+          `translate(${p.dx * (1 - k)} ${p.dy * (1 - k)})`);
+        p.g.setAttribute("opacity", .15 + k * .85);
+        tags[i].textContent = k >= 1 ? p.tag : "";
+      });
+      const done = T > 14 + 6 * 16;
+      const k2 = done ? ((T - (14 + 6 * 16)) % 24) / 24 : 1;
+      ping.setAttribute("r", 6 + k2 * 40);
+      ping.setAttribute("opacity", done ? Math.max(0, .8 - k2) : 0);
+    });
+  }
 
 })();
 </script>
