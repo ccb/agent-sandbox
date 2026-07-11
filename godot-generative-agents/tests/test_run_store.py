@@ -6,6 +6,8 @@ import re
 import pytest
 
 from backend.run_store import RunStore
+from backend.sim_config import RetrievalConfig
+from text_adventure_games.memory import AgentMemory, MemoryKind, MemoryRecord
 
 MANIFEST = {
     "schema_version": 1,
@@ -99,3 +101,110 @@ def test_append_frame_validates_the_contract_shape(tmp_path):
     with pytest.raises(ValueError):
         store.append_frame("run-a", 0, {})
     assert store.read_frames("run-a") == []  # nothing hit the disk
+
+
+def _record(i, text, *, turn=0, kind="observation", importance=3.0, embedding=None):
+    return MemoryRecord(
+        id=i,
+        kind=MemoryKind(kind),
+        text=text,
+        created_turn=turn,
+        last_accessed_turn=turn,
+        importance=importance,
+        embedding=embedding,
+    ).to_primitive()
+
+
+def test_record_memories_dedup_and_cursor(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    assert store.last_memory_id("run-a", "Ada") == -1
+    store.record_memories(
+        "run-a", "Ada", [_record(0, "saw a book"), _record(1, "read it")]
+    )
+    assert store.last_memory_id("run-a", "Ada") == 1
+    # Re-sending persisted ids is a no-op (INSERT OR IGNORE).
+    store.record_memories(
+        "run-a", "Ada", [_record(1, "read it"), _record(2, "shelved it")]
+    )
+    assert store.last_memory_id("run-a", "Ada") == 2
+    assert len(store.memories_for("run-a", "Ada")) == 3
+
+
+def test_memories_for_projection_and_filters(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    store.record_memories(
+        "run-a",
+        "Ada",
+        [
+            _record(0, "waking up", turn=0, importance=3.14),
+            _record(1, "planning the day", turn=2, kind="plan"),
+            _record(2, "met Diego", turn=5),
+        ],
+    )
+    lean = store.memories_for("run-a", "Ada")
+    assert [set(m) for m in lean] == [
+        {"kind", "importance", "text", "created_turn"}
+    ] * 3
+    assert lean[0]["importance"] == 3.1  # rounded like memory_stream_for_persona
+    assert [m["text"] for m in store.memories_for("run-a", "Ada", kind="plan")] == [
+        "planning the day"
+    ]
+    assert [m["text"] for m in store.memories_for("run-a", "Ada", since_turn=2)] == [
+        "planning the day",
+        "met Diego",
+    ]
+    assert len(store.memories_for("run-a", "Ada", limit=1)) == 1
+    assert store.memories_for("run-a", "Diego") == []
+
+
+def test_embedding_round_trips_losslessly(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    # Values exactly representable as float32, so unpack == input.
+    store.record_memories("run-a", "Ada", [_record(0, "x", embedding=[0.5, -1.0, 2.0])])
+    (rec,) = store._full_records("run-a", "Ada")
+    assert rec["embedding"] == [0.5, -1.0, 2.0]
+    assert MemoryRecord.from_primitive(rec).embedding == [0.5, -1.0, 2.0]
+
+
+def test_query_memories_matches_engine_retrieve(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    records = [
+        _record(0, "grabbed coffee at Houston Hall", turn=0, importance=2.0),
+        _record(
+            1,
+            "planning to read library books all day",
+            turn=1,
+            kind="plan",
+            importance=8.0,
+        ),
+        _record(2, "walked past College Hall", turn=3, importance=1.0),
+        _record(3, "found rare library books in the stacks", turn=6, importance=6.0),
+        _record(4, "chatted with Diego about lunch", turn=7, importance=4.0),
+    ]
+    store.record_memories("run-a", "Ada", records)
+    rc = RetrievalConfig(max_records=3)
+    engine = AgentMemory(owner="Ada")
+    engine.records = [MemoryRecord.from_primitive(r) for r in records]
+    expected = [
+        r.text
+        for r in engine.retrieve(
+            "library books",
+            10,
+            max_records=rc.max_records,
+            token_budget=rc.token_budget,
+            decay=rc.recency_decay,
+            alpha_recency=rc.alpha_recency,
+            alpha_importance=rc.alpha_importance,
+            alpha_relevance=rc.alpha_relevance,
+            touch=False,
+        )
+    ]
+    got = [
+        m["text"]
+        for m in store.query_memories("run-a", "Ada", "library books", 10, retrieval=rc)
+    ]
+    assert got == expected and len(got) == 3
