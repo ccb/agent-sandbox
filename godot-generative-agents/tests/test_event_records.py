@@ -167,3 +167,53 @@ def test_penn_stepper_reset_restarts_event_cursor():
     stepper.game.log_event("b", "narration", summary="after reset")
     rows = _game_event_rows(stepper.drain_events())
     assert [r["actor"] for r in rows] == ["b"]
+
+
+def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
+    # The #304 determinism guardrail: the store's copy of a bake equals the
+    # replay file, and store-side memory queries score like the engine.
+    from backend.penn import generate_penn_replay
+    from backend.run_store import RunStore
+    from text_adventure_games.memory import AgentMemory, MemoryRecord
+
+    out = tmp_path / "penn_replay.json"
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_penn_replay",
+            "--steps",
+            "8",
+            "--out",
+            str(out),
+            "--persist",
+            "--runs-dir",
+            str(runs),
+        ],
+    )
+    assert generate_penn_replay.main() == 0
+    replay = json.loads(out.read_text())
+    store = RunStore(runs)
+    (run,) = store.list_runs()
+    assert run["status"] == "finished"
+    assert run["steps"] == len(replay["frames"])
+    assert run["cost"] == 0.0
+    assert run["manifest"] == replay["meta"]
+    # Frames: byte-equal to the file's (persisted AFTER meeting injection).
+    assert store.read_frames(run["id"]) == replay["frames"]
+    # Memory streams: the store's lean projection == the file's, per persona.
+    for name, stream in replay["memory_streams"].items():
+        assert store.memories_for(run["id"], name) == stream
+    # Query parity: the store's retrieve delegation == a direct engine call
+    # over the same rehydrated records.
+    name = next(iter(replay["memory_streams"]))
+    engine = AgentMemory(owner=name)
+    engine.records = [
+        MemoryRecord.from_primitive(r) for r in store._full_records(run["id"], name)
+    ]
+    expected = [r.text for r in engine.retrieve("campus day plan", 8, touch=False)]
+    got = [
+        m["text"] for m in store.query_memories(run["id"], name, "campus day plan", 8)
+    ]
+    assert got == expected

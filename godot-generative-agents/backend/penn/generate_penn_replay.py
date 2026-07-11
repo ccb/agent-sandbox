@@ -31,6 +31,7 @@ import os
 # sibling `penn_world` import works because Python puts this script's own
 # directory on sys.path when it is run as a script.
 from backend.contract import SCHEMA_VERSION
+from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.run_simulation import simulate
 from backend.cognition import DEFAULT_VISION_R
 from penn_world import (
@@ -157,6 +158,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
     ap.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     ap.add_argument("--out", default=OUT_PATH)
+    ap.add_argument(
+        "--persist",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="also record this bake into the #304 RunStore (runs/<run_id>/ + sim.db)",
+    )
+    ap.add_argument(
+        "--runs-dir",
+        default=str(DEFAULT_RUNS_DIR),
+        help="RunStore root for --persist (default: godot-generative-agents/runs/)",
+    )
     args = ap.parse_args()
 
     # The configured Penn: personas + locations + meetings, the routing-patched
@@ -177,6 +189,9 @@ def main() -> int:
     # perform reflections and perception observations still accrue, so the
     # history is populated either way -- it just gets richer with a real model.
     memory_streams: dict = {}
+    # The same streams as full engine records (ids/embeddings included) -- what
+    # --persist hands the RunStore; the lean memory_streams cannot rehydrate.
+    memory_records: dict = {}
     events: list = []
     frames = simulate(
         pw.world_map,
@@ -184,6 +199,7 @@ def main() -> int:
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
         out_memories=memory_streams,
+        out_memory_records=memory_records,
         out_events=events,
         extra_action_names=PENN_ACTION_VERBS,
     )
@@ -242,6 +258,21 @@ def main() -> int:
         f"Wrote {os.path.relpath(args.out, _REPO)} "
         f"({len(frames)} steps, {len(order)} personas)."
     )
+
+    # Optionally mirror the bake into the durable store (#304) -- AFTER the
+    # meeting injection above, so the persisted frames byte-match the file's.
+    # The mock bake runs without a ledger, so cost is simply 0.
+    if args.persist:
+        store = RunStore(args.runs_dir)
+        run_id = store.create_run(replay["meta"])
+        for step_idx, frame in enumerate(replay["frames"]):
+            store.append_frame(run_id, step_idx, frame)
+        for name in order:
+            store.record_memories(run_id, name, memory_records.get(name, []))
+        store.update_run(
+            run_id, status="finished", steps=len(replay["frames"]), cost=0.0
+        )
+        print(f"Persisted run {run_id} to {store.root} (frames.jsonl + sim.db).")
     return 0
 
 

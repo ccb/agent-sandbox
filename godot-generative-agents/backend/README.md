@@ -938,11 +938,12 @@ lock-step because all three come from the same formatter
 `docs/design/agent-memory.md` §4) also carries `id`, `last_accessed_turn`
 (recency decay), `actor`, `source_event_ids` (provenance), `tags`, `embedding`
 (semantic retrieval, #76), and `metadata`. Those stay server-side: they power
-retrieval scoring (recency × importance × relevance), not rendering. The planned
-persistence layer (#304) stores rows as
-`memories(id, run_id, agent, kind, text, importance, created_turn, embedding)` —
-the four wire fields map 1:1 onto its queryable columns, and the richer fields
-surface there if a frontend ever needs them.
+retrieval scoring (recency × importance × relevance), not rendering. The
+persistence layer (`backend/run_store.py`, #304) stores rows as
+`memories(run_id, agent, record_id, kind, importance, created_turn, text,
+embedding, extra)` — the four wire fields map 1:1 onto queryable columns, the
+richer fields ride the `extra` JSON (embeddings a float32 BLOB), and a stored
+record rehydrates losslessly via `MemoryRecord.from_primitive`.
 
 **How a stream fills up.** Memories are written by the sim loop (not by the LLM
 provider directly), so the shape is identical whether the brain is the mock or a
@@ -1201,6 +1202,26 @@ retyped); additive optional fields don't bump it.
 `web/src/types/replay.ts` is a **mirror**, not the definition —
 `tests/test_replay_contract.py` holds the two field-for-field in lock-step,
 alongside conformance tests that validate the real bake output and live meta.
-The #304 RunStore (`frames.jsonl` lines = dicts validating as
-`dict[str, AgentFrame]`) and the #307 live-run exporter (emits a `Replay`)
-construct against these models.
+The RunStore (`backend/run_store.py`, #304) writes `frames.jsonl` lines in the
+`dict[str, AgentFrame]` shape — checked structurally at write time, since the
+base env has no pydantic — and the #307 live-run exporter (emits a `Replay`)
+constructs against these models.
+
+## RunStore: durable runs (#304)
+
+`backend/run_store.py` — SQLite + JSONL, zero extra dependencies:
+
+    godot-generative-agents/runs/        # git-ignored
+      sim.db                             # runs + memories tables
+      <run_id>/manifest.json             # the run's meta() blob
+      <run_id>/frames.jsonl              # line N = the step-N frame (#305 shape)
+
+Two opt-in producers: `serve_penn.py --persist` records a live run as it ticks
+(each `POST /reset` closes the current run and opens a new id), and
+`generate_penn_replay.py --persist [--runs-dir DIR]` mirrors a bake after the
+fact — round-trip tests pin that a persisted bake equals its replay file.
+Reads: `read_frames`, `memories_for` (the lean wire projection), and
+`query_memories`, which rehydrates rows into engine `MemoryRecord`s and
+delegates to `AgentMemory.retrieve` — store queries score exactly like the
+sim. Consumers on deck: the #307 live→replay exporter and the #306
+run-lifecycle endpoints.

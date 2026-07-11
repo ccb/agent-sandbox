@@ -271,6 +271,7 @@ def simulate(
     relationships_csv: str | None = None,
     base_personas_dir: str | None = None,
     out_memories: dict | None = None,
+    out_memory_records: dict | None = None,
     personas: list[dict] | None = None,
     build_world_fn=None,
     clock: SimClock | None = None,
@@ -319,6 +320,11 @@ def simulate(
     memory an agent formed, not just the few retrieved per step. It's an
     out-parameter (not part of the return) so the many ``frames = simulate(...)``
     callers and the determinism tests stay unchanged.
+
+    Pass ``out_memory_records`` to collect the same streams as full engine
+    records instead (each ``MemoryRecord.to_primitive()`` dict -- ids,
+    embeddings, provenance included): what the #304 RunStore persists. The
+    lean ``out_memories`` projection cannot rehydrate.
 
     Pass a :class:`~backend.sim_clock.SimClock` to enable clock-based plan
     revision (issue #83): at an hour boundary an agent still en route is "behind
@@ -502,6 +508,15 @@ def simulate(
     if out_memories is not None:
         for name in order:
             out_memories[name] = memory_stream_for_persona(chars[name].agent)
+
+    # Same streams as full engine records (#304): to_primitive() dicts the
+    # RunStore can persist and rehydrate (the lean projection above cannot).
+    if out_memory_records is not None:
+        for name in order:
+            memory = getattr(chars[name].agent, "memory", None)
+            out_memory_records[name] = (
+                [r.to_primitive() for r in memory.records] if memory is not None else []
+            )
 
     # Hand back the run's full GameEvent log, if the caller asked for it
     # (issue #467). Already-serialized EventState dicts, so bake artifacts
