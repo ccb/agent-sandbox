@@ -30,9 +30,15 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from backend.contract import AGENT_FRAME_FIELDS
+
 # godot-generative-agents/runs/ -- the default home for run artifacts
 # (git-ignored), resolved relative to this package, never the CWD.
 DEFAULT_RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
+
+# Per-agent frame entries must carry these; the rest of the pinned
+# AGENT_FRAME_FIELDS tuple (reasoning/chat/memories) is optional (#305).
+_FRAME_REQUIRED = ("x", "y", "act", "e")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -158,3 +164,59 @@ class RunStore:
         run = dict(row)
         run["manifest"] = json.loads(run["manifest"])
         return run
+
+    # --- frames ---------------------------------------------------------------
+
+    def append_frame(self, run_id: str, step: int, frame: dict) -> None:
+        """Append the step-N frame as line N of the run's frames.jsonl.
+
+        ``step`` must equal the current line count -- no gaps, no rewrites --
+        so #307 can read ``frames[]`` straight off the file. The frame is
+        checked against the pinned #305 fields before anything is written.
+        """
+        path = self._frames_path(run_id)
+        _validate_frame(frame)
+        with path.open("r", encoding="utf-8") as fh:
+            count = sum(1 for _ in fh)
+        if step != count:
+            raise ValueError(
+                f"{run_id} has {count} frames; expected step {count}, got {step}"
+            )
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(frame, ensure_ascii=False, separators=(",", ":")))
+            fh.write("\n")
+
+    def read_frames(self, run_id: str) -> list[dict]:
+        """Every persisted frame, in step order."""
+        with self._frames_path(run_id).open("r", encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    def _frames_path(self, run_id: str) -> Path:
+        path = self.root / run_id / "frames.jsonl"
+        if not path.exists():
+            raise KeyError(f"unknown run id: {run_id}")
+        return path
+
+
+def _validate_frame(frame: dict) -> None:
+    """Structural #305 check: a dict of per-agent entries, pinned fields only.
+
+    The pydantic conformance lives in the tests (contract_models needs
+    pydantic, which the base env deliberately lacks); this catches the shape
+    mistakes a producer could actually make -- a wrong container, an unpinned
+    field, a missing required one -- before they hit disk.
+    """
+    if not isinstance(frame, dict) or not frame:
+        raise ValueError("frame must be a non-empty dict of per-agent entries")
+    allowed = set(AGENT_FRAME_FIELDS)
+    for name, entry in frame.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"frame entry for {name!r} is not a dict")
+        unpinned = sorted(set(entry) - allowed)
+        if unpinned:
+            raise ValueError(
+                f"frame entry for {name!r} has unpinned fields: {unpinned}"
+            )
+        missing = [k for k in _FRAME_REQUIRED if k not in entry]
+        if missing:
+            raise ValueError(f"frame entry for {name!r} is missing {missing}")
