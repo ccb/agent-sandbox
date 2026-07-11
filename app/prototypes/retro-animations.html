@@ -158,6 +158,17 @@
        the lattice's bright threads visibly spooling under his fingertips while the
        remembered days accrue. <span class="attach">Attaches: TALK TO SILAS; the Hall of Memory.</span></p>
   </section>
+
+  <section>
+    <div class="slate"><h2>10 &mdash; SYNTH-HOUND</h2><span class="kind">LITHO / BESTIARY, WALKING</span></div>
+    <div class="screen">
+      <svg id="hound" viewBox="0 0 640 360" aria-label="Synth-hound field entry"></svg>
+    </div>
+    <p class="spec">A coursing unit long out of warranty: goggled eye, needle teeth, someone
+       else's heraldry cut into the panels, a whip tail for balance &mdash; still walking,
+       because no one ever told it to stop. Same gait engine as the jackal, opposite
+       heading. <span class="attach">Attaches: the Hall of Hounds; a bestiary card.</span></p>
+  </section>
 </div>
 
 <script>
@@ -922,6 +933,109 @@
       ledger.textContent = "#".repeat(days) + ".".repeat(10 - days) +
         (days === 10 ? "  (NEVER QUITE DONE)" : "");
       typeOn(foot, "A MAN IS NOT DONE DYING UNTIL HE IS DONE BEING REMEMBERED.", T, 130, 1.8);
+    });
+  }
+
+
+  /* ---------------- 10: the synth-hound ---------------- */
+  {
+    const svg = document.getElementById("hound");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "MACHINA / MASTERLESS / STILL COURSING";
+    const HDOTS = stipple(svg, "dots-hound", PH, 1.3);
+    // facing RIGHT, head held low: hip hump -> back slope -> descending neck
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "168,124 186,108 216,104 252,116 292,132 330,146 366,162 404,180 420,186" });
+    // the head: long tapered muzzle, needle teeth at the tip
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "420,186 470,196 540,224 528,236 470,220 436,210 424,204 420,186" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1,
+      points: "492,216 497,226 502,214 507,226 512,216 517,227 522,218" }); // needles
+    const eye = el(svg, "circle", { cx: 452, cy: 199, r: 8, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.6 });                 // the goggle
+    const pupil = el(svg, "circle", { cx: 454, cy: 200, r: 3, fill: PH_BRIGHT });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,          // antennae, swept
+      points: "432,184 468,144" });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points: "426,182 452,138" });
+    // the underline: throat -> chest -> belly tuck -> hip
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "424,204 396,204 356,196 330,186 300,178 258,182 220,186 192,182 172,160 168,124" });
+    // the dark hindquarter, stippled dense (after the reference's dipped hip)
+    el(svg, "polygon", { fill: HDOTS, stroke: PH, "stroke-width": 1.2, points:
+      "168,124 186,108 216,104 232,116 226,150 212,178 192,182 172,160" });
+    // someone else's heraldry, cut into the flank
+    el(svg, "polygon", { points: "268,150 284,150 276,164", fill: PH, "fill-opacity": .8 });
+    el(svg, "circle", { cx: 300, cy: 160, r: 5, fill: PH, "fill-opacity": .8 });
+    el(svg, "rect", { x: 316, y: 158, width: 26, height: 5, fill: PH, "fill-opacity": .8 });
+    el(svg, "polyline", { points: "254,168 262,168 258,164 258,172", stroke: PH, fill: "none" });
+    // rivets along the spine seam
+    [232, 262, 292, 322, 352].forEach(x =>
+      el(svg, "circle", { cx: x, cy: 128 + (x - 232) * .16, r: 1.3, fill: PH_DIM }));
+    // the whip tail (redrawn per tick: it sways)
+    const tail = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.3 });
+    // legs: the jackal's gait engine, mirrored for the opposite heading
+    const LEGS = [
+      { ax: 330, ay: 184, ph: 0.0, w: 1.6, knee: 9 },    // near fore
+      { ax: 318, ay: 180, ph: 0.5, w: 1.0, knee: 9 },    // far fore
+      { ax: 196, ay: 180, ph: 0.55, w: 1.6, knee: -12 }, // near hind
+      { ax: 182, ay: 176, ph: 0.05, w: 1.0, knee: -12 }, // far hind
+    ].map(cfg => Object.assign(cfg, {
+      n: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": cfg.w }),
+      j: el(svg, "circle", { r: 2, fill: "none", stroke: PH_DIM }),  // exposed joint
+    }));
+    const gGround = document.createElementNS(NS, "g");
+    for (let x = 44; x < 600; x += 16) {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 302);
+      l.setAttribute("x2", x + 7); l.setAttribute("y2", 302);
+      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
+    }
+    svg.appendChild(gGround);
+    // callouts + the pursuit ledger
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [452, 199], text: "EYE: GOGGLED, PATIENT" },
+      { at: [507, 222], text: "TEETH: NEEDLES, FOR HOLDING" },
+      { at: [300, 160], text: "PANELS: SOMEONE ELSE'S HERALDRY" },
+      { at: [128, 262], text: "TAIL: A WHIP, FOR BALANCE" },
+    ];
+    label(svg, 24, 334, 10, PH_DIM).textContent = "PURSUIT";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 92 + i * 18, y: 324, width: 14, height: 12, fill: PH, "fill-opacity": .08 }));
+    const verdict = label(svg, 290, 334, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "SYNTH-HOUND (COURSING UNIT R7-13)", T, 4, 1.4);
+      // the walk, mirrored: forward is +x now
+      LEGS.forEach(L => {
+        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const fx = L.ax + 34 - 20 * Math.cos(th);
+        const fy = 300 - Math.max(0, Math.sin(th)) * 12;
+        const kx = (L.ax + fx) / 2 + L.knee, ky = (L.ay + fy) / 2 + 8;
+        L.n.setAttribute("points",
+          `${L.ax},${L.ay} ${kx},${ky} ${fx},${fy} ${fx + 9},${fy + 2}`);
+        L.j.setAttribute("cx", kx); L.j.setAttribute("cy", ky);
+      });
+      gGround.setAttribute("transform", `translate(${-(t * 4) % 16}, 0)`);
+      const sway = ((t % 8) < 4 ? 1 : -1) * 5;             // the whip, balancing
+      tail.setAttribute("points",
+        `170,140 138,178 ${118 + sway},224 ${132 + sway * 2},272`);
+      pupil.setAttribute("opacity", (t % 22) < 19 ? 1 : .2); // the patient blink
+      const c = CALLS[Math.floor(T / 26) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 190,66 196,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const on = Math.min(10, Math.floor(Math.max(0, T - 20) / 11));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+      verdict.textContent = on >= 10 ? "LURE LOST. WAITING. (IT CAN WAIT LONGER THAN YOU.)" :
+        on >= 6 ? "COURSE: REACQUIRED" : "";
     });
   }
 
