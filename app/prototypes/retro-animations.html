@@ -1,0 +1,385 @@
+<title>Tomb Animation Prototypes</title>
+<style>
+  :root {
+    --bg: #020608;
+    --ph: #4db8ff;
+    --ph-dim: #24587c;
+    --ph-bright: #dff2ff;
+    --fungus: #ff9a3c;
+    --blood: #ff5a5a;
+  }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--ph);
+    font-family: ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace;
+    margin: 0;
+    padding: 2.5rem 1rem 5rem;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; display: flex; flex-direction: column; gap: 3.5rem; }
+  header h1 {
+    color: var(--ph-bright);
+    font-size: 1.35rem;
+    letter-spacing: .35em;
+    font-weight: 700;
+    margin: 0 0 .4rem;
+    text-shadow: 0 0 12px rgba(77,184,255,.55);
+  }
+  header p { color: var(--ph-dim); margin: 0; max-width: 60ch; }
+  header .rule { color: var(--ph-dim); margin-top: 1rem; overflow: hidden; white-space: nowrap; }
+  section { display: flex; flex-direction: column; gap: .9rem; }
+  .slate { display: flex; align-items: baseline; gap: .8rem; }
+  .slate h2 {
+    margin: 0; font-size: 1rem; font-weight: 700;
+    color: var(--ph-bright); letter-spacing: .18em;
+  }
+  .slate .kind { color: var(--fungus); font-size: .72rem; letter-spacing: .14em; }
+  .screen {
+    position: relative;
+    border: 1px solid var(--ph-dim);
+    border-radius: 6px;
+    background: #010304;
+    overflow: hidden;
+    box-shadow: inset 0 0 60px rgba(0,0,0,.9), 0 0 24px rgba(77,184,255,.07);
+  }
+  .screen canvas, .screen svg { display: block; width: 100%; height: auto; }
+  /* the CRT dressing: scanlines + vignette + a breath of flicker */
+  .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%);
+    animation: flicker 4.3s steps(60) infinite;
+  }
+  @keyframes flicker { 0%,100% {opacity:1} 48% {opacity:.92} 50% {opacity:1} 83% {opacity:.95} }
+  .spec { color: var(--ph-dim); font-size: .8rem; max-width: 62ch; }
+  .spec b { color: var(--ph); font-weight: 400; }
+  .spec .attach { color: var(--fungus); }
+  @media (prefers-reduced-motion: reduce) {
+    .screen::after { animation: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>TOMB OF NASSAK AN-RAH</h1>
+    <p>Animation prototypes &mdash; Rod Lord litho style (diagram + label + reveal) and
+       outline-wireframe 3D under the terminal's CRT dressing. All self-contained:
+       no libraries, no assets, quantized to hand-made frame steps.</p>
+    <div class="rule">================================================================</div>
+  </header>
+
+  <section>
+    <div class="slate"><h2>01 &mdash; THE MANIFOLD BOX</h2><span class="kind">WIREFRAME / HYPERGEOMETRY</span></div>
+    <div class="screen"><canvas id="tesseract" width="640" height="360"></canvas></div>
+    <p class="spec">A tesseract projected 4D&rarr;3D&rarr;2D, rotating through the planes the tomb
+       does not otherwise have. Inner cell dimmed by <b>w</b>-depth. This cannot be modeled
+       from an illustration, because that is the joke.
+       <span class="attach">Attaches: EXAMINE MANIFOLD BOX, the ulfire reveal.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>02 &mdash; THE TOMB</h2><span class="kind">WIREFRAME / TITLE SCREEN</span></div>
+    <div class="screen"><canvas id="slab" width="640" height="360"></canvas></div>
+    <p class="spec">The azure slab, hand-modeled (a few dozen edges), three carved mouths marked;
+       fungus seams in orange creep on their own step-clock.
+       <span class="attach">Attaches: the title screen, under the game's name.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>03 &mdash; GUIDE CARD: THE CANOPIC SYSTEM</h2><span class="kind">LITHO / DIAGRAM</span></div>
+    <div class="screen">
+      <svg id="canopic" viewBox="0 0 640 400" aria-label="Canopic system diagram"></svg>
+    </div>
+    <p class="spec">The Rod Lord translation: angular line art, gel-flat fills, a wipe with a
+       bright leading edge, mask-slot text reveals, and constant small busyness over a simple
+       underlying drawing. <span class="attach">Attaches: EXAMINE of any canopic jar; the seal puzzle.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>04 &mdash; GUIDE CARD: PTHALO-JACKAL</h2><span class="kind">LITHO / CREATURE ENTRY</span></div>
+    <div class="screen">
+      <svg id="jackal" viewBox="0 0 640 360" aria-label="Pthalo-jackal field entry"></svg>
+    </div>
+    <p class="spec">A field-guide entry that annotates itself: cycling callouts, a PATIENCE
+       gauge stepping down, tribute advice arriving just in time.
+       <span class="attach">Attaches: first jackal encounter; the hint booklet's jackal topic.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
+    <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
+    <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
+       horizon's molten line &mdash; and resets. Forty strokes, one ellipse, per-bat jitter.
+       <span class="attach">Attaches: the dates-under-open-sky beat; a death card.</span></p>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const PH = "#4db8ff", PH_DIM = "#24587c", PH_BRIGHT = "#dff2ff",
+        FUNGUS = "#ff9a3c", BG = "#010304";
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const FPS = 12; // Rod Lord cadence: nothing tweens, everything steps
+  const timers = [];
+  function clock(fn) { fn(0); if (reduced) return; let t = 0;
+    timers.push(setInterval(() => fn(++t), 1000 / FPS)); }
+
+  /* ---------------- shared wireframe plumbing ---------------- */
+  function drawEdges(ctx, pts, edges, color, glow) {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.shadowColor = color; ctx.shadowBlur = glow;
+    ctx.beginPath();
+    for (const [a, b] of edges) { ctx.moveTo(pts[a][0], pts[a][1]); ctx.lineTo(pts[b][0], pts[b][1]); }
+    ctx.stroke();
+  }
+  const rot = (x, y, a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+
+  /* ---------------- 01: tesseract ---------------- */
+  {
+    const cv = document.getElementById("tesseract"), ctx = cv.getContext("2d");
+    const verts = [], edges = [];
+    for (let i = 0; i < 16; i++) verts.push([1,2,4,8].map(b => (i & b) ? 1 : -1));
+    for (let i = 0; i < 16; i++) for (const b of [1,2,4,8]) if (!(i & b)) edges.push([i, i | b]);
+    clock(t => {
+      const a = (t % 96) * Math.PI / 48, b = (t % 144) * Math.PI / 72;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const inner = [], outer = [], pts = verts.map(v => {
+        let [x, y, z, w] = v;
+        [x, w] = rot(x, w, a); [y, z] = rot(y, z, b); [z, w] = rot(z, w, a * .5);
+        const s4 = 1.6 / (2.6 - w);           // 4D -> 3D
+        x *= s4; y *= s4; z *= s4;
+        const s3 = 300 / (4 - z * 1.2);       // 3D -> 2D
+        return { p: [320 + x * s3, 180 + y * s3], w };
+      });
+      edges.forEach(([i, j]) => ((pts[i].w + pts[j].w) < 0 ? inner : outer).push([i, j]));
+      drawEdges(ctx, pts.map(q => q.p), inner, PH_DIM, 4);
+      drawEdges(ctx, pts.map(q => q.p), outer, PH, 9);
+      ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText("INTERIOR: ADVISORY", 18, 340);
+      ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 520, 340);
+    });
+  }
+
+  /* ---------------- 02: the tomb slab ---------------- */
+  {
+    const cv = document.getElementById("slab"), ctx = cv.getContext("2d");
+    // hand mesh: a tapered slab + three carved mouth-frames
+    const V = [], E = [], F = [];
+    const slab = (x0,x1,y0,y1,z0,z1) => {
+      const n = V.length;
+      for (const x of [x0,x1]) for (const y of [y0,y1]) for (const z of [z0,z1]) V.push([x,y,z]);
+      [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
+        .forEach(([a,b]) => E.push([n+a, n+b]));
+    };
+    slab(-.9,.9,-1.6,1.6,-.45,.45);                 // the monolith
+    // carved mouths: west face (boy), east face (warrior), crown (elder)
+    const frame = (pts) => { const n = V.length; pts.forEach(p => V.push(p));
+      for (let i = 0; i < pts.length; i++) F.push([n+i, n+(i+1)%pts.length]); };
+    frame([[-.91,-.4,-.22],[-.91,-.4,.22],[-.91,.5,.22],[-.91,.5,-.22]]);
+    frame([[.91,-.3,-.2],[.91,-.3,.2],[.91,.6,.2],[.91,.6,-.2]]);
+    frame([[-.3,-1.61,-.2],[.3,-1.61,-.2],[.3,-1.61,.2],[-.3,-1.61,.2]]);
+    // fungus seams: jittered polylines down the west edge
+    clock(t => {
+      const a = (t % 240) * Math.PI / 120;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const pts = V.map(([x, y, z]) => {
+        [x, z] = rot(x, z, a);
+        const s = 190 / (4.4 - z);
+        return [320 + x * s, 170 + y * s];
+      });
+      drawEdges(ctx, pts, E, PH, 8);
+      drawEdges(ctx, pts, F, PH_BRIGHT, 6);
+      // the fungus, creeping on its own clock
+      ctx.strokeStyle = FUNGUS; ctx.shadowColor = FUNGUS; ctx.shadowBlur = 6; ctx.lineWidth = 1;
+      const grow = (t % 60) / 60;
+      for (let s = 0; s < 3; s++) {
+        ctx.beginPath();
+        const [bx, by] = pts[s * 2];       // start at a slab vertex
+        ctx.moveTo(bx, by);
+        for (let k = 1; k <= 6 * grow; k++)
+          ctx.lineTo(bx + Math.sin(s * 7 + k * 2.1) * 8 * k / 2, by + k * 9);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText("EACH MOUTH IS A DOOR", 18, 340);
+    });
+  }
+
+  /* ---------------- SVG helpers (litho cards) ---------------- */
+  const NS = "http://www.w3.org/2000/svg";
+  function el(svg, name, attrs) {
+    const n = document.createElementNS(NS, name);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    svg.appendChild(n); return n;
+  }
+  function label(svg, x, y, size, color) {
+    return el(svg, "text", { x, y, fill: color, "font-size": size,
+      "font-family": "ui-monospace, monospace", "letter-spacing": "1.5" });
+  }
+  // mask-slot text: reveal letter by letter on the step clock
+  function typeOn(node, text, t, t0, cps) {
+    const n = Math.max(0, Math.min(text.length, Math.floor((t - t0) * cps)));
+    node.textContent = text.slice(0, n) + (n < text.length && n > 0 ? "█" : "");
+  }
+  // the bright-edged wipe: returns a fn(t) that positions the sweep
+  function wipe(svg, w, h, t0, dur) {
+    const g = el(svg, "g", {});
+    const cover = el(g, "rect", { x: 0, y: 0, width: w, height: h, fill: BG });
+    const edge = el(g, "rect", { x: 0, y: 0, width: 3, height: h, fill: PH_BRIGHT });
+    return (t) => {
+      const k = Math.max(0, Math.min(1, (t - t0) / dur));
+      const x = k * w;
+      cover.setAttribute("x", x); cover.setAttribute("width", Math.max(0, w - x));
+      edge.setAttribute("x", Math.min(x, w - 3));
+      edge.setAttribute("opacity", k >= 1 ? 0 : 1);
+    };
+  }
+
+  /* ---------------- 03: THE CANOPIC SYSTEM ---------------- */
+  {
+    const svg = document.getElementById("canopic");
+    el(svg, "rect", { x:0, y:0, width:640, height:400, fill: BG });
+    // header bar, patent-drawing style
+    el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const entry = label(svg, 624, 24, 10, PH_DIM); entry.setAttribute("text-anchor", "end");
+    entry.textContent = "ENTRY 4471-C / FALLEN AUTARCHY / RITES";
+    // the body: angular sarcophagus figure, gel-fill
+    el(svg, "polygon", { points: "290,70 350,70 364,110 364,240 350,272 290,272 276,240 276,110",
+      fill: PH, "fill-opacity": .12, stroke: PH, "stroke-width": 1.5 });
+    el(svg, "polyline", { points: "300,96 320,88 340,96", fill: "none", stroke: PH }); // the face
+    // organ sites within the body
+    const organs = [
+      { x: 320, y: 130, jar: 0, name: "LUNGS",      head: "BABOON"  },
+      { x: 320, y: 160, jar: 1, name: "LIVER",      head: "HUMAN"   },
+      { x: 320, y: 112, jar: 2, name: "EYES",       head: "MANTIS"  },
+      { x: 320, y: 195, jar: 3, name: "INTESTINES", head: "FALCON"  },
+      { x: 320, y: 100, jar: 4, name: "BRAIN",      head: "JACKAL", odd: true },
+    ];
+    // five jars along the foot of the card
+    const jars = organs.map((o, i) => {
+      const jx = 70 + i * 125;
+      el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
+        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
+      el(svg, "rect", { x: jx-12, y: 284, width: 24, height: 11, fill: "none", stroke: PH });
+      const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
+      const who = label(svg, jx, 386, 9, o.odd ? FUNGUS : PH_DIM); who.setAttribute("text-anchor", "middle");
+      const lead = el(svg, "polyline", { points: "", fill: "none", stroke: o.odd ? FUNGUS : PH_DIM,
+        "stroke-dasharray": "3 3" });
+      return { jx, cap, who, lead, o };
+    });
+    const foot = label(svg, 320, 62, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const FOOTS = ["APPETITES AND THOUGHTS ARE JARRED SEPARATELY, AS THE RITE REQUIRES",
+                   "BOTH HAVE GOT UP",
+                   "MATCH THE HEAD TO THE PLINTH; THE SEAL TAKES THEIR WORD FOR IT"];
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE CANOPIC SYSTEM", T, 4, 1.2);
+      jars.forEach((j, i) => {
+        const t0 = 24 + i * 18, k = Math.max(0, Math.min(1, (T - t0) / 8));
+        // the leader line extends from organ to jar in steps
+        const seg = Math.floor(k * 3);
+        const pts = [[j.o.x, j.o.y], [j.jx, j.o.y + 40], [j.jx, 282]];
+        j.lead.setAttribute("points",
+          pts.slice(0, seg + 1).map(p => p.join(",")).join(" "));
+        typeOn(j.cap, j.o.name, T, t0 + 6, 1.5);
+        typeOn(j.who, j.o.head + (j.o.odd ? " (STRANGELY)" : ""), T, t0 + 10, 1.5);
+      });
+      foot.textContent = T > 130 ? FOOTS[2] : T > 118 ? FOOTS[1] : T > 100 ? FOOTS[0] : "";
+    });
+  }
+
+  /* ---------------- 04: PTHALO-JACKAL ---------------- */
+  {
+    const svg = document.getElementById("jackal");
+    el(svg, "rect", { x:0, y:0, width:640, height:360, fill: BG });
+    el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FAUNA / TOMBLANDS / CAUTIOUS, CLEVER, OWED";
+    // the jackal: straight segments only (Burd's rule: angular, more lines)
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      "120,250 170,240 210,205 262,196 300,204 332,186 352,150 344,132 372,118 386,128 " +
+      "372,150 366,186 340,226 330,250 306,244 268,252 232,246 196,258 168,252 120,250" });
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "352,150 344,110 356,96 366,118" }); // the ear
+    el(svg, "polygon", { points: "120,250 96,286 112,288 140,254", fill: PH, "fill-opacity": .12, stroke: PH }); // tail
+    ["196,258 192,300", "232,246 236,300", "306,244 300,300", "330,250 336,300"]
+      .forEach(p => el(svg, "polyline", { points: p, fill: "none", stroke: PH }));
+    el(svg, "circle", { cx: 366, cy: 130, r: 2.5, fill: PH_BRIGHT }); // the eye, doing sums
+    // cycling callouts with leader lines
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 470, 90, 10, PH);
+    const CALLS = [
+      { at: [366, 130], text: "EYES: DOING SUMS" },
+      { at: [280, 200], text: "COAT: PTHALO No.9" },
+      { at: [386, 128], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
+      { at: [112, 288], text: "EXIT: ALWAYS PREPARED" },
+    ];
+    // the PATIENCE gauge
+    label(svg, 24, 322, 10, PH_DIM).textContent = "PATIENCE";
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      el(svg, "rect", { x: 100 + i * 18, y: 312, width: 14, height: 12, fill: PH, "fill-opacity": .8 }));
+    const verdict = label(svg, 300, 322, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
+      const c = CALLS[Math.floor(T / 22) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 460,86 464,86`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
+      cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
+      verdict.textContent = left === 0
+        ? "TRIBUTE ACCEPTED: CRATE OF DATES. PEACE PURCHASED (DEEP)."
+        : left <= 3 ? "ADVICE: PRODUCE THE DATES" : "";
+    });
+  }
+
+  /* ---------------- 05: the wheel of bats ---------------- */
+  {
+    const cv = document.getElementById("bats"), ctx = cv.getContext("2d");
+    const N = 40, bats = Array.from({ length: N }, (_, i) => ({
+      ph: (i / N) * Math.PI * 2, r: 46 + (i * 37 % 34), wob: (i * 13 % 7) - 3 }));
+    clock(t => {
+      const T = t % 200, wheeling = T < 150, scatter = (T - 150) / 50;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      // the tomb, far below, minimal
+      ctx.strokeStyle = PH_DIM; ctx.shadowColor = PH; ctx.shadowBlur = 4;
+      ctx.strokeRect(290, 210, 60, 70);
+      ctx.beginPath(); ctx.moveTo(305, 280); ctx.lineTo(305, 258); ctx.lineTo(318, 258);
+      ctx.lineTo(318, 280); ctx.stroke();
+      // the horizon's molten line
+      ctx.strokeStyle = FUNGUS; ctx.beginPath(); ctx.moveTo(0, 281); ctx.lineTo(640, 281); ctx.stroke();
+      // the wheel
+      ctx.strokeStyle = PH; ctx.shadowBlur = 6; ctx.lineWidth = 1.4;
+      const a0 = T * .35;
+      for (const b of bats) {
+        let x, y;
+        if (wheeling) {
+          x = 320 + Math.cos(a0 + b.ph) * (b.r + b.wob * Math.sin(T * .7 + b.ph));
+          y = 120 + Math.sin(a0 + b.ph) * (b.r * .42);
+        } else {
+          x = 320 + Math.cos(b.ph) * (b.r + scatter * 420);
+          y = 120 + Math.sin(b.ph) * (b.r * .42) + scatter * (b.ph > Math.PI ? -30 : 60) * .4;
+        }
+        const flap = ((t + b.wob) % 4 < 2) ? 3.5 : 1.2;
+        ctx.globalAlpha = wheeling ? 1 : Math.max(0, 1 - scatter);
+        ctx.beginPath();
+        ctx.moveTo(x - 4, y - flap); ctx.lineTo(x, y); ctx.lineTo(x + 4, y - flap);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText(wheeling ? "TURN " + (Math.floor(T / 15) + 1) + " OF 10" :
+        "TOWARD THE HORIZON'S MOLTEN LINE", 18, 288);
+    });
+  }
+})();
+</script>
