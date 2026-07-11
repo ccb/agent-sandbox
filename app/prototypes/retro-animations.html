@@ -216,6 +216,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>13-C &mdash; THE AUTARCH, HOLLOWED</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="autarch-c" viewBox="0 0 640 420" aria-label="The Autarch, hollowed to the skull"></svg>
+    </div>
+    <p class="spec">The furthest gone: the stone worn to the skull beneath &mdash; nasal
+       aperture, a grin of carved teeth (one missing) &mdash; and the sockets FULL of the
+       orange, pulsing, with sprigs of it testing the air. The ropes still work the bust.
+       <span class="attach">Alternate for 13 (the ending nobody wanted).</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>14 &mdash; THE MANTIS JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
     <div class="screen">
       <svg id="jar-mantis" viewBox="0 0 640 300" aria-label="The mantis jar, close up"></svg>
@@ -1943,12 +1954,12 @@
       d += ` Q ${cx + Math.cos(a0) * rx * bump} ${cy + Math.sin(a0) * ry * bump}` +
            ` ${cx + Math.cos(a1) * rx} ${cy + Math.sin(a1) * ry}`;
     }
-    ing("path", { d: d + " Z", fill: DOTS, stroke: PH, "stroke-width": 1.7 });
+    ing("path", { d: d + " Z", fill: DOTS, stroke: FUNGUS, "stroke-width": 1.7 });
     // the gyri: S-squiggles scattered through the mass
     [[-.5,-.4],[.1,-.55],[.55,-.3],[-.6,.15],[0,.05],[.55,.25],[-.3,.5],[.25,.55]]
       .forEach(([fx, fy], i) => {
         const x = cx + fx * rx, y = cy + fy * ry, s2 = 10 + (i % 3) * 3;
-        ing("path", { fill: "none", stroke: PH, "stroke-width": 1.2, d:
+        ing("path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.2, d:
           `M ${x - s2} ${y} Q ${x - s2 / 2} ${y - s2} ${x} ${y} Q ${x + s2 / 2} ${y + s2} ${x + s2} ${y}` });
       });
   }
@@ -2001,7 +2012,7 @@
     const legS2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
     birdLeg(legT1, legS1, 300, 236, 0, 0);
     birdLeg(legT2, legS2, 336, 232, .8, 0);
-    brainBody(svg, gg, 320, 190, 78, 62, DOTS);
+    brainBody(svg, gg, 320, 190, 78, 62, stipple(svg, "sa-orange", FUNGUS, 1.2));
     const H = jarHead(svg, gg, 312, 90);
     // the fungal fringe at the neck
     el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
@@ -2051,7 +2062,7 @@
       "stroke-linecap": "round", opacity: .5 });
     const legS2 = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4, opacity: .5 });
     const gBody = document.createElementNS(NS, "g"); svg.appendChild(gBody);
-    brainBody(svg, gBody, 320, 190, 78, 62, DOTS);
+    brainBody(svg, gBody, 320, 190, 78, 62, stipple(svg, "sb-orange", FUNGUS, 1.2));
     const gHead = document.createElementNS(NS, "g"); svg.appendChild(gHead);
     const H = jarHead(svg, gHead, 312, 90);
     prickEars(H, 0);
@@ -2094,7 +2105,7 @@
       el(svg, "line", { x1: x, y1: 292, x2: x + 7, y2: 292, stroke: PH_DIM });
     // the body, down: the brain mass squashed against the ground
     const gg = document.createElementNS(NS, "g"); svg.appendChild(gg);
-    brainBody(svg, gg, 300, 246, 88, 44, DOTS);
+    brainBody(svg, gg, 300, 246, 88, 44, stipple(svg, "sc-orange", FUNGUS, 1.2));
     // the legs, where the stride left them
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 3,
       "stroke-linecap": "round", points: "356,244 408,232 446,252" });
@@ -2140,8 +2151,10 @@
       stroke: PH, "stroke-width": 1.6 });
     ing("line", { x1: 300, y1: 92, x2: 341, y2: 92, stroke: PH_DIM });
     ing("polyline", { fill: "none", stroke: PH, "stroke-width": 1.5, points:
-      "306,52 310,36 322,28 336,32 342,42 336,50 328,46 322,52 336,52" }); // the falcon
-    ing("circle", { cx: 327, cy: 36, r: 1.8, fill: PH_BRIGHT });
+      "306,52 308,38 318,28 332,28 342,36 " +               // the dome
+      "358,46 346,50 340,46 " +                             // the SHARP hook, down and back
+      "334,52 322,52 336,52" });                            // jaw home
+    ing("circle", { cx: 328, cy: 36, r: 1.8, fill: PH_BRIGHT });
   }
   // the face and collar: eye-cluster over a torus of gut
   function gutsFace(svg, DOTS) {
@@ -2179,18 +2192,41 @@
         `${s2.x0 + w2 * .6 + 8},${302 + droop}`);
     });
   }
-  // the corrugated arm, braced on the floor
+  // the gut-arm: an INTESTINE, rooted at the collar and reaching the floor
+  // -- a continuous tube with transverse creases (haustra), ending pooled
   function gutsArm(svg) {
-    const segs = [];
-    for (let k = 0; k < 11; k++) {
-      const a = Math.PI * (.5 + k * .07);
-      const x = 250 + Math.cos(a) * (60 + k * 4) - k * 4, y = 180 + k * 12;
-      segs.push(el(svg, "ellipse", { cx: 214 - k * 2.5, cy: 190 + k * 11,
-        rx: 16 - k * .5, ry: 7, fill: "none", stroke: PH, "stroke-width": 1.4 }));
+    const C = [[266, 192], [238, 200], [212, 220], [196, 250], [192, 280], [198, 302]];
+    const wall = (side) => {
+      const pts = C.map(([x, y], k) => {
+        const [x0, y0] = C[Math.max(0, k - 1)], [x1, y1] = C[Math.min(C.length - 1, k + 1)];
+        const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+        const w2 = 10 - k * .6;
+        return `${x - dy / len * w2 * side},${y + dx / len * w2 * side}`;
+      });
+      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+        points: pts.join(" ") });
+      return pts;
+    };
+    const L = wall(1), R = wall(-1);
+    // the haustral creases: paired arcs across the tube, every half-segment
+    for (let k = 0; k < C.length - 1; k++) {
+      for (const f of [0.33, 0.66, 1]) {
+        const x = C[k][0] + (C[k + 1][0] - C[k][0]) * f;
+        const y = C[k][1] + (C[k + 1][1] - C[k][1]) * f;
+        const dx = C[k + 1][0] - C[k][0], dy = C[k + 1][1] - C[k][1];
+        const len = Math.hypot(dx, dy) || 1, w2 = 9 - k * .6;
+        el(svg, "path", { fill: "none", stroke: PH_DIM, d:
+          `M ${x - dy / len * w2} ${y + dx / len * w2} ` +
+          `Q ${x + dx / len * 4} ${y + dy / len * 4} ` +
+          `${x + dy / len * w2} ${y - dx / len * w2}` });
+      }
     }
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "192,300 176,306 200,310 214,306" });          // the braced hand
-    return segs;
+    // the end, pooled on the floor
+    el(svg, "ellipse", { cx: 202, cy: 306, rx: 15, ry: 5.5, fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    el(svg, "ellipse", { cx: 214, cy: 310, rx: 24, ry: 4, fill: "none",
+      stroke: PH_DIM });
+    return [];
   }
 
   // 26: THE SWAY
@@ -2421,6 +2457,132 @@
       });
       spark.setAttribute("opacity", (t % 70) > 64 ? 1 : 0);   // something looks back
       typeOn(foot, "WHAT HE KEPT, IT KEEPS NOW.", T, 130, 1.8);
+    });
+  }
+
+
+  /* ---------------- 13-C: the Autarch, hollowed ---------------- */
+  {
+    const svg = document.getElementById("autarch-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / BONE / CLAIMED";
+    const ADOTS = stipple(svg, "dots-autarchc", PH, .9);
+    const ODOTS = stipple(svg, "dots-orangec", FUNGUS, 1.2);
+    const CX = 320, CY = 180;
+    // the halo, carvings still
+    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      el(svg, "polygon", { fill: PH, "fill-opacity": .35, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        opacity: .55, points: pts.join(" ") });
+    });
+    // THE SKULL: the same stone, worn honest
+    el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,214 370,236 364,258 276,258 270,236 260,214 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    // the sockets, FULL of the orange
+    const sockL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 14, ry: 10,
+      fill: ODOTS, stroke: PH, "stroke-width": 1.4 });
+    const sockR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 14, ry: 10,
+      fill: ODOTS, stroke: PH, "stroke-width": 1.4 });
+    const glowL = el(svg, "ellipse", { cx: 296, cy: 188, rx: 6, ry: 4,
+      fill: FUNGUS, "fill-opacity": .5 });
+    const glowR = el(svg, "ellipse", { cx: 344, cy: 188, rx: 6, ry: 4,
+      fill: FUNGUS, "fill-opacity": .5 });
+    // sprigs, testing the air out of each socket
+    const sprigs = [[296, 188, -2.2], [300, 186, -.9], [344, 188, -.6], [340, 186, -2.6]]
+      .map(() => el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5 }));
+    const SPRIG_AT = [[296, 190, -2.4], [302, 186, -.8], [344, 190, -.7], [338, 186, -2.5]];
+    // the nasal aperture, and the cheek hollows
+    el(svg, "path", { d: "M 320 204 L 312 230 Q 320 238 328 230 Z",
+      fill: BG, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "path", { d: "M 276 214 Q 284 224 292 218", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 348 218 Q 356 224 364 214", fill: "none", stroke: PH_DIM });
+    // THE GRIN: carved teeth, one gone
+    el(svg, "line", { x1: 294, y1: 240, x2: 346, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 294, y1: 252, x2: 346, y2: 252, stroke: PH, "stroke-width": 1.4 });
+    for (let x = 294; x <= 346; x += 6.5)
+      el(svg, "line", { x1: x, y1: 240, x2: x, y2: 252, stroke: PH });
+    el(svg, "rect", { x: 320.5, y: 240.5, width: 5.5, height: 11, fill: BG }); // the gap
+    // the beard: curl-rows, filled, still
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
+        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    // the ropes, as in 13-B
+    const ROOTS = [
+      [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
+      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
+      [288, 338, 2.2], [352, 338, .9],
+    ];
+    const tendrils = ROOTS.map(() =>
+      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
+        stroke: FUNGUS, "stroke-width": 1.4 }));
+    const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "NASSAK AN-RAH (HOLLOWED)", T, 4, 1.4);
+      const br = [.35, .45, .55, .65, .55, .45][Math.floor(t / 3) % 6]; // the sockets pulse
+      glowL.setAttribute("fill-opacity", br);
+      glowR.setAttribute("fill-opacity", br);
+      sprigs.forEach((n, i) => {                                       // the sprigs test the air
+        const [sx, sy, a0] = SPRIG_AT[i];
+        const pts = [1, 2, 3].map(k => {
+          const a = a0 + Math.sin(t * .3 + k + i * 2) * .35;
+          const r = k * (5 + ((t + i * 7) % 8) * .6);
+          return `${sx + Math.cos(a) * r},${sy + Math.sin(a) * r}`;
+        });
+        n.setAttribute("points", `${sx},${sy} ` + pts.join(" "));
+      });
+      tendrils.forEach((n, i) => {                                     // the ropes
+        const [rx, ry, a0] = ROOTS[i];
+        const w = Math.sin(t * .4 + i * 1.9);
+        const c = [[rx, ry]];
+        for (let k = 1; k <= 4; k++) {
+          const a = a0 + Math.sin(t * .25 + k * 1.2 + i) * .3 + w * .04 * k;
+          const r = k * (13 + ((t + i * 5) % 12));
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
+        }
+        const W = [6, 4.8, 3.4, 1.9, .7];
+        const L = [], R = [];
+        for (let k = 0; k < c.length; k++) {
+          const [x0, y0] = c[Math.max(0, k - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len * W[k], ny = dx / len * W[k];
+          L.push(`${c[k][0] + nx},${c[k][1] + ny}`);
+          R.push(`${c[k][0] - nx},${c[k][1] - ny}`);
+        }
+        n.setAttribute("points", L.concat(R.reverse()).join(" "));
+      });
+      typeOn(foot, "THE STONE WEARS TO THE SKULL. THE SKULL WEARS ORANGE.", T, 130, 1.8);
     });
   }
 
