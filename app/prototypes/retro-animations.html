@@ -2336,7 +2336,6 @@
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "FALLEN AUTARCHY / STONE / TENANTED";
     const ADOTS = stipple(svg, "dots-autarchb", PH, .9);
-    const BDOTS = stipple(svg, "dots-beardb", PH, 1.5);
     const CX = 320, CY = 180;
     // the halo: spiked disc, the lightning CARVED and still
     el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
@@ -2370,8 +2369,10 @@
     el(svg, "ellipse", { cx: 344, cy: 190, rx: 13, ry: 9, fill: BG, stroke: PH_DIM });
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
       points: "318,196 316,222 310,230 330,230 324,222 322,196" });
-    el(svg, "polygon", { points: "280,258 360,258 356,354 320,368 286,352",
-      fill: BDOTS, stroke: PH, "stroke-width": 1.6 });        // the dotted beard
+    // the beard: 13's curl-rows, but the circles FILLED, and still
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
+        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
     el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
       stroke: PH_BRIGHT, "stroke-width": 1.2 });
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
@@ -2382,11 +2383,12 @@
     // outward past the halo -- the only living thing on the card
     const ROOTS = [
       [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
-      [320, 366, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
-      [286, 352, 2.2], [356, 352, .9],
+      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
+      [288, 338, 2.2], [352, 338, .9],
     ];
     const tendrils = ROOTS.map(() =>
-      el(svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6 }));
+      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
+        stroke: FUNGUS, "stroke-width": 1.4 }));
     const spark = el(svg, "circle", { cx: 344, cy: 191, r: 1.3,
       fill: FUNGUS, opacity: 0 });
     const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
@@ -2396,14 +2398,26 @@
       doWipe(T);
       typeOn(hdr, "NASSAK AN-RAH (OVERGROWN)", T, 4, 1.4);
       tendrils.forEach((n, i) => {
+        // a tapered rope, not a line: centerline first, then a ribbon
         const [rx, ry, a0] = ROOTS[i];
         const w = Math.sin(t * .4 + i * 1.9);
-        const pts = [1, 2, 3, 4].map(k => {
+        const c = [[rx, ry]];
+        for (let k = 1; k <= 4; k++) {
           const a = a0 + Math.sin(t * .25 + k * 1.2 + i) * .3 + w * .04 * k;
           const r = k * (13 + ((t + i * 5) % 12));
-          return `${rx + Math.cos(a) * r},${ry + Math.sin(a) * r * .8}`;
-        });
-        n.setAttribute("points", `${rx},${ry} ` + pts.join(" "));
+          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
+        }
+        const W = [6, 4.8, 3.4, 1.9, .7];
+        const L = [], R = [];
+        for (let k = 0; k < c.length; k++) {
+          const [x0, y0] = c[Math.max(0, k - 1)];
+          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
+          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len * W[k], ny = dx / len * W[k];
+          L.push(`${c[k][0] + nx},${c[k][1] + ny}`);
+          R.push(`${c[k][0] - nx},${c[k][1] - ny}`);
+        }
+        n.setAttribute("points", L.concat(R.reverse()).join(" "));
       });
       spark.setAttribute("opacity", (t % 70) > 64 ? 1 : 0);   // something looks back
       typeOn(foot, "WHAT HE KEPT, IT KEEPS NOW.", T, 130, 1.8);
