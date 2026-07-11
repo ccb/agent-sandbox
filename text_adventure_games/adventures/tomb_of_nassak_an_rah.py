@@ -3976,6 +3976,9 @@ def build_game(seed=None):
                 if n >= 4 and jackal_pack.location is den:
                     g.relocate(jackal_pack, hall)
                     jackal_pack.set_property("_stride", True)
+                    g.show_figure(
+                        "jackal", force=True
+                    )  # the prowl, then the arithmetic
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
                         "filling the doorways -- the song called, and the "
@@ -4020,6 +4023,7 @@ def build_game(seed=None):
                         "noise -- once, and then again, nearer."
                     )
                 elif n == 3:
+                    g.show_figure("jackal", force=True)
                     g.parser.ok(
                         "Yellow eyes ring the doorways, unhurried. "
                         "Pthalo-jackals: cautious, clever, and done being "
@@ -4028,6 +4032,7 @@ def build_game(seed=None):
                 elif n >= 4:
                     g.relocate(jackal_pack, hall)
                     jackal_pack.set_property("_stride", True)  # first beat: hang back
+                    g.show_figure("jackal", force=True)  # the prowl, first
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
                         "filling the doorways. The nearest growls -- a sound "

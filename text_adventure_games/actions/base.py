@@ -500,4 +500,23 @@ class Describe(Action):
                 travel = loc.travel_descriptions.get(direction) or ""
                 line = f"To the {direction}, you see {dest.name}."
                 return self.parser.ok(f"{line} {travel}".strip())
+        # An explicit LOOK replays the room's illustration (CCB): the arrival
+        # plate is once-per-game, but asking to look again re-earns it. Only
+        # the bare look forms count -- Go's internal describe passes the
+        # movement command through here and must not re-cue.
+        looker = self.actor if self.actor is not None else self.game.player
+        if looker is self.game.player and cmd in (
+            "look",
+            "l",
+            "describe",
+            "look around",
+            "look round",
+            "look here",
+        ):
+            loc = looker.location
+            if loc is not None:
+                fig = loc.get_property("figure")
+                self.game.show_figure(
+                    fig(self.game) if callable(fig) else fig, force=True
+                )
         self.parser.ok(self.game.describe())

@@ -272,3 +272,12 @@ def test_arriving_at_the_summit_cues_the_mystic():
     g.do_command(f"go {str(getattr(direction, 'value', direction))}")
     if g.player.location is summit:  # the climb may be gated; only assert if we made it
         assert "mystic-b" in cap.texts(Channel.FIGURE)
+
+
+def test_look_replays_the_rooms_card():
+    g, cap = _game()
+    g.do_command("go north")  # ext1c, the arrival plate
+    g.do_command("look")  # and LOOK re-earns it
+    assert cap.texts(Channel.FIGURE).count("ext1c") == 2
+    g.do_command("look east")  # surveying an exit is not a look-around
+    assert cap.texts(Channel.FIGURE).count("ext1c") == 2
