@@ -98,6 +98,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>03-B &mdash; THE CANOPIC SYSTEM, OPERATION</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="canopic-b" viewBox="0 0 640 400" aria-label="The canopic system, operation style"></svg>
+    </div>
+    <p class="spec">The same five jars &mdash; but behind them, the patient: a body outline
+       with the organs cut out, board-game style. Each organ lights in turn and travels
+       down to its jar; the intestines are a difficult extraction, and the nose knows.
+       <span class="attach">Alternate for 03.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>04 &mdash; GUIDE CARD: PTHALO-JACKAL</h2><span class="kind">LITHO / CREATURE ENTRY</span></div>
     <div class="screen">
       <svg id="jackal" viewBox="0 0 640 360" aria-label="Pthalo-jackal field entry"></svg>
@@ -523,31 +534,8 @@
     };
   }
 
-  /* ---------------- 03: THE CANOPIC SYSTEM ---------------- */
-  {
-    const svg = document.getElementById("canopic");
-    el(svg, "rect", { x:0, y:0, width:640, height:400, fill: BG });
-    const DOTS = stipple(svg, "dots-canopic", PH, 1);
-    // header bar, patent-drawing style
-    el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    const entry = label(svg, 624, 24, 10, PH_DIM); entry.setAttribute("text-anchor", "end");
-    entry.textContent = "ENTRY 4471-C / FALLEN AUTARCHY / RITES";
-    // the body: angular sarcophagus figure, gel-fill
-    el(svg, "polygon", { points: "290,70 350,70 364,110 364,240 350,272 290,272 276,240 276,110",
-      fill: DOTS, stroke: PH, "stroke-width": 1.5 });
-    el(svg, "polyline", { points: "300,96 320,88 340,96", fill: "none", stroke: PH }); // the face
-    // organ sites within the body
-    const organs = [
-      { x: 320, y: 130, jar: 0, name: "LUNGS",      head: "BABOON"  },
-      { x: 320, y: 160, jar: 1, name: "LIVER",      head: "HUMAN"   },
-      { x: 320, y: 112, jar: 2, name: "EYES",       head: "MANTIS"  },
-      { x: 320, y: 195, jar: 3, name: "INTESTINES", head: "FALCON"  },
-      { x: 320, y: 100, jar: 4, name: "BRAIN",      head: "JACKAL", odd: true },
-    ];
-    // five jars along the foot of the card
     // each jar's stopper is the animal's head, in angular litho line
-    function headGlyph(kind, cx) {
+    function headGlyph(svg, kind, cx) {
       const P = (pts, extra) => el(svg, "polyline",
         Object.assign({ points: pts, fill: "none", stroke: PH, "stroke-width": 1.4 }, extra || {}));
       const dot = (x, y) => el(svg, "circle", { cx: x, cy: y, r: 1.8, fill: PH_BRIGHT });
@@ -587,11 +575,35 @@
         dot(cx-2, 276);
       }
     }
+
+  /* ---------------- 03: THE CANOPIC SYSTEM ---------------- */
+  {
+    const svg = document.getElementById("canopic");
+    el(svg, "rect", { x:0, y:0, width:640, height:400, fill: BG });
+    const DOTS = stipple(svg, "dots-canopic", PH, 1);
+    // header bar, patent-drawing style
+    el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const entry = label(svg, 624, 24, 10, PH_DIM); entry.setAttribute("text-anchor", "end");
+    entry.textContent = "ENTRY 4471-C / FALLEN AUTARCHY / RITES";
+    // the body: angular sarcophagus figure, gel-fill
+    el(svg, "polygon", { points: "290,70 350,70 364,110 364,240 350,272 290,272 276,240 276,110",
+      fill: DOTS, stroke: PH, "stroke-width": 1.5 });
+    el(svg, "polyline", { points: "300,96 320,88 340,96", fill: "none", stroke: PH }); // the face
+    // organ sites within the body
+    const organs = [
+      { x: 320, y: 130, jar: 0, name: "LUNGS",      head: "BABOON"  },
+      { x: 320, y: 160, jar: 1, name: "LIVER",      head: "HUMAN"   },
+      { x: 320, y: 112, jar: 2, name: "EYES",       head: "MANTIS"  },
+      { x: 320, y: 195, jar: 3, name: "INTESTINES", head: "FALCON"  },
+      { x: 320, y: 100, jar: 4, name: "BRAIN",      head: "JACKAL", odd: true },
+    ];
+    // five jars along the foot of the card
     const jars = organs.map((o, i) => {
       const jx = 70 + i * 125;
       el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
         fill: DOTS, stroke: PH, "stroke-width": 1.5 });
-      headGlyph(o.head, jx);
+      headGlyph(svg, o.head, jx);
       const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
       const who = label(svg, jx, 386, 9, o.odd ? FUNGUS : PH_DIM); who.setAttribute("text-anchor", "middle");
       const lead = el(svg, "polyline", { points: "", fill: "none", stroke: o.odd ? FUNGUS : PH_DIM,
@@ -2589,6 +2601,100 @@
         n.setAttribute("points", L.concat(R.reverse()).join(" "));
       });
       typeOn(foot, "THE STONE WEARS TO THE SKULL. THE SKULL WEARS ORANGE.", T, 130, 1.8);
+    });
+  }
+
+
+  /* ---------------- 03-B: the canopic system, operation style ---------------- */
+  {
+    const svg = document.getElementById("canopic-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "RITES / PROCEDURE / MIND THE SIDES";
+    // THE PATIENT: a board-game body, arms out, waiting politely
+    const body = el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      points:
+      "312,94 274,106 250,148 244,164 258,168 276,138 280,192 " +   // left arm in
+      "284,220 292,268 284,274 302,274 306,224 320,224 334,224 " +  // left leg
+      "338,274 356,274 348,268 356,220 360,192 364,138 382,168 " +  // right leg up
+      "396,164 390,148 366,106 328,94" });
+    const skull = el(svg, "circle", { cx: 320, cy: 72, r: 22, fill: "none",
+      stroke: PH, "stroke-width": 1.8 });
+    const nose = el(svg, "circle", { cx: 320, cy: 78, r: 3.5, fill: PH_DIM });
+    // THE ORGANS, in their cavities (dim until called)
+    const ORGANS = {};
+    ORGANS.BRAIN = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 308 62 Q 312 54 320 56 Q 328 52 332 60 Q 336 66 330 68 " +
+         "M 312 64 Q 316 60 318 66 M 324 60 Q 328 64 326 68" });
+    ORGANS.EYES = el(svg, "g", {});
+    [[312, 76], [328, 76]].forEach(([x, y]) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 3.4);
+      c.setAttribute("fill", "none"); c.setAttribute("stroke", PH_DIM);
+      c.setAttribute("stroke-width", 1.4); ORGANS.EYES.appendChild(c);
+    });
+    ORGANS.LUNGS = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 314 112 Q 300 116 298 138 Q 298 150 308 150 Q 314 146 314 132 Z " +
+         "M 326 112 Q 340 116 342 138 Q 342 150 332 150 Q 326 146 326 132 Z" });
+    ORGANS.LIVER = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+      d: "M 300 160 L 338 158 Q 344 166 336 172 L 306 174 Q 298 168 300 160 Z" });
+    ORGANS.INTESTINES = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.5,
+      d: "M 304 186 Q 320 180 336 186 Q 340 194 324 194 Q 306 192 306 200 " +
+         "Q 322 206 336 200 Q 340 210 322 212 Q 306 212 308 218 Q 322 222 334 218" });
+    // the five jars, exactly as in 03
+    const SEQ = [
+      { key: "LUNGS", at: [320, 132], jar: 0, name: "LUNGS", head: "BABOON" },
+      { key: "LIVER", at: [320, 166], jar: 1, name: "LIVER", head: "HUMAN" },
+      { key: "EYES", at: [320, 76], jar: 2, name: "EYES", head: "MANTIS" },
+      { key: "INTESTINES", at: [320, 200], jar: 3, name: "INTESTINES", head: "FALCON", hard: true },
+      { key: "BRAIN", at: [320, 62], jar: 4, name: "BRAIN", head: "JACKAL" },
+    ];
+    const jars = SEQ.map((o, i) => {
+      const jx = 70 + i * 125;
+      el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
+        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
+      headGlyph(svg, o.head, jx);
+      const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
+      const who = label(svg, jx, 386, 9, PH_DIM); who.setAttribute("text-anchor", "middle");
+      return { jx, cap, who, o };
+    });
+    const lead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const payload = el(svg, "circle", { r: 3.2, fill: PH_BRIGHT, opacity: 0 });
+    const bzzt = label(svg, 366, 60, 12, "#ff5a5a");
+    const foot = label(svg, 320, 62, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "THE CANOPIC SYSTEM (PROCEDURE)", T, 4, 1.4);
+      const step = Math.floor((T - 20) / 28), f = ((T - 20) % 28) / 28;
+      let buzzing = false;
+      SEQ.forEach((o, i) => {
+        const active = i === step && T >= 20;
+        ORGANS[o.key].setAttribute("stroke", active ? PH_BRIGHT : PH_DIM);
+        if (o.key === "EYES")
+          [...ORGANS.EYES.children].forEach(c =>
+            c.setAttribute("stroke", active ? PH_BRIGHT : PH_DIM));
+        if (active) {
+          const j = jars[i];
+          lead.setAttribute("points", `${o.at[0]},${o.at[1]} ${j.jx},${o.at[1] + 40} ${j.jx},292`);
+          const px = o.at[0] + (j.jx - o.at[0]) * f;
+          const py = o.at[1] + (292 - o.at[1]) * f;
+          payload.setAttribute("cx", px); payload.setAttribute("cy", py);
+          payload.setAttribute("opacity", 1);
+          if (f > .55) { typeOn(j.cap, o.name, T, 20 + i * 28 + 16, 1.6);
+                         typeOn(j.who, o.head, T, 20 + i * 28 + 20, 1.6); }
+          buzzing = o.hard && f > .2 && f < .5;              // it touched the sides
+        }
+      });
+      if (step > 4 || T < 20) { lead.setAttribute("points", ""); payload.setAttribute("opacity", 0); }
+      nose.setAttribute("fill", buzzing && (t % 2) ? "#ff5a5a" : PH_DIM);
+      body.setAttribute("stroke", buzzing && (t % 2) ? "#ff5a5a" : PH);
+      skull.setAttribute("stroke", buzzing && (t % 2) ? "#ff5a5a" : PH);
+      bzzt.textContent = buzzing ? "BZZT." : "";
+      typeOn(foot, "PLEASE REMOVE ALL ORGANS BEFORE INTERMENT.", T, 160, 1.8);
     });
   }
 
