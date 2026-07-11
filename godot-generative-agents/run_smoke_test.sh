@@ -33,8 +33,11 @@ fi
 "$GODOT" --headless --path "$PROJECT_DIR" --import >/dev/null 2>&1 || true
 
 # Headless unit tests (pure-GDScript helpers) run before the scene smoke; set -e
-# makes a red unit test fail the whole script.
-"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_markers.gd
+# makes a red unit test fail the whole script. Godot can exit 0 on a script
+# PARSE error under --script (assertion failures quit(1) fine), so also require
+# the success sentinel the test prints — grep -q + pipefail fails either way.
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_replay_markers.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 
 # exec so this script's exit code IS the smoke test's quit code (0 pass / 1 fail).
 exec "$GODOT" --headless --path "$PROJECT_DIR" res://scenes/smoke_test.tscn
