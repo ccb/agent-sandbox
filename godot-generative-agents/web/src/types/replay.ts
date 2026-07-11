@@ -104,10 +104,22 @@ export interface MemoryRecord {
   created_turn: number;
 }
 
+/** One GameEvent log entry — the #467 run record (verbatim
+ * GameEvent.to_primitive()). `payload` is event-specific structured detail. */
+export interface EventState {
+  turn: number;
+  actor: string;
+  action: string;
+  summary: string;
+  payload: Record<string, unknown>;
+}
+
 export interface Replay {
   meta: ReplayMeta;
   frames: Frame[];
   /** Per-persona full memory stream; the companion panel filters each agent's
    * records to created_turn <= step. Absent from very old replays. */
   memory_streams?: Record<string, MemoryRecord[]>;
+  /** The GameEvent run record (#467). Absent from replays baked before it. */
+  events?: EventState[];
 }
