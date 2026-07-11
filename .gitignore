@@ -168,6 +168,8 @@ cython_debug/
 
 # Generated per-checkout / per-run — regenerable, never commit.
 godot-generative-agents/godot/maps/penn_replay.json
+# RunStore artifacts (#304): per-run frames + sim.db.
+godot-generative-agents/runs/
 godot-generative-agents/tools/geo/out/upenn_core_ville_addresses.json
 
 # Project-shared Claude Code config (commit it); per-dev settings.local.json stays ignored.
