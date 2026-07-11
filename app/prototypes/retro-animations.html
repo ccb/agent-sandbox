@@ -113,6 +113,18 @@
   </section>
 
   <section>
+    <div class="slate"><h2>17-D &mdash; THE APPROACH, ELEVATIONS</h2><span class="kind">LITHO / SURVEY</span></div>
+    <div class="screen">
+      <svg id="ext1e" viewBox="0 0 640 400" aria-label="The approach, east and west elevations"></svg>
+    </div>
+    <p class="spec">The surveyor's sheet: the slab drawn face-on, sweeping between the WEST
+       elevation (the Autarch young, his mouth the door to the Hall of Youth) and the EAST
+       (the helmed warrior, his mouth the door to the Hall of Warriors) &mdash; while the
+       old man at the summit keeps weeping his orange tendrils over both.
+       <span class="attach">Companion to 17-C.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>02 &mdash; THE PRISMATIC BLADE</h2><span class="kind">WIREFRAME / OBJECT CARD</span></div>
     <div class="screen"><canvas id="blade" width="640" height="360"></canvas></div>
     <p class="spec">A guard's prismatic blade: faceted tip, square section, plain soldier's
@@ -3179,6 +3191,113 @@
         n.setAttribute("cx", pts[q][0]); n.setAttribute("cy", pts[q][1] - 4);
       });
       typeOn(foot, "THE GIFT DID NOT EXPIRE WITH HIM.", T, 40, 1.6);
+    });
+  }
+
+
+  /* ---------------- 17-D: the approach, elevations ---------------- */
+  {
+    const svg = document.getElementById("ext1e");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "AZURE STONE / SURVEY / BOTH DOORS";
+    const EDOTS2 = stipple(svg, "dots-ext1e", PH, .85);
+    el(svg, "line", { x1: 30, y1: 340, x2: 610, y2: 340, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "30,336 120,330 210,337 430,331 520,338 610,333" });
+    // THE SLAB, face-on
+    el(svg, "polygon", { fill: EDOTS2, stroke: PH, "stroke-width": 1.8,
+      points: "252,96 388,96 396,340 244,340" });
+    // the old man at the summit, face to the sky -- constant on both sheets
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "292,96 298,78 306,72 312,74 316,64 326,62 330,68 336,66 342,74 348,96" });
+    el(svg, "circle", { cx: 322, cy: 70, r: 1.6, fill: PH_BRIGHT });  // the eye
+    // his open mouth: the chimney, weeping
+    const TENDRILS = [[318, 66, -1.9], [322, 64, -.6], [326, 66, .6], [330, 68, 1.7]];
+    const tendrils = TENDRILS.map(() => el(svg, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    const drips = TENDRILS.map(() => el(svg, "circle", { r: 1.7, fill: FUNGUS }));
+    // the two sheets share the door: each face's MOUTH is the way in
+    const door = () => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      el(g, "path", { d: "M 306 296 L 306 258 Q 320 244 334 258 L 334 296 Z",
+        fill: BG, stroke: PH, "stroke-width": 1.6 });
+      el(g, "line", { x1: 300, y1: 296, x2: 340, y2: 296, stroke: PH, "stroke-width": 1.5 });
+      el(g, "line", { x1: 310, y1: 300, x2: 330, y2: 300, stroke: PH_DIM });
+      return g;
+    };
+    // WEST: the Autarch young -- smooth, swaddled, unsettlingly tender
+    const west = document.createElementNS(NS, "g"); svg.appendChild(west);
+    el(west, "ellipse", { cx: 320, cy: 205, rx: 52, ry: 62, fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(west, "path", { d: "M 296 192 Q 304 186 312 192", fill: "none",
+      stroke: PH, "stroke-width": 1.5 });                     // closed eyes
+    el(west, "path", { d: "M 328 192 Q 336 186 344 192", fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    el(west, "path", { d: "M 316 208 Q 320 214 324 208", fill: "none", stroke: PH_DIM });
+    el(west, "path", { d: "M 286 236 Q 320 252 354 236", fill: "none",
+      stroke: PH_DIM });                                      // the round cheekline
+    [0, 1, 2].forEach(k => el(west, "path", { fill: "none", stroke: PH_DIM,
+      d: `M ${268 - k * 4} ${160 + k * 26} Q 320 ${146 + k * 26} ${372 + k * 4} ${160 + k * 26}` }));
+    door().setAttribute("data-face", "west-door");
+    const westDoor = svg.lastChild; west.appendChild(westDoor);
+    // EAST: the helmed warrior -- angular, visored, on duty forever
+    const east = document.createElementNS(NS, "g"); svg.appendChild(east);
+    el(east, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "276,246 272,170 288,140 320,128 352,140 368,170 364,246" });
+    el(east, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "314,128 316,104 324,104 326,128" });            // the crest
+    el(east, "line", { x1: 282, y1: 178, x2: 358, y2: 178, stroke: PH, "stroke-width": 2.2 });
+    el(east, "line", { x1: 282, y1: 186, x2: 358, y2: 186, stroke: PH_DIM });
+    [292, 320, 348].forEach(x =>
+      el(east, "circle", { cx: x, cy: 172, r: 1.4, fill: PH_BRIGHT }));  // rivets
+    el(east, "line", { x1: 296, y1: 196, x2: 296, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    el(east, "line", { x1: 344, y1: 196, x2: 344, y2: 240, stroke: PH, "stroke-width": 1.4 });
+    for (let y = 200; y <= 236; y += 9)
+      el(east, "line", { x1: 300, y1: y, x2: 340, y2: y, stroke: PH_DIM });  // mail
+    door().setAttribute("data-face", "east-door");
+    const eastDoor = svg.lastChild; east.appendChild(eastDoor);
+    // the sweep: a bright edge redraws the sheet between elevations
+    const cover = el(svg, "rect", { y: 96, height: 244, fill: BG, opacity: 0 });
+    const edge = el(svg, "rect", { y: 96, width: 3, height: 244,
+      fill: PH_BRIGHT, opacity: 0 });
+    const compass = label(svg, 78, 230, 40, PH_DIM);
+    const sheet = label(svg, 320, 372, 10, PH); sheet.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(Math.min(t, 159));
+      typeOn(hdr, "THE APPROACH, ELEVATIONS", Math.min(t, 159), 4, 1.4);
+      const onWest = T < 80;
+      west.setAttribute("opacity", onWest ? 1 : 0);
+      east.setAttribute("opacity", onWest ? 0 : 1);
+      compass.textContent = onWest ? "W" : "E";
+      const k = Math.min(1, (T % 80) / 12);                   // the sweep, each sheet
+      cover.setAttribute("x", 244 + k * 152);
+      cover.setAttribute("width", Math.max(0, 152 * (1 - k)));
+      cover.setAttribute("opacity", k >= 1 ? 0 : 1);
+      edge.setAttribute("x", Math.min(244 + k * 152, 393));
+      edge.setAttribute("opacity", k >= 1 ? 0 : 1);
+      typeOn(sheet,
+        onWest ? "WEST ELEVATION -- THE AUTARCH, YOUNG. HIS MOUTH IS A DOOR."
+               : "EAST ELEVATION -- THE HELMED WARRIOR. HIS MOUTH IS A DOOR.",
+        T % 80, 10, 2.2);
+      tendrils.forEach((n, i) => {
+        const [x0, y0, ph] = TENDRILS[i];
+        const pts = [[x0, y0]];
+        for (let q = 1; q <= 5; q++) {
+          const sway = Math.sin(t * .22 + q * .9 + ph * 2) * 3 * q * .4;
+          pts.push([x0 + ph * q * 7 + sway, y0 + q * 13 + (ph * ph) * q]);
+        }
+        n.setAttribute("points", pts.map(p2 => p2.join(",")).join(" "));
+        const d = drips[i], dk = (t * 2 + i * 23) % 60;
+        d.setAttribute("cx", pts[5][0]); d.setAttribute("cy", pts[5][1] + dk);
+        d.setAttribute("opacity", dk > 46 ? 0 : .9);
+      });
+      typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 159), 96, 1.7);
     });
   }
 
