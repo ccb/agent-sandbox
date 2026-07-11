@@ -79,11 +79,12 @@
   </section>
 
   <section>
-    <div class="slate"><h2>02 &mdash; THE TOMB</h2><span class="kind">WIREFRAME / TITLE SCREEN</span></div>
-    <div class="screen"><canvas id="slab" width="640" height="360"></canvas></div>
-    <p class="spec">The azure slab, hand-modeled (a few dozen edges), three carved mouths marked;
-       fungus seams in orange creep on their own step-clock.
-       <span class="attach">Attaches: the title screen, under the game's name.</span></p>
+    <div class="slate"><h2>02 &mdash; THE PRISMATIC BLADE</h2><span class="kind">WIREFRAME / OBJECT CARD</span></div>
+    <div class="screen"><canvas id="blade" width="640" height="360"></canvas></div>
+    <p class="spec">A guard's prismatic blade: faceted tip, square section, plain soldier's
+       hilt. One facet edge cycles through the spectrum in steps &mdash; the edge bends
+       light, and will snap at the hilt exactly once.
+       <span class="attach">Attaches: EXAMINE PRISMATIC BLADE; the coffin pry.</span></p>
   </section>
 
   <section>
@@ -110,7 +111,7 @@
     <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
     <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
     <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
-       horizon's molten line &mdash; and resets. Forty strokes, one ellipse, per-bat jitter.
+       horizon's molten line &mdash; and resets. Sixty strokes, one ellipse, per-bat jitter.
        <span class="attach">Attaches: the dates-under-open-sky beat; a death card.</span></p>
   </section>
 </div>
@@ -162,48 +163,43 @@
     });
   }
 
-  /* ---------------- 02: the tomb slab ---------------- */
+  /* ---------------- 02: the prismatic blade ---------------- */
   {
-    const cv = document.getElementById("slab"), ctx = cv.getContext("2d");
-    // hand mesh: a tapered slab + three carved mouth-frames
-    const V = [], E = [], F = [];
-    const slab = (x0,x1,y0,y1,z0,z1) => {
+    const cv = document.getElementById("blade"), ctx = cv.getContext("2d");
+    const V = [], E = [];
+    const box = (x0,x1,y0,y1,z0,z1) => {
       const n = V.length;
       for (const x of [x0,x1]) for (const y of [y0,y1]) for (const z of [z0,z1]) V.push([x,y,z]);
       [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
         .forEach(([a,b]) => E.push([n+a, n+b]));
     };
-    slab(-.9,.9,-1.6,1.6,-.45,.45);                 // the monolith
-    // carved mouths: west face (boy), east face (warrior), crown (elder)
-    const frame = (pts) => { const n = V.length; pts.forEach(p => V.push(p));
-      for (let i = 0; i < pts.length; i++) F.push([n+i, n+(i+1)%pts.length]); };
-    frame([[-.91,-.4,-.22],[-.91,-.4,.22],[-.91,.5,.22],[-.91,.5,-.22]]);
-    frame([[.91,-.3,-.2],[.91,-.3,.2],[.91,.6,.2],[.91,.6,-.2]]);
-    frame([[-.3,-1.61,-.2],[.3,-1.61,-.2],[.3,-1.61,.2],[-.3,-1.61,.2]]);
-    // fungus seams: jittered polylines down the west edge
+    // the blade: a tip, a mid facet-ring, and a square ricasso section
+    const tip = V.length; V.push([0, -1.95, 0]);
+    const ring = (y, w, d) => { const n = V.length;
+      V.push([-w, y, 0], [0, y, d], [w, y, 0], [0, y, -d]);
+      for (let k = 0; k < 4; k++) E.push([n + k, n + (k + 1) % 4]); return n; };
+    const m = ring(-0.7, 0.22, 0.06);
+    const r = ring(0.85, 0.3, 0.09);
+    for (let k = 0; k < 4; k++) { E.push([tip, m + k]); E.push([m + k, r + k]); }
+    box(-0.55, 0.55, 0.85, 1.0, -0.12, 0.12);   // guard
+    box(-0.1, 0.1, 1.0, 1.62, -0.1, 0.1);       // grip
+    box(-0.2, 0.2, 1.62, 1.8, -0.16, 0.16);     // pommel
+    const GLEAM = [[tip, m + 1], [m + 1, r + 1]]; // the facet that bends light
     clock(t => {
-      const a = (t % 240) * Math.PI / 120;
+      const a = (t % 180) * Math.PI / 90, tilt = 0.5;
       ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
       const pts = V.map(([x, y, z]) => {
         [x, z] = rot(x, z, a);
-        const s = 190 / (4.4 - z);
-        return [320 + x * s, 170 + y * s];
+        [y, z] = rot(y, z, tilt * .4);
+        const s = 168 / (4.2 - z);
+        return [320 + x * s, 172 + y * s];
       });
       drawEdges(ctx, pts, E, PH, 8);
-      drawEdges(ctx, pts, F, PH_BRIGHT, 6);
-      // the fungus, creeping on its own clock
-      ctx.strokeStyle = FUNGUS; ctx.shadowColor = FUNGUS; ctx.shadowBlur = 6; ctx.lineWidth = 1;
-      const grow = (t % 60) / 60;
-      for (let s = 0; s < 3; s++) {
-        ctx.beginPath();
-        const [bx, by] = pts[s * 2];       // start at a slab vertex
-        ctx.moveTo(bx, by);
-        for (let k = 1; k <= 6 * grow; k++)
-          ctx.lineTo(bx + Math.sin(s * 7 + k * 2.1) * 8 * k / 2, by + k * 9);
-        ctx.stroke();
-      }
+      const hue = (t * 30) % 360; // the prismatic gleam, stepping the spectrum
+      drawEdges(ctx, pts, GLEAM, `hsl(${hue} 90% 70%)`, 12);
       ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
-      ctx.fillText("EACH MOUTH IS A DOOR", 18, 340);
+      ctx.fillText("EDGE: BENDS LIGHT", 18, 340);
+      ctx.fillText("HILT: SNAPS ONCE", 500, 340);
     });
   }
 
@@ -259,11 +255,46 @@
       { x: 320, y: 100, jar: 4, name: "BRAIN",      head: "JACKAL", odd: true },
     ];
     // five jars along the foot of the card
+    // each jar's stopper is the animal's head, in angular litho line
+    function headGlyph(kind, cx) {
+      const P = (pts, extra) => el(svg, "polyline",
+        Object.assign({ points: pts, fill: "none", stroke: PH, "stroke-width": 1.4 }, extra || {}));
+      const dot = (x, y) => el(svg, "circle", { cx: x, cy: y, r: 1.8, fill: PH_BRIGHT });
+      if (kind === "BABOON") {
+        P(`${cx-10},262 ${cx},256 ${cx+10},262`);                    // dome
+        P(`${cx-10},262 ${cx-14},288`); P(`${cx+10},262 ${cx+14},288`); // mane
+        P(`${cx-8},268 ${cx+8},268`);                                // the brow
+        P(`${cx-6},272 ${cx-6},290 ${cx+6},290 ${cx+6},272`);        // deep muzzle
+        dot(cx-3, 286); dot(cx+3, 286);
+      } else if (kind === "HUMAN") {
+        P(`${cx-14},290 ${cx-10},262 ${cx},256 ${cx+10},262 ${cx+14},290`); // nemes
+        P(`${cx-5},268 ${cx+5},268`);                                // brow
+        P(`${cx},270 ${cx-2},278 ${cx+2},278`);                      // nose
+        P(`${cx-3},284 ${cx+3},284`);                                // mouth
+      } else if (kind === "MANTIS") {
+        P(`${cx-12},262 ${cx+12},262 ${cx},284 ${cx-12},262`);       // the triangle
+        el(svg, "circle", { cx: cx-8, cy: 265, r: 3, fill: "none", stroke: PH });
+        el(svg, "circle", { cx: cx+8, cy: 265, r: 3, fill: "none", stroke: PH });
+        P(`${cx-6},262 ${cx-13},252`); P(`${cx+6},262 ${cx+13},252`); // antennae
+        P(`${cx},284 ${cx},290`);
+      } else if (kind === "FALCON") {
+        P(`${cx+8},290 ${cx+10},268 ${cx},258 ${cx-10},262 ${cx-14},272 ` +
+          `${cx-20},278 ${cx-12},280 ${cx-14},287 ${cx-7},283 ${cx-5},290`); // skull + hooked beak
+        P(`${cx-9},269 ${cx+1},273`);                                // the eye-stripe
+        dot(cx-3, 267);
+      } else { // JACKAL
+        P(`${cx-9},272 ${cx-13},258 ${cx-4},268`);                   // ear
+        P(`${cx+3},268 ${cx+7},258 ${cx+10},272`);                   // ear
+        P(`${cx+10},272 ${cx+9},280 ${cx-2},282 ${cx-16},288 ${cx-22},290 ` +
+          `${cx-15},281 ${cx-9},272`);                               // skull to snout
+        dot(cx-2, 276);
+      }
+    }
     const jars = organs.map((o, i) => {
       const jx = 70 + i * 125;
       el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
         fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
-      el(svg, "rect", { x: jx-12, y: 284, width: 24, height: 11, fill: "none", stroke: PH });
+      headGlyph(o.head, jx);
       const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
       const who = label(svg, jx, 386, 9, o.odd ? FUNGUS : PH_DIM); who.setAttribute("text-anchor", "middle");
       const lead = el(svg, "polyline", { points: "", fill: "none", stroke: o.odd ? FUNGUS : PH_DIM,
@@ -301,23 +332,37 @@
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "FAUNA / TOMBLANDS / CAUTIOUS, CLEVER, OWED";
-    // the jackal: straight segments only (Burd's rule: angular, more lines)
+    // the jackal: lean canid, tall ears, low tail -- angular segments only
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      "120,250 170,240 210,205 262,196 300,204 332,186 352,150 344,132 372,118 386,128 " +
-      "372,150 366,186 340,226 330,250 306,244 268,252 232,246 196,258 168,252 120,250" });
-    el(svg, "polyline", { fill: "none", stroke: PH, points: "352,150 344,110 356,96 366,118" }); // the ear
-    el(svg, "polygon", { points: "120,250 96,286 112,288 140,254", fill: PH, "fill-opacity": .12, stroke: PH }); // tail
-    ["196,258 192,300", "232,246 236,300", "306,244 300,300", "330,250 336,300"]
-      .forEach(p => el(svg, "polyline", { points: p, fill: "none", stroke: PH }));
-    el(svg, "circle", { cx: 366, cy: 130, r: 2.5, fill: PH_BRIGHT }); // the eye, doing sums
+      // nose -> jaw -> throat -> chest -> belly -> hind leg -> rump
+      "428,168 424,175 396,172 372,176 348,196 338,214 334,222 300,224 262,218 " +
+      "240,214 228,244 224,290" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+      // nose -> muzzle top -> stop -> ear valley -> withers -> back -> hip -> tail
+      "428,168 414,158 394,150 384,146 368,148 340,170 300,180 258,176 224,186 " +
+      "200,222 194,238" });
+    // the ears, tall and paired
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "368,148 360,104 376,140" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "382,144 384,100 394,148" });
+    // the tail, brushy
+    el(svg, "polygon", { points: "224,186 194,238 204,242 236,196",
+      fill: PH, "fill-opacity": .12, stroke: PH });
+    // legs: two fore (one advanced), two hind (hocked)
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "338,214 336,254 344,290 350,290" });
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "326,220 318,256 312,290 320,290" });
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "246,216 258,248 252,290 260,290" });
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "228,244 236,264 230,290 238,290" });
+    el(svg, "circle", { cx: 384, cy: 152, r: 2.5, fill: PH_BRIGHT }); // the eye, doing sums
     // cycling callouts with leader lines
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 470, 90, 10, PH);
     const CALLS = [
-      { at: [366, 130], text: "EYES: DOING SUMS" },
-      { at: [280, 200], text: "COAT: PTHALO No.9" },
-      { at: [386, 128], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
-      { at: [112, 288], text: "EXIT: ALWAYS PREPARED" },
+      { at: [384, 152], text: "EYES: DOING SUMS" },
+      { at: [300, 180], text: "COAT: PTHALO No.9" },
+      { at: [428, 168], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
+      { at: [199, 240], text: "EXIT: ALWAYS PREPARED" },
     ];
     // the PATIENCE gauge
     label(svg, 24, 322, 10, PH_DIM).textContent = "PATIENCE";
@@ -345,7 +390,7 @@
   /* ---------------- 05: the wheel of bats ---------------- */
   {
     const cv = document.getElementById("bats"), ctx = cv.getContext("2d");
-    const N = 40, bats = Array.from({ length: N }, (_, i) => ({
+    const N = 60, bats = Array.from({ length: N }, (_, i) => ({
       ph: (i / N) * Math.PI * 2, r: 46 + (i * 37 % 34), wob: (i * 13 % 7) - 3 }));
     clock(t => {
       const T = t % 200, wheeling = T < 150, scatter = (T - 150) / 50;
