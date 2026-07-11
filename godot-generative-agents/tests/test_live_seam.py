@@ -307,3 +307,36 @@ def test_resume_after_finished_repauses_with_no_bogus_frame():
         after = _wait_for_events(c, lambda evs: _finished_count(evs) >= 2)
         assert _frame_count(after) == 2  # no bogus frame slipped in on resume
         assert c.get("/live").json()["paused"] is True
+
+
+# --- game_event rows on the engine feed (#467) ------------------------------
+
+
+def test_game_event_rows_ride_the_engine_feed():
+    """#467: a stepper's drained game_event rows come out of GET /events inside
+    the ``engine`` envelope, exactly like llm_call rows (#398). serve_penn's
+    PennStepper produces these rows for real (test_event_records.py); here a
+    scripted stepper pins the transport."""
+    record = {
+        "turn": 1,
+        "actor": "Sofia Ramirez",
+        "action": "sickness",
+        "summary": "Sofia Ramirez got sick drinking cup of murky water",
+        "payload": {"item": "cup of murky water", "location": "Houston Hall"},
+        "kind": "game_event",
+    }
+    stepper = _walker(on_tick=lambda step: [dict(record)] if step == 0 else [])
+    with _live_client(stepper=stepper) as c:
+        events = _wait_for_events(
+            c,
+            lambda evs: any(
+                e["kind"] == "engine" and e["event"].get("kind") == "game_event"
+                for e in evs
+            ),
+        )
+    rows = [
+        e["event"]
+        for e in events
+        if e["kind"] == "engine" and e["event"].get("kind") == "game_event"
+    ]
+    assert rows == [record]

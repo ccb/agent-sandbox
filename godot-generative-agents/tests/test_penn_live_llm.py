@@ -289,22 +289,33 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
     # monitor's rows into the viewer HUD's request log. The payload is the
     # monitor's kept record, re-stamped kind:"llm_call" (to_primitive() says
     # kind:"call", which a feed consumer shouldn't have to know about).
+    # The method also drains GameEvents as game_event rows (#467).
     monitor = LlmCallMonitor(stream=io.StringIO(), color=False)
     stepper = _llm_stepper(monkeypatch, monitor=monitor)
     assert stepper.drain_events() == []  # nothing before the first tick
     assert stepper.tick() is not None
     events = stepper.drain_events()
-    assert events  # the t0 decides were monitored
-    for ev in events:
-        assert ev["kind"] == "llm_call"
+    llm_calls = [ev for ev in events if ev["kind"] == "llm_call"]
+    assert llm_calls  # the t0 decides were monitored
+    for ev in llm_calls:
         assert ev["model"] == "claude-haiku-4-5"
         assert ev["role"] in {"decide", "converse", "reflect"}
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
-    assert stepper.drain_events() == []  # drained means drained
+    all_drained = stepper.drain_events()
+    assert all_drained == []  # drained means drained
 
 
-def test_drain_events_is_empty_without_a_monitor(monkeypatch):
-    # --no-monitor: nothing is kept, so nothing rides the feed.
+def test_drain_events_has_no_llm_rows_without_a_monitor(monkeypatch):
+    # --no-monitor: the monitor keeps nothing, but drain_events still returns
+    # any GameEvents logged during the tick (#467).
     stepper = _llm_stepper(monkeypatch)
     assert stepper.tick() is not None
-    assert stepper.drain_events() == []
+    events = stepper.drain_events()
+    # Without a monitor there are no llm_call records, but game_events may exist.
+    llm_calls = [ev for ev in events if ev["kind"] == "llm_call"]
+    assert llm_calls == []  # no monitor means no llm_call rows
+    # Without a monitor the only rows are engine game_events (#467), each the
+    # EventState shape re-stamped with kind.
+    for row in events:
+        assert row["kind"] == "game_event"
+        assert set(row) == {"turn", "actor", "action", "summary", "payload", "kind"}
