@@ -44,8 +44,9 @@ static func save(texture: Texture2D, index: int, label: String, dir_override := 
 		# Some minimal Linux setups report no Pictures dir; fall back to the
 		# app's own user:// space rather than failing the save.
 		dir = pictures.path_join(DIR_NAME) if pictures != "" else "user://snapshots"
+	# make_dir_recursive_absolute returns OK even when the dir already exists.
 	var err := DirAccess.make_dir_recursive_absolute(dir)
-	if err != OK and err != ERR_ALREADY_EXISTS:
+	if err != OK:
 		push_error("snapshot_export: cannot create %s (%d)" % [dir, err])
 		return ""
 	var path := dir.path_join(fname)
