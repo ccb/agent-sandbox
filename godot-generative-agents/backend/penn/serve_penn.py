@@ -557,6 +557,16 @@ def main() -> int:
         "(--brain llm only); the day ends when cumulative spend reaches it",
     )
     ap.add_argument(
+        "--cognition-tools",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="let each decide -- and each conversation line -- consult the "
+        "agent's memory / world knowledge / day plan first (recall, "
+        "query_knowledge, read_plan; issues #358/#512): up to 3 model "
+        "requests per decide tick instead of 1, metered by --max-cost as "
+        "usual. --brain llm only; the mock brain never reaches the tool loop",
+    )
+    ap.add_argument(
         "--start-paused",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -605,6 +615,7 @@ def main() -> int:
             world=world,
             monitor=LlmCallMonitor() if args.monitor else None,
             llm=llm,
+            cognition_tools=args.cognition_tools,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
@@ -632,6 +643,14 @@ def main() -> int:
         print(
             "Brain: mock (deterministic, free; authored meeting dialogue ON). "
             "For the real thing: --brain llm."
+        )
+    if args.cognition_tools:
+        print(
+            "Cognition tools: ON -- a decide tick may spend up to 3 model "
+            "requests (recall/query_knowledge/read_plan before acting)."
+            if llm is not None
+            else "Cognition tools: ON, but the mock brain never reaches the "
+            "tool loop -- pair it with --brain llm for any effect."
         )
     print(
         f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"
