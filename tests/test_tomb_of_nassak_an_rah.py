@@ -2328,3 +2328,27 @@ def test_butchery_catches_the_blood_and_the_blood_mends():
     game.do_command("pour blood into waterskin")
     assert int(skin.get_property("portions")) == before + 1
     assert "zox blood" not in game.player.carried_items()
+
+
+def test_location_direction_aliases_answer_the_playtesters():
+    """'enter tomb' / 'climb stone' / 'enter wagon' parse as movement at the
+    rooms where players actually type them -- without the synonyms showing up
+    as extra entries in Exits: (which lists real connections only)."""
+    game = _game()
+    game.do_command("north")
+    assert game.player.location.name == "Tomb Exterior"
+    game.do_command("enter tomb")
+    assert game.player.location.name == "Hall of Youth"
+    game.do_command("leave tomb")
+    assert game.player.location.name == "Tomb Exterior"
+    game.do_command("climb stone")
+    assert game.player.location.name == "The Summit"
+    # the synonyms are parser-only: Exits stays the real connections
+    exterior = game.locations["Tomb Exterior"]
+    assert set(exterior.direction_aliases) & {"enter tomb", "climb stone"}
+    assert "enter tomb" not in exterior.connections
+    # and a non-movement command with the same noun is not hijacked
+    game.do_command("climb down")
+    cap = _texts(game)
+    game.do_command("examine tomb")
+    assert game.player.location.name == "Tomb Exterior"  # didn't move

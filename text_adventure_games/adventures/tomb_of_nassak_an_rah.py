@@ -2373,6 +2373,38 @@ def build_game(seed=None):
     ):
         for _d in _room.connections:
             _room.move_verbs.setdefault(_d, _verb)
+    # Anticipated phrasings (CCB playtest): each room teaches the parser how
+    # players actually ask to move there. Exact-command synonyms only -- they
+    # never show in Exits: or on the map.
+    for phrase in ("enter tomb", "enter the tomb", "enter", "inside", "go inside"):
+        exterior.add_direction_alias(phrase, "north")
+    for phrase in (
+        "climb",
+        "climb tomb",
+        "climb the tomb",
+        "climb stone",
+        "climb up the tomb",
+        "scale the tomb",
+    ):
+        exterior.add_direction_alias(phrase, "up")
+    for phrase in (
+        "tomb",
+        "go to tomb",
+        "to tomb",
+        "approach tomb",
+        "approach the tomb",
+    ):
+        wreck.add_direction_alias(phrase, "north")
+    for phrase in ("enter wagon", "enter the wagon", "wagon", "enter hold", "hold"):
+        wreck.add_direction_alias(phrase, "in")
+    for phrase in ("leave", "exit", "leave wagon", "exit wagon", "outside"):
+        hold.add_direction_alias(phrase, "out")
+    for phrase in ("descend", "climb down", "climb down the tomb"):
+        summit.add_direction_alias(phrase, "down")
+    for room in (youth, warriors):
+        back = next(d for d, dest in room.connections.items() if dest is exterior)
+        for phrase in ("outside", "leave tomb", "exit tomb", "leave", "exit"):
+            room.add_direction_alias(phrase, back)
     exterior.move_verbs.setdefault("north", "walk, footfalls carrying,")
     exterior.move_verbs.setdefault("east", "walk, footfalls carrying,")
     exterior.move_verbs.setdefault("up", "climb")
