@@ -446,25 +446,38 @@
     // the grin, zigzag, bared
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
       points: "114,160 119,167 124,159 129,167 134,159 139,166 144,161 149,167" });
-    // the eye: a slit, doing sums
-    el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.6,
-      points: "142,138 152,140" });
-    el(svg, "circle", { cx: 148, cy: 139, r: 1.6, fill: PH_BRIGHT });
+    // the eye: yellow, slanted, and frankly doing sums
+    el(svg, "polygon", { points: "138,138 147,133 156,138 147,142",
+      fill: "#ffd76a", stroke: "#ffd76a", "stroke-width": 1 });
+    el(svg, "circle", { cx: 149, cy: 138, r: 1.7, fill: BG });
+    // the hackles: a serrated crest of fur riding the spine, tallest at
+    // the shoulder (after the reference's hatched coat)
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.1, points:
+      "214,122 220,108 226,118 232,104 238,113 246,100 252,110 260,98 " +
+      "266,108 274,99 282,110 290,102 298,114 306,106 314,117 322,110 " +
+      "330,120 338,113 346,122 354,116 362,124 370,119 378,127 386,123 394,131" });
     // the brush tail, low and trailing, halftoned
     el(svg, "polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
       "416,150 448,180 490,214 526,232 542,242 524,246 480,228 440,198 408,164" });
-    // forelegs: one planted forward, one lifted mid-stride
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "250,178 228,220 204,256 190,268 202,271" });
-    el(svg, "polyline", { fill: "none", stroke: PH,
-      points: "262,182 268,220 278,248 290,256 296,250" });
-    // hind legs: one stepping under, one driving back (stifle, hock, pastern)
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "370,178 352,212 336,248 328,266 340,269" });
-    el(svg, "polyline", { fill: "none", stroke: PH,
-      points: "396,160 418,196 434,222 442,246 452,258 462,255" });
-    // the ground the reference stands on: a halftone band
-    el(svg, "rect", { x: 70, y: 272, width: 480, height: 12, fill: JDOTS, stroke: "none" });
+    // the legs, WALKING: a lateral-sequence gait on the step clock, each
+    // limb a shoulder/hip -> knee -> foot chain recomputed per tick
+    const LEGS = [
+      { ax: 250, ay: 178, ph: 0.0, w: 1.6, knee: -9 },   // near fore
+      { ax: 262, ay: 182, ph: 0.5, w: 1.0, knee: -9 },   // far fore
+      { ax: 370, ay: 178, ph: 0.55, w: 1.6, knee: 12 },  // near hind (hocked)
+      { ax: 396, ay: 160, ph: 0.05, w: 1.0, knee: 12 },  // far hind
+    ].map(cfg => Object.assign(cfg, {
+      n: el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": cfg.w }),
+    }));
+    // the ground: a band of ticks sliding rightward under the walk
+    const gGround = document.createElementNS(NS, "g");
+    for (let x = 44; x < 600; x += 16) {
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 276);
+      l.setAttribute("x2", x + 7); l.setAttribute("y2", 276);
+      l.setAttribute("stroke", PH_DIM); gGround.appendChild(l);
+    }
+    svg.appendChild(gGround);
     // cycling callouts with leader lines
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 624, 90, 10, PH);
@@ -485,6 +498,16 @@
       const T = t % 150;
       doWipe(T);
       typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
+      // the walk: sixteen poses per stride, feet planted or swinging
+      LEGS.forEach(L => {
+        const th = ((t % 16) / 16 + L.ph) * Math.PI * 2;
+        const fx = L.ax - 34 + 20 * Math.cos(th);
+        const fy = 274 - Math.max(0, Math.sin(th)) * 12;
+        const kx = (L.ax + fx) / 2 + L.knee, ky = (L.ay + fy) / 2 + 8;
+        L.n.setAttribute("points",
+          `${L.ax},${L.ay} ${kx},${ky} ${fx},${fy} ${fx - 9},${fy + 2}`);
+      });
+      gGround.setAttribute("transform", `translate(${(t * 4) % 16}, 0)`);
       const c = CALLS[Math.floor(T / 22) % CALLS.length];
       if (T > 16) {
         callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,86 448,86`);
