@@ -1031,7 +1031,7 @@ def test_minor_threats_pay_when_quelled_by_any_means():
     game.do_command("look")
     assert game.scored("spawn_guts") and game.scored("spawn_brain")
     assert game.score == before + 10
-    assert game.max_score == 140
+    assert game.max_score == 145
 
 
 def test_the_pack_answers_to_pack():
@@ -1645,6 +1645,68 @@ def test_the_dead_dont_sway_in_the_listings():
     assert "swaying toward every sound" not in out
 
 
+def test_remember_asks_the_lattice_by_name():
+    """REMEMBER <day> (CCB): directed recall -- the jar clue is findable by
+    name the moment Silas points at it, no dice required."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    game.do_command("remember the embalming")
+    text = " ".join(cap.texts(Channel.NARRATION))
+    assert "the jackal -- strangely -- his brain" in text  # the clue, on demand
+    assert game.scored("lattice")  # the first-look award pays either way
+    game.do_command("remember")  # bare: the consulted banks, by name
+    assert "THE EMBALMING" in " ".join(cap.texts(Channel.BLOCKED))
+    game.do_command("remember the choosing")  # hidden until earned
+    assert "has not shown it to you" in " ".join(cap.texts(Channel.BLOCKED))
+    game.relocate(game.player, game.locations["The Caravan Wreck"])
+    cap2 = _texts(game)
+    game.do_command("remember his mother")  # no lattice here
+    assert "Hall of Memory" in " ".join(cap2.texts(Channel.BLOCKED))
+
+
+def test_every_day_consulted_wakes_the_keep_list():
+    """Unseen facets draw first, so nine looks cover the nine -- and the
+    tenth wakes the hidden keep-list exactly once (+5)."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    for _ in range(9):
+        game.do_command("x lattice")
+    seen = " ".join(cap.texts(Channel.NARRATION))
+    for marker in ("embalming", "kestrel", "tombwrights", "starlight"):
+        assert marker in seen  # coverage, not luck
+    before = game.score
+    cap2 = _texts(game)
+    game.do_command("x lattice")  # the tenth
+    tenth = " ".join(cap2.texts(Channel.NARRATION))
+    assert "KEEP THIS TOO" in tenth and "KNOWS I KNEW" in tenth
+    assert game.scored("remembered") and game.score == before + 5
+    game.do_command("x lattice")  # afterwards: the lattice's own whim again
+    assert game.score == before + 5  # paid once
+    cap3 = _texts(game)
+    game.do_command("remember the choosing")  # now it answers by name
+    assert "THE DAY I CHOSE" in " ".join(cap3.texts(Channel.NARRATION))
+
+
+def test_the_facets_notice_what_the_expedition_has_done():
+    """The continuations (CCB): a facet re-read after events gains its
+    postscript -- the lattice is the tomb's commentary track."""
+    game = _game()
+    game.relocate(game.player, game.locations["Hall of Memory"])
+    cap = _texts(game)
+    game.do_command("remember the physician")
+    assert "corrected" not in " ".join(cap.texts(Channel.NARRATION))
+    game.locations["Burial Sphere of Nassak An-Rah"].set_property("horror_dead", True)
+    cap2 = _texts(game)
+    game.do_command("remember the physician")
+    assert "You have since corrected that." in " ".join(cap2.texts(Channel.NARRATION))
+    game.locations["Hall of the Canopic Jars"].has_been_visited = True
+    cap3 = _texts(game)
+    game.do_command("remember the embalming")
+    assert "telling you where things go" in " ".join(cap3.texts(Channel.NARRATION))
+
+
 def test_the_lattice_shows_a_different_memory_each_look():
     """CCB: looking into the lattice draws a random facet of the Autarch's
     days, not always the embalming -- but the embalming (the jar-puzzle clue)
@@ -2201,5 +2263,5 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 140 == game.max_score
+    assert game.score == 145 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
