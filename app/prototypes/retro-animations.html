@@ -205,25 +205,14 @@
   </section>
 
   <section>
-    <div class="slate"><h2>13 &mdash; THE AUTARCH</h2><span class="kind">LITHO / PORTRAIT</span></div>
+    <div class="slate"><h2>13 &mdash; THE AUTARCH</h2><span class="kind">LITHO / BEATIFIC SLUMBER</span></div>
     <div class="screen">
-      <svg id="autarch" viewBox="0 0 640 420" aria-label="Nassak An-Rah, the Autarch"></svg>
+      <svg id="autarch" viewBox="0 0 640 420" aria-label="Nassak An-Rah, at rest"></svg>
     </div>
-    <p class="spec">After the Leo Hunt bust: the cracked stone face with its hollow eyes, the
-       carved-lightning halo stepping around him like a lighthouse, and the court beard's
-       curl-rows shimmering downward as if being read. Deep in one socket, occasionally,
-       a point of light. <span class="attach">Attaches: EXAMINE the carved faces; the lattice; an ending card.</span></p>
-  </section>
-
-  <section>
-    <div class="slate"><h2>13-B &mdash; THE AUTARCH, OVERGROWN</h2><span class="kind">LITHO / VARIANT</span></div>
-    <div class="screen">
-      <svg id="autarch-b" viewBox="0 0 640 420" aria-label="The Autarch, overgrown"></svg>
-    </div>
-    <p class="spec">The variant: the lightning lies still (carvings, not weather), the beard
-       is a field of blue dots &mdash; and the only thing moving is the fungus, writhing
-       around the bust and reaching outward past the halo.
-       <span class="attach">Alternate for 13 (the tomb's late chapters).</span></p>
+    <p class="spec">The peace state: eyes closed at last, the carved lightning still, the
+       beard still &mdash; nothing moves except one slow breathing pulse through the whole
+       stone, the pace of a man dreaming something kind.
+       <span class="attach">Attaches: the Prayer of Peaceful Slumber; the FIX COFFIN ending.</span></p>
   </section>
 
   <section>
@@ -1547,9 +1536,9 @@
     const CX = 320, CY = 180;
     el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
       stroke: PH_DIM, "stroke-width": 1.4 });
-    Array.from({ length: 20 }, (_, i) => {
+    const spikes = Array.from({ length: 20 }, (_, i) => {
       const a = i * Math.PI / 10;
-      el(svg, "polygon", { fill: PH, "fill-opacity": .45, stroke: PH,
+      return el(svg, "polygon", { fill: PH, "fill-opacity": .45, stroke: PH,
         "stroke-width": 1, points:
         `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
         `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
@@ -1576,12 +1565,15 @@
       points: "300,158 306,180 298,204" });                  // a crack
     el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
       points: "352,150 346,176 354,196 348,214" });          // another
-    const eyeL = el(svg, "ellipse", { cx: 296, cy: 190, rx: 13, ry: 9,
-      fill: BG, stroke: PH_DIM });                           // the hollows
-    const eyeR = el(svg, "ellipse", { cx: 344, cy: 190, rx: 13, ry: 9,
-      fill: BG, stroke: PH_DIM });
-    const spark = el(svg, "circle", { cx: 344, cy: 191, r: 1.3,
-      fill: PH_BRIGHT, opacity: 0 });                        // gone ahead. mostly.
+    // the eyes, CLOSED at last: soft lids where the hollows were
+    el(svg, "path", { d: "M 284 190 Q 296 197 308 190", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(svg, "path", { d: "M 332 190 Q 344 197 356 190", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(svg, "path", { d: "M 286 183 Q 296 179 306 183", fill: "none",
+      stroke: PH_DIM });                                     // the softened brows
+    el(svg, "path", { d: "M 334 183 Q 344 179 354 183", fill: "none",
+      stroke: PH_DIM });
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
       points: "318,196 316,222 310,230 330,230 324,222 322,196" }); // the nose
     el(svg, "polyline", { fill: "none", stroke: PH, points: "306,244 334,244" });
@@ -1600,38 +1592,19 @@
       points: "268,258 218,290 186,340 176,392" });
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
       points: "372,258 422,290 454,340 464,392" });
-    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
-    const call = label(svg, 16, 62, 10, PH);
-    const CALLS = [
-      { at: [296, 190], text: "EYES: GONE AHEAD" },
-      { at: [438, 148], text: "HALO: CARVED LIGHTNING" },
-      { at: [320, 300], text: "BEARD: COURT FASHION, KEPT DAILY" },
-      { at: [352, 176], text: "STONE: CRACKED. PATIENT." },
-    ];
     const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 420, 2, 10);
     clock(t => {
       const T = t % 190;
       doWipe(T);
-      typeOn(hdr, "NASSAK AN-RAH (THE AUTARCH)", T, 4, 1.4);
-      bolts.forEach((b, i) => {                              // the lighthouse step
-        const lit = (i === Math.floor(t / 3) % 8) || (i === (Math.floor(t / 3) + 4) % 8);
-        b.setAttribute("stroke", lit ? PH_BRIGHT : PH);
-        b.setAttribute("opacity", lit ? 1 : .5);
-        b.setAttribute("stroke-width", lit ? 2.2 : 1.6);
-      });
-      curls.forEach(c => {                                   // the reading shimmer
-        const w = (Math.floor(t / 2) % 10);
-        c.q.setAttribute("opacity", c.r === w % 6 ? 1 : .45);
-      });
-      spark.setAttribute("opacity", (t % 90) > 84 ? 1 : 0);  // mostly.
-      spark.setAttribute("cx", 342 + (t % 3));
-      const c = CALLS[Math.floor(T / 32) % CALLS.length];
-      if (T > 14) {
-        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 150,66 156,66`);
-        call.textContent = c.text;
-      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
-      typeOn(foot, "HE CHOSE WHAT TO KEEP. YOU HAVE READ THE LIST.", T, 130, 1.8);
+      typeOn(hdr, "NASSAK AN-RAH (AT REST)", T, 4, 1.4);
+      // one slow breath through the whole stone; nothing else moves
+      const br = [0, 1, 2, 3, 4, 5, 6, 6, 5, 4, 3, 2, 1, 0][Math.floor(t / 4) % 14] / 6;
+      spikes.forEach(sp => sp.setAttribute("fill-opacity", .3 + br * .2));
+      bolts.forEach(b => { b.setAttribute("opacity", .4 + br * .25);
+        b.setAttribute("stroke", PH); b.setAttribute("stroke-width", 1.6); });
+      curls.forEach(c => c.q.setAttribute("opacity", .5 + br * .3));
+      typeOn(foot, "DREAMING SOMETHING KIND, FOUR THOUSAND YEARS IN.", T, 130, 1.8);
     });
   }
 
@@ -2377,104 +2350,6 @@
       gHelm.setAttribute("transform", `translate(${hx} ${hy}) rotate(${rot} 320 118)`);
       prize.textContent = T > 112 ? "[+5 -- THE FALCON JAR]" : "";
       typeOn(foot, "THE JAR IS OWED TO A PLINTH TWO FLOORS UP.", T, 130, 1.6);
-    });
-  }
-
-
-  /* ---------------- 13-B: the Autarch, overgrown ---------------- */
-  {
-    const svg = document.getElementById("autarch-b");
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
-    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "FALLEN AUTARCHY / STONE / TENANTED";
-    const ADOTS = stipple(svg, "dots-autarchb", PH, .9);
-    const CX = 320, CY = 180;
-    // the halo: spiked disc, the lightning CARVED and still
-    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
-      stroke: PH_DIM, "stroke-width": 1.4 });
-    Array.from({ length: 20 }, (_, i) => {
-      const a = i * Math.PI / 10;
-      el(svg, "polygon", { fill: PH, "fill-opacity": .35, stroke: PH,
-        "stroke-width": 1, points:
-        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
-        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
-        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
-    });
-    Array.from({ length: 8 }, (_, i) => {                    // carvings, not weather
-      const a = i * Math.PI / 4 + .4;
-      const pts = [70, 82, 94, 106, 116].map((r, k) => {
-        const aa = a + (k % 2 ? .11 : -.07);
-        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
-      });
-      el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
-        opacity: .55, points: pts.join(" ") });
-    });
-    // the face, and a beard of still blue dots
-    el(svg, "polygon", { points:
-      "272,128 368,128 382,160 380,224 366,258 274,258 260,224 258,160",
-      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
-    [0, 1, 2].forEach(r =>
-      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
-        Array.from({ length: 9 }, (_, k) =>
-          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
-    el(svg, "ellipse", { cx: 296, cy: 190, rx: 13, ry: 9, fill: BG, stroke: PH_DIM });
-    el(svg, "ellipse", { cx: 344, cy: 190, rx: 13, ry: 9, fill: BG, stroke: PH_DIM });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
-      points: "318,196 316,222 310,230 330,230 324,222 322,196" });
-    // the beard: 13's curl-rows, but the circles FILLED, and still
-    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
-      el(svg, "circle", { cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13,
-        r: 4.4, fill: PH, "fill-opacity": .75, stroke: PH, "stroke-width": 1 });
-    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
-      stroke: PH_BRIGHT, "stroke-width": 1.2 });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "268,258 218,290 186,340 176,392" });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "372,258 422,290 454,340 464,392" });
-    // THE TENANT'S WORK: orange tendrils rooted around the bust, writhing
-    // outward past the halo -- the only living thing on the card
-    const ROOTS = [
-      [232, 268, -2.6], [408, 268, -.5], [258, 152, 3.4], [384, 150, -.2],
-      [320, 344, 1.57], [206, 306, 2.9], [436, 306, .3], [320, 122, -1.57],
-      [288, 338, 2.2], [352, 338, .9],
-    ];
-    const tendrils = ROOTS.map(() =>
-      el(svg, "polygon", { fill: FUNGUS, "fill-opacity": .3,
-        stroke: FUNGUS, "stroke-width": 1.4 }));
-    const spark = el(svg, "circle", { cx: 344, cy: 191, r: 1.3,
-      fill: FUNGUS, opacity: 0 });
-    const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
-    const doWipe = wipe(svg, 640, 420, 2, 10);
-    clock(t => {
-      const T = t % 190;
-      doWipe(T);
-      typeOn(hdr, "NASSAK AN-RAH (OVERGROWN)", T, 4, 1.4);
-      tendrils.forEach((n, i) => {
-        // a tapered rope, not a line: centerline first, then a ribbon
-        const [rx, ry, a0] = ROOTS[i];
-        const w = Math.sin(t * .4 + i * 1.9);
-        const c = [[rx, ry]];
-        for (let k = 1; k <= 4; k++) {
-          const a = a0 + Math.sin(t * .25 + k * 1.2 + i) * .3 + w * .04 * k;
-          const r = k * (13 + ((t + i * 5) % 12));
-          c.push([rx + Math.cos(a) * r, ry + Math.sin(a) * r * .8]);
-        }
-        const W = [6, 4.8, 3.4, 1.9, .7];
-        const L = [], R = [];
-        for (let k = 0; k < c.length; k++) {
-          const [x0, y0] = c[Math.max(0, k - 1)];
-          const [x1, y1] = c[Math.min(c.length - 1, k + 1)];
-          const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
-          const nx = -dy / len * W[k], ny = dx / len * W[k];
-          L.push(`${c[k][0] + nx},${c[k][1] + ny}`);
-          R.push(`${c[k][0] - nx},${c[k][1] - ny}`);
-        }
-        n.setAttribute("points", L.concat(R.reverse()).join(" "));
-      });
-      spark.setAttribute("opacity", (t % 70) > 64 ? 1 : 0);   // something looks back
-      typeOn(foot, "WHAT HE KEPT, IT KEEPS NOW.", T, 130, 1.8);
     });
   }
 
