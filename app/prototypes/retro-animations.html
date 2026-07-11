@@ -1263,15 +1263,21 @@
   /* ---------------- 12: friend's fungus ---------------- */
   {
     const svg = document.getElementById("fungus");
-    const PINK = "#ff8ad8";
+    const PINK = "#ff5fd7";
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "SUMMIT / STATE GIFT";
-    const PDOTS = stipple(svg, "dots-pink", PINK, 1.1);
-    // the mound it grows from
-    el(svg, "ellipse", { cx: 320, cy: 306, rx: 120, ry: 14, fill: PDOTS,
+    const PDOTS = stipple(svg, "dots-pink", PINK, 1.2);
+    // THE BAGGIE: an Autarchy zip-seal pouch, drawn first so the cluster
+    // sits inside it; the glare and zipper go on top later
+    el(svg, "polygon", { points: "212,152 428,152 438,320 202,320",
+      fill: "none", stroke: PH, "stroke-width": 1.5 });
+    el(svg, "polygon", { points: "216,124 424,124 428,152 212,152",
+      fill: "none", stroke: PH_DIM });                       // the lip above the seal
+    // the mound it grows from, bagged
+    el(svg, "ellipse", { cx: 320, cy: 302, rx: 104, ry: 12, fill: PDOTS,
       stroke: PH_DIM });
     // the cluster: one tall, two middling, two buttons -- angular litho caps
     const shroom = (cx, capY, capW, stemW, spot) => {
@@ -1291,12 +1297,21 @@
       return [cx, capY - 16];                         // the apex, for the rings
     };
     const apexes = [
-      shroom(320, 190, 62, 9, true),
-      shroom(238, 250, 38, 6, true),
-      shroom(398, 258, 34, 6, false),
-      shroom(280, 288, 16, 3.5, false),
-      shroom(362, 292, 14, 3, false),
+      shroom(320, 168, 36, 6, true),     // tall and slender now
+      shroom(250, 214, 24, 4.5, true),
+      shroom(392, 224, 22, 4, false),
+      shroom(286, 268, 11, 2.6, false),
+      shroom(356, 274, 10, 2.4, false),
     ];
+    // the plastic, over everything: zipper teeth and a long glare
+    el(svg, "line", { x1: 212, y1: 152, x2: 428, y2: 152, stroke: PH_BRIGHT,
+      "stroke-width": 2 });
+    for (let x = 218; x < 426; x += 9)
+      el(svg, "line", { x1: x, y1: 148, x2: x, y2: 156, stroke: PH_DIM });
+    el(svg, "line", { x1: 240, y1: 160, x2: 226, y2: 308, stroke: PH_BRIGHT,
+      opacity: .16, "stroke-width": 6 });                    // the glare
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .5,
+      points: "402,170 390,236 398,296" });                  // a crease
     // agreeability, radiating: two staggered rings per big cap
     const rings = [];
     apexes.slice(0, 3).forEach(([x, y], i) => {
@@ -1317,10 +1332,11 @@
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
     const CALLS = [
-      { at: [320, 176], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
-      { at: [238, 236], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
-      { at: [398, 246], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
-      { at: [320, 306], text: "KEPT IN THE MYSTIC'S CLASPED HANDS" },
+      { at: [320, 152], text: "SEAL: AUTARCHY ZIP-PATTERN. STILL AIRTIGHT" },
+      { at: [320, 154], text: "CAPS: PINK, SOFT, FAINTLY WARM" },
+      { at: [250, 200], text: "DOSAGE: A CRUMB IS A MICRODOSE" },
+      { at: [392, 212], text: "EFFECT: EXTREME AGREEABILITY, FOR HOURS" },
+      { at: [320, 302], text: "KEPT IN THE MYSTIC'S CLASPED HANDS" },
     ];
     label(svg, 24, 334, 10, PH_DIM).textContent = "AGREEABILITY";
     const cells = Array.from({ length: 10 }, (_, i) =>
@@ -1338,10 +1354,10 @@
         r.q.setAttribute("opacity", Math.max(0, .8 - k));
       });
       spores.forEach(sp => {
-        const k = (t * 2 + sp.ph) % 220;
+        const k = (t * 2 + sp.ph) % 150;                     // they pool at the seal
         sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .25) * 7);
-        sp.q.setAttribute("cy", 290 - k);
-        sp.q.setAttribute("opacity", k > 200 ? 0 : .8);
+        sp.q.setAttribute("cy", 290 - Math.min(k, 132));
+        sp.q.setAttribute("opacity", k > 138 ? 0 : .85);
       });
       smiles.forEach(sm =>                             // they mean well
         sm.q.setAttribute("opacity", ((t + sm.off) % 80) < 12 ? .9 : 0));
