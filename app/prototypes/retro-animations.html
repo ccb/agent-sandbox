@@ -26,6 +26,25 @@
     text-shadow: 0 0 12px rgba(77,184,255,.55);
   }
   header p { color: var(--ph-dim); margin: 0; max-width: 60ch; }
+  header .titlerow {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap; margin-bottom: .4rem;
+  }
+  header .titlerow h1 { margin: 0; }
+  .chip-btn {
+    flex: 0 0 auto;
+    border: 1px solid var(--ph-dim);
+    border-radius: 3px;
+    padding: 0.1rem 0.55rem;
+    color: var(--ph-bright);
+    text-decoration: none;
+    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: .08em;
+    cursor: pointer;
+    user-select: none;
+  }
+  .chip-btn:hover, .chip-btn:active { background: var(--ph-dim); color: var(--bg); }
   header .rule { color: var(--ph-dim); margin-top: 1rem; overflow: hidden; white-space: nowrap; }
   section { display: flex; flex-direction: column; gap: .9rem; }
   .slate { display: flex; align-items: baseline; gap: .8rem; }
@@ -62,7 +81,10 @@
 
 <div class="wrap">
   <header>
-    <h1>TOMB OF NASSAK AN-RAH</h1>
+    <div class="titlerow">
+      <h1>TOMB OF NASSAK AN-RAH</h1>
+      <a class="chip-btn" href="https://ccb.github.io/tomb-of-nassak-an-rah/">PLAY GAME</a>
+    </div>
     <p>Animation prototypes &mdash; Rod Lord litho style (diagram + label + reveal) and
        outline-wireframe 3D under the terminal's CRT dressing. All self-contained:
        no libraries, no assets, quantized to hand-made frame steps.</p>
