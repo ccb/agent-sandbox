@@ -192,6 +192,48 @@
        smiles among the motes. The Autarchy fed it to guests of state.
        <span class="attach">Attaches: SEARCH CORPSE at the Summit; TASTE FUNGUS (the microdose).</span></p>
   </section>
+
+  <section>
+    <div class="slate"><h2>13 &mdash; THE AUTARCH</h2><span class="kind">LITHO / PORTRAIT</span></div>
+    <div class="screen">
+      <svg id="autarch" viewBox="0 0 640 420" aria-label="Nassak An-Rah, the Autarch"></svg>
+    </div>
+    <p class="spec">After the Leo Hunt bust: the cracked stone face with its hollow eyes, the
+       carved-lightning halo stepping around him like a lighthouse, and the court beard's
+       curl-rows shimmering downward as if being read. Deep in one socket, occasionally,
+       a point of light. <span class="attach">Attaches: EXAMINE the carved faces; the lattice; an ending card.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>14 &mdash; THE MANTIS JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="screen">
+      <svg id="jar-mantis" viewBox="0 0 640 300" aria-label="The mantis jar, close up"></svg>
+    </div>
+    <p class="spec">Split, budding, and listening: the crack creeps wider on the step clock,
+       the antennae twitch at nothing, and when the SONG gauge fills the jar sings &mdash;
+       rasp-rings radiating &mdash; and something in the halls goes very still.
+       <span class="attach">Attaches: EXAMINE MANTIS JAR; the song trigger.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>15 &mdash; THE JACKAL JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="screen">
+      <svg id="jar-jackal" viewBox="0 0 640 300" aria-label="The jackal jar, close up"></svg>
+    </div>
+    <p class="spec">The brain, strangely: a cutaway window on the jarred thoughts, pulsing at
+       a reading pace, while the stopper's tall ears twitch &mdash; still listening, four
+       thousand years on. <span class="attach">Attaches: EXAMINE JACKAL JAR; TASTE BRAIN.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>16 &mdash; THE FALCON JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="screen">
+      <svg id="jar-falcon" viewBox="0 0 640 300" aria-label="The falcon jar, close up"></svg>
+    </div>
+    <p class="spec">The hooked ceremonial stopper with its slow nictitating blink, and through
+       the cutaway, the coil of cured intestines turning by degrees. Last worn as a helm by
+       the spawn of guts. <span class="attach">Attaches: EXAMINE FALCON JAR; the tribute economy.</span></p>
+  </section>
 </div>
 
 <script>
@@ -1359,6 +1401,265 @@
       typeOn(foot, "MEANT FOR SOMEONE LONELIER THAN YOU.", T, 140, 1.6);
     });
   }
+
+
+  /* ---------------- 13: the Autarch ---------------- */
+  {
+    const svg = document.getElementById("autarch");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "FALLEN AUTARCHY / STONE / PATIENT";
+    const ADOTS = stipple(svg, "dots-autarch", PH, .9);
+    // THE HALO, as carved: a disc edged with flame-spikes, lightning bolts
+    // cut into its field, the whole thing stepping like a lighthouse
+    const CX = 320, CY = 180;
+    el(svg, "circle", { cx: CX, cy: CY, r: 118, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    Array.from({ length: 20 }, (_, i) => {
+      const a = i * Math.PI / 10;
+      el(svg, "polygon", { fill: PH, "fill-opacity": .45, stroke: PH,
+        "stroke-width": 1, points:
+        `${CX + Math.cos(a - .07) * 118},${CY + Math.sin(a - .07) * 118} ` +
+        `${CX + Math.cos(a + .04) * (142 + (i % 2) * 18)},${CY + Math.sin(a + .04) * (142 + (i % 2) * 18)} ` +
+        `${CX + Math.cos(a + .13) * 118},${CY + Math.sin(a + .13) * 118}` });
+    });
+    const bolts = Array.from({ length: 8 }, (_, i) => {
+      const a = i * Math.PI / 4 + .4;
+      const pts = [70, 82, 94, 106, 116].map((r, k) => {
+        const aa = a + (k % 2 ? .11 : -.07);
+        return `${CX + Math.cos(aa) * r},${CY + Math.sin(aa) * r}`;
+      });
+      return el(svg, "polyline", { fill: "none", stroke: PH,
+        "stroke-width": 1.6, points: pts.join(" ") });
+    });
+    // THE FACE: cracked stone, stippled, hollow-eyed
+    el(svg, "polygon", { points:
+      "272,128 368,128 382,160 380,224 366,258 274,258 260,224 258,160",
+      fill: ADOTS, stroke: PH, "stroke-width": 1.8 });
+    [0, 1, 2].forEach(r =>                                   // the knit cap rows
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        Array.from({ length: 9 }, (_, k) =>
+          `${272 + k * 12},${132 + r * 7 + (k % 2) * 3}`).join(" ") }));
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "300,158 306,180 298,204" });                  // a crack
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, opacity: .7,
+      points: "352,150 346,176 354,196 348,214" });          // another
+    const eyeL = el(svg, "ellipse", { cx: 296, cy: 190, rx: 13, ry: 9,
+      fill: BG, stroke: PH_DIM });                           // the hollows
+    const eyeR = el(svg, "ellipse", { cx: 344, cy: 190, rx: 13, ry: 9,
+      fill: BG, stroke: PH_DIM });
+    const spark = el(svg, "circle", { cx: 344, cy: 191, r: 1.3,
+      fill: PH_BRIGHT, opacity: 0 });                        // gone ahead. mostly.
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      points: "318,196 316,222 310,230 330,230 324,222 322,196" }); // the nose
+    el(svg, "polyline", { fill: "none", stroke: PH, points: "306,244 334,244" });
+    el(svg, "path", { d: "M 298 240 Q 304 234 310 240", fill: "none", stroke: PH_DIM });
+    el(svg, "path", { d: "M 330 240 Q 336 234 342 240", fill: "none", stroke: PH_DIM });
+    // THE BEARD: rows of court curls, shimmering downward as if being read
+    const curls = [];
+    for (let r = 0; r < 6; r++) for (let k = 0; k < 8 - (r > 3 ? 1 : 0); k++)
+      curls.push({ r, q: el(svg, "circle", {
+        cx: 286 + k * 10 + (r % 2) * 5, cy: 268 + r * 13, r: 4.4,
+        fill: "none", stroke: PH, "stroke-width": 1.1 }) });
+    el(svg, "rect", { x: 282, y: 300, width: 78, height: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });             // the collar band
+    // the shoulders
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "268,258 218,290 186,340 176,392" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      points: "372,258 422,290 454,340 464,392" });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [296, 190], text: "EYES: GONE AHEAD" },
+      { at: [438, 148], text: "HALO: CARVED LIGHTNING" },
+      { at: [320, 300], text: "BEARD: COURT FASHION, KEPT DAILY" },
+      { at: [352, 176], text: "STONE: CRACKED. PATIENT." },
+    ];
+    const foot = label(svg, 320, 410, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "NASSAK AN-RAH (THE AUTARCH)", T, 4, 1.4);
+      bolts.forEach((b, i) => {                              // the lighthouse step
+        const lit = (i === Math.floor(t / 3) % 8) || (i === (Math.floor(t / 3) + 4) % 8);
+        b.setAttribute("stroke", lit ? PH_BRIGHT : PH);
+        b.setAttribute("opacity", lit ? 1 : .5);
+        b.setAttribute("stroke-width", lit ? 2.2 : 1.6);
+      });
+      curls.forEach(c => {                                   // the reading shimmer
+        const w = (Math.floor(t / 2) % 10);
+        c.q.setAttribute("opacity", c.r === w % 6 ? 1 : .45);
+      });
+      spark.setAttribute("opacity", (t % 90) > 84 ? 1 : 0);  // mostly.
+      spark.setAttribute("cx", 342 + (t % 3));
+      const c = CALLS[Math.floor(T / 32) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 150,66 156,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "HE CHOSE WHAT TO KEEP. YOU HAVE READ THE LIST.", T, 130, 1.8);
+    });
+  }
+
+  /* ---------------- 14-16: the jars, close up ---------------- */
+  function jarCard(id, title, drawHead, drawInside, CALLS, footText, tick) {
+    const svg = document.getElementById(id);
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 300, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const JD = stipple(svg, id + "-dots", PH, 1);
+    // the jar, large, at the left: body, throat, and the head as stopper
+    el(svg, "polygon", { points: "150,270 290,270 272,120 168,120",
+      fill: JD, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "line", { x1: 162, y1: 140, x2: 278, y2: 140, stroke: PH_DIM });
+    const parts = { svg, JD, hx: 220, hy: 118 };             // stopper origin
+    drawHead(parts);
+    drawInside(parts);
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 64, 10, PH); call.setAttribute("text-anchor", "end");
+    const foot = label(svg, 430, 286, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 300, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, title, T, 4, 1.4);
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,60 448,60`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, footText, T, 110, 1.6);
+      tick(t, T, parts);
+    });
+  }
+
+  // 14: THE MANTIS JAR -- split, budding, listening
+  jarCard("jar-mantis", "THE MANTIS JAR (SPLIT, LISTENING)",
+    (P) => {
+      el(P.svg, "polygon", { points: "180,118 260,118 220,64 180,118",
+        fill: P.JD, stroke: PH, "stroke-width": 1.6 });      // the triangle head
+      P.eyeL = el(P.svg, "circle", { cx: 198, cy: 102, r: 8, fill: "none", stroke: PH_BRIGHT });
+      P.eyeR = el(P.svg, "circle", { cx: 242, cy: 102, r: 8, fill: "none", stroke: PH_BRIGHT });
+      [[-3,-2],[2,3],[3,-3]].forEach(([dx, dy]) => {
+        el(P.svg, "circle", { cx: 198 + dx, cy: 102 + dy, r: 1, fill: PH });
+        el(P.svg, "circle", { cx: 242 + dx, cy: 102 + dy, r: 1, fill: PH });
+      });
+      P.antL = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
+      P.antR = el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2 });
+    },
+    (P) => {
+      P.crack = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6 });
+      el(P.svg, "circle", { cx: 236, cy: 196, r: 6, fill: FUNGUS,
+        "fill-opacity": .4, stroke: FUNGUS });               // the bud in the split
+      P.rings = Array.from({ length: 3 }, () =>
+        el(P.svg, "circle", { cx: 220, cy: 96, r: 10, fill: "none",
+          stroke: PH_BRIGHT, opacity: 0 }));
+      label(P.svg, 24, 286, 10, PH_DIM).textContent = "SONG";
+      P.cells = Array.from({ length: 8 }, (_, i) =>
+        el(P.svg, "rect", { x: 66 + i * 15, y: 276, width: 11, height: 11,
+          fill: FUNGUS, "fill-opacity": .08 }));
+    },
+    [
+      { at: [220, 80], text: "EYES: COMPOUND. THE FACETS STILL COUNT" },
+      { at: [232, 190], text: "THE SPLIT: SOMETHING BUDS IN IT" },
+      { at: [220, 96], text: "IT AMPLIFIES. MAKE NO SOUND HERE" },
+    ],
+    "IT LISTENS. THEN IT SINGS.",
+    (t, T, P) => {
+      const tw = (t % 14) < 3 ? 6 : 0;                       // the twitch
+      P.antL.setAttribute("points", `206,70 ${188 - tw},40 ${180 - tw},30`);
+      P.antR.setAttribute("points", `234,70 ${252 + tw},42 ${262 + tw},32`);
+      const cw = Math.floor((t % 40) / 8);                   // the crack creeps
+      P.crack.setAttribute("points",
+        `226,122 ${230 + cw},160 ${224 + cw},198 ${232 + cw * 2},240`);
+      const singing = (T % 80) > 62;
+      P.rings.forEach((r, i) => {
+        const k = singing ? ((t * 2 + i * 9) % 28) / 28 : 1;
+        r.setAttribute("r", 10 + k * 60);
+        r.setAttribute("opacity", singing ? Math.max(0, .8 - k) : 0);
+      });
+      const on = Math.min(8, Math.floor((T % 80) / 9));
+      P.cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
+    });
+
+  // 15: THE JACKAL JAR -- the brain, strangely
+  jarCard("jar-jackal", "THE JACKAL JAR (THE BRAIN, STRANGELY)",
+    (P) => {
+      P.earL = el(P.svg, "polygon", { fill: PH, "fill-opacity": .4,
+        stroke: PH, "stroke-width": 1.4 });
+      P.earR = el(P.svg, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.4 });
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "196,118 190,96 202,78 232,72 254,84 " +
+        "268,92 284,100 280,108 262,108 244,112 236,118" }); // skull to long snout
+      el(P.svg, "circle", { cx: 232, cy: 88, r: 2.4, fill: PH_BRIGHT });
+      el(P.svg, "line", { x1: 282, y1: 104, x2: 288, y2: 106, stroke: PH_DIM });
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      P.brain = el(P.svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6,
+        d: "M 196 214 Q 190 186 210 178 Q 232 170 246 186 Q 256 200 244 214 " +
+           "Q 228 226 210 220 Q 200 218 196 214 M 212 182 Q 220 196 214 212 " +
+           "M 228 178 Q 238 194 230 212" });
+      P.pulses = Array.from({ length: 2 }, () =>
+        el(P.svg, "circle", { cx: 221, cy: 198, r: 8, fill: "none",
+          stroke: FUNGUS, opacity: 0 }));
+    },
+    [
+      { at: [202, 60], text: "EARS: STILL LISTENING" },
+      { at: [221, 198], text: "CONTENTS: HIS THOUGHTS, JARRED" },
+      { at: [284, 100], text: "TASTE: SOMEBODY'S BIOGRAPHY" },
+    ],
+    "APPETITES AND THOUGHTS, JARRED SEPARATELY. BOTH GOT UP.",
+    (t, T, P) => {
+      const tw = (t % 22) < 3 ? 8 : 0;                       // one ear pricks
+      P.earL.setAttribute("points", `202,80 ${188 - tw},34 214,70`);
+      P.earR.setAttribute("points", `226,74 ${240 + tw / 2},30 246,68`);
+      P.pulses.forEach((q, i) => {                            // a thought, not yours
+        const k = ((t * 2 + i * 14) % 30) / 30;
+        q.setAttribute("r", 8 + k * 34);
+        q.setAttribute("opacity", Math.max(0, .7 - k));
+      });
+    });
+
+  // 16: THE FALCON JAR -- the coil, turning
+  jarCard("jar-falcon", "THE FALCON JAR (THE COIL, CURED)",
+    (P) => {
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "252,118 258,86 240,62 208,56 184,66 170,84 " +
+        "158,92 166,98 176,108 172,118" });                  // skull, and the hook
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        points: "170,84 158,92 152,102 162,104 168,98" });   // the hooked beak
+      el(P.svg, "polyline", { fill: "none", stroke: PH_DIM,
+        points: "180,78 206,84 224,80" });                   // the eye-stripe
+      P.eye = el(P.svg, "circle", { cx: 196, cy: 76, r: 3, fill: PH_BRIGHT });
+      P.lid = el(P.svg, "line", { x1: 190, y1: 76, x2: 202, y2: 76,
+        stroke: PH_DIM, "stroke-width": 5, opacity: 0 });    // the nictitating blink
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      P.coil = el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.8 });
+    },
+    [
+      { at: [155, 98], text: "BEAK: CEREMONIAL, STILL SHARP" },
+      { at: [221, 198], text: "CONTENTS: THE COIL. TRIBUTE, IDEALLY" },
+      { at: [220, 118], text: "LAST WORN AS A HELM, BY SOMETHING BLIND" },
+    ],
+    "FOOD, TECHNICALLY. TRIBUTE, IDEALLY.",
+    (t, T, P) => {
+      P.lid.setAttribute("opacity", (t % 26) < 3 ? .9 : 0);  // the slow blink
+      const a0 = t * .06;                                    // the coil, by degrees
+      const pts = Array.from({ length: 26 }, (_, k) => {
+        const a = a0 + k * .5, r = 4 + k * 1.35;
+        return `${221 + Math.cos(a) * r},${198 + Math.sin(a) * r * .75}`;
+      });
+      P.coil.setAttribute("points", pts.join(" "));
+    });
 
 })();
 </script>
