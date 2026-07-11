@@ -218,3 +218,35 @@ def test_entering_the_hall_of_memory_cues_silas_only_when_lit():
     g.do_command("light glowstone")
     g.do_command(f"go {word}")  # lit: Silas at his reading, above the text
     assert "silas" in cap.texts(Channel.FIGURE)
+
+
+def test_arriving_in_the_hall_of_warriors_cues_the_cylinders_when_lit():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    g.do_command("go north")
+    g.do_command("go east")  # pitch dark: the card keeps
+    assert "cylinders-b" not in cap.texts(Channel.FIGURE)
+    g.do_command("go west")
+    g.do_command("light glowstone")
+    g.do_command("go east")  # lit: the intact deck, above the text
+    assert "cylinders-b" in cap.texts(Channel.FIGURE)
+
+
+def test_the_spawns_warning_draws_its_card_first():
+    g, cap = _game()
+    g.do_command("go north")
+    g.do_command("go east")  # footfalls: it swings toward you
+    msgs = [(m.channel, m.text) for m in cap.messages]
+    fig_at = next(
+        i for i, (c, t) in enumerate(msgs) if c is Channel.FIGURE and t == "guts-a"
+    )
+    warn_at = next(i for i, (c, t) in enumerate(msgs) if "swings toward" in t)
+    assert fig_at < warn_at  # the sway plays, THEN the warning prints
+
+
+def test_talking_to_silas_is_a_backstop_cue():
+    g, cap = _game()
+    g.relocate(g.player, g.locations["Hall of Memory"])
+    g.do_command("talk to silas")
+    assert "silas" in cap.texts(Channel.FIGURE)

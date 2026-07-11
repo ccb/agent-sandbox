@@ -2466,6 +2466,16 @@ def build_game(seed=None):
         "figure",
         lambda g: "cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders",
     )
+    # ...and the same card as a title plate on ARRIVAL, light permitting
+    # (the hall is pitch dark; a blind arrival keeps the card unburned).
+    warriors.set_property(
+        "figure",
+        lambda g: (
+            ("cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders")
+            if perception.sight_for(g.player, warriors)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
     # top of the plinth carvings and the memory crystals).
@@ -2942,6 +2952,7 @@ def build_game(seed=None):
     )
 
     def _silas_talk(g):
+        g.show_figure("silas")  # his card, if the arrival or a look hasn't
         g.award("silas", 5, "[+5 -- the archivist's acquaintance]")
         # With a living spawn in earshot, Silas will not perform the lecture.
         for name in ("spawn of guts", "spawn of brain"):
@@ -3735,6 +3746,9 @@ def build_game(seed=None):
                 n += 1
                 spawn.set_property(key, n)
                 if n == 1:
+                    # the card first, then the warning (CCB): the sway is
+                    # what you SEE as it swings toward your noise
+                    g.show_figure("guts-a" if spawn is spawn_guts else "spawn-a")
                     g.parser.ok(warn_text)
                 else:
                     attack(g)
