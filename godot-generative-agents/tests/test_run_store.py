@@ -56,3 +56,46 @@ def test_update_run_partial_and_unknown(tmp_path):
     assert (run["status"], run["cost"], run["steps"]) == ("finished", 0.25, 40)
     with pytest.raises(KeyError):
         store.update_run("missing", status="reset")
+
+
+FRAME = {
+    "Ada": {
+        "x": 1,
+        "y": 2,
+        "act": "reading @ UPenn:Van Pelt Library:stacks",
+        "e": "📖",
+        "chat": None,
+    }
+}
+
+
+def test_append_and_read_frames_in_order(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    frames = [{"Ada": dict(FRAME["Ada"], x=i)} for i in range(3)]
+    for i, frame in enumerate(frames):
+        store.append_frame("run-a", i, frame)
+    assert store.read_frames("run-a") == frames
+
+
+def test_append_frame_rejects_gaps_and_unknown_runs(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    with pytest.raises(ValueError):
+        store.append_frame("run-a", 1, FRAME)  # next line is step 0
+    with pytest.raises(KeyError):
+        store.append_frame("missing", 0, FRAME)
+
+
+def test_append_frame_validates_the_contract_shape(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    with pytest.raises(ValueError):
+        store.append_frame("run-a", 0, {"Ada": {"x": 1, "y": 2, "act": "?"}})  # no "e"
+    with pytest.raises(ValueError):
+        store.append_frame("run-a", 0, {"Ada": dict(FRAME["Ada"], speed=9)})  # unpinned
+    with pytest.raises(ValueError):
+        store.append_frame("run-a", 0, {"Ada": "not-a-dict"})
+    with pytest.raises(ValueError):
+        store.append_frame("run-a", 0, {})
+    assert store.read_frames("run-a") == []  # nothing hit the disk
