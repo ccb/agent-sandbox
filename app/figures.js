@@ -2808,58 +2808,90 @@
     el(svg, "polyline", { fill: "none", stroke: PH_DIM,
       points: "30,336 120,330 210,337 430,331 520,338 610,333" });
     // THE SLAB, face-on
-    el(svg, "polygon", { fill: EDOTS2, stroke: PH, "stroke-width": 1.8,
+    const slab = el(svg, "polygon", { fill: EDOTS2, stroke: PH, "stroke-width": 1.8,
       points: "252,96 388,96 396,340 244,340" });
-    // the old man at the summit, face to the sky -- constant on both sheets
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
+    // the old man at the summit, face to the sky -- constant on the elevations
+    const crownG = el(svg, "g", {});
+    el(crownG, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
       points: "292,96 298,78 306,72 312,74 316,64 326,62 330,68 336,66 342,74 348,96" });
-    el(svg, "circle", { cx: 322, cy: 70, r: 1.6, fill: PH_BRIGHT });  // the eye
-    // his open mouth: the chimney, weeping
+    el(crownG, "circle", { cx: 322, cy: 70, r: 1.6, fill: PH_BRIGHT });
     const TENDRILS = [[318, 66, -1.9], [322, 64, -.6], [326, 66, .6], [330, 68, 1.7]];
-    const tendrils = TENDRILS.map(() => el(svg, "polyline",
+    const tendrils = TENDRILS.map(() => el(crownG, "polyline",
       { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
-    const drips = TENDRILS.map(() => el(svg, "circle", { r: 1.7, fill: FUNGUS }));
-    // the two sheets share the door: each face's MOUTH is the way in
-    const door = () => {
-      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
-      el(g, "path", { d: "M 306 296 L 306 258 Q 320 244 334 258 L 334 296 Z",
+    const drips = TENDRILS.map(() => el(crownG, "circle", { r: 1.7, fill: FUNGUS }));
+    // each face's MOUTH is the way in: the doors stand on the ground itself
+    const door = parent => {
+      el(parent, "path", { d: "M 306 340 L 306 302 Q 320 288 334 302 L 334 340 Z",
         fill: BG, stroke: PH, "stroke-width": 1.6 });
-      el(g, "line", { x1: 300, y1: 296, x2: 340, y2: 296, stroke: PH, "stroke-width": 1.5 });
-      el(g, "line", { x1: 310, y1: 300, x2: 330, y2: 300, stroke: PH_DIM });
-      return g;
+      el(parent, "line", { x1: 306, y1: 340, x2: 334, y2: 340,
+        stroke: PH_BRIGHT, "stroke-width": 1.5 });            // the threshold
     };
     // WEST: the Autarch young -- smooth, swaddled, unsettlingly tender
-    const west = document.createElementNS(NS, "g"); svg.appendChild(west);
-    el(west, "ellipse", { cx: 320, cy: 205, rx: 52, ry: 62, fill: "none",
+    const west = el(svg, "g", {});
+    el(west, "ellipse", { cx: 320, cy: 244, rx: 52, ry: 62, fill: "none",
       stroke: PH, "stroke-width": 1.6 });
-    el(west, "path", { d: "M 296 192 Q 304 186 312 192", fill: "none",
+    el(west, "path", { d: "M 296 231 Q 304 225 312 231", fill: "none",
       stroke: PH, "stroke-width": 1.5 });                     // closed eyes
-    el(west, "path", { d: "M 328 192 Q 336 186 344 192", fill: "none",
+    el(west, "path", { d: "M 328 231 Q 336 225 344 231", fill: "none",
       stroke: PH, "stroke-width": 1.5 });
-    el(west, "path", { d: "M 316 208 Q 320 214 324 208", fill: "none", stroke: PH_DIM });
-    el(west, "path", { d: "M 286 236 Q 320 252 354 236", fill: "none",
+    el(west, "path", { d: "M 316 247 Q 320 253 324 247", fill: "none", stroke: PH_DIM });
+    el(west, "path", { d: "M 286 275 Q 320 291 354 275", fill: "none",
       stroke: PH_DIM });                                      // the round cheekline
     [0, 1, 2].forEach(k => el(west, "path", { fill: "none", stroke: PH_DIM,
-      d: `M ${268 - k * 4} ${160 + k * 26} Q 320 ${146 + k * 26} ${372 + k * 4} ${160 + k * 26}` }));
-    door().setAttribute("data-face", "west-door");
-    const westDoor = svg.lastChild; west.appendChild(westDoor);
-    // EAST: the helmed warrior -- angular, visored, on duty forever
-    const east = document.createElementNS(NS, "g"); svg.appendChild(east);
-    el(east, "polygon", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "276,246 272,170 288,140 320,128 352,140 368,170 364,246" });
-    el(east, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "314,128 316,104 324,104 326,128" });            // the crest
-    el(east, "line", { x1: 282, y1: 178, x2: 358, y2: 178, stroke: PH, "stroke-width": 2.2 });
-    el(east, "line", { x1: 282, y1: 186, x2: 358, y2: 186, stroke: PH_DIM });
-    [292, 320, 348].forEach(x =>
-      el(east, "circle", { cx: x, cy: 172, r: 1.4, fill: PH_BRIGHT }));  // rivets
-    el(east, "line", { x1: 296, y1: 196, x2: 296, y2: 240, stroke: PH, "stroke-width": 1.4 });
-    el(east, "line", { x1: 344, y1: 196, x2: 344, y2: 240, stroke: PH, "stroke-width": 1.4 });
-    for (let y = 200; y <= 236; y += 9)
-      el(east, "line", { x1: 300, y1: y, x2: 340, y2: y, stroke: PH_DIM });  // mail
-    door().setAttribute("data-face", "east-door");
-    const eastDoor = svg.lastChild; east.appendChild(eastDoor);
-    // the sweep: a bright edge redraws the sheet between elevations
+      d: `M ${268 - k * 4} ${199 + k * 26} Q 320 ${185 + k * 26} ${372 + k * 4} ${199 + k * 26}` }));
+    door(west);
+    // EAST: the helmed warrior -- a great helm, face-on
+    const east = el(svg, "g", {});
+    el(east, "path", { fill: "none", stroke: PH, "stroke-width": 1.8,
+      d: "M 280 296 L 276 196 Q 276 150 320 146 Q 364 150 364 196 L 360 296 " +
+         "Q 344 306 320 308 Q 296 306 280 296 Z" });          // dome to jaw
+    el(east, "line", { x1: 320, y1: 146, x2: 320, y2: 212, stroke: PH,
+      "stroke-width": 1.8 });                                  // the nasal ridge
+    el(east, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "300,146 306,132 334,132 340,146" });            // low crest fin
+    // the eye slit, split by the nasal: two dark windows
+    el(east, "rect", { x: 286, y: 196, width: 28, height: 8, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });
+    el(east, "rect", { x: 326, y: 196, width: 28, height: 8, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });
+    for (let r = 0; r < 2; r++) for (let x = 294; x <= 346; x += 13)
+      el(east, "circle", { cx: x, cy: 226 + r * 12, r: 1.6, fill: PH });  // breaths
+    el(east, "line", { x1: 280, y1: 256, x2: 360, y2: 256, stroke: PH,
+      "stroke-width": 1.4 });                                  // riveted band
+    [290, 310, 330, 350].forEach(x =>
+      el(east, "circle", { cx: x, cy: 262, r: 1.5, fill: PH_BRIGHT }));
+    el(east, "line", { x1: 280, y1: 268, x2: 360, y2: 268, stroke: PH_DIM });
+    door(east);
+    // SUMMIT: the plan view -- he faces the sky, and you
+    const plan = el(svg, "g", {});
+    el(plan, "rect", { x: 254, y: 118, width: 132, height: 200, rx: 16,
+      fill: "none", stroke: PH, "stroke-width": 1.6 });        // the slab footprint
+    [[254, 118], [386, 118], [254, 318], [386, 318]].forEach(([x, y]) => {
+      el(plan, "line", { x1: x - 8, y1: y, x2: x + 8, y2: y, stroke: PH_DIM });
+      el(plan, "line", { x1: x, y1: y - 8, x2: x, y2: y + 8, stroke: PH_DIM });
+    });
+    el(plan, "ellipse", { cx: 320, cy: 218, rx: 50, ry: 64, fill: "none",
+      stroke: PH, "stroke-width": 1.6 });                      // the upturned face
+    el(plan, "path", { d: "M 288 186 Q 298 178 308 184", fill: "none", stroke: PH_DIM });
+    el(plan, "path", { d: "M 332 184 Q 342 178 352 186", fill: "none", stroke: PH_DIM });
+    const eyeL = el(plan, "circle", { cx: 299, cy: 196, r: 6.5, fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    const eyeR = el(plan, "circle", { cx: 341, cy: 196, r: 6.5, fill: "none",
+      stroke: PH, "stroke-width": 1.5 });
+    el(plan, "circle", { cx: 299, cy: 196, r: 2.2, fill: PH_BRIGHT });
+    el(plan, "circle", { cx: 341, cy: 196, r: 2.2, fill: PH_BRIGHT });
+    el(plan, "polyline", { fill: "none", stroke: PH_DIM,
+      points: "318,206 316,224 324,224" });                    // the nose, foreshortened
+    el(plan, "path", { d: "M 284 226 Q 292 236 300 240", fill: "none", stroke: PH_DIM });
+    el(plan, "path", { d: "M 356 226 Q 348 236 340 240", fill: "none", stroke: PH_DIM });
+    el(plan, "circle", { cx: 320, cy: 254, r: 13, fill: BG, stroke: PH,
+      "stroke-width": 1.8 });                                  // the mouth: a chimney
+    el(plan, "circle", { cx: 320, cy: 254, r: 6, fill: "none", stroke: FUNGUS,
+      "stroke-width": 1.4 });
+    const PLANTENDRILS = Array.from({ length: 8 }, (_, i) => i * Math.PI / 4 + .35);
+    const ptend = PLANTENDRILS.map(() => el(plan, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    // the sweep: a bright edge redraws the sheet between views
     const cover = el(svg, "rect", { y: 96, height: 244, fill: BG, opacity: 0 });
     const edge = el(svg, "rect", { y: 96, width: 3, height: 244,
       fill: PH_BRIGHT, opacity: 0 });
@@ -2867,25 +2899,30 @@
     const sheet = label(svg, 320, 372, 10, PH); sheet.setAttribute("text-anchor", "middle");
     const foot = label(svg, 320, 392, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 400, 2, 10);
+    const CAPTIONS = [
+      "WEST ELEVATION -- THE AUTARCH, YOUNG. HIS MOUTH IS A DOOR.",
+      "EAST ELEVATION -- THE HELMED WARRIOR. HIS MOUTH IS A DOOR.",
+      "SUMMIT, IN PLAN -- THE OLD MAN FACES YOU. HIS MOUTH IS A CHIMNEY.",
+    ];
     clock(t => {
-      const T = t % 160;
-      doWipe(Math.min(t, 159));
-      typeOn(hdr, "THE APPROACH, ELEVATIONS", Math.min(t, 159), 4, 1.4);
-      const onWest = T < 80;
-      west.setAttribute("opacity", onWest ? 1 : 0);
-      east.setAttribute("opacity", onWest ? 0 : 1);
-      compass.textContent = onWest ? "W" : "E";
+      const T = t % 240;
+      doWipe(Math.min(t, 239));
+      typeOn(hdr, "THE APPROACH, ELEVATIONS", Math.min(t, 239), 4, 1.4);
+      const phase = Math.floor(T / 80);
+      west.setAttribute("opacity", phase === 0 ? 1 : 0);
+      east.setAttribute("opacity", phase === 1 ? 1 : 0);
+      plan.setAttribute("opacity", phase === 2 ? 1 : 0);
+      crownG.setAttribute("opacity", phase === 2 ? 0 : 1);   // seen from above instead
+      slab.setAttribute("opacity", phase === 2 ? 0 : 1);
+      compass.textContent = ["W", "E", "UP"][phase];
       const k = Math.min(1, (T % 80) / 12);                   // the sweep, each sheet
       cover.setAttribute("x", 244 + k * 152);
       cover.setAttribute("width", Math.max(0, 152 * (1 - k)));
       cover.setAttribute("opacity", k >= 1 ? 0 : 1);
       edge.setAttribute("x", Math.min(244 + k * 152, 393));
       edge.setAttribute("opacity", k >= 1 ? 0 : 1);
-      typeOn(sheet,
-        onWest ? "WEST ELEVATION -- THE AUTARCH, YOUNG. HIS MOUTH IS A DOOR."
-               : "EAST ELEVATION -- THE HELMED WARRIOR. HIS MOUTH IS A DOOR.",
-        T % 80, 10, 2.2);
-      tendrils.forEach((n, i) => {
+      typeOn(sheet, CAPTIONS[phase], T % 80, 10, 2.4);
+      tendrils.forEach((n, i) => {                            // the crown, weeping
         const [x0, y0, ph] = TENDRILS[i];
         const pts = [[x0, y0]];
         for (let q = 1; q <= 5; q++) {
@@ -2897,7 +2934,21 @@
         d.setAttribute("cx", pts[5][0]); d.setAttribute("cy", pts[5][1] + dk);
         d.setAttribute("opacity", dk > 46 ? 0 : .9);
       });
-      typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 159), 96, 1.7);
+      ptend.forEach((n, i) => {                               // the chimney, radiating
+        const a = PLANTENDRILS[i];
+        const pts = [[320 + Math.cos(a) * 14, 254 + Math.sin(a) * 14]];
+        for (let q = 1; q <= 4; q++) {
+          const wob = Math.sin(t * .2 + q * 1.1 + i * 1.7) * 4;
+          const r = 14 + q * 19;
+          pts.push([320 + Math.cos(a + wob * .01 * q) * r * 1.15,
+            254 + Math.sin(a + wob * .01 * q) * r * .95 + wob * .4]);
+        }
+        n.setAttribute("points", pts.map(p2 => p2.join(",")).join(" "));
+      });
+      const blink = (t % 90) > 86;                            // he blinks, rarely
+      eyeL.setAttribute("ry", blink ? 1 : 6.5); eyeL.setAttribute("rx", 6.5);
+      eyeR.setAttribute("ry", blink ? 1 : 6.5); eyeR.setAttribute("rx", 6.5);
+      typeOn(foot, "THREE FACES, TWO DOORS, ONE CHIMNEY.", Math.min(t, 239), 100, 1.7);
     });
   });
 
