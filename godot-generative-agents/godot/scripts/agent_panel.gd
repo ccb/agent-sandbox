@@ -37,6 +37,9 @@ signal heatmap_requested
 # The "Social graph" button was pressed (open/close the who-talked-to-whom pop-up,
 # issue #252). Same contract as heatmap_requested: a toggle request (G does the same).
 signal social_graph_requested
+# The "Day plans" button was pressed (open/close the planned-vs-actual pop-up,
+# issue #251). Same contract as heatmap_requested: a toggle request (T does the same).
+signal day_plans_requested
 # The "Snapshot" (camera) button was pressed: capture the current campus view (issue
 # #253). The viewer does the capture; C does the same.
 signal snapshot_requested
@@ -190,6 +193,34 @@ const GALLERY_ROWS: PackedStringArray = [
 	"................",
 ]
 
+# No calendar glyph in the pack either (issue #251): a little page-a-day
+# calendar — two binding pegs, an amber header band, a dotted grid of days —
+# in the pack's dark outline.
+const CALENDAR_PALETTE := {
+	"#": Color("181425"),  # outline + pegs
+	"a": Color("feae34"),  # header band (pack amber)
+	"w": Color("fff4b8"),  # page
+	"d": Color("8b9bb4"),  # day dots
+}
+const CALENDAR_ROWS: PackedStringArray = [
+	"................",
+	"...##......##...",
+	"...##......##...",
+	".##############.",
+	".#aaaaaaaaaaaa#.",
+	".#aaaaaaaaaaaa#.",
+	".##############.",
+	".#wwwwwwwwwwww#.",
+	".#wddwddwddwdw#.",
+	".#wwwwwwwwwwww#.",
+	".#wddwddwddwdw#.",
+	".#wwwwwwwwwwww#.",
+	".#wddwwddwwddw#.",
+	".#wwwwwwwwwwww#.",
+	".##############.",
+	"................",
+]
+
 var _clock: Label
 var _play: Button                   # play/pause toggle (icon set by set_playing)
 # Pause/play glyphs, dark-brown row of the sheet (matches the theme's text).
@@ -283,6 +314,10 @@ func _ready() -> void:
 	view_row.add_child(_icon_button(
 		_graph_icon(), "Social graph — who has talked to whom, up to now (G)",
 		func() -> void: social_graph_requested.emit()))
+	# Day plans: the hand-drawn calendar glyph (see CALENDAR_ROWS).
+	view_row.add_child(_icon_button(
+		_calendar_icon(), "Day plans — planned vs. actual, up to now (T)",
+		func() -> void: day_plans_requested.emit()))
 
 	# A second row for the capture tools (snapshot + its gallery, issue #253), kept off
 	# the controls row above so the icons stay finger-sized in the 300px sidebar.
@@ -415,6 +450,10 @@ static func _camera_icon() -> Texture2D:
 
 static func _gallery_icon() -> Texture2D:
 	return _bitmap_icon(GALLERY_ROWS, GALLERY_PALETTE)
+
+
+static func _calendar_icon() -> Texture2D:
+	return _bitmap_icon(CALENDAR_ROWS, CALENDAR_PALETTE)
 
 
 static func _bitmap_icon(rows: PackedStringArray, palette: Dictionary) -> Texture2D:
