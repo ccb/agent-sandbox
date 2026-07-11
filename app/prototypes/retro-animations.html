@@ -107,8 +107,29 @@
        <span class="attach">Attaches: first jackal encounter; the hint booklet's jackal topic.</span></p>
   </section>
 
+
+
   <section>
-    <div class="slate"><h2>06 &mdash; INTERIOR MAP</h2><span class="kind">LITHO / ISOMETRIC CUTAWAY</span></div>
+    <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
+    <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
+    <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
+       horizon's molten line &mdash; and resets. Forty strokes, one ellipse, per-bat jitter.
+       <span class="attach">Attaches: the dates-under-open-sky beat; a death card.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>06 &mdash; THE BURIAL CYLINDERS</h2><span class="kind">LITHO / HALL OF WARRIORS</span></div>
+    <div class="screen">
+      <svg id="cylinders" viewBox="0 0 640 400" aria-label="The four burial cylinders"></svg>
+    </div>
+    <p class="spec">Four plexiglas cylinders, guard-mummies at an attention no order will
+       relieve. Gel in three gel-filter hues, bubbles on the step clock, fungus veining the
+       orange one like pressed flowers, and the burst one already spilled. Callouts cycle
+       the kit. <span class="attach">Attaches: entering the Hall of Warriors; EXAMINE CYLINDERS.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>07 &mdash; INTERIOR MAP</h2><span class="kind">LITHO / ISOMETRIC CUTAWAY</span></div>
     <div class="screen">
       <svg id="isomap" viewBox="0 0 640 430" aria-label="Isometric interior map"></svg>
     </div>
@@ -119,11 +140,12 @@
   </section>
 
   <section>
-    <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
-    <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
-    <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
-       horizon's molten line &mdash; and resets. Forty strokes, one ellipse, per-bat jitter.
-       <span class="attach">Attaches: the dates-under-open-sky beat; a death card.</span></p>
+    <div class="slate"><h2>08 &mdash; THE GLOWSTONE</h2><span class="kind">WIREFRAME / INTERACTIVE</span></div>
+    <div class="screen"><canvas id="glowstone" width="640" height="300" style="cursor:pointer"></canvas></div>
+    <p class="spec">A shard of cold lazulite with a switch. CLICK THE SCREEN to throw it:
+       the stone steps up to a warm yellow burn, and the ATTENTION gauge fills while it
+       is lit &mdash; light is dear, and attention dearer. It also demonstrates itself.
+       <span class="attach">Attaches: LIGHT / DOUSE GLOWSTONE; the tutorial's first lesson.</span></p>
   </section>
 </div>
 
@@ -624,5 +646,139 @@
         "TOWARD THE HORIZON'S MOLTEN LINE", 18, 288);
     });
   }
+
+  /* ---------------- 06: the burial cylinders ---------------- */
+  {
+    const svg = document.getElementById("cylinders");
+    const AMBER = "#ffd06a", VIRIDIAN = "#4ee0a8";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF WARRIORS / GUARD ISSUE / GEL-KEPT";
+    const CYLS = [
+      { cx: 105, hue: AMBER,    name: "AMBER",    note: "AMBER: A RESPIRATOR, STILL SEALED" },
+      { cx: 245, hue: VIRIDIAN, name: "VIRIDIAN", note: "VIRIDIAN: MAGNETIC BOOTS, GUARD ISSUE" },
+      { cx: 385, hue: FUNGUS,   name: "ORANGE",   note: "ORANGE: A PLASMA-IGNITER -- AND A BLOOM" },
+      { cx: 525, hue: PH_DIM,   name: "BURST",    note: "BURST: KIT OUTLASTS ITS OWNERS", burst: true },
+    ];
+    const groups = CYLS.map((c, i) => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const put = (n, a) => { const q = document.createElementNS(NS, n);
+        for (const k in a) q.setAttribute(k, a[k]); g.appendChild(q); return q; };
+      const gel = stipple(svg, "gel" + i, c.hue, 1);
+      if (!c.burst) {
+        put("rect", { x: c.cx - 32, y: 130, width: 64, height: 186, fill: gel });
+        put("line", { x1: c.cx - 34, y1: 122, x2: c.cx - 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("line", { x1: c.cx + 34, y1: 122, x2: c.cx + 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 122, rx: 34, ry: 9, fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        // the tenant, at an attention no order will relieve
+        put("circle", { cx: c.cx, cy: 165, r: 7, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("polyline", { points: `${c.cx-11},178 ${c.cx+11},178 ${c.cx+8},240 ${c.cx+6},296 ` +
+          `${c.cx-6},296 ${c.cx-8},240 ${c.cx-11},178`, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("line", { x1: c.cx - 9, y1: 196, x2: c.cx + 7, y2: 212, stroke: PH_DIM });
+        put("line", { x1: c.cx + 9, y1: 196, x2: c.cx - 7, y2: 212, stroke: PH_DIM });
+        if (c.name === "ORANGE") // the bloom, veining like pressed flowers
+          [[-22, 300, -14, 250, -20, 214], [0, 306, 4, 262, -2, 226], [20, 300, 14, 246, 22, 208]]
+            .forEach(v => put("polyline", { points:
+              `${c.cx+v[0]},${v[1]} ${c.cx+v[2]},${v[3]} ${c.cx+v[4]},${v[5]}`,
+              fill: "none", stroke: FUNGUS, "stroke-width": 1 }));
+      } else {
+        // the burst one: a jagged stump, shards, the spill, the slumped dead
+        put("polyline", { points: `${c.cx-34},318 ${c.cx-34},236 ${c.cx-22},252 ${c.cx-12},230 ` +
+          `${c.cx},248 ${c.cx+12},226 ${c.cx+22},250 ${c.cx+34},232 ${c.cx+34},318`,
+          fill: "none", stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        put("ellipse", { cx: c.cx, cy: 336, rx: 52, ry: 8, fill: gel, stroke: "none" });
+        [[-48, 300, -40, 290], [44, 306, 52, 296], [40, 316, 50, 314]].forEach(v =>
+          put("line", { x1: c.cx + v[0], y1: v[1], x2: c.cx + v[2], y2: v[3], stroke: PH_BRIGHT }));
+        put("polyline", { points: `${c.cx-20},306 ${c.cx-6},296 ${c.cx+10},304 ${c.cx+20},298`,
+          fill: "none", stroke: PH_DIM, "stroke-width": 1.6 }); // the slump
+      }
+      const cap = label(svg, c.cx, 362, 10, c.hue); cap.setAttribute("text-anchor", "middle");
+      cap.textContent = c.name;
+      return { g, c };
+    });
+    // bubbles, on the step clock (the gel is alive enough to breathe)
+    const bubbles = [];
+    groups.forEach(({ c }, i) => {
+      if (c.burst) return;
+      for (let b = 0; b < 3; b++) {
+        const q = el(svg, "circle", { cx: c.cx + (b - 1) * 12, cy: 300, r: 2, fill: "none",
+          stroke: c.hue, opacity: .8 });
+        bubbles.push({ q, phase: i * 31 + b * 57 });
+      }
+    });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE BURIAL CYLINDERS", T, 4, 1.4);
+      groups.forEach(({ g }, i) => g.setAttribute("opacity", T > 10 + i * 7 ? 1 : 0));
+      bubbles.forEach(b => b.q.setAttribute("cy", 300 - ((t * 3 + b.phase) % 156)));
+      const k = Math.floor(T / 26) % CYLS.length;
+      if (T > 40) {
+        const c = CYLS[k];
+        callLead.setAttribute("points", `${c.cx},116 ${c.cx},58 448,58`);
+        call.textContent = c.note;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "BREAK AMBER FIRST. WEAR WHAT YOU FIND.", T, 120, 1.6);
+    });
+  }
+
+  /* ---------------- 08: the glowstone (interactive) ---------------- */
+  {
+    const cv = document.getElementById("glowstone"), ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    // the shard: an irregular faceted lump, hand-plotted
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    let lit = false, k = 0, lastT = 0;
+    function draw(t) {
+      lastT = t;
+      // the glow steps toward its target, one increment per tick
+      k = Math.max(0, Math.min(6, k + (lit ? 1 : -1)));
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const kk = k / 6;
+      if (kk > 0) { // concentric halo, quantized
+        for (let r = 1; r <= k; r++) {
+          ctx.strokeStyle = YELLOW; ctx.globalAlpha = .16 * kk;
+          ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+      const mix = kk > .5 ? YELLOW : kk > 0 ? PH : PH_DIM;
+      ctx.strokeStyle = mix; ctx.lineWidth = 1.6;
+      ctx.shadowColor = mix; ctx.shadowBlur = 4 + k * 4;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // the switch
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = lit ? YELLOW : PH_DIM;
+      ctx.fillRect(lit ? 322 : 274, 242, 44, 14);
+      ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the ledger: attention, accruing
+      const att = Math.round(kk * 10);
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 18, 288);
+      ctx.textAlign = "right";
+      ctx.fillText(lit ? "> LIGHT GLOWSTONE" : "> DOUSE GLOWSTONE", 622, 288);
+      ctx.textAlign = "left";
+      ctx.fillStyle = kk === 1 ? YELLOW : PH_DIM;
+      ctx.fillText(kk === 1 ? "LIGHT IS DEAR; ATTENTION DEARER" : "", 18, 24);
+    }
+    cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
+    clock(t => { if (t && t % 48 === 0) lit = !lit; draw(t); }); // it demos itself
+  }
+
 })();
 </script>
