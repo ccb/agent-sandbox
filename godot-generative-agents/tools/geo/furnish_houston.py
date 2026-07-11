@@ -44,6 +44,22 @@ DOOR_W = 2  # centered doorway gap, in cells, per partition segment
 
 # rugs sit on their own layer UNDER the furniture so a sofa/table can rest on one
 RUG_LAYER = "houston_rugs"
+# The boil-water kitchen strip (#466): hand-authored props on houston_furniture
+# (see docs/plans/2026-07-09-houston-boilwater-props.md). apply_furniture()
+# strips and rebuilds that layer, so the strip is re-applied from this pin on
+# every run -- a rerun can no longer silently wipe it. Gids are pinned the same
+# way tests/test_houston_objects.py pins them: if a tileset repack shifts them,
+# both fail loudly together.
+KITCHEN_STRIP = {
+    (117, 247): 1821,
+    (117, 248): 1837,  # pedestal sink
+    (118, 247): 1255,
+    (118, 248): 1287,  # counter
+    (119, 247): 1261,
+    (119, 248): 1293,  # stove/oven
+    (120, 247): 991,
+    (120, 248): 1287,  # cooking pot on counter
+}
 FURN_LAYER = "houston_furniture"
 RUGS = {"rug_red", "rug_blue", "rug_orange", "rug_green", "rug_magenta", "rug_cyan"}
 
@@ -482,6 +498,11 @@ def apply_furniture(tmj, matrix_dir):
         else:
             ok = _stamp(furn_data, furn_occ, sprites, name, c, r, walk, W)
         placed += ok
+
+    # Re-apply the hand-authored kitchen strip (#466) that the rebuild above
+    # just wiped -- the strip always wins over any layout-placed furniture.
+    for (x, y), gid in KITCHEN_STRIP.items():
+        furn_data[y * W + x] = gid
 
     base = max([L.get("id", 0) for L in tmj["layers"]] + [0]) + 1
     rugs = _new_layer(RUG_LAYER, rug_data, W, H, base)
