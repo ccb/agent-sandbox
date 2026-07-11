@@ -165,7 +165,7 @@
       <svg id="cylinders-b" viewBox="0 0 640 400" aria-label="The four burial cylinders, all intact"></svg>
     </div>
     <p class="spec">The hall as the tombwrights left it: all four sealed, four gel-filter
-       hues, four guards at attention, the fungus not yet arrived at the orange glass.
+       hues, four guards at attention, the fungus already veining the orange glass.
        Before anyone came scavenging. <span class="attach">Alternate for 06 (the before).</span></p>
   </section>
 
@@ -2611,7 +2611,7 @@
     const CYLS = [
       { cx: 105, hue: AMBER,    name: "AMBER",    note: "AMBER: A RESPIRATOR, STILL SEALED" },
       { cx: 245, hue: VIRIDIAN, name: "VIRIDIAN", note: "VIRIDIAN: MAGNETIC BOOTS, GUARD ISSUE" },
-      { cx: 385, hue: FUNGUS,   name: "ORANGE",   note: "ORANGE: A PLASMA-IGNITER. NO BLOOM YET" },
+      { cx: 385, hue: FUNGUS,   name: "ORANGE",   note: "ORANGE: A PLASMA-IGNITER -- AND A BLOOM" },
       { cx: 525, hue: CERULEAN, name: "CERULEAN", note: "CERULEAN: THE PRISMATIC BLADE, SHEATHED" },
     ];
     const groups = CYLS.map((c, i) => {
@@ -2629,6 +2629,11 @@
         `${c.cx-6},296 ${c.cx-8},240 ${c.cx-11},178`, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
       put("line", { x1: c.cx - 9, y1: 196, x2: c.cx + 7, y2: 212, stroke: PH_DIM });
       put("line", { x1: c.cx + 9, y1: 196, x2: c.cx - 7, y2: 212, stroke: PH_DIM });
+      if (c.name === "ORANGE") // the bloom, veining like pressed flowers
+        [[-22, 300, -14, 250, -20, 214], [0, 306, 4, 262, -2, 226], [20, 300, 14, 246, 22, 208]]
+          .forEach(v => put("polyline", { points:
+            `${c.cx+v[0]},${v[1]} ${c.cx+v[2]},${v[3]} ${c.cx+v[4]},${v[5]}`,
+            fill: "none", stroke: FUNGUS, "stroke-width": 1 }));
       const cap = label(svg, c.cx, 362, 10, c.hue); cap.setAttribute("text-anchor", "middle");
       cap.textContent = c.name;
       return { g, c };
