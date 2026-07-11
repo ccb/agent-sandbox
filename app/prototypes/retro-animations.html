@@ -2606,7 +2606,13 @@
       { y: 124, a: "TEAMSTER ......... DRIVING",        b: "TEAMSTER ......... FLED SOUTH" },
       { y: 146, a: "YOU .............. NOT YET HERE",   b: "YOU .............. INCOMING" },
     ].map(r => ({ ...r, n: label(svg, 24, r.y, 10, PH) }));
-    const flee = el(svg, "circle", { r: 2.6, fill: PH_BRIGHT, opacity: 0 });
+    // the teamster, fleeing: a little walking figure, not an ambiguous dot
+    const flee = el(svg, "g", { opacity: 0 });
+    el(flee, "circle", { cx: 0, cy: -12, r: 3, fill: PH_BRIGHT });
+    el(flee, "line", { x1: 0, y1: -9, x2: 0, y2: 2, stroke: PH_BRIGHT,
+      "stroke-width": 1.4 });
+    const fleeLegs = el(flee, "polyline", { fill: "none", stroke: PH_BRIGHT,
+      "stroke-width": 1.3 });
     const foot = label(svg, 320, 384, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 400, 2, 10);
     clock(t => {
@@ -2639,12 +2645,17 @@
           z.head.setAttribute("opacity", .4);
         }
       });
+      // gone from the bench at moonset -- REMOVED, not just faded: some
+      // renderers (Safari) leave stale paint behind attribute-only hides
+      if (fallen && driver.isConnected) driver.remove();
       driver.setAttribute("opacity", fallen ? 0 : 1);
       if (fallen && T < 170) {                      // the teamster, fleeing south
         flee.setAttribute("opacity", 1);
-        flee.setAttribute("cx", 420 + (T - 130) * 3);
-        flee.setAttribute("cy", 280 + (T - 130) * 2.4);
-      } else flee.setAttribute("opacity", 0);
+        flee.setAttribute("transform",
+          `translate(${420 + (T - 130) * 3} ${292 + (T - 130) * 2.4})`);
+        const st = (t % 4 < 2) ? 4 : -4;
+        fleeLegs.setAttribute("points", `${-st},10 0,2 ${st},10`);
+      } else if (flee.isConnected && T >= 170) flee.remove();
       R.forEach((r, i) => {
         if (!fallen) typeOn(r.n, r.a, T, 16 + i * 14, 1.6);
         else { r.n.textContent = r.b; r.n.setAttribute("fill", i === 3 ? PH_BRIGHT : PH_DIM); }
