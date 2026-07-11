@@ -76,6 +76,7 @@ def write_simulation(
     sec_per_step: int = SEC_PER_STEP,
     memory_streams: dict | None = None,
     plans: dict | None = None,
+    events: list | None = None,
 ) -> str:
     """Materialize a replayable sim folder under ``storage_root/sim_code``.
 
@@ -95,6 +96,13 @@ def write_simulation(
     to ``personas/<Name>/daily_plan.json`` so the plan a run used is an inspectable
     artifact a reader can load back without any model calls. Returns the
     sim folder path.
+
+    ``events`` (a list of ``GameEvent.to_primitive()`` dicts, from
+    ``simulate(out_events=...)``) is the run's engine event log (issue #467);
+    we write it to ``events.json`` so post-hoc metrics (#299) can count events
+    and their causes from the run record alone.
+
+    Returns the sim folder path.
     """
     sim_dir = os.path.join(storage_root, sim_code)
     movement_dir = os.path.join(sim_dir, "movement")
@@ -165,6 +173,12 @@ def write_simulation(
             persona_dir = os.path.join(personas_dir, name)
             os.makedirs(persona_dir, exist_ok=True)
             _dump(os.path.join(persona_dir, "daily_plan.json"), plan)
+
+    # The run's GameEvent log (#467): one JSON array of EventState-shaped
+    # records, so a sickness (or any future event) is queryable after the
+    # fact with its cause payload.
+    if events is not None:
+        _dump(os.path.join(sim_dir, "events.json"), events)
 
     return sim_dir
 
