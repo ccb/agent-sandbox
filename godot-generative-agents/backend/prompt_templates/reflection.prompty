@@ -2,33 +2,46 @@
 name: reflection
 description: >
   A persona's own successful action, recorded as a first-person observation
-  memory (backend/smallville_agents.py, remember_outcome). The command verb
-  selects the phrasing: arriving somewhere, doing an activity, or a quoted
-  fallback for any other command. The memory's importance is chosen in Python
-  (it is data, not text), so only the wording lives here.
+  memory (backend/cognition.py, remember_outcome). The command verb
+  selects the phrasing: arriving somewhere, doing an activity, drinking
+  (with a sick variant for contaminated water, #300), or a quoted fallback
+  for any other command. The memory's importance is chosen in Python (it is
+  data, not text), so only the wording lives here.
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", or anything else.
+    description: The command verb -- "travel", "perform", "drink", or anything else.
   location:
     type: string
     description: The place arrived at (used when verb == "travel").
   activity:
     type: string
     description: What the persona is doing (used when verb == "perform").
+  item:
+    type: string
+    description: What was drunk (used when verb == "drink").
+  sick:
+    type: boolean
+    description: Whether this drink just sickened the persona (verb == "drink").
   command:
     type: string
     description: The raw command, quoted verbatim in the fallback (any other verb).
 sample:
-  verb: travel
-  location: Hobbs Cafe
+  verb: drink
+  location: ""
   activity: ""
+  item: cup of murky water
+  sick: true
   command: ""
 ---
 {%- if verb == "travel" -%}
 I traveled to {{ location }}.
 {%- elif verb == "perform" -%}
 I am {{ activity }}.
+{%- elif verb == "drink" and sick -%}
+I drank the {{ item }} and now I feel terribly sick.
+{%- elif verb == "drink" -%}
+I drank the {{ item }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}

@@ -68,6 +68,8 @@ class ScheduleMockClient(MockReActClient):
         super().__init__(config, ledger=ledger)
         self.schedule = schedule
         self.stop_index = 0
+        # How many of the current stop's authored commands have been issued.
+        self._commands_used = 0
 
     @property
     def _stop(self) -> dict:
@@ -97,6 +99,7 @@ class ScheduleMockClient(MockReActClient):
         """Move to the next scheduled stop. Returns ``False`` if none remain."""
         if self.stop_index + 1 < len(self.schedule):
             self.stop_index += 1
+            self._commands_used = 0
             return True
         return False
 
@@ -108,8 +111,40 @@ class ScheduleMockClient(MockReActClient):
         ``stop_index`` -- so the index stays valid and only the upcoming tail
         differs. The mock never calls this (its day is static); it exists for the
         revision seam a real planner drives (``cognition.maybe_revise_plan``).
+
+        Carrying over authored ``commands`` (#300): the engine's
+        ``planning.Stop`` has no ``commands`` field, so any schedule that has been
+        through a ``Stop`` round-trip (``to_schedule_entry`` / ``from_schedule_entry``,
+        e.g. every ``MockPlanner``/``LLMPlanner`` plan) silently drops the
+        per-stop commands an author put in ``world_data.yaml`` / persona schedule.
+        Rather than teach the engine's ``Stop`` about a backend-only field
+        (upstreaming tracked in #464), we patch the loss back in here: for each
+        incoming entry that lines up positionally with the *current* schedule's
+        entry at the same index (same ``place`` and ``activity``) and itself
+        carries no ``commands`` (missing key or empty list), we carry over the
+        current stop's ``commands``. An entry that differs in ``place`` or
+        ``activity`` is a genuinely revised/new stop (e.g. a future LLM planner's
+        tail-replace) and gets no carry-over -- it has no authored commands to
+        inherit. This does not touch ``_commands_used``: the current stop (index
+        ``stop_index``), if it matched, is the *same* authored stop the agent may
+        already be partway through, so its progress must survive the swap.
         """
-        self.schedule = schedule
+        current = self.schedule
+        patched = []
+        for i, entry in enumerate(schedule):
+            if entry.get("commands"):
+                patched.append(entry)
+                continue
+            if i < len(current):
+                prior = current[i]
+                if (
+                    prior.get("place") == entry.get("place")
+                    and prior.get("activity") == entry.get("activity")
+                    and prior.get("commands")
+                ):
+                    entry = {**entry, "commands": list(prior["commands"])}
+            patched.append(entry)
+        self.schedule = patched
 
     def _current_location(self, observation: str) -> str:
         """describe_for() puts the location name (UPPERCASE) on the first line."""
@@ -121,6 +156,11 @@ class ScheduleMockClient(MockReActClient):
     def _choose(self, observation: str) -> str:
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
+        queued = self._stop.get("commands") or []
+        if self._commands_used < len(queued):
+            command = queued[self._commands_used]
+            self._commands_used += 1
+            return command
         return f"perform {self.activity}"
 
     # -- the two routes the agent layer may take; both defer to _choose --------
@@ -150,11 +190,12 @@ class ScheduleMockClient(MockReActClient):
         command = self._choose(observation)
         self.decisions.append({"command": command, "system": system})
         verb, _, rest = command.partition(" ")
-        reasoning = (
-            f"I'm on my way to {self.destination}."
-            if verb == "travel"
-            else f"I've arrived, so I'll get on with {self.activity}."
-        )
+        if verb == "travel":
+            reasoning = f"I'm on my way to {self.destination}."
+        elif verb == "perform":
+            reasoning = f"I've arrived, so I'll get on with {self.activity}."
+        else:
+            reasoning = f"While I'm here: {command}."
         result = {"reasoning": reasoning, "action": verb, "arguments": rest}
         # Zero-cost usage record (this override doesn't call super().call_tool),
         # so each persona's decision lands in the shared ledger.
@@ -187,6 +228,7 @@ def attach_agents(
     num_steps: int | None = None,
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
+    extra_action_names: list[str] | None = None,
 ) -> None:
     """Wire one mock-driven :class:`LLMAgent` onto each persona character.
 
@@ -243,7 +285,15 @@ def attach_agents(
     into higher-level thoughts written back into the stream. With none -- the
     offline default -- no reflector is wired on, so reflection never fires and the
     replay stays byte-identical. ``run_simulation`` supplies one only for a real
-    (non-mock) provider, the same gate as the brain and planner."""
+    (non-mock) provider, the same gate as the brain and planner.
+
+    Pass ``extra_action_names`` (spec §3, #300) to widen every attached agent's
+    ``action_names`` beyond the authored-command verbs discovered on its own
+    schedule -- e.g. Penn's ``["get", "drink", "activate", "deactivate"]`` -- so a
+    *real* brain (a closed tool-calling enum) can choose those verbs even for a
+    persona whose schedule never authors a matching ``commands:`` entry. With
+    none -- the default, and what every Smallville caller still passes -- the verb
+    set is derived from authored commands alone, unchanged from before."""
     # Load the relationship table once (returns {} if the path is unset/missing).
     relationships = (
         seed.load_relationships(relationships_csv) if relationships_csv else {}
@@ -266,8 +316,22 @@ def attach_agents(
         if reflector_client is not None:
             agent.reflector = LLMReflector(reflector_client)
         # The verbs the structured tool may offer; the mock ignores the enum but a
-        # well-formed schema keeps the seam honest for a real brain.
-        agent.action_names = ["travel", "perform"]
+        # well-formed schema keeps the seam honest for a real brain. Order:
+        # the base travel/perform, then any caller-supplied extra_action_names
+        # (spec §3, #300 -- e.g. Penn's device/drink verbs, so a real brain's
+        # closed enum can choose them even without an authored commands: stop),
+        # then whatever authored-command verbs remain (sorted), deduplicating
+        # while preserving that order.
+        authored_verbs = sorted(
+            {
+                cmd.split(" ", 1)[0]
+                for stop in spec["schedule"]
+                for cmd in stop.get("commands") or []
+            }
+        )
+        ordered = ["travel", "perform", *(extra_action_names or []), *authored_verbs]
+        seen: set[str] = set()
+        agent.action_names = [v for v in ordered if not (v in seen or seen.add(v))]
         char.set_agent(agent)
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
@@ -521,6 +585,25 @@ def remember_outcome(char, command: str, step: int) -> None:
     elif verb == "perform":
         activity = char.get_property("activity") or rest.strip()
         text = render("reflection", verb=verb, activity=activity)
+        importance = 2.0
+    elif verb == "drink":
+        # The contaminated-water effect (#300): DrinkPenn sets a one-shot
+        # "just_sickened" marker during apply_effects, keyed off the
+        # sick/not-sick *transition* rather than the character's ongoing
+        # is_sick state (spec §4) -- so a still-sick agent drinking a clean
+        # liquid doesn't misattribute "terribly sick" to this drink. Only the
+        # drink that actually caused the sickness lands as the HIGH-importance
+        # first-person memory the self-coding experiment (#299) retrieves;
+        # consume the marker here so it doesn't leak into a later drink.
+        sick = bool(char.get_property("just_sickened"))
+        if sick:
+            char.set_property("just_sickened", False)
+        text = render("reflection", verb=verb, item=rest.strip(), sick=sick)
+        importance = 8.0 if sick else 2.0
+    elif verb in ("get", "activate", "deactivate"):
+        # World-mutating one-shot verbs (#300): worth a normal-importance
+        # memory, unlike the 1.0 catch-all below.
+        text = render("reflection", verb=verb, command=command)
         importance = 2.0
     else:
         text = render("reflection", verb=verb, command=command)
