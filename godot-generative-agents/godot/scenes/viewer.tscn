@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/viewer.gd" id="1_replay"]
 [ext_resource type="Script" path="res://scripts/tiled_map.gd" id="2_tiled"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/persona_inspector.gd" id="11_inspector"]
 [ext_resource type="Script" path="res://scripts/social_graph_panel.gd" id="12_socgraph"]
 [ext_resource type="Script" path="res://scripts/snapshot_gallery.gd" id="13_snapgallery"]
+[ext_resource type="Script" path="res://scripts/day_plan_panel.gd" id="14_dayplans"]
 
 [node name="PennReplay" type="Node2D"]
 script = ExtResource("1_replay")
@@ -120,3 +121,15 @@ layer = 14
 [node name="SnapshotGallery" type="Control" parent="SnapshotLayer"]
 visible = false
 script = ExtResource("13_snapgallery")
+
+; Day-plans pop-up (day_plan_panel.gd, issue #251): each agent's authored day
+; plan beside what they actually did, on one shared time axis. On its OWN
+; CanvasLayer above the other modals (heatmap 11, inspector 12, social graph 13,
+; gallery 14) so its dim covers everything and Esc closes it first. Hidden until
+; opened (the sidebar's Day plans button / T); viewer.gd feeds it the replay.
+[node name="DayPlanLayer" type="CanvasLayer" parent="."]
+layer = 15
+
+[node name="DayPlanPanel" type="Control" parent="DayPlanLayer"]
+visible = false
+script = ExtResource("14_dayplans")
