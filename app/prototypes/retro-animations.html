@@ -2915,15 +2915,17 @@
         e2.q.setAttribute("cy", 282 - k * 1.05);
         e2.q.setAttribute("opacity", k > 168 ? 0 : .5 + ((t + e2.ph) % 3) * .25);
       });
-      spikes.forEach((n, i) => {                              // firelight on the crown
-        const lit = ((t * 2 + i * 5) % 17) < 4;
-        n.setAttribute("stroke", lit ? YELLOW : PH);
-        n.setAttribute("fill", lit ? YELLOW : PH);
+      const beat = Math.floor(t / 8);                         // slow firelight,
+      const AMBER = "#e5b955";                                // not a strobe
+      spikes.forEach((n, i) => {
+        const lit = (beat + i) % 5 === 0;
+        n.setAttribute("stroke", lit ? AMBER : PH);
+        n.setAttribute("fill", lit ? AMBER : PH);
       });
       curls.forEach((n, i) =>
-        n.setAttribute("stroke", ((t * 2 + i * 7) % 13) < 3 ? YELLOW : PH));
-      skull.setAttribute("stroke", (t % 9) < 2 ? YELLOW : PH); // and on the mask
-      ring.setAttribute("stroke", ((t + 4) % 9) < 2 ? YELLOW : PH_DIM);
+        n.setAttribute("stroke", (beat + i) % 4 === 0 ? AMBER : PH));
+      skull.setAttribute("stroke", beat % 5 === 0 ? AMBER : PH);
+      ring.setAttribute("stroke", (beat + 2) % 5 === 0 ? AMBER : PH_DIM);
       glowL.setAttribute("fill-opacity", .4 + ((t % 4) / 4) * .4);
       glowR.setAttribute("fill-opacity", .4 + (((t + 2) % 4) / 4) * .4);
       const vig = 5 - Math.min(5, Math.floor(burn * 5.5));
