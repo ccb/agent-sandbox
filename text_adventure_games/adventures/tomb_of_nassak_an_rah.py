@@ -2161,6 +2161,9 @@ def build_game(seed=None):
         "from his open mouth. Each mouth is a door. Wind and sand have been "
         "scoring these faces for ages, and yet they remain intact somehow.",
     )
+    # The approach (card 17-C): a title plate above the first arrival's
+    # description (the Go hook) -- and EXAMINE TOMB, whichever comes first.
+    exterior.set_property("figure", "ext1c")
     youth = things.Location(
         "Hall of Youth",
         # The LIT view -- what you see once a light is raised. Pitch dark until
@@ -4483,15 +4486,6 @@ def build_game(seed=None):
         _canopic_desc_update(g)  # the room reads open THIS round, not next
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
-
-    # The approach (card 17-C): the graven head, cued the first time the
-    # player stands before it -- and by EXAMINE TOMB, whichever comes first.
-    game.add_trigger(
-        "approach_figure",
-        lambda g: g.locations["Tomb Exterior"].has_been_visited,
-        lambda g: g.show_figure("ext1c"),
-        repeatable=False,
-    )
 
     # --- The Friend's Fungus chain (design doc §13; optional, no score) ------
     # fungus (corpse) -> GIVE to Silas -> the Ulfire Lantern -> LIGHT it while

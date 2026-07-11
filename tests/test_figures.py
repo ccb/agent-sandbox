@@ -186,10 +186,14 @@ def test_the_bridge_carries_figure_events():
     assert [e["text"] for e in figs] == ["glowstone"]
 
 
-def test_arriving_at_the_tomb_cues_the_approach():
+def test_arriving_at_the_tomb_cues_the_approach_above_the_description():
     g, cap = _game()
     g.do_command("go north")
-    assert "ext1c" in cap.texts(Channel.FIGURE)
+    kinds = [(m.channel, m.text) for m in cap.messages]
+    fig_at = next(i for i, (c, t) in enumerate(kinds) if c is Channel.FIGURE)
+    desc_at = next(i for i, (c, t) in enumerate(kinds) if "azure stone" in t)
+    assert kinds[fig_at][1] == "ext1c"
+    assert fig_at < desc_at  # the card is a title plate, not a footnote
     g.do_command("go south")
     g.do_command("go north")  # returning does not re-draw it
     assert cap.texts(Channel.FIGURE).count("ext1c") == 1
