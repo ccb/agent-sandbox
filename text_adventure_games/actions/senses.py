@@ -178,7 +178,7 @@ class Taste(_Probe):
             return (
                 line
                 or f"You taste the {target.name}: plain, but nothing wrong with it."
-            ) + " You could eat it."
+            ) + " But you could eat it."
         return (
             line
             or f"You touch your tongue to the {target.name}. It is not food, "

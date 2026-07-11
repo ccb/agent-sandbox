@@ -1106,7 +1106,7 @@ def test_taste_is_the_cautious_cousin_of_eat():
     game.do_command("taste crate of dates")
     text = " ".join(cap.texts(Channel.NARRATION))
     assert "honey and sun" in text  # the flavor
-    assert "You could eat it." in text  # the edibility verdict
+    assert "But you could eat it." in text  # the edibility verdict
     assert "crate of dates" in game.player.carried_items()  # NOT eaten
     game.do_command("lick glowstone")  # the alias -- and CCB's battery
     assert "nine-volt battery" in " ".join(cap.texts(Channel.NARRATION))
@@ -2294,3 +2294,37 @@ def test_the_full_winning_run_scores_100():
     assert game.is_won()
     assert game.score == 145 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
+
+
+def test_butchery_catches_the_blood_and_the_blood_mends():
+    """The first cut yields the haunch AND two doses of zox blood (CCB);
+    each dose drinks like water -- the most recent wound heals -- and the
+    doses can be decanted into the waterskin to keep."""
+    from text_adventure_games import things as _things
+    from text_adventure_games.slots import Wound
+
+    game = _game()
+    cap = _texts(game)
+    edge = _things.Item("test knife", "a test knife", "a test knife")
+    edge.set_property("edged", True)
+    game.player.add_to_inventory(edge)
+    game.do_command("butcher zoxen")
+    loc = game.player.location
+    assert "zox haunch" in loc.items
+    assert "zox blood" in loc.items
+    blood = loc.items["zox blood"]
+    assert int(blood.get_property("portions")) == 2
+    # a dose heals the freshest wound
+    game.player.add_wound(Wound("Bloody Gash", 1, "It will scar."))
+    game.do_command("take blood")
+    game.do_command("drink blood")
+    assert not game.player.wounds
+    assert int(blood.get_property("portions")) == 1
+    # the last dose keeps in the waterskin as a ration
+    game.do_command("search merchant")
+    game.do_command("take waterskin")
+    skin = game.player.carried_items()["waterskin"]
+    before = int(skin.get_property("portions"))
+    game.do_command("pour blood into waterskin")
+    assert int(skin.get_property("portions")) == before + 1
+    assert "zox blood" not in game.player.carried_items()
