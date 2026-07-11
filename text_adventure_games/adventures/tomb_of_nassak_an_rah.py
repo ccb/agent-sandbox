@@ -84,53 +84,248 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 # act alone: prying its coffin (the boss fight, below).
 
 
-# The lattice holds the Autarch's DAYS (CCB: a different memory per look, not
-# always the embalming). The embalming replay -- the jar-puzzle clue -- stays
-# in the pool: you sift a dead king's days for the useful one, and Silas
-# points the way ("the lattice remembers his embalming, for those who trouble
-# to look").
-_LATTICE_MEMORIES = (
-    "the Autarch's embalming: the baboon took his lungs, the human his "
-    "liver, the mantis his eyes; the falcon was given his intestines, and "
-    "the jackal -- strangely -- his brain.",
-    "a bath: full immersion, water to the chin and warm -- a luxury no one "
-    "now living has tasted. He weeps in it, quietly, where no court can "
-    "see, and the crystal keeps the weeping with the warmth.",
-    "his mother's hand on the back of his neck, from before either crown "
-    "or name. The facet is brief. It is the most consulted bank in the "
-    "lattice; the wear on the crystal says so.",
-    "the first time he drew blood: a training yard, a cousin's forearm "
-    "opened by accident, and the long second in which he understands that "
-    "no one is going to punish him. The facet ends on that second.",
-    "the day they raised him: ten thousand banners the colour of this sand, "
-    "and his own hands shaking too hard to take the staff, so that he grips "
-    "his wrist to steady it -- the gesture his historians would later call "
-    "the Vice.",
-    "a physician's chamber. Something orange in a sample-jar, small as a "
-    "coin, and An-Rah watching it move against the glass with an expression "
-    "the facet preserves exactly. It is not fear.",
-    "a memory that is not his: eight-jointed hands sorting seeds by "
-    "starlight, patient as arithmetic. The lattice does not say whose day "
-    "this was, or how it got in among the king's.",
-    "an old man's hands -- his own, by then -- teaching a kestrel to stand "
-    "on a wrist, over and over, with the patience of a man who has outlived "
-    "everyone who would have laughed at him.",
-    "the tombwrights taking his measurements while he still lived; his own "
-    "voice, bored, asking whether the sky-facing face might be made to "
-    "smile. It was not.",
+# The lattice holds the Autarch's DAYS (CCB: deeper now). Each facet has a
+# NAME the REMEMBER verb answers to, and a continuation that notices what the
+# expedition has since done -- the lattice is the tomb's commentary track.
+# EXAMINE draws unseen facets first; once every remembered day has been
+# consulted, a hidden bank wakes: the keep-list, the day he chose. The
+# embalming replay (the jar-puzzle clue) stays findable by name the moment
+# Silas points at it.
+_LATTICE_FACETS = (
+    {
+        "key": "embalming",
+        "name": "THE EMBALMING",
+        "words": ("embalming", "embalm", "funeral", "organs"),
+        "text": (
+            "the Autarch's embalming: the baboon took his lungs, the human his "
+            "liver, the mantis his eyes; the falcon was given his intestines, and "
+            "the jackal -- strangely -- his brain."
+        ),
+        "more": lambda g: (
+            " The jars stand answered on their plinths now; the stair took "
+            "the lattice at its word."
+            if g.locations["Hall of the Canopic Jars"].get_property("seal_open")
+            else (
+                " The hall of plinths below wears the same five faces. The "
+                "lattice has been telling you where things go."
+                if g.locations["Hall of the Canopic Jars"].has_been_visited
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "bath",
+        "name": "THE BATH",
+        "words": ("bath", "water", "weeping", "immersion"),
+        "text": (
+            "a bath: full immersion, water to the chin and warm -- a luxury no one "
+            "now living has tasted. He weeps in it, quietly, where no court can "
+            "see, and the crystal keeps the weeping with the warmth."
+        ),
+        "more": lambda g: (
+            " Water still mends, in Vaarn. You have felt what he wept for."
+            if g.scored("healed")
+            else ""
+        ),
+    },
+    {
+        "key": "mother",
+        "name": "HIS MOTHER",
+        "words": ("mother", "neck", "his mother"),
+        "text": (
+            "his mother's hand on the back of his neck, from before either crown "
+            "or name. The facet is brief. It is the most consulted bank in the "
+            "lattice; the wear on the crystal says so."
+        ),
+        "more": lambda g: (
+            " Silas says there is a daughter counting to a hundred in the "
+            "ego-core. The hand he kept HERE, at hand-height, where hands "
+            "could reach it."
+            if g.characters["Silas"].get_property("core_traded")
+            else ""
+        ),
+    },
+    {
+        "key": "first blood",
+        "name": "FIRST BLOOD",
+        "words": ("first blood", "blood", "cousin", "training yard"),
+        "text": (
+            "the first time he drew blood: a training yard, a cousin's forearm "
+            "opened by accident, and the long second in which he understands that "
+            "no one is going to punish him. The facet ends on that second."
+        ),
+        "more": lambda g: (
+            " No one has punished you, either."
+            if g.scored("spawn_guts")
+            or g.scored("spawn_brain")
+            or g.scored("jackals_settled")
+            else ""
+        ),
+    },
+    {
+        "key": "the raising",
+        "name": "THE RAISING",
+        "words": ("raising", "banners", "vice", "staff", "crown"),
+        "text": (
+            "the day they raised him: ten thousand banners the colour of this sand, "
+            "and his own hands shaking too hard to take the staff, so that he grips "
+            "his wrist to steady it -- the gesture his historians would later call "
+            "the Vice."
+        ),
+        "more": lambda g: (
+            " The guards in the western hall were buried gripping their "
+            "wrists the same way. The Vice outlived his historians."
+            if g.locations["Hall of Warriors"].has_been_visited
+            else ""
+        ),
+    },
+    {
+        "key": "physician",
+        "name": "THE PHYSICIAN'S CHAMBER",
+        "words": ("physician", "sample", "chamber", "orange"),
+        "text": (
+            "a physician's chamber. Something orange in a sample-jar, small as a "
+            "coin, and An-Rah watching it move against the glass with an expression "
+            "the facet preserves exactly. It is not fear."
+        ),
+        "more": lambda g: (
+            " The sample outlived him by four thousand years. You have "
+            "since corrected that."
+            if g.locations["Burial Sphere of Nassak An-Rah"].get_property("horror_dead")
+            else (
+                " You have seen that expression since -- on the thing "
+                "wearing his bones."
+                if g.characters["fungal horror"].location
+                is g.locations["Burial Sphere of Nassak An-Rah"]
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "seeds",
+        "name": "THE EIGHT-JOINTED HANDS",
+        "words": ("seeds", "starlight", "eight", "eight-jointed"),
+        "text": (
+            "a memory that is not his: eight-jointed hands sorting seeds by "
+            "starlight, patient as arithmetic. The lattice does not say whose day "
+            "this was, or how it got in among the king's."
+        ),
+        "more": lambda g: (
+            " Something in the jar-hall below sorts SOUND the way these "
+            "hands sort seeds. The lattice keeps its counsel."
+            if g.locations["Hall of the Canopic Jars"].has_been_visited
+            else ""
+        ),
+    },
+    {
+        "key": "kestrel",
+        "name": "THE KESTREL",
+        "words": ("kestrel", "bird", "falconry", "wrist"),
+        "text": (
+            "an old man's hands -- his own, by then -- teaching a kestrel to stand "
+            "on a wrist, over and over, with the patience of a man who has outlived "
+            "everyone who would have laughed at him."
+        ),
+        "more": lambda g: (
+            " That wrist lies composed now among its wrappings. You "
+            "arranged it yourself."
+            if g.locations["Burial Sphere of Nassak An-Rah"]
+            .items["coffin"]
+            .get_property("fixed")
+            else (
+                " That wrist is adrift in the sphere below, gold wire "
+                "loose at the joints."
+                if g.locations["Burial Sphere of Nassak An-Rah"].get_property(
+                    "horror_dead"
+                )
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "tombwrights",
+        "name": "THE TOMBWRIGHTS",
+        "words": ("tombwrights", "measurements", "smile", "faces", "sky"),
+        "text": (
+            "the tombwrights taking his measurements while he still lived; his own "
+            "voice, bored, asking whether the sky-facing face might be made to "
+            "smile. It was not."
+        ),
+        "more": lambda g: (
+            " You have since taught the face's owner to smile after all "
+            "-- from the inside."
+            if g.locations["Burial Sphere of Nassak An-Rah"]
+            .items["prayers"]
+            .get_property("slumber_spent")
+            else ""
+        ),
+    },
+    {
+        "key": "the choosing",
+        "name": "THE CHOOSING",
+        "words": ("choosing", "keep-list", "chose", "kept", "the day he chose"),
+        "hidden": True,  # wakes only once every other day has been consulted
+        "text": (
+            "the day he chose: a table of wax tablets, the tombwrights' "
+            "ledger of what a lattice can hold, and An-Rah, old, striking "
+            "lines from it. The decrees go. The conquests go. The ten "
+            "thousand banners go. What stays: the bath. The hand on the "
+            "neck. The kestrel, the weeping, the seeds that were never his. "
+            "And at the bottom, in the king's own unpracticed hand, one "
+            "entry the wrights did not offer: THE DAY I CHOSE. KEEP THIS "
+            "TOO, SO THAT WHOEVER READS ME KNOWS I KNEW."
+        ),
+    },
 )
+
+#: Compatibility view (tests and prose tooling read the raw day-texts).
+_LATTICE_MEMORIES = tuple(f["text"] for f in _LATTICE_FACETS if not f.get("hidden"))
+
+
+def _facet_text(g, lattice, i):
+    """Show facet *i*: mark it consulted, pay the first-look award (and the
+    completion award if this is the hidden keep-list), and return the text
+    with any continuation the expedition has earned."""
+    mask = int(lattice.get_property("_seen") or 0)
+    first = not mask & (1 << i)
+    lattice.set_property("_seen", mask | (1 << i))
+    g.award("lattice", 5, "[+5 -- a dead king's days]")
+    facet = _LATTICE_FACETS[i]
+    if facet.get("hidden") and first:
+        g.award("remembered", 5, "[+5 -- every remembered day, in its order]")
+    extra = facet["more"](g) if facet.get("more") else ""
+    return facet["text"] + (extra or "")
 
 
 def _lattice_look(g=None):
-    """A different facet each look (callable examine_text; engine support in
-    actions.things.Examine / Thing.sense_text)."""
-    if g is not None:
-        g.award("lattice", 5, "[+5 -- a dead king's days]")
-    return (
+    """A facet per look (callable examine_text): UNSEEN days first, so the
+    sifting converges; when every remembered day has been consulted, the
+    hidden bank -- the keep-list -- wakes exactly once, then the lattice
+    returns to replaying at its own whim."""
+    intro = (
         "Lazulite crystals knit across the walls, worn smooth at "
         "hand-height. A bank wakes at your attention and replays "
-        + _RNG.choice(_LATTICE_MEMORIES)
     )
+    if g is None:
+        return intro + _RNG.choice(_LATTICE_MEMORIES)
+    lattice = g.locations["Hall of Memory"].items["crystal lattice"]
+    mask = int(lattice.get_property("_seen") or 0)
+    unseen = [
+        i
+        for i, f in enumerate(_LATTICE_FACETS)
+        if not f.get("hidden") and not mask & (1 << i)
+    ]
+    if unseen:
+        return intro + _facet_text(g, lattice, _RNG.choice(unseen))
+    hidden_i = next(i for i, f in enumerate(_LATTICE_FACETS) if f.get("hidden"))
+    if not mask & (1 << hidden_i):
+        return (
+            "The banks go quiet at your attention -- all of them, at once: "
+            "every remembered day consulted, and the lattice knows it. Deep "
+            "in the wall a bank you have never seen wakes, unworn, and "
+            "replays " + _facet_text(g, lattice, hidden_i)
+        )
+    return intro + _facet_text(g, lattice, _RNG.choice(range(len(_LATTICE_FACETS))))
 
 
 def _wound_player(g, name, slots_n, desc):
@@ -709,6 +904,71 @@ class TieSilk(actions.Action):
             "You pay the spider-silk out through the wall-rings and lash the "
             "coffin fast -- cobweb-thin, and it holds like law. The coffin "
             "stops its slow turning."
+        )
+
+
+class Remember(actions.Action):
+    """REMEMBER <day> (CCB): directed recall at the lattice. A bank answers
+    to its NAME -- the embalming, his mother, the kestrel -- for whoever
+    knows what to ask for (Silas names several; the rest are earned by
+    looking). EXAMINE stays the lattice choosing; REMEMBER is you asking."""
+
+    ACTION_NAME = "remember"
+    ACTION_DESCRIPTION = "Ask the lattice for one of the Autarch's days by name"
+    ACTION_ALIASES = ["recall"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+        loc = self.player.location
+        self.lattice = loc.items.get("crystal lattice") if loc else None
+        self.facet_i = None
+        for i, f in enumerate(_LATTICE_FACETS):
+            if any(w in self.command for w in f["words"]):
+                self.facet_i = i
+                break
+
+    def check_preconditions(self) -> bool:
+        if self.lattice is None:
+            self.parser.fail(
+                "Nothing here holds a dead man's days. The memory-crystal "
+                "is in the Hall of Memory."
+            )
+            return False
+        mask = int(self.lattice.get_property("_seen") or 0)
+        if self.facet_i is None:
+            consulted = [
+                f["name"] for i, f in enumerate(_LATTICE_FACETS) if mask & (1 << i)
+            ]
+            if consulted:
+                self.parser.fail(
+                    "Which day? The banks you have consulted answer to: "
+                    + "; ".join(consulted)
+                    + ". (REMEMBER THE EMBALMING -- and Silas may name "
+                    "others.)"
+                )
+            else:
+                self.parser.fail(
+                    "The lattice shows what it chooses (EXAMINE LATTICE) -- "
+                    "but a bank answers to its NAME, for whoever knows what "
+                    "to ask for. Silas has named a few."
+                )
+            return False
+        facet = _LATTICE_FACETS[self.facet_i]
+        if facet.get("hidden") and not mask & (1 << self.facet_i):
+            self.parser.fail(
+                "If the lattice keeps such a day, it has not shown it to "
+                "you. Some banks wake only for a finished reader."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You lay your fingers where the wear is deepest and ask. The "
+            "bank wakes under them and replays "
+            + _facet_text(self.game, self.lattice, self.facet_i)
         )
 
 
@@ -2801,6 +3061,7 @@ def build_game(seed=None):
             Burn,
             FixCoffin,
             PryCoffin,
+            Remember,
             SayPrayer,
             TieSilk,
             Refill,
@@ -2808,7 +3069,7 @@ def build_game(seed=None):
             Butcher,
         ],
     )
-    game.max_score = 140
+    game.max_score = 145
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2977,8 +3238,9 @@ def build_game(seed=None):
                 "READ LEDGER at the wreck; DRINK WATER on a wound; the "
                 "lattice remembers a dead king's days; Silas rewards a "
                 "civil TALK.",
-                "The full 140: threshold 5, first light 5, water 5, a "
-                "healed wound 5, the lattice memory 5, Silas's acquaintance "
+                "The full 145: threshold 5, first light 5, water 5, a "
+                "healed wound 5, the lattice memory 5, every remembered day "
+                "in its order 5, Silas's acquaintance "
                 "5, falcon jar 5, jackal jar 5, the dagger 5, the manifold "
                 "box 5, the Friend's Fungus 5, the archivist made whole 5, "
                 "each spawn quelled 5, the "
@@ -4820,6 +5082,17 @@ WIN_WALKTHROUGH = [
     "give fungus to silas",  # the lonely archivist hands over the lantern
     "light ulfire lantern",  # ...which opens the manifold box's true interior
     "give core to silas",  # the stated price: his robes, and an ending (+5)
+    # Consult every remembered day (unseen facets draw first, so nine looks
+    # cover the nine) -- and the tenth look wakes the keep-list (+5).
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
     "sneak south",
     "sneak south",  # escape -> WIN
 ]
