@@ -100,6 +100,10 @@ class Game:
         self.hint_progress = {}
         self.hints_taken = 0
 
+        # Illustration cards already cued (show_figure fires once per key,
+        # like award's idempotence set). Rebuilt by journal replay for free.
+        self.figures_shown = set()
+
         # Add player to game and put them on starting point
         self.characters = {}
         self.add_character(player)
@@ -772,6 +776,16 @@ class Game:
         the idempotence set, for predicates (hints, triggers) that gate on
         a milestone having happened."""
         return key in self._scored_keys
+
+    def show_figure(self, key):
+        """Cue the illustration card *key*, once per game (repeats are no-ops,
+        so re-examining a thing doesn't re-draw its card). Purely cosmetic:
+        surfaces without a card registry ignore the FIGURE channel, and the
+        set rebuilds on journal replay because the cueing commands re-run."""
+        if not key or key in self.figures_shown:
+            return
+        self.figures_shown.add(key)
+        self.parser.figure(key)
 
     def award(self, key, points, msg=None):
         """Add *points* to the score once per *key* (idempotent), optionally

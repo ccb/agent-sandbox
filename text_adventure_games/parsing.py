@@ -145,6 +145,12 @@ class Parser:
         self.last_fail_message = description
         self._emit(Channel.BLOCKED, description)
 
+    def figure(self, key: str):
+        """Cue an illustration: *key* names a card in the surface's registry.
+        Text renderers stay silent below VERBOSE (a key is not prose); the web
+        terminal draws the card inline. Never enters command history."""
+        self._emit(Channel.FIGURE, key)
+
     @staticmethod
     def wrap_text(text: str, width: int = 80) -> str:
         """

@@ -28,6 +28,7 @@ const DEFAULTS = {
   haptics: true,
   chips: true,
   textsize: "normal", // "small" | "normal" | "large"
+  illustrations: true, // the litho cards (figures.js), drawn inline
 };
 let settings = { ...DEFAULTS };
 try {
@@ -46,6 +47,7 @@ function applySettings() {
 
 const SETTING_ROWS = [
   ["crt", "CRT EFFECTS", [true, false], (v) => (v ? "ON" : "OFF")],
+  ["illustrations", "ILLUSTRATIONS", [true, false], (v) => (v ? "ON" : "OFF")],
   ["typewriter", "TYPEWRITER", ["on", "fast", "off"], (v) => v.toUpperCase()],
   ["sound", "SOUND", [true, false], (v) => (v ? "ON" : "OFF")],
   ["haptics", "HAPTICS", [true, false], (v) => (v ? "ON" : "OFF")],
@@ -229,10 +231,34 @@ function haptic(kind) {
 
 let wasGameOver = false;
 
+/* An illustration card, drawn inline in the transcript. The engine cues
+   these on the "figure" channel (a card KEY, not prose); the registry in
+   figures.js does the drawing. Off-switch: the ILLUSTRATIONS setting. A
+   missing registry or unknown key is silently skipped -- text is always
+   the complete game. */
+function showFigure(key, opts = {}) {
+  if (!settings.illustrations) return null;
+  const F = window.TombFigures;
+  if (!F || !F.has(key)) return null;
+  const box = document.createElement("div");
+  box.className = "figure";
+  try {
+    if (opts.prepend) output.prepend(box);
+    else output.appendChild(box);
+    F.render(key, box);
+  } catch (e) {
+    box.remove();
+    return null;
+  }
+  if (!opts.prepend && nearBottom()) output.scrollTop = output.scrollHeight;
+  return box;
+}
+
 function render(payloadJson, opts = {}) {
   const payload = JSON.parse(payloadJson);
   const instant = opts.instant || payload.events.length > 10;
   for (const ev of payload.events) {
+    if (ev.channel === "figure") { showFigure(ev.text); continue; }
     const cls =
       ev.channel === "damage" ? "damage" :
       ev.channel === "blocked" ? "blocked" : "";
@@ -250,6 +276,7 @@ function render(payloadJson, opts = {}) {
   // (CCB: it was reprinting each turn). Post-mortem commands are refused by
   // the engine itself, with the RESTORE/RESTART hint in the refusal.
   if (s.game_over && !wasGameOver) {
+    if (!s.won) showFigure("epitaph"); // the Trail's tombstone, client-cued
     if (!s.won) { haptic("death"); sounds.damage(); }
     const hinted = s.hints ? ` (${s.hints} hint${s.hints === 1 ? "" : "s"} taken)` : "";
     print((s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***") + hinted, "echo", instant);
@@ -712,6 +739,9 @@ async function main() {
       seed = Date.now() % 1000000;
     }
     render(api.boot(seed));
+    // A fresh expedition opens on the Trail card, above the first look
+    // (a resumed one rejoins the story mid-stride, no title reel).
+    showFigure("road", { prepend: true });
   }
   output.scrollTop = 0; // the expedition reads from the top (CCB)
   bootscreen.classList.add("done");
