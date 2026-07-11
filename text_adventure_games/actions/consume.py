@@ -216,11 +216,28 @@ class Light(base.Action):
         Effects:
         * Changes the state to lit
         """
+        from .. import perception
+
+        loc = self.character.location
+        before = (
+            perception.sight_for(self.character, loc)[0] if loc is not None else None
+        )
         self.item.set_property(Property.IS_LIT, True)
         # Item-subject phrasing so it reads right for any actor -- "You lights the
         # lamp" (player named "you") would be ungrammatical.
         description = "The {item} flares alight and glows.".format(item=self.item.name)
         self.parser.ok(description)
+        # Raising a light where you couldn't see earns the room's full look
+        # (CCB): the same as typing LOOK -- description, contents, and the
+        # room's card -- because the light is what just revealed them.
+        if (
+            self.character is self.game.player
+            and loc is not None
+            and before is not None
+            and before < perception.Sight.CLEAR
+            and perception.sight_for(self.character, loc)[0] > before
+        ):
+            base.Describe(self.game, command="look", actor=self.character)()
 
 
 class Douse(base.Action):

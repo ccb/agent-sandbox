@@ -291,3 +291,14 @@ def test_taking_a_carded_item_draws_it_once():
     g.do_command("drop glowstone")
     g.do_command("take glowstone")  # re-pocketing is not
     assert cap.texts(Channel.FIGURE) == ["glowstone"]
+
+
+def test_lighting_up_in_the_dark_earns_the_look():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    g.relocate(g.player, g.locations["Hall of Memory"])  # gloom: shapes only
+    g.do_command("light glowstone")
+    assert "silas" in cap.texts(Channel.FIGURE)  # the room's card, via the look
+    joined = " ".join(cap.texts(Channel.NARRATION))
+    assert "Lattices of memory-crystal" in joined  # and its full description
