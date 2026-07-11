@@ -21,9 +21,9 @@ from text_adventure_games import (
     blocks,
     reactions,
     perception,
-    vaarn_chargen,
 )
 from text_adventure_games.enums import Property
+from text_adventure_games.adventures import vaarn_selves
 from text_adventure_games.hints import Hint
 from text_adventure_games.slots import Wound, roll_wound
 
@@ -905,6 +905,46 @@ class TieSilk(actions.Action):
             "coffin fast -- cobweb-thin, and it holds like law. The coffin "
             "stops its slow turning."
         )
+
+
+class ExamineSelf(actions.Action):
+    """EXAMINE SELF (CCB's easter egg): once per expedition, the scavenger
+    discovers who they have been all along -- one of a hundred pregenerated
+    Vaarnish selves (vaarn_selves.py). The draw happens at action time and
+    the command journals, so a save remembers your face; every later look
+    finds the same one."""
+
+    ACTION_NAME = "examine self"
+    ACTION_DESCRIPTION = "Take stock of yourself"
+    ACTION_ALIASES = [
+        "examine myself",
+        "x self",
+        "x myself",
+        "look at self",
+        "look at myself",
+        "inspect self",
+        "who am i",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        i = self.player.get_property("_self_index")
+        if i is False or i is None:  # never rolled (index 0 is a real self)
+            i = _RNG.randrange(len(vaarn_selves.SELVES))
+            self.player.set_property("_self_index", i)
+            intro = (
+                "You take stock of yourself, perhaps for the first time "
+                "since the Cacklemaw. "
+            )
+        else:
+            intro = "You remain, on inspection, yourself. "
+        self.parser.ok(intro + vaarn_selves.SELVES[int(i)])
 
 
 class Remember(actions.Action):
@@ -2060,59 +2100,45 @@ def build_game(seed=None):
     waterskin.set_property(Property.IS_HIDDEN, True)
     merchant.add_item(waterskin)
 
-    # The TEAMSTER is a NEWBEAST (Issue 1: humanoid animal-people who "speak
-    # and walk like men", wearing masks in imitation of the human face) --
-    # and a different one each expedition: rolled on the zine's own spark
-    # tables (vaarn_chargen), from a side-RNG derived from the game seed so
-    # the roll never shifts the main stream (saves stay deterministic).
-    # Newbeasts are never beasts of burden; the zoxen pulled, she drove.
-    _nb = vaarn_chargen.generate(
-        random.Random(None if seed is None else f"teamster-{seed}"),
-        ancestry="newbeast",
-    )
-    _beast = _nb.sparks["beast"]
-    _hue = _nb.sparks["hue"].lower()
-    _mask = _nb.sparks["mask"]
-    _mask_line = (
-        "She wears no mask; her beast face meets you bare, which among "
-        "newbeasts is either candor or challenge."
-        if _mask == "None"
-        else f"A carved mask in imitation of a human face -- a {_mask.lower()} "
-        "one -- hangs at her neck on a cord; there is no one left on the "
-        "road to wear it for."
-    )
-    _oddity = _nb.sparks["oddity"]
+    # The TEAMSTER is CRITCH (CCB's pick from the rolled slate; the chargen
+    # slate lives in docs/design/teamster-candidates.md): a golden new-hyena
+    # of Vaarn's mask-wearing newbeasts -- except Critch declines. Won't
+    # wear clothes, either; the brass pin rides a cord. The RANDOM chargen
+    # survives as the EXAMINE SELF easter egg (vaarn_selves.py).
     teamster = things.Character(
-        _nb.name,
-        f"a {_beast.lower()} teamster",
-        f"I am {_nb.name}. I drove the wagon; now there is no wagon.",
+        "Critch",
+        "a golden new-hyena teamster",
+        "I am Critch. I drove the wagon; now there is no wagon.",
     )
     teamster.examine_text = (
-        f"A {_hue}-coated {_beast.lower()} in a drover's long coat, upright, "
-        "dressed in the road's dust. Patient, mournful, unhurt. "
-        f"{_mask_line} ({_oddity.rstrip('.')}.) A brass pin on the coat "
-        f"reads {_nb.name.upper()}."
+        "A golden-coated new-hyena, upright, unhurt, and bare of any stitch "
+        "-- newbeasts dress to reassure, and Critch has declined. A carved "
+        "mask in imitation of a human face, cracked clean across the smile, "
+        "hangs at her neck on a cord beside a brass pin that reads CRITCH. "
+        "She laughs, softly and steadily, at nothing you can see; with "
+        "new-hyenas it is a manner of breathing, not an opinion."
     )
 
     def _teamster_talk(g):
         teamster.set_property("has_spoken", True)
         return (
-            f'"They came at moonset, laughing," {_nb.name} says. "I ran, and '
-            "the merchant could not, and that is the whole story. The "
-            'Cacklemaw make no secret of their coming." She looks north, to '
-            'the faces in the azure stone. "Take what he no longer needs -- '
-            "better you than the sand. He carried water, three rations of "
-            "it, and a glowstone; search him, he is past minding. The hold "
-            "is yours too, whatever you can carry. But mind the tomb, "
-            "scavenger. The caravans give its mouths a wide berth, and a "
-            'caravan is seldom wrong twice." She settles her pack straps as '
-            "she speaks, the way people do who have already decided to be "
-            "elsewhere."
+            '"They came at moonset, laughing," Critch says, and laughs '
+            'herself, without pleasure. "I ran, and the merchant could not, '
+            "and that is the whole story. The Cacklemaw make no secret of "
+            'their coming." She looks north, to the faces in the azure '
+            'stone. "Take what he no longer needs -- better you than the '
+            "sand. He carried water, three rations of it, and a glowstone; "
+            "search him, he is past minding. The hold is yours too, "
+            "whatever you can carry. But mind the tomb, scavenger. The "
+            "caravans give its mouths a wide berth, and a caravan is seldom "
+            'wrong twice." She settles her pack straps as she speaks, the '
+            "way people do who have already decided to be elsewhere."
         )
 
     teamster.talk_text = _teamster_talk
     teamster.add_alias("teamster")
-    teamster.add_alias(_beast.lower())
+    teamster.add_alias("new-hyena")
+    teamster.add_alias("hyena")
     wreck.add_character(teamster)
 
     # --- The eight locations -------------------------------------------------
@@ -3059,6 +3085,7 @@ def build_game(seed=None):
         custom_actions=[
             Sneak,
             Burn,
+            ExamineSelf,
             FixCoffin,
             PryCoffin,
             Remember,
