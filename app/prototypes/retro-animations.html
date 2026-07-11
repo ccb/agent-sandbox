@@ -290,17 +290,6 @@
   </section>
 
   <section>
-    <div class="slate"><h2>19 &mdash; THE OSSIFIED MYSTIC</h2><span class="kind">LITHO / THE SUMMIT</span></div>
-    <div class="screen">
-      <svg id="mystic" viewBox="0 0 640 400" aria-label="The ossified mystic"></svg>
-    </div>
-    <p class="spec">The lotus-postured stone man at the summit, pouch still in his clasped
-       hands, orange fronds running from his eyes and mouth down into the flue &mdash;
-       until the flame starts at his face and walks every frond down the hole. The network
-       dies at its root. <span class="attach">Attaches: BURN CORPSE.</span></p>
-  </section>
-
-  <section>
     <div class="slate"><h2>19-B &mdash; THE OSSIFIED MYSTIC, GIFTED</h2><span class="kind">LITHO / THE SUMMIT</span></div>
     <div class="screen">
       <svg id="mystic-b" viewBox="0 0 640 400" aria-label="The ossified mystic, gifted"></svg>
@@ -309,7 +298,7 @@
        a fringe of hanging threads, one hand out over the scrying bowl &mdash; and the
        Gift itself, a jagged emanation climbing up and out of frame, hung with drifting
        diamonds, frames, rings, and a cube. The orange fronds still run down into the
-       flue. <span class="attach">Alternate for 19.</span></p>
+       flue. <span class="attach">Attaches: the Summit; EXAMINE MYSTIC.</span></p>
   </section>
 
   <section>
@@ -2900,96 +2889,6 @@
       });
       arch.setAttribute("stroke", gone ? PH_BRIGHT : PH_DIM);
       typeOn(foot, "THE DOOR STOPS ARGUING.", T, 152, 1.6);
-    });
-  }
-
-  /* ---------------- 19: the ossified mystic ---------------- */
-  {
-    const svg = document.getElementById("mystic");
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
-    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "THE SUMMIT / STONE / HOST";
-    const MDOTS = stipple(svg, "dots-mystic", PH, .85);
-    const CHAR2 = "#4a2a14", FLAME = "#ffd76a";
-    el(svg, "line", { x1: 40, y1: 322, x2: 600, y2: 322, stroke: PH, "stroke-width": 1.4 });
-    // the flue mouth
-    el(svg, "ellipse", { cx: 560, cy: 322, rx: 36, ry: 10, fill: BG,
-      stroke: PH, "stroke-width": 1.5 });
-    [546, 560, 574].forEach(x =>
-      el(svg, "line", { x1: x, y1: 328, x2: x, y2: 350, stroke: PH_DIM }));
-    // the sitter: four thousand years of posture
-    el(svg, "path", { d: "M 180 292 Q 250 260 320 292 Q 250 322 180 292 Z",
-      fill: MDOTS, stroke: PH, "stroke-width": 1.6 });
-    el(svg, "path", { d: "M 196 292 Q 214 276 232 288", fill: "none", stroke: PH_DIM });
-    el(svg, "path", { d: "M 268 288 Q 286 276 304 292", fill: "none", stroke: PH_DIM });
-    el(svg, "polygon", { points: "214,158 286,158 292,280 208,280",
-      fill: MDOTS, stroke: PH, "stroke-width": 1.6 });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
-      points: "214,168 202,212 232,248" });
-    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.4,
-      points: "286,168 298,212 268,248" });
-    el(svg, "rect", { x: 238, y: 240, width: 24, height: 15, rx: 3,
-      fill: MDOTS, stroke: PH, "stroke-width": 1.3 });         // the pouch
-    el(svg, "circle", { cx: 250, cy: 247, r: 2, fill: FUNGUS });
-    el(svg, "circle", { cx: 250, cy: 134, r: 21, fill: MDOTS,
-      stroke: PH, "stroke-width": 1.6 });
-    el(svg, "polyline", { fill: "none", stroke: PH_DIM,
-      points: "224,196 246,204 240,224" });                    // a crack
-    el(svg, "polyline", { fill: "none", stroke: PH_DIM, points: "276,166 268,184" });
-    const eyes = [[242, 129], [258, 129]].map(([x, y]) =>
-      el(svg, "ellipse", { cx: x, cy: y, rx: 3.4, ry: 2.2, fill: FUNGUS }));
-    el(svg, "path", { d: "M 243 148 Q 250 153 257 148", fill: "none",
-      stroke: PH, "stroke-width": 1.3 });
-    const FRONDS = [[242, 127, -1], [258, 127, 1], [246, 150, 0], [255, 149, 2]];
-    const HX = 556, HY = 316;
-    const fpts = (f, t) => {
-      const [x0, y0, ph] = FRONDS[f], pts = [];
-      for (let q = 0; q <= 9; q++) {
-        const u = q / 9;
-        pts.push([x0 + (HX - x0) * u,
-          y0 + (HY - y0) * u - Math.sin(u * Math.PI) * (52 + ph * 11)
-          + Math.sin(t * .3 + u * 5 + ph) * 4.5 * u]);
-      }
-      return pts;
-    };
-    const live = FRONDS.map(() => el(svg, "polyline",
-      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
-    const dead = FRONDS.map(() => el(svg, "polyline",
-      { fill: "none", stroke: CHAR2, "stroke-width": 2 }));
-    const tips = FRONDS.map(() => el(svg, "circle", { r: 3.2, fill: FLAME, opacity: 0 }));
-    const motes = Array.from({ length: 6 }, () =>
-      el(svg, "circle", { r: 1.6, fill: FUNGUS, opacity: 0 }));
-    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
-    const doWipe = wipe(svg, 640, 400, 2, 10);
-    clock(t => {
-      const T = t % 240;
-      doWipe(T);
-      typeOn(hdr, "THE OSSIFIED MYSTIC", T, 4, 1.4);
-      const ub = Math.max(0, Math.min(1, (T - 120) / 70));    // the flame's progress
-      FRONDS.forEach((_, f) => {
-        const pts = fpts(f, t);
-        const cut = Math.min(9, Math.floor(ub * 9 + f * .4));
-        dead[f].setAttribute("points",
-          pts.slice(0, cut + 1).map(p2 => p2.join(",")).join(" "));
-        live[f].setAttribute("points",
-          pts.slice(cut).map(p2 => p2.join(",")).join(" "));
-        const burning = ub > 0 && ub < 1;
-        tips[f].setAttribute("opacity", burning && t % 3 ? .95 : 0);
-        tips[f].setAttribute("cx", pts[cut][0]); tips[f].setAttribute("cy", pts[cut][1]);
-      });
-      motes.forEach((n, j) => {
-        if (T >= 120) { n.setAttribute("opacity", 0); return; }
-        const pts = fpts(j % 4, t);
-        const q = Math.floor(((t * 2 + j * 33) % 90) / 10);
-        n.setAttribute("cx", pts[q][0]); n.setAttribute("cy", pts[q][1] - 4);
-        n.setAttribute("opacity", .8);
-      });
-      eyes.forEach(n => n.setAttribute("fill", ub > .06 ? CHAR2 : FUNGUS));
-      foot.textContent = "";
-      if (T < 120) typeOn(foot, "FOUR THOUSAND YEARS OF SITTING STILL.", T, 30, 1.6);
-      else typeOn(foot, "THE NETWORK DIES AT ITS ROOT.", T, 132, 1.6);
     });
   }
 
