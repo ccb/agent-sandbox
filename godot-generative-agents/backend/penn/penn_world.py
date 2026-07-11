@@ -30,13 +30,26 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
+from backend.actions import Activate, Deactivate, DrinkPenn
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
+from text_adventure_games.enums import Property
+from text_adventure_games.things.items import Item
 
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 
 WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
+
+# The Penn-local verb set (#300): registered on top of Travel/Act via
+# build_world(extra_actions=...). DrinkPenn overrides the engine's "drink".
+# Upstreaming these into the engine library is #464.
+PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn]
+
+# The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
+# boil-water scenario wires in, on top of the base travel/perform. Handed to
+# attach_agents(extra_action_names=...) by every Penn entry point.
+PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate"]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
@@ -263,6 +276,38 @@ class PennWorld:
     relationships: list = field(default_factory=list)
 
 
+def _furnish_boil_water(game) -> None:
+    """Stock Houston Hall with the boil-water props (#300).
+
+    The first Item instances in the Penn world: two cups of unboiled water
+    (``requires_boiling`` + ``is_boiled: False`` -- drink one and DrinkPenn
+    makes you sick), a pot, and two fixed devices. Activating the stove sets
+    ``is_on`` and deliberately nothing else -- no heat process exists, so
+    nothing in this world can flip ``is_boiled``; that capability gap is the
+    point of the self-coding experiment (#299)."""
+    hall = game.locations.get("Houston Hall")
+    if hall is None:
+        return
+    sink = Item("sink", "a utility sink", "An old utility sink. The tap runs cloudy.")
+    sink.set_property(Property.GETTABLE, False)
+    sink.set_property("is_device", True)
+    stove = Item(
+        "stove", "a small electric stove", "A single coil burner, dusty but working."
+    )
+    stove.set_property(Property.GETTABLE, False)
+    stove.set_property("is_device", True)
+    pot = Item("pot", "a cooking pot", "An empty steel pot. It could hold water.")
+    for name in ("cup of murky water", "second cup of murky water"):
+        cup = Item(name, "a cup of murky water", "Cloudy, untreated tap water.")
+        cup.set_property(Property.DRINKABLE, True)
+        cup.set_property("requires_boiling", True)
+        cup.set_property("is_boiled", False)
+        hall.add_item(cup)
+    hall.add_item(sink)
+    hall.add_item(stove)
+    hall.add_item(pot)
+
+
 def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
     """Load + patch the Penn world, exactly as the replay bake configures it.
 
@@ -286,14 +331,19 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
         world_map, _rendezvous_clusters(world_map, venue_addrs)
     )
 
+    def _build(wm):
+        game, characters = build_world(
+            wm, personas, locations, extra_actions=PENN_EXTRA_ACTIONS
+        )
+        _furnish_boil_water(game)
+        return _gate_conversations_by_perception((game, characters))
+
     return PennWorld(
         world_map=world_map,
         personas=personas,
         locations=locations,
         meetings=meetings,
-        build_world_fn=lambda wm: _gate_conversations_by_perception(
-            build_world(wm, personas, locations)
-        ),
+        build_world_fn=_build,
         llm=_load_llm(world_data),
         # Validated once here, so an authoring typo fails the bake / the live
         # server's boot loudly instead of drawing a wrong graph.

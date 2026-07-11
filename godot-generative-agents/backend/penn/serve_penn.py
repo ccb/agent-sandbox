@@ -52,6 +52,7 @@ from backend.cognition import attach_agents
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
+    PENN_ACTION_VERBS,
     SEC_PER_STEP,
     SIM_START,
     PennWorld,
@@ -334,6 +335,7 @@ class PennStepper:
             # authored schedules own the itinerary (see resolve_llm).
             llm_client=self.llm_client,
             reflector_client=self.reflector_client,
+            extra_action_names=PENN_ACTION_VERBS,
         )
         # Real conversations pace themselves through a per-pair cooldown that
         # must OUTLIVE each tick (simulate() keeps one for its whole run;

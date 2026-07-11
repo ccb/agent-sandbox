@@ -17,6 +17,7 @@ from text_adventure_games.things.characters import Character
 from text_adventure_games.things.locations import Location
 
 from .actions import Act, Travel
+from .parser import PennParser
 from .tiled_game import TiledGame
 
 # The cast and locations come from a world YAML (e.g. ``penn/world_data_upenn.yaml``).
@@ -75,6 +76,10 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "activity": stop["activity"],
                     "emoji": stop.get("emoji", spec["emoji"]),
                     "steps": stop.get("steps"),  # None => stay for the rest of the day
+                    # Authored one-shot commands the mock brain replays at this
+                    # stop, one per decision, before settling into `perform`
+                    # (#300 -- e.g. "get ..." then "drink ..." at Houston Hall).
+                    "commands": list(stop.get("commands") or []),
                 }
                 for stop in spec["schedule"]
             ]
@@ -87,6 +92,7 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "activity": spec["activity"],
                     "emoji": spec["emoji"],
                     "steps": None,
+                    "commands": [],
                 }
             ]
     return personas
@@ -96,6 +102,7 @@ def build_world(
     world_map=None,
     personas: list[dict] | None = None,
     locations_data: list[dict] | None = None,
+    extra_actions: list | None = None,
 ):
     """Construct a generative-agents game from a world's personas + locations.
 
@@ -113,6 +120,10 @@ def build_world(
     agent with ``vision_r > 0`` perceives residents/objects in arenas within that
     many tiles. With no ``world_map`` perception falls back to the current room,
     so callers that don't need proximity are unaffected.
+
+    ``extra_actions`` appends world-specific Action classes to the registry (the
+    UPenn boil-water verbs, #300); an entry whose action_name matches a built-in
+    (e.g. "drink") overrides it for this game.
     """
     if personas is None or locations_data is None:
         raise ValueError(
@@ -169,10 +180,15 @@ def build_world(
         hub_loc,
         observer,
         characters=list(characters.values()),
-        custom_actions=[Travel, Act],
+        custom_actions=[Travel, Act, *(extra_actions or [])],
         turn_mode="simultaneous",
         world_map=world_map,
     )
+
+    # Wire up the custom parser that fixes the "ate " substring collision with
+    # "activate"/"deactivate" (see parser.py); delegates everything else to
+    # the engine parser unchanged.
+    game.set_parser(PennParser(game))
 
     # Place each persona in their home location (Game only auto-places the player).
     for spec in personas:

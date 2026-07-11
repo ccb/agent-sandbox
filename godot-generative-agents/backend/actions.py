@@ -10,7 +10,7 @@ that, each going through the engine's precondition gate like any built-in action
   character so the exporter can render it as the on-screen action label.
 """
 
-from text_adventure_games.actions import base
+from text_adventure_games.actions import base, consume
 
 
 class Travel(base.Action):
@@ -87,3 +87,109 @@ class Act(base.Action):
     def apply_effects(self):
         self.character.set_property("activity", self.activity)
         return self.parser.ok(f"{self.character.name} is {self.activity}.")
+
+
+class DrinkPenn(consume.Drink):
+    """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
+    liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
+    on the drinker and logs a ``sickness`` GameEvent -- the measurable
+    motivation signal the self-coding experiment (#299) needs. The pair is
+    deliberate: properties default to False, so gating on ``is_boiled`` alone
+    would sicken every future drinkable; ``requires_boiling`` scopes the rule
+    to raw water, and a (self-coded, #301) boil action clears it by setting
+    ``is_boiled``. Registered with the same "drink" action name, so it
+    overrides the built-in for this game only. No cure exists in this world:
+    that gap is deliberate (see the spec; upstreaming tracked in #464)."""
+
+    def apply_effects(self):
+        super().apply_effects()
+        if self.item.get_property("requires_boiling") and not self.item.get_property(
+            "is_boiled"
+        ):
+            self.character.set_property("is_sick", True)
+            # One-shot marker: this drink is what just sickened the character,
+            # as opposed to an already-sick character drinking something clean.
+            # Consumed (and cleared) by cognition.remember_outcome so
+            # the high-importance memory attaches to the actual transition.
+            self.character.set_property("just_sickened", True)
+            self.parser.ok(
+                f"{self.character.name.capitalize()} clutches their stomach -- "
+                "that water was foul."
+            )
+            self.game.log_event(
+                self.character.name,
+                "sickness",
+                summary=(f"{self.character.name} got sick drinking {self.item.name}"),
+                payload={
+                    "item": self.item.name,
+                    "location": getattr(self.character.location, "name", None),
+                },
+            )
+
+
+class Activate(base.Action):
+    """Switch on a fixed device -- a stove, a sink (#300). Devices are room
+    fixtures (in scope, not necessarily held), marked with ``is_device``; the
+    only effect is the ``is_on`` flag. Deliberately no downstream process: the
+    stove heats nothing until the self-coding experiment (#299) writes one.
+    Distinct verb from the engine's Light ("turn on" alias) -- no flame here."""
+
+    ACTION_NAME = "activate"
+    ACTION_DESCRIPTION = "Switch on a device (a stove, a sink)"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="operator")
+        self.item = self.parser.match_item(
+            command, self.parser.get_items_in_scope(self.character), hint="device"
+        )
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(
+            self.item, error_message="I don't know what you want to switch on."
+        ):
+            return False
+        if not self.item.get_property("is_device"):
+            self.parser.fail(f"The {self.item.name} isn't something you can switch on.")
+            return False
+        if self.item.get_property("is_on"):
+            self.parser.fail(f"The {self.item.name} is already on.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.item.set_property("is_on", True)
+        return self.parser.ok(f"The {self.item.name} hums to life.")
+
+
+class Deactivate(base.Action):
+    """Switch off a device -- the inverse of :class:`Activate`."""
+
+    ACTION_NAME = "deactivate"
+    ACTION_DESCRIPTION = "Switch off a device (a stove, a sink)"
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="operator")
+        self.item = self.parser.match_item(
+            command, self.parser.get_items_in_scope(self.character), hint="device"
+        )
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(
+            self.item, error_message="I don't know what you want to switch off."
+        ):
+            return False
+        if not self.item.get_property("is_device"):
+            self.parser.fail(
+                f"The {self.item.name} isn't something you can switch off."
+            )
+            return False
+        if not self.item.get_property("is_on"):
+            self.parser.fail(f"The {self.item.name} is already off.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.item.set_property("is_on", False)
+        return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
