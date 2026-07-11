@@ -109,7 +109,7 @@ class DrinkPenn(consume.Drink):
             self.character.set_property("is_sick", True)
             # One-shot marker: this drink is what just sickened the character,
             # as opposed to an already-sick character drinking something clean.
-            # Consumed (and cleared) by smallville_agents.remember_outcome so
+            # Consumed (and cleared) by cognition.remember_outcome so
             # the high-importance memory attaches to the actual transition.
             self.character.set_property("just_sickened", True)
             self.parser.ok(

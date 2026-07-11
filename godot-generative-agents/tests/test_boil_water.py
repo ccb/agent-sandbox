@@ -156,7 +156,7 @@ def test_custom_action_fallback_routing_intact_through_delegation():
 
 # -- authored per-stop commands: normalization, mock replay, action_names --
 
-from backend.smallville_agents import SmallvilleMockClient, attach_agents
+from backend.cognition import ScheduleMockClient, attach_agents
 
 COMMANDS = ["get cup of murky water", "drink cup of murky water"]
 
@@ -186,7 +186,7 @@ def test_normalize_passes_commands_through():
 
 def test_mock_brain_replays_authored_commands_then_performs():
     schedule = _normalize_personas([_commands_persona()])[0]["schedule"]
-    brain = SmallvilleMockClient(schedule)
+    brain = ScheduleMockClient(schedule)
     away, here = "Campus\nThe green.", "Union\nThe union."
     assert brain._choose(away) == "travel to Union"
     assert brain._choose(here) == "get cup of murky water"
@@ -203,7 +203,7 @@ def test_replace_schedule_carries_authored_commands_through_stop_round_trip():
     ``Stop.from_schedule_entry`` -> ``Stop.to_schedule_entry`` (what
     ``MockPlanner``/``LLMPlanner`` do) still replays the authored commands."""
     schedule = _normalize_personas([_commands_persona()])[0]["schedule"]
-    brain = SmallvilleMockClient(schedule)
+    brain = ScheduleMockClient(schedule)
 
     # Simulate the Stop round-trip: same place/activity/steps, but no
     # "commands" key at all (as if it went through planning.Stop).
@@ -219,7 +219,7 @@ def test_replace_schedule_carries_authored_commands_through_stop_round_trip():
 
     # A replacement stop that differs in place is a genuinely new/revised stop
     # -- it must NOT inherit the old stop's commands.
-    brain2 = SmallvilleMockClient(schedule)
+    brain2 = ScheduleMockClient(schedule)
     different_place = [{**schedule[0], "place": "Campus"}]
     different_place[0].pop("commands", None)
     brain2.replace_schedule(different_place)
@@ -280,7 +280,7 @@ def test_extra_action_names_yields_penn_verb_set_without_authored_commands():
 
 # -- remember_outcome memory branching (#300) --------------------------------
 
-from backend.smallville_agents import memory_stream_for_persona, remember_outcome
+from backend.cognition import memory_stream_for_persona, remember_outcome
 
 
 def _attached_char():
