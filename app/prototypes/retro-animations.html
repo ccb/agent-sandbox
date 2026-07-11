@@ -108,6 +108,17 @@
   </section>
 
   <section>
+    <div class="slate"><h2>06 &mdash; INTERIOR MAP</h2><span class="kind">LITHO / ISOMETRIC CUTAWAY</span></div>
+    <div class="screen">
+      <svg id="isomap" viewBox="0 0 640 430" aria-label="Isometric interior map"></svg>
+    </div>
+    <p class="spec">After the 2e INTERIOR MAP plates: the tomb as a tiered isometric cutaway
+       that draws itself, halftone-stippled floors, the sphere with its fungus plume, rooms
+       numbered as they arrive. <span class="attach">Attaches: an alternate face for the map panel;
+       a chapter card.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>05 &mdash; THE WHEEL OF BATS</h2><span class="kind">PARTICLES / ENDING</span></div>
     <div class="screen"><canvas id="bats" width="640" height="300"></canvas></div>
     <p class="spec">The colony wheels over the tomb, ten turns, then scatters toward the
@@ -157,6 +168,22 @@
       edges.forEach(([i, j]) => ((pts[i].w + pts[j].w) < 0 ? inner : outer).push([i, j]));
       drawEdges(ctx, pts.map(q => q.p), inner, PH_DIM, 4);
       drawEdges(ctx, pts.map(q => q.p), outer, PH, 9);
+      // the METIS garnish: impossible debris, each shape awake for a moment
+      const DEBRIS = [
+        (x, y) => { ctx.strokeRect(x - 6, y - 6, 12, 12); },
+        (x, y) => { ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 7, y);
+                    ctx.lineTo(x, y + 8); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.stroke(); },
+        (x, y) => { ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.stroke(); },
+        (x, y) => { ctx.beginPath(); ctx.moveTo(x - 8, y + 4); ctx.lineTo(x - 2, y - 6);
+                    ctx.lineTo(x + 3, y + 2); ctx.lineTo(x + 9, y - 5); ctx.stroke(); },
+      ];
+      ctx.strokeStyle = PH_DIM; ctx.lineWidth = 1.2; ctx.shadowColor = PH; ctx.shadowBlur = 5;
+      DEBRIS.forEach((draw, i) => {
+        if (Math.floor(t / 7 + i * 2.5) % 4) return;   // each wakes in turn
+        const th = t * .05 + i * Math.PI / 2;
+        draw(320 + Math.cos(th) * 190, 180 + Math.sin(th) * 105);
+      });
       ctx.shadowBlur = 0; ctx.fillStyle = PH_DIM; ctx.font = "11px ui-monospace, monospace";
       ctx.fillText("INTERIOR: ADVISORY", 18, 340);
       ctx.fillText("W-AXIS: " + ((a * 180 / Math.PI) % 360 | 0) + "°", 520, 340);
@@ -232,6 +259,21 @@
 
   /* ---------------- SVG helpers (litho cards) ---------------- */
   const NS = "http://www.w3.org/2000/svg";
+  // Leo Hunt's halftone: a dot-screen pattern per svg, used as the gel fill
+  function stipple(svg, id, color, r) {
+    const defs = document.createElementNS(NS, "defs");
+    const pat = document.createElementNS(NS, "pattern");
+    pat.setAttribute("id", id); pat.setAttribute("width", 7); pat.setAttribute("height", 7);
+    pat.setAttribute("patternUnits", "userSpaceOnUse");
+    [[1.7, 1.7], [5.2, 5.2]].forEach(([cx, cy]) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", r || 1);
+      c.setAttribute("fill", color); c.setAttribute("opacity", .55);
+      pat.appendChild(c);
+    });
+    defs.appendChild(pat); svg.appendChild(defs);
+    return `url(#${id})`;
+  }
   function el(svg, name, attrs) {
     const n = document.createElementNS(NS, name);
     for (const k in attrs) n.setAttribute(k, attrs[k]);
@@ -244,7 +286,7 @@
   // mask-slot text: reveal letter by letter on the step clock
   function typeOn(node, text, t, t0, cps) {
     const n = Math.max(0, Math.min(text.length, Math.floor((t - t0) * cps)));
-    node.textContent = text.slice(0, n) + (n < text.length && n > 0 ? "█" : "");
+    node.textContent = text.slice(0, n) + (n < text.length && n > 0 ? "_" : "");
   }
   // the bright-edged wipe: returns a fn(t) that positions the sweep
   function wipe(svg, w, h, t0, dur) {
@@ -264,6 +306,7 @@
   {
     const svg = document.getElementById("canopic");
     el(svg, "rect", { x:0, y:0, width:640, height:400, fill: BG });
+    const DOTS = stipple(svg, "dots-canopic", PH, 1);
     // header bar, patent-drawing style
     el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
@@ -271,7 +314,7 @@
     entry.textContent = "ENTRY 4471-C / FALLEN AUTARCHY / RITES";
     // the body: angular sarcophagus figure, gel-fill
     el(svg, "polygon", { points: "290,70 350,70 364,110 364,240 350,272 290,272 276,240 276,110",
-      fill: PH, "fill-opacity": .12, stroke: PH, "stroke-width": 1.5 });
+      fill: DOTS, stroke: PH, "stroke-width": 1.5 });
     el(svg, "polyline", { points: "300,96 320,88 340,96", fill: "none", stroke: PH }); // the face
     // organ sites within the body
     const organs = [
@@ -326,7 +369,7 @@
     const jars = organs.map((o, i) => {
       const jx = 70 + i * 125;
       el(svg, "polygon", { points: `${jx-22},345 ${jx+22},345 ${jx+16},295 ${jx-16},295`,
-        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
+        fill: DOTS, stroke: PH, "stroke-width": 1.5 });
       headGlyph(o.head, jx);
       const cap = label(svg, jx, 372, 10, PH); cap.setAttribute("text-anchor", "middle");
       const who = label(svg, jx, 386, 9, o.odd ? FUNGUS : PH_DIM); who.setAttribute("text-anchor", "middle");
@@ -364,38 +407,51 @@
     el(svg, "line", { x1:16, y1:34, x2:624, y2:34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "FAUNA / TOMBLANDS / CAUTIOUS, CLEVER, OWED";
-    // the jackal: lean canid, tall ears, low tail -- angular segments only
+    cls.textContent = "FAUNA / DESERT / CAUTIOUS, CLEVER, HUNGRY";
+    // the jackal, from the 2e reference: prowling LEFT, head low, ears
+    // swept back, grin bared, brush tail trailing -- mid-stride.
+    const JDOTS = stipple(svg, "dots-jackal", PH, 1);
+    // top contour: nose -> stop -> skull -> ears -> shoulder -> hip -> tail base
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      // nose -> jaw -> throat -> chest -> belly -> hind leg -> rump
-      "428,168 424,175 396,172 372,176 348,196 338,214 334,222 300,224 262,218 " +
-      "240,214 228,244 224,290" });
+      "108,154 120,146 138,140 150,134 158,130 " +
+      "162,128 152,84 172,110 " +          // ear one, swept back
+      "178,112 198,80 212,108 " +          // ear two
+      "232,116 268,112 306,120 352,124 392,130 412,142 416,150" });
+    // underside: jaw -> throat -> chest -> belly -> flank
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
-      // nose -> muzzle top -> stop -> ear valley -> withers -> back -> hip -> tail
-      "428,168 414,158 394,150 384,146 368,148 340,170 300,180 258,176 224,186 " +
-      "200,222 194,238" });
-    // the ears, tall and paired
+      "108,154 112,166 128,172 152,170 182,158 216,150 242,162 258,184 " +
+      "308,190 350,188 372,176 396,160" });
+    // the grin, zigzag, bared
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.2,
+      points: "114,160 119,167 124,159 129,167 134,159 139,166 144,161 149,167" });
+    // the eye: a slit, doing sums
+    el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.6,
+      points: "142,138 152,140" });
+    el(svg, "circle", { cx: 148, cy: 139, r: 1.6, fill: PH_BRIGHT });
+    // the brush tail, low and trailing, halftoned
+    el(svg, "polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4, points:
+      "416,150 448,180 490,214 526,232 542,242 524,246 480,228 440,198 408,164" });
+    // forelegs: one planted forward, one lifted mid-stride
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "368,148 360,104 376,140" });
+      points: "250,178 228,220 204,256 190,268 202,271" });
+    el(svg, "polyline", { fill: "none", stroke: PH,
+      points: "262,182 268,220 278,248 290,256 296,250" });
+    // hind legs: one stepping under, one driving back (stifle, hock, pastern)
     el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6,
-      points: "382,144 384,100 394,148" });
-    // the tail, brushy
-    el(svg, "polygon", { points: "224,186 194,238 204,242 236,196",
-      fill: PH, "fill-opacity": .12, stroke: PH });
-    // legs: two fore (one advanced), two hind (hocked)
-    el(svg, "polyline", { fill: "none", stroke: PH, points: "338,214 336,254 344,290 350,290" });
-    el(svg, "polyline", { fill: "none", stroke: PH, points: "326,220 318,256 312,290 320,290" });
-    el(svg, "polyline", { fill: "none", stroke: PH, points: "246,216 258,248 252,290 260,290" });
-    el(svg, "polyline", { fill: "none", stroke: PH, points: "228,244 236,264 230,290 238,290" });
-    el(svg, "circle", { cx: 384, cy: 152, r: 2.5, fill: PH_BRIGHT }); // the eye, doing sums
+      points: "370,178 352,212 336,248 328,266 340,269" });
+    el(svg, "polyline", { fill: "none", stroke: PH,
+      points: "396,160 418,196 434,222 442,246 452,258 462,255" });
+    // the ground the reference stands on: a halftone band
+    el(svg, "rect", { x: 70, y: 272, width: 480, height: 12, fill: JDOTS, stroke: "none" });
     // cycling callouts with leader lines
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
-    const call = label(svg, 470, 90, 10, PH);
+    const call = label(svg, 624, 90, 10, PH);
+    call.setAttribute("text-anchor", "end");
     const CALLS = [
-      { at: [384, 152], text: "EYES: DOING SUMS" },
-      { at: [300, 180], text: "COAT: PTHALO No.9" },
-      { at: [428, 168], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
-      { at: [199, 240], text: "EXIT: ALWAYS PREPARED" },
+      { at: [148, 139], text: "EYES: DOING SUMS" },
+      { at: [310, 122], text: "COAT: PTHALO No.9" },
+      { at: [108, 154], text: "NOSE: FINDS MEAT AT TWO ROOMS" },
+      { at: [526, 232], text: "EXIT: ALWAYS PREPARED" },
     ];
     // the PATIENCE gauge
     label(svg, 24, 322, 10, PH_DIM).textContent = "PATIENCE";
@@ -409,14 +465,123 @@
       typeOn(hdr, "PTHALO-JACKAL (PACK, VIGOROUS)", T, 4, 1.4);
       const c = CALLS[Math.floor(T / 22) % CALLS.length];
       if (T > 16) {
-        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 460,86 464,86`);
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,86 448,86`);
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       const left = Math.max(0, 10 - Math.floor(Math.max(0, T - 20) / 9));
       cells.forEach((r, i) => r.setAttribute("fill-opacity", i < left ? .8 : .08));
       verdict.textContent = left === 0
-        ? "TRIBUTE ACCEPTED: CRATE OF DATES. PEACE PURCHASED (DEEP)."
+        ? "TRIBUTE ACCEPTED: PEACE, PURCHASED DEEP"
         : left <= 3 ? "ADVICE: PRODUCE THE DATES" : "";
+    });
+  }
+
+  /* ---------------- 06: INTERIOR MAP ---------------- */
+  {
+    const svg = document.getElementById("isomap");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 430, fill: BG });
+    const DOTS = stipple(svg, "dots-map", PH, .9);
+    const iso = (x, y, z) => [320 + (x - y) * 26, 148 + (x + y) * 13 - z * 40];
+    const P = (pts, extra) => el(svg, "polyline",
+      Object.assign({ points: pts.map(p => p.join(",")).join(" "),
+        fill: "none", stroke: PH, "stroke-width": 1.4 }, extra || {}));
+    const tierG = [];
+    // three tiers, drawn as groups so the timeline can raise them in order
+    function tier(x0, x1, z) {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const c = [iso(x0, x0, z), iso(x1, x0, z), iso(x1, x1, z), iso(x0, x1, z)];
+      const poly = document.createElementNS(NS, "polygon");
+      poly.setAttribute("points", c.map(p => p.join(",")).join(" "));
+      poly.setAttribute("fill", DOTS); poly.setAttribute("stroke", PH);
+      poly.setAttribute("stroke-width", 1.5); g.appendChild(poly);
+      for (let k = x0 + 1; k < x1; k++) {         // the grid, sparsely
+        [[iso(k, x0, z), iso(k, x1, z)], [iso(x0, k, z), iso(x1, k, z)]].forEach(([a, b]) => {
+          const l = document.createElementNS(NS, "line");
+          l.setAttribute("x1", a[0]); l.setAttribute("y1", a[1]);
+          l.setAttribute("x2", b[0]); l.setAttribute("y2", b[1]);
+          l.setAttribute("stroke", PH_DIM); g.appendChild(l);
+        });
+      }
+      // the near walls, dropping to the tier below
+      [[x1, x0], [x1, x1], [x0, x1]].forEach(([x, y], i, arr) => {
+        if (i === arr.length - 1) return;
+        const a = iso(...arr[i], z), b = iso(...arr[i + 1], z);
+        const wall = document.createElementNS(NS, "polygon");
+        wall.setAttribute("points", [a, b, [b[0], b[1] + 40], [a[0], a[1] + 40]]
+          .map(p => p.join(",")).join(" "));
+        wall.setAttribute("fill", BG); wall.setAttribute("stroke", PH);
+        g.insertBefore(wall, poly);
+      });
+      tierG.push(g); return g;
+    }
+    const gA = tier(0, 6, 0), gB = tier(1, 5, 1), gC = tier(2, 4, 2);
+    // level 4's burial cylinders, on the middle tier
+    const gProps = document.createElementNS(NS, "g"); svg.appendChild(gProps);
+    [[1.7, 2.3], [2.5, 3.3], [3.5, 2.1], [4.1, 3.1]].forEach(([x, y]) => {
+      const [cx, cy] = iso(x, y, 1);
+      const cyl = document.createElementNS(NS, "g"); gProps.appendChild(cyl);
+      [[-7, 0], [7, 0]].forEach(([dx]) => {
+        const l = document.createElementNS(NS, "line");
+        l.setAttribute("x1", cx + dx); l.setAttribute("y1", cy - 2);
+        l.setAttribute("x2", cx + dx); l.setAttribute("y2", cy - 26);
+        l.setAttribute("stroke", PH); cyl.appendChild(l);
+      });
+      const top = document.createElementNS(NS, "ellipse");
+      top.setAttribute("cx", cx); top.setAttribute("cy", cy - 26);
+      top.setAttribute("rx", 7); top.setAttribute("ry", 3);
+      top.setAttribute("fill", "none"); top.setAttribute("stroke", PH_BRIGHT);
+      cyl.appendChild(top);
+      const body = document.createElementNS(NS, "line");   // the tenant
+      body.setAttribute("x1", cx); body.setAttribute("y1", cy - 5);
+      body.setAttribute("x2", cx); body.setAttribute("y2", cy - 21);
+      body.setAttribute("stroke", PH_DIM); cyl.appendChild(body);
+    });
+    // the sphere, its stair, and the fungus plume
+    const [sx, sy] = iso(3, 3, 2);
+    const gSphere = document.createElementNS(NS, "g"); svg.appendChild(gSphere);
+    const stair = document.createElementNS(NS, "polyline");
+    stair.setAttribute("points", `${sx-6},${sy} ${sx-6},${sy-46} ${sx+6},${sy-46} ${sx+6},${sy}`);
+    stair.setAttribute("fill", "none"); stair.setAttribute("stroke", PH); gSphere.appendChild(stair);
+    const zig = document.createElementNS(NS, "polyline"); // the stair inside
+    zig.setAttribute("points", `${sx-6},${sy-8} ${sx+6},${sy-16} ${sx-6},${sy-24} ${sx+6},${sy-32}`);
+    zig.setAttribute("fill", "none"); zig.setAttribute("stroke", PH_DIM); gSphere.appendChild(zig);
+    const orb = document.createElementNS(NS, "circle");
+    orb.setAttribute("cx", sx); orb.setAttribute("cy", sy - 72); orb.setAttribute("r", 30);
+    orb.setAttribute("fill", DOTS); orb.setAttribute("stroke", PH_BRIGHT);
+    orb.setAttribute("stroke-width", 1.6); gSphere.appendChild(orb);
+    const coffin = document.createElementNS(NS, "ellipse");
+    coffin.setAttribute("cx", sx); coffin.setAttribute("cy", sy - 72);
+    coffin.setAttribute("rx", 13); coffin.setAttribute("ry", 8);
+    coffin.setAttribute("fill", BG); coffin.setAttribute("stroke", PH); gSphere.appendChild(coffin);
+    const plume = document.createElementNS(NS, "polyline"); // the fungus, erupting
+    plume.setAttribute("points",
+      `${sx},${sy-96} ${sx-4},${sy-108} ${sx+3},${sy-114} ${sx-5},${sy-122} ` +
+      `${sx+6},${sy-128} ${sx-2},${sy-136} ${sx+4},${sy-142}`);
+    plume.setAttribute("fill", "none"); plume.setAttribute("stroke", FUNGUS);
+    plume.setAttribute("stroke-width", 1.6); gSphere.appendChild(plume);
+    // the numbered rooms, arriving in order
+    const SPOTS = [
+      [iso(5.4, 0.6, 0), "1"], [iso(0.8, 5.2, 0), "2"], [iso(5.2, 5.2, 0), "3"],
+      [iso(4.6, 1.6, 1), "4"], [iso(1.6, 4.4, 2), "5"],
+      [[sx + 44, sy - 84], "6"], [[sx + 26, sy - 120], "7"],
+    ].map(([p, n]) => {
+      const t = label(svg, p[0], p[1], 22, PH_BRIGHT);
+      t.setAttribute("text-anchor", "middle"); t.dataset.n = n; return t;
+    });
+    const legend = label(svg, 320, 416, 10, PH_DIM);
+    legend.setAttribute("text-anchor", "middle");
+    const LEGEND = "1 MOUTHS  2 YOUTH  3 MEMORY  4 WARRIORS  5 CANOPIC  6 SPHERE  7 SUMMIT";
+    const doWipe = wipe(svg, 640, 430, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      gA.setAttribute("opacity", T > 8 ? 1 : 0);
+      gB.setAttribute("opacity", T > 18 ? 1 : 0);
+      gC.setAttribute("opacity", T > 28 ? 1 : 0);
+      gProps.setAttribute("opacity", T > 38 ? 1 : 0);
+      gSphere.setAttribute("opacity", T > 48 ? 1 : 0);
+      SPOTS.forEach((n, i) => { n.textContent = T > 62 + i * 9 ? n.dataset.n : ""; });
+      typeOn(legend, LEGEND, T, 130, 2.2);
     });
   }
 
