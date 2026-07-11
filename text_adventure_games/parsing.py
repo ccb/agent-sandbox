@@ -772,6 +772,14 @@ class Parser:
                 command = command[len(cl) + 1 :].strip()
                 break
 
+        # Location-specific travel synonyms ("enter tomb" -> north): matched
+        # on the EXACT typed command, before any verb-stripping, so "climb
+        # tomb" and "enter tomb" can aim at different exits.
+        if location:
+            direction = location.direction_aliases.get(command)
+            if direction is not None:
+                return direction
+
         # Candidate names: canonical directions plus any exit names this
         # location declares. Longest first, so a multi-word exit ("to hobbs
         # cafe") wins over a short one ("to") that is a prefix of it.

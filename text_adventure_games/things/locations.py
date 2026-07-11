@@ -39,6 +39,13 @@ class Location(Thing):
         # travel_descriptions; read by the Go action.
         self.move_verbs = {}
 
+        # Phrase -> direction: location-specific travel synonyms ("enter
+        # tomb" -> "north", "climb stone" -> "up"). Consulted by the parser
+        # on the EXACT typed command, so a game can anticipate how players
+        # will phrase each room's movement without those phrases showing up
+        # as redundant entries in Exits: (which lists connections only).
+        self.direction_aliases = {}
+
         # Dictionary mapping from a direction to a Block.
         self.blocks = {}
 
@@ -134,6 +141,12 @@ class Location(Thing):
         instance.has_been_visited = data["has_been_visited"]
         instance.properties = data["properties"]
         return instance
+
+    def add_direction_alias(self, phrase: str, direction: str) -> None:
+        """Register *phrase* as a way to take the *direction* exit from here
+        ("enter tomb" -> "north"). Aliases resolve in the parser only; they
+        never appear in the Exits list or on the map."""
+        self.direction_aliases[phrase.lower().strip()] = direction
 
     def add_connection(
         self, direction, connected_location, travel_description: str = ""
