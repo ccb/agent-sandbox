@@ -84,6 +84,7 @@ function BuildTomb(seed)
 	glowstone:set("lightable", true)
 	glowstone:set("onLit", function(game)
 		game:award("first_light", 5, "[+5 -- light, learned]")
+		game:showFigure("glowstone")
 	end)
 	merchant:add(glowstone)
 
@@ -295,6 +296,7 @@ function BuildTomb(seed)
 		warriors:set("sway", n)
 		spawn:set("aware", true)
 		if n == 1 then
+			game:showFigure("guts-a") -- the card plays first, then the text
 			game:say("Something big swings toward your noise, arms rising "
 				.. "from the floor like kelp in a current.")
 		elseif n % 2 == 1 then
@@ -312,8 +314,50 @@ function BuildTomb(seed)
 		spawn:set("aware", nil)
 	end, true)
 
+	-- ----------------------------------------------------- hall of memory
+	local memory = g:room("Hall of Memory",
+		"Lattices of memory-crystal climb every wall, the Autarch's "
+		.. "favoured recollections set in lazulite. The glimmering on them "
+		.. "moves while you are still. A synth in yellow robes reads the "
+		.. "walls with his fingertips.")
+	memory:set("dark", true)
+	memory:set("darkBlurb",
+		"Gloom. Crystal facets give back your light's absence; somewhere "
+		.. "in it, slow bright threads move where no light should be.")
+	youth:connect("north", memory, "south")
+
+	local lattice = Item("lattice", "lattices of memory-crystal",
+		"The favoured recollections of Nassak An-Rah, set in lazulite. One "
+		.. "bank is worn smooth at hand-height, as if often consulted.")
+	lattice:alias("crystal", "crystals", "walls")
+	memory:add(lattice)
+
+	local silas = Engine.Character("silas",
+		"Silas, a synthetic archivist in yellow monk's robes",
+		"A gaunt synth in yellow robes, fingertips tipped with cranial "
+		.. "bores, drawing memory from the lattice in slow bright threads. "
+		.. "Patient, courteous, elsewhere.")
+	silas:alias("synth", "archivist", "monk")
+	silas:set("onTalk", function(game)
+		game:award("archivist", 5, "[+5 -- the archivist's acquaintance]")
+		game:say('Silas speaks without turning. "Scavenger. You walk in a '
+			.. 'house of memory; mind what you wake. The lattice remembers '
+			.. 'his embalming, for those who trouble to look. The dead here '
+			.. 'listen. Step softly."')
+	end)
+	silas:set("onGift", function(game, item)
+		if item.name == "dates" then
+			game:say('Silas declines with a small bow. "I read the dead, '
+				.. 'not the dinner."')
+		else
+			game:say('Silas considers it, and returns it. "Not what the '
+				.. 'lattice wants. Not yet."')
+		end
+	end)
+	memory:addCharacter(silas)
+
 	-- ------------------------------------------------------------ start
-	g.maxScore = 25
+	g.maxScore = 30
 	g.player.location = wreck
 	wreck.visited = true
 	return g

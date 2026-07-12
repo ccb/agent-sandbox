@@ -177,6 +177,18 @@ function Game:runTriggers()
 	end
 end
 
+-- Illustration cues (the FIGURE channel, mirrored from the Python
+-- engine): once per key per game; the surface hooks onFigure to draw.
+-- Purely cosmetic -- a surface without cards ignores it, and replay
+-- rebuilds the shown-set without popping overlays (the surface attaches
+-- onFigure only after restore).
+function Game:showFigure(key)
+	self.figuresShown = self.figuresShown or {}
+	if self.figuresShown[key] then return end
+	self.figuresShown[key] = true
+	if self.onFigure then self.onFigure(key) end
+end
+
 -- Wounds, slice-simple (the full d20 table is M5): three and the tomb
 -- keeps you.
 function Game:wound(name, line)
@@ -560,7 +572,10 @@ end
 -- game state. In combat the fight verbs lead; at rest the fight verbs
 -- stay off the wheel entirely.
 Engine.pools = {
-	combat = { "attack", "throw", "examine", "look", "douse", "inventory" },
+	-- arming yourself mid-fight is THE move in the warriors hall: take and
+	-- search stay on the wheel (the audit caught their absence)
+	combat = { "attack", "take", "search", "throw", "examine", "look",
+		"douse", "inventory" },
 }
 
 -- Combat: something hostile shares the room and is either visible to you

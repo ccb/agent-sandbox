@@ -46,6 +46,22 @@ local function settleView(turnStartHeight)
 	clampView()
 end
 
+-- ---------------------------------------------------------------- figures
+-- Litho cards as 1-bit imagetables (tools/export_figures.py). A cue plays
+-- the card full-screen at the reel's 12 fps; any button returns to the
+-- text. Missing tables are silently skipped -- text is the complete game.
+local figTables = {}
+local overlay = nil
+
+local function showFigure(key)
+	if figTables[key] == nil then
+		figTables[key] = gfx.imagetable.new("images/figures/" .. key) or false
+	end
+	if figTables[key] then
+		overlay = { t = figTables[key], i = 1, acc = 0 }
+	end
+end
+
 -- ------------------------------------------------------------------ game
 local game
 
@@ -56,6 +72,8 @@ local function newGame(seed)
 	say("VAULTS OF VAARN: TOMB OF NASSAK AN-RAH")
 	game:describe()
 	settleView(0)
+	game.onFigure = showFigure
+	showFigure("road") -- the Trail opens every fresh expedition
 end
 
 local function autosave()
@@ -75,6 +93,7 @@ local function boot()
 		say("The expedition continues. (Menu: new game to begin anew.)")
 		game:describe()
 		settleView(0)
+		game.onFigure = showFigure -- attached AFTER replay: no stale pops
 	else
 		newGame(playdate.getSecondsSinceEpoch() % 1000000)
 	end
@@ -198,6 +217,26 @@ end
 
 -- ------------------------------------------------------------ input + draw
 function playdate.update()
+	-- a card on screen owns the screen: advance at the reel's 12 fps,
+	-- hold the last frame, and leave on any button
+	if overlay then
+		if playdate.buttonJustPressed(playdate.kButtonA)
+			or playdate.buttonJustPressed(playdate.kButtonB) then
+			overlay = nil
+			return
+		end
+		gfx.clear(gfx.kColorBlack)
+		local img = overlay.t:getImage(math.min(overlay.i, #overlay.t))
+		if img then img:draw((400 - 384) // 2, 0) end
+		overlay.acc = overlay.acc + 12 / 30
+		if overlay.acc >= 1 then
+			overlay.i = overlay.i + math.floor(overlay.acc)
+			overlay.acc = overlay.acc % 1
+			if overlay.i > #overlay.t then overlay.i = #overlay.t end
+		end
+		return
+	end
+
 	local ticks = playdate.getCrankTicks(6)
 	if ticks ~= 0 then pos = pos + ticks end
 
