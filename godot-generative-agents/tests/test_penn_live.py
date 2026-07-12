@@ -262,6 +262,24 @@ def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     # test above pins it): a bare stepper has no run id.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
 
+def test_stepper_threads_cognition_tools():
+    # The #514 plumbing: the flag rides the stepper into attach_agents, which
+    # stamps the engine attribute the decide tool loop and the converse path
+    # read. _build() re-reads it from the stepper, so POST /reset keeps it.
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), cognition_tools=True)
+    assert stepper.chars  # guard: the all() below actually checked someone
+    assert all(c.agent.cognition_tools is True for c in stepper.chars.values())
+    stepper.reset()
+    assert all(c.agent.cognition_tools is True for c in stepper.chars.values())
+
+
+def test_stepper_default_leaves_cognition_tools_off():
+    # No flag: agents keep the engine default (attach_agents only stamps when
+    # on), so the default live server stays byte-identical to today.
+    stepper = PennStepper(num_steps=3, world=build_penn_world())
+    assert stepper.chars
+    assert all(c.agent.cognition_tools is False for c in stepper.chars.values())
+
 
 # ---------------------------------------------------- LiveMeetingInjector
 
