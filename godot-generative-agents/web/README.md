@@ -157,13 +157,19 @@ stay running through both — just refresh the browser):
 | **Godot scripts / scenes / art** | `pnpm export:godot` | Vite serves `public/` statically, so the re-exported WASM is picked up on the next refresh. |
 | **Docs (mkdocs/)** | `pnpm gen:docs` | Same deal — `public/docs/` is served statically, so the rebuilt site shows up at `/docs/` on the next refresh. |
 
-### Live mode: the LLM-request stream (#398)
+### Live mode: follow a running backend
 
-The **Agent cards** page can follow a *running* live backend on top of the baked
-replay it plays: point the page at the server with an `?api=` query param and the
-selected agent's card grows an **LLM requests** log — the same
+The **Agent cards** page can follow a *running* live backend instead of the
+baked replay: point the page at the server with an `?api=` query param and the
+whole agents view goes live — roster from the backend's `GET /live` meta,
+current position/action/reasoning/conversation from the change feed's frame
+records, the **Full memory history** column from `GET /agents/{name}/memory`
+(refetched as the run advances), and an **LLM requests** log — the same
 one-line-per-model-call stream the backend's terminal monitor prints (and the
-Godot HUD shows), filtered to that agent via each record's `actor` field.
+Godot HUD shows), filtered to the selected agent via each record's `actor`
+field. A pill in the navigator shows the connection state (`live · step N`,
+`paused`, or `reconnecting`). Only the Godot **canvas** stays replay-driven —
+the live scene is the desktop viewer's job.
 
 ```bash
 uv run python godot-generative-agents/backend/penn/serve_penn.py            # terminal 1 (add --brain llm for real calls)
@@ -171,15 +177,18 @@ pnpm dev                                                           # terminal 2
 # then open  http://localhost:5173/?api=http://127.0.0.1:8080#agents
 ```
 
-Each row is `time · role · tokens in→out · $cost`; hover for the full detail
-(model, cache split, latency, turn, running total). Under the default mock brain
-the calls are free ($0.0000 rows) — real numbers appear when the server runs
-`--brain llm`. `VITE_SIM_API_URL` works as a `pnpm dev` default for the same
-setting; with neither given, the page stays fully static.
+Each LLM-log row is `time · role · tokens in→out · $cost`; hover for the full
+detail (model, cache split, latency, turn, running total). Under the default
+mock brain the calls are free ($0.0000 rows) — real numbers appear when the
+server runs `--brain llm`. `VITE_SIM_API_URL` works as a `pnpm dev` default for
+the same setting; with neither given, the page stays fully static and the
+agents view plays the baked replay exactly as before.
 
-How it works: [`src/useLlmCalls.ts`](src/useLlmCalls.ts) polls the backend's
-change feed (`GET /events?since=<cursor>`) and keeps the `engine` records whose
-payload is `kind: "llm_call"` — the wire contract is documented in
+How it works: [`src/useLive.ts`](src/useLive.ts) reads the `GET /live`
+handshake once (the world's replay-meta shape), then polls the backend's
+change feed (`GET /events?since=<cursor>`) and keeps the latest `frame` and
+`status` records plus every `engine` record whose payload is
+`kind: "llm_call"` — the wire contract is documented in
 [`backend/README.md`](../backend/README.md). The backend's CORS already
 allows any localhost origin, so the dev server needs no proxy.
 
@@ -233,7 +242,7 @@ The first panels exist (the **Agent cards** view — `src/components/AgentPanel.
 
 1. Read the replay via [`src/useReplay.ts`](src/useReplay.ts) (typed as `Replay`
    from [`src/types/replay.ts`](src/types/replay.ts)); for live-backend data,
-   follow the [`src/useLlmCalls.ts`](src/useLlmCalls.ts) pattern against the
+   follow the [`src/useLive.ts`](src/useLive.ts) pattern against the
    endpoints in [`../backend/README.md`](../backend/README.md).
 2. Add panel components under `src/components/` and give them a view in
    [`App.tsx`](src/App.tsx)'s hash-routed menu.

@@ -3,6 +3,7 @@ import { GodotCanvas } from "./components/GodotCanvas";
 import { AgentPanel } from "./components/AgentPanel";
 import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
+import { useLive } from "./useLive";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -132,6 +133,10 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
 
 export default function App() {
   const { status, replay, error } = useReplay();
+  // The live backend (?api= / VITE_SIM_API_URL): one handshake + one feed
+  // poll, shared by the agents view and its LLM-call log. Idle without ?api=.
+  const live = useLive();
+  const liveReady = live.live && (live.meta?.personas.length ?? 0) > 0;
   const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -270,8 +275,12 @@ export default function App() {
         </section>
 
         <section className="view view-agents" aria-hidden={view !== "agents"}>
-          {status === "ready" && replay.meta.personas.length > 0 ? (
-            <AgentPanel replay={replay} />
+          {/* A live backend (once its handshake lands) takes over the agents
+              view; otherwise the baked replay drives it exactly as before. */}
+          {liveReady || (status === "ready" && replay.meta.personas.length > 0) ? (
+            <AgentPanel replay={replay} live={live} />
+          ) : live.enabled ? (
+            <div className="agents-placeholder">Waiting for the live backend…</div>
           ) : (
             <div className="agents-placeholder">
               {status === "loading" && "Loading agents…"}
