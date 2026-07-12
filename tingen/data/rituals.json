@@ -3,12 +3,29 @@
 		"name": "The Descent",
 		"actor": "cult",
 		"description": "The Iron Cross cell's rite to call the descending god (外神) into Tingen. Each ingredient binds another thread of the gate; the final step demands the marked sacrifice.",
-		"ingredients": { "ritual_salt": 3, "consecrated_chalk": 2, "candle": 3 },
+		"ingredients": { "ritual_salt": 1, "consecrated_chalk": 1, "candle": 1 },
 		"steps": [
 			"Inscribe the consecrated circle in chalk.",
-			"Set and light the three candles at its points.",
+			"Set and light the candle at the circle's point.",
 			"Lay the salt wards and speak the descending name.",
 			"Offer the marked sacrifice to open the gate."
+		]
+	},
+	"counter_rite": {
+		"name": "The Unbinding Rite",
+		"actor": "player",
+		"_note": "M28 (direction v2 §6) — the COUNTER-RITE, the ONLY player verb that pushes Doom DOWN. Consumed by the CounterRite autoload (which RitualPanel drives from a button + tests call directly). Data-driven: `ingredients` are Inventory item ids spent; `doom_reduction` is subtracted from the Doom meter; `impede` is added to SummoningPlan (a weaker descent); `notice_cost` is the Notice tax (push-your-luck — buying time draws the Beyond's eye). TUNING placeholders.",
+		"description": "A warding rite worked against the descent — chalk, candle-smoke, and a name spoken backward. It buys the city time and turns the Beyond's eye toward you: the only rite that pushes the Doom clock BACK, paid for in Notice.",
+		"_hint_note": "M32 — the once-per-run DISCOVERABILITY hint. Surfaced diegetically (WorldState.thought_requested, the HUD's thought channel) by CounterRite the FIRST moment the player holds every ingredient this run — the single line that tells a fresh player the anti-Doom rite exists and how to reach it (the ritual panel, R). Content is DATA here, not an engine literal; no NPC-id branch.",
+		"hint": "Consecrated chalk and a candle in your bag — the makings of an unbinding rite. Open your rituals (press R) and work it to turn the Doom clock back, if you'll pay the Beyond's notice.",
+		"ingredients": { "consecrated_chalk": 1, "candle": 1 },
+		"doom_reduction": 8,
+		"impede": 10,
+		"notice_cost": 12,
+		"steps": [
+			"Draw the unbinding circle in consecrated chalk.",
+			"Light the candle and read the descending name backward.",
+			"Snuff the flame — and feel the Beyond turn to look at you."
 		]
 	}
 }

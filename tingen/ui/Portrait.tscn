@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1tngnportrait01"]
+
+[ext_resource type="Script" path="res://src/Portrait.gd" id="1"]
+
+[node name="Portrait" type="Control"]
+custom_minimum_size = Vector2(112, 148)
+clip_contents = true
+script = ExtResource("1")

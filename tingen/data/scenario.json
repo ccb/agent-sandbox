@@ -1,0 +1,252 @@
+{
+ "player_loadout": {
+  "revolver": 1,
+  "revolver_round": 12,
+  "shilling": 5
+ },
+ "shop": {
+  "_doc": "M15: Franky's counter — the coin economy loop. Engine-neutral: the counter Interactable carries generic export flags (shop_sell_harvest / shop_buy_ammo, the ritual_interrupt pattern) that call the Shop autoload's verbs; every price/quantity is authored HERE, no NPC-id branch in src/. TUNING (2026-07-11): start 5 shillings (player_loadout); buy 6 revolver_round for 4 shillings, max 3 restocks per run (the per-run stock latch — closes the M13 'free infinite tap' warning on franky_buy; +18 rounds/run ceiling, coin-gated, so the reachable economy is 36 found + up to 18 bought). Sell: tainted_characteristic 6 (the butcher's off-pathway harvest — one sale funds a round box with 2sh over), hunter_characteristic 10 (it is ALSO the advance fuel; selling it no longer forfeits the climb after M26's pity-margin — see the `progression` block — so it stays a push-your-luck coin choice priced above tainted to tempt). The stock latch resets per run and rides the nightly checkpoint; coin lives in the player proxy inventory (died-with-proxy loadout semantics, same as the 12 rounds). M26 BALANCE RETUNE #4 (coin gate): buy_ammo.price 4 -> 3 so ONE tainted sale (6sh) buys TWO round boxes (2x3) instead of one box + 2sh idle — the shop ammo ceiling (18 bought) is no longer gated behind forfeiting an advance's worth of coin. M34 D (Hermit coin fork): hermit_characteristic sells for 10 too — the Hermit's Characteristic drop is ALSO its advance fuel, so selling it is the SAME push-your-luck fuel-vs-coin choice the Hunter has (Shop.sell_harvest iterates this table generically; the pity margin in the `progression` block keys off characteristic_item()='hermit_characteristic', so a Hermit may sell ONE fuel and still reach Seq 7, but selling BOTH forfeits — no NPC/pathway branch in src/).",
+  "coin_item": "shilling",
+  "buy_ammo": {
+   "item": "revolver_round",
+   "qty": 6,
+   "price": 3
+  },
+  "restocks_per_run": 3,
+  "sell_prices": {
+   "tainted_characteristic": 6,
+   "hunter_characteristic": 10,
+   "hermit_characteristic": 10
+  },
+  "buy_ingredients": {
+   "_doc": "M32: Franky also stocks the COUNTER-RITE ingredients, so the rite (the ONLY player verb that pushes Doom DOWN) is no longer locked behind the cult supply cache alone (a player who missed the cache could never work it). Shape mirrors sell_prices — {item_id -> price in coin}; non-numeric keys (this _doc) are filtered by Shop.ingredient_prices(). The buy DEBITS coin from the player proxy (like buy_ammo) but DELIVERS the ingredient into the ritual Inventory autoload the counter-rite reads (the two stores are bridged only here) — so buying both makes CounterRite.can_perform() pass. TUNING: chalk 4 + candle 2 = 6 shillings per rite, ~one tainted_characteristic sale; the candle is the cheap tallow one, chalk the costlier consecrated marking. Not stock-latched: ingredients are a coin-gated staple, not the per-run ammo shelf. The cult cache is KEPT alongside this.",
+   "consecrated_chalk": 4,
+   "candle": 2
+  }
+ },
+ "progression": {
+  "_doc": "M26 BALANCE RETUNE #1 (sell-fork trap). The slice ladder needs 2 advances (Seq 9->8->7) and the world stages EXACTLY 2 same-pathway meals (sable_wren Seq-9, leland_mack Seq-8). So the M15 shop 'sell your hunter_characteristic' fork WAS A TRAP: sell one and you can never reach Seq 7. This block adds a PITY MARGIN (engine-neutral, keyed off the fuel item id — no NPC-id branch): selling a hunter_characteristic latches ONE make-up 'pity' unit of advance fuel for the run (capped by pity_fuel_cap). Net effect = the prompt's 'MARGIN to sell one and still advance': you may cash in ONE fuel for coin and still climb to Seq 7. It is NOT a free advance tap — the pity is consumed only inside advance() (never lands in inventory to be re-sold) and the per-run cap is 1, so selling BOTH meals' fuel STILL forfeits the climb (the push-your-luck choice keeps its teeth). Set pity_fuel_on_sell:false to restore the raw trap.",
+  "pity_fuel_on_sell": true,
+  "pity_fuel_cap": 1
+ },
+ "ammo_spawn": {
+  "_doc": "M13: world ammo pickup table. revolver_round pickups placed per run — enough so a careful player is never stranded but ammo stays a resource. TUNING: 24 rounds across city + cathedral + crypt = 2 full refills on top of the 12 starting rounds (36 total). Each spawn is {room, pos:[x,y], qty} — deterministic per run seed; placed by AmmoSpawn autoload into RoomItems at run start, cleared on run reset. Scatter: city 12r (4×3), cathedral_nave 6r (2×3), cathedral_crypt 6r (2×3) = 24 rounds reachable if all are found. Mr Franky buy source is the SHOP (see the `shop` block): AmmoSpawn.franky_buy() delegates to Shop.buy_ammo() — costed + stock-latched, never a free grant.",
+  "spawns": [
+   {
+    "room": "city",
+    "pos": [
+     2800,
+     3600
+    ],
+    "qty": 3
+   },
+   {
+    "room": "city",
+    "pos": [
+     3200,
+     4000
+    ],
+    "qty": 3
+   },
+   {
+    "room": "city",
+    "pos": [
+     1900,
+     4800
+    ],
+    "qty": 3
+   },
+   {
+    "room": "city",
+    "pos": [
+     3600,
+     5200
+    ],
+    "qty": 3
+   },
+   {
+    "room": "cathedral_nave",
+    "pos": [
+     691,
+     300
+    ],
+    "qty": 3
+   },
+   {
+    "room": "cathedral_nave",
+    "pos": [
+     400,
+     450
+    ],
+    "qty": 3
+   },
+   {
+    "room": "cathedral_crypt",
+    "pos": [
+     691,
+     420
+    ],
+    "qty": 3
+   },
+   {
+    "room": "cathedral_crypt",
+    "pos": [
+     500,
+     550
+    ],
+    "qty": 3
+   }
+  ],
+  "total_rounds": 24
+ },
+ "opening": {
+  "_doc": "The GM-guaranteed first-ten-minutes contract (direction v2 §3). GMOpening reads this so the opening is DATA, not an NPC-id branch in engine code: which lead is the guaranteed hot opener, who carries it (the constable hammering on doors), which staged Beyonder the lead routes to and where he stands (his Iron Cross shop), the harvest fork the kill offers, and the same-pathway follow-up lead the 'he wasn't the only one' hint is backed by. bram_kell/constable_brom live in npcs.json + leads.json; this block only names the roles.",
+  "butcher_lead": "butcher_iron_cross",
+  "source_npc": "constable_brom",
+  "butcher_npc": "bram_kell",
+  "butcher_room": "city",
+  "butcher_shop_pos": [
+   3640,
+   3430
+  ],
+  "butcher_open_form": "butcher_human",
+  "source_line": "The butcher's on Iron Cross. Blood under the door.",
+  "where_site_name": "iron_cross_shop",
+  "harvest_fork": [
+   "digest",
+   "sell",
+   "keep"
+  ],
+  "harvest_hint": "He wasn't the only one — the same blood walks the beat wearing another face.",
+  "hunter_follow_up_lead": "hunter_prey_kell_kin",
+  "sell_hint": "Franky pays for curiosities — his counter is off the entry hall of the lodging house."
+ },
+ "summoning": {
+  "cult": [
+   "clerk_voss",
+   "fishwife_dalia",
+   "lamplighter_orin"
+  ],
+  "spots": {
+   "clerk_voss": [
+    2020,
+    5440
+   ],
+   "fishwife_dalia": [
+    2210,
+    5450
+   ],
+   "lamplighter_orin": [
+    2110,
+    5480
+   ]
+  },
+  "cache_items": {
+   "ritual_salt": [
+    2020,
+    5440
+   ],
+   "consecrated_chalk": [
+    2210,
+    5450
+   ],
+   "candle": [
+    2110,
+    5480
+   ]
+  },
+  "intent": "Complete the summoning. FIRST gather the ritual offerings (ritual_salt, consecrated_chalk, candle) from the supply cache '%s' nearby — gather_item to pick them up (your hands hold only a couple). THEN descend through Saint Selena's Cathedral to the site named '%s' (the crypt altar): perform_ritual_step to lay each offering, and once every offering is laid keep performing the rite to drive the descent. Let nothing stop it."
+ },
+ "ritual_night": {
+  "_note": "M7 climax data (§9 Ritual Night). Engine code (RitualNight.gd) is NPC-neutral; WHO the celebrant is, WHERE the crypt is, HOW MANY defenders each door fields, the relocation candidates, and the boss/backlash FORMS all live here. The fuse is the descent timer in beats. M26 BALANCE RETUNE #3: fuse_beats 12 -> 48. At 12 beats the passive-Doom-fill climax gave only ~90 real-seconds — a GEOGRAPHIC forced loss (the player literally cannot cross the city to the crypt in time). 48 beats restores the promised ~cross-the-city window (~a few in-game minutes) so Ritual Night is a race the player can actually run, not an instant loss.",
+  "site_room": "cathedral_crypt",
+  "celebrant": "clerk_voss",
+  "fuse_beats": 48,
+  "avatar_threshold": 3,
+  "doors": {
+   "front": {
+    "defenders": 3
+   },
+   "side": {
+    "defenders": 1
+   }
+  },
+  "relocate_rooms": [
+   "warehouse_inner",
+   "selena_almshouse_inner"
+  ],
+  "avatar_form": "descended_avatar",
+  "backlash_form": "cult_thrall",
+  "backlash_extra": 2,
+  "backlash_beats": 10
+ },
+ "slot_defs": [
+  {
+   "id": "primary_ritual_site",
+   "resolve_at": "world-start",
+   "candidates": [
+    {
+     "value": "iron_cross_warehouse",
+     "weight": 3.0
+    },
+    {
+     "value": "st_selena_crypt",
+     "weight": 2.0
+    },
+    {
+     "value": "harbor_customs_house",
+     "weight": 1.0
+    }
+   ]
+  },
+  {
+   "id": "decoy_courier",
+   "resolve_at": "world-start",
+   "candidates": [
+    {
+     "value": "lamplighter_orin",
+     "weight": 2.0
+    },
+    {
+     "value": "fishwife_dalia",
+     "weight": 2.0
+    },
+    {
+     "value": "clerk_voss",
+     "weight": 1.0
+    }
+   ]
+  },
+  {
+   "id": "first_corrupted_civilian",
+   "resolve_at": "stage-enter:awakening",
+   "candidates": [
+    {
+     "value": "dockhand_pell",
+     "weight": 2.0
+    },
+    {
+     "value": "widow_carrow",
+     "weight": 1.5
+    },
+    {
+     "value": "boy_tomas",
+     "weight": 1.0
+    }
+   ]
+  }
+ ],
+ "codex": {
+  "_doc": "M27 meta payoff — the codex 'learned line' copy table. RunManager._codex_line looks up a fact-id here (exact match first), else falls back to a per-category template in _templates, else engine-side default copy. Engine reads DATA only: it splits the fact-id on ':' for the category, never branches on NPC identity. Fact-ids: 'ending:<outcome>', 'pathway:<p>', 'adversary:<combat_form>'.",
+  "ending:avatar_slain": "You struck a descending god (外神) from the sky while it was still half-made — one foot in the world, one beyond — and it fell. Few Beyonders ever witness a half-landed avatar; fewer still its unmaking.",
+  "ending:descent_stopped": "You broke a summoning rite at the altar and cut down the faithful as they lost their shape (§⑦). The descent (降临) was denied; the city woke to an ordinary dawn, never knowing how close the dark came.",
+  "ending:descent_complete": "You watched a descent (降临) reach its final beat and complete. The city was unmade — but you carry the memory of how the rite closes, and where the fuse burned too fast.",
+  "pathway:hunter": "The Hunter pathway: predators who harvest the Characteristics of their prey to climb the Sequence. You have walked its low rungs — mark, run down, and digest.",
+  "pathway:fool": "The Fool pathway: trickster-spirits, puppeteers, and marionettes who work from the margins and pull strings no one sees. You have glimpsed its shape.",
+  "_templates": {
+   "adversary": "You faced and put down a Beyonder in the %s shape; its gait, its tells, and its dying are known to you now.",
+   "pathway": "You have glimpsed the %s pathway and something of how its Beyonders climb.",
+   "ending": "You witnessed how a run can end: %s."
+  }
+ }
+}

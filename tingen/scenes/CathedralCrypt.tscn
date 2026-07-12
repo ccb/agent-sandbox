@@ -3,6 +3,7 @@
 [ext_resource type="Texture2D" path="res://assets/backgrounds/cathedral_crypt.png" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
 [ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="4"]
 
 [sub_resource type="RectangleShape2D" id="h_wall"]
 size = Vector2(1382, 24)
@@ -20,7 +21,7 @@ color = Color(0.02, 0.02, 0.04, 1)
 polygon = PackedVector2Array(-600, -600, 2000, -600, 2000, 1520, -600, 1520)
 
 [node name="Floor" type="Sprite2D" parent="."]
-texture_filter = 2
+texture_filter = 4
 centered = false
 scale = Vector2(0.9, 0.9)
 texture = ExtResource("1")
@@ -53,6 +54,13 @@ target_scene = "res://scenes/CathedralNave.tscn"
 
 [node name="StairShape" type="CollisionShape2D" parent="StairsUp"]
 shape = SubResource("p_stair")
+
+[node name="RitualAltar" parent="." instance=ExtResource("4")]
+position = Vector2(691, 460)
+prompt_text = "Break the altar"
+ritual_interrupt = true
+thought = "The ritual altar — the vessel of the descent. Breaking it would shatter the rite."
+tint = Color(0.6, 0.1, 0.12, 1)
 
 [node name="HintLayer" type="CanvasLayer" parent="."]
 

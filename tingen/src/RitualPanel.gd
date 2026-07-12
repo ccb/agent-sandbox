@@ -92,6 +92,10 @@ func _build_rite() -> void:
 	for c in _rite_box.get_children():
 		c.free()
 	_rite_steps = 0
+	# M28: the player COUNTER-RITE action sits at the top of the rite section (the only player verb that
+	# pushes Doom DOWN) — rendered into the SAME _rite_box (no .tscn change), and it does NOT count toward
+	# rite_step_count() (that stays the descent's authored steps).
+	_build_counter_rite()
 	var rite: Dictionary = _rituals.get("summoning_descent", {})
 	if rite.is_empty():
 		return
@@ -109,6 +113,43 @@ func _build_rite() -> void:
 		_label(_rite_box, "  %d. %s" % [i, String(step)], Color(0.82, 0.82, 0.86))
 		i += 1
 		_rite_steps += 1
+
+## M28 — render the player COUNTER-RITE block (name, cost/effect summary, and a Use button that works
+## the rite through the CounterRite autoload). Disabled unless the ingredients are in hand. All content
+## is DATA (CounterRite.rite_def); the panel knows no item id or number.
+func _build_counter_rite() -> void:
+	var cr := get_node_or_null("/root/CounterRite")
+	if cr == null:
+		return
+	var d: Dictionary = cr.rite_def()
+	if d.is_empty():
+		return
+	_label(_rite_box, String(d.get("name", "The Unbinding Rite")), Color(0.55, 0.75, 0.95), 16)
+	_label(_rite_box, String(d.get("description", "")), Color(0.82, 0.82, 0.86))
+	var ing: Dictionary = d.get("ingredients", {})
+	var parts: PackedStringArray = []
+	for k in ing.keys():
+		parts.append("%s ×%d" % [_humanize(String(k)), int(ing[k])])
+	_label(_rite_box, "Requires: " + ", ".join(parts), Color(0.7, 0.7, 0.75))
+	_label(_rite_box, "Turns the descent back (Doom −%d) · draws the Beyond's eye (Notice +%d)"
+		% [int(d.get("doom_reduction", 0)), int(d.get("notice_cost", 0))], Color(0.7, 0.7, 0.75))
+	var use_btn := Button.new()
+	use_btn.text = "Work the Unbinding Rite"
+	use_btn.disabled = not bool(cr.can_perform().get("ok", false))
+	use_btn.pressed.connect(func(): _on_counter_rite())
+	_rite_box.add_child(use_btn)
+	_rite_box.add_child(HSeparator.new())
+
+func _on_counter_rite() -> void:
+	var cr := get_node_or_null("/root/CounterRite")
+	if cr == null:
+		return
+	var res: Dictionary = cr.perform()
+	if bool(res.get("ok", false)):
+		WorldState.thought_requested.emit("You work the unbinding rite. The descent falters — and something vast turns to look at you.")
+	else:
+		WorldState.thought_requested.emit("You lack what the unbinding rite demands.")
+	refresh()
 
 func _label(box: VBoxContainer, text: String, color: Color, font_size: int = 0) -> void:
 	var l := Label.new()

@@ -1,0 +1,165 @@
+{
+	"_comment": "Data-authored night deeds + event consequences (combat plan §M6), consumed by the generic DeedRunner autoload. A DEED is a witnessable act an agent performs when its schedule brings it to a waypoint during the named phases: the fact_line fans through the standard vision-gated Stimulus channel (no engine strings), and the player proxy SEEING it grants the clue. A CONSEQUENCE row reacts to a published combat event (`transformed` / agent_downed as `downed`) for the named agent: pressures adjust, and the clue lands — gated on the proxy's own sight when clue_needs_sight. All identity strings live HERE, never in engine code.",
+	"deeds": [
+		{
+			"id": "kell_canal_disposal",
+			"agent": "bram_kell",
+			"phases": ["late-night"],
+			"room": "city",
+			"waypoint": [4230, 2050],
+			"radius": 80,
+			"fact_line": "Kell drags something heavy toward the canal.",
+			"clue": "bram_kell_suspicious"
+		},
+		{
+			"id": "wren_blackthorn_stalk",
+			"_note": "M12 — the SECOND adversary's signature deed (sable_wren's 'wrongness', mirroring the butcher's canal round). Her schedule walks her to the Blackthorn corner at night/late-night; the deed FIRES once per day there, fanning the fact_line through the standard vision-gated Stimulus channel. The PLAYER PROXY seeing it grants sable_wren_suspicious — the suspicion clue that feeds the hunter_prey lead (same seam as kell_canal_disposal -> bram_kell_suspicious). All identity strings are DATA; DeedRunner knows no id.",
+			"agent": "sable_wren",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [3100, 1600],
+			"radius": 80,
+			"fact_line": "Sable Wren stalks a frightened stranger off the Blackthorn corner, patient as a thing that hunts.",
+			"clue": "sable_wren_suspicious"
+		},
+		{
+			"id": "mack_breakwater_drag",
+			"_note": "M14 — the THIRD adversary's signature deed (leland_mack's 'wrongness', mirroring wren_blackthorn_stalk). His schedule walks him to the harbor breakwater at night/late-night; the deed FIRES once per day there, fanning the fact_line through the standard vision-gated Stimulus channel. The PLAYER PROXY seeing it grants leland_mack_suspicious — the suspicion clue that feeds the hunter_prey_mack_docks lead (same seam as kell_canal_disposal -> bram_kell_suspicious and wren_blackthorn_stalk -> sable_wren_suspicious). All identity strings are DATA; DeedRunner knows no id.",
+			"agent": "leland_mack",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [4950, 5500],
+			"radius": 80,
+			"fact_line": "Leland Mack hauls something heavy to the edge of the breakwater and tips it over — not fish.",
+			"clue": "leland_mack_suspicious"
+		},
+		{
+			"id": "hunter_act_predator",
+			"_note": "M5 (direction v2 §6): the PLAYER's 'acting' ritual — stalk and act the predator, the role of the Hunter pathway. Unlike a schedule-walked NPC deed, this fires on demand when the player performs it (DeedRunner.perform_deed), which Progression requires before an advance. agent='player' so the actor is the proxy; no waypoint/phase gate (the player acts wherever they choose to digest).",
+			"agent": "player",
+			"phases": [],
+			"room": "city",
+			"waypoint": [0, 0],
+			"radius": 0,
+			"player_performed": true,
+			"fact_line": "The investigator moves like something that hunts — reading trails, holding still, becoming the predator.",
+			"clue": ""
+		},
+		{
+			"id": "hermit_act_rite",
+			"_note": "M28 (direction v2 §6): the HERMIT player's 'acting' ritual — trace the star-charts and work the knowing rite, the role of the Hermit pathway (mirrors the Hunter's hunter_act_predator). Fires on demand when the player performs it (DeedRunner.perform_deed), which Progression requires before a Hermit advance (Progression.acting_deed_id() returns this for pathway hermit). agent='player'; no waypoint/phase gate (the Hermit works the rite wherever they choose to digest).",
+			"agent": "player",
+			"phases": [],
+			"room": "city",
+			"waypoint": [0, 0],
+			"radius": 0,
+			"player_performed": true,
+			"fact_line": "The investigator draws the star-charts and works the rite, reading the turning of the heavens like a true Hermit.",
+			"clue": ""
+		},
+		{
+			"id": "neil_star_rite",
+			"_note": "M28 — old_neil's signature deed (his 'wrongness', mirroring wren_blackthorn_stalk). His schedule walks him to his rooms at night/late-night; the deed FIRES once per day there, fanning the fact_line through the standard vision-gated Stimulus channel. The PLAYER PROXY seeing it grants old_neil_suspicious — the suspicion clue that feeds the hermit_prey_neil lead (same seam as kell_canal_disposal -> bram_kell_suspicious). All identity strings are DATA; DeedRunner knows no id.",
+			"agent": "old_neil",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [2700, 3800],
+			"radius": 80,
+			"fact_line": "Behind a shuttered window Old Neil bleeds himself into a chalk star and mouths a name the dark answers — Celeste.",
+			"clue": "old_neil_suspicious"
+		},
+		{
+			"id": "finch_archive_rite",
+			"_note": "M30 — ledger_finch's signature deed (her 'wrongness', mirroring neil_star_rite). Her schedule walks her deep into the university archive at night/late-night; the deed FIRES once per day there, fanning the fact_line through the standard vision-gated Stimulus channel. The PLAYER PROXY seeing it grants ledger_finch_suspicious — the suspicion clue that feeds the hermit_prey_finch lead (same seam as neil_star_rite -> old_neil_suspicious). Waypoint matches her night schedule slot. All identity strings are DATA; DeedRunner knows no id.",
+			"agent": "ledger_finch",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [3150, 2880],
+			"radius": 80,
+			"fact_line": "Deep in the stacks after closing, Ledger Finch reads aloud from a volume that should not exist, and the ink runs off the page toward her like it is listening.",
+			"clue": "ledger_finch_suspicious"
+		}
+	],
+	"consequences": [
+		{
+			"agent": "bram_kell",
+			"on": "transformed",
+			"form": "bieber_monster",
+			"clue": "bram_kell_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "bram_kell",
+			"on": "downed",
+			"form": "bieber_monster",
+			"clue": "bram_kell_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "sable_wren",
+			"on": "transformed",
+			"form": "wren_predator",
+			"clue": "sable_wren_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "sable_wren",
+			"on": "downed",
+			"form": "wren_predator",
+			"clue": "sable_wren_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "leland_mack",
+			"on": "transformed",
+			"form": "mack_beast",
+			"clue": "leland_mack_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "leland_mack",
+			"on": "downed",
+			"form": "mack_beast",
+			"clue": "leland_mack_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "old_neil",
+			"on": "transformed",
+			"form": "neil_monster",
+			"clue": "old_neil_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "old_neil",
+			"on": "downed",
+			"form": "neil_monster",
+			"clue": "old_neil_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "ledger_finch",
+			"on": "transformed",
+			"form": "finch_monster",
+			"clue": "ledger_finch_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "ledger_finch",
+			"on": "downed",
+			"form": "finch_monster",
+			"clue": "ledger_finch_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		}
+	]
+}

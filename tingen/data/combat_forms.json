@@ -1,0 +1,531 @@
+{
+	"_player_base_kits": {
+		"_note": "M28 — the PER-PATHWAY player base-kit table (the one net-new eng seam). AbilityDB.kit_for('player') resolves the run's pathway (Progression.pathway()) through THIS table: a pathway authored here SWAPS the base kit; a pathway NOT listed (hunter — the slice default) falls back to the 'player' form's kit below, UNCHANGED, so the Hunter base kit and the pinned combat_sim/full_run staging stay byte-identical. Engine-neutral: a data table keyed by pathway string, no NPC/id branch. This is NOT a combat_form (AbilityDB skips the leading-underscore key in the form loop).",
+		"hermit": [
+			"star_brand",
+			"ward_circle",
+			"dash",
+			"astral_sight"
+		]
+	},
+	"bieber_monster": {
+		"kit": [
+			"cleaver_swipe",
+			"charge",
+			"hook_throw",
+			"blood_frenzy",
+			"assume_form"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.25
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "blood_frenzy"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"butcher_human": {
+		"hidden_beyonder": true,
+		"kit": [
+			"cleaver_swipe",
+			"assume_form"
+		],
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.5
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "assume_form"
+				},
+				"delay_ms": 250,
+				"max_fires": 1
+			}
+		]
+	},
+	"civilian": {
+		"kit": [],
+		"default_style": "cautious",
+		"reflexes": []
+	},
+	"player": {
+		"_note": "M22 B8: pistol_whip is the ammo-free MELEE FLOOR (a free strike) — a dry (0-round) player can always chip hp with it, so ammo starvation is no longer an unrecoverable soft-loss. It is APPENDED last so it never displaces revolver_shot as the primary-attack pick (PlayerCombat._primary_attack_id returns revolver_shot for the player form regardless); the melee floor is fired by its own `melee` input binding.",
+		"kit": [
+			"revolver_shot",
+			"dash",
+			"paper_charm",
+			"pistol_whip"
+		]
+	},
+	"cult_thrall": {
+		"_note": "M7 Ritual Night backlash — an interrupted celebrant LOSES CONTROL (canon summoning §⑦) and assume_forms into this thrall. A monster form (so the Doom driver counts it) with the butcher's cleaver kit; no assume_form of its own (a thrall is the terminal shape, not a two-stage descent).",
+		"kit": [
+			"cleaver_swipe"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 240,
+				"max_fires": 2
+			}
+		]
+	},
+	"descended_avatar": {
+		"_note": "M7 Ritual Night boss — the avatar HALF-LANDS when the fuse crosses the low threshold (§9 'kill the avatar before full descent'). Two-stage descent: at low HP its hp_below reflex casts avatar_ascend -> descended_avatar_true, exactly like bram_kell/butcher_human's assume_form seam. A monster form.",
+		"kit": [
+			"avatar_rend",
+			"charge",
+			"avatar_ascend"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 260,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.35
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "avatar_ascend"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"beyond_hunter": {
+		"_note": "M11 Notice teeth — the Attention of the Beyond made flesh. When Notice crosses its high threshold (Meters.threat_threshold 'notice'), MeterThreats spawns ONE agent wearing this form, in_combat with combat_intent engage->player, so the tactical layer pursues + attacks the investigator. A MONSTER form (Beyond-touched / unknown-corrupted, canon: a corrupted unknown thing — NOT a Nighthawk), so the Doom 'monsters left alive' driver ALSO counts it while it stalks. Aggressive melee-charge kit reused from the built monster arts; an hp_below frenzy so it presses the kill. No assume_form of its own (it is the terminal hunter shape). Numbers are TUNING placeholders.",
+		"kit": [
+			"cleaver_swipe",
+			"charge",
+			"hook_throw",
+			"blood_frenzy"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 240,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "blood_frenzy"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"nighthawk_pursuer": {
+		"_note": "M11 Heat teeth — an official Evernight Beyonder (a Nighthawk) dispatched when Heat crosses its high threshold (Meters.threat_threshold 'heat'). Spawned by MeterThreats as ONE agent, in_combat with combat_intent engage->player, so the tactical layer hunts the investigator. NOT a monster form — the Nighthawks are HUMAN officials (the player's nominal allies' faction; being hunted by them is the cost of public power), so this is deliberately absent 'monster' and does NOT feed the Doom monster driver. A disciplined ranged-first kit (revolver + a movement dash) with a cautious style so it keeps distance and paces its shots — engine-neutral, no morality branch. Numbers are TUNING placeholders.",
+		"kit": [
+			"revolver_shot",
+			"dash",
+			"cleaver_swipe"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			}
+		]
+	},
+	"wren_human": {
+		"hidden_beyonder": true,
+		"_note": "M12 — the SECOND adversary's HUMAN phase-1 form (sable_wren, a Hunter-pathway Beyonder who LOST CONTROL from a bad over-ingestion). Mirrors butcher_human's two-phase shape but with a DISTINCT, DISTANCE-first Hunter kit (canon direction v2 §6: guns -> fire -> blood-fury): she opens at range with a revolver + brands her quarry with mark_prey (the Provoker's tracking mark), NOT the butcher's melee cleaver. Her hp_below reflex casts shed_the_hunt (NOT assume_form) -> wren_predator, the feral monster shape — the same descent seam bram_kell uses, a different destination. A telegraph->dodge reflex gives readable counterplay; cautious default_style so she keeps distance and paces her shots (a gunman, not a brawler). Numbers are TUNING placeholders.",
+		"kit": [
+			"revolver_shot",
+			"mark_prey",
+			"dash",
+			"shed_the_hunt"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 200,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.5
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "shed_the_hunt"
+				},
+				"delay_ms": 250,
+				"max_fires": 1
+			}
+		]
+	},
+	"wren_predator": {
+		"_note": "M12 — the SECOND adversary's MONSTER phase-2 form (sable_wren's feral blood-hunter shape, reached only via wren_human's hp_below -> shed_the_hunt). monster:true so the Doom 'monsters left alive' driver counts her. A DISTINCT kit from the butcher's bieber_monster cleaver set: this is the Hunter pathway's fire+blood-fury endgame (direction v2 §6) — a phosphor incendiary round that burns, a thrown hook to pin fleeing prey at range, a charge to close, and a self-worked blood_frenzy that quickens every following blow. A ranged/berserk blood-hunter, NOT a melee brawler. An hp_below reflex fires blood_frenzy so she presses the kill; a telegraph->dodge reflex keeps her evasive. No further transform (this is the terminal hunter shape — the executor's self-loop guard makes any future hp_below row safe). Numbers are TUNING placeholders.",
+		"kit": [
+			"incendiary_round",
+			"hook_throw",
+			"charge",
+			"blood_frenzy"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "blood_frenzy"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"mack_harbor": {
+		"hidden_beyonder": true,
+		"_note": "M14 — the THIRD adversary's HUMAN phase-1 form (leland_mack, a Hunter-pathway Beyonder who LOST CONTROL from over-ingesting a Red-Priest potion). DISTINCT in fiction and fight from both the butcher (melee cleaver) and Wren (ranged revolver): Mack is a mid-range hook-and-charge bruiser — he CLOSES with charge (the bull-rush lunge) and pins prey at range with hook_throw to slow them, applies mark_prey for the tracking mark, uses dash to reposition, and transforms via lose_the_line (his own transform row, distinct destination mack_beast — the same descent seam). Kit advantage over Wren: charge (22 dmg, 4s CD) + hook_throw (14 dmg, 5s CD) stack more damage than Wren's human hook alone — combined with 200 HP vs Wren's 100, Mack is HARDER to bring down before the transform. His hp_below transform fires at 0.45 (vs Wren's 0.5): on a 200-HP pool the transform fires at <=90 HP, a narrower band than Wren's 50 HP absolute trigger — the player has LESS time in the readable human phase before the beast emerges. An aggressive default_style (a bruiser, not a cautious gunman like Wren). A telegraph->dodge reflex with 230ms delay (vs Wren's 200ms: marginally slower, balanced by the charge close distance and higher HP). TUNING: harder than Wren through raw survivability + charge melee, not just kit variety.",
+		"kit": [
+			"charge",
+			"hook_throw",
+			"mark_prey",
+			"dash",
+			"lose_the_line"
+		],
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 230,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.45
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "lose_the_line"
+				},
+				"delay_ms": 240,
+				"max_fires": 1
+			}
+		]
+	},
+	"mack_beast": {
+		"_note": "M14 — the THIRD adversary's MONSTER phase-2 form (leland_mack's feral harbour beast, reached only via mack_harbor's hp_below -> lose_the_line). monster:true so the Doom 'monsters left alive' driver counts him. A DISTINCT kit from BOTH the butcher's bieber_monster (cleaver_swipe melee) AND Wren's wren_predator (incendiary_round / blood-hunter): this is a grapple-and-lunge harbour beast — hook_throw to snare prey at range, charge to close and slam, blood_frenzy to quicken the kill. NO cleaver_swipe (distinct from butcher), NO incendiary_round (distinct from Wren). An aggressive style; the hp_below blood_frenzy fires at 0.25 (vs Wren's 0.3: less room to breathe, HARDER). TUNING: higher poise via charge (55) + hook slow keeps the player from kiting freely — the Seq-8 meal fights meaner than the Seq-9 Wren. A telegraph->dodge reflex with shorter delay (210ms vs Wren's 220ms: faster reactions). Numbers are TUNING placeholders — the combat_sim Scenario F proves the two-phase fight resolves deterministically.",
+		"kit": [
+			"hook_throw",
+			"charge",
+			"blood_frenzy"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 4
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.25
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "blood_frenzy"
+				},
+				"delay_ms": 280,
+				"max_fires": 1
+			}
+		]
+	},
+	"neil_human": {
+		"hidden_beyonder": true,
+		"_note": "M28 — old_neil's HUMAN phase-1 form (a Hermit-pathway Beyonder who LOST CONTROL to the Hidden Sage's whispers while trying to resurrect Celeste). Mirrors wren_human's two-phase shape (hidden_beyonder:true + an hp_below transform reflex) but with a DISTINCT HERMIT ritual/astrology kit: he opens at range with the star-brand + wards the ground with ward_circle, NOT a revolver or a cleaver. His hp_below(0.5) reflex casts neil_descend -> neil_monster — the same descent seam bram_kell/sable_wren use, a different destination. A telegraph->dodge reflex gives readable counterplay; cautious default_style (a caster keeps his distance). TUNING placeholders.",
+		"kit": [
+			"star_brand",
+			"ward_circle",
+			"dash",
+			"neil_descend"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.5
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "neil_descend"
+				},
+				"delay_ms": 250,
+				"max_fires": 1
+			}
+		]
+	},
+	"neil_monster": {
+		"_note": "M28 — old_neil's MONSTER phase-2 form (the Hidden Sage's pollution wearing what is left of the alchemist), reached only via neil_human's hp_below -> neil_descend. monster:true so the Doom 'monsters left alive' driver counts it. A DISTINCT kit from every Hunter monster (no cleaver_swipe, no revolver_shot, no incendiary_round): the Hermit's star/ritual endgame — collapsing_star (the wide AoE burst), star_brand, and astral_chains (a binding stun). An aggressive style; an hp_below(0.3) reflex presses with collapsing_star. A telegraph->dodge reflex keeps it evasive. No further transform (the terminal shape — the executor self-loop guard makes any future hp_below row safe). TUNING placeholders — combat_sim Scenario G proves the two-phase fight resolves deterministically.",
+		"kit": [
+			"collapsing_star",
+			"star_brand",
+			"astral_chains"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "collapsing_star"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"finch_human": {
+		"hidden_beyonder": true,
+		"_note": "M30 — ledger_finch's HUMAN phase-1 form (the SECOND Hermit-pathway prey, the Seq-8 meal; direction v2 §6). A university records clerk who stole a restricted forbidden volume and LOST CONTROL reading it — mirrors neil_human's two-phase shape (hidden_beyonder:true + an hp_below transform reflex) but fights her OWN Hermit word/ink kit: she opens at range with forbidden_recitation and binds with the redacted name, NOT neil's star_brand/ward_circle (so finch is a distinct hunt, not a neil re-skin). Her hp_below(0.5) reflex casts finch_descend -> finch_monster — the same descent seam bram_kell/sable_wren/old_neil use, a different destination. A telegraph->dodge reflex gives readable counterplay; cautious default_style (a caster keeps her distance). TUNING placeholders.",
+		"kit": [
+			"finch_recite",
+			"redacted_word",
+			"dash",
+			"finch_descend"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.5
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "finch_descend"
+				},
+				"delay_ms": 250,
+				"max_fires": 1
+			}
+		]
+	},
+	"finch_monster": {
+		"_note": "M30 — ledger_finch's MONSTER phase-2 form (the forbidden volume wearing what is left of the clerk), reached only via finch_human's hp_below -> finch_descend. monster:true so the Doom 'monsters left alive' driver counts it once she has transformed. A DISTINCT kit from EVERY Hunter monster (no cleaver_swipe/revolver_shot/incendiary_round) AND from neil_monster (which fights collapsing_star/star_brand/astral_chains): finch's endgame is her OWN ink/word set — ink_flood (the wide AoE burst), redacted_word (the binding stun), forbidden_recitation (the aimed word-bolt). NO art shared with neil_monster, so the two Hermit prey fight differently. An aggressive style; an hp_below(0.3) reflex presses with ink_flood. A telegraph->dodge reflex keeps it evasive. No further transform (the terminal shape — the executor self-loop guard makes any future hp_below row safe). The body sprite follows the assets/enemies/<form>.png convention (finch_monster.png, generated separately); the form works with the placeholder if the png is absent (CombatExecutor._apply_form_sprite no-ops on a missing file). TUNING placeholders.",
+		"kit": [
+			"ink_flood",
+			"redacted_word",
+			"finch_recite"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "ink_flood"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"descended_avatar_true": {
+		"_note": "M7 Ritual Night — the avatar's TRUER shape (the second stage of the descent). Reached only via descended_avatar's hp_below -> avatar_ascend. Deadlier arc + a charge; no further assume_form (this is the terminal form — the self-loop guard in the executor keeps any future hp_below row from re-casting into itself).",
+		"kit": [
+			"avatar_rend",
+			"charge"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 4
+			}
+		]
+	}
+}

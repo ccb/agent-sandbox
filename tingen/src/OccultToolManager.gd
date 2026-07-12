@@ -46,12 +46,19 @@ func can_use(id: String) -> bool:
 
 ## Use a tool; returns its result dict and surfaces any lead through WorldState.
 func use(id: String) -> Dictionary:
+	# Loss-of-control lockout (§13 decision #5): the beast can't work a divination tool. Normal play
+	# is suspended during a rampage — refuse tool use until the window closes and the run ends.
+	if Meters != null and Meters.in_rampage():
+		return {"ok": false, "kind": "locked", "text": "You have lost control.", "lead": "", "mislead": false}
 	var t: OccultTool = _tools.get(id, null)
 	if t == null:
 		return {"ok": false, "kind": "unknown", "text": "No such tool.", "lead": "", "mislead": false}
 	var res: Dictionary = t.use(_rng, WorldState.corruption)
 	if res.get("ok", false) and String(res.get("lead", "")) != "":
-		WorldState.set_lead(String(res["lead"]))
+		# M25 (backlog "M18"): a reading is now a first-class LEAD on the board (LeadSystem), not the
+		# dead single-objective WorldState.set_lead string. It rides the normal open->cold lifecycle;
+		# the tool id is its `source` and its mislead flag rides along (a false lead the fog let slip).
+		LeadSystem.surface_occult(String(res["lead"]), id, bool(res.get("mislead", false)))
 		EventBus.emit_event("player_occult", {"actor": "player", "tool": id, "mislead": res.get("mislead", false)})
 	return res
 

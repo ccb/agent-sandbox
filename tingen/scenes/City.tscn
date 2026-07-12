@@ -1,85 +1,662 @@
 [gd_scene format=3 uid="uid://bx4bm262xeqyl"]
 
 [ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/ground_test.png" id="1"]
-[ext_resource type="Texture2D" uid="uid://caomhj8tyuxdp" path="res://assets/props/chapel_test.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://chuyurc8bux5x" path="res://assets/props/chapel_test.png" id="2"]
 [ext_resource type="PackedScene" uid="uid://cujesusiidnnk" path="res://scenes/Player.tscn" id="3"]
 [ext_resource type="Script" uid="uid://db0lqqotc32a" path="res://src/Portal.gd" id="4"]
-
-[sub_resource type="CircleShape2D" id="CircleShape2D_xw602"]
-radius = 201.20139
-
+[ext_resource type="Texture2D" uid="uid://cjbkp1ekxaifu" path="res://assets/props/blackthorn.png" id="5"]
+[ext_resource type="PackedScene" uid="uid://b68b38m8u16ym" path="res://scenes/Interactable.tscn" id="7"]
+[ext_resource type="Texture2D" uid="uid://c6loh7x4u1ryw" path="res://assets/props/university.png" id="8"]
+[ext_resource type="Texture2D" uid="uid://dqh3o203bod4w" path="res://assets/props/warehouse.png" id="9"]
+[ext_resource type="Texture2D" uid="uid://bjwhs8x28bh7n" path="res://assets/props/klein_house.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://db286nqa6byj0" path="res://assets/props/laughing_eel.png" id="11"]
+[ext_resource type="Texture2D" uid="uid://l3fsthoqv6b" path="res://assets/props/iron_cross_market.png" id="12"]
+[ext_resource type="Texture2D" uid="uid://bml4ovmiepes7" path="res://assets/props/selena_almshouse.png" id="14"]
+[ext_resource type="Texture2D" uid="uid://duivym10e2jae" path="res://assets/props/tingen_docks.png" id="15"]
+[ext_resource type="Texture2D" uid="uid://d3hp755vud4ux" path="res://assets/props/river_wharves.png" id="16"]
+[ext_resource type="Texture2D" uid="uid://du2acp6aw7al2" path="res://assets/props/police_station.png" id="17"]
+[ext_resource type="Texture2D" uid="uid://dhx0e5c8g441d" path="res://assets/props/mr_frankys.png" id="18"]
+[ext_resource type="Texture2D" uid="uid://bfu7f7d3ynkrc" path="res://assets/props/coal_yard.png" id="19"]
+[ext_resource type="Texture2D" uid="uid://drp32jqxsjgk1" path="res://assets/props/ironworks.png" id="20"]
+[ext_resource type="Texture2D" uid="uid://hnurytdwgagk" path="res://assets/props/globe_works.png" id="21"]
+[ext_resource type="Texture2D" uid="uid://dtfcqretpy2bq" path="res://assets/props/rowhouse_a.png" id="22"]
+[ext_resource type="Texture2D" uid="uid://baamwrdj83ll7" path="res://assets/props/rowhouse_b.png" id="23"]
+[ext_resource type="Texture2D" uid="uid://dtxg3ndpetlk4" path="res://assets/props/rowhouse_c.png" id="24"]
+[ext_resource type="Texture2D" uid="uid://bgugtyokh7efy" path="res://assets/props/fill_01.png" id="25"]
+[ext_resource type="Texture2D" uid="uid://cs66sr1tyyaoi" path="res://assets/props/fill_02.png" id="26"]
+[ext_resource type="Texture2D" uid="uid://b8mq5d6q25rk1" path="res://assets/props/fill_04.png" id="27"]
+[ext_resource type="Texture2D" uid="uid://bwcpaft3mjxyu" path="res://assets/props/fill_05.png" id="28"]
+[ext_resource type="Texture2D" uid="uid://ci0cqxqru5qxn" path="res://assets/props/fill_06.png" id="29"]
+[ext_resource type="Texture2D" uid="uid://b1axabepnvxis" path="res://assets/props/fill_07.png" id="30"]
+[ext_resource type="Texture2D" uid="uid://1xdnn71o2trk" path="res://assets/props/fill_08.png" id="31"]
+[ext_resource type="Texture2D" uid="uid://c77ltuj2vek6g" path="res://assets/props/fill_09.png" id="32"]
+[ext_resource type="Texture2D" uid="uid://sj440itl1v4h" path="res://assets/props/fill_10.png" id="33"]
+[ext_resource type="Texture2D" uid="uid://m1jsmv0yjkx0" path="res://assets/props/fill_11.png" id="34"]
+[ext_resource type="Texture2D" uid="uid://cy678th0lm010" path="res://assets/props/fill_12.png" id="35"]
+[ext_resource type="Texture2D" uid="uid://hul5ak2fxlds" path="res://assets/props/fill_13.png" id="36"]
 [sub_resource type="RectangleShape2D" id="h_edge"]
 size = Vector2(6270, 60)
 
 [sub_resource type="RectangleShape2D" id="v_edge"]
 size = Vector2(60, 6270)
 
+[sub_resource type="RectangleShape2D" id="chapel_nave"]
+size = Vector2(410, 470)
+
+[sub_resource type="RectangleShape2D" id="chapel_tower"]
+size = Vector2(170, 560)
+
 [sub_resource type="RectangleShape2D" id="door"]
 size = Vector2(101, 123)
 
-[node name="City" type="Node2D" unique_id=1090555206]
+[sub_resource type="RectangleShape2D" id="blackthorn_body"]
+size = Vector2(903.34, 831.36)
+
+[sub_resource type="RectangleShape2D" id="university_body"]
+size = Vector2(851.25, 613.8)
+
+[sub_resource type="RectangleShape2D" id="klein_body"]
+size = Vector2(721.21, 637.67)
+
+[sub_resource type="RectangleShape2D" id="warehouse_body"]
+size = Vector2(786.75, 606.36)
+
+[sub_resource type="RectangleShape2D" id="laughing_eel_body"]
+size = Vector2(513.75, 495.38)
+
+[sub_resource type="RectangleShape2D" id="iron_cross_market_body"]
+size = Vector2(365.25, 380.68)
+
+[sub_resource type="RectangleShape2D" id="selena_almshouse_body"]
+size = Vector2(717.75, 535.06)
+
+[sub_resource type="RectangleShape2D" id="tingen_docks_body"]
+size = Vector2(578.25, 561.72)
+
+[sub_resource type="RectangleShape2D" id="river_wharves_body"]
+size = Vector2(544.5, 504.06)
+
+[sub_resource type="RectangleShape2D" id="police_station_body"]
+size = Vector2(493.5, 546.22)
+
+[sub_resource type="RectangleShape2D" id="mr_frankys_body"]
+size = Vector2(551.25, 423.46)
+
+[sub_resource type="RectangleShape2D" id="coal_yard_body"]
+size = Vector2(537.75, 369.52)
+
+[sub_resource type="RectangleShape2D" id="ironworks_body"]
+size = Vector2(622.5, 474.3)
+
+[sub_resource type="RectangleShape2D" id="globe_works_body"]
+size = Vector2(759, 503.44)
+
+[sub_resource type="RectangleShape2D" id="rowhouse_a_body"]
+size = Vector2(575.25, 491.04)
+
+[sub_resource type="RectangleShape2D" id="rowhouse_b_body"]
+size = Vector2(576, 460.04)
+
+[sub_resource type="RectangleShape2D" id="rowhouse_c_body"]
+size = Vector2(590.25, 589)
+
+[sub_resource type="RectangleShape2D" id="neil_home_body"]
+size = Vector2(861.54, 560.48)
+
+[sub_resource type="RectangleShape2D" id="fill_block1_body"]
+size = Vector2(479.25, 406.72)
+
+[sub_resource type="RectangleShape2D" id="fill_block2_body"]
+size = Vector2(642.75, 339.76)
+
+[sub_resource type="RectangleShape2D" id="fill_block4_body"]
+size = Vector2(352.5, 402.38)
+
+[sub_resource type="RectangleShape2D" id="fill_block5_body"]
+size = Vector2(618.75, 404.86)
+
+[sub_resource type="RectangleShape2D" id="fill_block6_body"]
+size = Vector2(443.25, 367.04)
+
+[sub_resource type="RectangleShape2D" id="fill_block7_body"]
+size = Vector2(577.5, 298.22)
+
+[sub_resource type="RectangleShape2D" id="fill_block8_body"]
+size = Vector2(397.5, 482.98)
+
+[sub_resource type="RectangleShape2D" id="fill_block9_body"]
+size = Vector2(394.5, 466.24)
+
+[sub_resource type="RectangleShape2D" id="fill_block10_body"]
+size = Vector2(687.0, 606.98)
+
+[sub_resource type="RectangleShape2D" id="fill_block11_body"]
+size = Vector2(537.75, 526.38)
+
+[sub_resource type="RectangleShape2D" id="fill_block12_body"]
+size = Vector2(495.75, 522.04)
+
+[sub_resource type="RectangleShape2D" id="fill_block13_body"]
+size = Vector2(361.5, 512.74)
+
+[node name="City" type="Node2D" unique_id=150407349]
 y_sort_enabled = true
 
-[node name="Solids" type="StaticBody2D" parent="." unique_id=2125282252]
+[node name="Ground" type="StaticBody2D" parent="." unique_id=616824436]
 
-[node name="Church" type="CollisionShape2D" parent="Solids" unique_id=1341003367]
-top_level = true
-position = Vector2(2086, 4977)
-shape = SubResource("CircleShape2D_xw602")
-
-[node name="EdgeTop" type="CollisionShape2D" parent="Solids" unique_id=828669043]
-position = Vector2(3135, 0)
-shape = SubResource("h_edge")
-
-[node name="EdgeBottom" type="CollisionShape2D" parent="Solids" unique_id=229788389]
-position = Vector2(3135, 6270)
-shape = SubResource("h_edge")
-
-[node name="EdgeLeft" type="CollisionShape2D" parent="Solids" unique_id=1958891037]
-position = Vector2(0, 3135)
-shape = SubResource("v_edge")
-
-[node name="EdgeRight" type="CollisionShape2D" parent="Solids" unique_id=2040502604]
-position = Vector2(6270, 3135)
-shape = SubResource("v_edge")
-
-[node name="Ground" type="Sprite2D" parent="." unique_id=1647879393]
+[node name="Sprite" type="Sprite2D" parent="Ground" unique_id=644219810]
 texture_filter = 4
-scale = Vector2(5, 5)
+scale = Vector2(2.5, 2.5)
 texture = ExtResource("1")
 centered = false
 
-[node name="Chapel" type="Sprite2D" parent="." unique_id=912121814]
+[node name="EdgeTop" type="CollisionShape2D" parent="Ground" unique_id=1987947566]
+position = Vector2(3135, 0)
+shape = SubResource("h_edge")
+
+[node name="EdgeBottom" type="CollisionShape2D" parent="Ground" unique_id=906289333]
+position = Vector2(3135, 6270)
+shape = SubResource("h_edge")
+
+[node name="EdgeLeft" type="CollisionShape2D" parent="Ground" unique_id=454211780]
+position = Vector2(0, 3135)
+shape = SubResource("v_edge")
+
+[node name="EdgeRight" type="CollisionShape2D" parent="Ground" unique_id=501156171]
+position = Vector2(6270, 3135)
+shape = SubResource("v_edge")
+
+[node name="Chapel" type="StaticBody2D" parent="." unique_id=1815749732]
+position = Vector2(2118, 5015)
+
+[node name="Sprite" type="Sprite2D" parent="Chapel" unique_id=1307445385]
 texture_filter = 2
-position = Vector2(2071, 4960)
-scale = Vector2(0.95, 1.2)
+position = Vector2(-10, -36)
+scale = Vector2(1.0703622, 1.3204311)
 texture = ExtResource("2")
 
-[node name="Player" parent="." unique_id=976192019 instance=ExtResource("3")]
-position = Vector2(2618, 5334)
+[node name="ChapelNave" type="CollisionShape2D" parent="Chapel" unique_id=1609628618]
+position = Vector2(-70, -20)
+rotation = -0.28939268
+shape = SubResource("chapel_nave")
 
-[node name="ChapelDoor" type="Area2D" parent="." unique_id=142974700]
-position = Vector2(1916, 5143)
+[node name="ChapelTower" type="CollisionShape2D" parent="Chapel" unique_id=797476001]
+position = Vector2(200, -300)
+shape = SubResource("chapel_tower")
+
+[node name="ChapelDoor" type="Area2D" parent="Chapel" unique_id=1917902656]
+position = Vector2(-159, 242)
 script = ExtResource("4")
 target_scene = "res://scenes/CathedralNave.tscn"
 
-[node name="DoorShape" type="CollisionShape2D" parent="ChapelDoor" unique_id=581355398]
+[node name="DoorShape" type="CollisionShape2D" parent="Chapel/ChapelDoor" unique_id=748900188]
 position = Vector2(213.5, 27.5)
 shape = SubResource("door")
 
-[node name="NeilHomeDoor" type="Area2D" parent="." unique_id=245755487]
+[node name="Blackthorn" type="StaticBody2D" parent="." unique_id=1688632364]
+position = Vector2(1677.0001, 1648)
+
+[node name="Sprite" type="Sprite2D" parent="Blackthorn" unique_id=529247648]
+texture_filter = 2
+scale = Vector2(1.1, 1.1)
+texture = ExtResource("5")
+
+[node name="BlackthornBody" type="CollisionShape2D" parent="Blackthorn" unique_id=849433372]
+position = Vector2(0, 79.32)
+shape = SubResource("blackthorn_body")
+
+[node name="HQDoor" type="Area2D" parent="Blackthorn" unique_id=407569825]
+position = Vector2(-91.0001, 576)
+script = ExtResource("4")
+target_scene = "res://scenes/NighthawksHQ.tscn"
+
+[node name="HQDoorShape" type="CollisionShape2D" parent="Blackthorn/HQDoor" unique_id=664563052]
+shape = SubResource("door")
+
+[node name="Player" parent="." unique_id=2014092794 instance=ExtResource("3")]
+position = Vector2(1854, 5523)
+
+[node name="NeilHomeDoor" type="Area2D" parent="." unique_id=1093530957]
 position = Vector2(2700, 3600)
 script = ExtResource("4")
 target_scene = "res://scenes/NeilHome.tscn"
 
-[node name="NeilDoorShape" type="CollisionShape2D" parent="NeilHomeDoor" unique_id=2001001359]
+[node name="NeilDoorShape" type="CollisionShape2D" parent="NeilHomeDoor" unique_id=798591975]
 shape = SubResource("door")
 
-[node name="HintLayer" type="CanvasLayer" parent="." unique_id=1083835837]
+[node name="HintLayer" type="CanvasLayer" parent="." unique_id=157043641]
 
-[node name="Hint" type="Label" parent="HintLayer" unique_id=1306356140]
+[node name="Hint" type="Label" parent="HintLayer" unique_id=47996058]
 offset_left = 40.0
 offset_top = 24.0
 offset_right = 920.0
 offset_bottom = 48.0
 text = "WASD / Arrows to move    ·    walk onto the chapel steps to enter"
+
+[node name="University" type="StaticBody2D" parent="." unique_id=1977381544]
+position = Vector2(2947.0002, 1020.00006)
+rotation = -0.057384387
+scale = Vector2(1.4, 1.4)
+
+[node name="Sprite" type="Sprite2D" parent="University" unique_id=1561776214]
+texture_filter = 2
+texture = ExtResource("8")
+
+[node name="UniversityBody" type="CollisionShape2D" parent="University" unique_id=1214894888]
+position = Vector2(0, 23.1)
+shape = SubResource("university_body")
+
+[node name="UniversityDoor" type="Area2D" parent="University" unique_id=1287128862]
+position = Vector2(0, 400)
+script = ExtResource("4")
+target_scene = "res://scenes/UniversityArchive.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="University/UniversityDoor" unique_id=2019474672]
+position = Vector2(128.76903, -63.48949)
+shape = SubResource("door")
+
+[node name="Warehouse" type="StaticBody2D" parent="." unique_id=1115775429]
+position = Vector2(5397.001, 1875)
+rotation = 0.060247045
+scale = Vector2(1.2, 1.2)
+
+[node name="Sprite" type="Sprite2D" parent="Warehouse" unique_id=150623417]
+texture_filter = 2
+texture = ExtResource("9")
+
+[node name="WarehouseBody" type="CollisionShape2D" parent="Warehouse" unique_id=412228980]
+position = Vector2(0, 36.82)
+shape = SubResource("warehouse_body")
+
+[node name="WarehouseDoor" type="Area2D" parent="Warehouse"]
+position = Vector2(-200, 385)
+script = ExtResource("4")
+target_scene = "res://scenes/WarehouseInner.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="Warehouse/WarehouseDoor"]
+shape = SubResource("door")
+
+[node name="RiteCache" parent="Warehouse" unique_id=371188297 instance=ExtResource("7")]
+position = Vector2(0, 420)
+prompt_text = "Spoil the summoning cache"
+tint = Color(0.85, 0.35, 0.3, 1)
+sabotage_cache = true
+
+[node name="KleinHouse" type="StaticBody2D" parent="." unique_id=1367525138]
+position = Vector2(3070, 2171)
+
+[node name="Sprite" type="Sprite2D" parent="KleinHouse" unique_id=88197893]
+texture_filter = 2
+scale = Vector2(1.0804718, 1.1)
+texture = ExtResource("10")
+
+[node name="KleinHouseBody" type="CollisionShape2D" parent="KleinHouse" unique_id=614293937]
+position = Vector2(-27.01, 90.16)
+shape = SubResource("klein_body")
+
+[node name="KleinHouseDoor" type="Area2D" parent="KleinHouse"]
+position = Vector2(0, 484)
+script = ExtResource("4")
+target_scene = "res://scenes/KleinLivingRoom.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="KleinHouse/KleinHouseDoor"]
+shape = SubResource("door")
+
+[node name="LaughingEel" type="StaticBody2D" parent="." unique_id=1095575860]
+position = Vector2(2157.5, 3522.5)
+scale = Vector2(1.35, 1.35)
+
+[node name="Sprite" type="Sprite2D" parent="LaughingEel" unique_id=2077561169]
+texture_filter = 2
+texture = ExtResource("11")
+
+[node name="LaughingEelBody" type="CollisionShape2D" parent="LaughingEel" unique_id=1381966756]
+position = Vector2(0, 189)
+shape = SubResource("laughing_eel_body")
+
+[node name="TavernDoor" type="Area2D" parent="LaughingEel"]
+position = Vector2(0, 480)
+script = ExtResource("4")
+target_scene = "res://scenes/LaughingEelTavern.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="LaughingEel/TavernDoor"]
+shape = SubResource("door")
+
+[node name="IronCrossMarket" type="StaticBody2D" parent="." unique_id=390504099]
+position = Vector2(3200, 3235)
+scale = Vector2(1.9055, 1.9055)
+
+[node name="Sprite" type="Sprite2D" parent="IronCrossMarket" unique_id=806774928]
+texture_filter = 2
+texture = ExtResource("12")
+
+[node name="IronCrossMarketBody" type="CollisionShape2D" parent="IronCrossMarket" unique_id=785909723]
+position = Vector2(0, 186)
+shape = SubResource("iron_cross_market_body")
+
+[node name="ButcherShopDoor" type="Area2D" parent="IronCrossMarket"]
+position = Vector2(204.7, 217.8)
+script = ExtResource("4")
+target_scene = "res://scenes/ButcherShopInner.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="IronCrossMarket/ButcherShopDoor"]
+shape = SubResource("door")
+
+[node name="SelenaAlmshouse" type="StaticBody2D" parent="." unique_id=992845432]
+position = Vector2(4260, 1105)
+scale = Vector2(1.53, 1.53)
+
+[node name="Sprite" type="Sprite2D" parent="SelenaAlmshouse" unique_id=1068593317]
+texture_filter = 2
+texture = ExtResource("14")
+
+[node name="SelenaAlmshouseBody" type="CollisionShape2D" parent="SelenaAlmshouse" unique_id=1678604135]
+position = Vector2(0, 165)
+shape = SubResource("selena_almshouse_body")
+
+[node name="AlmshouseDoor" type="Area2D" parent="SelenaAlmshouse"]
+position = Vector2(0, 475)
+script = ExtResource("4")
+target_scene = "res://scenes/SelenaAlmshouseInner.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="SelenaAlmshouse/AlmshouseDoor"]
+shape = SubResource("door")
+
+[node name="TingenDocks" type="StaticBody2D" parent="." unique_id=1560425930]
+position = Vector2(1026.5, 5549)
+scale = Vector2(1.8305, 1.8305)
+
+[node name="Sprite" type="Sprite2D" parent="TingenDocks" unique_id=550208456]
+texture_filter = 2
+texture = ExtResource("15")
+
+[node name="TingenDocksBody" type="CollisionShape2D" parent="TingenDocks" unique_id=706456368]
+position = Vector2(0, 179)
+shape = SubResource("tingen_docks_body")
+
+[node name="RiverWharves" type="StaticBody2D" parent="." unique_id=2060275523]
+position = Vector2(5634, 5788)
+scale = Vector2(1.7863, 1.7863)
+
+[node name="Sprite" type="Sprite2D" parent="RiverWharves" unique_id=1773752661]
+texture_filter = 2
+texture = ExtResource("16")
+
+[node name="RiverWharvesBody" type="CollisionShape2D" parent="RiverWharves" unique_id=1381585758]
+position = Vector2(0, 174)
+shape = SubResource("river_wharves_body")
+
+[node name="PoliceStation" type="StaticBody2D" parent="." unique_id=732072068]
+position = Vector2(3885, 4010)
+scale = Vector2(1.45, 1.45)
+
+[node name="Sprite" type="Sprite2D" parent="PoliceStation" unique_id=405038640]
+texture_filter = 2
+texture = ExtResource("17")
+
+[node name="PoliceStationBody" type="CollisionShape2D" parent="PoliceStation" unique_id=1057409510]
+position = Vector2(0, 180)
+shape = SubResource("police_station_body")
+
+[node name="StationDoor" type="Area2D" parent="PoliceStation"]
+position = Vector2(0, 500)
+script = ExtResource("4")
+target_scene = "res://scenes/PoliceStationInner.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="PoliceStation/StationDoor"]
+shape = SubResource("door")
+
+[node name="MrFrankys" type="StaticBody2D" parent="." unique_id=1092142030]
+position = Vector2(4735, 3205)
+
+[node name="Sprite" type="Sprite2D" parent="MrFrankys" unique_id=1281240107]
+texture_filter = 2
+texture = ExtResource("18")
+
+[node name="MrFrankysBody" type="CollisionShape2D" parent="MrFrankys" unique_id=564711264]
+position = Vector2(0, 180)
+shape = SubResource("mr_frankys_body")
+
+[node name="FrankysDoor" type="Area2D" parent="MrFrankys"]
+position = Vector2(0, 440)
+script = ExtResource("4")
+target_scene = "res://scenes/MrFrankysInner.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="MrFrankys/FrankysDoor"]
+shape = SubResource("door")
+
+[node name="CoalYard" type="StaticBody2D" parent="." unique_id=1398406751]
+position = Vector2(982.5, 830)
+scale = Vector2(1.528, 1.528)
+
+[node name="Sprite" type="Sprite2D" parent="CoalYard" unique_id=1802107113]
+texture_filter = 2
+texture = ExtResource("19")
+
+[node name="CoalYardBody" type="CollisionShape2D" parent="CoalYard" unique_id=1409936854]
+position = Vector2(0, 166)
+shape = SubResource("coal_yard_body")
+
+[node name="Ironworks" type="StaticBody2D" parent="." unique_id=1577818428]
+position = Vector2(5199.5, 562)
+scale = Vector2(1.7667, 1.7667)
+
+[node name="Sprite" type="Sprite2D" parent="Ironworks" unique_id=1842446309]
+texture_filter = 2
+texture = ExtResource("20")
+
+[node name="IronworksBody" type="CollisionShape2D" parent="Ironworks" unique_id=838402866]
+position = Vector2(0, 186)
+shape = SubResource("ironworks_body")
+
+[node name="GlobeWorks" type="StaticBody2D" parent="." unique_id=614060856]
+position = Vector2(762.5, 3097.5)
+scale = Vector2(1.3393, 1.3393)
+
+[node name="Sprite" type="Sprite2D" parent="GlobeWorks" unique_id=809326747]
+texture_filter = 2
+position = Vector2(-15.306504, -23.51975)
+texture = ExtResource("21")
+
+[node name="GlobeWorksBody" type="CollisionShape2D" parent="GlobeWorks" unique_id=2036089326]
+position = Vector2(0, 190)
+shape = SubResource("globe_works_body")
+
+[node name="RowhouseA" type="StaticBody2D" parent="." unique_id=1890879397]
+position = Vector2(2725, 1750)
+scale = Vector2(0.95, 0.95)
+
+[node name="Sprite" type="Sprite2D" parent="RowhouseA" unique_id=24348926]
+texture_filter = 2
+texture = ExtResource("22")
+
+[node name="RowhouseABody" type="CollisionShape2D" parent="RowhouseA" unique_id=196220241]
+position = Vector2(0, 172)
+shape = SubResource("rowhouse_a_body")
+
+[node name="RowhouseB" type="StaticBody2D" parent="." unique_id=395157090]
+position = Vector2(4388.5, 5236.5)
+scale = Vector2(1.17, 1.17)
+
+[node name="Sprite" type="Sprite2D" parent="RowhouseB" unique_id=1650795954]
+texture_filter = 2
+texture = ExtResource("23")
+
+[node name="RowhouseBBody" type="CollisionShape2D" parent="RowhouseB" unique_id=48906657]
+position = Vector2(0, 175)
+shape = SubResource("rowhouse_b_body")
+
+[node name="RowhouseC" type="StaticBody2D" parent="." unique_id=1678552971]
+position = Vector2(2067.5, 2877.5)
+scale = Vector2(1.3, 1.3)
+
+[node name="Sprite" type="Sprite2D" parent="RowhouseC" unique_id=1841616334]
+texture_filter = 2
+texture = ExtResource("24")
+
+[node name="RowhouseCBody" type="CollisionShape2D" parent="RowhouseC" unique_id=719489062]
+position = Vector2(0, 183)
+shape = SubResource("rowhouse_c_body")
+
+[node name="NeilHome" type="StaticBody2D" parent="." unique_id=1685797275]
+position = Vector2(2610, 3350)
+scale = Vector2(1.0714, 1.0714)
+
+[node name="Sprite" type="Sprite2D" parent="NeilHome" unique_id=1005315240]
+modulate = Color(0.9, 0.84, 0.78, 1)
+texture_filter = 2
+texture = ExtResource("22")
+
+[node name="NeilHomeBody" type="CollisionShape2D" parent="NeilHome" unique_id=1836921397]
+position = Vector2(-176.4047, -55.068172)
+shape = SubResource("neil_home_body")
+
+[node name="Nighthawk" parent="." unique_id=894992163 instance=ExtResource("7")]
+position = Vector2(1690, 2310)
+prompt_text = "Speak to the Nighthawk"
+tint = Color(0.45, 0.55, 0.8, 1)
+dialogue_id = "nighthawk"
+
+[node name="FillBlock1" type="StaticBody2D" parent="."]
+position = Vector2(572.5, 2005.0)
+scale = Vector2(1.6348, 1.6348)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock1"]
+texture_filter = 2
+texture = ExtResource("25")
+
+[node name="FillBlock1Body" type="CollisionShape2D" parent="FillBlock1"]
+position = Vector2(0, 124.64)
+shape = SubResource("fill_block1_body")
+
+[node name="FillBlock2" type="StaticBody2D" parent="."]
+position = Vector2(1047.5, 690.0)
+scale = Vector2(1.7903, 1.7903)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock2"]
+texture_filter = 2
+texture = ExtResource("26")
+
+[node name="FillBlock2Body" type="CollisionShape2D" parent="FillBlock2"]
+position = Vector2(0, 104.12)
+shape = SubResource("fill_block2_body")
+
+[node name="FillBlock4" type="StaticBody2D" parent="."]
+position = Vector2(4845.0, 4140.0)
+scale = Vector2(1.2128, 1.2128)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock4"]
+texture_filter = 2
+texture = ExtResource("27")
+
+[node name="FillBlock4Body" type="CollisionShape2D" parent="FillBlock4"]
+position = Vector2(0, 123.31)
+shape = SubResource("fill_block4_body")
+
+[node name="FillBlock5" type="StaticBody2D" parent="."]
+position = Vector2(1132.5, 4010.0)
+scale = Vector2(1.4713, 1.4713)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock5"]
+texture_filter = 2
+texture = ExtResource("28")
+
+[node name="FillBlock5Body" type="CollisionShape2D" parent="FillBlock5"]
+position = Vector2(0, 124.07)
+shape = SubResource("fill_block5_body")
+
+[node name="FillBlock6" type="StaticBody2D" parent="."]
+position = Vector2(5780.0, 2935.0)
+scale = Vector2(0.9961, 0.9961)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock6"]
+texture_filter = 2
+texture = ExtResource("29")
+
+[node name="FillBlock6Body" type="CollisionShape2D" parent="FillBlock6"]
+position = Vector2(0, 112.48)
+shape = SubResource("fill_block6_body")
+
+[node name="FillBlock7" type="StaticBody2D" parent="."]
+position = Vector2(2330.0, 182.5)
+scale = Vector2(0.7383, 0.7383)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock7"]
+texture_filter = 2
+texture = ExtResource("30")
+
+[node name="FillBlock7Body" type="CollisionShape2D" parent="FillBlock7"]
+position = Vector2(0, 91.39)
+shape = SubResource("fill_block7_body")
+
+[node name="FillBlock8" type="StaticBody2D" parent="."]
+position = Vector2(5785.0, 3230.0)
+scale = Vector2(1.1312, 1.1312)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock8"]
+texture_filter = 2
+texture = ExtResource("31")
+
+[node name="FillBlock8Body" type="CollisionShape2D" parent="FillBlock8"]
+position = Vector2(0, 148.01)
+shape = SubResource("fill_block8_body")
+
+[node name="FillBlock9" type="StaticBody2D" parent="."]
+position = Vector2(5732.5, 3392.5)
+scale = Vector2(1.0969, 1.0969)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock9"]
+texture_filter = 2
+texture = ExtResource("32")
+
+[node name="FillBlock9Body" type="CollisionShape2D" parent="FillBlock9"]
+position = Vector2(0, 142.88)
+shape = SubResource("fill_block9_body")
+
+[node name="FillBlock10" type="StaticBody2D" parent="."]
+position = Vector2(3390.0, 4980.0)
+scale = Vector2(0.4903, 0.4903)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock10"]
+texture_filter = 2
+texture = ExtResource("33")
+
+[node name="FillBlock10Body" type="CollisionShape2D" parent="FillBlock10"]
+position = Vector2(0, 186.01)
+shape = SubResource("fill_block10_body")
+
+[node name="FillBlock11" type="StaticBody2D" parent="."]
+position = Vector2(5497.5, 4270.0)
+scale = Vector2(1.1215, 1.1215)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock11"]
+texture_filter = 2
+texture = ExtResource("34")
+
+[node name="FillBlock11Body" type="CollisionShape2D" parent="FillBlock11"]
+position = Vector2(0, 161.31)
+shape = SubResource("fill_block11_body")
+
+[node name="FillBlock12" type="StaticBody2D" parent="."]
+position = Vector2(4575.0, 1962.5)
+scale = Vector2(1.149, 1.149)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock12"]
+texture_filter = 2
+texture = ExtResource("35")
+
+[node name="FillBlock12Body" type="CollisionShape2D" parent="FillBlock12"]
+position = Vector2(0, 159.98)
+shape = SubResource("fill_block12_body")
+
+[node name="FillBlock13" type="StaticBody2D" parent="."]
+position = Vector2(4572.5, 2592.5)
+scale = Vector2(0.5719, 0.5719)
+
+[node name="Sprite" type="Sprite2D" parent="FillBlock13"]
+texture_filter = 2
+texture = ExtResource("36")
+
+[node name="FillBlock13Body" type="CollisionShape2D" parent="FillBlock13"]
+position = Vector2(0, 157.13)
+shape = SubResource("fill_block13_body")

@@ -25,7 +25,7 @@ color = Color(0.03, 0.03, 0.05, 1)
 polygon = PackedVector2Array(-500, -500, 2400, -500, 2400, 1700, -500, 1700)
 
 [node name="Floor" type="Sprite2D" parent="."]
-texture_filter = 2
+texture_filter = 4
 centered = false
 scale = Vector2(1.2, 1.2)
 texture = ExtResource("1")

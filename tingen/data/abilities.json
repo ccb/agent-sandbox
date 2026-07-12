@@ -1,0 +1,604 @@
+{
+	"abilities": [
+		{
+			"id": "revolver_shot",
+			"name": "revolver shot",
+			"description": "a quick aimed revolver shot at a distant mark",
+			"class": "projectile",
+			"cast_time": 0.25,
+			"cooldown": 0.9,
+			"cost": {
+				"ammo": 1
+			},
+			"range": 520,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 700
+			},
+			"poise_damage": 15,
+			"fx": "bullet_tracer",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 26
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "dash",
+			"name": "dash",
+			"description": "a burst of speed that carries you through danger untouched",
+			"class": "movement",
+			"cast_time": 0.0,
+			"cooldown": 1.6,
+			"cost": {
+				"stamina": 25
+			},
+			"range": 0,
+			"target_type": "point",
+			"motion": {
+				"kind": "dash",
+				"distance": 140
+			},
+			"fx": "dash_afterimage_wisp",
+			"i_frames": 0.25,
+			"effects": [],
+			"anim": "dash"
+		},
+		{
+			"id": "paper_charm",
+			"name": "paper charm",
+			"description": "a warded paper charm whose circle slows and silences whoever stands inside it",
+			"class": "spell",
+			"cast_time": 0.6,
+			"cooldown": 6.0,
+			"cost": {
+				"spirituality": 15
+			},
+			"range": 260,
+			"target_type": "point",
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "zone",
+					"radius": 90,
+					"duration": 4.0,
+					"tick": 0.5,
+					"statuses": [
+						"slow",
+						"silence"
+					]
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "pistol_whip",
+			"name": "pistol-whip",
+			"description": "a short, brutal crack with the revolver's butt when there's no round to spare",
+			"_note": "M22 B8 ammo-floor (backlog OVERNIGHT §B8). The Hunter base kit had ZERO ammo-free damage, so a dry (0-round) player could deal NO hp at all -> an unrecoverable soft-loss. This is the SURVIVABILITY FLOOR, not a main weapon: a free (cost {}) melee STRIKE the dry hunter can always throw to chip hp. DELIBERATELY weak (dmg 8, poise 12) and short (range 64) so the revolver stays the real gun — it only guarantees a dry player is never fully weaponless. Economy note: base ammo economy runs ~48 supply (12 start + 24 world + ~12 bought) vs ~55-65 demand, and the dodge-reflex re-arm on the mask-drop transform adds a ~6-dodged-round/fight tax; this floor closes that gap without touching supply. TUNING placeholders — dmg 8, poise 12, cast 0.35, cooldown 1.1, range 64.",
+			"class": "strike",
+			"cast_time": 0.35,
+			"cooldown": 1.1,
+			"cost": {},
+			"range": 64,
+			"target_type": "enemy",
+			"poise_damage": 12,
+			"knockback": 15,
+			"fx": "hit_spark_1",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 8
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "cleaver_swipe",
+			"name": "cleaver swipe",
+			"description": "a heavy cleaver swing at whoever stands within arm's reach",
+			"class": "strike",
+			"cast_time": 0.45,
+			"cooldown": 1.2,
+			"cost": {},
+			"range": 70,
+			"aoe_radius": 40,
+			"target_type": "enemy",
+			"poise_damage": 45,
+			"knockback": 40,
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 34
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "charge",
+			"name": "bull charge",
+			"description": "a rushing slam that bowls into the first body it meets",
+			"class": "movement",
+			"cast_time": 0.6,
+			"cooldown": 4.0,
+			"cost": {},
+			"range": 320,
+			"target_type": "enemy",
+			"motion": {
+				"kind": "charge",
+				"distance": 320
+			},
+			"poise_damage": 55,
+			"knockback": 90,
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 22
+				},
+				{
+					"kind": "status",
+					"status": "stun",
+					"duration": 0.4
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "hook_throw",
+			"name": "hook throw",
+			"description": "a thrown hook that bites at range and slows its mark",
+			"class": "projectile",
+			"cast_time": 0.5,
+			"cooldown": 5.0,
+			"cost": {},
+			"range": 420,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 420
+			},
+			"poise_damage": 10,
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 14
+				},
+				{
+					"kind": "status",
+					"status": "slow",
+					"duration": 1.5
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "blood_frenzy",
+			"name": "blood frenzy",
+			"description": "a self-worked fury that quickens every blow that follows",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.8,
+			"cooldown": 20.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"effects": [
+				{
+					"kind": "buff",
+					"stat": "attack_speed",
+					"mult": 1.5,
+					"duration": 6.0
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "assume_form",
+			"name": "shed the skin",
+			"description": "let the worn shape fall away and become the monstrous thing beneath it",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "bieber_monster"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "mark_prey",
+			"name": "mark prey",
+			"description": "brand a quarry so the next blow opens on exposed nerve — the Provoker's tracking mark",
+			"_note": "M5 Hunter Seq-8 unlock (direction v2 §6, Provoker). An 'effect'-class tracking mark: a light slow to pin the prey plus a heavy poise_damage opener (the deterministic first-strike bonus §6). TUNING placeholders — poise 30 opener, slow 0.35 magnitude for 2.0s, mid cast/cooldown/range.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.35,
+			"cooldown": 8.0,
+			"cost": {},
+			"range": 480,
+			"target_type": "enemy",
+			"poise_damage": 30,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "status",
+					"status": "slow",
+					"magnitude": 0.35,
+					"duration": 2.0
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "incendiary_round",
+			"name": "incendiary round",
+			"description": "a phosphor-cored slug that punches harder and leaves the wound burning — the Pyromaniac's shot",
+			"_note": "M5 Hunter Seq-7 unlock (direction v2 §6, Pyromaniac). A stronger revolver variant: a projectile with higher instant damage than revolver_shot (26 -> 40) plus a small burn modelled as a direct 'dot' status (no new resolver status default needed — validate_refs stays clean). Costs one round like revolver_shot. TUNING placeholders — dmg 40, burn 4 per 0.5s tick over 3s, cast 0.3, cooldown 3.0.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.3,
+			"cooldown": 3.0,
+			"cost": {
+				"ammo": 1
+			},
+			"range": 520,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 700
+			},
+			"poise_damage": 18,
+			"fx": "bullet_tracer",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 40
+				},
+				{
+					"kind": "status",
+					"status": "dot",
+					"magnitude": 4,
+					"duration": 3.0,
+					"tick": 0.5
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "shed_the_hunt",
+			"name": "let the hunt take you",
+			"description": "stop fighting it — let the over-ingested potion have its way and become the thing that hunts on all fours",
+			"_note": "M12 — the SECOND adversary's transform (sable_wren, a Hunter-pathway Beyonder who LOST CONTROL from a bad over-ingestion). A distinct transform from the butcher's assume_form (which hardcodes bieber_monster): this one lands on wren_predator, the feral blood-hunter shape. Fired by wren_human's hp_below reflex, exactly like bram_kell/butcher_human's assume_form seam — the executor's transform code + the self-loop guard handle it unchanged. class:transform, self-target, no cost. TUNING placeholders mirror assume_form's cast_time.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "wren_predator"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "lose_the_line",
+			"name": "let go the line",
+			"description": "drop the harpoon rope, stop pretending the hands are your own — become the thing the harbour dose made",
+			"_note": "M14 — the THIRD adversary's transform (leland_mack, a Hunter-pathway Beyonder who LOST CONTROL from over-ingesting a Red-Priest potion). A distinct transform from both the butcher's assume_form (bieber_monster) and Wren's shed_the_hunt (wren_predator): this one lands on mack_beast, the feral harbour beast shape. Fired by mack_harbor's hp_below(0.45) reflex — tighter threshold than Wren's 0.5 (HARDER: the player has LESS time in the human-readable phase). class:transform, self-target, no cost, cast_time mirrors assume_form. The executor's transform code + self-loop guard handle it unchanged.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "mack_beast"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "avatar_rend",
+			"name": "rend",
+			"description": "the half-landed avatar sweeps a limb of impossible geometry through everything within reach",
+			"_note": "M7 Ritual Night — the descended_avatar boss's basic strike. A heavy, wide arc (like cleaver_swipe but harder/longer reach), so a half-manifested outer god (外神) is a real fight, not a bump.",
+			"class": "strike",
+			"occult": true,
+			"cast_time": 0.5,
+			"cooldown": 1.3,
+			"cost": {},
+			"range": 96,
+			"aoe_radius": 60,
+			"target_type": "enemy",
+			"poise_damage": 55,
+			"knockback": 60,
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 42
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "avatar_ascend",
+			"name": "ascend",
+			"description": "the half-landed shape gives up its borrowed anatomy and reaches for its truer descent",
+			"_note": "M7 Ritual Night — the SECOND stage of the two-stage descent (§9). Fired by the descended_avatar's hp_below reflex, exactly like bram_kell/butcher_human's assume_form: at low HP it sheds into descended_avatar_true. A transform, so the executor's assume_form seam handles it and the self-loop guard applies.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "descended_avatar_true"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "star_brand",
+			"name": "star-brand",
+			"description": "a hurled brand of starfire that sears its mark — the Hermit's aimed rite",
+			"_note": "M28 (direction v2 §6, Hermit astrology/ritual). The Hermit BASE-KIT primary + neil_human's opener: a projectile-class star-bolt (reuses the proven ranged/telegraph/dodge path so the tactical brain fires it like a gun) — pure instant damage like revolver_shot (deliberately NO dot: a frequently-cast primary's dot ticks on a living target emit the engine's un-telegraphed 'dot' attack, which would break the §0 telegraphs-precede-all-damage invariant the sims pin). No ammo — a caster spends spirituality, not bullets (spirituality is unenforced today, like paper_charm, so effectively free; the Hermit's real scarcity is a later tuning pass). TUNING placeholders.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.3,
+			"cooldown": 1.0,
+			"cost": {
+				"spirituality": 10
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 680
+			},
+			"poise_damage": 16,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 30
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "ward_circle",
+			"name": "ward circle",
+			"description": "a chalk-and-starlight circle that snares and wards whoever stands inside it",
+			"_note": "M28 Hermit BASE-KIT utility zone (mirrors the Hunter's paper_charm). A spell-class point-target zone that slows anyone inside (a warded circle holds its shape against the Gray Fog). Zone status 'slow' has an authored resolver default (NAMED_STATUS_DEFAULTS), so validate_refs stays clean. TUNING placeholders.",
+			"class": "spell",
+			"cast_time": 0.6,
+			"cooldown": 6.0,
+			"cost": {
+				"spirituality": 15
+			},
+			"range": 260,
+			"target_type": "point",
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "zone",
+					"radius": 90,
+					"duration": 4.0,
+					"tick": 0.5,
+					"statuses": [
+						"slow"
+					]
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "astral_sight",
+			"name": "astral sight",
+			"description": "open the third eye and read the turning of the stars — the world slows to the Hermit's knowing",
+			"_note": "M28 Hermit BASE-KIT knowledge/sight utility. A self-target effect buff (the Hermit's occult knowledge sharpens their reactions): a short attack_speed buff, the 'knowing' made mechanical. class:effect, self, free. TUNING placeholders.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.5,
+			"cooldown": 14.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "buff",
+					"stat": "attack_speed",
+					"mult": 1.3,
+					"duration": 6.0
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "astral_chains",
+			"name": "astral chains",
+			"description": "bind a quarry in chains of cold starlight, holding it fast for the space of a breath",
+			"_note": "M28 Hermit Seq-8 ladder unlock (LADDER_UNLOCKS['hermit'][8]), mirroring the Hunter's mark_prey. A ranged 'effect'-class control art: a heavy poise opener plus a short STUN (the Hermit's binding rite). 'stun' is a real resolver STATUS_KIND, so validate_refs stays clean. TUNING placeholders.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.35,
+			"cooldown": 8.0,
+			"cost": {},
+			"range": 480,
+			"target_type": "enemy",
+			"poise_damage": 28,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "status",
+					"status": "stun",
+					"duration": 0.6
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "collapsing_star",
+			"name": "collapsing star",
+			"description": "call down a dying star that bursts over a wide reach, searing everything beneath it",
+			"_note": "M28 Hermit Seq-7 ladder unlock (LADDER_UNLOCKS['hermit'][7]), mirroring the Hunter's incendiary_round as the stronger art — the star/ritual AoE payoff (§6). A projectile with a burst radius and higher instant damage than star_brand (pure damage, no dot — same §0-invariant reason as star_brand: a living-target dot tick emits the engine's un-telegraphed 'dot' attack). TUNING placeholders.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.4,
+			"cooldown": 3.0,
+			"cost": {
+				"spirituality": 20
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 620
+			},
+			"aoe_radius": 70,
+			"poise_damage": 22,
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 46
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "neil_descend",
+			"name": "let the Sage in",
+			"description": "stop holding the shape of the grieving man and let the Hidden Sage's pollution finish what it began",
+			"_note": "M28 — old_neil's transform (a Hermit-pathway Beyonder who LOST CONTROL to the Hidden Sage's whispers). A distinct destination from the Hunter transforms (shed_the_hunt/lose_the_line): lands on neil_monster, the pollution-shaped Sage-thing. Fired by neil_human's hp_below reflex — the same descent seam as bram_kell/sable_wren. class:transform, self, no cost, cast_time mirrors assume_form.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "neil_monster"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "finch_recite",
+			"name": "forbidden recitation",
+			"description": "reads a line from the stolen restricted volume aloud — the words themselves cut the air toward a mark",
+			"_note": "M30 — ledger_finch's HERMIT primary (the second Hermit prey, direction v2 §6). A projectile-class star/word-bolt distinct in id from neil's star_brand so finch's kit is her own — pure instant damage like star_brand (deliberately NO dot: a frequently-cast primary's dot tick emits the engine's un-telegraphed 'dot' attack, breaking the §0 telegraphs-precede-all-damage invariant the sims pin). Reuses the proven ranged/telegraph/dodge path so the tactical brain fires it like a gun. cost:spirituality (unenforced today, like paper_charm). TUNING placeholders.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.3,
+			"cooldown": 1.0,
+			"cost": {
+				"spirituality": 10
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 680
+			},
+			"poise_damage": 16,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 28
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "redacted_word",
+			"name": "the redacted name",
+			"description": "speaks the name struck from the record — the sound binds a quarry mid-breath",
+			"_note": "M30 — ledger_finch's Hermit control art, distinct in id from neil's astral_chains (so finch_monster's kit differs from neil_monster's). A ranged 'effect'-class binder: heavy poise plus a short STUN. 'stun' is a real CombatResolver STATUS_KIND, so validate_refs stays clean. TUNING placeholders.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.35,
+			"cooldown": 8.0,
+			"cost": {},
+			"range": 460,
+			"target_type": "enemy",
+			"poise_damage": 26,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "status",
+					"status": "stun",
+					"duration": 0.6
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "ink_flood",
+			"name": "ink flood",
+			"description": "the stolen index bleeds — a wide burst of living ink drowns everything beneath it",
+			"_note": "M30 — ledger_finch's Seq-8 star/ritual AoE payoff, mirroring the shape of neil's collapsing_star but a DISTINCT id (finch_monster fights her own kit, no art shared with neil_monster). A projectile with a burst radius, higher instant damage than finch_recite — pure damage, no dot (same §0-invariant reason as star_brand). TUNING placeholders.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.4,
+			"cooldown": 3.0,
+			"cost": {
+				"spirituality": 20
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 620
+			},
+			"aoe_radius": 70,
+			"poise_damage": 22,
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 44
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "finch_descend",
+			"name": "let the volume read her",
+			"description": "stops fighting the words on the stolen page and lets the forbidden knowledge finish hollowing her out",
+			"_note": "M30 — ledger_finch's transform (a Hermit-pathway Beyonder who lost control to the restricted volume she stole). A distinct destination from neil_descend (which lands on neil_monster): this lands on finch_monster, the ink-and-index Sage-thing. Fired by finch_human's hp_below reflex — the same descent seam bram_kell/sable_wren/old_neil use. class:transform, self, no cost, cast_time mirrors assume_form.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "finch_monster"
+				}
+			],
+			"anim": "transform"
+		}
+	]
+}

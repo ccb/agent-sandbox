@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/CombatProjectile.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://d1ief8sr5x4ft" path="res://assets/fx/bullet_tracer.png" id="2"]
+
+[sub_resource type="CircleShape2D" id="hit"]
+radius = 4.0
+
+[node name="CombatProjectile" type="Area2D" groups=["combat_projectile"]]
+script = ExtResource("1")
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("hit")
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2")

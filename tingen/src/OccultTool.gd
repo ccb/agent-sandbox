@@ -44,8 +44,12 @@ func use(rng: RandomNumberGenerator, corruption: float) -> Dictionary:
 	if not can_use():
 		return {"ok": false, "kind": "blocked", "text": "Cannot use right now.", "lead": "", "mislead": false}
 	var cost := compute_cost()
-	_al("WorldState").adjust(&"fatigue", float(cost["fatigue"]))
-	_al("WorldState").adjust(&"attention", float(cost["attention"]))
+	# M25 (backlog "M18"): a tool USE now pays the LIVE meters, not the dead legacy pressures. The
+	# authored fatigue_cost is occult/mental strain -> Madness; attention_cost is exposure to the
+	# unknown -> Notice (divination is the canon §4 exposure channel). Mapping is Meters.LEGACY_METER_MAP.
+	var meters := _al("Meters")
+	meters.adjust_legacy("fatigue", float(cost["fatigue"]), "occult_tool:%s" % id)
+	meters.adjust_legacy("attention", float(cost["attention"]), "occult_tool:%s" % id)
 	for ing in (cost["items"] as Dictionary).keys():
 		_al("Inventory").remove(String(ing), int(cost["items"][ing]))
 	for prod in (def.get("produces", {}) as Dictionary).keys():

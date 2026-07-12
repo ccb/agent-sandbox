@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://b1tngnhud00001"]
+[gd_scene load_steps=14 format=3 uid="uid://b1tngnhud00001"]
 
 [ext_resource type="Script" path="res://src/HUD.gd" id="1"]
 [ext_resource type="PackedScene" path="res://ui/InvestigationBoard.tscn" id="2"]
@@ -11,6 +11,8 @@
 [ext_resource type="PackedScene" path="res://ui/PrayerPanel.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://ui/DebugLogPanel.tscn" id="10"]
 [ext_resource type="PackedScene" path="res://ui/InventoryPanel.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://ui/CombatHUD.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://ui/MeterHUD.tscn" id="13"]
 
 [node name="HUD" type="Control"]
 anchor_right = 1.0
@@ -48,61 +50,6 @@ text = "Tab Board   ·   M Map   ·   I Inventory   ·   C Cult   ·   R Rituals
 theme_override_colors/font_color = Color(0.72, 0.74, 0.8, 0.8)
 theme_override_font_sizes/font_size = 12
 
-[node name="Meters" type="VBoxContainer" parent="."]
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -250.0
-offset_top = 56.0
-offset_right = -12.0
-offset_bottom = 150.0
-grow_horizontal = 0
-theme_override_constants/separation = 6
-
-[node name="Stability" type="HBoxContainer" parent="Meters"]
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Meters/Stability"]
-custom_minimum_size = Vector2(84, 0)
-text = "Stability"
-
-[node name="Bar" type="ProgressBar" parent="Meters/Stability"]
-custom_minimum_size = Vector2(150, 14)
-modulate = Color(0.5, 0.9, 0.6, 1)
-size_flags_horizontal = 3
-max_value = 100.0
-value = 80.0
-show_percentage = false
-
-[node name="Corruption" type="HBoxContainer" parent="Meters"]
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Meters/Corruption"]
-custom_minimum_size = Vector2(84, 0)
-text = "Corruption"
-
-[node name="Bar" type="ProgressBar" parent="Meters/Corruption"]
-custom_minimum_size = Vector2(150, 14)
-modulate = Color(0.7, 0.45, 0.85, 1)
-size_flags_horizontal = 3
-max_value = 100.0
-value = 5.0
-show_percentage = false
-
-[node name="Panic" type="HBoxContainer" parent="Meters"]
-theme_override_constants/separation = 8
-
-[node name="Label" type="Label" parent="Meters/Panic"]
-custom_minimum_size = Vector2(84, 0)
-text = "Panic"
-
-[node name="Bar" type="ProgressBar" parent="Meters/Panic"]
-custom_minimum_size = Vector2(150, 14)
-modulate = Color(0.9, 0.5, 0.45, 1)
-size_flags_horizontal = 3
-max_value = 100.0
-value = 5.0
-show_percentage = false
-
 [node name="ThoughtPanel" type="Panel" parent="."]
 anchor_top = 1.0
 anchor_right = 1.0
@@ -129,6 +76,10 @@ text = ""
 
 [node name="ThoughtTimer" type="Timer" parent="."]
 one_shot = true
+
+[node name="CombatHUD" parent="." instance=ExtResource("12")]
+
+[node name="MeterHUD" parent="." instance=ExtResource("13")]
 
 [node name="InvestigationBoard" parent="." instance=ExtResource("2")]
 visible = false

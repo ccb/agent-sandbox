@@ -1,27 +1,28 @@
 extends Panel
-## Investigation Board modal. Renders collected clues dynamically, grouped by evidence
-## type, plus open threads driven by the active lead. (Flat gallery — the drag-connect
-## node graph is deferred per the design docs.)
+## The LEADS board (direction v2 §5 — Rumors -> Leads). Repurposed from the old clue/deduction UI:
+## it now renders what the city is WHISPERING — the active leads (subject + where_hint + freshness),
+## not a forensic evidence gallery. Investigation-as-forensics is cut (§5); the open world is
+## navigated by TALK, so the board is a tracker of leads surfaced through conversation/chatter, each
+## pointing at a street or place NAME (never a map marker). The toggle key (Tab) is unchanged.
+##
+## A lead reads: its subject, "-> <where_hint>", and a freshness tag (HOT / open / on the trail) that
+## makes the perishable lifecycle (§5) legible — an open lead left to cool goes cold (Doom +5) and
+## re-emerges elsewhere, so the board is a to-do list with a running clock.
 
-const TYPE_ORDER: Array = ["physical", "behavioral", "occult", "testimony"]
-const TYPE_LABEL: Dictionary = {
-	"physical": "Physical Evidence",
-	"behavioral": "Behavioural Evidence",
-	"occult": "Occult Evidence",
-	"testimony": "Testimony",
+const STATE_COLOR: Dictionary = {
+	"open": Color(0.9, 0.85, 0.6),
+	"followed": Color(0.6, 0.85, 0.7),
 }
-const TYPE_COLOR: Dictionary = {
-	"physical": Color(0.7, 0.7, 0.74),
-	"behavioral": Color(0.5, 0.75, 0.85),
-	"occult": Color(0.7, 0.45, 0.85),
-	"testimony": Color(0.45, 0.55, 0.8),
-}
+const HOT_COLOR: Color = Color(0.95, 0.55, 0.4)
 
 @onready var _list: VBoxContainer = $Margin/Body/Scroll/List
 
 func _ready() -> void:
-	ClueDB.clue_collected.connect(func(_id): _rebuild())
-	WorldState.lead_changed.connect(func(_t): _rebuild())
+	var ls := get_node_or_null("/root/LeadSystem")
+	if ls != null:
+		ls.leads_changed.connect(_rebuild)
+		ls.lead_surfaced.connect(func(_id): _rebuild())
+		ls.lead_perished.connect(func(_c, _f): _rebuild())
 	visibility_changed.connect(func(): if visible: _rebuild())
 	_rebuild()
 
@@ -31,23 +32,68 @@ func _rebuild() -> void:
 	for c in _list.get_children():
 		c.queue_free()
 
-	var groups := ClueDB.collected_by_type()
-	if groups.is_empty():
-		_add_label("No clues collected yet. Examine the scene (E).", Color(0.8, 0.8, 0.8), true)
-	else:
-		for t in TYPE_ORDER:
-			if not groups.has(t):
-				continue
-			_add_label(TYPE_LABEL.get(t, t), TYPE_COLOR.get(t, Color.WHITE), false, 16)
-			for clue in groups[t]:
-				var imp := String(clue.get("importance", "flavor"))
-				var mark := "*" if imp == "pivotal" else "-"
-				_add_label("  %s %s" % [mark, clue.get("name", "?")], Color.WHITE)
-				_add_label("      %s" % clue.get("description", ""), Color(0.72, 0.72, 0.76))
-
+	_add_label("Leads — what the city is whispering", Color(0.85, 0.8, 0.6), false, 18)
 	_add_spacer()
-	_add_label("Open threads", Color(0.85, 0.8, 0.6), false, 16)
-	_add_label("  - " + WorldState.current_lead, Color(0.9, 0.9, 0.78))
+
+	var ls := get_node_or_null("/root/LeadSystem")
+	var leads: Array = ls.active_leads() if ls != null else []
+	if leads.is_empty():
+		_add_label("No leads yet. Talk to people — the city knows more than it says.",
+			Color(0.8, 0.8, 0.8), true)
+		return
+
+	for lead in leads:
+		var state := String(lead.get("state", "open"))
+		var hot := bool(lead.get("hot", false))
+		var tag := "HOT" if hot else ("on the trail" if state == "followed" else "open")
+		var color: Color = HOT_COLOR if hot else STATE_COLOR.get(state, Color.WHITE)
+		var mark := "*" if hot else "-"
+		_add_lead_row(String(lead.get("source", "")),
+			"  %s %s  [%s]" % [mark, lead.get("subject", "?"), tag], color,
+			"      -> %s" % lead.get("where_hint", "somewhere in the city"))
+
+## Render one lead. M19: when the lead's source is a known NPC we put their face beside it (a small
+## headshot thumb) — reusing the ONE portrait seam (Portrait.resolve_texture). If the source has no
+## art (or isn't an NPC) we fall back to the exact label-only layout the board always used.
+func _add_lead_row(source_id: String, subject_line: String, subject_color: Color, hint_line: String) -> void:
+	var tex: Texture2D = load("res://src/Portrait.gd").resolve_texture(source_id)
+	if tex == null:
+		_add_label(subject_line, subject_color)
+		_add_label(hint_line, Color(0.72, 0.72, 0.76))
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var thumb := TextureRect.new()
+	thumb.custom_minimum_size = Vector2(38, 38)
+	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	thumb.tooltip_text = "Heard from %s" % source_id
+	# A top-square region of the full-body portrait = a headshot thumb.
+	var at := AtlasTexture.new()
+	at.atlas = tex
+	var side := headshot_side(tex)
+	at.region = Rect2(0, 0, side, side)
+	thumb.texture = at
+	row.add_child(thumb)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 2)
+	_add_label_to(col, subject_line, subject_color)
+	_add_label_to(col, hint_line, Color(0.72, 0.72, 0.76))
+	row.add_child(col)
+	_list.add_child(row)
+
+## The side of the top-square headshot crop for a portrait thumb: clamped to the SHORTER side so a
+## wider-than-tall portrait can't run its atlas region past the texture bounds (a taller-than-wide
+## portrait — every shipped one — is unaffected: side == width). Static + pure so tests can drive it.
+static func headshot_side(tex: Texture2D) -> float:
+	return minf(float(tex.get_width()), float(tex.get_height()))
+
+func _add_label_to(parent: Node, text: String, color: Color) -> void:
+	var l := Label.new()
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", color)
+	parent.add_child(l)
 
 func _add_label(text: String, color: Color, italic: bool = false, font_size: int = 0) -> void:
 	var l := Label.new()

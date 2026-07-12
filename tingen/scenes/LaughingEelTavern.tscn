@@ -1,0 +1,166 @@
+[gd_scene load_steps=21 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/laughing_eel_tavern.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="wall_top"]
+size = Vector2(1536, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot_l"]
+size = Vector2(703, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot_r"]
+size = Vector2(673, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 1024)
+
+[sub_resource type="RectangleShape2D" id="s_bar"]
+size = Vector2(799, 190)
+
+[sub_resource type="RectangleShape2D" id="s_kegs_nw"]
+size = Vector2(307, 102)
+
+[sub_resource type="RectangleShape2D" id="s_hearth"]
+size = Vector2(230, 287)
+
+[sub_resource type="RectangleShape2D" id="s_table_sw"]
+size = Vector2(184, 154)
+
+[sub_resource type="RectangleShape2D" id="s_table_a"]
+size = Vector2(246, 164)
+
+[sub_resource type="RectangleShape2D" id="s_table_b"]
+size = Vector2(230, 164)
+
+[sub_resource type="RectangleShape2D" id="s_table_c"]
+size = Vector2(215, 276)
+
+[sub_resource type="RectangleShape2D" id="s_table_d"]
+size = Vector2(323, 154)
+
+[sub_resource type="RectangleShape2D" id="s_table_e"]
+size = Vector2(200, 133)
+
+[sub_resource type="RectangleShape2D" id="s_table_f"]
+size = Vector2(246, 174)
+
+[sub_resource type="RectangleShape2D" id="s_rack_se"]
+size = Vector2(307, 143)
+
+[sub_resource type="RectangleShape2D" id="s_stairs"]
+size = Vector2(215, 553)
+
+[sub_resource type="RectangleShape2D" id="p_exit"]
+size = Vector2(180, 90)
+
+[node name="LaughingEelTavern" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.05, 0.04, 0.035, 1)
+polygon = PackedVector2Array(-300, -300, 1840, -300, 1840, 1330, -300, 1330)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
+centered = false
+texture = ExtResource("1")
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(768, 8)
+shape = SubResource("wall_top")
+
+[node name="WBottomL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(351.5, 1016)
+shape = SubResource("wall_bot_l")
+
+[node name="WBottomR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1199.5, 1016)
+shape = SubResource("wall_bot_r")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 512)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1528, 512)
+shape = SubResource("wall_v")
+
+[node name="FBar" type="CollisionShape2D" parent="Solids"]
+position = Vector2(768, 115)
+shape = SubResource("s_bar")
+
+[node name="FKegsNW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(184, 72)
+shape = SubResource("s_kegs_nw")
+
+[node name="FHearth" type="CollisionShape2D" parent="Solids"]
+position = Vector2(115, 430)
+shape = SubResource("s_hearth")
+
+[node name="FTableSW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(92, 845)
+shape = SubResource("s_table_sw")
+
+[node name="FTableA" type="CollisionShape2D" parent="Solids"]
+position = Vector2(461, 348)
+shape = SubResource("s_table_a")
+
+[node name="FTableB" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1098, 358)
+shape = SubResource("s_table_b")
+
+[node name="FTableC" type="CollisionShape2D" parent="Solids"]
+position = Vector2(814, 507)
+shape = SubResource("s_table_c")
+
+[node name="FTableD" type="CollisionShape2D" parent="Solids"]
+position = Vector2(422, 691)
+shape = SubResource("s_table_d")
+
+[node name="FTableE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(361, 855)
+shape = SubResource("s_table_e")
+
+[node name="FTableF" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1137, 701)
+shape = SubResource("s_table_f")
+
+[node name="FBarrelRackSE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1213, 881)
+shape = SubResource("s_rack_se")
+
+[node name="FStairs" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1428, 522)
+shape = SubResource("s_stairs")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(783, 930)
+
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(768, 512)
+zoom = Vector2(1, 1)
+
+[node name="ExitToCity" type="Area2D" parent="."]
+position = Vector2(783, 1054)
+script = ExtResource("3")
+target_scene = "res://scenes/City.tscn"
+
+[node name="ExitShape" type="CollisionShape2D" parent="ExitToCity"]
+shape = SubResource("p_exit")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 450.0
+offset_top = 24.0
+offset_right = 1100.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "The Laughing Eel — taproom    ·    walk down (S) to the street"

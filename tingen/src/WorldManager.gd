@@ -47,24 +47,23 @@ const STAGE_ACTIVITY: Dictionary = {
 	"resolution": 0.0,
 }
 
-## Weighted candidate pools resolved at the listed time. Placeholder ids.
-const SLOT_DEFS: Array = [
-	{"id": "primary_ritual_site", "resolve_at": "world-start", "candidates": [
-		{"value": "iron_cross_warehouse", "weight": 3.0},
-		{"value": "st_selena_crypt", "weight": 2.0},
-		{"value": "harbor_customs_house", "weight": 1.0},
-	]},
-	{"id": "decoy_courier", "resolve_at": "world-start", "candidates": [
-		{"value": "lamplighter_orin", "weight": 2.0},
-		{"value": "fishwife_dalia", "weight": 2.0},
-		{"value": "clerk_voss", "weight": 1.0},
-	]},
-	{"id": "first_corrupted_civilian", "resolve_at": "stage-enter:awakening", "candidates": [
-		{"value": "dockhand_pell", "weight": 2.0},
-		{"value": "widow_carrow", "weight": 1.5},
-		{"value": "boy_tomas", "weight": 1.0},
-	]},
-]
+## Weighted candidate pools resolved at the listed time. WHICH sites/NPCs are candidates is
+## identity data, so the pools live in data/scenario.json ("slot_defs") — engine code stays
+## NPC-neutral (tingen_combat_implementation_plan.md §1). Shape per def:
+##   {"id": ..., "resolve_at": "world-start"|"stage-enter:<stage>",
+##    "candidates": [{"value": ..., "weight": ...}, ...]}
+const SCENARIO_PATH := "res://data/scenario.json"
+static var SLOT_DEFS: Array = _load_slot_defs()
+
+static func _load_slot_defs() -> Array:
+	if not FileAccess.file_exists(SCENARIO_PATH):
+		push_error("WorldManager: missing %s" % SCENARIO_PATH)
+		return []
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SCENARIO_PATH))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_error("WorldManager: %s is not a JSON object" % SCENARIO_PATH)
+		return []
+	return (parsed as Dictionary).get("slot_defs", [])
 
 var current_stage_id: String = "disturbance"
 var refresh_count: int = 0
@@ -78,6 +77,11 @@ var _last_quarter: Dictionary = {}   # pressure name -> last crossed quarter (0.
 var _timer: Timer
 
 func _ready() -> void:
+	# B5 (M21): seed the GLOBAL RNG once at boot so randi() (the per-run reseed source in
+	# RunManager._restart_fresh) draws a genuinely fresh stream each game launch — without this
+	# every launch replayed the same seed sequence. Our own _rng stays seeded from seed_value
+	# (below), so save/load slot resolution is unaffected; only the fresh-run draw re-randomizes.
+	randomize()
 	if seed_value == 0:
 		seed_value = randi()
 	_start_run(false)

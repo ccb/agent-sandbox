@@ -1,0 +1,17 @@
+{
+	"_note": "M35 — the onboarding contextual first-time hints. Each is surfaced by HintDirector EXACTLY ONCE EVER (a persisted flag), on the FIRST time its real trigger fires: first move (Player.gd), first primary fire / first dash / first enemy telegraph (the ability_cast_started cast/telegraph seam). Copy is DATA here (engine holds no literal), diegetic + instructive in Klein's own voice; the parenthetical names the control. HintDirector routes the counter-rite discoverability hint (data/rituals.json counter_rite.hint) through the SAME system — one framework, not two.",
+	"hints": {
+		"first_move": {
+			"text": "The fog parts as I walk. (WASD to move — double-tap forward to break into a run when the street turns against me.)"
+		},
+		"first_fire": {
+			"text": "The power answers my hand. (Left click to loose it — every strike spends something; watch the meter it draws down.)"
+		},
+		"first_dash": {
+			"text": "A half-step and the world lurches past me. (Dash — Shift — slips me clear of a blow, but it costs wind.)"
+		},
+		"first_telegraph": {
+			"text": "There — the air draws taut, a red tell before the strike. (That warning is my chance: dash clear, or break the cast before it lands.)"
+		}
+	}
+}

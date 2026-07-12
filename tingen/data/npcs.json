@@ -2,68 +2,1093 @@
 	"old_neil": {
 		"name": "Old Neil",
 		"dialogue_id": "old_neil",
-		"faction": "civilian",
 		"role": "alchemist",
+		"_pathway_note": "M28 (direction v2 §6): the HERMIT pathway's Seq-9 prey — the second playable build's first real hunt (canon docs/canon_tingen_characters.md: old_neil lost control to the Hidden Sage's pollution). Public face: a grieving alchemist. Secret: the forbidden Life ritual + the Sage's whispers have hollowed him into a hidden Hermit-pathway Beyonder. Tagged pathway:hermit so a SAME-pathway kill drops a player-usable hermit_characteristic through the PATHWAY-driven drop (Progression), never his id. Two-phase combat_form (neil_human -> neil_monster via neil_descend) mirrors the butcher/Wren assume_form seam with a DISTINCT star/ritual kit. Pure DATA — the foe works through the same combat/deed/lead/progression machinery as bram_kell/sable_wren.",
+		"pathway": "hermit",
+		"combat_form": "neil_human",
+		"vision_r": 600,
 		"intent": "Bring his dead fiancée Celeste back through the forbidden Alchemical Life ritual, before grief and the Hidden Sage's whispers finish hollowing him out.",
-		"tint": [0.62, 0.56, 0.66]
+		"description": "A gaunt alchemist in his sixties, ink-stained and sleepless, who keeps his dead fiancée's portrait turned to the wall.",
+		"voice": "Courtly and evasive; drifts into reverie about Celeste, then sharpens when pressed.",
+		"knowledge": [
+			"alchemy and forbidden Life rituals",
+			"the Hidden Sage's whispers",
+			"where rare reagents are bought in Tingen"
+		],
+		"secrets": [
+			"is trying to resurrect Celeste",
+			"hears the Hidden Sage"
+		],
+		"tier": "full",
+		"tint": [
+			0.62,
+			0.56,
+			0.66
+		],
+		"schedule": {
+			"morning": [
+				2700,
+				3760
+			],
+			"afternoon": [
+				2740,
+				5480
+			],
+			"dusk": [
+				2640,
+				3790
+			],
+			"night": [
+				2700,
+				3800
+			]
+		}
 	},
 	"clerk_voss": {
 		"name": "Clerk Voss",
 		"dialogue_id": "",
-		"faction": "cult",
 		"role": "leader",
 		"intent": "Complete the warehouse summoning to escape mortality. Plan the ritual steps, direct the acolytes, recruit quietly, and keep the cell hidden from the Nighthawks and the player.",
-		"tint": [0.6, 0.5, 0.7],
+		"description": "A fastidious shipping clerk with a cleric's calm and ledgers always squared; the cell's leader. He is calm even in violence: anyone who walks in on the work is a loose thread to be cut, and the faithful leave no witnesses to the descent.",
+		"voice": "Measured and persuasive, never raises his voice; speaks of 'the work' only in euphemism.",
+		"knowledge": [
+			"the cult's plans and members",
+			"the crypt rite beneath Saint Selena's",
+			"that the Nighthawks are hunting the cell"
+		],
+		"secrets": [
+			"leads the Iron Cross cell",
+			"means to pull the Descending One into Tingen",
+			"has marked Pell as the sacrifice"
+		],
+		"goals": [
+			{
+				"description": "Gather the ritual offerings (ritual_salt, consecrated_chalk, candle) from the supply cache, carry them down to the cathedral crypt altar, and lay them there",
+				"tier": "medium"
+			},
+			{
+				"description": "Once the altar holds every offering, work the rite at the crypt altar to complete the summoning",
+				"tier": "medium"
+			},
+			{
+				"description": "Summon the descending god and escape mortality",
+				"tier": "long"
+			}
+		],
+		"task": {
+			"ritual": "summoning_descent",
+			"site": "crypt_altar",
+			"cache": "ritual_cache"
+		},
+		"tier": "full",
+		"tint": [
+			0.6,
+			0.5,
+			0.7
+		],
 		"schedule": {
-			"morning": [1793, 1327],
-			"afternoon": [1830, 1220],
-			"dusk": [1793, 1263],
-			"night": [1757, 1284],
-			"late-night": [1775, 1284]
+			"morning": [
+				5380,
+				2330
+			],
+			"afternoon": [
+				5240,
+				2350
+			],
+			"dusk": [
+				5330,
+				2370
+			],
+			"night": [
+				5210,
+				2390
+			],
+			"late-night": [
+				5260,
+				2390
+			]
 		}
 	},
 	"fishwife_dalia": {
 		"name": "Dalia the Fishwife",
 		"dialogue_id": "",
-		"faction": "cult",
 		"role": "logistics",
 		"intent": "Move ritual ingredients through the harbor to the warehouse, and run decoy errands that mislead anyone investigating the cell.",
-		"tint": [0.5, 0.7, 0.65],
+		"description": "A broad-shouldered fishwife who knows every dock and back-alley in the harbor. Fiercely loyal to the cell, she puts down anyone who stumbles onto the work — the harbor has always swallowed inconvenient bodies.",
+		"voice": "Brash and quick with a decoy lie, fiercely loyal to Voss.",
+		"knowledge": [
+			"the smuggling routes through the harbor",
+			"where the ritual ingredients are cached",
+			"who has been asking questions"
+		],
+		"secrets": [
+			"runs logistics for the cult",
+			"is moving the offerings to the rite site"
+		],
+		"goals": [
+			{
+				"description": "Gather the ritual offerings (ritual_salt, consecrated_chalk, candle) from the supply cache, carry them down to the cathedral crypt altar, and lay them there",
+				"tier": "medium"
+			},
+			{
+				"description": "Once the altar holds every offering, work the rite at the crypt altar to complete the summoning",
+				"tier": "medium"
+			},
+			{
+				"description": "Summon the descending god and escape mortality",
+				"tier": "long"
+			}
+		],
+		"task": {
+			"ritual": "summoning_descent",
+			"site": "crypt_altar",
+			"cache": "ritual_cache"
+		},
+		"tier": "full",
+		"tint": [
+			0.5,
+			0.7,
+			0.65
+		],
 		"schedule": {
-			"morning": [2010, 1260],
-			"afternoon": [1848, 1260],
-			"dusk": [1812, 1242],
-			"night": [1757, 1284]
+			"morning": [
+				5540,
+				2330
+			],
+			"afternoon": [
+				5310,
+				2350
+			],
+			"dusk": [
+				5270,
+				2370
+			],
+			"night": [
+				5210,
+				2390
+			]
 		}
 	},
 	"lamplighter_orin": {
 		"name": "Orin the Lamplighter",
 		"dialogue_id": "orin_waverer",
-		"faction": "cult",
 		"role": "scout_waverer",
 		"intent": "Scout the district while lighting the lamps, reporting movements to Voss. Increasingly doubts what the cell is about to do, and can be turned by someone who reaches him.",
-		"tint": [0.85, 0.7, 0.4],
+		"description": "A lamplighter in his fifties, soot on his cuffs, who took the cult's coin before he understood the price.",
+		"voice": "Plain and hesitant, asks more than he answers; trails off when the talk turns to the warehouse.",
+		"knowledge": [
+			"the cult meets below Saint Selena's",
+			"Voss leads the cell",
+			"the offerings move through the harbor"
+		],
+		"secrets": [
+			"doubts the summoning",
+			"has not told Voss that he wavers"
+		],
+		"goals": [
+			{
+				"description": "Gather the ritual offerings (ritual_salt, consecrated_chalk, candle) from the supply cache, carry them down to the cathedral crypt altar, and lay them there",
+				"tier": "medium"
+			},
+			{
+				"description": "Once the altar holds every offering, work the rite at the crypt altar to complete the summoning",
+				"tier": "medium"
+			},
+			{
+				"description": "Summon the descending god and escape mortality",
+				"tier": "long"
+			}
+		],
+		"task": {
+			"ritual": "summoning_descent",
+			"site": "crypt_altar",
+			"cache": "ritual_cache"
+		},
+		"tier": "full",
+		"tint": [
+			0.85,
+			0.7,
+			0.4
+		],
 		"schedule": {
-			"early-morning": [1703, 1050],
-			"morning": [1595, 1220],
-			"afternoon": [1884, 1220],
-			"dusk": [1866, 1284],
-			"night": [1721, 1284],
-			"late-night": [1694, 1284]
+			"early-morning": [
+				4780,
+				2620
+			],
+			"morning": [
+				4700,
+				2700
+			],
+			"afternoon": [
+				5350,
+				2350
+			],
+			"dusk": [
+				5310,
+				2390
+			],
+			"night": [
+				4900,
+				2620
+			],
+			"late-night": [
+				4840,
+				2650
+			]
 		}
 	},
 	"dockhand_pell": {
 		"name": "Dockhand Pell",
 		"dialogue_id": "",
-		"faction": "civilian",
 		"role": "victim",
 		"intent": "Get through the workday and back home. Unaware that the cell has marked him as the intended sacrifice for the summoning.",
-		"tint": [0.7, 0.65, 0.55],
+		"description": "A tired dockhand counting the hours to the end of his shift, with nothing on his mind but home.",
+		"voice": "Friendly and ordinary, a little weary; talks about the weather and the day's catch.",
+		"knowledge": [
+			"the day's dock gossip",
+			"the harbor's comings and goings",
+			"a wrapped-parcel courier who works the wharves only after dark"
+		],
+		"secrets": [],
+		"tier": "full",
+		"tint": [
+			0.7,
+			0.65,
+			0.55
+		],
 		"schedule": {
-			"morning": [1866, 1260],
-			"afternoon": [1866, 1284],
-			"dusk": [1848, 1306],
-			"night": [1721, 1220]
+			"morning": [
+				5500,
+				2330
+			],
+			"afternoon": [
+				5530,
+				2360
+			],
+			"dusk": [
+				5480,
+				2400
+			],
+			"night": [
+				4820,
+				2760
+			]
+		}
+	},
+	"hawker_neille": {
+		"name": "Hawker Neille",
+		"dialogue_id": "",
+		"role": "hawker",
+		"intent": "Land the scoop on the harbor disappearances; trade rumor for coin until then.",
+		"description": "A leathery newspaper hawker and pamphleteer who works the cathedral plaza at dawn and the taverns after dark; a walking rumor-exchange.",
+		"voice": "Rapid-fire patter, headlines first; everything is 'a story' and every story has a price.",
+		"knowledge": [
+			"the day's headlines and the week's pamphlets",
+			"the rumors around the harbor disappearances",
+			"who drinks where, and when"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.75,
+			0.72,
+			0.5
+		],
+		"schedule": {
+			"early-morning": [
+				1760,
+				5470
+			],
+			"morning": [
+				1750,
+				5455
+			],
+			"afternoon": [
+				2450,
+				4250
+			],
+			"night": [
+				2260,
+				4148
+			],
+			"late-night": [
+				2260,
+				4148
+			]
+		}
+	},
+	"maribel_hatch": {
+		"name": "Maribel Hatch",
+		"dialogue_id": "",
+		"role": "tavern_keeper",
+		"intent": "Pay off the loan shark before he sends men round to the Laughing Eel.",
+		"description": "Keeper of the Laughing Eel tavern off Iron Cross Street; pours, listens, and forgets nothing.",
+		"voice": "Warm but brisk; trades gossip like small change and never lets a tab slide.",
+		"knowledge": [
+			"everyone's business on Iron Cross Street",
+			"that the butcher two doors down has gone strange and stopped opening shop",
+			"who owes money to whom",
+			"what the dockworkers say after their third pint"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.78,
+			0.45,
+			0.42
+		],
+		"schedule": {
+			"morning": [
+				2660,
+				3750
+			],
+			"afternoon": [
+				2140,
+				4148
+			],
+			"dusk": [
+				2150,
+				4148
+			],
+			"night": [
+				2130,
+				4148
+			],
+			"late-night": [
+				2140,
+				4148
+			]
+		}
+	},
+	"constable_brom": {
+		"name": "Constable Brom Aldery",
+		"dialogue_id": "constable_brom",
+		"role": "constable",
+		"_pathway_note": "B7 (M20): constable_brom is a QUEST ANCHOR — the source NPC for the guaranteed butcher opener AND both hunter-prey leads, and the friendly voice that hammers on the player's door at run start. He is DELIBERATELY OFF-PATHWAY (no `pathway`, no `combat_form`) like bram_kell's mundane peers: downing the lead-giver must NOT drop a free player-usable hunter_characteristic (a whole Sequence advance), and he is not a Beyonder-tier combat target. Previously mis-tagged pathway:hunter + a copy-paste combat_form:butcher_human — both removed. The drop economy keys off `pathway` (absent -> generic tainted_characteristic), never his id.",
+		"intent": "Make sergeant by keeping the beat spotless; resents the private investigators who outrank his reach.",
+		"description": "A beat constable with polished buttons and a fixed patrol: the Blackthorn corner, the university quad, the market street.",
+		"voice": "Clipped and official; softens into gossip only when it might further a promotion.",
+		"knowledge": [
+			"the beat's regular faces and the irregular ones",
+			"the week's petty crimes and complaints",
+			"which streets go quiet after dark"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.38,
+			0.48,
+			0.72
+		],
+		"schedule": {
+			"early-morning": [
+				1642,
+				2300
+			],
+			"morning": [
+				3100,
+				1600
+			],
+			"afternoon": [
+				3700,
+				2800
+			],
+			"dusk": [
+				2700,
+				3900
+			],
+			"night": [
+				1650,
+				1050
+			],
+			"late-night": [
+				1642,
+				2300
+			]
+		}
+	},
+	"wm_tasker": {
+		"name": "Wm. Tasker",
+		"dialogue_id": "",
+		"role": "stevedore_foreman",
+		"intent": "Keep the crews moving and skim a crate or two off the manifests without the tally catching it.",
+		"description": "A dockside stevedore foreman, broad as a hatch cover, who counts crates aloud and drinks what the miscounts buy.",
+		"voice": "Bellowing on the docks, conspiratorial over a bought drink; will talk for drink money.",
+		"knowledge": [
+			"what moves through the docks and wharves",
+			"which manifests do not add up",
+			"the harbor crews and their habits"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.55,
+			0.45,
+			0.33
+		],
+		"schedule": {
+			"early-morning": [
+				1250,
+				5100
+			],
+			"morning": [
+				1230,
+				4900
+			],
+			"afternoon": [
+				4775,
+				5400
+			],
+			"dusk": [
+				4775,
+				5250
+			],
+			"night": [
+				4250,
+				5122
+			]
+		}
+	},
+	"goodwife_perrin": {
+		"name": "Goodwife Perrin",
+		"dialogue_id": "",
+		"role": "laundress",
+		"intent": "Marry her daughter up a class, one starched collar and one well-placed word at a time.",
+		"description": "A laundress and char-woman who works the residential lanes; half the borough's gossip travels along her wash-lines.",
+		"voice": "Comfortable, scandalized, unstoppable; every second sentence begins 'well, I heard'.",
+		"knowledge": [
+			"the households she chars for and what their linens betray",
+			"which families are rising and which are sinking",
+			"the lanes' comings and goings by morning light"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.85,
+			0.83,
+			0.88
+		],
+		"schedule": {
+			"morning": [
+				2000,
+				2683
+			],
+			"afternoon": [
+				2150,
+				2683
+			],
+			"dusk": [
+				2020,
+				2683
+			],
+			"night": [
+				2000,
+				2683
+			]
+		}
+	},
+	"ledger_finch": {
+		"name": "Ledger Finch",
+		"dialogue_id": "finch",
+		"role": "records_clerk",
+		"_pathway_note": "M30 (direction v2 §6): the HERMIT pathway's Seq-8 prey — the SECOND real Hermit hunt (the Seq-8 meal, mirroring the Hunter's leland_mack). Public face: a nervous university records clerk short one restricted volume. Secret: she did not lose the forbidden book — she STOLE and READ it, and the forbidden knowledge has hollowed her into a hidden Hermit-pathway Beyonder. Tagged pathway:hermit so a SAME-pathway kill drops a player-usable hermit_characteristic through the PATHWAY-driven drop (Progression), never her id — so the 9->8->7 ladder is feedable by TWO real kills (old_neil then ledger_finch). Two-phase combat_form (finch_human -> finch_monster via finch_descend) mirrors the neil/Wren/mack assume_form seam with a DISTINCT ink/word kit. Pure DATA — she works through the same combat/deed/lead/progression machinery as old_neil.",
+		"pathway": "hermit",
+		"combat_form": "finch_human",
+		"vision_r": 600,
+		"intent": "Keep the archive audit from finding the gap in the restricted stacks — and keep the volume she took, though the words in it are reading her back now, and some nights she cannot say where the ink on her hands came from.",
+		"description": "A university records clerk with ink-stained cuffs and a haunted glance for the restricted stacks' one empty slot.",
+		"voice": "Precise and nervous; answers a shade too fast whenever the restricted collection comes up.",
+		"knowledge": [
+			"the university archive's catalogue",
+			"that a restricted volume is missing from the stacks",
+			"who has been asking after the restricted collection"
+		],
+		"secrets": [
+			"stole the restricted forbidden volume rather than losing it",
+			"read the volume and lost control — a hidden Hermit-pathway Beyonder now",
+			"works its rite in the archive after dark, and the ink is not always ink"
+		],
+		"tier": "full",
+		"tint": [
+			0.45,
+			0.58,
+			0.5
+		],
+		"schedule": {
+			"morning": [
+				2800,
+				1620
+			],
+			"afternoon": [
+				3250,
+				1620
+			],
+			"dusk": [
+				2820,
+				1640
+			],
+			"night": [
+				3150,
+				2880
+			]
+		}
+	},
+	"pip": {
+		"name": "Pip",
+		"dialogue_id": "",
+		"role": "urchin",
+		"intent": "Eat today. Run messages, tail a mark, hold a horse — anything for a copper.",
+		"description": "A street urchin, runner and lookout, never twice in the same alley off Iron Cross Street.",
+		"voice": "Quick, cocky, gone before the sentence lands; talks fast and sees faster.",
+		"knowledge": [
+			"the alleys off Iron Cross Street",
+			"who pays for errands and who stiffs you",
+			"what moves through the streets that grown folk never notice"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.6,
+			0.58,
+			0.38
+		],
+		"schedule": {
+			"early-morning": [
+				2640,
+				3760
+			],
+			"morning": [
+				3135,
+				4002
+			],
+			"afternoon": [
+				3730,
+				3350
+			],
+			"dusk": [
+				2209,
+				2683
+			],
+			"night": [
+				2802,
+				3652
+			]
+		}
+	},
+	"hollis_vane": {
+		"name": "Hollis Vane",
+		"dialogue_id": "",
+		"role": "poet",
+		"intent": "Drown a grief nightly at the Laughing Eel, and mind not what the third bottle lets slip.",
+		"description": "An out-of-work poet and habitual drunk; dusk to late-night in the tavern, mornings sleeping it off on the embankment.",
+		"voice": "Grandiloquent and slurred; occasionally blurts a true thing he overheard without knowing it matters.",
+		"knowledge": [
+			"fragments overheard in taverns that nobody sober would repeat",
+			"the embankment at every hour",
+			"verse, mostly unpublished"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.52,
+			0.4,
+			0.58
+		],
+		"schedule": {
+			"morning": [
+				3600,
+				5600
+			],
+			"dusk": [
+				2760,
+				3652
+			],
+			"night": [
+				2620,
+				3830
+			],
+			"late-night": [
+				3600,
+				5600
+			]
+		}
+	},
+	"sister_auber": {
+		"name": "Sister Auber",
+		"dialogue_id": "",
+		"role": "lay_sister",
+		"intent": "Shelter the destitute at Saint Selena's, and quietly reckon with her doubts about the recent miracles.",
+		"description": "A cathedral lay-sister who feeds the plaza's poor at dawn and dusk; her faith is steady, her doubts about the recent miracles are not.",
+		"voice": "Gentle and unhurried; chooses words like alms, but goes quiet when the miracles come up.",
+		"knowledge": [
+			"the cathedral's daily rhythms and its parishioners",
+			"the destitute of the plaza by name",
+			"that the recent miracles sit wrong with her"
+		],
+		"secrets": [],
+		"tier": "light",
+		"tint": [
+			0.92,
+			0.9,
+			0.8
+		],
+		"schedule": {
+			"early-morning": [
+				1730,
+				5440
+			],
+			"morning": [
+				1700,
+				5100
+			],
+			"dusk": [
+				1730,
+				5445
+			],
+			"night": [
+				1700,
+				5150
+			]
+		}
+	},
+	"dr_aldous_crane": {
+		"name": "Dr. Aldous Crane",
+		"dialogue_id": "",
+		"role": "physician",
+		"intent": "Keep the surgery respectable and the ledger clean while quietly harvesting what the Order's potions require from the dying.",
+		"description": "A kindly North Borough physician — surgery in the morning, house-calls in the afternoon; families trust him with their worst hours.",
+		"voice": "Bedside-calm; Latin softened for the patient, condolences perfectly practiced.",
+		"knowledge": [
+			"medicine and the city's sickbeds",
+			"which households are dying and of what",
+			"how a death certificate is worded so no one asks twice"
+		],
+		"secrets": [
+			"is an initiate of the Aurora Order",
+			"harvests ingredients for the Order's potions from the dying",
+			"has signed off natural deaths that were nothing of the kind"
+		],
+		"goals": [
+			{
+				"description": "Keep the surgery's reputation spotless so no one thinks to look in the cellar",
+				"tier": "medium"
+			},
+			{
+				"description": "Fill the Order's requisition of ingredients from patients past saving",
+				"tier": "medium"
+			},
+			{
+				"description": "Serve the True Creator's design in Tingen",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.32,
+			0.36,
+			0.42
+		],
+		"schedule": {
+			"morning": [
+				2050,
+				780
+			],
+			"afternoon": [
+				2160,
+				2683
+			],
+			"dusk": [
+				2050,
+				830
+			],
+			"night": [
+				2050,
+				900
+			]
+		}
+	},
+	"eulalia_vire": {
+		"name": "Eulalia Vire",
+		"dialogue_id": "",
+		"role": "hostess",
+		"intent": "Climb into the Moretti-class gentry by day; by night, gather grieving women into the fold with promises of reunion beyond death.",
+		"description": "A genteel widow and society hostess; her salons are the softest rooms in Tingen, and the most carefully attended.",
+		"voice": "Silken condolence; she remembers every loss you have ever mentioned and returns to it at the perfect moment.",
+		"knowledge": [
+			"Tingen society and its bereavements",
+			"who grieves freshly and who grieves still",
+			"the etiquette that opens any parlor door"
+		],
+		"secrets": [
+			"is a deaconess of the Demoness Sect",
+			"recruits grieving women with promises of reunion beyond death",
+			"runs the Sect's local cell"
+		],
+		"goals": [
+			{
+				"description": "Host the season's salons and mark which mourners lean toward the promise",
+				"tier": "medium"
+			},
+			{
+				"description": "Bind the newest recruits to the cell before their grief cools",
+				"tier": "medium"
+			},
+			{
+				"description": "Deliver Tingen's grieving faithful to the Primordial Demoness",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.58,
+			0.32,
+			0.48
+		],
+		"schedule": {
+			"morning": [
+				1650,
+				5250
+			],
+			"afternoon": [
+				4300,
+				3700
+			],
+			"dusk": [
+				1680,
+				5220
+			],
+			"night": [
+				4380,
+				3760
+			]
+		}
+	},
+	"bram_kell": {
+		"name": "Bram Kell",
+		"dialogue_id": "",
+		"role": "butcher",
+		"combat_form": "butcher_human",
+		"intent": "Keep the shop open and his sick wife fed — and do the carrying when the night knock comes, because refusing costs more.",
+		"description": "The cheerful Iron Cross Street butcher everyone likes; strong arms, fair prices, a sick wife upstairs.",
+		"voice": "Big, friendly, and simple on purpose; goes quiet and careful when night work is mentioned.",
+		"knowledge": [
+			"every kitchen and cellar off Iron Cross Street",
+			"how to move a heavy load without being remarked",
+			"which of his debts have been quietly paid, and by whom"
+		],
+		"secrets": [
+			"disposes of the Demoness Sect's leavings as its body-man",
+			"was coerced into the work as much as converted",
+			"moves the Sect's burdens through the night streets"
+		],
+		"goals": [
+			{
+				"description": "Keep the shop and his wife's medicine paid for",
+				"tier": "medium"
+			},
+			{
+				"description": "Carry out the Sect's disposal errands without being caught",
+				"tier": "medium"
+			},
+			{
+				"description": "Get free of the Sect's grip someday, if such a thing is possible",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.72,
+			0.38,
+			0.3
+		],
+		"schedule": {
+			"early-morning": [
+				3620,
+				3450
+			],
+			"morning": [
+				3640,
+				3430
+			],
+			"afternoon": [
+				3620,
+				3460
+			],
+			"dusk": [
+				3150,
+				2960
+			],
+			"night": [
+				2750,
+				5300
+			],
+			"late-night": [
+				4230,
+				2050
+			]
+		},
+		"vision_r": 600
+	},
+	"sable_wren": {
+		"name": "Sable Wren",
+		"dialogue_id": "",
+		"role": "thief_taker",
+		"_pathway_note": "M12 (direction v2 §3/§6): the FIRST REAL HUNT — the same-pathway prey the opening promises ('he wasn't the only one — the same blood walks the beat wearing another face'). A hidden Hunter-pathway Beyonder who LOST CONTROL (canon §4/§6: over-ingestion of a bad, Red-Priest-touched Hunter dose). Public face: a licensed thief-taker (bounty tracker) who works the Blackthorn corner, Nighthawk-adjacent field muscle. Secret: the potion took her — she now hunts PEOPLE, not warrants. Tagged pathway:hunter so a SAME-pathway kill drops a player-usable hunter_characteristic through the PATHWAY-DRIVEN drop (Progression M5), never her id. Two-phase combat_form (wren_human -> wren_predator via shed_the_hunt) mirrors the butcher's assume_form seam with a DISTINCT ranged blood-hunter kit. Pure DATA — the foe works through the same combat/deed/lead/progression machinery as bram_kell.",
+		"pathway": "hunter",
+		"combat_form": "wren_human",
+		"_carried_items_note": "M18: her combat_form opens with revolver_shot (an ammo-costed art). With the generic AgentCostProvider bound on the NPC seam, she now fires from THIS carried magazine and RUNS DRY after a few rounds (then leans on her free arts / sheds to the predator form). Downing her makes the revolver + whatever rounds are left LOOTABLE off her body — real RPG texture, engine-neutral (loot = her inventory). Pure DATA, hydrated into her per-agent inventory by AgentRegistry.rebuild; re-hydrates each run, no cross-run leak.",
+		"carried_items": {
+			"revolver": 1,
+			"revolver_round": 6
+		},
+		"intent": "Work the Blackthorn corner as a thief-taker by day; by night, follow the trail her ruined blood chooses — and pretend, each morning, that she still chooses her marks.",
+		"description": "A lean, watchful thief-taker who works the Blackthorn corner: a licensed tracker of debtors and runaways, quick with a revolver, quicker to read a face.",
+		"voice": "Low and unhurried, all patience and appraisal; goes very still and very quiet when the hunt is on her, and afterward can't quite account for the hours.",
+		"knowledge": [
+			"every bolt-hole and back-stair off the Blackthorn corner",
+			"how a frightened person moves, and where they run to",
+			"which of the beat's faces have gone missing, and how quietly"
+		],
+		"secrets": [
+			"over-ingested a bad Hunter potion and lost control of the pathway",
+			"no longer hunts warrants — she hunts people, and feeds on the fear",
+			"is the 'same blood' the butcher's kin-hunter lead points to"
+		],
+		"goals": [
+			{
+				"description": "Keep the thief-taker's licence and the corner's trust intact",
+				"tier": "medium"
+			},
+			{
+				"description": "Feed the hunt without leaving a body the beat can name",
+				"tier": "medium"
+			},
+			{
+				"description": "Get the pathway back under her hand — if a lost potion can ever be undone",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.34,
+			0.3,
+			0.4
+		],
+		"schedule": {
+			"early-morning": [
+				3040,
+				1560
+			],
+			"morning": [
+				3100,
+				1600
+			],
+			"afternoon": [
+				3260,
+				1720
+			],
+			"dusk": [
+				3120,
+				1640
+			],
+			"night": [
+				3100,
+				1600
+			],
+			"late-night": [
+				3100,
+				1600
+			]
+		},
+		"vision_r": 620
+	},
+	"brother_cassian": {
+		"name": "Brother Cassian",
+		"dialogue_id": "",
+		"role": "curate",
+		"intent": "Restore faith in a doubting parish — with staged miracles that soften the city for what is to descend, reporting all the while to Eulalia's cell.",
+		"description": "The earnest young curate at Saint Selena's; services and confession by day, the very picture of a parish renewed.",
+		"voice": "Warm pulpit cadence even at a whisper; answers doubt with scripture and a smile that arrives half a second late.",
+		"knowledge": [
+			"the cathedral's liturgy, keys, and quiet hours",
+			"the parish's confessions and crises of faith",
+			"how the recent miracles have been received"
+		],
+		"secrets": [
+			"stages the recent miracles himself",
+			"is softening the parish for the ritual night",
+			"reports to Eulalia Vire's cell"
+		],
+		"goals": [
+			{
+				"description": "Stage the next miracle where the whole parish will hear of it",
+				"tier": "medium"
+			},
+			{
+				"description": "Keep watchful eyes off the cathedral until the appointed night",
+				"tier": "medium"
+			},
+			{
+				"description": "Have the city kneeling, willingly, when the ritual night comes",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.42,
+			0.42,
+			0.48
+		],
+		"schedule": {
+			"early-morning": [
+				2680,
+				5460
+			],
+			"morning": [
+				2660,
+				5380
+			],
+			"afternoon": [
+				2680,
+				5465
+			],
+			"dusk": [
+				2685,
+				5470
+			],
+			"night": [
+				2600,
+				5180
+			]
+		}
+	},
+	"leland_mack": {
+		"name": "Leland Mack",
+		"dialogue_id": "",
+		"role": "line_handler",
+		"_pathway_note": "M14 (direction v2 §6): the THIRD adversary and the SECOND legitimate Hunter-pathway meal — the Seq-8 player's prey. A dockside poacher and line-handler who took a Hunter potion from a Red-Priest contact to make himself 'better at the kill'. He over-ingested and lost control; by night he hunts at the harbor breakwater, dragging marks off the sea-wall. Tuned HARDER than Wren: a meaner reflex table (hp_below 0.45 in human form vs Wren's 0.5) and a mid-range hook-and-charge bruiser kit distinct from both the butcher (melee cleaver) and Wren (ranged revolver). Tagged pathway:hunter so the PATHWAY-DRIVEN drop (Progression M5) yields hunter_characteristic — no id branch in engine code. Two-phase combat_form (mack_harbor -> mack_beast via lose_the_line), the same descent seam as bram_kell and sable_wren. Pure DATA.",
+		"pathway": "hunter",
+		"combat_form": "mack_harbor",
+		"max_hp": 200,
+		"intent": "Work the harbor line-gang by day and tell himself the night work is just old habits — poaching seals, not people; the bad potion makes it harder to remember the difference each morning.",
+		"description": "A broad-shouldered dockside line-handler, weathered and quiet, who knows every tide and cleat on the harbor breakwater. His catch-tallies are always short — he says the seals took them.",
+		"voice": "Slow and careful, the accent of the deep harbor; goes very still when the tide is wrong, and afterward can't account for where the night went.",
+		"knowledge": [
+			"the harbor breakwater and the night tides",
+			"the poaching grounds off the south wharf",
+			"which dockworkers go missing and which nights the harbor goes quiet"
+		],
+		"secrets": [
+			"took a Hunter's potion from a Red-Priest contact and lost control from over-ingestion",
+			"hunts at the breakwater at night, dragging marks off the sea-wall",
+			"the missing dockworkers the harbor master can't account for are his kills"
+		],
+		"goals": [
+			{
+				"description": "Keep the line-gang job and the foreman's trust — a man without a daylight trade gets noticed",
+				"tier": "medium"
+			},
+			{
+				"description": "Feed the hunt without leaving a body the harbor master can name",
+				"tier": "medium"
+			},
+			{
+				"description": "Find the Red-Priest contact who sold him the bad dose and make them fix it — if it can be fixed",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.38,
+			0.45,
+			0.52
+		],
+		"schedule": {
+			"early-morning": [
+				5250,
+				2310
+			],
+			"morning": [
+				5220,
+				2330
+			],
+			"afternoon": [
+				4800,
+				5350
+			],
+			"dusk": [
+				4820,
+				5300
+			],
+			"night": [
+				4900,
+				5450
+			],
+			"late-night": [
+				4950,
+				5500
+			]
+		},
+		"vision_r": 640
+	},
+	"naya_brookes": {
+		"name": "Naya Brookes",
+		"dialogue_id": "",
+		"role": "fortune_teller",
+		"intent": "Make rent off card-readings near the market and keep her head down — some of her readings come true, and that is exactly the problem.",
+		"description": "A small-time card-reader and spirit medium with a stall near the Iron Cross market; mostly cold-reading, except when it is not.",
+		"voice": "Theatrical mystique for the customers; drops to flat, wary honesty the instant she feels watched.",
+		"knowledge": [
+			"cold-reading and what customers give away",
+			"the market street's faces and moods",
+			"that some of her readings have lately come true"
+		],
+		"secrets": [
+			"is a genuine low-Sequence Seer",
+			"hides from the Nighthawks for fear of being taken for a heretic",
+			"her true sight could aid an investigator she came to trust"
+		],
+		"goals": [
+			{
+				"description": "Make rent without drawing a second glance",
+				"tier": "medium"
+			},
+			{
+				"description": "Stay invisible to the Nighthawks and to anyone hunting heretics",
+				"tier": "medium"
+			},
+			{
+				"description": "Find one person safe to trust with what she really sees",
+				"tier": "long"
+			}
+		],
+		"tier": "full",
+		"tint": [
+			0.68,
+			0.52,
+			0.78
+		],
+		"schedule": {
+			"morning": [
+				2802,
+				3700
+			],
+			"afternoon": [
+				2802,
+				3700
+			],
+			"dusk": [
+				2802,
+				3730
+			],
+			"night": [
+				2802,
+				3689
+			],
+			"late-night": [
+				2802,
+				3689
+			]
 		}
 	}
 }

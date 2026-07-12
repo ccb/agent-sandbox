@@ -1,0 +1,136 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/butcher_shop_inner.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="wall_top"]
+size = Vector2(1306, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot"]
+size = Vector2(573, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 870)
+
+[sub_resource type="RectangleShape2D" id="s_counter"]
+size = Vector2(758, 157)
+
+[sub_resource type="RectangleShape2D" id="s_hooks_w"]
+size = Vector2(457, 74)
+
+[sub_resource type="RectangleShape2D" id="s_hooks_e"]
+size = Vector2(496, 74)
+
+[sub_resource type="RectangleShape2D" id="s_shelf_w"]
+size = Vector2(157, 391)
+
+[sub_resource type="RectangleShape2D" id="s_barrels_e"]
+size = Vector2(235, 139)
+
+[sub_resource type="RectangleShape2D" id="s_crates_se"]
+size = Vector2(287, 200)
+
+[sub_resource type="RectangleShape2D" id="s_crates_nw"]
+size = Vector2(118, 235)
+
+[sub_resource type="RectangleShape2D" id="s_basket_sw"]
+size = Vector2(105, 87)
+
+[sub_resource type="RectangleShape2D" id="p_exit"]
+size = Vector2(180, 90)
+
+[node name="ButcherShopInner" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.06, 0.045, 0.04, 1)
+polygon = PackedVector2Array(-300, -300, 1600, -300, 1600, 1170, -300, 1170)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
+centered = false
+scale = Vector2(0.85, 0.85)
+texture = ExtResource("1")
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(653, 8)
+shape = SubResource("wall_top")
+
+[node name="WBottomL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(286.5, 862)
+shape = SubResource("wall_bot")
+
+[node name="WBottomR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1019.5, 862)
+shape = SubResource("wall_bot")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 435)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1298, 435)
+shape = SubResource("wall_v")
+
+[node name="FCounter" type="CollisionShape2D" parent="Solids"]
+position = Vector2(653, 426)
+shape = SubResource("s_counter")
+
+[node name="FHookRailW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(294, 50)
+shape = SubResource("s_hooks_w")
+
+[node name="FHookRailE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1032, 50)
+shape = SubResource("s_hooks_e")
+
+[node name="FShelvesW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(78, 648)
+shape = SubResource("s_shelf_w")
+
+[node name="FBarrelsE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1188, 487)
+shape = SubResource("s_barrels_e")
+
+[node name="FCratesSE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1162, 761)
+shape = SubResource("s_crates_se")
+
+[node name="FCratesNW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(59, 161)
+shape = SubResource("s_crates_nw")
+
+[node name="FBasketSW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(248, 757)
+shape = SubResource("s_basket_sw")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(653, 780)
+
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(653, 435)
+zoom = Vector2(1, 1)
+
+[node name="ExitToCity" type="Area2D" parent="."]
+position = Vector2(653, 900)
+script = ExtResource("3")
+target_scene = "res://scenes/City.tscn"
+
+[node name="ExitShape" type="CollisionShape2D" parent="ExitToCity"]
+shape = SubResource("p_exit")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 400.0
+offset_top = 24.0
+offset_right = 900.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "Kell's butcher shop    ·    walk down (S) to the street"

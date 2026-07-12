@@ -16,27 +16,61 @@ signal loaded(path: String)
 const SAVE_PATH: String = "user://save.json"
 const SAVE_VERSION: int = 1
 
+## THE single source of truth for which run-scoped subsystems get persisted, and in what RESTORE
+## order (each entry: [json_key, autoload_name]). BOTH the disk save (save_game/load_game) AND the
+## in-memory checkpoint (RunManager._snapshot/_restore) build their subsystem payload from THIS list,
+## so the two paths can never drift on membership again (B3, M21 — they had silently diverged:
+## meters/progression/leads/shop rode the in-memory snapshot but were dropped from the disk save,
+## so a cross-session Continue lost them). Ordering constraints baked into the list:
+##   * Meters AFTER WorldState — Meters.from_dict re-derives Doom/Notice from the restored pressures.
+##   * everything else is independent, so the order is otherwise the historical disk order.
+## /root lookups keep it tolerant of a subsystem absent under a partial test harness (e.g. Shop).
+const SUBSYSTEMS: Array = [
+	["world_manager", "WorldManager"],
+	["clues", "ClueDB"],
+	["clock", "Clock"],
+	["world_state", "WorldState"],
+	["meters", "Meters"],
+	["summoning_plan", "SummoningPlan"],
+	["overseer", "Overseer"],
+	["occult_tools", "OccultToolManager"],
+	["prayer", "PrayerService"],
+	["deeds", "DeedRunner"],
+	["inventory", "Inventory"],
+	["agents", "Agents"],
+	["event_bus", "EventBus"],
+	["progression", "Progression"],
+	["leads", "LeadSystem"],
+	["shop", "Shop"],
+]
+
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
+## Build {json_key: subsystem.to_dict()} for every present subsystem in the manifest. The ONE seam
+## the disk save and the in-memory checkpoint share, so their key sets are identical by construction.
+func subsystem_dump() -> Dictionary:
+	var out: Dictionary = {}
+	for entry in SUBSYSTEMS:
+		var node := _subsystem(String(entry[1]))
+		if node != null and node.has_method("to_dict"):
+			out[String(entry[0])] = node.to_dict()
+	return out
+
+## Apply a saved payload back onto the subsystems, in manifest (restore) order. Absent keys fall
+## through to each from_dict's own defaults (older saves that predate a subsystem).
+func apply_subsystem_dump(data: Dictionary) -> void:
+	for entry in SUBSYSTEMS:
+		var node := _subsystem(String(entry[1]))
+		if node != null and node.has_method("from_dict"):
+			node.from_dict(data.get(String(entry[0]), {}))
+
 func save_game(path: String = SAVE_PATH) -> bool:
 	var gc := _game_controller()
-	var data: Dictionary = {
-		"version": SAVE_VERSION,
-		"world_state": WorldState.to_dict(),
-		"clock": Clock.to_dict(),
-		"world_manager": WorldManager.to_dict(),
-		"clues": ClueDB.to_dict(),
-		"inventory": Inventory.to_dict(),
-		"summoning_plan": SummoningPlan.to_dict(),
-		"overseer": Overseer.to_dict(),
-		"occult_tools": OccultToolManager.to_dict(),
-		"prayer": PrayerService.to_dict(),
-		"event_bus": EventBus.to_dict(),
-		"agents": Agents.to_dict(),
-		"scene_path": gc.current_scene_path if gc else "",
-		"player_pos": _vec_to_arr(gc.player_position() if gc else Vector2.ZERO),
-	}
+	var data: Dictionary = subsystem_dump()
+	data["version"] = SAVE_VERSION
+	data["scene_path"] = gc.current_scene_path if gc else ""
+	data["player_pos"] = _vec_to_arr(gc.player_position() if gc else Vector2.ZERO)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		push_error("SaveManager: cannot open %s for write (%d)" % [path, FileAccess.get_open_error()])
@@ -56,18 +90,8 @@ func load_game(path: String = SAVE_PATH) -> bool:
 		return false
 	var data: Dictionary = parsed
 
-	# Restore data-only subsystems first; the scene swap reads from them.
-	WorldManager.from_dict(data.get("world_manager", {}))
-	ClueDB.from_dict(data.get("clues", {}))
-	Clock.from_dict(data.get("clock", {}))
-	WorldState.from_dict(data.get("world_state", {}))
-	SummoningPlan.from_dict(data.get("summoning_plan", {}))
-	Overseer.from_dict(data.get("overseer", {}))
-	OccultToolManager.from_dict(data.get("occult_tools", {}))
-	PrayerService.from_dict(data.get("prayer", {}))
-	Inventory.from_dict(data.get("inventory", {}))
-	EventBus.from_dict(data.get("event_bus", {}))
-	Agents.from_dict(data.get("agents", {}))
+	# Restore data-only subsystems first (manifest order); the scene swap below reads from them.
+	apply_subsystem_dump(data)
 
 	var gc := _game_controller()
 	var scene_path := String(data.get("scene_path", ""))
@@ -75,6 +99,12 @@ func load_game(path: String = SAVE_PATH) -> bool:
 		gc.load_world_at(scene_path, _arr_to_vec(data.get("player_pos", [0, 0])))
 	loaded.emit(path)
 	return true
+
+## Resolve a subsystem autoload by name via /root — class_name-safe under the headless -s harness
+## and tolerant of an autoload absent under a partial harness (returns null).
+func _subsystem(name: String) -> Node:
+	var tree := get_tree()
+	return tree.root.get_node_or_null("/root/" + name) if tree != null else null
 
 func _game_controller() -> Node:
 	var nodes := get_tree().get_nodes_in_group("game_controller")

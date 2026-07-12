@@ -1,5 +1,11 @@
 # Agent Runtime + Beat Loop Implementation Plan
 
+> **HISTORICAL (2026-06-08 snapshot).** Code shown here uses an early `faction` field (e.g. `agent.faction`
+> in the snapshot/nearby roster). That field was later **removed** in the neutral-engine refactor — the
+> engine no longer has faction; perception is objective (id + role + distance) and allegiance is inferred
+> from data (`task` + persona). See `tingen_npc_framework_design.md`. This plan is preserved as-written for
+> the implementation record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the loop: on each beat, build a perception snapshot for every active agent, ask the sidecar for a proposed action, validate it against the schema, commit the approved verb to the world deterministically, and log it to the `EventBus`. Agents that aren't active run their schedule fallback so the world never stalls.

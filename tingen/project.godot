@@ -18,9 +18,11 @@ config/icon="res://icon.svg"
 [autoload]
 
 WorldState="*res://src/WorldState.gd"
+Meters="*res://src/Meters.gd"
 Clock="*res://src/Clock.gd"
 ClueDB="*res://src/ClueDB.gd"
 ItemDB="*res://src/ItemDB.gd"
+AbilityDB="*res://src/AbilityDB.gd"
 Inventory="*res://src/Inventory.gd"
 NpcDB="*res://src/NpcDB.gd"
 WorldManager="*res://src/WorldManager.gd"
@@ -30,6 +32,10 @@ SidecarBridge="*res://src/SidecarBridge.gd"
 AgentRuntime="*res://src/AgentRuntime.gd"
 Overseer="*res://src/Overseer.gd"
 SummoningPlan="*res://src/SummoningPlan.gd"
+CounterRite="*res://src/CounterRite.gd"
+HintDirector="*res://src/HintDirector.gd"
+Coordinator="*res://src/Coordinator.gd"
+RoomItems="*res://src/RoomItems.gd"
 OccultToolManager="*res://src/OccultToolManager.gd"
 EventManager="*res://src/EventManager.gd"
 DialogueManager="*res://src/DialogueManager.gd"
@@ -38,8 +44,33 @@ DevConsole="*res://src/DevConsole.gd"
 PlayerActions="*res://src/PlayerActions.gd"
 PrayerService="*res://src/PrayerService.gd"
 EndGame="*res://src/EndGame.gd"
+RunManager="*res://src/RunManager.gd"
+RitualNight="*res://src/RitualNight.gd"
+LeadSystem="*res://src/LeadSystem.gd"
+Progression="*res://src/Progression.gd"
+GMOpening="*res://src/GMOpening.gd"
 SceneFade="*res://src/SceneFade.gd"
 StandaloneBoot="*res://src/StandaloneBoot.gd"
+PlayLog="*res://src/PlayLog.gd"
+RoomView="*res://src/RoomView.gd"
+Stimulus="*res://src/Stimulus.gd"
+CombatMode="*res://src/CombatMode.gd"
+CombatFx="*res://src/CombatFx.gd"
+DeedRunner="*res://src/DeedRunner.gd"
+MeterDrivers="*res://src/MeterDrivers.gd"
+MeterThreats="*res://src/MeterThreats.gd"
+ModelConfig="*res://src/ModelConfig.gd"
+ModelPanel="*res://src/ModelPanel.gd"
+GMPanel="*res://src/GMPanel.gd"
+Settings="*res://src/Settings.gd"
+CombatFeedback="*res://src/CombatFeedback.gd"
+PauseMenu="*res://src/PauseMenu.gd"
+AmmoSpawn="*res://src/AmmoSpawn.gd"
+Shop="*res://src/Shop.gd"
+
+[gui]
+
+theme/custom="res://assets/ui/tingen_theme.tres"
 
 [display]
 
@@ -80,6 +111,27 @@ interact={
 , Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194309,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ]
 }
+attack={
+"deadzone": 0.5,
+"events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
+, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+dash={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+melee={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+use_charm={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":81,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
 toggle_board={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194306,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
@@ -118,6 +170,26 @@ toggle_debug={
 toggle_inventory={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":73,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+toggle_models={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":57,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+toggle_gm={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":71,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+pause={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194305,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+toggle_legend={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":72,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ]
 }
 

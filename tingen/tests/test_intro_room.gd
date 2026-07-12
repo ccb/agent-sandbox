@@ -33,10 +33,10 @@ func _init() -> void:
 	_ok(shape_count >= 10, "Solids has >=10 collision shapes (got %d)" % shape_count)
 
 	# Player uses the bespoke 4-way Klein sprite (asset owned elsewhere; just verify wiring).
-	var psprite: Sprite2D = room.get_node_or_null("Player/Sprite2D")
-	_ok(psprite != null and psprite.texture != null
-		and psprite.texture.resource_path.ends_with("klein_down.png"),
-		"Player sprite -> klein_down.png")
+	var psprite: AnimatedSprite2D = room.get_node_or_null("Player/Sprite")
+	_ok(psprite != null and psprite.sprite_frames != null
+		and psprite.sprite_frames.has_animation("idle_s"),
+		"Player sprite -> AnimatedSprite2D (idle_s)")
 
 	_ok(room.get_node_or_null("RoomCam") is Camera2D, "RoomCam is a Camera2D")
 
@@ -50,8 +50,8 @@ func _init() -> void:
 	var door: Node = room.get_node_or_null("Door")
 	_ok(door != null and door.get("icon") == null,
 		"Door is an invisible hotspot (no icon)")
-	_ok(door != null and door.get("target_scene") == "res://scenes/City.tscn",
-		"Door -> City.tscn")
+	_ok(door != null and door.get("target_scene") == "res://scenes/KleinLivingRoom.tscn",
+		"Door -> KleinLivingRoom.tscn (the layered Klein house: bedroom -> parlor -> street)")
 
 	print("\n=== %d passed, %d failed ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)

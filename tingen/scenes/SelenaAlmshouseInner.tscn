@@ -1,0 +1,115 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/selena_almshouse_inner.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="wall_top"]
+size = Vector2(1152, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot"]
+size = Vector2(506, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 768)
+
+[sub_resource type="RectangleShape2D" id="s_chapel_niche"]
+size = Vector2(207, 238)
+
+[sub_resource type="RectangleShape2D" id="s_cots_w"]
+size = Vector2(219, 668)
+
+[sub_resource type="RectangleShape2D" id="s_cots_e"]
+size = Vector2(242, 714)
+
+[sub_resource type="RectangleShape2D" id="s_tables_e"]
+size = Vector2(173, 691)
+
+[sub_resource type="RectangleShape2D" id="s_stools_w"]
+size = Vector2(115, 384)
+
+[sub_resource type="RectangleShape2D" id="p_exit"]
+size = Vector2(160, 90)
+
+[node name="SelenaAlmshouseInner" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.055, 0.055, 0.06, 1)
+polygon = PackedVector2Array(-300, -300, 1450, -300, 1450, 1070, -300, 1070)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
+centered = false
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("1")
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(576, 8)
+shape = SubResource("wall_top")
+
+[node name="WBottomL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(253, 760)
+shape = SubResource("wall_bot")
+
+[node name="WBottomR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(899, 760)
+shape = SubResource("wall_bot")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 384)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1144, 384)
+shape = SubResource("wall_v")
+
+[node name="FChapelNiche" type="CollisionShape2D" parent="Solids"]
+position = Vector2(127, 134)
+shape = SubResource("s_chapel_niche")
+
+[node name="FCotsW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(328, 380)
+shape = SubResource("s_cots_w")
+
+[node name="FCotsE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(754, 372)
+shape = SubResource("s_cots_e")
+
+[node name="FTablesE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1066, 384)
+shape = SubResource("s_tables_e")
+
+[node name="FStoolsW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(81, 499)
+shape = SubResource("s_stools_w")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(570, 690)
+
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(576, 384)
+zoom = Vector2(1.1, 1.1)
+
+[node name="ExitToCity" type="Area2D" parent="."]
+position = Vector2(576, 798)
+script = ExtResource("3")
+target_scene = "res://scenes/City.tscn"
+
+[node name="ExitShape" type="CollisionShape2D" parent="ExitToCity"]
+shape = SubResource("p_exit")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 280.0
+offset_top = 24.0
+offset_right = 880.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "Saint Selena's almshouse — ward hall    ·    walk down (S) to the street"

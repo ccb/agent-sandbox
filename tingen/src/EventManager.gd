@@ -24,6 +24,13 @@ func _ready() -> void:
 	_rng.seed = WorldManager.seed_value ^ 0x5eed
 	WorldManager.refreshed.connect(_on_refreshed)
 
+## Run-scoped reset (RunManager calls this on a fresh run). Clears accumulated cooldowns and
+## re-derives the RNG from the current WorldManager seed so a fresh run's event draws are
+## deterministic from run-start (not carried over from the prior run's _ready seeding).
+func reset() -> void:
+	_cooldowns.clear()
+	_rng.seed = WorldManager.seed_value ^ 0x5eed
+
 func _load() -> void:
 	if not FileAccess.file_exists(EVENTS_PATH):
 		push_error("EventManager: missing %s" % EVENTS_PATH)
@@ -99,7 +106,10 @@ func _condition_met(c: Dictionary) -> bool:
 func _apply_effect(e: Dictionary) -> void:
 	match String(e.get("type", "")):
 		"pressure":
-			WorldState.adjust(StringName(e.get("target", "")), float(e.get("delta", 0.0)))
+			# M25 (backlog "M18"): an ambient beat now moves the FOUR LIVE meters, not the dead legacy
+			# WorldState pressure. The event's `target` is still an §8.3 pressure name (events.json is
+			# unchanged); Meters.LEGACY_METER_MAP routes it to the mapped live meter with the same delta.
+			Meters.adjust_legacy(String(e.get("target", "")), float(e.get("delta", 0.0)), "ambient_event")
 		"lead":
 			WorldState.set_lead(String(e.get("text", "")))
 		"collect":

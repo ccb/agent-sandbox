@@ -34,10 +34,10 @@ func _init() -> void:
 				shape_count += 1
 	_ok(shape_count >= 8, "Solids has >=8 collision shapes (got %d)" % shape_count)
 
-	var psprite: Sprite2D = room.get_node_or_null("Player/Sprite2D")
-	_ok(psprite != null and psprite.texture != null
-		and psprite.texture.resource_path.ends_with("klein_down.png"),
-		"Player sprite -> klein_down.png")
+	var psprite: AnimatedSprite2D = room.get_node_or_null("Player/Sprite")
+	_ok(psprite != null and psprite.sprite_frames != null
+		and psprite.sprite_frames.has_animation("idle_s"),
+		"Player sprite -> AnimatedSprite2D (idle_s)")
 
 	_ok(room.get_node_or_null("RoomCam") is Camera2D, "RoomCam is a Camera2D")
 

@@ -33,7 +33,7 @@ func _refresh() -> void:
 		visible = false
 		return
 	_name.text = a.display_name
-	_sub.text = "%s · %s" % [String(a.faction).capitalize(), String(a.role).capitalize()]
+	_sub.text = String(a.role).capitalize()
 	_thought.text = "\"%s\"" % a.describe_thought()
 	_goal.text = a.intent
 	# Free synchronously, not queue_free: several agents can act on one beat, so

@@ -1,5 +1,11 @@
 # World-AI Overseer + Critic Implementation Plan
 
+> **HISTORICAL (2026-06-08 snapshot).** Code shown here uses an early `faction` field (`agent.faction`, a
+> faction/position coherence check, turning a waverer by setting `faction = "ally"`). That field was later
+> **removed** in the neutral-engine refactor — the Critic now checks identity/role only, and a waverer is
+> turned by adopting a goal stamped `kind == "defection"`, not by relabelling a faction. See
+> `tingen_npc_framework_design.md`. This plan is preserved as-written for the implementation record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Put the director above the simulation. A `Critic` reviews every proposed action on legality (possible now), coherence (fits the agent), and interestingness, returning approve / amend / veto. An `Overseer` consumes the event stream, tracks whether the player is involved, issues directives that re-task or coordinate agents, and enforces the invariant that **the cult is never exposed/caught without the player**. Both hook into the beat loop between proposal and commit — deterministically, with no LLM.

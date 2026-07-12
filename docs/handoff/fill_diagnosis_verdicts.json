@@ -1,0 +1,298 @@
+{
+ "verdicts": [
+  {
+   "block": "fill_01",
+   "position_verdict": "off_slightly",
+   "sprite_verdict": "full",
+   "severity": 1,
+   "recommended_fix": "retweak",
+   "confidence": "high",
+   "offset_map_px": {
+    "dx": -3,
+    "dy": -1
+   },
+   "scale_factor": 1,
+   "cut_edges": [],
+   "orig_is_better": false,
+   "notes": "Block matches the painting well. Multi-scale correlation peaks at scale 1.0 (corr 0.57) with the scene content ~9 panel px right / ~2 px down at zoom 3x, i.e. sprite is ~3 map px too far right and ~1 too far down; correction dx=-3, dy=-1 map px. Sprite silhouette is irregular on all sides (<1.5% opaque border pixels) so no straight-cut slicing; keyed and keyed/orig are byte-identical. Architecture (perimeter block, courtyard greenery, curved bottom lane, gabled top row) matches; palette is mossier/lighter than the painting, cosmetic only. Note: a small cluster at map ~(7-57, 194-217) in the reference is missing in the scene but lies ABOVE fill_01's bbox (y0=264) - it belongs to a neighboring block and should be checked separately."
+  },
+  {
+   "block": "fill_02",
+   "position_verdict": "off_slightly",
+   "offset_map_px": {
+    "dx": -3.5,
+    "dy": 0
+   },
+   "scale_factor": 1,
+   "sprite_verdict": "cut_off",
+   "cut_edges": [
+    "bottom"
+   ],
+   "orig_is_better": true,
+   "severity": 2,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Content is correct (top building row north of Coal Yard: rubble pile at left, gabled roofs, courtyards all match the painting). Position is nearly right: cross-correlation puts the scene content ~7 panel px (~3.5 map px) right of the reference, dy~0; scale ~1.0. The real defect is a hard straight horizontal slice along the sprite's bottom edge: 90% of the trimmed sprite's bottom pixel row is opaque (keyed/fill_02.png, 738x226), and in the scene the facades terminate in a razor-straight line with bare cobblestone below, while the painting continues wall facades, a slanted annex roof, and clutter down to ~map y 90-100. keyed/orig/fill_02.png (857x794) contains all the missing lower facades seamlessly (it extends far past the cut; the excess Coal Yard/warehouse content below belongs to neighboring blocks and must be masked, not straight-cut at y=226). Recut from orig along the natural facade boundary (~map y 90-95, orig row ~240-260) instead of the hard trim, then nudge ~4 map px left. Note: reference buildings continuing right of map x 348 are the neighboring block's, not fill_02's."
+  },
+  {
+   "block": "fill_03",
+   "position_verdict": "off_badly",
+   "sprite_verdict": "cut_off",
+   "cut_edges": [
+    "top",
+    "right"
+   ],
+   "severity": 2,
+   "offset_map_px": {
+    "dx": -4.5,
+    "dy": -24.5
+   },
+   "scale_factor": 1,
+   "orig_is_better": true,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Content is correct (masked NCC 0.72 vs painting, 0.82 vs scene at identical template scale \u2014 sharp peak at same scale for both, so rendered size is right). Position: placed center (297,296) vs reference center (288,246) panel px at zoom 2x -> move sprite left 4.5 and up 24.5 map px; currently the bottom house row spills onto Grimmer Lane and bare pavement shows at top where the painting has buildings. Completeness: trim removed 210 px (top) and 123 px (right) from keyed/orig/fill_03.png (764x657 -> 626x447, trim offset (15,210)); top edge is a dead-straight slice through courtyards/rooftops, plainly visible against pavement in the scene, and the right edge is a straight vertical cut through roofs. Recut from keyed/orig/fill_03.png (which contains all missing content), then apply the offset. Files: .../buildings/fill/_qa_panels/fill_03_panel.png, .../fill/keyed/fill_03.png, .../fill/keyed/orig/fill_03.png, .../fill/fill_03_meta.json."
+  },
+  {
+   "block": "fill_04",
+   "position_verdict": "off_slightly",
+   "sprite_verdict": "cut_off",
+   "severity": 2,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "offset_map_px": {
+    "dx": -13,
+    "dy": 30
+   },
+   "scale_factor": 1,
+   "cut_edges": [
+    "top",
+    "left",
+    "right"
+   ],
+   "orig_is_better": true,
+   "notes": "Content is correct (Dolphin Inn block). Two problems. (1) CUT: placed keyed/fill_04.png (470x649) is a hard slice of keyed/orig/fill_04.png (659x779) at offset (70,130) - trim removed 70px left, 130px top, 119px right. Placed sprite border opacity: top row 100%, left col 89%, right col 85% (straight cuts through dark rooftops, visible in scene); orig borders are ~0-2% opaque, i.e. orig is the complete naturally-bounded cluster -> recut from orig. (2) POSITION: inn renders up-right of the painting's inn (blend overlay confirms). Visual landmark reads give correction dx~-15, dy~+26..+38 map px; independent prediction from trim asymmetry (content center displaced 65 sprite px down, 24.5 left of orig center) plus measured placed-center (974,817 map px) vs nominal (969,828) gives (-13,+31). Report dx=-13, dy=+30 for the CURRENT trimmed sprite. If recut from orig and re-placed centered at nominal world_center (4845,4140), residual offset should be near zero. Scale ~1.0 (generated redraw proportions differ slightly from painting, no uniform scale error). Panel zoom=3, crop origin (842,662), bbox [912,732,1026,924]."
+  },
+  {
+   "block": "fill_05",
+   "position_verdict": "off_slightly",
+   "sprite_verdict": "cut_off",
+   "severity": 2,
+   "cut_edges": [
+    "top",
+    "bottom",
+    "right"
+   ],
+   "orig_is_better": true,
+   "offset_map_px": {
+    "dx": 4,
+    "dy": 20
+   },
+   "scale_factor": 0.84,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Placed sprite (729x338) is an exact band of keyed/orig/fill_05.png (rows 164-502 of 900, cols 0-729 of 825): the trim sliced off the north rooflines (top), the entire courtyard south half + south row (bottom, 713/729 opaque px straight cut), and the east wing edge (right, 305/338). In-scene the north row sits roughly where the painting's top strip is, but ~60% of the painted block area (map ~(102..302)x(729..889), the Works/Oldmere Rd courtyard block) renders as empty pavement with a visible straight cut. Content/architecture is correct. Fix: recut from orig (full block present there) and refit: world scale ~1.21 vs current 1.4396 (scale_factor ~0.84 on current sprite px), center ~map (202,809) = world (1010,4045), i.e. +4,+20 map px from current center (198,789). CAUTION for orchestrator: the panel title-bar coords are wrong for this panel \u2014 croporigin=(668,290)/bbox=[738,360,894,474] belong to fill_03's region; the actual left-half crop origin is map_v3 (32,657) at zoom 2 (verified by template match, score 0.918). Offsets above are in true map_v3 px. Also note: sibling QA agents share the scratchpad; use unique filename prefixes."
+  },
+  {
+   "block": "fill_06",
+   "position_verdict": "off_slightly",
+   "sprite_verdict": "cut_off",
+   "severity": 2,
+   "recommended_fix": "regenerate",
+   "confidence": "high",
+   "cut_edges": [
+    "bottom"
+   ],
+   "offset_map_px": {
+    "dx": 0,
+    "dy": -14
+   },
+   "scale_factor": 1,
+   "orig_is_better": false,
+   "notes": "Template match (score 0.974, placed at 0.85x nominal scale) puts the sprite at map [1101-1217]x[506-634] vs bbox [1098-1218]x[504-606]: horizontal fit and top edge are excellent, but the content is 127 map px tall where the painting block is 102. Root cause is the generation: orig is 598x965 px (~140x226 map px), over 2x taller than the painting's squat block, so the trim stage hard-sliced the bottom (544/587 opaque px in the final row, cutting straight through facades/windows mid-story). The placed sprite overruns the block's south edge by ~28 map px, covering the lane the painting shows and merging into the south neighbor block, which currently hides the slice; fixing that neighbor will expose it. orig_is_better=false: the untrimmed sprite's extra height is invented content and would overrun by ~100 map px. No uniform rescale fixes it (width ratio 1.03, height ratio 0.80) and moving it up (dy -14 to center) would poke into the north street. Needs a new generation with a ~120x102 map px squat composition; keep the current x placement logic, which is accurate."
+  },
+  {
+   "block": "fill_07",
+   "position_verdict": "off_slightly",
+   "sprite_verdict": "cut_off",
+   "severity": 2,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "cut_edges": [
+    "left",
+    "bottom"
+   ],
+   "orig_is_better": true,
+   "offset_map_px": {
+    "dx": -8,
+    "dy": -10
+   },
+   "scale_factor": 1.3,
+   "notes": "Placed sprite locked in scene via masked NCC (score 0.78) at map bbox ~(440,2)-(563,73). Trim stage cropped keyed (648x375) out of orig (770x616) at offset (104,0): hard slice on LEFT (297/375 opaque border px - the dark tall building's roof is a bare grey wedge with a straight diagonal cut, visible in-game) and BOTTOM (542/648 opaque border px - the entire red hipped-roof building, the block's most prominent painted feature at map ~467-557 x, 45-120 y, is gone; scene shows bare cobblestone there). orig contains all missing parts with clean borders. Sprite is also rendered at ~77% of nominal scale (0.57 vs 0.738 panel px/sprite px; painting feature widths suggest 1.3-1.4x needed). Content itself is correct for this block (dark dormered tenement + brown rowhouse). Fix: recut from orig, restore ~nominal scale (x1.3), nudge ~8 map px left and ~10 up for the current anchor (recompute after recut since the cluster grows left+down)."
+  },
+  {
+   "block": "fill_08",
+   "position_verdict": "off_slightly",
+   "offset_map_px": {
+    "dx": -3,
+    "dy": 0
+   },
+   "scale_factor": 1,
+   "sprite_verdict": "cut_off",
+   "cut_edges": [
+    "top",
+    "bottom",
+    "right"
+   ],
+   "orig_is_better": true,
+   "severity": 2,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Content is correct: the placed sprite depicts this block's middle section (chimney house with wheel rosette, courtyard wall) matching the painting. Position is close but shifted ~3 map px right of the reference (gradient NCC on three sub-regions gave dx -6..-11 panel px at zoom 3x, dy ~0; scale sweep peaks at 1.0). The real problem is the trim: keyed/fill_08.png (350x363) is a hard slice of the full cluster \u2014 alpha is opaque along 83% of the top edge, 99% of the bottom edge, and 100% of the right edge, i.e. straight cuts through the upper courtyard buildings, the long blue roofline on the right, and the plank roof at the bottom. keyed/orig/fill_08.png (530x885) contains the complete cluster with a natural silhouette (<2% opaque on all four edges), so orig_is_better=true. In the current panel the neighbors happen to paper over most of the seams, but the sliced edges plus independent per-block offsets are exactly the cut-off look the user flagged. Fix: recut from orig (or re-trim with feathered/natural boundaries) and nudge the placement ~3 map px left; re-anchor world position since the orig footprint is much larger than the trimmed one (meta world_center_nominal [5655, 3225], scale 0.9668)."
+  },
+  {
+   "block": "fill_09",
+   "position_verdict": "off_slightly",
+   "offset_map_px": {
+    "dx": -2.7,
+    "dy": 0.7
+   },
+   "scale_factor": 1,
+   "sprite_verdict": "cut_off",
+   "cut_edges": [
+    "top",
+    "left"
+   ],
+   "orig_is_better": true,
+   "severity": 2,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Content is the correct block (gray gabled warehouse + Pike St. building). Placed sprite keyed/fill_09.png (521x497) is pixel-identical to keyed/orig/fill_09.png (526x752) trimmed 255px off the TOP and 5px off the left; keyed top row is 88.9% opaque = hard straight slice through the northern rooftops (~58 map px of building mass lost). In-scene this leaves bare cobblestone and a straight roof edge at the block's north side (panel y~130-210) where the painting shows continuous buildings; the left trim is minor. Recut from orig restores the missing tops (note: re-center vertically ~29 map px north since sprite height grows 255 gen px upward). Position of current content: scale exactly 1.0, shifted ~8 panel px right / 2 up at zoom 3 -> nudge dx=-2.7, dy=+0.7 map px."
+  },
+  {
+   "block": "fill_10",
+   "position_verdict": "ok",
+   "sprite_verdict": "full",
+   "severity": 2,
+   "recommended_fix": "regenerate",
+   "confidence": "high",
+   "orig_is_better": false,
+   "cut_edges": [],
+   "offset_map_px": {
+    "dx": -4,
+    "dy": -2
+   },
+   "scale_factor": 1.2,
+   "notes": "Placement is centered (offset ~4,2 map px, negligible) and the sprite is not sliced \u2014 edges are organic, alpha touches borders only at trim points. The real defect is the generation itself: the painting shows a wide 3-story terrace filling the whole 144x96 bbox (~160x105 map px, horizontal rooflines, no tower); the sprite is a near-square (916x979) compacted jumble with an invented church tower, rendered ~132x137 map px. It leaves bald cobblestone in the bbox's top-left/left and spills ~24 px below the block onto the lane. Aspect mismatch means no uniform retweak works: scale 1.2 fixes width but overshoots height ~30%. Needs a new gpt-image generation constrained to the block's wide-slab footprint. Note: keyed/orig/fill_10.png is missing (all other blocks have one), so recut_from_orig is impossible anyway."
+  },
+  {
+   "block": "fill_11",
+   "position_verdict": "ok",
+   "sprite_verdict": "cut_off",
+   "severity": 3,
+   "cut_edges": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ],
+   "orig_is_better": true,
+   "recommended_fix": "recut_from_orig",
+   "offset_map_px": {
+    "dx": 0,
+    "dy": -2
+   },
+   "scale_factor": 1,
+   "confidence": "high",
+   "notes": "Reference shows a large closed ring of rowhouses around a central courtyard (~160x180 map px). The placed sprite is only a 416x389 rectangular slice of the courtyard center out of the 717x959 orig - opaque pixels touch all four borders (93-100%), so it is hard-cut on top/bottom/left/right and the entire perimeter building ring is missing; in-scene the block reads as an empty cobblestone lot with a floating square. Template match puts the placed slice within ~2 map px of correct (dx=-0.3, dy=-2.3), so position is fine. Ghost overlay of keyed/orig/fill_11.png at nominal world_center (5475,4110) and scale 0.9668 aligns with the painting's ring (smoke plume, brick chimney building, all four perimeter rows), so re-placing the untrimmed orig at the existing nominal transform fixes the block; no regeneration needed. The trim stage is the culprit here."
+  },
+  {
+   "block": "fill_12",
+   "position_verdict": "off_badly",
+   "sprite_verdict": "cut_off",
+   "severity": 3,
+   "cut_edges": [
+    "left",
+    "top",
+    "right",
+    "bottom"
+   ],
+   "offset_map_px": {
+    "dx": 16.3,
+    "dy": -22.4
+   },
+   "scale_factor": 1.667,
+   "orig_is_better": true,
+   "recommended_fix": "recut_and_retweak",
+   "confidence": "high",
+   "notes": "Placed sprite is a hard rectangle sliced from orig (exact match at orig px 334,244-587,758): all four edges cut through buildings (left/right 100% opaque, top 91%, bottom 88%). Worse, the slice content maps to map x 911-966 (verified via exact match into fill_12_cut.png at offset 161,16), so it dropped the left 17 map px of this block's row and instead includes the street plus part of the NEIGHBOR row across the street. Scene (City.tscn FillBlock12) renders it at scale 0.6504 vs correct 1.084 (60% size, auto-match score 0.405) centered at map (922.5,434.5); painting-true center for this slice is (938.75,412.1) -> dx +16.3, dy -22.4, scale x1.667. In the panel the top ~third of the block is bare cobblestone where the painting has continuous gabled row. Retweak alone would 1:1-align the slice but still show four hard cut edges and a duplicated across-street row; recut from orig (which holds the full cluster with natural keyed edges; block spans orig px x 254-448, y 261-731) along the street boundaries, then retweak position/scale to nominal (center map 915,411 adjusted for new trim, scale 1.084)."
+  },
+  {
+   "block": "fill_13",
+   "position_verdict": "off_badly",
+   "sprite_verdict": "full",
+   "severity": 2,
+   "recommended_fix": "retweak",
+   "confidence": "high",
+   "offset_map_px": {
+    "dx": -2,
+    "dy": -12
+   },
+   "scale_factor": 1.72,
+   "cut_edges": [],
+   "orig_is_better": false,
+   "notes": "Sprite content is correct (the wedge-shaped Grimmer Lane terrace block with interior courtyard) and it is COMPLETE \u2014 keyed/fill_13.png is byte-identical to keyed/orig/fill_13.png and all four alpha borders are ~99% transparent, so no cut edges. The defect is scale: alpha-weighted template matching of the keyed sprite against the scene half of the QA panel (zoom 4 px/map px) peaks at 0.58x of nominal size (NCC 0.748 at 0.58x vs 0.099 at 1.0x), i.e. the sprite renders at world scale ~0.54 instead of world_scale_nominal 0.9375 from fill_13_meta.json. Its footprint shrinks from the correct ~90x155 map px to ~52x90, leaving bare cobblestone plaza where the painting has dense rooftops \u2014 this is what reads as 'not at the right position / not full' to a player. Fix: rescale by ~1.72x (i.e. restore world_scale_nominal 0.9375) and center at world_center_nominal (4425, 2640); current rendered center is map (887, 540) vs target (885, 528), so after rescaling about the current center nudge dx=-2, dy=-12 map px (world: -10, -60 at 5x). No regeneration or recut needed."
+  },
+  {
+   "block": "fill_14",
+   "position_verdict": "absent",
+   "sprite_verdict": "wrong_content",
+   "severity": 3,
+   "recommended_fix": "regenerate",
+   "confidence": "high",
+   "orig_is_better": false,
+   "scale_factor": 1,
+   "offset_map_px": {
+    "dx": -12,
+    "dy": 112
+   },
+   "cut_edges": [],
+   "notes": "Double failure. (1) ABSENT IN SCENE: the painting has a tall dark tenement at bbox [654,0,708,48], but the scene renders bare cobblestone across the whole bbox and nominal sprite footprint (meta world_center_nominal 3405,120 = map 681,24); the fill_14 node appears missing/hidden in the scene. The ornate teal-domed building at the panel bottom is a DIFFERENT sprite (gold finials, stone dormers) - verified it does not match fill_14's roofline. (2) WRONG CONTENT: the keyed sprite (810x680, pixel-identical to keyed/orig, clean uncut transparent borders) does not depict the bbox building at all; NCC template match against fill_14_crop.png locks it to map x600-738, y78-194 - the tenement row + red-brick tower one block SOUTH of the bbox. So even placing the existing sprite would duplicate the southern row and still leave this lot's actual building missing. Scale of the generated art matches the painting (1.0 at ratio 5.885). offset_map_px (-12,+112) is where the current sprite's content would belong vs its nominal placement, given for completeness - the real fix is a new generation targeted at the bbox building, then placement at the bbox lot."
+  }
+ ],
+ "critic": {
+  "extra_problems": [
+   {
+    "where": "map-px x\u2248430-850, y\u22481080-1254 (bottom-center strip, incl. 'St Raphael('s) Cemetery' label at x\u2248430-520)",
+    "what": "Entire bottom-center district is missing. The painting shows a dense built-up district plus a walled cemetery between Kirkgate church and the River Wharves; the composite is bare cobblestone with zero sprites over the whole strip. Largest single gap on the map \u2014 far too large to be a waypoint lot.",
+    "severity": 5
+   },
+   {
+    "where": "map-px x\u2248495-720, y\u2248760-950 (block SW/west of Tingen Police Station, south of the market)",
+    "what": "Large painted tenement block (dense reddish rooftops clearly ghosting in the overlay) has NO sprite at all \u2014 composite shows an empty cobbled plaza. The police station itself is placed; only this neighboring block is missing.",
+    "severity": 5
+   },
+   {
+    "where": "map-px x\u2248715-875, y\u2248500-715 (block south of 'Grimmer Lane', west of Mr. Franky's)",
+    "what": "Whole painted block missing, including a distinctive curved-roof shed/greenhouse structure at its south end (~x760-830, y650-715). Composite is bare ground; Mr. Franky's and the diagonal street-front strip beside it are present.",
+    "severity": 4
+   },
+   {
+    "where": "map-px x\u22481000-1175, y\u2248880-990 (east of the Grigg Lane crossing, directly north of the River Wharves)",
+    "what": "Painted building block ghosting strongly in the overlay with no sprites in the composite. It sits immediately below the sliced red-row chunk (see next finding), so the district ends in a straight artificial line at y\u2248880 then nothing down to the wharf walls.",
+    "severity": 4
+   },
+   {
+    "where": "map-px x\u22481037-1143, y\u2248758-880 (block just east of The Dolphin Inn)",
+    "what": "Fill sprite is a raw rectangular crop with dead-straight left (x\u22481037), top (y\u2248758) and bottom (y\u2248880) edges that slice neighboring painted buildings mid-roof; a second vertical seam at x\u22481108 suggests two abutting rect chunks. Reads as an obvious pasted rectangle in-game, not at a map edge so it cannot pass as camera cropping.",
+    "severity": 4
+   },
+   {
+    "where": "map-px x\u22481000-1100, y\u2248475-750 (Pine St tenement cluster, right-center)",
+    "what": "Minor: the dense blue-gray tenement cluster is assembled from several sprites that visibly stack/overlap each other (repeated mansard sub-sprites, overlapping roof lines). It does not block Pine St or any road, so cosmetic only \u2014 worth a look but low priority.",
+    "severity": 2
+   }
+  ],
+  "summary": "Whole-map pass over _fill_overlay.png / _fill_composite.png (2508px, map=1254px). Main finding: the fill pipeline left a contiguous south-central hole \u2014 four LARGE painted districts have zero sprites: (1) the entire bottom-center strip incl. St Raphael's Cemetery (x430-850, y1080-1254), (2) the tenement block SW of Tingen Police Station (x495-720, y760-950), (3) the Grimmer Lane block west of Mr. Franky's (x715-875, y500-715), and (4) the block north of the River Wharves (x1000-1175, y880-990). All are far larger than waypoint lots, so flagged regardless of the 4-bare-lot exemption. One sliced-sprite defect not at a map edge: the chunk east of The Dolphin Inn (x1037-1143, y758-880) is a raw rectangle with straight left/top/bottom edges cutting buildings mid-roof, plus an internal seam at x\u22481108 \u2014 matches the user's earlier 'cut-off sprites' complaint. Everything else is clean: map edges (top ironworks/chimneys, left Globe Works, bottom docks/boats, right Pine St) all match the painting's own cropping; no sprites sit on streets or canals; no confident duplicate placements found (only minor sub-sprite stacking in the Pine St cluster, severity 2). Placed/verified-good whole-map items: Coal Yard, manor estate, ironworks, market, Globe Works, Kirkgate church, docks, wharves, police station, Mr. Franky's, Dolphin Inn."
+ }
+}
