@@ -8,6 +8,7 @@ import "CoreLibs/crank"
 import "CoreLibs/keyboard"
 import "engine/core"
 import "content/slice"
+import "content/captions"
 
 local gfx = playdate.graphics
 
@@ -46,6 +47,33 @@ local function settleView(turnStartHeight)
 	clampView()
 end
 
+-- ---------------------------------------------------------- card captions
+-- Words on the cards render on DEVICE (content/captions.lua): pixel-true
+-- Playdate fonts over text-free imagetable geometry.
+local function drawCaptions(key, frame)
+	local list = Captions and Captions[key]
+	if not list then return end
+	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+	for j = 1, #list do
+		local c = list[j]
+		if frame >= (c.from or 0) and (not c.to or frame < c.to) then
+			local txt = c.text
+			if c.type then
+				local n = math.floor((frame - (c.from or 0)) * (c.cps or 2))
+				if n < #txt then txt = string.sub(txt, 1, n) .. "_" end
+			end
+			if c.bold then txt = "*" .. txt .. "*" end
+			if c.align == "center" then
+				gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.center)
+			elseif c.align == "right" then
+				gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.right)
+			else
+				gfx.drawText(txt, c.x, c.y)
+			end
+		end
+	end
+end
+
 -- ---------------------------------------------------------------- figures
 -- Litho cards as 1-bit imagetables (tools/export_figures.py). A cue plays
 -- the card full-screen at the reel's 12 fps; any button returns to the
@@ -58,7 +86,7 @@ local function showFigure(key)
 		figTables[key] = gfx.imagetable.new("images/figures/" .. key) or false
 	end
 	if figTables[key] then
-		overlay = { t = figTables[key], i = 1, acc = 0 }
+		overlay = { t = figTables[key], i = 1, acc = 0, key = key }
 	end
 end
 
@@ -232,6 +260,7 @@ function playdate.update()
 		local n = overlay.t:getLength()
 		local img = overlay.t:getImage(math.min(overlay.i, n))
 		if img then img:draw(8, 0) end
+		drawCaptions(overlay.key, overlay.i - 1)
 		overlay.acc = overlay.acc + 12 / 30
 		if overlay.acc >= 1 then
 			overlay.i = math.min(overlay.i + math.floor(overlay.acc), n)

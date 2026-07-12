@@ -46,6 +46,12 @@ def export(page, key, frames):
         fh.write(HARNESS % FIGURES_JS)
     page.goto("file://" + harness)
     page.wait_for_function("window.TombFigures !== undefined")
+    page.evaluate(
+        """() => {
+          CanvasRenderingContext2D.prototype.fillText = function () {};
+          CanvasRenderingContext2D.prototype.strokeText = function () {};
+        }"""
+    )
     ok = page.evaluate(
         """(key) => {
           const F = window.TombFigures;
@@ -58,86 +64,14 @@ def export(page, key, frames):
     )
     if not ok:
         raise SystemExit(f"no card named {key}")
-    # Boost the type before capture: reel labels are sized for a monitor;
-    # at 0.6x they land at ~6 device px. 1.7x (with tightened tracking)
-    # puts them at ~11 px -- readable 1-bit -- without touching geometry.
-    # (Canvas-drawn text is untouched; those cards await small masters.)
+    # NATIVE-TEXT LAYER: the device renders all words itself (real
+    # Playdate fonts, content/captions.lua), so the export strips every
+    # label -- svg text hidden, canvas text no-opped -- leaving pure
+    # geometry for the imagetable.
     page.evaluate(
         """() => {
-          const K = 2.3;
-          const texts = [];
-          document.querySelectorAll('#stage text').forEach((t) => {
-            const y = parseFloat(t.getAttribute('y') || '0');
-            if (t.getAttribute('text-anchor') === 'end' && y < 30) {
-              t.setAttribute('display', 'none'); // topline chrome: cut
-              return;
-            }
-            const fs = parseFloat(t.getAttribute('font-size') || '10');
-            const nfs = Math.round(fs * K);
-            t.setAttribute('font-size', nfs);
-            t.setAttribute('letter-spacing', '0.5');
-            if (y > 350) { // footer band: wrapped per-frame, not shrunk
-              t.dataset.footer = '1';
-              t.dataset.fs = nfs;
-              t.dataset.oy = y;
-            }
-            texts.push({ t, y, fs: nfs });
-          });
-          // bigger type needs more leading: labels sharing a column (same
-          // x + anchor) get re-spaced so they can't overlap
-          const cols = {};
-          texts.forEach((e) => {
-            const key = (e.t.getAttribute('text-anchor') || 'start') + '|'
-              + (e.t.getAttribute('x') || '0');
-            (cols[key] = cols[key] || []).push(e);
-          });
-          for (const key in cols) {
-            const col = cols[key].sort((a, b) => a.y - b.y);
-            for (let i = 1; i < col.length; i++) {
-              const need = col[i - 1].y + col[i - 1].fs * 1.15;
-              if (col[i].y < need) {
-                col[i].y = need;
-                col[i].t.setAttribute('y', need);
-              }
-            }
-          }
-          // per-frame footer wrap: typeOn rewrites these nodes every tick,
-          // so re-split the current string into tspans before each capture
-          window.__wrapFooters = () => {
-            document.querySelectorAll('#stage text[data-footer]').forEach((t) => {
-              const s = (t.textContent || '').trimEnd();
-              if (!s) return;
-              const fs = parseFloat(t.dataset.fs);
-              const est = fs * 0.62 + 0.5; // char width, letterspaced
-              const maxChars = Math.floor(600 / est);
-              if (s.length <= maxChars) return;
-              const words = s.split(' ');
-              const lines = [];
-              let cur = '';
-              words.forEach((w) => {
-                if ((cur + ' ' + w).trim().length > maxChars) {
-                  if (cur) lines.push(cur);
-                  cur = w;
-                } else {
-                  cur = cur ? cur + ' ' + w : w;
-                }
-              });
-              if (cur) lines.push(cur);
-              const lh = fs * 1.1;
-              t.textContent = '';
-              t.setAttribute('y',
-                Math.min(parseFloat(t.dataset.oy), 394 - (lines.length - 1) * lh));
-              const x = t.getAttribute('x');
-              lines.forEach((ln, i) => {
-                const sp = document.createElementNS(
-                  'http://www.w3.org/2000/svg', 'tspan');
-                sp.setAttribute('x', x);
-                sp.setAttribute('dy', i === 0 ? 0 : lh);
-                sp.textContent = ln;
-                t.appendChild(sp);
-              });
-            });
-          };
+          document.querySelectorAll('#stage text')
+            .forEach((t) => t.setAttribute('display', 'none'));
         }"""
     )
     stage = page.locator("#stage")
@@ -146,7 +80,6 @@ def export(page, key, frames):
         page.evaluate("window.TombFigures._tickAll()")
     cells = []
     for _ in range(frames):
-        page.evaluate("window.__wrapFooters()")
         shot = Image.open(io.BytesIO(stage.screenshot())).convert("L")
         scale = min(CELL_W / shot.width, CELL_H / shot.height)
         shot = shot.resize(
