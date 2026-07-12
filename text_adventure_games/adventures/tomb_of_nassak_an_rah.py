@@ -2062,6 +2062,9 @@ def build_game(seed=None):
         "walked only by the desperate; last night this was proven again. "
         "Northward, three carved faces watch from a slab of azure stone.",
     )
+    # The opening image (CCB audit): 00 -- THE ROAD TO GNOMON is the
+    # wreck's own scene, so the boot LOOK deals it as the first card.
+    wreck.set_property("figure", "road")
     hold = things.Location(
         "The Wagon's Hold",
         # The LIT view; the Darkness veil below supplies the dark blurb. This is
@@ -2313,6 +2316,9 @@ def build_game(seed=None):
         "servo-hocks, chrome ribs, lenses where a dog keeps its eyes. They are "
         "perfectly preserved. The lenses are open.",
     )
+    # The tank IS this room (CCB audit): the synth-hound litho greets
+    # the first arrival; examining the pile still re-earns it.
+    hounds.set_property("figure", "hound")
     warriors = things.Location(
         "Hall of Warriors",
         "Four plexiglas cylinders stand on an uneven floor, each holding a "
