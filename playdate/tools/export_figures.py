@@ -65,15 +65,17 @@ def export(page, key, frames):
     cells = []
     for _ in range(frames):
         shot = Image.open(io.BytesIO(stage.screenshot())).convert("L")
-        # dim phosphor lines dither to noise at 1-bit: lift them first
-        shot = shot.point(lambda v: min(255, int(v * 1.9)))
         scale = min(CELL_W / shot.width, CELL_H / shot.height)
         shot = shot.resize(
             (int(shot.width * scale), int(shot.height * scale)), Image.LANCZOS
         )
         cell = Image.new("L", (CELL_W, CELL_H), 0)
         cell.paste(shot, ((CELL_W - shot.width) // 2, (CELL_H - shot.height) // 2))
-        cells.append(cell.convert("1"))  # Floyd-Steinberg
+        # THRESHOLD, not error-diffusion: line art wants crisp stable
+        # strokes. Floyd-Steinberg re-rolls per frame (shimmering sand,
+        # text chewed to mush); a fixed cutoff keeps black black, keeps
+        # the dim phosphor lines, and never flickers.
+        cells.append(cell.point(lambda v: 255 if v >= 55 else 0, mode="1"))
         page.evaluate("window.TombFigures._tickAll()")
     rows = (len(cells) + COLS - 1) // COLS
     grid = Image.new("1", (CELL_W * COLS, CELL_H * rows), 0)
