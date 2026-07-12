@@ -205,8 +205,40 @@ top verbs, and the room's leading nouns without any cranking.
 - **M5 -- systems**: wounds/slots, hints (the HINT menu is naturally
   crank-scrollable), death/epitaph + restart.
 - **M6 -- ship**: device soak, itch sideload build, Catalog submission.
+- **M7 (stretch) -- small masters**: legibility audit of the deck, compact
+  re-authoring of the worst offenders in the reel, two-tier registry, web
+  terminal picks compact on narrow screens (ships to iPhone web before and
+  independently of the Playdate build).
 
-## 10. Open questions for CCB
+## 10. Stretch: small masters (and the iPhone dividend)
+
+The figures pipeline in §5 *scales* the 640×400 cards down; the stretch goal
+is to *re-author* the ones that deserve it at small-screen-native
+composition. Scaling preserves geometry; it does not preserve READING. A
+card that reads on a monitor can turn to lint at 384×240: 10px labels become
+fuzz, one-pixel strokes alias away, five plinths become a picket fence.
+
+- **Small-master guidelines** (one card, one subject): minimum stroke weight
+  ~2.5 at reel scale (so it survives 0.6×), labels >= 13px and FEWER of
+  them, coarser stipple pitch (the 7px dot screen becomes 10-12px), one
+  focal subject with the busy-ness budget spent there, gauges and footers
+  merged into a single caption line.
+- **Audit first**: rank the deck by small-size legibility. Expected worst
+  offenders: 09 Silas (thread detail), 18 the seal (five plinths + gate +
+  ring), 00 the road (roster typography), 17-D (three sheets of captions);
+  expected fine as-is: the jars, the bats, the glowstone, the spawn trios
+  (big single subjects already).
+- **Single source holds**: compact variants live in the reel as tagged
+  sections (`data-variant="compact"`, same key), and `gen_figures.py`
+  exports a two-tier registry -- `META[key]` gains an optional compact
+  entry. The Playdate imagetable exporter (§5) prefers the compact master.
+- **The iPhone dividend**: this is not Playdate-gated. terminal.js picks the
+  compact variant whenever the figure container is narrow (< ~480 CSS px),
+  which fixes the same cards on phone-width web TODAY. Ship the compact
+  variants to the web as they are authored, ahead of any Playdate build --
+  the port polishes the game it came from.
+
+## 11. Open questions for CCB
 
 - Sound? The device has a synth API; the web terminal's beeps would port,
   and the crank could literally click like a ratchet when scrolling.
