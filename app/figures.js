@@ -2476,10 +2476,10 @@
       headGlyph(g, kind, 0);
       return g;
     };
-    [["BABOON", 0], ["HUMAN", 2], ["MANTIS", 4]].forEach(([kind, i]) =>
+    [["BABOON", 0], ["HUMAN", 1], ["MANTIS", 4]].forEach(([kind, i]) =>
       jar(kind).setAttribute("transform", `translate(${PLINTHS[i]} -29)`));
     const m1 = jar("FALCON"), m2 = jar("JACKAL");
-    const blinks = [1, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 26, y: 220,
+    const blinks = [2, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 26, y: 220,
       width: 52, height: 96, fill: "none", stroke: PH_DIM,
       "stroke-dasharray": "4 3" }));
     // the seal itself
@@ -2499,11 +2499,11 @@
       const T = t % 220;
       doWipe(T);
       typeOn(hdr, "THE SEAL ANSWERS THE JARS", T, 4, 1.4);
-      const x1 = T < 60 ? -60 : q6(-60 + Math.min(1, (T - 60) / 40) * 284);
+      const x1 = T < 60 ? -60 : q6(-60 + Math.min(1, (T - 60) / 40) * 380);
       const x2 = T < 80 ? 700 : q6(700 - Math.min(1, (T - 80) / 44) * 284);
       m1.setAttribute("transform", `translate(${x1} -29)`);
       m2.setAttribute("transform", `translate(${x2} -29)`);
-      const in1 = x1 >= 218, in2 = x2 <= 422;
+      const in1 = x1 >= 314, in2 = x2 <= 422;
       blinks[0].setAttribute("opacity", !in1 && t % 6 < 3 ? .8 : 0);
       blinks[1].setAttribute("opacity", !in2 && t % 6 < 3 ? .8 : 0);
       att.textContent = `ATTENDANCE: ${3 + in1 + in2} OF 5`;
@@ -2669,13 +2669,13 @@
       headGlyph(g, kind, 0);
       return g;
     };
-    [["BABOON", 0], ["HUMAN", 2], ["MANTIS", 4]].forEach(([kind, i]) =>
+    [["BABOON", 0], ["HUMAN", 1], ["MANTIS", 4]].forEach(([kind, i]) =>
       jar(kind).setAttribute("transform", `translate(${PLINTHS[i]} -29)`));
     // the two wanting: dashed ghosts over plinths that burn crimson from within
-    const blinks = [1, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 26, y: 220,
+    const blinks = [2, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 26, y: 220,
       width: 52, height: 96, fill: "none", stroke: PH_DIM,
       "stroke-dasharray": "4 3" }));
-    const embers = [1, 3].map(i => el(svg, "circle", { cx: PLINTHS[i], cy: 330,
+    const embers = [2, 3].map(i => el(svg, "circle", { cx: PLINTHS[i], cy: 330,
       r: 8, fill: CRIM, opacity: .3 }));
     // the seal, turning in place with the patience of a lock
     const sealRing = el(svg, "circle", { cx: 320, cy: 158, r: 50, fill: "none",
@@ -2702,7 +2702,7 @@
       });
       sealRing.setAttribute("stroke-width", 1.5 + (t % 6) / 4);
       att.textContent = "ATTENDANCE: 3 OF 5";
-      typeOn(foot, "TWO STAND EMPTY. THE STAIR IS SPOKEN FOR.", T, 40, 1.6);
+      typeOn(foot, "TWO STAND EMPTY. THE STAIR IS BARRED.", T, 40, 1.6);
     });
   });
 
