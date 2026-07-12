@@ -2009,7 +2009,7 @@ def build_game(seed=None):
     # docs/design/vaarn-style-guide.md.)
     wreck = things.Location(
         "The Caravan Wreck",
-        "The Tomblands road, at the hour after the Cacklemaw. A trade caravan lies "
+        "The Tomblands road, at the hour after the Cacklemaw attack. A trade caravan lies "
         "heeled over in the blue sand -- wind-wagon ribs of pale wood, cargo "
         "strewn and already sanding under -- and the dead have been arranged by "
         "the wind into attitudes of sleep. It is said the road to Gnomon is "
