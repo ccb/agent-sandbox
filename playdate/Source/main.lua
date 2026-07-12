@@ -79,8 +79,13 @@ local function drawCaptions(key, frame)
 					local k = math.floor((frame - rw.at) * (rw.cps or 2))
 					if k < #c.text2 then
 						value = string.sub(c.text2, 1, #c.text2 - k) .. "_"
+					elseif rw.retypeAt and frame < rw.retypeAt then
+						value = "" -- erased; the ledger holds its breath
 					else
-						local typed = k - #c.text2
+						local t0 = rw.retypeAt or rw.at
+						local typed = rw.retypeAt
+							and math.floor((frame - t0) * (rw.cps or 2))
+							or (k - #c.text2)
 						value = string.sub(rw.text2, 1, math.min(typed, #rw.text2))
 						if typed < #rw.text2 then value = value .. "_" end
 					end
