@@ -57,62 +57,68 @@ local function drawCaptions(key, frame)
 	for j = 1, #list do
 		local c = list[j]
 		if frame >= (c.from or 0) and (not c.to or frame < c.to) then
-			local full = c.text .. (c.text2 or "")
-			local shown = #full
-			if c.type then
-				shown = math.floor((frame - (c.from or 0)) * (c.cps or 2))
-			end
 			if c.text2 then
-				-- a LEDGER line: label, dot leader to the tab stop, value --
-				-- the leader is drawn to fit, so proportional type aligns
-				local label = string.sub(c.text, 1, math.min(shown, #c.text))
-				local value = shown > #c.text
-					and string.sub(c.text2, 1, shown - #c.text) or ""
-				if shown < #full then
-					if #value > 0 then value = value .. "_"
-					else label = label .. "_" end
+				-- a LEDGER line: label, then the dot leader typed one dot
+				-- at a time to the tab stop, then the value -- proportional
+				-- type, aligned column
+				local labelW = gfx.getTextSize(c.text)
+				local dotW = gfx.getTextSize(".")
+				local dotsX = c.x + labelW + 4
+				local nDots = math.max(0, math.floor((c.x2 - 6 - dotsX) / dotW))
+				local total = #c.text + nDots + #c.text2
+				local k = total
+				if c.type then
+					k = math.min(total,
+						math.floor((frame - (c.from or 0)) * (c.cps or 2)))
 				end
-				-- the REWRITE beat: backspace the old value one character
-				-- at a time, then retype the new one in its place
+				local label = string.sub(c.text, 1, math.min(k, #c.text))
+				local dots = string.rep(".", math.max(0,
+					math.min(k - #c.text, nDots)))
+				local value = string.sub(c.text2, 1,
+					math.max(0, k - #c.text - nDots))
+				local cursor = (k < #c.text and 1)
+					or (k < #c.text + nDots and 2)
+					or (k < total and 3) or 0
+				-- the REWRITE beat: backspace the value, hold, retype the
+				-- fate (the dots stay down)
 				local rw = c.rewrite
+				local boldLine = c.bold
 				if rw and frame >= rw.at then
-					local k = math.floor((frame - rw.at) * (rw.cps or 2))
-					if k < #c.text2 then
-						value = string.sub(c.text2, 1, #c.text2 - k) .. "_"
+					local rk = math.floor((frame - rw.at) * (rw.cps or 2))
+					if rk < #c.text2 then
+						value = string.sub(c.text2, 1, #c.text2 - rk)
+						cursor = 3
 					elseif rw.retypeAt and frame < rw.retypeAt then
-						value = "" -- erased; the ledger holds its breath
+						value = ""
+						cursor = 0
 					else
 						local t0 = rw.retypeAt or rw.at
-						local typed = rw.retypeAt
-							and math.floor((frame - t0) * (rw.cps or 2))
-							or (k - #c.text2)
-						value = string.sub(rw.text2, 1, math.min(typed, #rw.text2))
-						if typed < #rw.text2 then value = value .. "_" end
+						local typed = math.floor((frame - t0) * (rw.cps or 2))
+						value = string.sub(rw.text2, 1,
+							math.min(typed, #rw.text2))
+						cursor = typed < #rw.text2 and 3 or 0
 					end
-					if rw.bold then
-						label = "*" .. label .. "*"
-						if #value > 0 then value = "*" .. value .. "*" end
-					end
+					if rw.bold then boldLine = true end
 				end
-				if c.bold then
+				if cursor == 1 then label = label .. "_"
+				elseif cursor == 2 then dots = dots .. "_"
+				elseif cursor == 3 then value = value .. "_" end
+				if boldLine then
 					label = "*" .. label .. "*"
+					if #dots > 0 then dots = "*" .. dots .. "*" end
 					if #value > 0 then value = "*" .. value .. "*" end
 				end
 				gfx.drawText(label, c.x, c.y)
-				if shown >= #c.text then
-					local lw = gfx.getTextSize(string.sub(label, 1, -1))
-					local dots = ""
-					local dx = c.x + lw + 4
-					while dx + 5 < c.x2 - 4 do
-						dots = dots .. "."
-						dx = dx + 5
-					end
-					gfx.drawText(dots, c.x + lw + 4, c.y)
-					if #value > 0 then gfx.drawText(value, c.x2, c.y) end
-				end
+				if #dots > 0 then gfx.drawText(dots, dotsX, c.y) end
+				if #value > 0 then gfx.drawText(value, c.x2, c.y) end
 			else
-				local txt = string.sub(full, 1, shown)
-				if shown < #full then txt = txt .. "_" end
+				local shown = #c.text
+				if c.type then
+					shown = math.min(#c.text,
+						math.floor((frame - (c.from or 0)) * (c.cps or 2)))
+				end
+				local txt = string.sub(c.text, 1, shown)
+				if shown < #c.text then txt = txt .. "_" end
 				if c.bold then txt = "*" .. txt .. "*" end
 				if c.align == "center" then
 					gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.center)
