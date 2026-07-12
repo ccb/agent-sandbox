@@ -271,6 +271,82 @@ function BuildTomb(seed)
 	cylinders:alias("cylinder", "mummies", "guards")
 	warriors:add(cylinders)
 
+	-- the four cylinders, individually: nouns on the wheel, each with its
+	-- own temperament under a crowbar opinion
+	local cerulean = Item("cerulean cylinder", "the cerulean cylinder, burst",
+		"The burst one: gel dried to amber lace, its guard slumped where "
+		.. "duty left him. His kit scattered when it went -- worth a "
+		.. "SEARCH of the cylinders.")
+	cerulean:alias("cerulean")
+	cerulean:set("onBreak", function(game)
+		game:say("It is already burst. You kick a shard, for punctuation.")
+	end)
+	warriors:add(cerulean)
+
+	local amber = Item("amber cylinder", "the amber cylinder, sealed",
+		"A guard-mummy stands sealed in amber gel, armed as in life, "
+		.. "provisioned as for a march.")
+	amber:alias("amber")
+	amber:set("onBreak", function(game, thing)
+		if thing:get("broken") then
+			game:say("Its pieces are done breaking.")
+			return
+		end
+		thing:set("broken", true)
+		thing.description = "the amber cylinder, broken"
+		thing.examineText = "Crazed plexiglas and drying gel. The guard "
+			.. "slumps; his marching kit does not march."
+		local rations = Item("preserved rations", "a guard's preserved rations",
+			"Autarchy field rations, gel-sealed four thousand years. "
+			.. "Technically food. Philosophically a dare.")
+		rations:alias("rations")
+		rations:set("gettable", true)
+		warriors:add(rations)
+		game:say("The amber cylinder gives on the second blow -- gel "
+			.. "sheets down, the guard slumps, and his marching kit "
+			.. "spills at your feet. The crash rolls down the halls.")
+	end)
+	warriors:add(amber)
+
+	local viridian = Item("viridian cylinder", "the viridian cylinder, sealed",
+		"A guard-mummy in viridian gel, spear still shouldered, four "
+		.. "thousand years into the watch.")
+	viridian:alias("viridian")
+	viridian:set("onBreak", function(game, thing)
+		if thing:get("broken") then
+			game:say("Its pieces are done breaking.")
+			return
+		end
+		thing:set("broken", true)
+		thing.description = "the viridian cylinder, broken"
+		thing.examineText = "The guard finished slumping; the gel is "
+			.. "finishing drying. The watch is over."
+		game:say("The viridian cylinder shatters; gel gouts across the "
+			.. "floor and the guard folds out of his watch at last. The "
+			.. "crash rolls down the halls.")
+	end)
+	warriors:add(viridian)
+
+	local orange = Item("orange cylinder", "the orange cylinder, sealed -- and wrong",
+		"The gel in this one has gone ORANGE, and it is not entirely "
+		.. "still. Whatever the guard is keeping now, it is not the watch.")
+	orange:alias("orange")
+	orange:set("onBreak", function(game, thing)
+		if thing:get("broken") then
+			game:say("Nothing left in it but the smell of bad decisions.")
+			return
+		end
+		thing:set("broken", true)
+		thing.description = "the orange cylinder, broken -- a mistake"
+		thing.examineText = "Burst plexiglas rimed with orange dust. The "
+			.. "guard inside is mostly fungus now, and glad of the air."
+		game:say("The orange cylinder cracks -- and EXHALES. A gout of "
+			.. "spores takes you full in the face.")
+		game:wound("Spore-Bitten", "the orange dust finds your lungs and "
+			.. "files a claim.")
+	end)
+	warriors:add(orange)
+
 	local blade = Item("prismatic blade", "a guard's prismatic blade",
 		"An Autarchy guard's blade, its edge fracturing the light into "
 		.. "colours. It wants using.")

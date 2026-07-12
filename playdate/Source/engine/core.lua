@@ -535,6 +535,15 @@ local sneakVerb = verb("sneak", 1, function(g)
 end, "creep")
 sneakVerb.template = { "direction" }
 
+verb("break", 1, function(g, thing)
+	local hook = thing:get("onBreak")
+	if not hook then
+		g:say("The " .. thing.name .. " is sturdier than your opinion of it.")
+		return
+	end
+	hook(g, thing)
+end, "smash", "shatter")
+
 verb("pry", 1, function(g, thing)
 	local hook = thing:get("onPried")
 	if not hook then
@@ -747,8 +756,8 @@ end
 Engine.pools = {
 	-- arming yourself mid-fight is THE move in the warriors hall: take and
 	-- search stay on the wheel (the audit caught their absence)
-	combat = { "attack", "sneak", "say", "read", "pry", "take", "search",
-		"throw", "examine", "look", "douse", "inventory", "hint" },
+	combat = { "attack", "sneak", "say", "read", "pry", "break", "take",
+		"search", "throw", "examine", "look", "douse", "inventory", "hint" },
 }
 
 -- Combat: something hostile shares the room and is either visible to you

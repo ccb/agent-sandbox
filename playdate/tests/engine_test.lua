@@ -434,3 +434,27 @@ ok(g.wounds == 0, "the sneak slips past the coiled glass")
 g:doCommand("look")
 ok(g.wounds == 1, "the next loud act springs it")
 print("sneak: all green")
+
+-- ---------------------------------------------------------------- break
+g, lines = game()
+g:doCommand("search merchant")
+g:doCommand("take glowstone")
+g:doCommand("light glowstone")
+g:doCommand("go north")
+g:doCommand("go east")
+sug = g:suggestions()
+for _, cyl in ipairs({ "cylinders", "cerulean cylinder", "amber cylinder",
+	"viridian cylinder", "orange cylinder" }) do
+	ok(has(sug.nouns, cyl), "on the wheel: " .. cyl)
+end
+ok(has(sug.verbs, "break"), "break is on the combat wheel too")
+g:doCommand("break amber cylinder")
+ok(saw(lines, "marching kit spills"), "the amber cylinder gives up its kit")
+g:doCommand("take preserved rations")
+ok(g.player:carrying("preserved rations") ~= nil, "the rations are real")
+local wB = g.wounds
+g:doCommand("break orange cylinder")
+ok(g.wounds == wB + 1, "the orange cylinder files a claim")
+g:doCommand("break wreck")
+ok(saw(lines, "sturdier than your opinion"), "unbreakables refuse politely")
+print("break: all green")
