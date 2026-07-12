@@ -44,10 +44,37 @@ function BuildTomb(seed)
 		.. "close -- and low down, near the floor, something breathes "
 		.. "wetly, in no hurry.")
 
+	local hounds = g:room("Hall of Hounds",
+		"A long gallery dominated by a gel tank, its glass sweating. "
+		.. "Inside floats a cyborg hound, perfectly preserved. Something "
+		.. "small and two-legged twitches in the far dark, listening.")
+	hounds:set("dark", true)
+	hounds:set("darkBlurb",
+		"Dark, and close. Glass somewhere, sweating. And a small dry "
+		.. "twitching, like a metronome deciding.")
+
+	local summit = g:room("The Summit",
+		"The tomb's crown, open to the horizon's molten line. An ossified "
+		.. "mystic sits here in the lotus posture, fungus weeping from his "
+		.. "eyes and mouth, down into a chimney bored through the crown.")
+
+	local chimney = g:room("The Fungal Chimney",
+		"A throat of stone furred floor-to-crown with orange growth. It "
+		.. "breathes. Somewhere in the fur, something long and patient "
+		.. "does not move.")
+	chimney:set("dark", true)
+	chimney:set("darkBlurb",
+		"A throat of stone, utterly dark, furred with something soft that "
+		.. "your fingers regret. The air moves like slow breath.")
+
 	exterior:connect("north", youth, "south")
 	exterior:connect("east", warriors, "west")
-	exterior.blocks.up = "The climb waits for surer milestones."
+	warriors:connect("east", hounds, "west")
+	exterior:connect("up", summit, "down")
+	summit:connect("in", chimney, "out")
 	exterior:travelAlias("warrior door", "east"):travelAlias("enter warrior", "east")
+	summit:travelAlias("chimney", "in"):travelAlias("enter chimney", "in")
+		:travelAlias("descend", "in")
 
 	-- the playtesters' phrasings (mirrors the Python direction aliases)
 	wreck:travelAlias("enter wagon", "in"):travelAlias("wagon", "in")
@@ -347,7 +374,17 @@ function BuildTomb(seed)
 			.. 'listen. Step softly."')
 	end)
 	silas:set("onGift", function(game, item)
-		if item.name == "dates" then
+		if item.name == "friend's fungus" then
+			game.player:remove(item)
+			silas:add(item)
+			game:award("archivist_dosed", 5,
+				"[+5 -- the archivist, agreeable]")
+			game:say('Silas takes the pouch with both hands, and for the '
+				.. 'first time turns from the wall. "The mystic\'s own. '
+				.. 'You climbed for this." He doses the wafer-port under '
+				.. 'his jaw, and his shoulders settle an inch. "Ask me '
+				.. 'anything. Better: ask the lattice."')
+		elseif item.name == "dates" then
 			game:say('Silas declines with a small bow. "I read the dead, '
 				.. 'not the dinner."')
 		else
@@ -357,13 +394,164 @@ function BuildTomb(seed)
 	end)
 	memory:addCharacter(silas)
 
+	-- ------------------------------------------------------ hall of hounds
+	local tank = Item("gel tank", "the sweating gel tank",
+		"Preservative gel, faintly luminous. The hound inside is sleek as "
+		.. "a racing dog and half chrome. It is not coming out; it is not "
+		.. "trying to.")
+	tank:alias("tank", "glass")
+	hounds:add(tank)
+
+	local hound = Item("cyborg hound", "a cyborg hound, gel-slick, preserved",
+		"One of An-Rah's coursers: servo hocks, chrome ribs, glass lenses, "
+		.. "the rest of it dog. Heavy as a rolled carpet.")
+	hound:alias("hound", "dog")
+	tank:add(hound)
+
+	local servo = Item("sparking servo", "a sparking servo",
+		"A fist-sized actuator out of the hound's chest, still holding "
+		.. "charge. Strike its leads and it spits fat blue sparks.")
+	servo:alias("servo")
+	servo:set("gettable", true)
+	servo:set("hidden", true)
+	hound:add(servo)
+
+	local jackalJar = Item("jackal jar", "a jackal-headed canopic jar",
+		"A sealed jar with a jackal's head, ears swept back along the "
+		.. "lid. Something folded shifts inside.")
+	jackalJar:set("gettable", true)
+
+	local brain = Engine.Character("spawn of brain",
+		"a fungal brain on two small legs, jackal jar for a head, listening",
+		"A fungal brain that walks on two small legs, the jackal canopic "
+		.. "jar worn as a hat. No eyes, and it does not appear to want "
+		.. "any; it twitches toward every noise, precise as a metronome.")
+	brain:alias("spawn", "brain")
+	brain:set("hostile", true)
+	brain:set("vigor", 2)
+	brain:set("struckText", "The blade parts a lobe; the brain staggers, "
+		.. "reorients by ear, and keeps coming.")
+	brain:set("koText", "The last cut is the last. The brain folds, and "
+		.. "the jackal jar rolls to your feet and settles upright.")
+	brain:set("onDeath", function(game)
+		hounds:add(jackalJar)
+		hounds.description = "A long gallery, a sweating gel tank, a "
+			.. "preserved hound. The listener lies folded; the hall keeps "
+			.. "only the tank's slow drip now."
+		hounds:set("darkBlurb", "Dark, and close. Glass somewhere, "
+			.. "sweating. Nothing listens but you.")
+		game:award("brain_quelled", 5, "[+5 -- the spawn of brain is quelled]")
+	end)
+	hounds:addCharacter(brain)
+
+	jackalJar:set("onTaken", function(game)
+		game:award("jackal_jar", 5, "[+5 -- the jackal jar, claimed]")
+	end)
+
+	g:addTrigger("brain_menace", function(game)
+		return game.player.location == hounds and not brain:get("dead")
+	end, function(game)
+		local n = (hounds:get("tick") or 0) + 1
+		hounds:set("tick", n)
+		brain:set("aware", true)
+		if n == 1 then
+			game:say("The twitching stops. Then it starts toward you, "
+				.. "precise as a metronome.")
+		elseif n % 2 == 1 then
+			game:wound("Head-Butted", "the jar-helmed thing rams you at "
+				.. "knee height, harder than it has any right to.")
+		else
+			game:say("Small feet, counting your position.")
+		end
+	end, true)
+
+	g:addTrigger("brain_calm", function(game)
+		return (hounds:get("tick") or 0) > 0
+			and (game.player.location ~= hounds or brain:get("dead"))
+	end, function(_game)
+		hounds:set("tick", 0)
+		brain:set("aware", nil)
+	end, true)
+
+	-- ------------------------------------------------------------ summit
+	local mystic = Item("ossified corpse", "an ossified mystic",
+		"A corpse turned to stone mid-meditation, orange fungus weeping "
+		.. "from its eyes and mouth -- the wellspring, it seems, of all "
+		.. "the rot below. Its clasped hands hold their shape around "
+		.. "something.")
+	mystic:alias("mystic", "corpse", "statue")
+	summit:add(mystic)
+
+	local fungus = Item("friend's fungus", "a pouch of pink fungus",
+		"A pouch of pink fungus, soft and faintly warm. The Autarchy fed "
+		.. "it to guests of state: whoever ingests it becomes extremely "
+		.. "agreeable, and stays that way for hours.")
+	fungus:alias("fungus", "pouch")
+	fungus:set("gettable", true)
+	fungus:set("hidden", true)
+	mystic:add(fungus)
+
+	-- ----------------------------------------------------------- chimney
+	local growth = Item("orange growth", "orange growth, floor to crown",
+		"The fur of the chimney: soft, warm, and wrong. It flinches from "
+		.. "your light by a finger's width.")
+	growth:alias("growth", "fur")
+	chimney:add(growth)
+
+	local centipede = Engine.Character("glass centipede",
+		"a glass centipede, four feet of translucent patience",
+		"Four feet of centipede in a carapace like poured glass -- you "
+		.. "see it mostly by what bends behind it. It does not move while "
+		.. "you watch.")
+	centipede:alias("centipede", "glass")
+	centipede:set("hostile", true)
+	centipede:set("vigor", 1)
+	centipede:set("koText", "The blade finds it mid-flow: the centipede "
+		.. "shatters along its length like a dropped icicle.")
+	centipede:set("onDeath", function(game)
+		chimney.description = "A throat of stone furred with orange "
+			.. "growth. Glass litter glitters in the fur where the "
+			.. "centipede came apart."
+		game:award("centipede_quelled", 5, "[+5 -- the centipede, answered]")
+	end)
+	chimney:addCharacter(centipede)
+
+	g:addTrigger("centipede_springs", function(game)
+		return game.player.location == chimney
+			and not centipede:get("sprung")
+			and not centipede:get("dead")
+	end, function(game)
+		centipede:set("sprung", true)
+		centipede:set("aware", true)
+		game:say("The growth beside you bends wrong -- and four feet of "
+			.. "glass uncoils out of it, faster than the eye wants to "
+			.. "allow.")
+		game:wound("Centipede Venom", "twin punctures in the calf; the "
+			.. "venom goes in cold.")
+	end, false)
+
+	g:addTrigger("centipede_presses", function(game)
+		return game.player.location == chimney
+			and centipede:get("sprung") == true
+			and not centipede:get("dead")
+	end, function(game)
+		local n = (chimney:get("coil") or 0) + 1
+		chimney:set("coil", n)
+		if n % 2 == 0 then
+			game:wound("Centipede Venom", "it strikes again from the fur, "
+				.. "cold and exact.")
+		else
+			game:say("A ripple crosses the growth: it is repositioning.")
+		end
+	end, true)
+
 	-- ------------------------------------------------ canopic jars (slice)
 	local sphere -- built after the hall; the plinth hook closes over it
 	local canopic = g:room("Hall of the Canopic Jars",
 		"Five plinths ring a central stair in a pentagon of dressed stone. "
 		.. "Three jars stand answered -- baboon, human, mantis. The falcon "
-		.. "plinth stands empty, lit crimson, its carved talons cupped "
-		.. "around the shape of something lost.")
+		.. "and jackal plinths stand empty, lit crimson: cupped talons and "
+		.. "parted jaws, each around the shape of something lost.")
 	memory:connect("east", canopic, "west")
 
 	local seated = Item("jars", "three seated canopic jars",
@@ -371,6 +559,32 @@ function BuildTomb(seed)
 		.. "glow a settled white.")
 	seated:alias("three jars", "seated jars")
 	canopic:add(seated)
+
+	local function sealCheck(game)
+		local falconHome, jackalHome = false, false
+		for _, it in ipairs(canopic.contents) do
+			if it.name == "falcon plinth" then
+				for _, c in ipairs(it.contents) do
+					if c.name == "falcon jar" then falconHome = true end
+				end
+			elseif it.name == "jackal plinth" then
+				for _, c in ipairs(it.contents) do
+					if c.name == "jackal jar" then jackalHome = true end
+				end
+			end
+		end
+		if falconHome and jackalHome then
+			game:say("The last jar settles -- and every plinth answers at "
+				.. "once, crimson steadying to white around the ring. Above "
+				.. "the stair, stone parts from stone with a sigh. The way "
+				.. "UP stands open.")
+			game:award("seal", 10, "[+10 -- the seal answers the jars]")
+			canopic.description = "Five plinths, five jars, one pentagon "
+				.. "of dressed stone -- all of it answered, all of it "
+				.. "white. The stair above stands open on the dark."
+			canopic:connect("up", sphere, "down")
+		end
+	end
 
 	local plinth = Item("falcon plinth", "the empty falcon plinth",
 		"Carved talons, cupped and waiting. The crimson light over it "
@@ -384,18 +598,31 @@ function BuildTomb(seed)
 			return
 		end
 		game:say("The jar settles into the talons like a word into a "
-			.. "sentence. The crimson steadies to white -- and above the "
-			.. "stair, stone parts from stone with a sigh. The way UP "
-			.. "stands open.")
-		game:award("seal", 10, "[+10 -- the seal answers the jars]")
+			.. "sentence. The plinth's crimson steadies to white.")
 		plinth.examineText = "The falcon jar sits answered in its talons, "
 			.. "the light gone white. The carving reads as finished."
-		canopic.description = "Five plinths, five jars, one pentagon of "
-			.. "dressed stone -- all of it answered, all of it white. The "
-			.. "stair above stands open on the dark."
-		canopic:connect("up", sphere, "down")
+		sealCheck(game)
 	end)
 	canopic:add(plinth)
+
+	local jplinth = Item("jackal plinth", "the empty jackal plinth",
+		"Carved stone jaws, parted around an absence, lit crimson.")
+	jplinth:alias("jackal stand")
+	jplinth:set("onReceive", function(game, item)
+		if item.name ~= "jackal jar" then
+			game:say("The stone jaws refuse it. They were parted for one "
+				.. "thing.")
+			jplinth:remove(item)
+			game.player:add(item)
+			return
+		end
+		game:say("The jar settles between the jaws, and they read as "
+			.. "closed at last. The plinth's crimson steadies to white.")
+		jplinth.examineText = "The jackal jar sits answered in the stone "
+			.. "jaws, the light gone white."
+		sealCheck(game)
+	end)
+	canopic:add(jplinth)
 
 	-- --------------------------------------------------- the burial sphere
 	sphere = g:room("Burial Sphere of Nassak An-Rah",
@@ -569,14 +796,39 @@ function BuildTomb(seed)
 		},
 		available = function(_) return warriors.visited end,
 		resolved = function(_) return spawn:get("dead") == true end })
-	g:addHint({ key = "plinth", question = "What is the falcon jar for?",
+	g:addHint({ key = "plinth", question = "What are the jars for?",
 		levels = {
-			"The empty plinth's talons were carved for one thing.",
-			"The spawn wears it as a hat. Quell it, TAKE FALCON JAR, and "
-				.. "PUT FALCON JAR ON FALCON PLINTH.",
+			"Two plinths burn crimson: cupped talons, parted jaws. Each "
+				.. "was carved for one thing.",
+			"The spawns wear them as hats. Quell both, TAKE the jars, and "
+				.. "PUT each ON its matching plinth.",
 		},
 		available = function(_) return canopic.visited end,
 		resolved = function(game) return game.won == true end })
+
+	g:addHint({ key = "listener", question = "Something small counts my steps.",
+		levels = {
+			"It hunts like its sibling in the warriors' hall.",
+			"Light up, and the blade you already carry answers it. It "
+				.. "wears what the jackal plinth wants.",
+		},
+		available = function(_) return hounds.visited end,
+		resolved = function(_) return brain:get("dead") == true end })
+	g:addHint({ key = "chimney", question = "The chimney bit me.",
+		levels = {
+			"It is faster than you, once. Then it is glass.",
+			"With light raised, one clean blow: ATTACK CENTIPEDE.",
+		},
+		available = function(_) return chimney.visited end,
+		resolved = function(_) return centipede:get("dead") == true end })
+	g:addHint({ key = "mystic", question = "The stone man on the summit holds something.",
+		levels = {
+			"His hands kept their shape around it for a reason.",
+			"SEARCH the ossified corpse. The archivist below would thank "
+				.. "you for what it holds.",
+		},
+		available = function(_) return summit.visited end,
+		resolved = function(game) return game.scoredKeys["archivist_dosed"] end })
 
 	g:addHint({
 		key = "horror",
@@ -590,7 +842,7 @@ function BuildTomb(seed)
 	})
 
 	-- ------------------------------------------------------------ start
-	g.maxScore = 50
+	g.maxScore = 70
 	g.player.location = wreck
 	wreck.visited = true
 	return g
