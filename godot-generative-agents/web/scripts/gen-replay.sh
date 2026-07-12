@@ -8,9 +8,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"           # .../godot-generative-agents/web
-GODOT_PROJECT="$(cd "$WEB_DIR/.." && pwd)"         # .../godot-generative-agents
-REPO_ROOT="$(cd "$GODOT_PROJECT/.." && pwd)"
-SRC_JSON="$GODOT_PROJECT/maps/penn_replay.json"
+GG_DIR="$(cd "$WEB_DIR/.." && pwd)"                # .../godot-generative-agents
+REPO_ROOT="$(cd "$GG_DIR/.." && pwd)"
+# The bake writes into the Godot project (godot/, split out in #400).
+SRC_JSON="$GG_DIR/godot/maps/penn_replay.json"
 DEST_JSON="$WEB_DIR/public/replay/penn_replay.json"
 
 echo "==> Running the Penn sim…"
