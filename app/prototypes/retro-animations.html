@@ -2068,12 +2068,18 @@
       const cx = 370 + ph2 * 110;                            // where it points
       const apex = [104, 250];
       const half = 72;
+      // the beams ARE the boundary (CCB): the reveal is bounded by the two
+      // drawn rays up to the crown, vertical only beneath the beam line --
+      // so the left beam restores stone sweeping right, reveals sweeping left
+      const k40 = (apex[1] - 52) / (apex[1] - 120);
+      const lx40 = apex[0] + (cx - half - apex[0]) * k40;
+      const rx40 = apex[0] + (cx + half - apex[0]) * k40;
       wedge.setAttribute("points",
-        `${apex[0]},${apex[1]} ${cx - half},40 ${cx + half},40 ` +
-        `${cx + half},306 ${cx - half},306`);
+        `${apex[0]},${apex[1]} ${lx40},52 ${rx40},52 ${cx + half},120 ` +
+        `${cx + half},306 ${cx - half},306 ${cx - half},120`);
       [bTop, bBot].forEach((L, i) => {
         L.setAttribute("x1", apex[0]); L.setAttribute("y1", apex[1]);
-        L.setAttribute("x2", cx + (i ? half : -half)); L.setAttribute("y2", 120);
+        L.setAttribute("x2", i ? rx40 : lx40); L.setAttribute("y2", 52);
         L.setAttribute("stroke", HUES[(t + i * 4) % HUES.length]);
         L.setAttribute("opacity", .8);
       });
