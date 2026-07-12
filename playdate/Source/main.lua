@@ -243,6 +243,10 @@ local function pressA()
 	if #items == 0 then return end
 	pos = ((pos - 1) % #items) + 1
 	local it = items[pos]
+	if game.hintMode then
+		runCommand(it.word) -- topics answer to a single word
+		return
+	end
 	if it.lane == EXITS_LANE then
 		if #command == 0 then
 			lastWord[EXITS_LANE] = it.word

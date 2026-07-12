@@ -397,6 +397,38 @@ function BuildTomb(seed)
 	end)
 	canopic:add(plinth)
 
+	-- ------------------------------------------------------------- hints
+	-- The booklet lists only puzzles the player has MET and not yet beaten.
+	g:addHint({ key = "light", question = "How do I see anything down here?",
+		levels = {
+			"The caravan did not die carrying nothing.",
+			"SEARCH the dead merchant; TAKE and LIGHT the glowstone.",
+		},
+		resolved = function(game) return game.scoredKeys["first_light"] end })
+	g:addHint({ key = "bats", question = "What do I do about the bats?",
+		levels = {
+			"They hate your light. They love something else more.",
+			"The wagon's crates hold dates. THROW DATES in the Hall of Youth.",
+		},
+		available = function(_) return youth.visited end,
+		resolved = function(_) return youth:get("fed") end })
+	g:addHint({ key = "spawn", question = "The thing in the dark keeps hitting me.",
+		levels = {
+			"It hunts sound, not light. Standing still is not quiet enough.",
+			"The burst cylinder holds an edge. With light raised: SEARCH "
+				.. "CYLINDERS, TAKE BLADE, ATTACK.",
+		},
+		available = function(_) return warriors.visited end,
+		resolved = function(_) return spawn:get("dead") == true end })
+	g:addHint({ key = "plinth", question = "What is the falcon jar for?",
+		levels = {
+			"The empty plinth's talons were carved for one thing.",
+			"The spawn wears it as a hat. Quell it, TAKE FALCON JAR, and "
+				.. "PUT FALCON JAR ON FALCON PLINTH.",
+		},
+		available = function(_) return canopic.visited end,
+		resolved = function(game) return game.won == true end })
+
 	-- ------------------------------------------------------------ start
 	g.maxScore = 40
 	g.player.location = wreck

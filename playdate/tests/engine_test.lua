@@ -310,3 +310,42 @@ ok(g.over, "the spawn finishes the careless")
 ok(g.figuresShown and g.figuresShown["epitaph"], "death cues the stone")
 
 print("canopic + cues: all green")
+
+-- ------------------------------------------------------- the hint booklet
+g, lines = game()
+g:doCommand("hint")
+ok(saw(lines, "see anything down here"), "the light question is always met")
+ok(not saw(lines, "falcon jar for"), "unmet puzzles stay off the menu")
+sug = g:suggestions()
+ok(has(sug.verbs, "light") and has(sug.verbs, "resume"),
+	"hint mode fills the wheel with topics")
+local t0 = g.turn
+g:doCommand("light")
+ok(saw(lines, "did not die carrying nothing"), "one ask, one level")
+ok(not saw(lines, "SEARCH the dead merchant"), "level two stays unbought")
+g:doCommand("light")
+ok(saw(lines, "SEARCH the dead merchant"), "the second ask buys it")
+ok(g.turn == t0, "the booklet is free: no turns passed")
+ok(g.hintsTaken == 2, "the game owns up to the hints")
+g:doCommand("resume")
+ok(not g.hintMode, "resume closes the booklet")
+
+-- solved topics leave; replay restores the reveals
+g:doCommand("search merchant")
+g:doCommand("take glowstone")
+g:doCommand("light glowstone")
+g:doCommand("hint")
+ok(not saw(lines, "see anything down here (")
+	and g:openHints()[1].key ~= "light", "solved topics leave the menu")
+g:doCommand("resume")
+local snap3 = g:snapshot()
+local g4 = Engine.restore(function(seed)
+	local gg = BuildTomb(seed)
+	gg.out = function() end
+	return gg
+end, snap3)
+ok(g4.hintProgress["light"] == 2, "replay restores the reveals")
+ok(g4.hintsTaken == 2, "replay restores the honesty counter")
+ok(not g4.hintMode, "replay closes the booklet it opened")
+
+print("hints: all green")

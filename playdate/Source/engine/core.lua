@@ -155,6 +155,12 @@ function Game:init(seed)
 	self.over = false
 	self.wounds = 0
 	self.triggers = {}
+	-- InvisiClues, in-engine (ported from the Python hints.py): topics the
+	-- player has MET and not yet beaten; each ask reveals one more level.
+	self.hints = {}
+	self.hintProgress = {}
+	self.hintsTaken = 0
+	self.hintMode = false
 	self.out = function(_text) end -- the surface's renderer hooks this
 	self.player = Character("you", "you, a scavenger of the Tomblands")
 end
@@ -175,6 +181,21 @@ function Game:runTriggers()
 			if self.over then return end
 		end
 	end
+end
+
+function Game:addHint(h)
+	self.hints[#self.hints + 1] = h
+end
+
+function Game:openHints()
+	local out = {}
+	for i = 1, #self.hints do
+		local h = self.hints[i]
+		local met = (h.available == nil) or h.available(self)
+		local beaten = h.resolved ~= nil and h.resolved(self)
+		if met and not beaten then out[#out + 1] = h end
+	end
+	return out
 end
 
 -- Illustration cues (the FIGURE channel, mirrored from the Python
@@ -494,6 +515,24 @@ templateVerb("give", { "noun", "to", "noun" }, function(g, item, target)
 	end
 end, "offer")
 
+local hintVerb = verb("hint", 0, function(g)
+	local open = g:openHints()
+	if #open == 0 then
+		g:say("Nothing you have met wants a hint right now.")
+		return
+	end
+	g:say("The questions worth asking, so far:")
+	for i = 1, #open do
+		local h = open[i]
+		local done = g.hintProgress[h.key] or 0
+		local gauge = done > 0 and ("  (" .. done .. "/" .. #h.levels .. ")") or ""
+		g:say("  " .. string.upper(h.key) .. " -- " .. h.question .. gauge)
+	end
+	g:say("(Pick a question from the wheel; RESUME returns to the tomb.)")
+	g.hintMode = true
+end, "hints")
+hintVerb.free = true -- consulting the booklet costs no turn
+
 verb("inventory", 0, function(g)
 	if #g.player.contents == 0 then
 		g:say("You carry nothing but your reputation.")
@@ -513,6 +552,40 @@ function Game:doCommand(line)
 	self:say("> " .. line)
 	if self.over then
 		self:say("The expedition is over. (Menu: new game.)")
+		return false
+	end
+	-- the hint booklet: journaled (replay restores the reveals) but FREE --
+	-- no turn passes, nothing in the tomb gets to move
+	if self.hintMode then
+		self.journal[#self.journal + 1] = line
+		if line == "resume" or line == "done" or line == "back" then
+			self.hintMode = false
+			self:say("You close the booklet. The tomb resumes.")
+			return true
+		end
+		local open = self:openHints()
+		for i = 1, #open do
+			local h = open[i]
+			if h.key == line then
+				local done = self.hintProgress[h.key] or 0
+				if done < #h.levels then
+					done = done + 1
+					self.hintProgress[h.key] = done
+					self.hintsTaken = self.hintsTaken + 1
+				end
+				self:say(string.upper(h.key) .. " -- " .. h.question)
+				for l = 1, done do
+					self:say("  " .. l .. ". " .. h.levels[l])
+				end
+				if done >= #h.levels then
+					self:say("(That is the whole of it.)")
+				else
+					self:say("(Ask again for a stronger nudge.)")
+				end
+				return true
+			end
+		end
+		self:say("No open question matches that. (RESUME to return.)")
 		return false
 	end
 	local room = self.player.location
@@ -580,6 +653,10 @@ function Game:doCommand(line)
 		end
 	end
 	self.journal[#self.journal + 1] = line
+	if v.free then
+		v.run(self, args[1], args[2])
+		return true
+	end
 	self.turn = self.turn + 1
 	v.run(self, args[1], args[2])
 	self:runTriggers()
@@ -614,6 +691,13 @@ end
 -- accept. Verb order is fixed (ranking doc section 8); noun order is scope
 -- order (the fiction's own salience).
 function Game:suggestions()
+	if self.hintMode then
+		local verbs = {}
+		local open = self:openHints()
+		for i = 1, #open do verbs[#verbs + 1] = open[i].key end
+		verbs[#verbs + 1] = "resume"
+		return { exits = {}, verbs = verbs, nouns = {} }
+	end
 	local nouns, seen = {}, {}
 	local things = self:scope()
 	for i = 1, #things do
