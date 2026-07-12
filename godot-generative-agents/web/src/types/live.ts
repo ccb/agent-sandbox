@@ -1,7 +1,10 @@
-// Types for the live backend's change feed (backend/README.md "The feed: one
-// log, two doors"). The companion only unpacks the LLM-request stream (#398);
-// frames and statuses exist on the wire but the Godot canvas doesn't need them
-// here — it plays the baked replay.
+// Types for the live backend's HTTP surface (backend/README.md "The feed: one
+// log, two doors"): the GET /live handshake, the GET /events change feed
+// (llm_call + frame + status records), and GET /agents/{name}/memory. The
+// companion's agents view follows all of these when opened with ?api=; only
+// the Godot canvas stays replay-driven — it plays the baked file.
+
+import type { Frame, MemoryRecord, ReplayMeta } from "./replay";
 
 // The per-LLM-request record the backend's terminal monitor keeps
 // (backend/llm_monitor.py: a flattened CallRecord plus the monitor's extras),
@@ -27,12 +30,19 @@ export interface LlmCallRecord {
   latency_ms: number | null;
 }
 
-// One retained record from GET /events. `kind` is the discriminator; only
-// `engine` records carry an `event` payload.
+// One retained record from GET /events. `kind` is the discriminator:
+// - "frame": `step` + `agents` (persona name → AgentFrame, the live
+//   counterpart of `replay.frames[step]`);
+// - "status": the run-control state after a start/pause/resume/reset;
+// - "engine": an engine event, payload in `event` (llm_call rows and friends).
 export interface FeedRecord {
   cursor: number;
   kind: string;
   step?: number;
+  agents?: Frame;
+  reason?: string;
+  running?: boolean;
+  paused?: boolean;
   event?: { kind?: string } & Record<string, unknown>;
 }
 
@@ -41,4 +51,31 @@ export interface EventsResponse {
   latest_cursor: number;
   oldest_cursor: number | null;
   events: FeedRecord[];
+}
+
+// The live meta blob GET /live passes through: the replay-meta shape minus
+// `steps` (a running sim doesn't know its length up front).
+export type LiveMeta = Omit<ReplayMeta, "steps"> & { steps?: number };
+
+// GET /live — the handshake a live client reads once before following the
+// feed. With no live loop injected: `enabled: false, meta: null`.
+export interface LiveStatusResponse {
+  enabled: boolean;
+  running: boolean;
+  paused: boolean;
+  step: number | null;
+  cursor: number;
+  tick_seconds: number | null;
+  meta: LiveMeta | null;
+}
+
+// GET /agents/{name}/memory — the live counterpart of the baked
+// `memory_streams[name]`: same MemoryRecord entries, byte-identical (#298).
+// `total` appears only when a since_turn/kind/limit selector was applied.
+export interface MemoryStreamResponse {
+  persona: string;
+  turn: number;
+  count: number;
+  total?: number;
+  memories: MemoryRecord[];
 }
