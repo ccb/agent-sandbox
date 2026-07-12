@@ -142,19 +142,29 @@ local function pressA()
 	end
 	lastWord[it.lane] = it.word
 	command[#command + 1] = it.word
-	local arity = Engine.verbArity(command[1])
-	if #command >= arity + 1 then
+	-- walk the verb's slot template: connectors ("to") append themselves
+	local slots = Engine.verbSlots(command[1])
+	local filled = #command - 1
+	while filled < #slots and slots[filled + 1] ~= "noun" do
+		command[#command + 1] = slots[filled + 1]
+		filled = filled + 1
+	end
+	if filled >= #slots then
 		runCommand(table.concat(command, " "))
 		command = {}
 		jumpTo(VERBS_LANE) -- the loop restarts at the verbs
 	elseif it.lane == VERBS_LANE then
-		jumpTo(NOUNS_LANE) -- a verb that wants a noun advances you
+		jumpTo(NOUNS_LANE) -- a verb that wants nouns advances you
 	end
 end
 
 local function pressB()
 	if #command > 0 then
 		command[#command] = nil
+		-- a bare connector never stands at the end of the line
+		while #command > 1 and Engine.verbSlots(command[1])[#command - 1] ~= "noun" do
+			command[#command] = nil
+		end
 		if #command == 0 then jumpTo(VERBS_LANE) end
 	else
 		viewY = totalHeight() - PANE -- bare B: snap to the latest

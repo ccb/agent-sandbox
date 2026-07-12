@@ -180,3 +180,33 @@ ok(g3.player.location.name == "hall of youth", "replay: location")
 ok(g3.wounds == g.wounds, "replay: wounds")
 
 print("youth slice: all green")
+
+-- ------------------------------------------------- M2: templates and talk
+g, lines = game()
+g:doCommand("talk to critch")
+ok(saw(lines, "ceiling has opinions about light"), "Critch talks, and hints")
+g:doCommand("look")
+g:doCommand("look")
+local gone = true
+for i = 1, #g.player.location.characters do
+	if g.player.location.characters[i].name == "critch" then gone = false end
+end
+ok(gone, "the teamster decamps after speaking")
+ok(saw(lines, "does not look back"), "the departure narrates")
+
+g, lines = game()
+g:doCommand("in")
+g:doCommand("take dates")
+g:doCommand("out")
+g:doCommand("give dates to critch")
+ok(saw(lines, "Feed the ceiling"), "GIVE _ TO _ parses and Critch declines with the hint")
+ok(g.player:carrying("dates") ~= nil, "declined gifts stay carried")
+g:doCommand("give dates to zoxen")
+ok(saw(lines, "wants nothing of yours"), "giving to the unreceptive defaults politely")
+
+-- the composer's slot walk exposes the template
+local slots = Engine.verbSlots("give")
+ok(#slots == 3 and slots[2] == "to", "give walks noun-to-noun")
+ok(#Engine.verbSlots("look") == 0, "look walks nothing")
+
+print("M2 templates: all green")

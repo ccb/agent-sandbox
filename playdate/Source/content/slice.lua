@@ -90,7 +90,50 @@ function BuildTomb(seed)
 	local critch = Engine.Character("critch", "Critch, a golden new-hyena teamster",
 		"Critch settles his pack straps like someone already decided to be "
 		.. "elsewhere. His cracked mask hangs on its cord.")
+	critch:alias("teamster", "hyena")
+	critch:set("onTalk", function(game)
+		if critch:get("spoken") then
+			game:say("Critch is done talking. His feet say south.")
+			return
+		end
+		critch:set("spoken", true)
+		game:say('Critch does not stop working the straps. "Tomb pays better '
+			.. 'than the road, if the tomb lets you keep it. Mind the boy\'s '
+			.. 'hall -- the ceiling has opinions about light, and only one '
+			.. 'appetite bigger." He nods at the crates. "I walk south."')
+	end)
+	critch:set("onGift", function(game, item)
+		if item.name == "dates" then
+			game:say('Critch waves the crate off. "Keep them. Feed the '
+				.. 'ceiling, not me -- nothing quiets a roost like a full '
+				.. 'stomach."')
+		else
+			game:say('Critch shakes his head. "Carry your own weight, '
+				.. 'scavenger. I have mine."')
+		end
+	end)
 	wreck:addCharacter(critch)
+
+	-- once spoken, the teamster decamps at the end of the NEXT turn
+	g:addTrigger("critch_decamps", function(game)
+		if not critch:get("spoken") or critch.location == nil then return false end
+		local n = (critch:get("straps") or 0) + 1
+		critch:set("straps", n)
+		return n >= 2
+	end, function(game)
+		local room = critch.location
+		for i = 1, #room.characters do
+			if room.characters[i] == critch then
+				table.remove(room.characters, i)
+				break
+			end
+		end
+		critch.location = nil
+		if game.player.location == room then
+			game:say("Critch shoulders his pack, tips the cracked mask, and "
+				.. "walks south into the sand-haze. He does not look back.")
+		end
+	end, false)
 
 	-- ------------------------------------------------------------- hold
 	local crates = Item("crates", "lashed crates, one split open",

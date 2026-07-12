@@ -275,6 +275,14 @@ local function verb(name, arity, run, ...)
 	return v
 end
 
+-- A multi-slot verb: template is the slot walk, e.g. {"noun","to","noun"}
+-- (bare strings are connectors the composer inserts by itself).
+local function templateVerb(name, template, run, ...)
+	local v = verb(name, #template, run, ...)
+	v.template = template
+	return v
+end
+
 local function findVerb(word)
 	for i = 1, #Engine.verbs do
 		local v = Engine.verbs[i]
@@ -401,6 +409,28 @@ verb("douse", 1, function(g, thing)
 	end
 end, "turn off", "extinguish")
 
+verb("talk to", 1, function(g, thing)
+	local hook = thing:get("onTalk")
+	if hook then
+		hook(g, thing)
+	else
+		g:say("The " .. thing.name .. " has nothing to say to you.")
+	end
+end, "talk", "talk with")
+
+templateVerb("give", { "noun", "to", "noun" }, function(g, item, target)
+	if not g.player:carrying(item.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	local hook = target:get("onGift")
+	if hook then
+		hook(g, item, target)
+	else
+		g:say("The " .. target.name .. " wants nothing of yours.")
+	end
+end, "offer")
+
 verb("inventory", 0, function(g)
 	if #g.player.contents == 0 then
 		g:say("You carry nothing but your reputation.")
@@ -442,35 +472,53 @@ function Game:doCommand(line)
 	end
 
 	local verbWord, rest = line:match("^(%S+)%s*(.*)$")
-	local v = findVerb(verbWord)
-	if not v and rest ~= "" then
-		-- two-word aliases ("look at X"): longest verb phrase wins
-		local two = verbWord .. " " .. rest:match("^(%S+)") 
-		local v2 = findVerb(two)
-		if v2 then
-			v = v2
-			rest = rest:gsub("^%S+%s*", "")
-		end
+	-- longest verb phrase wins: try "talk to"/"look at" BEFORE bare "talk"
+	-- (whose alias would otherwise strand the connector in the noun)
+	local v = nil
+	if rest ~= "" then
+		local two = verbWord .. " " .. rest:match("^(%S+)")
+		v = findVerb(two)
+		if v then rest = rest:gsub("^%S+%s*", "") end
 	end
+	if not v then v = findVerb(verbWord) end
 	if not v then
 		self:say("The tomb does not know that word yet.")
 		return false
 	end
-	local thing = nil
-	if v.arity == 1 then
+	local args = {}
+	if v.template then
+		-- walk the template: nouns split on the connector words
+		local pieces, connector = {}, nil
+		for i = 1, #v.template do
+			if v.template[i] ~= "noun" then connector = v.template[i] end
+		end
+		local a, b = rest:match("^(.-)%s+" .. connector .. "%s+(.+)$")
+		if not a then
+			self:say(string.upper(v.name) .. " what " .. connector .. " whom?")
+			return false
+		end
+		pieces[1], pieces[2] = a, b
+		for i = 1, 2 do
+			args[i] = self:find(pieces[i])
+			if not args[i] then
+				self:say("You don't see any " .. pieces[i] .. " here.")
+				return false
+			end
+		end
+	elseif v.arity == 1 then
 		if rest == "" then
 			self:say(string.upper(v.name) .. " what?")
 			return false
 		end
-		thing = self:find(rest)
-		if not thing then
+		args[1] = self:find(rest)
+		if not args[1] then
 			self:say("You don't see any " .. rest .. " here.")
 			return false
 		end
 	end
 	self.journal[#self.journal + 1] = line
 	self.turn = self.turn + 1
-	v.run(self, thing)
+	v.run(self, args[1], args[2])
 	self:runTriggers()
 	return true
 end
@@ -501,6 +549,17 @@ end
 function Engine.verbArity(name)
 	local v = findVerb(name)
 	return v and v.arity or 1
+end
+
+-- The composer's slot walk for a verb: {"noun"}, {}, or the template
+-- ({"noun","to","noun"} -- connectors are strings the composer inserts).
+function Engine.verbSlots(name)
+	local v = findVerb(name)
+	if not v then return { "noun" } end
+	if v.template then return v.template end
+	local slots = {}
+	for _ = 1, v.arity do slots[#slots + 1] = "noun" end
+	return slots
 end
 
 -- ------------------------------------------------------------ saves/replay
