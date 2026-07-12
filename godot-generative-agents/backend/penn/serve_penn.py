@@ -47,6 +47,7 @@ from backend.contract import SCHEMA_VERSION
 from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
+from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_config import CognitionConfig
 from backend.cognition import attach_agents
 from penn_world import (
@@ -272,10 +273,19 @@ class PennStepper:
         world=None,
         monitor=None,
         llm=None,
+        run_store=None,
         cognition_tools=False,
     ):
         self.num_steps = num_steps
         self.endless = endless
+        # The #304 persistence seam: a backend.run_store.RunStore, or None (the
+        # default -- nothing is written, byte-identical to before). Set before
+        # the _build() below so every build, first boot and each POST /reset,
+        # opens its own run in the store.
+        self.run_store = run_store
+        self._run_id = None
+        self._run_finished = False
+        self._mem_synced = {}
         # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
@@ -385,10 +395,21 @@ class PennStepper:
             locations=self.world.locations,
         )
         self._step_idx = 0
+        # Open this day's run in the store (#304). The manifest is the same
+        # meta() blob the live handshake serves; each _build() gets its own id.
+        if self.run_store is not None:
+            self._run_id = self.run_store.create_run(self.meta())
+            self._run_finished = False
+            self._mem_synced = {name: -1 for name in self.order}
 
     @property
     def step(self) -> int:
         return self._step_idx
+
+    @property
+    def run_id(self):
+        """The store id of the current day's run, or None when not persisting."""
+        return self._run_id
 
     def meta(self) -> dict:
         """The handshake blob ``GET /live`` serves -- the baked replay's ``meta``
@@ -437,8 +458,10 @@ class PennStepper:
         tripped).
         """
         if self.ledger.over_budget():
+            self._finish_run()
             return None
         if not self.endless and self._step_idx >= self.num_steps:
+            self._finish_run()
             return None
         raw, _chats = step(
             self.game,
@@ -459,8 +482,41 @@ class PennStepper:
         # runs (on the converted frames, never the engine state) -- so a future
         # real-LLM chat in `raw` composes: the clash rule above skips over it.
         self.injector.apply(frame, self._step_idx)
+        if self.run_store is not None:
+            self._persist_tick(frame)
         self._step_idx += 1
         return frame
+
+    def _persist_tick(self, frame: dict) -> None:
+        # Called with the pre-increment step index: frames.jsonl line N IS
+        # step N. Memory sync is incremental by engine record id (monotonic
+        # per agent), so each row is written exactly once across the run.
+        self.run_store.append_frame(self._run_id, self._step_idx, frame)
+        for name in self.order:
+            memory = getattr(self.chars[name].agent, "memory", None)
+            if memory is None:
+                continue
+            last = self._mem_synced.get(name, -1)
+            fresh = [r.to_primitive() for r in memory.records if r.id > last]
+            if fresh:
+                self.run_store.record_memories(self._run_id, name, fresh)
+                self._mem_synced[name] = fresh[-1]["id"]
+        self.run_store.update_run(
+            self._run_id,
+            cost=self.ledger.total_cost_usd(),
+            steps=self._step_idx + 1,
+        )
+
+    def _finish_run(self) -> None:
+        # Idempotent: the live loop keeps ticking a finished day (every tick
+        # returns None) and only the first one flips the status.
+        if (
+            self.run_store is not None
+            and self._run_id is not None
+            and not self._run_finished
+        ):
+            self.run_store.update_run(self._run_id, status="finished")
+            self._run_finished = True
 
     def drain_events(self) -> list:
         """New change-feed rows formed during the last ``tick()`` (#398, #467).
@@ -493,6 +549,15 @@ class PennStepper:
         return rows
 
     def reset(self) -> None:
+        # A reset is a new day AND a new run: close the old run's row first
+        # (status "reset" -- its frames stay readable), then _build() opens
+        # the next one. A day that already finished keeps "finished".
+        if (
+            self.run_store is not None
+            and self._run_id is not None
+            and not self._run_finished
+        ):
+            self.run_store.update_run(self._run_id, status="reset")
         self._build()
 
 
@@ -557,6 +622,14 @@ def main() -> int:
         "(--brain llm only); the day ends when cumulative spend reaches it",
     )
     ap.add_argument(
+        "--persist",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="record this run durably (#304): frames to runs/<run_id>/frames.jsonl,"
+        " agent memory + run metadata to runs/sim.db, under"
+        " godot-generative-agents/runs/. POST /reset starts a new run id",
+    )
+    ap.add_argument(
         "--cognition-tools",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -615,6 +688,7 @@ def main() -> int:
             world=world,
             monitor=LlmCallMonitor() if args.monitor else None,
             llm=llm,
+            run_store=RunStore(DEFAULT_RUNS_DIR) if args.persist else None,
             cognition_tools=args.cognition_tools,
         )
     except ImportError as e:
@@ -643,6 +717,11 @@ def main() -> int:
         print(
             "Brain: mock (deterministic, free; authored meeting dialogue ON). "
             "For the real thing: --brain llm."
+        )
+    if args.persist:
+        print(
+            f"Persistence: ON -- run {stepper.run_id} recording to "
+            f"{stepper.run_store.root} (frames.jsonl + sim.db)."
         )
     if args.cognition_tools:
         print(

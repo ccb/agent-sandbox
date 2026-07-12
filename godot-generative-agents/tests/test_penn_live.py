@@ -29,6 +29,7 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402
+from backend.run_store import RunStore  # noqa: E402
 from penn_world import (  # noqa: E402
     build_penn_world,
     relationships_meta,
@@ -224,6 +225,42 @@ def test_stepper_finishes_then_resets():
     assert stepper.step == 0
     assert stepper.ledger is ledger  # money spent stays spent across resets
     assert stepper.tick() == first_day[0]  # a fresh day replays deterministically
+
+
+def test_stepper_persists_frames_memories_and_finish(tmp_path):
+    # The #304 live wiring: every tick lands in the store as it happens, and
+    # the day's end flips the run to "finished".
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=5, world=build_penn_world(), run_store=store)
+    run_id = stepper.run_id
+    frames = [stepper.tick() for _ in range(5)]
+    assert store.read_frames(run_id) == frames
+    run = store.get_run(run_id)
+    assert run["status"] == "running" and run["steps"] == 5 and run["cost"] == 0.0
+    assert run["manifest"] == stepper.meta()
+    # The t=0 plan memory alone guarantees at least one row per persona.
+    for name in stepper.order:
+        assert store.last_memory_id(run_id, name) >= 0
+    assert stepper.tick() is None  # the day ends...
+    assert store.get_run(run_id)["status"] == "finished"
+    assert stepper.tick() is None  # ...and stays finished (idempotent)
+    assert store.get_run(run_id)["status"] == "finished"
+
+
+def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    first = stepper.run_id
+    stepper.tick()
+    stepper.reset()
+    second = stepper.run_id
+    assert first != second
+    assert store.get_run(first)["status"] == "reset"
+    assert store.get_run(second)["status"] == "running"
+    assert {r["id"] for r in store.list_runs()} == {first, second}
+    # The default stays storeless (and byte-identical -- the simulate-mirror
+    # test above pins it): a bare stepper has no run id.
+    assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
 
 
 def test_stepper_threads_cognition_tools():
