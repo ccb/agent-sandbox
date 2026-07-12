@@ -313,6 +313,28 @@
   </section>
 
   <section>
+    <div class="slate"><h2>29 &mdash; THE BABOON JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="screen">
+      <svg id="jar-baboon" viewBox="0 0 640 300" aria-label="The baboon jar"></svg>
+    </div>
+    <p class="spec">The third close-up in the canopic series: the baboon-headed jar that
+       keeps the Autarch's lungs. The brow disapproves professionally; in the cutaway
+       the lungs rise and fall on a slow tide, and every so often they hold a breath --
+       a counter tallies the total since interment. <span class="attach">Attaches: EXAMINE BABOON JAR.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>30 &mdash; THE HUMAN JAR</h2><span class="kind">LITHO / CLOSE-UP</span></div>
+    <div class="screen">
+      <svg id="jar-human" viewBox="0 0 640 300" aria-label="The human jar"></svg>
+    </div>
+    <p class="spec">The jar with its owner's face: the Autarch young, carved serene and
+       decidedly not smiling, lids shut. In the cutaway the liver drips at the patience
+       of geology; now and then the carved lids flicker, which they should not.
+       <span class="attach">Attaches: EXAMINE HUMAN JAR.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>18-B &mdash; THE HALL, SHORT-HANDED</h2><span class="kind">LITHO / THE ARRIVAL</span></div>
     <div class="screen">
       <svg id="seal-b" viewBox="0 0 640 400" aria-label="The hall of the canopic jars, short-handed"></svg>
@@ -1595,6 +1617,121 @@
         return `${221 + Math.cos(a) * r},${198 + Math.sin(a) * r * .75}`;
       });
       P.coil.setAttribute("points", pts.join(" "));
+    });
+
+  // 29: THE BABOON JAR -- the lungs, kept working
+  jarCard("jar-baboon", "THE BABOON JAR (THE LUNGS, KEPT)",
+    (P) => {
+      // the head in profile: heavy disapproving brow, long muzzle
+      el(P.svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.6, points:
+        "240,118 246,92 240,62 224,50 " +                    // crown
+        "206,52 196,58 " +                                   // the brow shelf
+        "188,64 170,82 160,92 " +                            // the muzzle, down
+        "164,98 176,102 " +                                  // nostril and lip
+        "188,106 200,112 208,118" });                        // jaw to throat
+      el(P.svg, "line", { x1: 196, y1: 58, x2: 210, y2: 62,
+        stroke: PH, "stroke-width": 1.8 });                  // the brow, doubled
+      P.eye = el(P.svg, "circle", { cx: 206, cy: 68, r: 2.4, fill: PH_BRIGHT });
+      el(P.svg, "polyline", { fill: "none", stroke: PH_DIM,
+        points: "176,102 178,108 182,103" });                // one fang, polite
+      el(P.svg, "polyline", { fill: "none", stroke: PH_DIM, points:
+        "240,62 250,70 244,80 252,90 246,100 252,110 244,118" }); // the mane
+      P.puffs = Array.from({ length: 3 }, () =>
+        el(P.svg, "circle", { cx: 154, cy: 94, r: 2, fill: "none",
+          stroke: PH_DIM, opacity: 0 }));                    // breath at the nostril
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      el(P.svg, "line", { x1: 221, y1: 166, x2: 221, y2: 182,
+        stroke: FUNGUS, "stroke-width": 1.5 });              // the trachea
+      el(P.svg, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
+        points: "221,182 208,190 M 221,182 234,190" });      // the fork
+      P.lungL = el(P.svg, "ellipse", { cx: 206, cy: 206, rx: 11, ry: 18,
+        fill: "none", stroke: FUNGUS, "stroke-width": 1.6 });
+      P.lungR = el(P.svg, "ellipse", { cx: 236, cy: 206, rx: 11, ry: 18,
+        fill: "none", stroke: FUNGUS, "stroke-width": 1.6 });
+      P.count = label(P.svg, 24, 286, 10, PH_DIM);
+    },
+    [
+      { at: [200, 56], text: "BROW: DISAPPROVING, PROFESSIONALLY" },
+      { at: [221, 206], text: "CONTENTS: THE LUNGS. STILL AT WORK" },
+      { at: [156, 94], text: "THE GLASS FOGS FROM THE INSIDE" },
+    ],
+    "FOUR THOUSAND YEARS. STILL COUNTING BREATHS.",
+    (t, T, P) => {
+      // the tide -- and every cycle, one held breath (T 120..136)
+      const held = T >= 120 && T < 136;
+      const k = held ? 1 : Math.sin(t * .35);
+      P.lungL.setAttribute("rx", 10 + k * 2); P.lungL.setAttribute("ry", 16 + k * 4);
+      P.lungR.setAttribute("rx", 10 + k * 2); P.lungR.setAttribute("ry", 16 + k * 4);
+      const exhale = !held && k < -.6;
+      P.puffs.forEach((n, i) => {
+        const q = ((t * 2 + i * 6) % 18) / 18;
+        n.setAttribute("cx", 154 - q * 16); n.setAttribute("cy", 94 - q * 6);
+        n.setAttribute("r", 1.5 + q * 2.5);
+        n.setAttribute("opacity", exhale ? Math.max(0, .7 - q) : 0);
+      });
+      P.count.textContent = "BREATHS SINCE INTERMENT: " +
+        (147460000000 + Math.floor(t / 12));
+    });
+
+  // 30: THE HUMAN JAR -- his own face, young, not smiling
+  jarCard("jar-human", "THE HUMAN JAR (HIS OWN FACE, YOUNG)",
+    (P) => {
+      el(P.svg, "path", { fill: P.JD, stroke: PH, "stroke-width": 1.6,
+        d: "M 220 44 Q 250 44 252 78 Q 252 104 236 114 Q 228 120 220 120 " +
+           "Q 212 120 204 114 Q 188 104 188 78 Q 190 44 220 44 Z" });
+      el(P.svg, "line", { x1: 192, y1: 60, x2: 248, y2: 60,
+        stroke: PH, "stroke-width": 1.8 });                  // the diadem band
+      el(P.svg, "polygon", { points: "188,60 180,118 194,118 196,74",
+        fill: P.JD, stroke: PH, "stroke-width": 1.4 });      // the fall, left
+      el(P.svg, "polygon", { points: "252,60 260,118 246,118 244,74",
+        fill: P.JD, stroke: PH, "stroke-width": 1.4 });      // the fall, right
+      P.lidL = el(P.svg, "path", { fill: "none", stroke: PH_BRIGHT,
+        "stroke-width": 1.5, d: "M 200 80 Q 207 85 214 80" });   // lids, carved shut
+      P.lidR = el(P.svg, "path", { fill: "none", stroke: PH_BRIGHT,
+        "stroke-width": 1.5, d: "M 226 80 Q 233 85 240 80" });
+      P.slitL = el(P.svg, "line", { x1: 203, y1: 84, x2: 211, y2: 84,
+        stroke: PH_BRIGHT, "stroke-width": 1, opacity: 0 });     // ...check anyway
+      P.slitR = el(P.svg, "line", { x1: 229, y1: 84, x2: 237, y2: 84,
+        stroke: PH_BRIGHT, "stroke-width": 1, opacity: 0 });
+      el(P.svg, "polyline", { fill: "none", stroke: PH,
+        points: "220,86 218,96 222,98" });                   // the nose
+      el(P.svg, "line", { x1: 212, y1: 106, x2: 228, y2: 106,
+        stroke: PH, "stroke-width": 1.6 });                  // the mouth. it is a line.
+    },
+    (P) => {
+      el(P.svg, "rect", { x: 178, y: 160, width: 86, height: 74, fill: BG,
+        stroke: PH_DIM, "stroke-dasharray": "4 3" });        // the cutaway window
+      el(P.svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.6,
+        d: "M 192 196 Q 194 180 212 178 Q 240 174 250 190 Q 256 202 244 210 " +
+           "Q 236 218 224 214 Q 206 220 196 210 Q 188 204 192 196 Z " +
+           "M 226 180 Q 230 194 224 206" });                 // the liver, lobed
+      P.drops = Array.from({ length: 2 }, () =>
+        el(P.svg, "circle", { r: 1.6, fill: FUNGUS, opacity: 0 }));
+      P.pool = el(P.svg, "line", { x1: 216, y1: 231, x2: 226, y2: 231,
+        stroke: FUNGUS, "stroke-width": 1.4, opacity: .5 });
+    },
+    [
+      { at: [220, 52], text: "THE FACE: HIS OWN, YOUNG. NOT SMILING" },
+      { at: [221, 196], text: "CONTENTS: THE LIVER. GRUDGES INTACT" },
+      { at: [240, 80], text: "THE LIDS: CARVED SHUT. CHECK ANYWAY" },
+    ],
+    "THE ONLY JAR WITH ITS OWNER'S FACE. IT ISN'T FLATTERED.",
+    (t, T, P) => {
+      const flicker = (t % 46) < 2;                          // they should not do that
+      P.slitL.setAttribute("opacity", flicker ? .9 : 0);
+      P.slitR.setAttribute("opacity", flicker ? .9 : 0);
+      P.lidL.setAttribute("opacity", flicker ? .3 : 1);
+      P.lidR.setAttribute("opacity", flicker ? .3 : 1);
+      P.drops.forEach((n, i) => {                            // geology-paced drip
+        const q = ((t + i * 24) % 48) / 48;
+        n.setAttribute("cx", 221); n.setAttribute("cy", 214 + q * 16);
+        n.setAttribute("opacity", q > .1 ? .8 - q * .5 : 0);
+      });
+      P.pool.setAttribute("x1", 221 - 5 - (t % 48) / 12);
+      P.pool.setAttribute("x2", 221 + 5 + (t % 48) / 12);
     });
 
 

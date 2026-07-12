@@ -2018,6 +2018,8 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
         "mantis jar": "jar-mantis",
         "jackal jar": "jar-jackal",
         "falcon jar": "jar-falcon",
+        "baboon jar": "jar-baboon",
+        "human jar": "jar-human",
     }.get(name)
     if fig:
         jar.set_property("figure", fig)
