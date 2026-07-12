@@ -324,16 +324,6 @@
        steadies to white and parts into motes. <span class="attach">Attaches: PUT JAR ON PLINTH, the last one.</span></p>
   </section>
 
-  <section>
-    <div class="slate"><h2>18-A &mdash; THE SEAL ANSWERS THE JARS (FIRST STATE)</h2><span class="kind">LITHO / BACKUP</span></div>
-    <div class="screen">
-      <svg id="seal-a" viewBox="0 0 640 400" aria-label="The seal answers the jars, first state"></svg>
-    </div>
-    <p class="spec">Archival copy of 18 as first drawn. Kept for the record: this state
-       seats the JACKAL and slides the HUMAN home -- but the tomb's spawns wear the
-       falcon and jackal jars, so those are the two that go missing. Superseded by 18.
-       <span class="attach">Attaches: nothing; the record only.</span></p>
-  </section>
 
   <section>
     <div class="slate"><h2>18-B &mdash; THE HALL, SHORT-HANDED</h2><span class="kind">LITHO / THE ARRIVAL</span></div>
@@ -2923,104 +2913,6 @@
       m1.setAttribute("transform", `translate(${x1} -29)`);
       m2.setAttribute("transform", `translate(${x2} -29)`);
       const in1 = x1 >= 314, in2 = x2 <= 422;
-      blinks[0].setAttribute("opacity", !in1 && t % 6 < 3 ? .8 : 0);
-      blinks[1].setAttribute("opacity", !in2 && t % 6 < 3 ? .8 : 0);
-      att.textContent = `ATTENDANCE: ${3 + in1 + in2} OF 5`;
-      // the gate raises once the last jar is home
-      const raise = Math.max(0, Math.min(1, (T - 130) / 30));
-      bars.forEach(n => {
-        n.setAttribute("y2", 316 - Math.round(raise * 21) * 6);
-        n.setAttribute("opacity", raise >= 1 ? 0 : .85);
-      });
-      crossbar.setAttribute("y1", 254 - Math.round(raise * 10) * 6);
-      crossbar.setAttribute("y2", 254 - Math.round(raise * 10) * 6);
-      crossbar.setAttribute("opacity", raise >= .55 ? 0 : .85);
-      // crimson while short-handed; white when answered; then motes
-      const col = T < 130 ? CRIM : T < 138 ? "#ff9aa8" : T < 146 ? "#ffd9de" : WHITE;
-      const gone = T >= 150;
-      [sealRing, inner].forEach(n => { n.setAttribute("stroke", col);
-        n.setAttribute("opacity", gone ? 0 : 1); });
-      const rot = T < 130 ? t * .12 : 15.6;
-      runes.forEach((n, i) => {
-        const a = i * Math.PI / 4 + rot;
-        n.setAttribute("x1", 320 + Math.cos(a) * 37); n.setAttribute("y1", 158 + Math.sin(a) * 37);
-        n.setAttribute("x2", 320 + Math.cos(a) * 48); n.setAttribute("y2", 158 + Math.sin(a) * 48);
-        n.setAttribute("stroke", col); n.setAttribute("opacity", gone ? 0 : 1);
-      });
-      sealRing.setAttribute("stroke-width", T < 130 ? 1.5 + (t % 6) / 4 : 2);
-      motes.forEach((n, i) => {
-        if (!gone) { n.setAttribute("opacity", 0); return; }
-        const a = i * Math.PI * 2 / 14, r = (T - 150) * 2.2;
-        n.setAttribute("cx", 320 + Math.cos(a) * r);
-        n.setAttribute("cy", 158 + Math.sin(a) * r - (T - 150) * .6);
-        n.setAttribute("opacity", Math.max(0, 1 - r / 110));
-      });
-      arch.setAttribute("stroke", gone ? PH_BRIGHT : PH_DIM);
-      typeOn(foot, "THE DOOR STOPS ARGUING.", T, 152, 1.6);
-    });
-  }
-
-  /* ------- 18-A: the seal answers the jars (first state; archival) ------- */
-  {
-    const svg = document.getElementById("seal-a");
-    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
-    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
-    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
-    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "HALL OF THE CANOPIC JARS / FIRST STATE";
-    const JDOTS = stipple(svg, "dots-seal-a", PH, .9);
-    const CRIM = "#ff3b57", WHITE = "#eaf6ff";
-    const arch = el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.8,
-      d: "M 246 316 L 246 170 Q 320 108 394 170 L 394 316" });
-    // the crimson gate, barred until the hall is fully attended
-    const bars = [268, 294, 320, 346, 372].map(x =>
-      el(svg, "line", { x1: x, y1: 186, x2: x, y2: 316, stroke: CRIM,
-        "stroke-width": 2.4, opacity: .85 }));
-    const crossbar = el(svg, "line", { x1: 252, y1: 254, x2: 388, y2: 254,
-      stroke: CRIM, "stroke-width": 2, opacity: .85 });
-    const PLINTHS = [128, 224, 320, 416, 512];
-    PLINTHS.forEach(cx => {
-      el(svg, "polygon", { fill: JDOTS, stroke: PH, "stroke-width": 1.4,
-        points: `${cx - 28},344 ${cx + 28},344 ${cx + 22},316 ${cx - 22},316` });
-      el(svg, "line", { x1: cx - 24, y1: 316, x2: cx + 24, y2: 316,
-        stroke: PH, "stroke-width": 1.6 });
-    });
-    // the jars of 03-C: tapered vessels, each stoppered with its head
-    const jar = kind => {
-      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
-      el(g, "polygon", { points: "-22,345 22,345 16,295 -16,295",
-        fill: PH, "fill-opacity": .10, stroke: PH, "stroke-width": 1.5 });
-      headGlyph(g, kind, 0);
-      return g;
-    };
-    [["BABOON", 0], ["MANTIS", 2], ["JACKAL", 4]].forEach(([kind, i]) =>
-      jar(kind).setAttribute("transform", `translate(${PLINTHS[i]} -29)`));
-    const m1 = jar("HUMAN"), m2 = jar("FALCON");
-    const blinks = [1, 3].map(i => el(svg, "rect", { x: PLINTHS[i] - 26, y: 220,
-      width: 52, height: 96, fill: "none", stroke: PH_DIM,
-      "stroke-dasharray": "4 3" }));
-    // the seal itself
-    const sealRing = el(svg, "circle", { cx: 320, cy: 158, r: 50, fill: "none",
-      stroke: CRIM, "stroke-width": 2 });
-    const inner = el(svg, "circle", { cx: 320, cy: 158, r: 35, fill: "none",
-      stroke: CRIM, "stroke-width": 1.2 });
-    const runes = Array.from({ length: 8 }, () =>
-      el(svg, "line", { stroke: CRIM, "stroke-width": 1.6 }));
-    const motes = Array.from({ length: 14 }, () =>
-      el(svg, "circle", { r: 2, fill: WHITE, opacity: 0 }));
-    const att = label(svg, 24, 390, 10, PH_DIM);
-    const foot = label(svg, 380, 390, 10, FUNGUS);
-    const doWipe = wipe(svg, 640, 400, 2, 10);
-    const q6 = x => Math.round(x / 6) * 6;
-    clock(t => {
-      const T = t % 220;
-      doWipe(T);
-      typeOn(hdr, "THE SEAL ANSWERS THE JARS", T, 4, 1.4);
-      const x1 = T < 60 ? -60 : q6(-60 + Math.min(1, (T - 60) / 40) * 284);
-      const x2 = T < 80 ? 700 : q6(700 - Math.min(1, (T - 80) / 44) * 284);
-      m1.setAttribute("transform", `translate(${x1} -29)`);
-      m2.setAttribute("transform", `translate(${x2} -29)`);
-      const in1 = x1 >= 218, in2 = x2 <= 422;
       blinks[0].setAttribute("opacity", !in1 && t % 6 < 3 ? .8 : 0);
       blinks[1].setAttribute("opacity", !in2 && t % 6 < 3 ? .8 : 0);
       att.textContent = `ATTENDANCE: ${3 + in1 + in2} OF 5`;
