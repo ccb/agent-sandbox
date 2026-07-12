@@ -362,5 +362,94 @@ def test_decide_and_route_attributes_calls_to_actor_and_turn(tiny_game):
     assert rec.turn == tiny_game.turn  # attribution picked up the game's turn
 
 
+# ----------------------------------------------------------------------
+# Section E: native tool loop wiring (#355) -- reflect in-conversation
+# ----------------------------------------------------------------------
+
+
+def _act_call(action, arguments=""):
+    """A scripted choose_action tool call for the loop's call_tools queue."""
+    return {
+        "tool_calls": [
+            {
+                "name": "choose_action",
+                "arguments": {"action": action, "arguments": arguments},
+            }
+        ]
+    }
+
+
+def test_decide_and_route_reflects_in_conversation(tiny_game):
+    """The #355 acceptance: a failed precondition comes back as an is_error
+    tool_result IN THE SAME conversation, and the model's retry then succeeds."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+    # Round 1 'go south' fails (no south exit); round 2 'go north' succeeds.
+    mock = MockLlmClient(
+        tool_calls_responses=[_act_call("go", "south"), _act_call("go", "north")]
+    )
+    troll.set_behavior(make_react_behavior(mock))
+
+    troll.take_turn(tiny_game)
+
+    assert troll.location is tiny_game.locations["Forest"]  # the retry landed
+    assert len(mock.tool_calls_log) == 2  # two rounds, one conversation
+    # Round 2's request carries round 1's tool_use + an is_error tool_result.
+    round2 = mock.tool_calls_log[1]["messages"]
+    blocks = [b for m in round2 if isinstance(m["content"], list) for b in m["content"]]
+    assert any(b.get("type") == "tool_use" for b in blocks)
+    assert any(
+        b.get("type") == "tool_result"
+        and b.get("is_error")
+        and "does not have an exit" in str(b["content"])
+        for b in blocks
+    )
+    assert not mock.calls  # the legacy chat() reflect path did NOT run
+
+
+def test_decide_and_route_no_extra_roundtrip_on_success(tiny_game):
+    """A terminal action that succeeds stops the loop immediately -- one
+    call_tools, no wasted confirmation round-trip."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+    mock = MockLlmClient(tool_calls_responses=[_act_call("go", "north")])
+    troll.set_behavior(make_react_behavior(mock))
+
+    troll.take_turn(tiny_game)
+    assert troll.location is tiny_game.locations["Forest"]
+    assert len(mock.tool_calls_log) == 1
+
+
+def test_decide_and_route_caps_rounds_in_conversation(tiny_game):
+    """max_rounds = 1 + max_retries bounds the in-conversation retries."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    def always_fail(messages, tools, tool_choice, max_tokens, temperature):
+        return _act_call("go", "south")  # no south exit -> always fails
+
+    mock = MockLlmClient(tool_calls_responses=always_fail)
+    troll.set_behavior(make_react_behavior(mock, max_retries=2))
+
+    troll.take_turn(tiny_game)
+    assert troll.location is tiny_game.locations["Field"]  # never moved
+    assert len(mock.tool_calls_log) == 3  # 1 initial + 2 retries
+
+
+def test_decide_and_route_falls_back_to_legacy_when_no_tool_call(tiny_game):
+    """A client that makes no tool call (only chat scripted) falls through to the
+    legacy string-reflection path unchanged."""
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+    # No tool_calls_responses -> call_tools returns None (a decline / probe), so
+    # decide_and_route falls back to the chat()-driven legacy loop.
+    mock = MockLlmClient(["go south", "go north"])
+    troll.set_behavior(make_react_behavior(mock))
+
+    troll.take_turn(tiny_game)
+    assert troll.location is tiny_game.locations["Forest"]
+    assert len(mock.calls) == 2  # chat fallback drove both attempts
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
