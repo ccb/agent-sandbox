@@ -319,6 +319,7 @@ function BuildTomb(seed)
 	-- then acid on the odd rounds -- light or dark, it does not care.
 	g:addTrigger("spawn_menace", function(game)
 		return game.player.location == warriors and not spawn:get("dead")
+			and not game.sneaked
 	end, function(game)
 		local n = (warriors:get("sway") or 0) + 1
 		warriors:set("sway", n)
@@ -450,6 +451,7 @@ function BuildTomb(seed)
 
 	g:addTrigger("brain_menace", function(game)
 		return game.player.location == hounds and not brain:get("dead")
+			and not game.sneaked
 	end, function(game)
 		local n = (hounds:get("tick") or 0) + 1
 		hounds:set("tick", n)
@@ -520,6 +522,7 @@ function BuildTomb(seed)
 		return game.player.location == chimney
 			and not centipede:get("sprung")
 			and not centipede:get("dead")
+			and not game.sneaked
 	end, function(game)
 		centipede:set("sprung", true)
 		centipede:set("aware", true)

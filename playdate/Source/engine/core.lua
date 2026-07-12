@@ -530,6 +530,11 @@ templateVerb("give", { "noun", "to", "noun" }, function(g, item, target)
 	end
 end, "offer")
 
+local sneakVerb = verb("sneak", 1, function(g)
+	g:say("Sneak which way?")
+end, "creep")
+sneakVerb.template = { "direction" }
+
 verb("pry", 1, function(g, thing)
 	local hook = thing:get("onPried")
 	if not hook then
@@ -635,6 +640,33 @@ function Game:doCommand(line)
 	end
 	local room = self.player.location
 
+	self.sneaked = false
+	-- SNEAK <exit>: quiet travel -- the sound-hunters' triggers skip the
+	-- round (their preds consult game.sneaked). Handled before the verb
+	-- table: its argument is a direction, not a noun.
+	local sneakArg = line:match("^sneak%s*(.*)$") or line:match("^creep%s*(.*)$")
+	if sneakArg then
+		if sneakArg == "" then
+			self:say("Sneak which way?")
+			return false
+		end
+		local d = room.directionAliases[sneakArg]
+		if not d and (room.connections[sneakArg] or room.blocks[sneakArg]) then
+			d = sneakArg
+		end
+		if not d then
+			self:say("You can't creep that way.")
+			return false
+		end
+		self.journal[#self.journal + 1] = line
+		self.turn = self.turn + 1
+		self.sneaked = true
+		self:say("You go low and quiet, weight on the outside of your feet.")
+		self:go(d)
+		self:runTriggers()
+		return true
+	end
+
 	-- travel: exact per-room phrase, a bare exit name, or GO <exit>
 	local dir = room.directionAliases[line]
 	if not dir and (room.connections[line] or room.blocks[line]) then dir = line end
@@ -715,8 +747,8 @@ end
 Engine.pools = {
 	-- arming yourself mid-fight is THE move in the warriors hall: take and
 	-- search stay on the wheel (the audit caught their absence)
-	combat = { "attack", "say", "read", "pry", "take", "search", "throw",
-		"examine", "look", "douse", "inventory", "hint" },
+	combat = { "attack", "sneak", "say", "read", "pry", "take", "search",
+		"throw", "examine", "look", "douse", "inventory", "hint" },
 }
 
 -- Combat: something hostile shares the room and is either visible to you

@@ -251,8 +251,18 @@ local function pressA()
 		if #command == 0 then
 			lastWord[EXITS_LANE] = it.word
 			runCommand("go " .. it.word)
+			return
 		end
-		return -- an exit is never a noun; mid-command it stays quiet
+		-- a verb awaiting a DIRECTION slot (sneak) accepts an exit
+		local slots = Engine.verbSlots(command[1])
+		if slots[#command] == "direction" then
+			lastWord[EXITS_LANE] = it.word
+			command[#command + 1] = it.word
+			runCommand(table.concat(command, " "))
+			command = {}
+			jumpTo(VERBS_LANE)
+		end
+		return -- otherwise an exit is never a noun
 	end
 	lastWord[it.lane] = it.word
 	command[#command + 1] = it.word
@@ -268,7 +278,11 @@ local function pressA()
 		command = {}
 		jumpTo(VERBS_LANE) -- the loop restarts at the verbs
 	elseif it.lane == VERBS_LANE then
-		jumpTo(NOUNS_LANE) -- a verb that wants nouns advances you
+		if slots[filled + 1] == "direction" then
+			jumpTo(EXITS_LANE) -- sneak wants a direction, not a noun
+		else
+			jumpTo(NOUNS_LANE) -- a verb that wants nouns advances you
+		end
 	end
 end
 
