@@ -338,12 +338,26 @@ function playdate.keyboard.keyboardWillHideCallback(okPressed)
 end
 
 -- ------------------------------------------------------------ input + draw
+-- Button CALLBACKS, not per-frame polling: the OS queues these, so a tap
+-- whose press+release falls between frames (easy on the real d-pad) is
+-- never lost. update() drains the queue in arrival order.
+local pending = {}
+local function press(name)
+	return function() pending[#pending + 1] = name end
+end
+playdate.leftButtonDown = press("left")
+playdate.rightButtonDown = press("right")
+playdate.upButtonDown = press("up")
+playdate.downButtonDown = press("down")
+playdate.AButtonDown = press("a")
+playdate.BButtonDown = press("b")
+
 function playdate.update()
 	-- a card on screen owns the screen: advance at the reel's 12 fps,
 	-- hold the last frame, and leave on any button
 	if overlay then
-		if playdate.buttonJustPressed(playdate.kButtonA)
-			or playdate.buttonJustPressed(playdate.kButtonB) then
+		if #pending > 0 then
+			pending = {}
 			overlay = nil
 			return
 		end
@@ -366,21 +380,25 @@ function playdate.update()
 	local ticks = playdate.getCrankTicks(6)
 	if ticks ~= 0 then pos = pos + ticks end
 
-	if playdate.buttonJustPressed(playdate.kButtonLeft) then
-		pos = pos - 1 -- the d-pad steps the wheel, same as the crank
-	elseif playdate.buttonJustPressed(playdate.kButtonRight) then
-		pos = pos + 1
-	elseif playdate.buttonJustPressed(playdate.kButtonUp) then
-		viewY = viewY - 40
-		clampView()
-	elseif playdate.buttonJustPressed(playdate.kButtonDown) then
-		viewY = viewY + 40
-		clampView()
-	elseif playdate.buttonJustPressed(playdate.kButtonA) then
-		pressA()
-	elseif playdate.buttonJustPressed(playdate.kButtonB) then
-		pressB()
+	for i = 1, #pending do
+		local btn = pending[i]
+		if btn == "left" then
+			pos = pos - 1 -- the d-pad steps the wheel, same as the crank
+		elseif btn == "right" then
+			pos = pos + 1
+		elseif btn == "up" then
+			viewY = viewY - 40
+			clampView()
+		elseif btn == "down" then
+			viewY = viewY + 40
+			clampView()
+		elseif btn == "a" then
+			pressA()
+		elseif btn == "b" then
+			pressB()
+		end
 	end
+	pending = {}
 
 	gfx.clear(gfx.kColorBlack)
 	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
