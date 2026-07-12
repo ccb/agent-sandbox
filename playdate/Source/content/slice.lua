@@ -91,10 +91,78 @@ function BuildTomb(seed)
 	wagon:alias("wagon", "wind-wagon")
 	wreck:add(wagon)
 
+	Engine.selves = {
+		"a cacogen salvager, chrome-gilled, owing three water-debts",
+		"a true-kin exile with a forged pilgrim's brand",
+		"a mycomorph courier whose spores hum when it rains",
+		"a synth deserter running on prayer and one good servo",
+		"a newbeast tinker, hyena-line, mask cracked down the smile",
+		"a vat-born duelist who lost the duel and kept the walk",
+		"a faa nomad's seventh child, sold a map that was a poem",
+		"an archive-thief with lazulite dust under every nail",
+		"a gene-witch's apprentice, fired for excessive mercy",
+		"a former Autarchy re-enactor who got too good at it",
+		"a water-diviner whose rod points only at debts",
+		"an ex-cultist of the Sky Sires, deprogrammed, mostly",
+	}
+
 	local zoxen = Item("zoxen", "two dead zoxen, half-sanded",
 		"Salt-heavy haulers, dead in harness. The sand is patient with them.")
 	zoxen:alias("zox")
+	zoxen:set("taste", "of salt and brine. Zoxen are half salt by weight.")
 	wreck:add(zoxen)
+
+	-- butchery: the first cut takes the haunch AND the blood; meat draws
+	-- the pack (they keep a ledger, and you just opened an account)
+	local haunch = Item("zox haunch", "a briny haunch of zox meat",
+		"Dense and briny, dark as jerky already. It will keep. In these "
+		.. "halls, meat has listeners.")
+	haunch:alias("haunch", "meat")
+	haunch:set("gettable", true)
+	haunch:set("edible", true)
+	haunch:set("taste", "of iron and brine -- food, honestly, and better "
+		.. "bait: you are not the hungriest thing out here.")
+
+	local blood = Item("zox blood", "zox blood, caught warm (2 doses)",
+		"Half water by weight, like everything about a zox. Two honest "
+		.. "doses; each drinks like a meal and a rest.")
+	blood:alias("blood")
+	blood:set("gettable", true)
+	blood:set("portions", 2)
+	blood:set("onDrunk", function(game, thing)
+		local n = thing:get("portions") or 0
+		if n <= 0 then
+			game:say("Only the stain remains.")
+			return
+		end
+		thing:set("portions", n - 1)
+		if game:heal() then
+			game:say("The blood goes down like a meal and a drink at once. "
+				.. "A wound closes.")
+		else
+			game:say("The blood goes down warm. Nothing in you needed "
+				.. "mending; it settles for the mood.")
+		end
+		thing.description = (n - 1 > 0)
+			and ("zox blood, caught warm (" .. (n - 1) .. " dose)")
+			or "a smear of zox blood, spent"
+	end)
+
+	zoxen:set("onButchered", function(game, thing)
+		local cut = (thing:get("cut") or 0) + 1
+		thing:set("cut", cut)
+		if cut == 1 then
+			wreck:add(haunch)
+			wreck:add(blood)
+			game:say("You open the nearer zox along the clean flank and "
+				.. "carve loose a haunch; the blood you catch before the "
+				.. "sand can. Road-butchery: quick, ungentle, honest. And "
+				.. "somewhere south, noses lift.")
+		else
+			game:say("Nothing left on them worth the knife; the sand has "
+				.. "the rest.")
+		end
+	end)
 
 	local merchant = Item("dead merchant", "the merchant, dead where the road put him",
 		"He kept his ledger neat and his glowstone close. The road decided "
@@ -109,6 +177,8 @@ function BuildTomb(seed)
 	glowstone:set("gettable", true)
 	glowstone:set("hidden", true)
 	glowstone:set("lightable", true)
+	glowstone:set("taste", "like a nine-volt battery: a flat electric fizz "
+		.. "that finds every filling you own. Not food. Possibly not polite.")
 	glowstone:set("onLit", function(game)
 		game:award("first_light", 5, "[+5 -- light, learned]")
 		game:showFigure("glowstone")
@@ -120,6 +190,25 @@ function BuildTomb(seed)
 	waterskin:alias("skin", "water")
 	waterskin:set("gettable", true)
 	waterskin:set("hidden", true)
+	waterskin:set("portions", 3)
+	waterskin:set("onDrunk", function(game, thing)
+		local n = thing:get("portions") or 0
+		if n <= 0 then
+			game:say("The skin gives a dry apology.")
+			return
+		end
+		thing:set("portions", n - 1)
+		if game:heal() then
+			game:say("The water does what water does in Vaarn. A wound "
+				.. "troubles you less.")
+		else
+			game:say("You drink. Money never tasted so plain.")
+		end
+		thing.description = (n - 1 > 0)
+			and ("a waterskin with " .. (n - 1) .. " ration"
+				.. ((n - 1) ~= 1 and "s" or ""))
+			or "an empty waterskin"
+	end)
 	merchant:add(waterskin)
 
 	merchant:set("onSearched", function(game)
@@ -186,6 +275,12 @@ function BuildTomb(seed)
 		"Proper trail food -- and anything in these halls with a nose will "
 		.. "know you carry it.")
 	dates:set("gettable", true)
+	dates:set("taste", "of honey and sun under the road-dust. Anything "
+		.. "down here with a nose will know you carry them.")
+	dates:set("onEaten", function(game)
+		game:say("You could. But something in the boy's hall wants them "
+			.. "more than you do, and it outvotes you by thousands.")
+	end)
 	crates:add(dates)
 
 	local ledger = Item("ledger", "the merchant's ledger",
@@ -301,6 +396,18 @@ function BuildTomb(seed)
 			.. "Technically food. Philosophically a dare.")
 		rations:alias("rations")
 		rations:set("gettable", true)
+		rations:set("taste", "of history, wax, and a soldier's patience.")
+		rations:set("onEaten", function(game, thing)
+			if thing.holder then thing.holder:remove(thing) end
+			if game:heal() then
+				game:say("You honor the dare. Four thousand years and the "
+					.. "Autarchy's quartermaster still delivers: a wound "
+					.. "troubles you less.")
+			else
+				game:say("You honor the dare. Dense, waxy, adequate. The "
+					.. "quartermaster would accept that review.")
+			end
+		end)
 		warriors:add(rations)
 		game:say("The amber cylinder gives on the second blow -- gel "
 			.. "sheets down, the guard slumps, and his marching kit "
@@ -451,6 +558,18 @@ function BuildTomb(seed)
 			.. 'listen. Step softly."')
 	end)
 	silas:set("onGift", function(game, item)
+		if item.name == "ego-core" then
+			game.player:remove(item)
+			silas:add(item)
+			game:award("archivist_whole", 10,
+				"[+10 -- the archivist, made whole]")
+			game:say('Silas holds the core to his brow. His eyes flicker '
+				.. 'through four thousand years in a breath, and when he '
+				.. 'speaks, it is with two voices in perfect agreement. '
+				.. '"The lattice is complete. The dead may rest. And you, '
+				.. 'scavenger -- you are WRITTEN IN."')
+			return
+		end
 		if item.name == "friend's fungus" then
 			game.player:remove(item)
 			silas:add(item)
@@ -461,6 +580,30 @@ function BuildTomb(seed)
 				.. 'You climbed for this." He doses the wafer-port under '
 				.. 'his jaw, and his shoulders settle an inch. "Ask me '
 				.. 'anything. Better: ask the lattice."')
+			local lantern = Item("ulfire lantern", "the ulfire lantern",
+				"A lantern that burns the ninth colour. Things lit by it "
+				.. "show what they are, not what they seem.")
+			lantern:alias("lantern")
+			lantern:set("gettable", true)
+			lantern:set("lightable", true)
+			lantern:set("onLit", function(game2)
+				local box = game2.player:carrying("manifold box")
+				if box and not box:get("opened") then
+					box:set("opened", true)
+					for i = 1, #box.contents do
+						box.contents[i]:set("hidden", nil)
+					end
+					game2:say("Under the ninth colour the box shows what "
+						.. "it is: a fold of space wearing a box costume. "
+						.. "A compartment that was always there opens "
+						.. "outward from somewhere else, and inside -- "
+						.. "the EGO-CORE, humming its owner's name.")
+				end
+			end)
+			game.player:add(lantern)
+			game:say('He presses something into your hands: a lantern '
+				.. 'that burns a colour you have no name for. "Ulfire. '
+				.. 'For seeing what things are. You will know when."')
 		elseif item.name == "dates" then
 			game:say('Silas declines with a small bow. "I read the dead, '
 				.. 'not the dinner."')
@@ -470,6 +613,83 @@ function BuildTomb(seed)
 		end
 	end)
 	memory:addCharacter(silas)
+
+	-- --------------------------------------------------- the jackal pack
+	-- Staged offstage; butchered meat opens an account. Outdoors only.
+	local pack = Engine.Character("jackal pack", "a pack of pthalo-jackals",
+		"Pthalo-jackals: cautious, clever, cerulean-coated. Their eyes do "
+		.. "sums -- you, minus what you carry, minus what you bleed. It is "
+		.. "not you they want.")
+	pack:alias("jackals", "jackal", "pack")
+	pack:set("hostile", true)
+	pack:set("vigor", 3)
+	pack:set("struckText", "The blow lands; the pack gives ground "
+		.. "snarling, thinner by one.")
+	pack:set("koText", "The last jackal breaks and runs south, ledger "
+		.. "unbalanced. The road is yours.")
+	pack:set("onDeath", function(game)
+		game:award("jackals_settled", 5, "[+5 -- the pack is settled]")
+	end)
+	pack:set("onGift", function(game, item)
+		if item.name == "zox haunch" then
+			game.player:remove(item)
+			game:say("The pack closes over the haunch with terrible "
+				.. "courtesy and is gone south before the sand settles. "
+				.. "The ledger reads: paid.")
+			pack:set("dead", true)
+			pack:set("hostile", nil)
+			local room = pack.location
+			if room then
+				for i = 1, #room.characters do
+					if room.characters[i] == pack then
+						table.remove(room.characters, i)
+						break
+					end
+				end
+				pack.location = nil
+			end
+			game:award("jackals_settled", 5, "[+5 -- the pack is settled]")
+		else
+			game:say("The pack noses it and lets it fall. It is not you "
+				.. "they want; it is not this either.")
+		end
+	end)
+
+	g:addTrigger("pack_arrives", function(game)
+		if pack.location ~= nil or pack:get("dead") then return false end
+		local room = game.player.location
+		if room ~= wreck and room ~= exterior then return false end
+		if game.player:carrying("zox haunch") then return true end
+		for i = 1, #room.contents do
+			if room.contents[i].name == "zox haunch" then return true end
+		end
+		return false
+	end, function(game)
+		game.player.location:addCharacter(pack)
+		game:say("They come in low and unhurried, cerulean-coated, "
+			.. "filling the road. The nearest growls -- a sound with "
+			.. "arithmetic in it -- and the pack looks from you to your "
+			.. "bag, and back.")
+	end, false)
+
+	g:addTrigger("pack_presses", function(game)
+		return pack.location ~= nil
+			and game.player.location == pack.location
+			and not pack:get("dead")
+			and not game.sneaked
+	end, function(game)
+		local n = (pack:get("owed") or 0) + 1
+		pack:set("owed", n)
+		pack:set("aware", true)
+		if n == 1 then
+			game:say("The pack spreads, unhurried, sure of you.")
+		elseif n % 2 == 1 then
+			game:wound("Pack-Torn", "a jackal takes its installment out "
+				.. "of your calf.")
+		else
+			game:say("Yellow eyes do the arithmetic again.")
+		end
+	end, true)
 
 	-- ------------------------------------------------------ hall of hounds
 	local tank = Item("gel tank", "the sweating gel tank",
@@ -567,6 +787,15 @@ function BuildTomb(seed)
 	fungus:alias("fungus", "pouch")
 	fungus:set("gettable", true)
 	fungus:set("hidden", true)
+	fungus:set("taste", "of a microdose of agreement. For one long minute "
+		.. "the sand seems reasonable, the tomb well-run.")
+	fungus:set("onEaten", function(game)
+		game:say("You eat the whole pouch. The next hour is spent agreeing "
+			.. "warmly with the wind, the stone, and a rock that reminds "
+			.. "you of your mother. When it passes, the pouch is gone and "
+			.. "the archivist below will never know what he missed.")
+		game.player:remove(game.player:carrying("friend's fungus"))
+	end)
 	mystic:add(fungus)
 
 	-- ----------------------------------------------------------- chimney
@@ -720,7 +949,24 @@ function BuildTomb(seed)
 		.. "seam at its equator, fine as a hair -- it could be PRIED, "
 		.. "with an edge.")
 	coffin:alias("glass sphere", "casket")
+	coffin:set("closed", true) -- the pry is the only way in
 	sphere:add(coffin)
+
+	local box = Item("manifold box", "An-Rah's manifold box",
+		"A small gilded box that doesn't quite fit the space it sits in "
+		.. "-- hypergeometric, and heavier inside than out.")
+	box:alias("box")
+	box:set("gettable", true)
+	box:set("hidden", true)
+	coffin:add(box)
+
+	local core = Item("ego-core", "the Autarch's ego-core",
+		"A spindle of memory-lazulite, warm as a kept promise. It hums "
+		.. "a name: its own.")
+	core:alias("core")
+	core:set("gettable", true)
+	core:set("hidden", true)
+	box:add(core)
 
 	local prayers = Item("prayers", "funeral prayers, carved everywhere",
 		"Carved to be read from every direction at once. READ them to "
@@ -740,13 +986,58 @@ function BuildTomb(seed)
 	balm:set("hidden", true)
 	sphere:add(balm)
 
+	local mending = Item("prayer of mending", "the Prayer of Mending",
+		"A word that remembers how things were made. Said aloud over the "
+		.. "broken, it argues them whole.")
+	mending:alias("mending")
+	mending:set("hidden", true)
+	sphere:add(mending)
+
 	prayers:set("readText",
-		"Most of it is names and grief. But two lines are RUNG, cut "
+		"Most of it is names and grief. But three lines are RUNG, cut "
 		.. "deeper than the rest, meant to be SAID aloud: the PRAYER OF "
-		.. "BALM, and the PRAYER OF WRATH.")
+		.. "BALM, the PRAYER OF WRATH -- and beneath them, oldest and "
+		.. "deepest, the PRAYER OF MENDING.")
 	prayers:set("onRead", function(_game)
 		wrath:set("hidden", nil)
 		balm:set("hidden", nil)
+		mending:set("hidden", nil)
+	end)
+
+	mending:set("onSaid", function(game)
+		if not coffin:get("pried") then
+			game:say("The word finds nothing broken here worth its breath.")
+			return
+		end
+		if game.player:carrying("manifold box") == nil
+			and not game.scoredKeys["laid_to_rest"]
+			and sphere.characters[1] ~= nil then
+			game:say("The chamber will not mend around its tenant. The "
+				.. "Horror first.")
+			return
+		end
+		if game.scoredKeys["laid_to_rest"] then
+			game:say("The coffin is whole. The word rests too.")
+			return
+		end
+		coffin:set("pried", nil)
+		coffin:set("closed", true)
+		coffin.examineText = "The glass sphere hangs whole at the "
+			.. "chamber's heart, its equator seamless -- you know where "
+			.. "the cracks were, and cannot find them. Past the clearing "
+			.. "cloud, Nassak An-Rah lies re-housed among his wrappings, "
+			.. "composed, the gold wire at his joints at rest."
+		sphere.description = "A spherical chamber carved with funeral "
+			.. "prayers, quiet in the way of a made bed. The coffin hangs "
+			.. "whole at the dead centre, seam sealed, the Autarch "
+			.. "re-housed within; the ash of the Horror turns in its slow "
+			.. "orbit, out of respect."
+		game:say("You say the PRAYER OF MENDING, and the chamber leans on "
+			.. "the cracks until they remember being whole. Seams close "
+			.. "like water under silk. Past the clearing cloud the "
+			.. "Autarch settles among his wrappings -- composed, kept, "
+			.. "DREAMING SOMETHING KIND.")
+		game:award("laid_to_rest", 10, "[+10 -- the Autarch, laid to rest]")
 	end)
 
 	local horror = Engine.Character("fungal horror",
@@ -775,6 +1066,7 @@ function BuildTomb(seed)
 			return
 		end
 		coffin:set("pried", true)
+		coffin:set("closed", nil) -- what it kept is reachable now
 		coffin.examineText = "The coffin stands open, its cloud let out. "
 			.. "What it kept is out with it."
 		horror:set("hostile", true)
@@ -909,6 +1201,33 @@ function BuildTomb(seed)
 		available = function(_) return summit.visited end,
 		resolved = function(game) return game.scoredKeys["archivist_dosed"] end })
 
+	g:addHint({ key = "jackals", question = "A pack is doing arithmetic at me.",
+		levels = {
+			"They keep a ledger, and your knife opened an account.",
+			"GIVE ZOX HAUNCH TO JACKAL PACK -- or the blade balances it "
+				.. "the other way.",
+		},
+		available = function(_) return pack.location ~= nil
+			or pack:get("dead") == true end,
+		resolved = function(_) return pack:get("dead") == true end })
+	g:addHint({ key = "box", question = "The gilded box won't open.",
+		levels = {
+			"It isn't closed. It's folded. You need a light that shows "
+				.. "what things ARE.",
+			"The dosed archivist gave you it: carry the box, LIGHT ULFIRE "
+				.. "LANTERN.",
+		},
+		available = function(game) return game.player:carrying("manifold box") ~= nil end,
+		resolved = function(game) return game.scoredKeys["archivist_whole"] end })
+	g:addHint({ key = "rest", question = "The coffin stands open and wrong.",
+		levels = {
+			"The walls hold three prayers, not two. Read them again.",
+			"With the Horror gone: SAY PRAYER OF MENDING.",
+		},
+		available = function(_) return coffin:get("pried") == true
+			and sphere.characters[1] == nil end,
+		resolved = function(game) return game.scoredKeys["laid_to_rest"] end })
+
 	g:addHint({
 		key = "horror",
 		question = "The coffin's tenant will not stay cut.",
@@ -921,7 +1240,7 @@ function BuildTomb(seed)
 	})
 
 	-- ------------------------------------------------------------ start
-	g.maxScore = 70
+	g.maxScore = 95
 	g.player.location = wreck
 	wreck.visited = true
 	return g

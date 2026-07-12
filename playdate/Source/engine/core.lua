@@ -535,6 +535,52 @@ local sneakVerb = verb("sneak", 1, function(g)
 end, "creep")
 sneakVerb.template = { "direction" }
 
+verb("taste", 1, function(g, thing)
+	local t = thing:get("taste")
+	g:say("You touch the " .. thing.name .. " to your tongue. It tastes "
+		.. (t or "of dust and patience."))
+end, "lick")
+
+verb("eat", 1, function(g, thing)
+	local hook = thing:get("onEaten")
+	if hook then
+		hook(g, thing)
+		return
+	end
+	if thing:get("edible") then
+		if thing.holder then thing.holder:remove(thing) end
+		g:say("You eat the " .. thing.name .. ". The tomb watches you chew.")
+	else
+		g:say("The " .. thing.name .. " is not food, by any argument.")
+	end
+end)
+
+verb("drink", 1, function(g, thing)
+	local hook = thing:get("onDrunk")
+	if not hook then
+		g:say("You can't drink the " .. thing.name .. ".")
+		return
+	end
+	hook(g, thing)
+end)
+
+verb("butcher", 1, function(g, thing)
+	local hook = thing:get("onButchered")
+	if not hook then
+		g:say("Nothing there worth the knife.")
+		return
+	end
+	local edged = false
+	for i = 1, #g.player.contents do
+		if g.player.contents[i]:get("weapon") then edged = true end
+	end
+	if not edged then
+		g:say("Butchery wants an edge. Your hands alone won't part hide.")
+		return
+	end
+	hook(g, thing)
+end, "carve")
+
 verb("break", 1, function(g, thing)
 	local hook = thing:get("onBreak")
 	if not hook then
@@ -650,6 +696,15 @@ function Game:doCommand(line)
 	local room = self.player.location
 
 	self.sneaked = false
+	-- the chargen's afterlife: EXAMINE SELF rolls you a Vaarnish self,
+	-- once per expedition (seeded: saves keep the same you)
+	if line == "examine self" or line == "x self" or line == "examine me"
+		or line == "x me" or line == "look at self" then
+		self.journal[#self.journal + 1] = line
+		local selves = Engine.selves or { "a scavenger of the Tomblands" }
+		self:say("You are " .. selves[(self.seed % #selves) + 1] .. "")
+		return true
+	end
 	-- SNEAK <exit>: quiet travel -- the sound-hunters' triggers skip the
 	-- round (their preds consult game.sneaked). Handled before the verb
 	-- table: its argument is a direction, not a noun.
@@ -756,8 +811,9 @@ end
 Engine.pools = {
 	-- arming yourself mid-fight is THE move in the warriors hall: take and
 	-- search stay on the wheel (the audit caught their absence)
-	combat = { "attack", "sneak", "say", "read", "pry", "break", "take",
-		"search", "throw", "examine", "look", "douse", "inventory", "hint" },
+	combat = { "attack", "give", "sneak", "say", "read", "pry", "break",
+		"take", "search", "throw", "examine", "look", "douse", "inventory",
+		"hint" },
 }
 
 -- Combat: something hostile shares the room and is either visible to you
