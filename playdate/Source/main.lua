@@ -460,4 +460,5 @@ function playdate.update()
 	end
 end
 
+applyFont()
 boot()
