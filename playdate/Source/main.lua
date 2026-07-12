@@ -17,7 +17,7 @@ local MARGIN = 6
 local PANE = TRANS_H - MARGIN * 2
 local transcript = {}
 local viewY = 0 -- pixels of transcript scrolled past the pane's top
-local anchorTop = false -- reading mode: false = show latest, true = top of turn
+local anchorTop = true -- reading mode: top of turn by default (CCB)
 
 local function say(text)
 	local _, h = gfx.getTextSizeForMaxWidth(text, SCREEN_W - MARGIN * 2)
@@ -118,9 +118,15 @@ end
 
 local function runCommand(line)
 	local startH = totalHeight()
+	local n0 = #transcript
 	game:doCommand(line)
 	autosave()
-	settleView(startH)
+	-- In top mode, pin the view just PAST the echoed command: you know what
+	-- you said; the pane opens on the world's answer. The echo stays in the
+	-- transcript for scrollback (CCB).
+	local echoH = 0
+	if #transcript > n0 + 1 then echoH = transcript[n0 + 1].h end
+	settleView(startH + echoH)
 end
 
 local function pressA()
@@ -166,13 +172,10 @@ end)
 menu:addCheckmarkMenuItem("free input", false, function(on)
 	if on then playdate.keyboard.show("") end
 end)
-menu:addOptionsMenuItem("reading", { "latest", "top" }, (function()
+menu:addOptionsMenuItem("reading", { "top", "latest" }, (function()
 	local prefs = playdate.datastore.read("prefs")
-	if prefs and prefs.anchorTop then
-		anchorTop = true
-		return "top"
-	end
-	return "latest"
+	if prefs ~= nil then anchorTop = (prefs.anchorTop == true) end
+	return anchorTop and "top" or "latest"
 end)(), function(value)
 	anchorTop = (value == "top")
 	playdate.datastore.write({ anchorTop = anchorTop }, "prefs")
