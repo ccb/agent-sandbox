@@ -95,6 +95,31 @@ The crank is the parser.
 - The crank docked = scroll the transcript. Undocked = compose. The gesture
   IS the mode.
 
+### 3.1 Scene View: the MacVenture lesson (CCB reference: Shadowgate PD)
+
+Shadowgate PD's screen is two panes: the illustrated scene at left, a
+swappable panel (inventory, save, self) at right -- thick 1-bit outlines,
+dither shading, almost no prose on screen. We are a prose game, so we invert
+the proportions, but the lesson stands: **on a 1-bit handheld, the picture
+can carry the room and the text can carry the turn.**
+
+- **Two screen modes, one button.** TRANSCRIPT view (default): the layout in
+  §3 -- text pane + composer. SCENE view (toggle, or hold UP): the room's
+  figure fills a left pane ~256×240 while a right rail shows the room name,
+  exits in compass order, and the noun lane -- the MacVenture arrangement,
+  with our cards as the art. The deck already covers most rooms and every
+  major beat; rooms without a card fall back to a framed room-name plate.
+- **The figures earn their place**: in Scene view a card plays its loop
+  once, then holds (the plays-once Road behavior generalizes); the crank
+  scrubs the loop when the composer is idle -- crank-as-pacing, the house
+  idiom.
+- **Panel swap**: left/right on the rail cycles NOUNS / INVENTORY / MAP,
+  mirroring the web app's swipe panels (the data already exists in
+  panel_data()). SAVE and SELF live at the rail's foot, straight from the
+  reference.
+- Cost control: Scene view is a VIEW over the same engine state -- no new
+  content, just layout. It slots after M4 (figures) as M4.5.
+
 ## 4. Architecture options
 
 **A. Lua re-implementation (recommended).** A slim `mini-engine` in Lua:
@@ -226,6 +251,9 @@ top verbs, and the room's leading nouns without any cranking.
   Exterior -> Youth vertical slice) WITH the terse-text pass as it goes,
   then the trigger set; parity harness green on the WIN walkthrough.
 - **M4 -- figures**: exporter + imagetable playback, ILLUSTRATIONS toggle.
+- **M4.5 -- Scene view**: the MacVenture two-pane mode (§3.1): figure pane
+  + rail (nouns/inventory/map, SAVE/SELF), one-button toggle from the
+  transcript.
 - **M5 -- systems**: wounds/slots, hints (the HINT menu is naturally
   crank-scrollable), death/epitaph + restart.
 - **M6 -- ship**: device soak, itch sideload build, Catalog submission.
