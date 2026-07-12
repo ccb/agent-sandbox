@@ -103,6 +103,33 @@
   padding: 0.15em 0.6em;
 }
 
+/* Live mode: connection + run state pill in the navigator (green = following,
+   amber = paused, red = the poll is failing and we're retrying). */
+.agent-live-badge {
+  flex: none;
+  font-size: 0.72em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #116932;
+  background: #e8f6ec;
+  border: 1px solid #bfe4c9;
+  border-radius: 999px;
+  padding: 0.15em 0.6em;
+  white-space: nowrap;
+}
+
+.agent-live-badge.is-paused {
+  color: #8a5b00;
+  background: #fdf3dd;
+  border-color: #f0dcae;
+}
+
+.agent-live-badge.is-off {
+  color: #b3261e;
+  background: #fdecea;
+  border-color: #f5c6c2;
+}
+
 /* ---------- Two-column body ------------------------------------------------- */
 /* Left: the agent's details (the card). Right: its full memory history. A hairline
    between them; on a narrow viewport they stack and the rule moves to the top. */
