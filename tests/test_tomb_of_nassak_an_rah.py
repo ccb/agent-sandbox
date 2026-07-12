@@ -1388,6 +1388,52 @@ def test_prying_the_coffin_needs_an_anchor_and_a_blade_it_will_lose():
     assert "prismatic blade" not in game.player.carried_items()
 
 
+def test_any_honest_edge_pries_the_coffin():
+    """The seam wants an edge, not a pedigree (CCB): the centipede's
+    crystal shard -- a knife by any honest measure -- opens the coffin,
+    and it is the shard that snaps, not some other carried blade."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)
+    game.relocate(game.player, sphere)
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
+    game.do_command("wear boots")
+    shard = game.locations["Tomb Exterior"]  # forge the knife by hand
+    from text_adventure_games import things
+    edge = things.Item("crystal shard", "a shard", "A knife by any honest measure.")
+    edge.set_property("gettable", True)
+    edge.set_property("edged", True)
+    edge.add_alias("shard")
+    game.player.add_to_inventory(edge)
+    game.do_command("pry open coffin with shard")
+    assert sphere.items["coffin"].get_property("pried")
+    assert "crystal shard" not in game.player.carried_items()
+    assert "synth-hunting dagger" in sphere.items
+
+
+def test_the_named_lever_is_the_one_that_snaps():
+    """Carrying both, 'pry coffin with shard' spends the shard and the
+    prismatic blade survives; bare 'pry coffin' also prefers the shard
+    (the cheapest edge goes first, the Exotica dagger last of all)."""
+    game = _game()
+    sphere = game.locations["Burial Sphere of Nassak An-Rah"]
+    sphere.set_property("horror_dead", True)
+    game.relocate(game.player, sphere)
+    _hand(game, "Hall of Warriors", "viridian cylinder", "magnetic boots")
+    _hand(game, "Hall of Warriors", "cerulean cylinder", "prismatic blade")
+    game.do_command("wear boots")
+    from text_adventure_games import things
+    edge = things.Item("crystal shard", "a shard", "A knife by any honest measure.")
+    edge.set_property("gettable", True)
+    edge.set_property("edged", True)
+    edge.add_alias("shard")
+    game.player.add_to_inventory(edge)
+    game.do_command("pry coffin with shard")
+    assert sphere.items["coffin"].get_property("pried")
+    assert "crystal shard" not in game.player.carried_items()
+    assert "prismatic blade" in game.player.carried_items()
+
+
 def test_the_spider_silk_tether_is_the_bootless_anchor():
     game = _game()
     sphere = game.locations["Burial Sphere of Nassak An-Rah"]

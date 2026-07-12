@@ -1171,6 +1171,33 @@ class PryCoffin(actions.Action):
     def __init__(self, game, command, actor=None):
         super().__init__(game, actor=actor)
         self.player = self.game.player
+        self.command = command
+        self.edge = None
+
+    def _carried_edges(self):
+        """Every carried thing that would satisfy the seam -- the same
+        test butchery applies: a blade by name, or anything 'edged'
+        (the centipede's crystal shard earns its keep here too, CCB)."""
+        return {
+            n: it
+            for n, it in self.player.carried_items().items()
+            if "blade" in n or "dagger" in n or it.get_property("edged")
+        }
+
+    def _choose_edge(self, edges):
+        """The lever that gets lost. A tool named in the command wins
+        ('pry coffin with shard'); otherwise spend the cheapest edge
+        first and the Exotica dagger only as a last resort."""
+        named = self.parser.match_item(self.command, edges, hint="lever")
+        if named is not None:
+            return named
+        for pick in ("crystal shard", "prismatic blade"):
+            if pick in edges:
+                return edges[pick]
+        keep_last = [
+            it for n, it in edges.items() if n != "synth-hunting dagger"
+        ]
+        return keep_last[0] if keep_last else next(iter(edges.values()))
 
     def check_preconditions(self) -> bool:
         loc = self.player.location
@@ -1191,12 +1218,14 @@ class PryCoffin(actions.Action):
                 "you down, and prying wants something to brace against."
             )
             return False
-        if "prismatic blade" not in self.player.carried_items():
+        edges = self._carried_edges()
+        if not edges:
             self.parser.fail(
                 "The seam is fine as a hair; fingers will not part it. It "
                 "wants a blade's edge -- and a fool willing to lose one."
             )
             return False
+        self.edge = self._choose_edge(edges)
         return True
 
     def apply_effects(self):
@@ -1222,12 +1251,18 @@ class PryCoffin(actions.Action):
             _sphere_erupted(self.game)
             return
         coffin.set_property("pried", True)
-        blade = self.player.carried_items()["prismatic blade"]
-        self.player.discard_item(blade)
+        edge = self.edge
+        self.player.discard_item(edge)
         anchor = (
             "Anchored by the magnetic boots"
             if "magnetic boots" in self.player.worn
             else "Braced against the silk-lashed coffin"
+        )
+        snap = (
+            "The edge bends light, bends -- and snaps at the hilt as the "
+            "coffin gives."
+            if edge.name == "prismatic blade"
+            else "The edge bites, bends -- and snaps as the coffin gives."
         )
         taken = []
         for item in list(coffin.contents.values()):
@@ -1235,11 +1270,10 @@ class PryCoffin(actions.Action):
             loc.add_item(item)
             taken.append(item.name)
         self.parser.ok(
-            f"{anchor}, you work the prismatic blade into the hairline seam. "
-            "The edge bends light, bends -- and snaps at the hilt as the "
-            "coffin gives. Among the Autarch's drifting bones you find: "
+            f"{anchor}, you work the {edge.name} into the hairline seam. "
+            f"{snap} Among the Autarch's drifting bones you find: "
             + ", ".join(taken)
-            + ". The blade is done."
+            + f". The {edge.name} is done."
         )
         _sphere_aftermath(self.game, ash=False)
 
