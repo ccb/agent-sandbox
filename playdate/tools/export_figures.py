@@ -73,11 +73,14 @@ def export(page, key, frames):
               return;
             }
             const fs = parseFloat(t.getAttribute('font-size') || '10');
-            // footer-band lines are long sentences: a gentler boost keeps
-            // them inside the card instead of clipping both edges
-            const nfs = Math.round(fs * (y > 350 ? 1.55 : K));
+            const nfs = Math.round(fs * K);
             t.setAttribute('font-size', nfs);
             t.setAttribute('letter-spacing', '0.5');
+            if (y > 350) { // footer band: wrapped per-frame, not shrunk
+              t.dataset.footer = '1';
+              t.dataset.fs = nfs;
+              t.dataset.oy = y;
+            }
             texts.push({ t, y, fs: nfs });
           });
           // bigger type needs more leading: labels sharing a column (same
@@ -98,6 +101,43 @@ def export(page, key, frames):
               }
             }
           }
+          // per-frame footer wrap: typeOn rewrites these nodes every tick,
+          // so re-split the current string into tspans before each capture
+          window.__wrapFooters = () => {
+            document.querySelectorAll('#stage text[data-footer]').forEach((t) => {
+              const s = (t.textContent || '').trimEnd();
+              if (!s) return;
+              const fs = parseFloat(t.dataset.fs);
+              const est = fs * 0.62 + 0.5; // char width, letterspaced
+              const maxChars = Math.floor(600 / est);
+              if (s.length <= maxChars) return;
+              const words = s.split(' ');
+              const lines = [];
+              let cur = '';
+              words.forEach((w) => {
+                if ((cur + ' ' + w).trim().length > maxChars) {
+                  if (cur) lines.push(cur);
+                  cur = w;
+                } else {
+                  cur = cur ? cur + ' ' + w : w;
+                }
+              });
+              if (cur) lines.push(cur);
+              const lh = fs * 1.1;
+              t.textContent = '';
+              t.setAttribute('y',
+                Math.min(parseFloat(t.dataset.oy), 394 - (lines.length - 1) * lh));
+              const x = t.getAttribute('x');
+              lines.forEach((ln, i) => {
+                const sp = document.createElementNS(
+                  'http://www.w3.org/2000/svg', 'tspan');
+                sp.setAttribute('x', x);
+                sp.setAttribute('dy', i === 0 ? 0 : lh);
+                sp.textContent = ln;
+                t.appendChild(sp);
+              });
+            });
+          };
         }"""
     )
     stage = page.locator("#stage")
@@ -106,6 +146,7 @@ def export(page, key, frames):
         page.evaluate("window.TombFigures._tickAll()")
     cells = []
     for _ in range(frames):
+        page.evaluate("window.__wrapFooters()")
         shot = Image.open(io.BytesIO(stage.screenshot())).convert("L")
         scale = min(CELL_W / shot.width, CELL_H / shot.height)
         shot = shot.resize(
