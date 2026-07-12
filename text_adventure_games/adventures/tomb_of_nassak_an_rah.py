@@ -96,6 +96,9 @@ _LATTICE_FACETS = (
         "key": "embalming",
         "name": "THE EMBALMING",
         "words": ("embalming", "embalm", "funeral", "organs"),
+        # The replay is the litho (CCB): the bank shows the canopic system
+        # as it teaches it -- the same card the plinths wear downstairs.
+        "figure": "canopic-c",
         "text": (
             "the Autarch's embalming: the baboon took his lungs, the human his "
             "liver, the mantis his eyes; the falcon was given his intestines, and "
@@ -293,6 +296,9 @@ def _facet_text(g, lattice, i):
     facet = _LATTICE_FACETS[i]
     if facet.get("hidden") and first:
         g.award("remembered", 5, "[+5 -- every remembered day, in its order]")
+    if facet.get("figure"):
+        # A replay REPLAYS: like examine, the bank re-earns its card.
+        g.show_figure(facet["figure"], force=True)
     extra = facet["more"](g) if facet.get("more") else ""
     return facet["text"] + (extra or "")
 
