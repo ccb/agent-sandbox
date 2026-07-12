@@ -16,11 +16,35 @@ Research + port plan (CCB, 2026-07). Branch: `feat/playdate`.
   (Panic review). Unique `bundleID` required.
 - **Pulp** (the web-based maker) is a toy for this purpose -- room-based
   scripting, no real text layout. Not a fit; we use the SDK.
-- **Prior art**: text games exist and work on the device (The Simorgh, Thy
-  Dungeonman, robotfindskitten ports) -- all avoid free typing in favor of
-  menus. There IS a `playdate.keyboard` on-screen keyboard (d-pad/crank
-  driven) usable as a fallback for naming/save slots, but it is far too slow
-  to be the primary way to play a parser game.
+- **Prior art** (survey, 2026-07): text games ship and sell on the device;
+  nobody has shipped a satisfying TYPED parser game. The strategies seen:
+  1. **Choice-based reduction** (The Simorgh; most itch.io "interactive
+     fiction" on Playdate): drop the parser, become menus/CYOA. Works, but
+     surrenders the verb+noun identity -- our failure mode to avoid.
+  2. **Guided input, dual-mode** (Thy Dungeonman 1 & 2 -- the closest
+     relative): preset VERB and NOUN pickers as the DEFAULT input, with
+     free typing available as an opt-in via the system menu for purists;
+     the crank scrolls both the selections and the transcript, and even
+     scrubs the text reveal speed. Direct validation of the Composer.
+  3. **Verb-panel adventure** (Shadowgate PD, official MacVenture port,
+     Catalog Season 2): a fixed verb panel + object targeting with
+     crank-tailored interaction -- commercial proof that verb+object
+     adventuring works on this hardware.
+  4. **Typing anyway** (Colossal Cave port; forum interest in a Z-machine
+     interpreter): exists, generally read as awkward; Panic's own
+     "Designing for Playdate" says of `playdate.keyboard`: if your game
+     expects a lot of text input, "it's worth pondering if that will be
+     fun." Keyboard = naming and save slots only.
+  5. **Crank as pacing** (Simorgh's hold-A fast-forward, Dungeonman's
+     crank-controlled reveal, Your Best Day's crank-through-your-day):
+     the crank as a READING control is a house idiom -- it supports the
+     docked-crank-scrolls-transcript plan, and suggests crank-scrubbed
+     typewriter speed as cheap, native-feeling polish.
+  Two takeaways: our Composer is strategy 2 with lanes and grammar
+  templates on top (no shipped game composes multi-slot commands like
+  GIVE X TO Y -- that is our contribution); and we should copy
+  Dungeonman's dual-mode courtesy (free-input toggle in the system menu)
+  and the crank-scrubbed reveal.
 
 ## 2. Why this game can work there
 
