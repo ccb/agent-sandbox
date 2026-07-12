@@ -695,8 +695,16 @@ def test_openai_tool_choice_maps():
 
 
 def test_anthropic_tool_choice_maps():
-    assert _anthropic_tool_choice("auto") == {"type": "auto"}
-    assert _anthropic_tool_choice("any") == {"type": "any"}
+    # "auto"/"any" ask for one tool call per turn (the parallel-tool-use belt);
+    # the forced-single shape is pinned unchanged for call_tool's consumers.
+    assert _anthropic_tool_choice("auto") == {
+        "type": "auto",
+        "disable_parallel_tool_use": True,
+    }
+    assert _anthropic_tool_choice("any") == {
+        "type": "any",
+        "disable_parallel_tool_use": True,
+    }
     assert _anthropic_tool_choice({"name": "t"}) == {"type": "tool", "name": "t"}
 
 
@@ -730,6 +738,7 @@ def test_openai_call_tools_collects_multiple_calls():
     )
 
     assert fake.created_kwargs["tool_choice"] == "required"  # "any" -> required
+    assert fake.created_kwargs["parallel_tool_calls"] is False  # the belt
     assert len(fake.created_kwargs["tools"]) == 3
     assert [c["id"] for c in result.tool_calls] == ["c1", "c2"]  # ALL, not just [0]
     assert result.tool_calls[0] == {"id": "c1", "name": "t1", "arguments": {"x": 1}}
@@ -753,7 +762,10 @@ def test_anthropic_call_tools_collects_all_tool_use_blocks():
         tool_choice="any",
     )
 
-    assert fake.created_kwargs["tool_choice"] == {"type": "any"}
+    assert fake.created_kwargs["tool_choice"] == {
+        "type": "any",
+        "disable_parallel_tool_use": True,  # the belt: one call per turn, please
+    }
     assert len(fake.created_kwargs["tools"]) == 3
     assert [c["id"] for c in result.tool_calls] == ["u1", "u2"]  # both, not just first
     assert result.tool_calls[0] == {"id": "u1", "name": "t1", "arguments": {"x": 1}}
@@ -1613,3 +1625,40 @@ def test_custom_action_tool_precondition_still_gates_bad_target():
 
     assert acted is False  # every attempt was gated, never routed to an effect
     assert not player.get_property("waved_at")
+
+
+# --- #453 review: parallel tool calls must not double-act ------------------
+
+import pytest
+
+
+def test_parallel_tool_calls_apply_only_the_first_act():
+    # Real providers can emit 2+ tool calls in one assistant turn even under
+    # tool_choice="any" (the offline mocks never do). Only the first successful
+    # route may act; the rest get a refusal tool_result -- an NPC gets ONE act
+    # per game turn.
+    game, player, friend = _scope_scene()
+    game.parser.add_action(_Wave)
+
+    double = {
+        "tool_calls": [
+            {"id": "c1", "name": "wave", "arguments": {"target": "player"}},
+            {"id": "c2", "name": "go", "arguments": {"arguments": "north"}},
+        ]
+    }
+    client = MockLlmClient(tool_calls_responses=[double])
+    friend.set_behavior(make_react_behavior(client))
+
+    friend.take_turn(game)
+
+    assert player.get_property("waved_at") is True  # the first call acted
+    assert friend.location.name == "Hall"  # the second was refused: no move
+
+
+def test_tools_for_rejects_sanitized_name_collision():
+    # Distinct registry verbs may sanitize to the SAME provider tool name
+    # ("ghost touch" / "ghost  touch" -> "ghost_touch"); shipping the duplicate
+    # would 400 at the provider, so tools_for fails fast at build time instead.
+    game, _, _ = _scope_scene()
+    with pytest.raises(ValueError, match="collision"):
+        tools_for(game.parser, names=["ghost touch", "ghost  touch"])

@@ -353,6 +353,12 @@ def _cacheable_system(system_text: str) -> list[dict]:
 # answer with text or call tools), "any" (must call some tool), and a forced
 # {"name": ...} (must call that one). call_tool's forced-single path passes the
 # {"name": ...} form, so these must reproduce today's forced wire shapes exactly.
+# "auto"/"any" additionally ask the provider for ONE tool call per assistant
+# turn (Anthropic: disable_parallel_tool_use; OpenAI: parallel_tool_calls=False
+# in call_tools): the engine's tool loops execute calls one at a time and an
+# NPC gets one act per game turn, so parallel calls only waste refusals. This
+# is best-effort -- providers may still emit several, and the decide loop's
+# execute guard remains the authority.
 def _openai_tool_choice(tool_choice):
     if tool_choice == "auto":
         return "auto"
@@ -363,9 +369,9 @@ def _openai_tool_choice(tool_choice):
 
 def _anthropic_tool_choice(tool_choice):
     if tool_choice == "auto":
-        return {"type": "auto"}
+        return {"type": "auto", "disable_parallel_tool_use": True}
     if tool_choice == "any":
-        return {"type": "any"}
+        return {"type": "any", "disable_parallel_tool_use": True}
     return {"type": "tool", "name": tool_choice["name"]}
 
 
@@ -687,6 +693,7 @@ class OpenAIClient:
                     max_tokens=max_tokens,
                     tools=[_to_openai_tool(t) for t in tools],
                     tool_choice=_openai_tool_choice(tool_choice),
+                    parallel_tool_calls=False,
                 ),
                 provider="openai",
                 messages=messages,
