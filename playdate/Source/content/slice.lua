@@ -9,7 +9,7 @@ function BuildTomb(seed)
 
 	-- ------------------------------------------------------------ rooms
 	local wreck = g:room("The Caravan Wreck",
-		"The Tomblands road, the hour after the Cacklemaw. The wreck of a "
+		"The Tomblands road, the hour after the Cacklemaw attack. The wreck of a "
 		.. "wind-wagon lies heeled over in blue sand; the dead zoxen and "
 		.. "the merchant have been arranged by the wind into attitudes of "
 		.. "sleep. Northward, three carved faces watch from azure stone.")
