@@ -1,13 +1,22 @@
-# Playdate port -- M0 spike
+# Playdate port -- M1 (mini-engine)
+
+Layout:
+- `Source/engine/core.lua` -- the playdate-free mini-engine (pure Lua 5.4:
+  no playdate APIs, no `+=`): things/characters/locations with properties,
+  aliases and ordered contents; the verb registry (look/examine/search/
+  take/drop/inventory + travel); scope -> suggestions (the composer lanes);
+  journal + (seed, journal) restore.
+- `Source/content/slice.lua` -- the vertical slice (Wreck, Wagon's Hold,
+  Tomb Exterior) ported from the Python tomb with the terse-text pass.
+- `Source/main.lua` -- the device layer: transcript, the Composer
+  (crank lane + per-pool recency recall), datastore autosave every turn,
+  system menu (new game, free input via playdate.keyboard).
+- `tests/engine_test.lua` -- the parity harness: `lua playdate/tests/engine_test.lua`
+  (22 assertions: movement/aliases/blocks, hidden-until-search honesty,
+  awards idempotence, take/drop/containers, replay-rebuilds-state).
 
 Build:  `pdc -sdkpath ~/Developer/PlaydateSDK Source TombOfNassakAnRah.pdx`
-Run:    open the .pdx with the Playdate Simulator, or sideload via play.date/account.
+Run:    open the .pdx with the Playdate Simulator, or sideload.
 
-Controls (the Composer, docs/design/playdate.md section 3):
-- crank .... scroll the active word lane (6 detents/rev)
-- left/right lane: EXITS / VERBS / NOUNS
-- up/down .. page the transcript
-- A ........ speak the highlighted word (an exit alone just goes)
-- B ........ unsay the last word
-
-M0 exit criterion: compose GO NORTH on hardware.
+Controls: crank = word lane; left/right = EXITS/VERBS/NOUNS; A speaks
+(an exit alone just goes); B unsays; up/down pages the transcript.

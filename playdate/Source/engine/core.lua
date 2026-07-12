@@ -1,0 +1,421 @@
+-- The mini-engine (M1): rooms, things, verbs, journal -- the playdate-free
+-- core of the Tomb port (docs/design/playdate.md section 4). Pure Lua 5.4:
+-- no playdate APIs, no `+=`, so the same file runs under pdc on device and
+-- under plain lua in the parity harness (tests/engine_test.lua).
+--
+-- The Python engine remains the source of truth; this mirrors its shapes
+-- (properties, scope, journal replay, idempotent awards) small enough for a
+-- 168 MHz handheld. One global namespace: Engine.
+
+Engine = {}
+
+local function class(parent)
+	local c = {}
+	c.__index = c
+	setmetatable(c, {
+		__index = parent,
+		__call = function(cls, ...)
+			local o = setmetatable({}, cls)
+			o:init(...)
+			return o
+		end,
+	})
+	return c
+end
+Engine.class = class
+
+-- ------------------------------------------------------------------ things
+local Thing = class()
+Engine.Thing = Thing
+
+function Thing:init(name, description, examine)
+	self.name = string.lower(name)
+	self.description = description
+	self.examineText = examine or description
+	self.properties = {}
+	self.aliases = {}
+	self.contents = {} -- ordered: description order IS lane order
+end
+
+function Thing:set(k, v) self.properties[k] = v end
+function Thing:get(k) return self.properties[k] end
+
+function Thing:alias(...)
+	local names = { ... }
+	for i = 1, #names do
+		self.aliases[#self.aliases + 1] = string.lower(names[i])
+	end
+	return self
+end
+
+function Thing:answersTo(word)
+	word = string.lower(word)
+	if self.name == word then return true end
+	for i = 1, #self.aliases do
+		if self.aliases[i] == word then return true end
+	end
+	return false
+end
+
+function Thing:add(item)
+	self.contents[#self.contents + 1] = item
+	item.holder = self
+	return self
+end
+
+function Thing:remove(item)
+	for i = 1, #self.contents do
+		if self.contents[i] == item then
+			table.remove(self.contents, i)
+			item.holder = nil
+			return true
+		end
+	end
+	return false
+end
+
+-- What a look can reach inside this thing: nothing while closed, and
+-- hidden things stay hidden until SEARCH lifts them.
+function Thing:accessible()
+	local out = {}
+	if self:get("closed") then return out end
+	for i = 1, #self.contents do
+		if not self.contents[i]:get("hidden") then
+			out[#out + 1] = self.contents[i]
+		end
+	end
+	return out
+end
+
+-- --------------------------------------------------------------- character
+local Character = class(Thing)
+Engine.Character = Character
+
+function Character:init(name, description, examine)
+	Thing.init(self, name, description, examine)
+	self.location = nil
+end
+
+function Character:carrying(word)
+	for i = 1, #self.contents do
+		if self.contents[i]:answersTo(word) then return self.contents[i] end
+	end
+	return nil
+end
+
+-- ---------------------------------------------------------------- location
+local Location = class(Thing)
+Engine.Location = Location
+
+function Location:init(name, description)
+	Thing.init(self, name, description)
+	self.connections = {} -- dir -> Location
+	self.directionAliases = {} -- exact phrase -> dir
+	self.blocks = {} -- dir -> refusal line
+	self.characters = {}
+	self.visited = false
+end
+
+function Location:connect(dir, dest, backDir)
+	self.connections[dir] = dest
+	if backDir then dest.connections[backDir] = self end
+	return self
+end
+
+function Location:travelAlias(phrase, dir)
+	self.directionAliases[string.lower(phrase)] = dir
+	return self
+end
+
+function Location:addCharacter(c)
+	self.characters[#self.characters + 1] = c
+	c.location = self
+end
+
+function Location:exitNames()
+	local out = {}
+	for dir in pairs(self.connections) do out[#out + 1] = dir end
+	table.sort(out)
+	return out
+end
+
+-- -------------------------------------------------------------------- game
+local Game = class()
+Engine.Game = Game
+
+function Game:init(seed)
+	self.seed = seed or 0
+	self.rooms = {}
+	self.turn = 0
+	self.score = 0
+	self.maxScore = 0
+	self.scoredKeys = {}
+	self.journal = {}
+	self.quiet = false
+	self.over = false
+	self.out = function(_text) end -- the surface's renderer hooks this
+	self.player = Character("you", "you, a scavenger of the Tomblands")
+end
+
+function Game:room(name, description)
+	local r = Location(name, description)
+	self.rooms[#self.rooms + 1] = r
+	return r
+end
+
+function Game:say(text)
+	if not self.quiet then self.out(text) end
+end
+
+function Game:award(key, points, msg)
+	if self.scoredKeys[key] then return end
+	self.scoredKeys[key] = true
+	self.score = self.score + points
+	if msg then self:say(msg) end
+end
+
+function Game:describe()
+	local room = self.player.location
+	self:say("*" .. string.upper(room.name) .. "*")
+	self:say(room.description)
+	local seen = {}
+	for i = 1, #room.contents do
+		local it = room.contents[i]
+		if not it:get("hidden") then seen[#seen + 1] = it.description end
+	end
+	for i = 1, #room.characters do
+		seen[#seen + 1] = room.characters[i].description
+	end
+	if #seen > 0 then self:say("You see: " .. table.concat(seen, "; ") .. ".") end
+	self:say("Exits: " .. table.concat(room:exitNames(), ", ") .. ".")
+end
+
+-- Scope: what a word can mean HERE -- room things (not hidden), what shows
+-- inside them, folk present, and everything carried. Order is lane order.
+function Game:scope()
+	local out = {}
+	local function put(thing)
+		out[#out + 1] = thing
+		local inner = thing:accessible()
+		for i = 1, #inner do put(inner[i]) end
+	end
+	local room = self.player.location
+	for i = 1, #room.contents do
+		if not room.contents[i]:get("hidden") then put(room.contents[i]) end
+	end
+	for i = 1, #room.characters do out[#out + 1] = room.characters[i] end
+	for i = 1, #self.player.contents do put(self.player.contents[i]) end
+	return out
+end
+
+function Game:find(word)
+	local things = self:scope()
+	for i = 1, #things do
+		if things[i]:answersTo(word) then return things[i] end
+	end
+	return nil
+end
+
+-- ------------------------------------------------------------------- verbs
+-- Ordered: this IS the composer's verb lane. arity 0 verbs submit alone;
+-- arity 1 wait for a noun.
+Engine.verbs = {}
+local function verb(name, arity, run, ...)
+	local v = { name = name, arity = arity, run = run, aliases = { ... } }
+	Engine.verbs[#Engine.verbs + 1] = v
+	return v
+end
+
+local function findVerb(word)
+	for i = 1, #Engine.verbs do
+		local v = Engine.verbs[i]
+		if v.name == word then return v end
+		for j = 1, #v.aliases do
+			if v.aliases[j] == word then return v end
+		end
+	end
+	return nil
+end
+
+function Game:go(dir)
+	local room = self.player.location
+	if room.blocks[dir] then
+		self:say(room.blocks[dir])
+		return true
+	end
+	local dest = room.connections[dir]
+	if not dest then
+		self:say("You can't go that way.")
+		return true
+	end
+	self.player.location = dest
+	dest.visited = true
+	self:say("You moved to " .. dest.name .. ".")
+	self:describe()
+	return true
+end
+
+verb("look", 0, function(g)
+	g:describe()
+end, "l", "look around")
+
+verb("examine", 1, function(g, thing)
+	g:say(thing.examineText)
+	local inner = thing:accessible()
+	if #inner > 0 then
+		local names = {}
+		for i = 1, #inner do names[#names + 1] = inner[i].description end
+		g:say("Within reach: " .. table.concat(names, "; ") .. ".")
+	end
+end, "x", "look at")
+
+verb("search", 1, function(g, thing)
+	local found = {}
+	for i = 1, #thing.contents do
+		if thing.contents[i]:get("hidden") then
+			thing.contents[i]:set("hidden", nil)
+			found[#found + 1] = thing.contents[i].description
+		end
+	end
+	if #found > 0 then
+		g:say("You search the " .. thing.name .. " and find "
+			.. table.concat(found, ", ") .. ".")
+		local hook = thing:get("onSearched")
+		if hook then hook(g, thing) end
+	else
+		g:say("You find nothing more in the " .. thing.name .. ".")
+	end
+end)
+
+verb("take", 1, function(g, thing)
+	if not thing:get("gettable") then
+		g:say("The " .. thing.name .. " stays where it is.")
+		return
+	end
+	if thing.holder then thing.holder:remove(thing) end
+	g.player:add(thing)
+	g:say("You got the " .. thing.name .. ".")
+	local hook = thing:get("onTaken")
+	if hook then hook(g, thing) end
+end, "get")
+
+verb("drop", 1, function(g, thing)
+	if not g.player:carrying(thing.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	g.player:remove(thing)
+	g.player.location:add(thing)
+	g:say("You dropped the " .. thing.name .. ".")
+end)
+
+verb("inventory", 0, function(g)
+	if #g.player.contents == 0 then
+		g:say("You carry nothing but your reputation.")
+		return
+	end
+	local names = {}
+	for i = 1, #g.player.contents do
+		names[#names + 1] = g.player.contents[i].description
+	end
+	g:say("You carry: " .. table.concat(names, "; ") .. ".")
+end, "i")
+
+-- --------------------------------------------------------------- the turn
+function Game:doCommand(line)
+	line = string.lower(line):gsub("^%s+", ""):gsub("%s+$", "")
+	if line == "" then return end
+	self:say("> " .. line)
+	local room = self.player.location
+
+	-- travel: exact per-room phrase, a bare exit name, or GO <exit>
+	local dir = room.directionAliases[line]
+	if not dir and (room.connections[line] or room.blocks[line]) then dir = line end
+	if not dir then
+		local goDir = line:match("^go%s+(.+)$")
+		if goDir and (room.connections[goDir] or room.blocks[goDir]) then
+			dir = goDir
+		end
+	end
+	if dir then
+		self.journal[#self.journal + 1] = line
+		self.turn = self.turn + 1
+		self:go(dir)
+		return true
+	end
+
+	local verbWord, rest = line:match("^(%S+)%s*(.*)$")
+	local v = findVerb(verbWord)
+	if not v and rest ~= "" then
+		-- two-word aliases ("look at X"): longest verb phrase wins
+		local two = verbWord .. " " .. rest:match("^(%S+)") 
+		local v2 = findVerb(two)
+		if v2 then
+			v = v2
+			rest = rest:gsub("^%S+%s*", "")
+		end
+	end
+	if not v then
+		self:say("The tomb does not know that word yet.")
+		return false
+	end
+	local thing = nil
+	if v.arity == 1 then
+		if rest == "" then
+			self:say(string.upper(v.name) .. " what?")
+			return false
+		end
+		thing = self:find(rest)
+		if not thing then
+			self:say("You don't see any " .. rest .. " here.")
+			return false
+		end
+	end
+	self.journal[#self.journal + 1] = line
+	self.turn = self.turn + 1
+	v.run(self, thing)
+	return true
+end
+
+-- ------------------------------------------------------------- suggestions
+-- The composer's lanes, honesty guaranteed: only words the engine will
+-- accept. Verb order is fixed (ranking doc section 8); noun order is scope
+-- order (the fiction's own salience).
+function Game:suggestions()
+	local nouns, seen = {}, {}
+	local things = self:scope()
+	for i = 1, #things do
+		local n = things[i].name
+		if not seen[n] then
+			seen[n] = true
+			nouns[#nouns + 1] = n
+		end
+	end
+	local verbs = {}
+	for i = 1, #Engine.verbs do verbs[#verbs + 1] = Engine.verbs[i].name end
+	return {
+		exits = self.player.location:exitNames(),
+		verbs = verbs,
+		nouns = nouns,
+	}
+end
+
+function Engine.verbArity(name)
+	local v = findVerb(name)
+	return v and v.arity or 1
+end
+
+-- ------------------------------------------------------------ saves/replay
+-- A save is (seed, journal); restoring is replaying quietly. Determinism
+-- is the whole save system, same contract as the Python engine.
+function Game:snapshot()
+	return { seed = self.seed, journal = self.journal }
+end
+
+function Engine.restore(build, snap)
+	local g = build(snap.seed)
+	g.quiet = true
+	for i = 1, #snap.journal do g:doCommand(snap.journal[i]) end
+	g.quiet = false
+	return g
+end
