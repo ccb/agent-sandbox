@@ -29,7 +29,7 @@ The pieces:
 
 * :class:`PennStepper` -- implements the ``backend.live.SimStepper`` protocol by
   reconstructing ``simulate()``'s pre-loop setup (the same reconstruction
-  ``generative-agents/tests/test_step_seam.py`` pins) and driving the extracted
+  ``godot-generative-agents/tests/test_penn_live.py`` pins) and driving the extracted
   one-tick ``step()`` seam (#296) per ``tick()``. Frames come out in the exact
   replay schema the bake writes (``penn_world.replay_frame_entry``), so every
   viewer feature -- bubbles, links, trails, minimap, heatmap -- works unchanged.
@@ -255,7 +255,7 @@ class PennStepper:
     attach the mock brains, seed each persona's per-step ``state``) and then
     drives the extracted one-tick ``step()`` per ``tick()`` call -- so N ticks
     produce exactly the frames ``simulate(world_map, N)`` would
-    (``generative-agents/tests/test_penn_live.py`` pins that equivalence).
+    (``godot-generative-agents/tests/test_penn_live.py`` pins that equivalence).
 
     ``reset()`` rebuilds *everything* from a fresh ``build_penn_world()``: the
     routing patches carry per-venue round-robin counters in closures, so
@@ -274,6 +274,7 @@ class PennStepper:
         monitor=None,
         llm=None,
         run_store=None,
+        cognition_tools=False,
     ):
         self.num_steps = num_steps
         self.endless = endless
@@ -285,6 +286,10 @@ class PennStepper:
         self._run_id = None
         self._run_finished = False
         self._mem_synced = {}
+        # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
+        # read_plan before each decide. Held on the stepper -- not read from
+        # argv -- so _build() re-applies it on every reset (POST /reset).
+        self.cognition_tools = cognition_tools
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
         # reports the budget and tick() can end the day at it.
@@ -327,10 +332,11 @@ class PennStepper:
 
     def _build(self, world: PennWorld | None = None):
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
-        # same reconstruction test_step_seam.py::_build_run pins). If simulate's
-        # setup ever drifts from this, the equivalence test fails -- on purpose.
+        # same reconstruction tests/test_penn_live.py::
+        # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
+        # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
-        self.cog = CognitionConfig()
+        self.cog = CognitionConfig(cognition_tools=self.cognition_tools)
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
@@ -624,6 +630,17 @@ def main() -> int:
         " godot-generative-agents/runs/. POST /reset starts a new run id",
     )
     ap.add_argument(
+        "--cognition-tools",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="let each decide -- and each conversation line -- consult the "
+        "agent's memory / world knowledge / day plan first (recall, "
+        "query_knowledge, read_plan; issues #358/#512): up to 3 model "
+        "requests per decide tick instead of 1, metered by --max-cost as "
+        "usual. --brain llm only; the mock brain never reaches the tool loop",
+
+    )
+    ap.add_argument(
         "--start-paused",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -673,6 +690,7 @@ def main() -> int:
             monitor=LlmCallMonitor() if args.monitor else None,
             llm=llm,
             run_store=RunStore(DEFAULT_RUNS_DIR) if args.persist else None,
+            cognition_tools=args.cognition_tools,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
@@ -705,6 +723,14 @@ def main() -> int:
         print(
             f"Persistence: ON -- run {stepper.run_id} recording to "
             f"{stepper.run_store.root} (frames.jsonl + sim.db)."
+        )
+    if args.cognition_tools:
+        print(
+            "Cognition tools: ON -- a decide tick may spend up to 3 model "
+            "requests (recall/query_knowledge/read_plan before acting)."
+            if llm is not None
+            else "Cognition tools: ON, but the mock brain never reaches the "
+            "tool loop -- pair it with --brain llm for any effect."
         )
     print(
         f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"
