@@ -166,17 +166,17 @@ end)
 menu:addCheckmarkMenuItem("free input", false, function(on)
 	if on then playdate.keyboard.show("") end
 end)
-menu:addOptionsMenuItem("reading", { "latest", "top" }, function(value)
-	anchorTop = (value == "top")
-	playdate.datastore.write({ anchorTop = anchorTop }, "prefs")
-end, (function()
+menu:addOptionsMenuItem("reading", { "latest", "top" }, (function()
 	local prefs = playdate.datastore.read("prefs")
 	if prefs and prefs.anchorTop then
 		anchorTop = true
 		return "top"
 	end
 	return "latest"
-end)())
+end)(), function(value)
+	anchorTop = (value == "top")
+	playdate.datastore.write({ anchorTop = anchorTop }, "prefs")
+end)
 
 function playdate.keyboard.keyboardWillHideCallback(okPressed)
 	if okPressed and playdate.keyboard.text ~= "" then
