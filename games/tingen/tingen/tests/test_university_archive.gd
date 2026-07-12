@@ -38,10 +38,10 @@ func _init() -> void:
 	_ok(shape_count >= 8, "Solids has >=8 collision shapes (got %d)" % shape_count)
 
 	# Player wiring (asset owned elsewhere; just verify the sprite path).
-	var psprite: Sprite2D = room.get_node_or_null("Player/Sprite2D")
-	_ok(psprite != null and psprite.texture != null
-		and psprite.texture.resource_path.ends_with("klein_down.png"),
-		"Player sprite -> klein_down.png")
+	var psprite: AnimatedSprite2D = room.get_node_or_null("Player/Sprite")
+	_ok(psprite != null and psprite.sprite_frames != null
+		and psprite.sprite_frames.has_animation("idle_s"),
+		"Player sprite -> AnimatedSprite2D (idle_s)")
 
 	_ok(room.get_node_or_null("RoomCam") is Camera2D, "RoomCam is a Camera2D")
 
@@ -63,8 +63,8 @@ func _init() -> void:
 	var door: Node = room.get_node_or_null("Door")
 	_ok(door != null and door.get("icon") == null,
 		"Door is an invisible hotspot (no icon)")
-	_ok(door != null and door.get("target_scene") == "res://scenes/CityBlocks.tscn",
-		"Door -> CityBlocks.tscn")
+	_ok(door != null and door.get("target_scene") == "res://scenes/City.tscn",
+		"Door -> City.tscn")
 
 	# Simulation framing: the room must NOT overwrite the player's lead. No interactable
 	# in the room sets lead_on_use (the Welch thread is a thought, not an objective).

@@ -77,6 +77,14 @@ func topic_unlocked(topic: String) -> bool:
 func unlocked_topics() -> Array:
 	return _unlocked_topics.keys()
 
+## Drop every collected clue + unlocked topic back to a fresh run (the library itself is static
+## data and stays loaded). Called by RunManager.start_run() so a new run starts with an empty
+## board (part of the GAP-2.9 leak fix).
+func reset() -> void:
+	_collected.clear()
+	_unlocked_topics.clear()
+	topics_changed.emit()
+
 func _read_json_array(path: String) -> Array:
 	if not FileAccess.file_exists(path):
 		push_error("ClueDB: missing data file %s" % path)

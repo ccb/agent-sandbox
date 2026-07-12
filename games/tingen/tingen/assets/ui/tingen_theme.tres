@@ -1,0 +1,86 @@
+[gd_resource type="Theme" load_steps=5 format=3 uid="uid://ctingenthemem16"]
+
+; M16 — Tingen shared UI theme. Occult-noir dossier aesthetic to sit against the painted city:
+; dark ink/parchment panels, a warm gilt accent on borders and hovers, cream serif-neutral text.
+; Set as the project-wide gui theme (project.godot [gui] theme/custom) so the title, HUD and every
+; code-built panel inherit it. It only supplies DEFAULTS: the M10 Settings seams (per-Control
+; text_scale font-size overrides and the colorblind meter/telegraph palette, both applied via
+; add_theme_*_override / drawn directly) still win over these values — accessibility is unaffected.
+
+[sub_resource type="StyleBoxFlat" id="panel_ink"]
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+bg_color = Color(0.11, 0.1, 0.13, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.56, 0.29, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="btn_normal"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.16, 0.14, 0.18, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.56, 0.29, 0.4)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="btn_hover"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.22, 0.19, 0.25, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.82, 0.66, 0.35, 0.85)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="btn_pressed"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.13, 0.11, 0.15, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.56, 0.29, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[resource]
+default_font_size = 15
+Label/colors/font_color = Color(0.87, 0.82, 0.7, 1.0)
+Panel/styles/panel = SubResource("panel_ink")
+PanelContainer/styles/panel = SubResource("panel_ink")
+Button/colors/font_color = Color(0.85, 0.8, 0.68, 1.0)
+Button/colors/font_hover_color = Color(0.95, 0.83, 0.55, 1.0)
+Button/colors/font_pressed_color = Color(0.72, 0.58, 0.29, 1.0)
+Button/colors/font_disabled_color = Color(0.5, 0.47, 0.42, 0.7)
+Button/styles/normal = SubResource("btn_normal")
+Button/styles/hover = SubResource("btn_hover")
+Button/styles/pressed = SubResource("btn_pressed")
+Button/styles/focus = SubResource("btn_hover")

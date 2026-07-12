@@ -1,0 +1,125 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/police_station_inner.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="wall_top"]
+size = Vector2(1459, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot_l"]
+size = Vector2(625, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot_r"]
+size = Vector2(684, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 973)
+
+[sub_resource type="RectangleShape2D" id="s_cabinets"]
+size = Vector2(336, 175)
+
+[sub_resource type="RectangleShape2D" id="s_shelf_ne"]
+size = Vector2(365, 136)
+
+[sub_resource type="RectangleShape2D" id="s_board_e"]
+size = Vector2(146, 224)
+
+[sub_resource type="RectangleShape2D" id="s_stove"]
+size = Vector2(277, 185)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(409, 234)
+
+[sub_resource type="RectangleShape2D" id="s_bench"]
+size = Vector2(365, 107)
+
+[sub_resource type="RectangleShape2D" id="p_exit"]
+size = Vector2(170, 90)
+
+[node name="PoliceStationInner" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.05, 0.05, 0.055, 1)
+polygon = PackedVector2Array(-300, -300, 1760, -300, 1760, 1280, -300, 1280)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
+centered = false
+scale = Vector2(0.95, 0.95)
+texture = ExtResource("1")
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTop" type="CollisionShape2D" parent="Solids"]
+position = Vector2(729.5, 8)
+shape = SubResource("wall_top")
+
+[node name="WBottomL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(312.5, 965)
+shape = SubResource("wall_bot_l")
+
+[node name="WBottomR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1117, 965)
+shape = SubResource("wall_bot_r")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 486.5)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1451, 486.5)
+shape = SubResource("wall_v")
+
+[node name="FFilingCabinets" type="CollisionShape2D" parent="Solids"]
+position = Vector2(270, 107)
+shape = SubResource("s_cabinets")
+
+[node name="FDocShelfNE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1116, 88)
+shape = SubResource("s_shelf_ne")
+
+[node name="FNoticeBoardE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1386, 326)
+shape = SubResource("s_board_e")
+
+[node name="FStove" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1248, 550)
+shape = SubResource("s_stove")
+
+[node name="FFrontDesk" type="CollisionShape2D" parent="Solids"]
+position = Vector2(350, 525)
+shape = SubResource("s_desk")
+
+[node name="FBench" type="CollisionShape2D" parent="Solids"]
+position = Vector2(1058, 803)
+shape = SubResource("s_bench")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(700, 880)
+
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(729, 486)
+zoom = Vector2(1, 1)
+
+[node name="ExitToCity" type="Area2D" parent="."]
+position = Vector2(700, 1003)
+script = ExtResource("3")
+target_scene = "res://scenes/City.tscn"
+
+[node name="ExitShape" type="CollisionShape2D" parent="ExitToCity"]
+shape = SubResource("p_exit")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 400.0
+offset_top = 24.0
+offset_right = 1060.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "Tingen constabulary — front office    ·    walk down (S) to the street"

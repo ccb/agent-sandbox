@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/CombatZone.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://d4jm0e34m87xe" path="res://assets/fx/charm_glyph.png" id="2"]
+
+[sub_resource type="CircleShape2D" id="area"]
+radius = 90.0
+
+[node name="CombatZone" type="Area2D" groups=["combat_zone"]]
+script = ExtResource("1")
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("area")
+
+[node name="Visual" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+modulate = Color(1, 1, 1, 0.7)

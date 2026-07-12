@@ -1,5 +1,12 @@
 # Tingen Mystery Pixel Game - Detailed Design Document
 
+> ⚠️ **SUPERSEDED (2026-07-03) by `tingen_game_direction_v2.md`.** Tingen is now an
+> **occult-noir action-RPG roguelite** (RPG + open-world + roguelite), not a detective/mystery
+> game. The **investigation/forensic/deduction systems in this doc are DROPPED** (user decision).
+> Read `tingen_game_direction_v2.md` for the current north star; this GDD is kept for its
+> still-valid living-city, occult-canon, world-manager, and combat material only. Where the two
+> conflict, v2 wins.
+
 ## 0. Important Note
 
 This document contains **design suggestions, not instructions**. It is intended as a feature-testing and vertical-slice planning document for Yumina's future direction. The goal is to explore whether a **2D pixel-art mystery game with living NPC intelligence, world-managed plot progression, enterable buildings, and investigation-combat integration** can serve as a strong new feature testbed.

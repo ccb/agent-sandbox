@@ -44,6 +44,9 @@ func _install() -> void:
 ## Standalone doors swap the whole scene (the HUD persists here, on the autoload).
 func _on_transition(scene_path: String, _lead: String) -> void:
 	get_tree().change_scene_to_file(scene_path)
+	# Same neutral room-entry stimulus as the Main-mode path (room id is derived from the path, so it is
+	# correct regardless of when the deferred scene swap completes).
+	WorldState.room_changed.emit(RoomGraph.room_for_scene(scene_path), scene_path)
 
 func _process(_delta: float) -> void:
 	# Stand in for GameController: keep AgentRuntime pointed at the live player so the map dot
@@ -52,4 +55,9 @@ func _process(_delta: float) -> void:
 		return
 	var players := get_tree().get_nodes_in_group("player")
 	if not players.is_empty():
-		AgentRuntime.player_position = players[0].global_position
+		var pos: Vector2 = players[0].global_position
+		AgentRuntime.player_position = pos
+		# Mirror the player proxy so the cult can perceive + attack the player in standalone runs too.
+		var cs := get_tree().current_scene
+		var room := RoomGraph.room_for_scene(cs.scene_file_path) if cs != null else RoomGraph.DEFAULT_ROOM
+		Agents.ensure_player_proxy(pos, room)

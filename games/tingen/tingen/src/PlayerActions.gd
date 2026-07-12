@@ -27,12 +27,19 @@ func sabotage_any() -> String:
 	var item := String(held[0])
 	return item if sabotage(item) else ""
 
-## Turn a waverer (role "scout_waverer") into an ally. Returns false for anyone else.
+## The behavioral marker that a waverer has been turned: a defection GOAL it now pursues. Adopting it
+## both steers the agent (it acts to help the player) and is what makes the persuade option vanish (you
+## can't re-persuade someone already won over) — no separate "turned" flag, the goal IS the state.
+const TURN_GOAL := "Help the investigator stop the cell"
+
+## Turn a waverer (role "scout_waverer") against the cell. Returns false for anyone else. Turning is the
+## agent ADOPTING the defection goal — purely behavioral (no concealment flag, no faction relabel).
 func social_influence(agent_id: String) -> bool:
 	var a: Agent = Agents.get_agent(agent_id)
 	if a == null or a.role != "scout_waverer":
 		return false
-	a.faction = "ally"
+	if not a.has_adopted_goal(TURN_GOAL):
+		a.adopted_goals.append({"text": TURN_GOAL, "kind": "defection"})
 	a.remember("chose to turn against the cell")
 	SummoningPlan.add_impede(SOCIAL_IMPEDE, "turned waverer")
 	EventBus.emit_event("player_social", {"actor": "player", "agent": agent_id, "result": "turned"})

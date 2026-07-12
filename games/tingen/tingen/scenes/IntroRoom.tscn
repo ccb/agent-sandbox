@@ -49,6 +49,7 @@ color = Color(0.08, 0.07, 0.06, 1)
 polygon = PackedVector2Array(-200, -200, 1100, -200, 1100, 800, -200, 800)
 
 [node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
 centered = false
 texture = ExtResource("klein_room")
 scale = Vector2(0.5833, 0.5833)
@@ -110,8 +111,8 @@ shape = SubResource("s_chest")
 [node name="Player" parent="." instance=ExtResource("player")]
 position = Vector2(415, 470)
 
-[node name="Sprite2D" parent="Player" index="0"]
-scale = Vector2(0.073, 0.073)
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
 
 [node name="Camera2D" parent="Player" index="2"]
 enabled = false
@@ -147,8 +148,19 @@ clue_id = "wrong_reflection"
 position = Vector2(845, 400)
 prompt_text = "Open the door"
 tint = Color(0.7, 0.55, 0.4, 0)
-target_scene = "res://scenes/City.tscn"
-lead_on_use = "线索：寻找值夜者 (Find the Nighthawks)."
+target_scene = "res://scenes/KleinLivingRoom.tscn"
+
+[node name="DigestSpot" parent="." instance=ExtResource("interactable")]
+position = Vector2(300, 250)
+prompt_text = "Digest a Characteristic (rise a Sequence)"
+tint = Color(0.55, 0.2, 0.5, 0)
+digest_advance = true
+
+[node name="ActingSpot" parent="." instance=ExtResource("interactable")]
+position = Vector2(300, 450)
+prompt_text = "Act your Hunter's role (quiet the Madness)"
+tint = Color(0.3, 0.5, 0.55, 0)
+acting_deed = true
 
 [node name="Hint" type="Label" parent="."]
 offset_left = 300.0

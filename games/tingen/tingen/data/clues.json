@@ -128,5 +128,105 @@
 		"location": "university_archive",
 		"topics": ["the_theft"],
 		"linked_entities": ["ledger_finch"]
+	},
+	{
+		"id": "bram_kell_suspicious",
+		"name": "The Butcher's Night Errand",
+		"description": "Deep in the night, far from his shop, Bram Kell drags something heavy toward the canal. No honest delivery goes out at that hour.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["bram_kell", "the_night_work"],
+		"linked_entities": ["bram_kell"]
+	},
+	{
+		"id": "bram_kell_revealed",
+		"name": "The Thing Beneath the Butcher",
+		"description": "Bram Kell's flesh split open and something else stood up inside his skin. The cheerful butcher of Iron Cross Street is a monster wearing a man.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["bram_kell", "the_demoness_sect"],
+		"linked_entities": ["bram_kell"]
+	},
+	{
+		"id": "sable_wren_suspicious",
+		"name": "The Thief-Taker's Night Stalk",
+		"description": "Long after the corner has emptied, Sable Wren is still on it — motionless in a doorway, then following a frightened stranger with the patience of something that does not mean to lose them. No warrant moves like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["sable_wren", "the_first_hunt"],
+		"linked_entities": ["sable_wren"]
+	},
+	{
+		"id": "sable_wren_revealed",
+		"name": "The Hunt Wearing Sable Wren",
+		"description": "Sable Wren's skin came apart and the thing the bad potion made of her stood up on the corner — the same blood as the butcher, a Hunter that lost the leash and hunts people now.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["sable_wren", "the_first_hunt"],
+		"linked_entities": ["sable_wren"]
+	},
+	{
+		"id": "leland_mack_suspicious",
+		"name": "The Line-Handler's Night Haul",
+		"description": "Well past midnight at the harbor breakwater, Leland Mack tips something heavy off the sea-wall — not cargo, not a crate. The splash is wrong. No honest dockhand hauls like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["leland_mack", "the_docks_missing"],
+		"linked_entities": ["leland_mack"]
+	},
+	{
+		"id": "leland_mack_revealed",
+		"name": "The Beast That Was Mack",
+		"description": "Leland Mack's flesh came apart at the breakwater and something built for the hunt stood up in his place — a harbour beast shaped by a bad dose and years of poaching, and it hunts people now.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["leland_mack", "the_docks_missing"],
+		"linked_entities": ["leland_mack"]
+	},
+	{
+		"id": "old_neil_suspicious",
+		"name": "The Alchemist's Blood-Star",
+		"description": "Past midnight, behind Old Neil's shuttered window, a chalk star drinks his own blood and he speaks a dead woman's name to the dark. No grief prays like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["old_neil", "the_resurrection"],
+		"linked_entities": ["old_neil"]
+	},
+	{
+		"id": "old_neil_revealed",
+		"name": "The Sage Wearing Old Neil",
+		"description": "Old Neil's grief came apart and the Hidden Sage's pollution stood up in his skin — a Hermit that lost the leash, starlight and rot where the alchemist used to be.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["old_neil", "the_hidden_sage"],
+		"linked_entities": ["old_neil"]
+	},
+	{
+		"id": "ledger_finch_suspicious",
+		"name": "The Clerk's After-Hours Reading",
+		"description": "Long after the archive has locked, Ledger Finch is still deep in the restricted stacks, reading aloud from a volume with no catalogue number while the ink runs off the page toward her hands. No audit is done like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["ledger_finch", "the_restricted_volume"],
+		"linked_entities": ["ledger_finch"]
+	},
+	{
+		"id": "ledger_finch_revealed",
+		"name": "The Volume Wearing Ledger Finch",
+		"description": "Ledger Finch's skin came apart in the stacks and the thing the forbidden volume made of her stood up — a Hermit that read too deep and lost the leash, ink and starlight where the clerk used to be.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["ledger_finch", "the_restricted_volume"],
+		"linked_entities": ["ledger_finch"]
 	}
 ]

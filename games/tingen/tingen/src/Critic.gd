@@ -3,7 +3,7 @@ extends RefCounted
 ## The "catch & kill" guardrail. Given a schema-valid proposed action and its agent,
 ## returns a verdict on three axes:
 ##   - legality (state): is the verb possible for this agent right now?
-##   - coherence: does it fit the agent's identity / faction / role?
+##   - coherence: does it fit the agent's identity / role?
 ##   - interestingness: does it advance or complicate the thread (vs. dead repetition)?
 ## Verdict ∈ { approve, amend, veto }. `amend` returns a corrected `action`. The runtime
 ## turns veto (and, for the slice, reroll-equivalents) into a schedule fallback.
@@ -28,17 +28,39 @@ static func review(action: Dictionary, agent: Agent) -> Dictionary:
 	if agent.downed and verb != "idle":
 		return _verdict("veto", "%s is downed and can only idle" % agent.id)
 
-	# --- Coherence / state legality by role + faction ---
-	var is_cultist := agent.faction == "cult"
-
-	if verb == "perform_ritual_step":
-		if not is_cultist:
-			return _verdict("veto", "%s is not a cultist and cannot perform a ritual step" % agent.id)
-	if verb == "recruit":
-		if not is_cultist:
-			return _verdict("veto", "%s is not a cultist and cannot recruit" % agent.id)
-	if agent.role == "victim" and verb in ["perform_ritual_step", "recruit", "attack"]:
-		return _verdict("veto", "the intended victim would not act as a cultist")
+	# --- Coherence / state legality ---
+	# A rite is work only an agent with a TASK can do (a legality gate, mirrored in governance). WHO
+	# recruits is NOT gated here — that's behavioral: a character recruits only if its persona drives it
+	# (the LLM decides), so there is no hard "may recruit" check.
+	if verb == "perform_ritual_step" and agent.task.is_empty():
+		return _verdict("veto", "%s has no task that involves a rite" % agent.id)
+	# `engage` mirrors the victim's attack gate: the intended victim never opens hostilities
+	# (disengage/protect stay open — fleeing a fight or shielding someone is coherent for prey).
+	if agent.role == "victim" and verb in ["perform_ritual_step", "recruit", "attack", "engage"]:
+		return _verdict("veto", "the intended victim would not take such an action")
+	# `cast_ability` is a combat act (combat plan §M4): legal from a PROPOSAL only for an agent
+	# already in a fight. Overseer directives bypass the Critic by design (AgentRuntime
+	# _apply_directive checks only the schema), so the GM/Director can still force a cast on a
+	# not-yet-fighting agent — the corruption loss-of-control transform.
+	if verb == "cast_ability" and not agent.in_combat:
+		return _verdict("veto", "%s is not in a fight — no art to work outside one" % agent.id)
+	# In a LIVE fight the executor is the damage channel (combat plan §M6, the M4 live-gate
+	# finding): an engaged LLM keeps proposing the legacy beat-level `attack` each beat, which
+	# would land flat damage ON TOP of the frame-rate abilities — double-dipping. AMEND the
+	# proposal into the intent it is really expressing: `engage {target}`, keeping a standing
+	# style (the re-mask keeps fighting HOW it was fighting; _engage refreshes set_at_beat).
+	# Gated on a live executor: an in-combat agent with no executor bound (no body fighting for
+	# it yet) still has only the legacy attack channel, so that proposal stands unchanged.
+	if verb == "attack" and agent.in_combat and CombatExecutor.for_agent(agent.id) != null:
+		var amended: Dictionary = {"actor": agent.id, "verb": "engage",
+			"args": {"target": String(args.get("target", ""))}}
+		var standing_style := String(agent.combat_intent.get("style", ""))
+		if standing_style != "":
+			(amended["args"] as Dictionary)["style"] = standing_style
+		if action.has("thought"):
+			amended["thought"] = action["thought"]
+		return _verdict("amend",
+			"a live fight's damage flows through the executor — attack re-expressed as engage", amended)
 
 	# --- No-chance-exposure invariant ---
 	if verb == "report" and _is_exposing(args) and not _al("Overseer").allows_exposure():

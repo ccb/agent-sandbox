@@ -1,0 +1,98 @@
+{
+	"_doc": "The GM's per-run lead seed (direction v2 §5 — Rumors -> Leads). LeadSystem slots these at run start, deterministically per run-seed (a seeded RNG, never RNG-in-combat). A lead = {id, subject, where_hint, source, state, spawned_day}. 'source' is which NPC KNOWS the lead (source-gated reveal — an NPC only surfaces a lead whose source is them, OR whose subject matches a phrase in that NPC's knowledge[] in npcs.json; this keeps the who-knows-what in DATA, no NPC-id branch in engine logic). 'guaranteed' leads are always slotted (the §3 opener). 'where_candidates' is a weighted pool the GM picks a where_hint from per run (the reshuffle). 'respawn_where' seeds the fresh where_hint a COLD lead re-emerges at (perish -> the subject moved). 'prey_form' (M26 RETUNE #2 fix) names the hidden-Beyonder combat_form this lead points at (butcher_human/wren_human/mack_harbor); the Doom 'monsters left alive' driver counts a live hidden Beyonder ONLY once its lead has been SURFACED to the player (known) — an idle player is never taxed for prey they have not yet been told exists, but ignoring KNOWN prey costs Doom. Pure data linkage form<->lead, no NPC-id branch.",
+
+	"leads": [
+		{
+			"id": "butcher_iron_cross",
+			"subject": "the butcher on Iron Cross Street, who hasn't been himself",
+			"subject_key": "butcher",
+			"source": "constable_brom",
+			"guaranteed": true,
+			"hot": true,
+			"where_hint": "Iron Cross Street",
+			"prey_form": "butcher_human",
+			"respawn_where": ["the Iron Cross shambles", "the canal steps off Iron Cross"]
+		},
+		{
+			"id": "hunter_prey_kell_kin",
+			"_note": "M12 — the FIRST REAL HUNT made real (direction v2 §3/§6). Previously a where_candidates pool that pointed nowhere; now a REAL destination: subject = Sable Wren (the hidden Hunter-pathway Beyonder, npcs.json), where_hint = 'the Blackthorn corner' (her authored schedule/deed site, so following it ROUTES the player to the fight), pathway:hunter (so the advance is same-pathway). subject_key 'hunter' keeps the source-gate DATA-driven (constable_brom's beat knowledge names the corner). Downing her drops hunter_characteristic via Progression's PATHWAY-driven drop (M5), enabling the advance — the loop's payoff.",
+			"subject": "the butcher wasn't the only one — Sable Wren, the thief-taker on the Blackthorn corner, carries the same ruined blood",
+			"subject_key": "hunter",
+			"pathway": "hunter",
+			"follow_up": true,
+			"source": "constable_brom",
+			"guaranteed": true,
+			"hot": false,
+			"where_hint": "the Blackthorn corner",
+			"prey_form": "wren_human",
+			"respawn_where": ["the abattoir row", "the constables' yard", "the market street after dark"]
+		},
+		{
+			"id": "hunter_prey_mack_docks",
+			"_note": "M14 — the SECOND REAL HUNT (the Seq-8 player's meal, direction v2 §6). A lead pointing at leland_mack, the harbor poacher who lost control. Gated behind the first advance: after_advance:true means LeadSystem surfaces it ONLY AFTER Progression emits advanced (the post-advance hook wired in LeadSystem._ready). This preserves pacing: Wren is the Seq-9 meal; Mack is the Seq-8 meal, revealed by the city only once the player has proven they can handle the first hunt. where_hint = 'the harbor breakwater' (his authored schedule/deed site). pathway:hunter so the advance payoff keys off the same rule as all hunter foes. Source is constable_brom (his beat knowledge covers the harbor missing persons). subject_key 'hunter' keeps the source-gate DATA-driven.",
+			"subject": "the line-handler at the breakwater — Leland Mack — carries the same ruined blood; the docks missing persons are his kills",
+			"subject_key": "hunter",
+			"pathway": "hunter",
+			"after_advance": true,
+			"source": "constable_brom",
+			"guaranteed": true,
+			"hot": false,
+			"where_hint": "the harbor breakwater",
+			"prey_form": "mack_harbor",
+			"respawn_where": ["the south wharf", "the sea-wall steps", "the night fish market"]
+		},
+		{
+			"id": "hermit_prey_neil",
+			"_note": "M28 (direction v2 §6) — the HERMIT pathway's prey lead, mirroring the Hunter's hunter_prey_kell_kin. Points at old_neil, the alchemist who lost control to the Hidden Sage. subject = Old Neil, where_hint = his rooms (his authored schedule/deed site, so following it ROUTES the player to the fight), pathway:hermit (so the advance is same-pathway -> hermit_characteristic via the PATHWAY-driven drop). subject_key 'hermit' keeps the source-gate DATA-driven; source naya_brookes (a real Seer who senses a fellow occultist's wrongness). prey_form is DELIBERATELY omitted (empty): unlike the Hunter meals, ignoring the KNOWN-but-human Neil does not tax the Doom 'monsters left alive' driver — this keeps the shipped Hunter-run pacing (test_balance's 3 loose Beyonders) unperturbed; once Neil TRANSFORMS to neil_monster (monster:true) he is counted like any monster.",
+			"subject": "the alchemist Old Neil, who traded his grief to the Hidden Sage — the same starlight in his blood as any Hermit that lost the leash",
+			"subject_key": "hermit",
+			"pathway": "hermit",
+			"source": "naya_brookes",
+			"guaranteed": false,
+			"hot": false,
+			"where_hint": "Old Neil's rooms off the apothecary lane",
+			"respawn_where": ["the shuttered apothecary", "the chalk-marked cellar", "the star-charts room after dark"]
+		},
+		{
+			"id": "hermit_prey_finch",
+			"_note": "M30 (direction v2 §6) — the HERMIT pathway's SECOND prey lead (the Seq-8 meal), mirroring the Hunter's hunter_prey_mack_docks. Points at ledger_finch, the records clerk who stole and read a restricted forbidden volume and lost control. Gated behind the first advance (after_advance:true): LeadSystem surfaces it ONLY AFTER Progression emits advanced, exactly like the Hunter's Mack — Neil is the Seq-9 meal, Finch is the Seq-8 meal the city names only once the player has proven the first Hermit hunt. pathway:hermit so a same-pathway kill drops hermit_characteristic via the PATHWAY-driven drop (the ladder's second fuel), and so slot_run's pathway gate (M30 bug#3) keeps it out of Hunter runs. subject_key 'hermit' keeps the source-gate DATA-driven; source naya_brookes (the Seer who feels a second occultist's wrongness). where_hint is the university archive (her authored schedule/deed site, so following it ROUTES the player to the fight). prey_form is DELIBERATELY omitted (empty), like the neil lead: ignoring the KNOWN-but-human Finch does not tax the Doom 'monsters left alive' driver until she TRANSFORMS to finch_monster (monster:true) — keeping the shipped pacing unperturbed.",
+			"subject": "there is a second one — Ledger Finch at the university archive, ink to the elbows, carrying the same starlight-in-the-blood as any Hermit that read too deep and lost the leash",
+			"subject_key": "hermit",
+			"pathway": "hermit",
+			"after_advance": true,
+			"source": "naya_brookes",
+			"guaranteed": false,
+			"hot": false,
+			"where_hint": "the university archive's restricted stacks",
+			"respawn_where": ["the archive reading room after dark", "the catalogue cellar", "the locked map room"]
+		},
+		{
+			"id": "cult_courier",
+			"subject": "a cult courier moving something wrapped through the harbor after dark",
+			"subject_key": "courier",
+			"source": "wm_tasker",
+			"guaranteed": false,
+			"hot": false,
+			"where_candidates": [
+				{"value": "the harbor wharves", "weight": 3.0},
+				{"value": "the customs house", "weight": 2.0},
+				{"value": "the fish market lane", "weight": 1.0}
+			],
+			"respawn_where": ["the night docks", "the coal wharf"]
+		},
+		{
+			"id": "ritual_site",
+			"subject": "chalk marks and candle-smoke found where the rite is being prepared",
+			"subject_key": "rite",
+			"source": "goodwife_perrin",
+			"guaranteed": false,
+			"hot": false,
+			"where_candidates": [
+				{"value": "the Iron Cross warehouse", "weight": 3.0},
+				{"value": "the crypt beneath Saint Selena's", "weight": 2.0},
+				{"value": "the old customs cellar", "weight": 1.0}
+			],
+			"respawn_where": ["a boarded chapel", "the tannery yard"]
+		}
+	]
+}

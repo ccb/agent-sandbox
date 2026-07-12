@@ -1,0 +1,165 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/backgrounds/klein_living_room.png" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="Script" path="res://src/Portal.gd" id="3"]
+
+[sub_resource type="RectangleShape2D" id="wall_top_l"]
+size = Vector2(375, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_top_r"]
+size = Vector2(411, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_bot"]
+size = Vector2(393, 16)
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(16, 597)
+
+[sub_resource type="RectangleShape2D" id="s_fireplace"]
+size = Vector2(224, 68)
+
+[sub_resource type="RectangleShape2D" id="s_bookshelf"]
+size = Vector2(143, 72)
+
+[sub_resource type="RectangleShape2D" id="s_desk"]
+size = Vector2(134, 107)
+
+[sub_resource type="RectangleShape2D" id="s_sofa"]
+size = Vector2(144, 179)
+
+[sub_resource type="RectangleShape2D" id="s_armchair_n"]
+size = Vector2(116, 107)
+
+[sub_resource type="RectangleShape2D" id="s_teatable"]
+size = Vector2(125, 101)
+
+[sub_resource type="RectangleShape2D" id="s_armchair_s"]
+size = Vector2(116, 101)
+
+[sub_resource type="RectangleShape2D" id="s_sidetable_nw"]
+size = Vector2(72, 84)
+
+[sub_resource type="RectangleShape2D" id="s_sidetable_sw"]
+size = Vector2(90, 84)
+
+[sub_resource type="RectangleShape2D" id="s_lamptable_e"]
+size = Vector2(107, 96)
+
+[sub_resource type="RectangleShape2D" id="p_door"]
+size = Vector2(130, 90)
+
+[node name="KleinLivingRoom" type="Node2D"]
+
+[node name="Background" type="Polygon2D" parent="."]
+color = Color(0.07, 0.055, 0.045, 1)
+polygon = PackedVector2Array(-300, -300, 1200, -300, 1200, 900, -300, 900)
+
+[node name="RoomPhoto" type="Sprite2D" parent="."]
+texture_filter = 4
+centered = false
+scale = Vector2(0.5833, 0.5833)
+texture = ExtResource("1")
+
+[node name="Solids" type="StaticBody2D" parent="."]
+
+[node name="WTopL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(187.5, 8)
+shape = SubResource("wall_top_l")
+
+[node name="WTopR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(690.5, 8)
+shape = SubResource("wall_top_r")
+
+[node name="WBottomL" type="CollisionShape2D" parent="Solids"]
+position = Vector2(196.5, 589)
+shape = SubResource("wall_bot")
+
+[node name="WBottomR" type="CollisionShape2D" parent="Solids"]
+position = Vector2(699.5, 589)
+shape = SubResource("wall_bot")
+
+[node name="WLeft" type="CollisionShape2D" parent="Solids"]
+position = Vector2(8, 298.5)
+shape = SubResource("wall_v")
+
+[node name="WRight" type="CollisionShape2D" parent="Solids"]
+position = Vector2(888, 298.5)
+shape = SubResource("wall_v")
+
+[node name="FFireplace" type="CollisionShape2D" parent="Solids"]
+position = Vector2(184, 50)
+shape = SubResource("s_fireplace")
+
+[node name="FBookshelf" type="CollisionShape2D" parent="Solids"]
+position = Vector2(609, 54)
+shape = SubResource("s_bookshelf")
+
+[node name="FDesk" type="CollisionShape2D" parent="Solids"]
+position = Vector2(811, 125)
+shape = SubResource("s_desk")
+
+[node name="FSofa" type="CollisionShape2D" parent="Solids"]
+position = Vector2(251, 268)
+shape = SubResource("s_sofa")
+
+[node name="FArmchairN" type="CollisionShape2D" parent="Solids"]
+position = Vector2(512, 173)
+shape = SubResource("s_armchair_n")
+
+[node name="FTeaTable" type="CollisionShape2D" parent="Solids"]
+position = Vector2(421, 290)
+shape = SubResource("s_teatable")
+
+[node name="FArmchairS" type="CollisionShape2D" parent="Solids"]
+position = Vector2(551, 379)
+shape = SubResource("s_armchair_s")
+
+[node name="FSideTableNW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(54, 209)
+shape = SubResource("s_sidetable_nw")
+
+[node name="FSideTableSW" type="CollisionShape2D" parent="Solids"]
+position = Vector2(63, 388)
+shape = SubResource("s_sidetable_sw")
+
+[node name="FLampTableE" type="CollisionShape2D" parent="Solids"]
+position = Vector2(824, 394)
+shape = SubResource("s_lamptable_e")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(448, 520)
+
+[node name="Sprite" parent="Player" index="0"]
+scale = Vector2(0.1095, 0.1095)
+
+[node name="Camera2D" parent="Player" index="2"]
+enabled = false
+
+[node name="RoomCam" type="Camera2D" parent="."]
+position = Vector2(448, 298)
+zoom = Vector2(1.2, 1.2)
+
+[node name="ExitToCity" type="Area2D" parent="."]
+position = Vector2(448, 627)
+script = ExtResource("3")
+target_scene = "res://scenes/City.tscn"
+
+[node name="ExitShape" type="CollisionShape2D" parent="ExitToCity"]
+shape = SubResource("p_door")
+
+[node name="DoorToBedroom" type="Area2D" parent="."]
+position = Vector2(430, -30)
+script = ExtResource("3")
+target_scene = "res://scenes/IntroRoom.tscn"
+
+[node name="DoorShape" type="CollisionShape2D" parent="DoorToBedroom"]
+shape = SubResource("p_door")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 250.0
+offset_top = 24.0
+offset_right = 650.0
+offset_bottom = 44.0
+horizontal_alignment = 1
+text = "Klein's home — the parlor    ·    walk down (S) to the street    ·    top door → the bedroom"

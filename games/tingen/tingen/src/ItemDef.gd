@@ -5,7 +5,7 @@ extends RefCounted
 
 const KNOWN_CATEGORIES: Array = [
 	"occult_tool", "divination_focus", "ingredient", "characteristic",
-	"medium", "sustenance", "tool", "key_item",
+	"medium", "sustenance", "tool", "key_item", "weapon", "ammo",
 ]
 
 var id: String = ""
@@ -16,6 +16,11 @@ var max_stack: int = 1
 var tags: Array = []
 var description: String = ""
 var on_use: Dictionary = {}   # empty = no effect
+## Weapon/tool combat wiring (category "weapon"): the ability ids a CARRIED copy of this
+## item grants, and the item id its `ammo` cost consumes from the carrier's inventory.
+## The executor cost seam resolves `ammo` through these — never through a built-in pool.
+var grants: Array = []        # ability ids (Strings)
+var ammo_item: String = ""    # "" = the weapon costs no ammo
 
 static func from_json(d: Dictionary) -> ItemDef:
 	var it := ItemDef.new()
@@ -30,4 +35,8 @@ static func from_json(d: Dictionary) -> ItemDef:
 	it.description = String(d.get("description", ""))
 	var ou: Variant = d.get("on_use", null)
 	it.on_use = (ou as Dictionary).duplicate(true) if typeof(ou) == TYPE_DICTIONARY else {}
+	# Shape-guarded (a String where an Array belongs degrades to empty, never hard-errors).
+	var g: Variant = d.get("grants", [])
+	it.grants = (g as Array).duplicate() if g is Array else []
+	it.ammo_item = String(d.get("ammo_item", ""))
 	return it

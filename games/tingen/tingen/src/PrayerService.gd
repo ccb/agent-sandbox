@@ -45,17 +45,23 @@ func pray(god_id: String, text: String) -> Dictionary:
 ## Apply the mechanical consequences. Returns true if the punishment struck the player down.
 func _apply_effects(god_id: String, god: Dictionary, outcome: String, severity: int) -> bool:
 	var opposes_cult := bool(god.get("opposes_cult", false))
+	# M25 (backlog "M18"): the mechanical effects now land on the FOUR LIVE meters (Meters), not the
+	# dead legacy WorldState pressures. The legacy->meter mapping is Meters.LEGACY_METER_MAP (one
+	# documented table); adjust_legacy() carries the SAME magnitudes onto the mapped meter, so a prayer
+	# has a real, felt effect on Doom/Madness/Notice/Heat. (Bare autoload refs are fine at runtime.)
 	match outcome:
 		"granted":
-			WorldState.adjust(&"fatigue", -15.0)
+			# A granted boon steadies the investigator: the old fatigue relief (-15) now eases Madness.
+			Meters.adjust_legacy("fatigue", -15.0, "prayer_granted")
 			_bump_standing(god_id, 2.0)
 			if opposes_cult:
 				# A rival power lends strength against the descent.
 				SummoningPlan.add_impede(8.0 * severity, "divine favor: %s" % god_id)
 			elif god_id == "outer_god":
-				# The descending god grants power, but you have fed its gate.
-				WorldState.adjust(&"corruption", 12.0)
-				WorldState.adjust(&"cult_readiness", 8.0)
+				# The descending god grants power, but you have fed its gate: corruption + cult_readiness
+				# both map to Doom (§4 folds cult_readiness into Doom's fill), so the descent hastens (+20).
+				Meters.adjust_legacy("corruption", 12.0, "prayer_outer_god")
+				Meters.adjust_legacy("cult_readiness", 8.0, "prayer_outer_god")
 			else:
 				# Canon invariant: the only pro-cult god IS the 外神. A future god that is
 				# neither opposing nor the outer god would grant with no world-tier effect.
@@ -65,9 +71,11 @@ func _apply_effects(god_id: String, god: Dictionary, outcome: String, severity: 
 		"ignored":
 			pass
 		"punished":
-			WorldState.adjust(&"corruption", 10.0 * severity)
-			WorldState.adjust(&"panic", 5.0 * severity)
-			WorldState.adjust(&"fatigue", 8.0 * severity)
+			# The god's wrath: ruin hastens the descent (corruption -> Doom), and the dread + strain
+			# rattle your control (panic + fatigue -> Madness). Same magnitudes, now on the live meters.
+			Meters.adjust_legacy("corruption", 10.0 * severity, "prayer_punished")
+			Meters.adjust_legacy("panic", 5.0 * severity, "prayer_punished")
+			Meters.adjust_legacy("fatigue", 8.0 * severity, "prayer_punished")
 			_bump_standing(god_id, -2.0 * severity)
 			if severity >= 3:
 				EventBus.emit_event("player_struck_down", {"actor": "player", "god": god_id})

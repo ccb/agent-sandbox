@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://cujesisojyvnk"]
+[gd_scene load_steps=3 format=3 uid="uid://cujesisojyvnk"]
 
 [ext_resource type="Script" path="res://src/DialoguePanel.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ui/Portrait.tscn" id="2"]
 
 [node name="DialoguePanel" type="Control"]
 anchor_right = 1.0
@@ -20,10 +21,16 @@ offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 0
 
+[node name="Portrait" parent="Box" instance=ExtResource("2")]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 128.0
+offset_bottom = 164.0
+
 [node name="Margin" type="MarginContainer" parent="Box"]
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_constants/margin_left = 18
+theme_override_constants/margin_left = 144
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 14
@@ -44,3 +51,15 @@ text = "..."
 
 [node name="Options" type="VBoxContainer" parent="Box/Margin/Body"]
 theme_override_constants/separation = 4
+
+[node name="InputRow" type="HBoxContainer" parent="Box/Margin/Body"]
+theme_override_constants/separation = 6
+
+[node name="Input" type="LineEdit" parent="Box/Margin/Body/InputRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Say something…  (Enter to send)"
+
+[node name="Send" type="Button" parent="Box/Margin/Body/InputRow"]
+layout_mode = 2
+text = "Send"

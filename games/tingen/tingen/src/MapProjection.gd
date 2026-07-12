@@ -10,15 +10,16 @@ extends RefCounted
 ## panel's aspect-fit letterbox and are independent of CITY_SCALE.
 
 const MAP_SIZE := Vector2(1254.0, 1254.0)
-## World units per map pixel. The map (1254x1254) becomes a (0,0)..(4389,4389) world. 3.5 keeps the
-## established district feel: a full-city walk is ~37 s at the player's 120 u/s.
-const CITY_SCALE := 3.5
+## World units per map pixel — UNIFIED with the live scene (coordinate-unification pass):
+## City.tscn's ground is ground_test.png (2508px, a 2x render of the 1254 map) at node scale 2.5,
+## i.e. a (0,0)..(6270,6270) world = exactly 5.0 world units per map pixel. Under the old 3.5 the
+## southern city (Chapel, player start) projected off the map image and the rite anchor landed
+## inside the wrong building. A full-city walk is ~52 s at the player's 120 u/s.
+const CITY_SCALE := 5.0
 ## The 降临 / rite site, in the canonical map-image space. Its world position =
-## map_to_world(WAREHOUSE_MAP); its map marker is itself. NOTE: still anchored to the OLD map
-## space pending the world/rite coordinate-unification pass. On map_v3 the rite marker is not yet
-## re-aligned to the Iron Cross district; the WORLD anchor (and CityBlocks, ActionCommit.SITES) are
-## deliberately left unchanged here so the panel re-skin causes no gameplay ripple.
-const WAREHOUSE_MAP := Vector2(515.0, 372.0)
+## map_to_world(WAREHOUSE_MAP) = ~(5366.65, 2378.09) — the sabotage cache (Warehouse/RiteCache)
+## at the REAL Warehouse building in City.tscn; its map marker is itself.
+const WAREHOUSE_MAP := Vector2(1073.33, 475.618)
 
 ## Map-image space -> world space.
 static func map_to_world(map_pos: Vector2) -> Vector2:

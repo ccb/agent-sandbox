@@ -1,0 +1,439 @@
+{
+  "_about": "Language-neutral fixtures for SPEC.md. Both the Python (Tingen) and TS (Yumina) cognition implementations MUST pass these. Float assertions use tolerance 1e-6. Retrieval/goal/veto outputs are exact.",
+  "constants": {
+    "ALPHA_RECENCY": 1.0,
+    "ALPHA_IMPORTANCE": 1.0,
+    "ALPHA_RELEVANCE": 1.0,
+    "DEFAULT_DECAY": 0.95,
+    "DEFAULT_MAX_RECORDS": 6,
+    "DEFAULT_TOKEN_BUDGET": 800,
+    "REFLECTION_THRESHOLD": 30.0,
+    "REFLECTION_DEFAULT_IMPORTANCE": 5.0,
+    "OBSERVATION_DEFAULT_IMPORTANCE": 1.0
+  },
+  "stop_words": [
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "had",
+    "has",
+    "have",
+    "he",
+    "her",
+    "here",
+    "his",
+    "i",
+    "in",
+    "is",
+    "it",
+    "its",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "she",
+    "that",
+    "the",
+    "their",
+    "them",
+    "they",
+    "this",
+    "to",
+    "was",
+    "were",
+    "with",
+    "you",
+    "your"
+  ],
+  "tokenizer": "lowercase; split on /[^a-z0-9]+/; drop empties and stop_words. relevance(query,text) = |tokens(query) ∩ tokens(text)| / |tokens(query)|, or 0.0 if tokens(query) is empty.",
+  "scoring": {
+    "recency": [
+      {
+        "name": "fresh (same turn)",
+        "last_accessed_turn": 10,
+        "turn": 10,
+        "decay": 0.95,
+        "expected": 1.0
+      },
+      {
+        "name": "one turn old",
+        "last_accessed_turn": 9,
+        "turn": 10,
+        "decay": 0.95,
+        "expected": 0.95
+      },
+      {
+        "name": "six turns old",
+        "last_accessed_turn": 4,
+        "turn": 10,
+        "decay": 0.95,
+        "expected": 0.7350918906
+      },
+      {
+        "name": "future clamps to 0 delta",
+        "last_accessed_turn": 12,
+        "turn": 10,
+        "decay": 0.95,
+        "expected": 1.0
+      }
+    ],
+    "importance": [
+      {
+        "name": "mid",
+        "importance": 7.0,
+        "expected": 0.7
+      },
+      {
+        "name": "clamp high",
+        "importance": 12.0,
+        "expected": 1.0
+      },
+      {
+        "name": "clamp low",
+        "importance": -1.0,
+        "expected": 0.0
+      }
+    ],
+    "relevance": [
+      {
+        "name": "full overlap",
+        "query": "player food bridge",
+        "text": "The player offered me food at the bridge",
+        "expected": 1.0
+      },
+      {
+        "name": "partial overlap",
+        "query": "player food bridge",
+        "text": "The troll guards the bridge",
+        "expected": 0.3333333333
+      },
+      {
+        "name": "no content overlap",
+        "query": "player food bridge",
+        "text": "I lit the lamp",
+        "expected": 0.0
+      },
+      {
+        "name": "query is all stop-words",
+        "query": "the and is it",
+        "text": "anything here",
+        "expected": 0.0
+      }
+    ]
+  },
+  "retrieval": [
+    {
+      "name": "recency x importance x relevance ranking",
+      "turn": 10,
+      "decay": 0.95,
+      "max_records": 6,
+      "token_budget": 100000,
+      "query": "player food bridge",
+      "records": [
+        {
+          "id": 0,
+          "text": "The player gave me a fish",
+          "importance": 3.0,
+          "last_accessed_turn": 4
+        },
+        {
+          "id": 1,
+          "text": "The troll guards the bridge",
+          "importance": 2.0,
+          "last_accessed_turn": 9
+        },
+        {
+          "id": 2,
+          "text": "The player offered me food at the bridge",
+          "importance": 6.0,
+          "last_accessed_turn": 8
+        },
+        {
+          "id": 3,
+          "text": "I lit the lamp",
+          "importance": 1.0,
+          "last_accessed_turn": 10
+        }
+      ],
+      "expected_scores": {
+        "0": 1.3684252239,
+        "1": 1.4833333333,
+        "2": 2.5025,
+        "3": 1.1
+      },
+      "expected_order": [
+        2,
+        1,
+        0,
+        3
+      ],
+      "expected_last_accessed_after": {
+        "0": 10,
+        "1": 10,
+        "2": 10,
+        "3": 10
+      }
+    },
+    {
+      "name": "max_records cap keeps only the top two",
+      "turn": 10,
+      "decay": 0.95,
+      "max_records": 2,
+      "token_budget": 100000,
+      "query": "player food bridge",
+      "records": [
+        {
+          "id": 0,
+          "text": "The player gave me a fish",
+          "importance": 3.0,
+          "last_accessed_turn": 4
+        },
+        {
+          "id": 1,
+          "text": "The troll guards the bridge",
+          "importance": 2.0,
+          "last_accessed_turn": 9
+        },
+        {
+          "id": 2,
+          "text": "The player offered me food at the bridge",
+          "importance": 6.0,
+          "last_accessed_turn": 8
+        },
+        {
+          "id": 3,
+          "text": "I lit the lamp",
+          "importance": 1.0,
+          "last_accessed_turn": 10
+        }
+      ],
+      "expected_order": [
+        2,
+        1
+      ]
+    },
+    {
+      "name": "tie on score breaks toward the newer id",
+      "turn": 5,
+      "decay": 0.95,
+      "max_records": 6,
+      "token_budget": 100000,
+      "query": "bell",
+      "records": [
+        {
+          "id": 0,
+          "text": "the bell rings",
+          "importance": 5.0,
+          "last_accessed_turn": 5
+        },
+        {
+          "id": 1,
+          "text": "the bell rings",
+          "importance": 5.0,
+          "last_accessed_turn": 5
+        }
+      ],
+      "expected_order": [
+        1,
+        0
+      ]
+    },
+    {
+      "name": "token_budget: the first chosen record is kept even if it alone exceeds the budget",
+      "turn": 10,
+      "decay": 0.95,
+      "max_records": 6,
+      "token_budget": 8,
+      "query": "player food bridge",
+      "records": [
+        {
+          "id": 0,
+          "text": "The player gave me a fish",
+          "importance": 3.0,
+          "last_accessed_turn": 4
+        },
+        {
+          "id": 1,
+          "text": "The troll guards the bridge",
+          "importance": 2.0,
+          "last_accessed_turn": 9
+        },
+        {
+          "id": 2,
+          "text": "The player offered me food at the bridge",
+          "importance": 6.0,
+          "last_accessed_turn": 8
+        },
+        {
+          "id": 3,
+          "text": "I lit the lamp",
+          "importance": 1.0,
+          "last_accessed_turn": 10
+        }
+      ],
+      "expected_order": [
+        2
+      ]
+    },
+    {
+      "name": "token_budget: the walk stops before the record that would exceed the budget (mid-list cut)",
+      "turn": 10,
+      "decay": 0.95,
+      "max_records": 6,
+      "token_budget": 29,
+      "query": "player food bridge",
+      "records": [
+        {
+          "id": 0,
+          "text": "The player gave me a fish",
+          "importance": 3.0,
+          "last_accessed_turn": 4
+        },
+        {
+          "id": 1,
+          "text": "The troll guards the bridge",
+          "importance": 2.0,
+          "last_accessed_turn": 9
+        },
+        {
+          "id": 2,
+          "text": "The player offered me food at the bridge",
+          "importance": 6.0,
+          "last_accessed_turn": 8
+        },
+        {
+          "id": 3,
+          "text": "I lit the lamp",
+          "importance": 1.0,
+          "last_accessed_turn": 10
+        }
+      ],
+      "expected_order": [
+        2,
+        1
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "name": "active-by-tier + long->medium->short render, secret filtered",
+      "goals": [
+        {
+          "description": "Complete the summoning rite in the crypt",
+          "tier": "long",
+          "done": false,
+          "secret": true
+        },
+        {
+          "description": "Gather the ritual materials",
+          "tier": "medium",
+          "done": true,
+          "secret": false
+        },
+        {
+          "description": "Bring the sacrifice to the crypt",
+          "tier": "medium",
+          "done": false,
+          "secret": false
+        },
+        {
+          "description": "Avoid the Nighthawks",
+          "tier": "short",
+          "done": false,
+          "secret": false
+        }
+      ],
+      "expected_active_by_tier": {
+        "long": [
+          "Complete the summoning rite in the crypt"
+        ],
+        "medium": [
+          "Bring the sacrifice to the crypt"
+        ],
+        "short": [
+          "Avoid the Nighthawks"
+        ]
+      },
+      "expected_prompt_order_revealed_true": [
+        "Complete the summoning rite in the crypt",
+        "Bring the sacrifice to the crypt",
+        "Avoid the Nighthawks"
+      ],
+      "expected_prompt_order_revealed_false": [
+        "Bring the sacrifice to the crypt",
+        "Avoid the Nighthawks"
+      ]
+    }
+  ],
+  "veto": [
+    {
+      "name": "no_rite_without_site: a task-bearer off-site is amended to idle",
+      "action": {
+        "verb": "perform_ritual_step",
+        "public": false,
+        "reveals_membership": false
+      },
+      "actor": {
+        "task": { "ritual": "summoning_descent" }
+      },
+      "world_state": {
+        "player_triggered": false,
+        "actor_at_rite_site": false
+      },
+      "expected": {
+        "decision": "amend",
+        "invariant": "no_rite_without_site",
+        "amended_action": {
+          "verb": "idle"
+        }
+      }
+    },
+    {
+      "name": "no_rite_without_site: a task-bearer on-site performs the rite",
+      "action": {
+        "verb": "perform_ritual_step",
+        "public": false,
+        "reveals_membership": false
+      },
+      "actor": {
+        "task": { "ritual": "summoning_descent" }
+      },
+      "world_state": {
+        "player_triggered": false,
+        "actor_at_rite_site": true
+      },
+      "expected": {
+        "decision": "approve",
+        "invariant": null
+      }
+    },
+    {
+      "name": "no_rite_without_site: an agent with no task is amended to idle",
+      "action": {
+        "verb": "perform_ritual_step",
+        "public": false,
+        "reveals_membership": false
+      },
+      "actor": {},
+      "world_state": {
+        "player_triggered": false,
+        "actor_at_rite_site": true
+      },
+      "expected": {
+        "decision": "amend",
+        "invariant": "no_rite_without_site",
+        "amended_action": {
+          "verb": "idle"
+        }
+      }
+    }
+  ]
+}

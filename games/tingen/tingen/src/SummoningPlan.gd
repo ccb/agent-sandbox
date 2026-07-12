@@ -22,14 +22,34 @@ var impede_score: float = 0.0
 ## What the cell has gathered. Sabotage strips from here.
 var ingredients: Dictionary = {"ritual_salt": 3, "consecrated_chalk": 2, "candle": 3}
 
+## Materials that must be physically carried down and laid at the crypt altar before the descent
+## can advance at all. This is the gather→deliver gate: the cult must pick these up from the supply
+## cache (RoomItems, ground items), carry them across scenes to the altar, and deposit them. Until
+## `materials_ready()`, a perform_ritual_step at the altar only lays materials (or no-ops) and never
+## advances the clock — so the rite literally cannot progress on an empty altar.
+const DEFAULT_RITUAL_REQUIREMENT := {"ritual_salt": 1, "consecrated_chalk": 1, "candle": 1}
+var ritual_requirement: Dictionary = DEFAULT_RITUAL_REQUIREMENT.duplicate()
+## What has actually been laid at the altar so far (item_id -> count).
+var deposited: Dictionary = {}
+
 var _initial_total: int = 8   # sum of starting ingredients, for the strength fraction
+
+## TODO(doomsday-timer): the passive doomsday clock is DISABLED for now — the descent is driven
+## PURELY by the cult's own rite work (advance_rite, fired by perform_ritual_step at the altar). With
+## this off, stopping the cult — blocking their descent, downing them, or sabotaging ingredients —
+## actually prevents the summoning. Flip this back to `true` to restore "the city falls on a schedule"
+## time pressure, and rebalance START_COUNTDOWN for the combined timer+rite drive.
+const PASSIVE_DOOMSDAY_TICK: bool = false
 
 func _ready() -> void:
 	Clock.beat_ticked.connect(_on_beat)
 
-# _beat_index/_day intentionally unused: every beat advances the doomsday clock equally.
+# _beat_index/_day intentionally unused. While PASSIVE_DOOMSDAY_TICK is off, a beat alone does NOT
+# advance the clock — only the cult working the rite does (advance_rite). tick_countdown() is kept and
+# still callable directly, ready to re-enable.
 func _on_beat(_beat_index: int, _day: int) -> void:
-	tick_countdown()
+	if PASSIVE_DOOMSDAY_TICK:
+		tick_countdown()
 
 ## Advance the doomsday clock by one beat. At zero, fire the climax exactly once.
 func tick_countdown() -> void:
@@ -40,9 +60,53 @@ func tick_countdown() -> void:
 		countdown_changed.emit(countdown_beats)
 	_fire_climax_if_due()
 
-## Hasten the descent by `beats` — the cult's own hands working the rite at the warehouse
-## drive this (ActionCommit.perform_ritual_step), so the player watches the clock leap when
-## the faithful gather, not just tick on a timer. Clamps at zero and fires the climax once.
+## True once every required material has been laid at the altar.
+func materials_ready() -> bool:
+	for item_id in ritual_requirement:
+		if int(deposited.get(item_id, 0)) < int(ritual_requirement[item_id]):
+			return false
+	return true
+
+## True when the altar still wants more of `item_id` (used to decide whether a carried unit
+## should be laid down rather than hoarded).
+func needs(item_id: String) -> bool:
+	return int(deposited.get(item_id, 0)) < int(ritual_requirement.get(item_id, 0))
+
+## Lay one unit of a material at the altar. Returns false when the altar wants no more of it.
+func deposit(item_id: String) -> bool:
+	if not needs(item_id):
+		return false
+	deposited[item_id] = int(deposited.get(item_id, 0)) + 1
+	return true
+
+## How many required units are laid vs. still wanted, for perception/log lines.
+func materials_deposited_total() -> int:
+	var n := 0
+	for item_id in ritual_requirement:
+		n += mini(int(deposited.get(item_id, 0)), int(ritual_requirement[item_id]))
+	return n
+
+func materials_required_total() -> int:
+	var n := 0
+	for item_id in ritual_requirement:
+		n += int(ritual_requirement[item_id])
+	return n
+
+## The materials still missing from the altar (item_id -> remaining count) — fed to perception so
+## the brain knows what is left to fetch.
+func materials_outstanding() -> Dictionary:
+	var out: Dictionary = {}
+	for item_id in ritual_requirement:
+		var short := int(ritual_requirement[item_id]) - int(deposited.get(item_id, 0))
+		if short > 0:
+			out[item_id] = short
+	return out
+
+## Hasten the descent by `beats` — the cult's own hands working the rite at the altar drive this
+## (ActionCommit.perform_ritual_step), so the player watches the clock leap when the faithful work,
+## not just tick on a timer. This is the low-level primitive; the materials gate (the altar must be
+## fully stocked before any beat advances) is enforced by its sole caller, _perform_ritual_step.
+## Clamps at zero and fires the climax once.
 func advance_rite(beats: int = 1) -> void:
 	if climax_fired or beats <= 0:
 		return
@@ -57,14 +121,18 @@ func _fire_climax_if_due() -> void:
 	if countdown_beats <= 0 and not climax_fired:
 		climax_fired = true
 		var strength := manifestation_strength()
-		summoning_climax.emit(strength)
+		# Log the descent BEFORE the signal: summoning_climax.emit drives EndGame to resolve the ending
+		# synchronously (the `endgame` event), so the descent must be recorded first to read in order.
 		EventBus.emit_event("summoning_climax", {"strength": strength})
+		summoning_climax.emit(strength)
 
 func reset() -> void:
 	climax_fired = false
 	countdown_beats = START_COUNTDOWN
 	impede_score = 0.0
 	ingredients = {"ritual_salt": 3, "consecrated_chalk": 2, "candle": 3}
+	ritual_requirement = DEFAULT_RITUAL_REQUIREMENT.duplicate()
+	deposited = {}
 	_initial_total = _total_ingredients()
 
 func _total_ingredients() -> int:
@@ -121,6 +189,8 @@ func to_dict() -> Dictionary:
 		"countdown_beats": countdown_beats,
 		"impede_score": impede_score,
 		"ingredients": ingredients.duplicate(true),
+		"ritual_requirement": ritual_requirement.duplicate(true),
+		"deposited": deposited.duplicate(true),
 		"initial_total": _initial_total,
 		"climax_fired": climax_fired,
 	}
@@ -129,5 +199,7 @@ func from_dict(d: Dictionary) -> void:
 	countdown_beats = int(d.get("countdown_beats", START_COUNTDOWN))
 	impede_score = float(d.get("impede_score", 0.0))
 	ingredients = (d.get("ingredients", {}) as Dictionary).duplicate(true)
+	ritual_requirement = (d.get("ritual_requirement", DEFAULT_RITUAL_REQUIREMENT) as Dictionary).duplicate(true)
+	deposited = (d.get("deposited", {}) as Dictionary).duplicate(true)
 	_initial_total = int(d.get("initial_total", _total_ingredients()))
 	climax_fired = bool(d.get("climax_fired", false))

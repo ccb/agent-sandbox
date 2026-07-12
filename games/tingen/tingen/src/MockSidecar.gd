@@ -6,12 +6,48 @@ extends SidecarClient
 ## drive exact agent behavior with no LLM.
 
 var scripted: Dictionary = {}   # actor_id -> action dict OR Array[action dict]
+var scripted_converse: Dictionary = {}   # agent_id -> {say, action, replies}
+var scripted_narration: String = ""      # "" (default) = no GM narration, like an offline build
+var last_narrate_request: Dictionary = {}   # what the GM panel last asked to narrate (test seam)
+var last_converse_request: Dictionary = {}  # what the dialogue path last asked to converse (test seam)
+## Tests exercising the stagger path set this to k>1; the default 1 keeps every scripted test
+## deliberating on every beat (stagger is an LLM-brain property — SidecarClient.stagger_k).
+var stagger_k_value: int = 1
+
+func stagger_k() -> int:
+	return stagger_k_value
 
 func set_action(actor_id: String, action: Variant) -> void:
 	scripted[actor_id] = action
 
+## Script a deterministic conversation reply for an agent (offline/tests). reply: {say, action, replies}.
+func set_converse(agent_id: String, reply: Dictionary) -> void:
+	scripted_converse[agent_id] = reply
+
+## Script the GM digest narration (tests). Empty string = back to the offline default (no narration).
+func set_narrate(summary: String) -> void:
+	scripted_narration = summary
+
 func clear() -> void:
 	scripted.clear()
+	scripted_converse.clear()
+	scripted_narration = ""
+	last_narrate_request = {}
+
+func converse(request: Dictionary) -> Dictionary:
+	last_converse_request = request.duplicate(true)
+	var aid := String(request.get("agent_id", ""))
+	if scripted_converse.has(aid):
+		return (scripted_converse[aid] as Dictionary).duplicate(true)
+	return {"say": "", "action": null, "replies": []}
+
+## GM digest narration: the scripted summary if one is set, else {} — the "no narration" default the
+## GM panel treats as a normal offline outcome. Records the request so tests can assert its shape.
+func narrate(request: Dictionary) -> Dictionary:
+	last_narrate_request = request.duplicate(true)
+	if scripted_narration == "":
+		return {}
+	return {"summary": scripted_narration}
 
 func propose(snapshots: Array) -> Array:
 	var out: Array = []

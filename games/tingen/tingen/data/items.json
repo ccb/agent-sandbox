@@ -100,6 +100,28 @@
 		"on_use": null
 	},
 	{
+		"id": "revolver",
+		"name": "Service Revolver",
+		"category": "weapon",
+		"stackable": false,
+		"max_stack": 1,
+		"tags": ["weapon", "firearm"],
+		"description": "A worn service revolver; it answers to a steady hand and whatever rounds are left in the pocket.",
+		"grants": ["revolver_shot", "incendiary_round"],
+		"ammo_item": "revolver_round",
+		"on_use": null
+	},
+	{
+		"id": "revolver_round",
+		"name": "Revolver Round",
+		"category": "ammo",
+		"stackable": true,
+		"max_stack": 12,
+		"tags": ["weapon", "ammo", "gatherable"],
+		"description": "A heavy lead round. The city sells fewer of these than it should.",
+		"on_use": null
+	},
+	{
 		"id": "rye_bread",
 		"name": "Rye Bread",
 		"category": "sustenance",
@@ -108,5 +130,45 @@
 		"tags": ["food"],
 		"description": "Dense, sour, filling.",
 		"on_use": { "effect": "adjust_pressure", "var": "fatigue", "delta": -12.0 }
+	},
+	{
+		"id": "hunter_characteristic",
+		"name": "Hunter Characteristic",
+		"category": "characteristic",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["characteristic", "pathway_hunter", "gatherable"],
+		"description": "The crystallised essence that precipitates from a slain Hunter-pathway Beyonder. Digest it via the acting ritual to climb the Sequence — knowledge bought at the price of your mind.",
+		"on_use": null
+	},
+	{
+		"id": "hermit_characteristic",
+		"name": "Hermit Characteristic",
+		"category": "characteristic",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["characteristic", "pathway_hermit", "gatherable"],
+		"description": "The crystallised essence that precipitates from a slain Hermit-pathway Beyonder — starlight caught in salt. Digest it via the acting rite to climb the Sequence: knowledge bought at the price of your mind.",
+		"on_use": null
+	},
+	{
+		"id": "shilling",
+		"name": "Shilling",
+		"category": "medium",
+		"stackable": true,
+		"max_stack": 99,
+		"tags": ["currency", "coin"],
+		"description": "A worn silver shilling. The city runs on these; so does Franky's counter.",
+		"on_use": null
+	},
+	{
+		"id": "tainted_characteristic",
+		"name": "Tainted Characteristic",
+		"category": "characteristic",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["characteristic", "off_pathway", "sellable", "gatherable"],
+		"description": "An off-pathway essence — useless to your own digestion, but ritual fuel or quiet income sold to a church fence.",
+		"on_use": null
 	}
 ]

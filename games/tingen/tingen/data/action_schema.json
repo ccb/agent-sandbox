@@ -7,9 +7,16 @@
 		"hide": [],
 		"flee": ["from"],
 		"attack": ["target"],
+		"cast_ability": ["ability"],
+		"engage": ["target"],
+		"disengage": [],
+		"protect": ["agent"],
 		"recruit": ["agent"],
 		"report": ["to", "info"],
 		"pray": ["god", "prayer"],
+		"adopt_goal": ["goal"],
+		"drop_goal": ["goal"],
+		"reveal_secret": ["secret"],
 		"idle": []
 	}
 }

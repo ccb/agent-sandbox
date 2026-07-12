@@ -1,5 +1,13 @@
 # Tingen — Design Decisions Log
 
+> **SUPERSEDED — `faction` removed (neutral-engine refactor).** Several entries below (the `AmbientSidecar`
+> cult-pathing, the Critic's faction/position coherence check, and the `requires_agent_faction` persuade
+> gate) describe an early `faction` field. That field has since been **removed**: the engine is now fully
+> neutral and data-driven — an NPC is a bag of data (role, goals, secrets, task), and allegiance is inferred
+> from having a `task` at the rite + persona prose, never a categorical field. These entries are kept as the
+> historical record of *why* faction existed and was reversed; the current design is in
+> `tingen_npc_framework_design.md`.
+
 Running log of the choices I made while implementing TODO tasks 1–10 in the Godot
 project, plus open questions for you to review. Where I had to guess, I picked what
 seemed the best default and noted it here rather than stopping to ask.
