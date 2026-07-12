@@ -335,8 +335,11 @@ g:doCommand("search merchant")
 g:doCommand("take glowstone")
 g:doCommand("light glowstone")
 g:doCommand("hint")
-ok(not saw(lines, "see anything down here (")
-	and g:openHints()[1].key ~= "light", "solved topics leave the menu")
+local lightOpen = false
+for _, h in ipairs(g:openHints()) do
+	if h.key == "light" then lightOpen = true end
+end
+ok(not lightOpen, "solved topics leave the menu")
 g:doCommand("resume")
 local snap3 = g:snapshot()
 local g4 = Engine.restore(function(seed)
