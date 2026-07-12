@@ -1535,7 +1535,7 @@
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "LANTERN / TRANSPARENCY: TOTAL. PERMISSION: NONE";
+    cls.textContent = "THE TOMB, X-RAYED / PERMISSION: NONE";
     el(svg, "line", { x1: 0, y1: 306, x2: 640, y2: 306, stroke: PH, "stroke-width": 1.4 });
     const HUES = ["#ff5a5a", "#ff9a3c", "#ffd76a", "#7fff9e", "#4db8ff",
       "#7a7aff", "#c07aff", "#dff2ff"];
@@ -1594,6 +1594,8 @@
     const glow = el(lg, "circle", { cx: 0, cy: -42, r: 15, fill: "none" });
     const bTop = el(svg, "line", { "stroke-width": 1.2 });
     const bBot = el(svg, "line", { "stroke-width": 1.2 });
+    const dropL = el(svg, "line", { "stroke-width": 1, "stroke-dasharray": "3 4" });
+    const dropR = el(svg, "line", { "stroke-width": 1, "stroke-dasharray": "3 4" });
     const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
     const call = label(svg, 624, 64, 10, PH); call.setAttribute("text-anchor", "end");
     const CALLS = [
@@ -1606,7 +1608,7 @@
     clock(t => {
       const T = t % 190;
       doWipe(T);
-      typeOn(hdr, "THE ULFIRE LANTERN (THE TOMB, X-RAYED)", T, 4, 1.4);
+      typeOn(hdr, "THE ULFIRE LANTERN", T, 4, 1.4);
       const hue = HUES[t % HUES.length];
       flame.setAttribute("stroke", hue);
       glow.setAttribute("stroke", HUES[(t + 3) % HUES.length]);
@@ -1617,20 +1619,25 @@
       const cx = 370 + ph2 * 110;                            // where it points
       const apex = [104, 250];
       const half = 72;
-      // the beams ARE the boundary (CCB): the reveal is bounded by the two
-      // drawn rays up to the crown, vertical only beneath the beam line --
-      // so the left beam restores stone sweeping right, reveals sweeping left
-      const k40 = (apex[1] - 52) / (apex[1] - 120);
-      const lx40 = apex[0] + (cx - half - apex[0]) * k40;
-      const rx40 = apex[0] + (cx + half - apex[0]) * k40;
+      // the reveal hangs from the beam tips (CCB): each beam ends at a
+      // tip, a vertical drops straight down from it to the ground, and
+      // the x-ray window is exactly the band between the two drops
+      const tipY = 66;
       wedge.setAttribute("points",
-        `${apex[0]},${apex[1]} ${lx40},52 ${rx40},52 ${cx + half},120 ` +
-        `${cx + half},306 ${cx - half},306 ${cx - half},120`);
+        `${cx - half},${tipY} ${cx + half},${tipY} ` +
+        `${cx + half},306 ${cx - half},306`);
       [bTop, bBot].forEach((L, i) => {
         L.setAttribute("x1", apex[0]); L.setAttribute("y1", apex[1]);
-        L.setAttribute("x2", i ? rx40 : lx40); L.setAttribute("y2", 52);
+        L.setAttribute("x2", cx + (i ? half : -half)); L.setAttribute("y2", tipY);
         L.setAttribute("stroke", HUES[(t + i * 4) % HUES.length]);
         L.setAttribute("opacity", .8);
+      });
+      [dropL, dropR].forEach((L, i) => {
+        const x = cx + (i ? half : -half);
+        L.setAttribute("x1", x); L.setAttribute("y1", tipY);
+        L.setAttribute("x2", x); L.setAttribute("y2", 306);
+        L.setAttribute("stroke", HUES[(t + i * 4) % HUES.length]);
+        L.setAttribute("opacity", .55);
       });
       pulses.forEach((p, i) => {
         const q = ((t * 2 + i * 16) % 48) / 48;
