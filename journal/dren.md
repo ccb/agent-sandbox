@@ -22,7 +22,7 @@ on top; copy the template block each working day.
 - Onboarding step 2: set up the project (`uv sync --extra dev`).
 - Onboarding step 3: confirmed the suite is green — `uv run pytest -q` → 1423 passed, 4 skipped.
 - Onboarding step 4: played the Tomb game to feel the engine from the outside.
-- Read through ROADMAP.md to understand the phased plan (Phase 0 onboarding → Phase 1 agents → Phase 2 memory/planning → Phase 3 Godot).
+- Skimed through ROADMAP.md to understand the phased plan (Phase 0 onboarding → Phase 1 agents → Phase 2 memory/planning → Phase 3 Godot).
 
 **Blockers / questions:**
 - Need to learn more about git commands and the command line in general.
