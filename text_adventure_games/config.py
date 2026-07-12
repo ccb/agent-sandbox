@@ -70,6 +70,17 @@ class AgentConfig:
     # actually has a reflector wired in -- with none (the default), reflection
     # never fires and behavior is unchanged. Was reflection.DEFAULT_REFLECTION_THRESHOLD.
     reflection_threshold: float = 30.0
+    # Cognition tools (issue #358): offer recall / query_knowledge / read_plan
+    # alongside the action tools in the bounded tool loop, so the agent can
+    # consult its own memory, beliefs, and plan when IT decides to (each tool
+    # only appears when its source exists; at most npc.COGNITION_BUDGET calls
+    # per decision, then it must act). False (the default) keeps the fixed
+    # retrieve-then-prompt pipeline byte-identical to before. Tradeoff, kept
+    # deliberately lazy: when True, the prompt-side "Relevant memories:" paste
+    # is STILL included, so a run pays for both the engine-pushed and the
+    # agent-pulled retrieval -- no behavior surprise, but no savings either;
+    # skipping the paste (and measuring the difference) is future work.
+    cognition_tools: bool = False
 
 
 @dataclass
