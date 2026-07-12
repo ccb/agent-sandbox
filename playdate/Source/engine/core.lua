@@ -590,6 +590,24 @@ verb("break", 1, function(g, thing)
 	hook(g, thing)
 end, "smash", "shatter")
 
+verb("open", 1, function(g, thing)
+	local hook = thing:get("onOpened")
+	if hook then
+		hook(g, thing)
+		return
+	end
+	if thing:get("onPried") then
+		g:say("It doesn't open; it PRIES, and it will want an edge.")
+		return
+	end
+	if thing:get("closed") then
+		thing:set("closed", nil)
+		g:say("You open the " .. thing.name .. ".")
+		return
+	end
+	g:say("The " .. thing.name .. " has no more open to offer.")
+end)
+
 verb("pry", 1, function(g, thing)
 	local hook = thing:get("onPried")
 	if not hook then
@@ -597,7 +615,7 @@ verb("pry", 1, function(g, thing)
 		return
 	end
 	hook(g, thing)
-end, "pry open", "open")
+end, "pry open")
 
 verb("read", 1, function(g, thing)
 	local txt = thing:get("readText")

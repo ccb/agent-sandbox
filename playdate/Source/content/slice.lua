@@ -463,11 +463,17 @@ function BuildTomb(seed)
 	blade:set("weapon", true)
 	cylinders:add(blade)
 
+	local sealedJar = function(game, thing)
+		game:say("The seal refuses your fingers. These were closed by "
+			.. "professionals, for reasons the plinths remember.")
+	end
+
 	local jar = Item("falcon jar", "a falcon-headed canopic jar",
 		"A sealed jar with a falcon's head, wings swept back along the "
 		.. "lid. Something coiled shifts inside.")
 	jar:alias("jar")
 	jar:set("gettable", true)
+	jar:set("onOpened", sealedJar)
 
 	local spawn = Engine.Character("spawn of guts",
 		"a fungal spawn, eyeless under its falcon-headed jar, swaying "
@@ -717,6 +723,7 @@ function BuildTomb(seed)
 		"A sealed jar with a jackal's head, ears swept back along the "
 		.. "lid. Something folded shifts inside.")
 	jackalJar:set("gettable", true)
+	jackalJar:set("onOpened", sealedJar)
 
 	local brain = Engine.Character("spawn of brain",
 		"a fungal brain on two small legs, jackal jar for a head, listening",
