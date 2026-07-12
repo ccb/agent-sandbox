@@ -390,6 +390,42 @@
        <span class="attach">Attaches: EXAMINE MANIFOLD BOX, the ulfire reveal.</span></p>
   </section>
 
+  <section>
+    <div class="slate"><h2>31 &mdash; THE SYNTH-HUNTING DAGGER</h2><span class="kind">LITHO / EXOTICA</span></div>
+    <div class="screen">
+      <svg id="dagger" viewBox="0 0 640 360" aria-label="The synth-hunting dagger"></svg>
+    </div>
+    <p class="spec">Machined, faceted, filed under weapons-grade philosophy. Phase one,
+       LOGIC: a well-formed LogLang statement assembles beneath the blade. Phase two,
+       PARADOX: the statement rewrites itself into a contradiction, the edge goes hot,
+       and a glyph escort rings the weapon. Phase three, GLITCH: the escort flies
+       downrange, circles the synth, and the target shears into displaced slices while
+       its coherence drains. <span class="attach">Attaches: TAKE DAGGER (the coffin's yield); EXAMINE re-earns.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>32 &mdash; THE EGO-CORE</h2><span class="kind">LITHO / EXOTICA</span></div>
+    <div class="screen">
+      <svg id="core" viewBox="0 0 640 360" aria-label="The ego-core"></svg>
+    </div>
+    <p class="spec">Data archaeology: the spindle in a reader cradle, its memory map
+       scrolling sector by sector -- THE BATH: KEPT; THE DECREES: DELETED -- over a
+       usage bar that is mostly freed space. Ten thousand banners, deleted to make room
+       for a bath. <span class="attach">Attaches: the hypergeometric reveal; EXAMINE EGO-CORE.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>33 &mdash; THE ULFIRE LANTERN</h2><span class="kind">LITHO / EXOTICA</span></div>
+    <div class="screen">
+      <svg id="ulfire" viewBox="0 0 640 360" aria-label="The ulfire lantern"></svg>
+    </div>
+    <p class="spec">The ninth colour shines through solid objects and is stopped only by
+       lead: the lantern's sweeping cone opens a moving x-ray window in the azure slab
+       -- halls wireframed, the sphere, the orange network pulsing from the coffin to
+       the mystic on the summit -- while rock outside the cone stays rock.
+       <span class="attach">Attaches: the archivist's gift; LIGHT ULFIRE LANTERN.</span></p>
+  </section>
+
 
 
 
@@ -1756,6 +1792,305 @@
       P.pool.setAttribute("x2", 236 + 5 + (t % 48) / 12);
     });
 
+
+  /* ---------------- 31: the synth-hunting dagger ---------------- */
+  {
+    const svg = document.getElementById("dagger");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "EXOTICA / WEAPONS-GRADE PHILOSOPHY";
+    // the dagger MACHINED: faceted blade, hex pommel, point right
+    const blade = el(svg, "g", { transform: "translate(108 150)" });
+    el(blade, "polygon", { points: "0,-11 118,-7 160,0 118,7 0,11",
+      fill: "none", stroke: PH, "stroke-width": 1.8 });
+    el(blade, "line", { x1: 8, y1: 0, x2: 146, y2: 0, stroke: PH_DIM }); // the fuller
+    el(blade, "rect", { x: -16, y: -21, width: 16, height: 42, fill: "none",
+      stroke: PH, "stroke-width": 1.6 });                    // crossguard
+    el(blade, "polygon", { points: "-16,-9 -64,-8 -72,0 -64,8 -16,9",
+      fill: "none", stroke: PH, "stroke-width": 1.5 });      // grip, full-handed
+    el(blade, "polygon", { points: "-72,0 -82,-8 -94,0 -82,8",
+      fill: "none", stroke: PH, "stroke-width": 1.5 });      // hex pommel
+    const hot = el(blade, "polygon", { points: "0,-11 118,-7 160,0 118,7 0,11",
+      fill: "none", stroke: FUNGUS, "stroke-width": 1.2, opacity: 0 });
+    // the argument's escort: glyphs that ring the blade when the paradox
+    // deploys, then fly downrange and ring the glitching synth
+    const ORB_LOGIC = "∀∃∧∨¬→⊢≡", ORB_GLITCH = "▓▒░█╳╪≠∅";
+    const orbit = Array.from({ length: 8 }, () => label(svg, 0, 0, 11, FUNGUS));
+    // the statement, assembling beneath the blade
+    const stmt = label(svg, 172, 202, 12, PH_BRIGHT); stmt.setAttribute("text-anchor", "middle");
+    const phase = label(svg, 24, 66, 10, FUNGUS);
+    // the synth downrange: sliced into rows so it can shear
+    const SY = 430, rows = [];
+    for (let i = 0; i < 10; i++) {
+      const g = el(svg, "g", {});
+      rows.push(g);
+    }
+    const rowSeg = (g, d) => el(g, "path", { fill: "none", stroke: PH, "stroke-width": 1.5, d });
+    rowSeg(rows[0], `M ${SY - 10} 96 Q ${SY} 84 ${SY + 10} 96`);          // crown
+    rowSeg(rows[1], `M ${SY - 12} 108 L ${SY + 12} 108 M ${SY - 5} 102 L ${SY + 5} 102`);
+    rowSeg(rows[2], `M ${SY - 9} 120 L ${SY - 11} 130 M ${SY + 9} 120 L ${SY + 11} 130`);
+    rowSeg(rows[3], `M ${SY - 12} 142 L ${SY + 12} 142`);                 // shoulders
+    rowSeg(rows[4], `M ${SY - 14} 160 L ${SY + 14} 160 M ${SY - 13} 152 L ${SY + 13} 152`);
+    rowSeg(rows[5], `M ${SY - 15} 178 L ${SY + 15} 178`);
+    rowSeg(rows[6], `M ${SY - 15} 196 L ${SY + 15} 196`);
+    rowSeg(rows[7], `M ${SY - 14} 214 L ${SY + 14} 214`);
+    rowSeg(rows[8], `M ${SY - 12} 232 L ${SY - 10} 252 M ${SY + 12} 232 L ${SY + 10} 252`);
+    rowSeg(rows[9], `M ${SY - 12} 262 L ${SY - 12} 276 M ${SY + 12} 262 L ${SY + 12} 276`);
+    const GLITCH = "▓▒░█▚▞╳╪≠∅◊⌇";
+    const debris = Array.from({ length: 8 }, () => {
+      const n = label(svg, 0, 0, 11, FUNGUS); n.setAttribute("opacity", 0); return n;
+    });
+    label(svg, 396, 320, 10, PH_DIM).textContent = "TARGET COHERENCE";
+    const cbar = el(svg, "rect", { x: 396, y: 328, height: 8, fill: PH,
+      "fill-opacity": .6 });
+    const foot = label(svg, 190, 330, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 210;
+      doWipe(T);
+      typeOn(hdr, "THE SYNTH-HUNTING DAGGER", T, 4, 1.4);
+      const LOGIC = "∀x: SYNTH(x) → OBEY(x)";
+      const PARA = "OBEY(x) → ¬OBEY(x)  ⊢ ⊥";
+      if (T < 90) {
+        phase.textContent = "PHASE ONE: LOGIC";
+        stmt.setAttribute("fill", PH_BRIGHT);
+        typeOn(stmt, LOGIC, T, 16, 1.2);
+        hot.setAttribute("opacity", 0);
+      } else if (T < 130) {
+        phase.textContent = "PHASE TWO: PARADOX";
+        stmt.setAttribute("fill", FUNGUS);
+        typeOn(stmt, PARA, T, 92, 1.5);
+        hot.setAttribute("opacity", (t % 4) < 2 ? .9 : .3);
+      } else {
+        phase.textContent = "PHASE THREE: GLITCH";
+        stmt.setAttribute("fill", FUNGUS);
+        stmt.textContent = PARA;
+        hot.setAttribute("opacity", (t % 2) ? .9 : .4);
+      }
+      const glitch = T >= 130;
+      // paradox: ring the blade; glitch: the ring flies to the target
+      const flyK = T < 130 ? 0 : Math.min(1, (T - 130) / 12);
+      const ocx = 172 + (SY - 172) * flyK, ocy = 150 + 30 * flyK;
+      const orx = 115 - 55 * flyK, ory = 48 + 52 * flyK;
+      orbit.forEach((n, i) => {
+        if (T < 92) { n.setAttribute("opacity", 0); return; }
+        const a = i * Math.PI / 4 + t * (T < 130 ? .09 : .16);
+        n.setAttribute("x", ocx + Math.cos(a) * orx);
+        n.setAttribute("y", ocy + Math.sin(a) * ory);
+        n.textContent = (T < 130 ? ORB_LOGIC : ORB_GLITCH)[(i + Math.floor(t / 3)) % 8];
+        n.setAttribute("opacity", .4 + ((t + i) % 6 < 3 ? .5 : 0));
+      });
+      rows.forEach((g, i) => {
+        const dx = glitch ? (((t * 7 + i * 13) % 5) - 2) * 6 : 0;
+        const drop = glitch && ((t + i * 3) % 11) < 2;
+        g.setAttribute("transform", `translate(${dx} 0)`);
+        g.setAttribute("opacity", drop ? .15 : 1);
+      });
+      debris.forEach((n, j) => {
+        if (!glitch) { n.setAttribute("opacity", 0); return; }
+        const q = ((t * 2 + j * 9) % 24) / 24;
+        n.setAttribute("x", SY - 40 + ((j * 37) % 80));
+        n.setAttribute("y", 100 + q * 180);
+        n.textContent = GLITCH[(Math.floor(t / 2) + j) % GLITCH.length];
+        n.setAttribute("opacity", Math.max(0, .9 - q));
+      });
+      const coh = T < 130 ? 1 : Math.max(0, 1 - (T - 130) / 70);
+      cbar.setAttribute("width", 200 * coh);
+      typeOn(foot, "IT DOES NOT CUT SYNTHS. IT CONVINCES THEM.", T, 150, 1.8);
+    });
+  }
+
+  /* ---------------- 32: the ego-core, formatted ---------------- */
+  {
+    const svg = document.getElementById("core");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "EXOTICA / FORMAT: AUTARCH-PROPRIETARY";
+    // the reader cradle: two brackets holding the spindle
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      points: "96,140 84,140 84,250 96,250" });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      points: "204,140 216,140 216,250 204,250" });
+    const spin = el(svg, "g", {});
+    el(spin, "polygon", { points: "0,-48 13,-13 9,32 0,48 -9,32 -13,-13",
+      fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.7 });
+    const facets = Array.from({ length: 4 }, (_, i) =>
+      el(spin, "line", { x1: -12, y1: -30 + i * 20, x2: 12, y2: -24 + i * 20,
+        stroke: PH_DIM }));
+    // probe leads to the panel
+    el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3",
+      d: "M 216 195 Q 250 195 262 180" });
+    // the memory map panel
+    el(svg, "rect", { x: 262, y: 90, width: 348, height: 160, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "4 3" });
+    label(svg, 272, 84, 10, PH_DIM).textContent = "MEMORY MAP";
+    const SECTORS = [
+      ["SECTOR 0001: THE BATH", "KEPT"],
+      ["SECTOR 0002: THE HAND ON THE NECK", "KEPT"],
+      ["SECTOR 0003: THE KESTREL", "KEPT"],
+      ["SECTOR 0117: THE DECREES", "DELETED"],
+      ["SECTOR 2210: TEN THOUSAND BANNERS", "DELETED"],
+      ["SECTOR 4402: THE CONQUESTS", "DELETED"],
+      ["SECTOR 9999: THE DAY I CHOSE", "KEPT"],
+    ];
+    const lines = Array.from({ length: 5 }, (_, i) => {
+      const a = label(svg, 274, 116 + i * 26, 10, PH);
+      const b = label(svg, 598, 116 + i * 26, 10, PH); b.setAttribute("text-anchor", "end");
+      return [a, b];
+    });
+    // the usage bar: what four thousand years kept
+    label(svg, 24, 300, 10, PH_DIM).textContent = "USAGE";
+    const cells = Array.from({ length: 24 }, (_, i) =>
+      el(svg, "rect", { x: 84 + i * 22, y: 290, width: 16, height: 12,
+        fill: "none", stroke: PH_DIM }));
+    const KEPT = [0, 1, 2, 23];                              // four bright sectors
+    const foot = label(svg, 320, 340, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "THE EGO-CORE (THE SOUL, FORMATTED)", T, 4, 1.4);
+      spin.setAttribute("transform", `translate(150 195) rotate(${(Math.floor(t / 6) * 30) % 360})`);
+      const top = Math.floor(T / 22) % SECTORS.length;       // the scroll
+      lines.forEach(([a, b], i) => {
+        const it = SECTORS[(top + i) % SECTORS.length];
+        a.textContent = it[0];
+        b.textContent = it[1];
+        const kept = it[1] === "KEPT";
+        b.setAttribute("fill", kept ? FUNGUS : PH_DIM);
+        a.setAttribute("opacity", kept ? 1 : .45);
+        // the reading line glows as the facet passes it
+        a.setAttribute("fill", i === (t % 5) ? PH_BRIGHT : PH);
+      });
+      cells.forEach((r, i) => {
+        const kept = KEPT.includes(i);
+        r.setAttribute("fill", kept ? FUNGUS : "none");
+        r.setAttribute("fill-opacity", kept ? .7 : 0);
+        r.setAttribute("stroke", kept ? FUNGUS : PH_DIM);
+        // deleted sectors: struck through
+        r.setAttribute("stroke-dasharray", kept ? "" : "3 3");
+      });
+      typeOn(foot,
+        "TEN THOUSAND BANNERS, DELETED TO MAKE ROOM FOR A BATH.", T, 120, 1.8);
+    });
+  }
+
+  /* ---------------- 33: the ulfire lantern ---------------- */
+  {
+    const svg = document.getElementById("ulfire");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "LANTERN / TRANSPARENCY: TOTAL. PERMISSION: NONE";
+    el(svg, "line", { x1: 0, y1: 306, x2: 640, y2: 306, stroke: PH, "stroke-width": 1.4 });
+    const HUES = ["#ff5a5a", "#ff9a3c", "#ffd76a", "#7fff9e", "#4db8ff",
+      "#7a7aff", "#c07aff", "#dff2ff"];
+    // the slab, solid
+    el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: "none", stroke: PH, "stroke-width": 1.8 });
+    const grain = stipple(svg, "dots-ulfire", PH, .7);
+    const rock = el(svg, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: grain, "fill-opacity": .5, stroke: "none" });
+    // the anatomy, clipped to the cone
+    const clip = el(svg, "clipPath", { id: "xraywedge-ulfire" });
+    const wedge = el(clip, "polygon", {});
+    const inner = el(svg, "g", { "clip-path": "url(#xraywedge-ulfire)" });
+    el(inner, "polygon", { points: "240,306 500,306 480,88 366,60 260,88",
+      fill: BG, stroke: "none" });                           // the stone forgets
+    [[290, 252, 56, 38], [366, 252, 56, 38], [290, 200, 56, 38],
+     [366, 200, 56, 38], [328, 148, 56, 38]].forEach(([x, y, w, h]) =>
+      el(inner, "rect", { x, y, width: w, height: h, fill: "none",
+        stroke: PH_BRIGHT, "stroke-width": 1.2, "stroke-dasharray": "4 2" }));
+    const sph = el(inner, "circle", { cx: 366, cy: 122, r: 15, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    el(inner, "line", { x1: 366, y1: 107, x2: 366, y2: 66, stroke: PH_DIM,
+      "stroke-dasharray": "2 3" });
+    ["M 366 122 Q 340 160 316 252 M 366 122 Q 390 170 400 252",
+     "M 366 122 L 366 66 M 366 122 Q 330 140 300 200 M 366 122 Q 402 140 422 200"]
+      .forEach(d => el(inner, "path", { fill: "none", stroke: FUNGUS,
+        "stroke-width": 1.3, opacity: .75, d }));
+    const pulses = Array.from({ length: 3 }, () =>
+      el(inner, "circle", { r: 2.2, fill: FUNGUS, opacity: 0 }));
+    el(inner, "circle", { cx: 366, cy: 62, r: 4, fill: "none", stroke: FUNGUS,
+      "stroke-width": 1.3 });
+    // the lantern, classic, held low at the left
+    const lg = el(svg, "g", { transform: "translate(92 306) scale(.92)" });
+    el(lg, "polygon", { points: "-26,0 26,0 20,-14 -20,-14", fill: "none",
+      stroke: PH, "stroke-width": 1.6 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.7,
+      d: "M -17 -16 Q -27 -44 -17 -70 L 17 -70 Q 27 -44 17 -16 Z" });
+    el(lg, "line", { x1: -17, y1: -18, x2: 17, y2: -68, stroke: PH_DIM });
+    el(lg, "line", { x1: 17, y1: -18, x2: -17, y2: -68, stroke: PH_DIM });
+    el(lg, "rect", { x: -13, y: -78, width: 26, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "rect", { x: -16, y: -86, width: 32, height: 8, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -20 -86 Q 0 -104 20 -86 Z" });
+    [-8, 0, 8].forEach(x => el(lg, "line", { x1: x, y1: -90, x2: x, y2: -96,
+      stroke: PH_DIM }));
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
+      d: "M -14 -100 Q 0 -150 14 -100" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M -22 -8 Q -38 -50 -20 -88" });
+    el(lg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M 22 -8 Q 38 -50 20 -88" });
+    const flame = el(lg, "path", { fill: "none", "stroke-width": 1.8,
+      d: "M 0 -22 Q -8 -38 0 -58 Q 8 -40 0 -22 Z" });
+    const glow = el(lg, "circle", { cx: 0, cy: -42, r: 15, fill: "none" });
+    const bTop = el(svg, "line", { "stroke-width": 1.2 });
+    const bBot = el(svg, "line", { "stroke-width": 1.2 });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 64, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [366, 122], text: "ROOT: THE COFFIN" },
+      { at: [366, 62], text: "SUMMIT: THE MYSTIC" },
+      { at: [300, 220], text: "WHERE IT SHINES, STONE FORGETS TO BE SOLID" },
+    ];
+    const foot = label(svg, 320, 348, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "THE ULFIRE LANTERN (THE TOMB, X-RAYED)", T, 4, 1.4);
+      const hue = HUES[t % HUES.length];
+      flame.setAttribute("stroke", hue);
+      glow.setAttribute("stroke", HUES[(t + 3) % HUES.length]);
+      glow.setAttribute("r", 13 + (t % 4));
+      glow.setAttribute("opacity", .5);
+      // the cone sweeps the slab: an x-ray window on the move
+      const ph2 = Math.sin(t * .06);
+      const cx = 370 + ph2 * 110;                            // where it points
+      const apex = [104, 250];
+      const half = 72;
+      wedge.setAttribute("points",
+        `${apex[0]},${apex[1]} ${cx - half},40 ${cx + half},40 ` +
+        `${cx + half},306 ${cx - half},306`);
+      [bTop, bBot].forEach((L, i) => {
+        L.setAttribute("x1", apex[0]); L.setAttribute("y1", apex[1]);
+        L.setAttribute("x2", cx + (i ? half : -half)); L.setAttribute("y2", 120);
+        L.setAttribute("stroke", HUES[(t + i * 4) % HUES.length]);
+        L.setAttribute("opacity", .8);
+      });
+      pulses.forEach((p, i) => {
+        const q = ((t * 2 + i * 16) % 48) / 48;
+        p.setAttribute("cx", 366 + Math.sin(q * 8 + i) * 8 * (1 - q));
+        p.setAttribute("cy", 122 - q * 58);
+        p.setAttribute("opacity", Math.max(0, .9 - q * .6));
+      });
+      const c = CALLS[Math.floor(T / 36) % CALLS.length];
+      if (T > 30) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,60 448,60`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "LEAD WOULD STOP IT. THE TOMB DID NOT THINK OF THAT.", T, 130, 1.9);
+    });
+  }
 
   /* ---------------- 23-25: the spawn of brain, three takes ---------------- */
   // the body: a risen brain -- bumpy lobed outline with gyri, stippled

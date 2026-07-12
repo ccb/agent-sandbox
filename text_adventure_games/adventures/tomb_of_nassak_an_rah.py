@@ -2746,6 +2746,7 @@ def build_game(seed=None):
         "from its wielder.",
     )
     dagger.set_property("is_weapon", True)
+    dagger.set_property("figure", "dagger")
     dagger.set_property(Property.WIELDABLE, True)
     dagger.add_alias("dagger")
     manifold_box = things.Item(
@@ -3219,6 +3220,7 @@ def build_game(seed=None):
         "solid objects, and is stopped only by lead.",
     )
     ulfire_lantern.set_property(Property.FLAMMABLE, True)
+    ulfire_lantern.set_property("figure", "ulfire")
     ulfire_lantern.add_alias("lantern")
     silas.add_to_inventory(ulfire_lantern)
     # A synth takes some breaking (vigor 2).
@@ -4746,6 +4748,9 @@ def build_game(seed=None):
         if lamp is not None:
             silas.remove_from_inventory(lamp)
             g.player.add_to_inventory(lamp)
+            # The gift is the beat (CCB): the lantern's card plays as it
+            # changes hands -- light should be for the unread.
+            g.show_figure("ulfire", force=True)
         silas.talk_text = (
             '"A friend," Silas says, warmly and a little vaguely, and returns '
             "to the lattice. The bright threads spool on."
@@ -5208,6 +5213,7 @@ def build_game(seed=None):
         "for it.",
     )
     ego_core.add_alias("core")
+    ego_core.set_property("figure", "core")
 
     def _box_viewed(g):
         return (
@@ -5220,6 +5226,8 @@ def build_game(seed=None):
     def _reveal_core(g):
         manifold_box.set_property("compartment_found", True)
         g.player.add_to_inventory(ego_core)
+        # The reveal bypasses Get (no auto card), so the beat forces it.
+        g.show_figure("core", force=True)
         g.parser.ok(
             "Under the ninth colour, the manifold box stops pretending. Its "
             "gilded walls go glassy, then merely ADVISORY -- and the "
