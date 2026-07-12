@@ -97,10 +97,11 @@ function BuildTomb(seed)
 			return
 		end
 		critch:set("spoken", true)
-		game:say('Critch does not stop working the straps. "Tomb pays better '
-			.. 'than the road, if the tomb lets you keep it. Mind the boy\'s '
-			.. 'hall -- the ceiling has opinions about light, and only one '
-			.. 'appetite bigger." He nods at the crates. "I walk south."')
+		game:say('Critch does not stop working the straps. "Take what you '
+			.. 'need from the merchant. He doesn\'t need it now. Tomb pays '
+			.. 'better than the road, if the tomb lets you keep it. Mind the '
+			.. 'boy\'s hall -- the ceiling has opinions about light." He '
+			.. 'nods at the crates. "I walk south."')
 	end)
 	critch:set("onGift", function(game, item)
 		if item.name == "dates" then
