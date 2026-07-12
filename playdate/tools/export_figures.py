@@ -73,7 +73,9 @@ def export(page, key, frames):
               return;
             }
             const fs = parseFloat(t.getAttribute('font-size') || '10');
-            const nfs = Math.round(fs * K);
+            // footer-band lines are long sentences: a gentler boost keeps
+            // them inside the card instead of clipping both edges
+            const nfs = Math.round(fs * (y > 350 ? 1.55 : K));
             t.setAttribute('font-size', nfs);
             t.setAttribute('letter-spacing', '0.5');
             texts.push({ t, y, fs: nfs });
