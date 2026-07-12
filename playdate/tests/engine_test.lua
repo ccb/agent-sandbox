@@ -455,6 +455,6 @@ ok(g.player:carrying("preserved rations") ~= nil, "the rations are real")
 local wB = g.wounds
 g:doCommand("break orange cylinder")
 ok(g.wounds == wB + 1, "the orange cylinder files a claim")
-g:doCommand("break wreck")
+g:doCommand("break cylinders")
 ok(saw(lines, "sturdier than your opinion"), "unbreakables refuse politely")
 print("break: all green")
