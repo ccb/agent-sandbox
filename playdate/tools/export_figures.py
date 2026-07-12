@@ -64,6 +64,8 @@ def export(page, key, frames):
     # (Canvas-drawn text is untouched; those cards await small masters.)
     page.evaluate(
         """() => {
+          const K = 2.3;
+          const texts = [];
           document.querySelectorAll('#stage text').forEach((t) => {
             const y = parseFloat(t.getAttribute('y') || '0');
             if (t.getAttribute('text-anchor') === 'end' && y < 30) {
@@ -71,9 +73,29 @@ def export(page, key, frames):
               return;
             }
             const fs = parseFloat(t.getAttribute('font-size') || '10');
-            t.setAttribute('font-size', Math.round(fs * 1.7));
+            const nfs = Math.round(fs * K);
+            t.setAttribute('font-size', nfs);
             t.setAttribute('letter-spacing', '0.5');
+            texts.push({ t, y, fs: nfs });
           });
+          // bigger type needs more leading: labels sharing a column (same
+          // x + anchor) get re-spaced so they can't overlap
+          const cols = {};
+          texts.forEach((e) => {
+            const key = (e.t.getAttribute('text-anchor') || 'start') + '|'
+              + (e.t.getAttribute('x') || '0');
+            (cols[key] = cols[key] || []).push(e);
+          });
+          for (const key in cols) {
+            const col = cols[key].sort((a, b) => a.y - b.y);
+            for (let i = 1; i < col.length; i++) {
+              const need = col[i - 1].y + col[i - 1].fs * 1.15;
+              if (col[i].y < need) {
+                col[i].y = need;
+                col[i].t.setAttribute('y', need);
+              }
+            }
+          }
         }"""
     )
     stage = page.locator("#stage")
