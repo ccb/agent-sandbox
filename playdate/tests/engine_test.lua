@@ -305,11 +305,7 @@ g:doCommand("search merchant")
 g:doCommand("take glowstone")
 g:doCommand("go north")
 g:doCommand("go east")
-g:doCommand("look")
-g:doCommand("look")
-g:doCommand("look")
-g:doCommand("look")
-g:doCommand("look")
+for _ = 1, 7 do g:doCommand("look") end
 ok(g.over, "the spawn finishes the careless")
 ok(g.figuresShown and g.figuresShown["epitaph"], "death cues the stone")
 
