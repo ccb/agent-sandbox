@@ -3034,16 +3034,21 @@
     const GLASS = "#cfefff";
     const wave = x => 286 + Math.sin(x * .018) * 16;
     const DASH = [[20, 28], [44, 52], [68, 76], [92, 100], [116, 124], [140, 148]];
-    const adv = T => DASH.reduce((a, [s2, e2]) =>
-      a + Math.max(0, Math.min(T, e2) - s2) * 14, 0);
+    // it does not stop when it goes unseen (CCB): 4 px/frame in the light,
+    // 5 in the dark -- it gains ground while your eye loses it, so every
+    // reappearance is ahead of the vanishing point.
+    const seenIn = T => DASH.reduce((a, [s2, e2]) =>
+      a + Math.max(0, Math.min(T, e2 + 3) - s2), 0);
+    const pos = T => { const sf = seenIn(T); return -40 + sf * 4 + (T - sf) * 5; };
     const segs = Array.from({ length: 16 }, () => el(svg, "ellipse",
       { rx: 8, ry: 5, fill: "none", stroke: GLASS, "stroke-width": 1.3, opacity: 0 }));
     const legs = Array.from({ length: 32 }, () => el(svg, "line",
       { stroke: "#9fd9f2", "stroke-width": 1, opacity: 0 }));
     const feelers = [0, 1].map(() => el(svg, "line",
       { stroke: GLASS, "stroke-width": 1.2, opacity: 0 }));
-    const glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS].map(c =>
-      el(svg, "circle", { r: 1.5, fill: c, opacity: 0 }));
+    const glints = ["#ff5a5a", "#ffd76a", "#7fff9e", GLASS, GLASS,
+      "#9fd9f2", GLASS, "#ffd76a"].map(c =>
+      el(svg, "circle", { r: 2, fill: c, opacity: 0 }));
     label(svg, 24, 350, 10, PH_DIM).textContent = "VISIBILITY";
     const cells = Array.from({ length: 6 }, (_, i) =>
       el(svg, "rect", { x: 110 + i * 16, y: 340, width: 12, height: 11,
@@ -3054,7 +3059,7 @@
       const T = t % 168;
       doWipe(T);
       typeOn(hdr, "THE GLASS CENTIPEDE", T, 4, 1.4);
-      const hx = -40 + adv(T);
+      const hx = pos(T);
       const seen = DASH.some(([s2, e2]) => T >= s2 && T < e2 + 3);
       segs.forEach((n, i) => {
         const x = hx - i * 13, y = wave(x);
@@ -3072,11 +3077,11 @@
         n.setAttribute("x2", hx + 20); n.setAttribute("y2", wave(hx) - 10 + k * 12);
         n.setAttribute("opacity", seen ? .9 : 0);
       });
-      glints.forEach((n, j) => {                              // stray refraction, between
-        const gi = (Math.floor(t / 2) * 7 + j * 5) % 16;
+      glints.forEach((n, j) => {                              // the sparkling wake
+        const gi = (Math.floor(t / 2) * 7 + j * 5) % 22;      // 16 body + 6 wake
         const x = hx - gi * 13;
         n.setAttribute("cx", x + ((t + j) % 3) - 1); n.setAttribute("cy", wave(x) + ((t * j) % 5) - 2);
-        n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 1 && x > 0 && x < 640 ? .9 : 0);
+        n.setAttribute("opacity", !seen && (t + j * 2) % 5 < 2 && x > 0 && x < 640 ? .9 : 0);
       });
       const on = seen ? 6 : (t % 7 === 0 ? 1 : 0);
       cells.forEach((r, i) => r.setAttribute("fill-opacity", i < on ? .8 : .08));
