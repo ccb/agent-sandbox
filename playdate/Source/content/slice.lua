@@ -32,6 +32,19 @@ function BuildTomb(seed)
 		.. "and the floor grits underfoot. Your light would wake this room "
 		.. "-- and everything roosting in it.")
 
+	-- the senses, room by room: what the dark tells you anyway
+	youth:set("touchText", "Cold smooth stone: a swaddled infant, then a "
+		.. "standing boy, larger than life. The boy-Autarch, unmistakably.")
+	youth:set("soundText", function(_game)
+		if youth:get("fed") then
+			return "Thousands of small sleepers breathe in one slow, "
+				.. "gorged tide."
+		end
+		return "Above, a dry rustle answers your breathing -- thousands "
+			.. "of somethings, awake and opinionated."
+	end)
+	hold:set("smellText", "Saffron, dust, and ledger-ink.")
+
 	wreck:connect("in", hold, "out")
 	wreck:connect("north", exterior, "south")
 	local warriors = g:room("Hall of Warriors",
@@ -43,6 +56,19 @@ function BuildTomb(seed)
 		"Dark as a pocket. Your footsteps come back off plexiglas somewhere "
 		.. "close -- and low down, near the floor, something breathes "
 		.. "wetly, in no hurry.")
+	warriors:set("soundText", function(game)
+		local sp
+		for i = 1, #warriors.characters do
+			if warriors.characters[i].name == "spawn of guts" then
+				sp = warriors.characters[i]
+			end
+		end
+		if sp and not sp:get("dead") then
+			return "Low, near the floor: wet breathing, in no hurry."
+		end
+		return "Plexiglas gives back your own sounds, and nothing else's."
+	end)
+	warriors:set("smellText", "Old gel and older duty.")
 
 	local hounds = g:room("Hall of Hounds",
 		"A long gallery dominated by a gel tank, its glass sweating. "
@@ -66,6 +92,10 @@ function BuildTomb(seed)
 	chimney:set("darkBlurb",
 		"A throat of stone, utterly dark, furred with something soft that "
 		.. "your fingers regret. The air moves like slow breath.")
+	hounds:set("soundText", "Glass sweating somewhere, and a small dry "
+		.. "twitching, counting.")
+	chimney:set("smellText", "Spores: pepper, rot, and something patient "
+		.. "and orange.")
 
 	exterior:connect("north", youth, "south")
 	exterior:connect("east", warriors, "west")
@@ -467,6 +497,9 @@ function BuildTomb(seed)
 		game:say("The seal refuses your fingers. These were closed by "
 			.. "professionals, for reasons the plinths remember.")
 	end
+	local stillSealed = function(game, thing)
+		game:say("It is closed. That is rather the point of it.")
+	end
 
 	local jar = Item("falcon jar", "a falcon-headed canopic jar",
 		"A sealed jar with a falcon's head, wings swept back along the "
@@ -474,6 +507,7 @@ function BuildTomb(seed)
 	jar:alias("jar")
 	jar:set("gettable", true)
 	jar:set("onOpened", sealedJar)
+	jar:set("onClosed", stillSealed)
 
 	local spawn = Engine.Character("spawn of guts",
 		"a fungal spawn, eyeless under its falcon-headed jar, swaying "
@@ -949,6 +983,7 @@ function BuildTomb(seed)
 	sphere:set("darkBlurb",
 		"Gloom, and no floor your feet believe in. Somewhere at the centre "
 		.. "something turns over, slowly, like a sleeper.")
+	sphere:set("soundText", "The carved prayers hum, just below hearing.")
 
 	local coffin = Item("coffin", "the Autarch's anti-entropy coffin",
 		"A clouded glass sphere. Past the cloud, shapes drift and turn "

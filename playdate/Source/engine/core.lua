@@ -535,6 +535,62 @@ local sneakVerb = verb("sneak", 1, function(g)
 end, "creep")
 sneakVerb.template = { "direction" }
 
+verb("wait", 0, function(g)
+	g:say("Time passes. The tomb spends it too.")
+end, "z")
+
+verb("close", 1, function(g, thing)
+	local hook = thing:get("onClosed")
+	if hook then
+		hook(g, thing)
+		return
+	end
+	if thing:get("closed") then
+		g:say("The " .. thing.name .. " is already closed.")
+	elseif thing:get("closable") then
+		thing:set("closed", true)
+		g:say("You close the " .. thing.name .. ".")
+	else
+		g:say("The " .. thing.name .. " won't close, and won't apologize.")
+	end
+end, "shut")
+
+verb("wield", 1, function(g, thing)
+	if not g.player:carrying(thing.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	if not thing:get("weapon") then
+		g:say("You brandish the " .. thing.name .. ". It is unmoved by "
+			.. "the promotion.")
+		return
+	end
+	g:say("You wield the " .. thing.name .. ". It approves.")
+end, "equip", "stow")
+
+-- The senses: what darkness is FOR. Each reads the room's sense text
+-- (a string or a function(game) -> string), and each works unlit.
+local function senseVerb(name, prop, default, ...)
+	verb(name, 0, function(g)
+		local t = g.player.location:get(prop)
+		if type(t) == "function" then t = t(g) end
+		g:say(t or default)
+	end, ...)
+end
+senseVerb("feel", "touchText",
+	"Your hands find nothing they trust.", "touch", "feel around")
+senseVerb("listen", "soundText",
+	"The tomb holds its breath.", "listen to")
+senseVerb("smell", "smellText",
+	"Dust, stone, and time.", "sniff")
+
+local helpVerb = verb("help", 0, function(g)
+	g:say("Crank or left/right turns the word wheel; A speaks; B unsays; "
+		.. "up/down reads. The wheel only offers what the tomb will "
+		.. "accept. HINT knows the rest.")
+end, "?", "commands")
+helpVerb.free = true
+
 verb("taste", 1, function(g, thing)
 	local t = thing:get("taste")
 	g:say("You touch the " .. thing.name .. " to your tongue. It tastes "
