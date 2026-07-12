@@ -214,10 +214,10 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
         ],
     )
 
-    # The NPC's turns flowed through LLMAgent's structured tool call (not a
-    # scripted behavior, and not the chat() fallback) -- this is the issue #44
-    # demonstration that decisions now go through provider tool calling.
-    assert mock.tool_calls, "the agent never used the structured tool path"
+    # The NPC's turns flowed through the native tool loop (call_tools), not a
+    # scripted behavior or the chat() fallback -- the acting agent now drives via
+    # the bounded loop (#355), which logs into tool_calls_log.
+    assert mock.tool_calls_log, "the agent never used the structured tool path"
 
     # Escalation driven by observation history. The full strings pin the
     # subject too: the actor seam must attribute the action to the troll
@@ -232,14 +232,20 @@ def test_react_troll_escalates_and_reflect_gates_attack(live_game):
     errors = by_type(messages, "error")
     assert any("doesn't have a weapon" in m for m in errors), "attack was not gated"
 
-    # ...and the Reflect step fed the parser's real failure reason back.
-    reflect_prompts = [
-        call["messages"][-1]["content"]
-        for call in mock.tool_calls
-        if "' failed:" in call["messages"][-1]["content"]
+    # ...and the Reflect step fed the parser's real failure reason back -- now as
+    # an is_error tool_result IN THE SAME conversation (#355), not a rebuilt
+    # observation string. The acting troll drives via call_tools, so the failure
+    # the model saw before its corrected retry is a tool_result block in the loop.
+    error_results = [
+        block
+        for call in mock.tool_calls_log
+        for msg in call["messages"]
+        if isinstance(msg["content"], list)
+        for block in msg["content"]
+        if block.get("type") == "tool_result" and block.get("is_error")
     ]
-    assert reflect_prompts, "no reflect retry happened"
-    assert any("doesn't have a weapon" in p for p in reflect_prompts)
+    assert error_results, "no is_error tool_result fed the reflect retry"
+    assert any("doesn't have a weapon" in str(b["content"]) for b in error_results)
 
     # The corrected command passed the gate and applied real effects.
     assert any("attacked" in m for m in by_type(messages, "output"))
@@ -291,7 +297,7 @@ def test_react_guard_warns_then_escalates(live_game):
     ), "missing threaten"
     assert any("attacked" in m for m in by_type(messages, "output"))
     assert game.player.get_property("is_unconscious") is True
-    assert mock.tool_calls
+    assert mock.tool_calls_log
 
 
 def test_react_ghost_haunts_then_kills(live_game):
@@ -316,7 +322,7 @@ def test_react_ghost_haunts_then_kills(live_game):
         in npc_actions
     ), "missing ghost touch"
     assert game.player.get_property("is_dead") is True
-    assert mock.tool_calls
+    assert mock.tool_calls_log
 
 
 def test_react_banished_ghost_is_gated(live_game):
@@ -355,7 +361,9 @@ def test_webapp_hybrid_path_is_react_driven():
 
     messages = run_commands(game, ["go out", "go north", "go east", "wait", "wait"])
 
-    assert mock.tool_calls, "the hybrid behavior never used the structured tool path"
+    assert (
+        mock.tool_calls_log
+    ), "the hybrid behavior never used the structured tool path"
     npc_actions = by_type(messages, "npc_action")
     assert not any(
         "pounds its fists" in m for m in npc_actions

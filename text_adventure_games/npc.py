@@ -38,6 +38,7 @@ import re
 from . import prompt_templates
 from .config import AgentConfig
 from .enums import ReActLabel, Role
+from .llm_client import run_tool_loop
 from .memory import AgentMemory, render_memories
 from .reflection import DEFAULT_REFLECTION_THRESHOLD, reflect, should_reflect
 from .things.characters import Goal, GoalType
@@ -632,6 +633,108 @@ def _log_decision(character, game, agent: Agent, command: str):
     game.parser.agent_action(character.name, command)
 
 
+def _use_tool_loop(agent: Agent) -> bool:
+    """True when *agent* can drive the native tool loop (issue #355): an
+    :class:`LLMAgent` whose client exposes ``call_tools``. Chat-only clients,
+    legacy callables, and non-LLM agents fall back to the legacy
+    string-reflection path in :func:`decide_and_route`."""
+    client = getattr(agent, "llm_client", None)
+    return isinstance(agent, LLMAgent) and hasattr(client, "call_tools")
+
+
+def _decide_and_route_loop(
+    character, game, agent: "LLMAgent", observation: str, max_rounds: int
+) -> tuple[bool, bool]:
+    """Decide -> Act -> Reflect as a native tool loop (issue #355).
+
+    The model calls ``choose_action``; we route the command through the parser's
+    precondition gate; a failure comes back as an ``is_error`` tool_result IN THE
+    SAME conversation -- so the model reflects on its own prior tool call rather
+    than on a rebuilt observation string, and the byte-stable system+tools prefix
+    stays prompt-cacheable across rounds. The ``execute`` closure replicates
+    :func:`decide_and_route`'s per-attempt side effects (``_log_decision``, the
+    success/failure memory writes, the ``agent_reflection`` trace, and
+    ``_set_attribution``), so the AGENT_* trace is byte-for-byte unchanged.
+
+    Termination (see :func:`~text_adventure_games.llm_client.run_tool_loop`): a
+    successful route is a *terminal* action -> ``done=True`` ends the episode with
+    no wasted round-trip; a failed precondition -> ``is_error=True`` retries in
+    conversation; ``max_rounds`` caps total model calls at the historical
+    ``1 + max_retries`` budget.
+
+    Returns ``(handled, acted)``. ``handled`` is ``False`` when the client made no
+    tool call at all (a declining or chat-only client), so the caller falls
+    through to the legacy path.
+    """
+    # Same single-shot reset contract as LLMAgent.decide(): the structured tool
+    # carries no duration, so last_duration stays None (-> _resolve_duration uses
+    # the executed action's declared DURATION), and last_reasoning is per-call.
+    agent.last_reasoning = None
+    agent.last_duration = None
+    mem = getattr(agent, "memory", None)
+    turn = getattr(game, "turn", 0)
+    tool = build_choose_action_tool(agent.action_names)
+    messages = [
+        {"role": Role.SYSTEM, "content": agent._structured_system_message()},
+        {"role": Role.USER, "content": observation},
+    ]
+    state = {"acted": False, "calls": 0, "attempt": 1}
+
+    def execute(name, args):
+        state["calls"] += 1
+        agent.last_reasoning = (args.get("reasoning") or "").strip() or None
+        action = (args.get("action") or "").strip()
+        arguments = (args.get("arguments") or "").strip()
+        command = f"{action} {arguments}".strip()
+        if not command:
+            # The model called the tool but named no action: nothing to route.
+            # Terminal (no retry) so the loop ends, mirroring decide()'s "no
+            # command -> stop" and leaving `acted` False.
+            return ("No action was chosen.", False, True)
+        _log_decision(character, game, agent, command)
+        if _route(character, game, command):
+            state["acted"] = True
+            if mem is not None:
+                mem.add_observation(
+                    f'I tried "{command}" and succeeded.', turn=turn, importance=3
+                )
+            return ("Done.", False, True)
+        failure_reason = (
+            getattr(game.parser, "last_fail_message", None) or "action failed"
+        )
+        if mem is not None:
+            # "but it failed because ..." avoids the "' failed:'" substring the
+            # mock troll brain keys on -- a private memory must never spoof a
+            # decision (same guard as decide_and_route's legacy path).
+            mem.add_observation(
+                f'I tried "{command}" but it failed because {failure_reason}',
+                turn=turn,
+                importance=4,
+            )
+        game.parser.agent_reflection(character.name, failure_reason)
+        # Attribute the NEXT round's call to the upcoming attempt index.
+        _set_attribution(
+            agent, character.name, getattr(game, "turn", None), state["attempt"]
+        )
+        state["attempt"] += 1
+        return (failure_reason, True, False)
+
+    _set_attribution(agent, character.name, getattr(game, "turn", None), 0)
+    run_tool_loop(
+        agent.llm_client,
+        messages,
+        [tool],
+        execute,
+        max_rounds=max_rounds,
+        tool_choice="any",
+        max_tokens=agent.max_tokens,
+        temperature=agent.temperature,
+    )
+    if state["calls"] == 0:
+        return (False, False)
+    return (True, state["acted"])
+
+
 def decide_and_route(
     character, game, agent: Agent, observation: str, max_retries: int = 1
 ) -> bool:
@@ -654,6 +757,16 @@ def decide_and_route(
     if mem is not None and not mem.owner:
         mem.owner = character.name
     turn = getattr(game, "turn", 0)
+
+    # Native tool loop (issue #355): when the client supports call_tools, retries
+    # ride in the same conversation as an is_error tool_result. `handled` is False
+    # if the client made no tool call, so we fall through to the legacy loop.
+    if _use_tool_loop(agent):
+        handled, acted = _decide_and_route_loop(
+            character, game, agent, observation, max_rounds=1 + max_retries
+        )
+        if handled:
+            return acted
 
     for attempt in range(1 + max_retries):
         _set_attribution(agent, character.name, getattr(game, "turn", None), attempt)
