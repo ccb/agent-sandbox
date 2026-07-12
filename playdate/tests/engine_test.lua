@@ -371,6 +371,13 @@ g:doCommand("take prismatic blade")
 g:doCommand("attack spawn of guts")
 g:doCommand("attack spawn of guts")
 g:doCommand("take falcon jar")
+-- the guards' kit: the mask spares the chimney, the boots anchor the pry
+g:doCommand("break amber cylinder")
+g:doCommand("take respirator")
+g:doCommand("wear respirator")
+g:doCommand("break viridian cylinder")
+g:doCommand("take magnetic boots")
+g:doCommand("wear magnetic boots")
 -- the hall of hounds: the listener, and the second jar
 g:doCommand("go east")
 ok(saw(lines, "precise as a metronome"), "the brain marks you")
@@ -441,9 +448,10 @@ g, lines = game()
 g:doCommand("go north")
 g:doCommand("go up")
 g:doCommand("sneak in")
-ok(g.wounds == 0, "the sneak slips past the coiled glass")
+ok(g.wounds == 1, "quiet slips the glass but not the spores (web parity: "
+	.. "unmasked lungs pay at the door)")
 g:doCommand("look")
-ok(g.wounds == 1, "the next loud act springs it")
+ok(g.wounds == 2, "the next loud act springs the centipede")
 print("sneak: all green")
 
 -- ---------------------------------------------------------------- break

@@ -96,6 +96,8 @@ run("inventory", "inventory")
 run("talk to", "talk to critch")
 run("go", "in")
 run("take", "take dates")
+run("open", "open crates")
+run("take", "take bolt of spider-silk")
 run("go", "out")
 run("go", "go north")
 run("sneak", "sneak east")
@@ -105,6 +107,10 @@ run("attack", "attack spawn of guts")
 run("attack", "attack spawn of guts")
 run("open", "open falcon jar")
 run("break", "break amber cylinder")
+run("take", "take respirator")
+run("wear", "wear respirator")
+run("break", "break orange cylinder")
+run("take", "take plasma-igniter")
 run("eat-rations", "take preserved rations")
 run("eat", "eat preserved rations")
 run("close", "close falcon jar")
@@ -122,9 +128,20 @@ run("go", "go north")
 run("remember", "remember") -- the lattice answers in the hall of memory
 run("go", "go east")
 run("put", "put falcon jar on falcon plinth")
+-- the burn path: gel from the hounds, spark from the guards, fire at the crown
+local function roomNamed(name)
+	for i = 1, #g2.rooms do
+		if g2.rooms[i].name == name then return g2.rooms[i] end
+	end
+end
+g2.player.location = roomNamed("hall of hounds")
+run("take", "take flask of gel")
+g2.player.location = roomNamed("the summit")
+run("burn", "burn ossified corpse")
 -- the sphere set (jackal jar skipped: this run tests verbs, not the win)
 g2.player.location = g2.rooms[#g2.rooms] -- the sphere is built last
 run("open-redirect", "open coffin")
+run("tie", "tie coffin") -- the silk from the hold answers zero gravity
 run("pry", "pry coffin")
 run("read", "read prayers")
 run("say", "say prayer of balm")

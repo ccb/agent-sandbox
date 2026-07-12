@@ -584,6 +584,43 @@ senseVerb("listen", "soundText",
 senseVerb("smell", "smellText",
 	"Dust, stone, and time.", "sniff")
 
+verb("wear", 1, function(g, thing)
+	if not g.player:carrying(thing.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	if not thing:get("wearable") then
+		g:say("The " .. thing.name .. " fits nowhere you own.")
+		return
+	end
+	if thing:get("worn") then
+		g:say("It is already on.")
+		return
+	end
+	thing:set("worn", true)
+	g:say("You put on the " .. thing.name .. ".")
+	local hook = thing:get("onWorn")
+	if hook then hook(g, thing) end
+end, "don", "put on")
+
+verb("tie", 1, function(g, thing)
+	local hook = thing:get("onTied")
+	if not hook then
+		g:say("Nothing about the " .. thing.name .. " takes a lashing.")
+		return
+	end
+	hook(g, thing)
+end, "lash", "tether")
+
+verb("burn", 1, function(g, thing)
+	local hook = thing:get("onBurned")
+	if not hook then
+		g:say("The " .. thing.name .. " does not want burning.")
+		return
+	end
+	hook(g, thing)
+end, "ignite", "torch")
+
 verb("remember", 0, function(g)
 	local hook = g.player.location:get("onRemember")
 	if hook then

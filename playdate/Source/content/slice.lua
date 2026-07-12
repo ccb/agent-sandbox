@@ -252,6 +252,16 @@ function BuildTomb(seed)
 	end)
 	merchant:add(waterskin)
 
+	local purse = Item("purse of water-debt tokens",
+		"a purse of water-debt tokens",
+		"Stamped ceramic: water owed to the merchant at the souks of "
+		.. "Gnomon. Money, if the debtors never learn who holds the "
+		.. "debt now.")
+	purse:alias("purse", "tokens")
+	purse:set("gettable", true)
+	purse:set("hidden", true)
+	merchant:add(purse)
+
 
 
 	local critch = Engine.Character("critch", "Critch, a golden new-hyena teamster",
@@ -306,9 +316,40 @@ function BuildTomb(seed)
 	-- ------------------------------------------------------------- hold
 	local crates = Item("crates", "lashed crates, one split open",
 		"Saffron and dates, lashed tight. One crate split in the wreck; "
-		.. "dates within reach.")
+		.. "dates within reach. The rest would OPEN to patient hands.")
 	crates:alias("crate")
 	hold:add(crates)
+
+	local saffron = Item("bale of saffron", "a bale of saffron",
+		"Crimson threads pressed into a bale, worth more than its "
+		.. "weight in water at the souks of Gnomon. Heavy, and it "
+		.. "knows it.")
+	saffron:alias("saffron", "bale")
+	saffron:set("gettable", true)
+	saffron:set("hidden", true)
+	crates:add(saffron)
+
+	local silk = Item("bolt of spider-silk", "a bolt of spider-silk",
+		"Grey spider-silk, cool as water over the hands. Light -- the "
+		.. "merchant knew what was worth the wagon-space. Cobweb-thin, "
+		.. "and it holds like law.")
+	silk:alias("silk", "spider-silk", "bolt")
+	silk:set("gettable", true)
+	silk:set("hidden", true)
+	crates:add(silk)
+
+	crates:set("onOpened", function(game, thing)
+		if thing:get("cut") then
+			game:say("The crates are as open as they will ever be.")
+			return
+		end
+		thing:set("cut", true)
+		saffron:set("hidden", nil)
+		silk:set("hidden", nil)
+		game:say("You work the lashings loose. Under the dates: a bale "
+			.. "of saffron, and a bolt of grey spider-silk, cool as "
+			.. "water over the hands.")
+	end)
 
 	local dates = Item("dates", "a crate of dates",
 		"Proper trail food -- and anything in these halls with a nose will "
@@ -326,6 +367,7 @@ function BuildTomb(seed)
 		"Neat columns: water in, water out. The last line is the route "
 		.. "north, underlined twice.")
 	ledger:alias("book")
+	ledger:set("gettable", true)
 	hold:add(ledger)
 
 	-- --------------------------------------------------------- exterior
@@ -399,6 +441,12 @@ function BuildTomb(seed)
 		youth:set("mob", 0)
 	end, true)
 
+	-- the mask rule (web parity): a WORN respirator answers every spore
+	local function sporeMasked(game)
+		local r = game.player:carrying("respirator")
+		return r ~= nil and r:get("worn") == true
+	end
+
 	-- --------------------------------------------------- hall of warriors
 	local cylinders = Item("cylinders", "four plexiglas burial cylinders",
 		"Guard-mummies stand sealed in gel, armed as in life. The burst one "
@@ -449,9 +497,20 @@ function BuildTomb(seed)
 			end
 		end)
 		warriors:add(rations)
+		local respirator = Item("respirator", "a guard's respirator",
+			"A field respirator, gel-sealed and patient. The Autarchy "
+			.. "marched into worse air than this.")
+		respirator:alias("mask")
+		respirator:set("gettable", true)
+		respirator:set("wearable", true)
+		respirator:set("onWorn", function(game2)
+			game2:say("The seal takes. The tomb's air becomes rumor.")
+		end)
+		warriors:add(respirator)
 		game:say("The amber cylinder gives on the second blow -- gel "
 			.. "sheets down, the guard slumps, and his marching kit "
-			.. "spills at your feet. The crash rolls down the halls.")
+			.. "spills at your feet: rations, and a respirator. The "
+			.. "crash rolls down the halls.")
 	end)
 	warriors:add(amber)
 
@@ -468,9 +527,21 @@ function BuildTomb(seed)
 		thing.description = "the viridian cylinder, broken"
 		thing.examineText = "The guard finished slumping; the gel is "
 			.. "finishing drying. The watch is over."
+		local boots = Item("magnetic boots", "magnetic boots, still humming",
+			"Tombwright work: soles that argue with the floor and win. "
+			.. "Somewhere in this tomb is a floor worth arguing with.")
+		boots:alias("boots")
+		boots:set("gettable", true)
+		boots:set("wearable", true)
+		boots:set("onWorn", function(game2)
+			game2:say("The soles bite the stone. Your steps become "
+				.. "opinions.")
+		end)
+		warriors:add(boots)
 		game:say("The viridian cylinder shatters; gel gouts across the "
-			.. "floor and the guard folds out of his watch at last. The "
-			.. "crash rolls down the halls.")
+			.. "floor and the guard folds out of his watch at last -- "
+			.. "boots anchored, heel-together, still humming. The crash "
+			.. "rolls down the halls.")
 	end)
 	warriors:add(viridian)
 
@@ -487,10 +558,21 @@ function BuildTomb(seed)
 		thing.description = "the orange cylinder, broken -- a mistake"
 		thing.examineText = "Burst plexiglas rimed with orange dust. The "
 			.. "guard inside is mostly fungus now, and glad of the air."
-		game:say("The orange cylinder cracks -- and EXHALES. A gout of "
-			.. "spores takes you full in the face.")
-		game:wound("Spore-Bitten", "the orange dust finds your lungs and "
-			.. "files a claim.")
+		local igniter = Item("plasma-igniter", "a plasma-igniter",
+			"An Autarchy field igniter, dry in its case. One squeeze "
+			.. "holds a tongue of star-hot plasma.")
+		igniter:alias("igniter")
+		igniter:set("gettable", true)
+		warriors:add(igniter)
+		game:say("The orange cylinder cracks -- and EXHALES.")
+		if sporeMasked(game) then
+			game:say("The respirator's seal holds; the spores settle "
+				.. "over your shoulders like ash, disappointed. Amid "
+				.. "the mess: the guard's igniter, dry in its case.")
+		else
+			game:wound("Spore-Bitten", "the orange dust finds your "
+				.. "lungs and files a claim.")
+		end
 	end)
 	warriors:add(orange)
 
@@ -780,7 +862,21 @@ function BuildTomb(seed)
 		"One of An-Rah's coursers: servo hocks, chrome ribs, glass lenses, "
 		.. "the rest of it dog. Heavy as a rolled carpet.")
 	hound:alias("hound", "dog")
+	hound:set("gettable", true)
+	hound:set("onTaken", function(game)
+		game:say("You haul the hound out, all dead weight and dripping "
+			.. "gel. Yours now -- whatever you think you will do with "
+			.. "a hundredweight of preserved dog.")
+	end)
 	tank:add(hound)
+
+	local gelFlask = Item("flask of gel", "a flask of embalming gel (3 doses)",
+		"New-Pangean work, grown rather than cut. The tombwrights fed "
+		.. "it to the tank. It burns hot, fast, and completely.")
+	gelFlask:alias("gel", "flask")
+	gelFlask:set("gettable", true)
+	gelFlask:set("portions", 3)
+	hounds:add(gelFlask)
 
 	local servo = Item("sparking servo", "a sparking servo",
 		"A fist-sized actuator out of the hound's chest, still holding "
@@ -898,12 +994,32 @@ function BuildTomb(seed)
 		.. "shatters along its length like a dropped icicle.")
 	centipede:set("onDeath", function(game)
 		game:award("centipede", 5, "[+5 -- the centipede, answered]")
+		local shard = Item("crystal shard", "a shard of the centipede",
+			"A hand-length of the centipede's glass, edged like grief. "
+			.. "A knife, if you grip the dull end.")
+		shard:alias("shard")
+		shard:set("gettable", true)
+		shard:set("weapon", true)
+		chimney:add(shard)
 		chimney.description = "A throat of stone furred with orange "
 			.. "growth. Glass litter glitters in the fur where the "
-			.. "centipede came apart."
-
+			.. "centipede came apart -- one shard the length of a hand."
 	end)
 	chimney:addCharacter(centipede)
+
+	g:addTrigger("chimney_spores", function(game)
+		return game.player.location == chimney and not chimney:get("spored")
+	end, function(game)
+		chimney:set("spored", true)
+		if sporeMasked(game) then
+			game:say("Spores swirl against your light like snow shaken "
+				.. "in a globe. The respirator's seal holds; the "
+				.. "throat's opinion of you goes unbreathed.")
+		else
+			game:wound("Seared Lungs", "every breath in here is smaller "
+				.. "than the last.")
+		end
+	end, false)
 
 	g:addTrigger("centipede_springs", function(game)
 		return game.player.location == chimney
@@ -944,11 +1060,58 @@ function BuildTomb(seed)
 		.. "parted jaws, each around the shape of something lost.")
 	memory:connect("east", canopic, "west")
 
-	local seated = Item("jars", "three seated canopic jars",
-		"Baboon, human, mantis: sealed, seated, satisfied. Their plinths "
-		.. "glow a settled white.")
-	seated:alias("three jars", "seated jars")
-	canopic:add(seated)
+	local baboonJar = Item("baboon jar", "a baboon-headed canopic jar",
+		"A sealed jar with a baboon's head, lips drawn back along the "
+		.. "lid. The Autarch's lungs, if the embalming song is right.")
+	baboonJar:set("gettable", true)
+	baboonJar:set("onOpened", sealedJar)
+	canopic:add(baboonJar)
+
+	local humanJar = Item("human jar", "a human-headed canopic jar",
+		"A sealed jar with the Autarch's own young face. His liver, if "
+		.. "the embalming song is right. The face is not smiling.")
+	humanJar:set("gettable", true)
+	humanJar:set("onOpened", sealedJar)
+	canopic:add(humanJar)
+
+	local mantisJar = Item("mantis jar", "a mantis-headed canopic jar, split",
+		"A split, fungal jar with a mantis's head, orange growth "
+		.. "budding through the crack. Inside, where his eyes were "
+		.. "kept, something is LOOKING back.")
+	mantisJar:alias("mantis")
+	mantisJar:set("gettable", true)
+	local function mantisSnap(game)
+		if mantisJar:get("bit") then return false end
+		mantisJar:set("bit", true)
+		game:say("The split widens and the mantis head STRIKES -- one "
+			.. "motion, out and back, quicker than the eye. The jar "
+			.. "settles again, as if it had never moved.")
+		game:wound("Mantis-Bitten", "mandibles snip the web of your "
+			.. "hand and let go -- a warning, not a meal.")
+		return true
+	end
+	mantisJar:set("onOpened", function(game, thing)
+		if mantisSnap(game) then return end
+		sealedJar(game, thing)
+	end)
+	canopic:add(mantisJar)
+
+	local eyes = Item("fungal eyes", "the Autarch's eyes, gone fungal",
+		"Two clouded orbs, orange thread through each. They keep "
+		.. "turning to face you, patiently, like sunflowers.")
+	eyes:alias("eyes")
+	eyes:set("gettable", true)
+	eyes:set("edible", true)
+	eyes:set("taste", "of oysters and bad ideas.")
+	eyes:set("onTaken", function(game)
+		mantisSnap(game)
+	end)
+	eyes:set("onEaten", function(game, thing)
+		if thing.holder then thing.holder:remove(thing) end
+		game:wound("Spore-Gut", "the eyes go down like oysters and "
+			.. "begin, at once, to garden.")
+	end)
+	mantisJar:add(eyes)
 
 	local function sealCheck(game)
 		local falconHome, jackalHome = false, false
@@ -1155,6 +1318,15 @@ function BuildTomb(seed)
 			game:say("The coffin already stands open, and regrets it.")
 			return
 		end
+		local boots = game.player:carrying("magnetic boots")
+		local anchored = (boots ~= nil and boots:get("worn") == true)
+			or coffin:get("tethered") == true
+		if not anchored then
+			game:say("You shove -- and it is YOU who drifts away, "
+				.. "unmoored. Prying wants bracing: soles that hold "
+				.. "the floor, or a coffin lashed fast.")
+			return
+		end
 		local edged = false
 		for i = 1, #game.player.contents do
 			if game.player.contents[i]:get("weapon") then edged = true end
@@ -1170,12 +1342,38 @@ function BuildTomb(seed)
 		dagger:set("hidden", nil)
 		coffin.examineText = "The coffin stands open, its cloud let out. "
 			.. "What it kept is out with it."
+		if horror:get("dead") then
+			game:say("The seam gives. The cloud sighs out over nothing "
+				.. "at all: the tenant burned at its root, and what is "
+				.. "left only drifts -- bones, gold wire, and what the "
+				.. "keeping kept.")
+			return
+		end
 		horror:set("hostile", true)
 		horror:set("aware", true)
 		sphere:addCharacter(horror)
 		game:say("The seam gives. The cloud sighs out -- and the coffin's "
 			.. "tenant UNCOILS, taking the Autarch's bones with it like a "
 			.. "puppet recalled to the stage.")
+	end)
+
+	coffin:set("onTied", function(game)
+		if coffin:get("tethered") then
+			game:say("The coffin is already lashed fast.")
+			return
+		end
+		local bolt = game.player:carrying("bolt of spider-silk")
+		if bolt == nil then
+			game:say("It wants lashing, and you carry nothing that "
+				.. "would hold it -- nothing cobweb-thin that holds "
+				.. "like law.")
+			return
+		end
+		game.player:remove(bolt)
+		coffin:set("tethered", true)
+		game:say("You pass the spider-silk around the coffin and make "
+			.. "it fast to the carved walls -- cobweb-thin, and it "
+			.. "holds like law. The coffin hangs still at last.")
 	end)
 
 	g:addTrigger("horror_menace", function(game)
@@ -1242,6 +1440,59 @@ function BuildTomb(seed)
 		game:award("horror", 25, "[+25 -- the Horror is ended]")
 		game:say("The tomb is quiet. What it kept is yours to carry out "
 			.. "-- if you can walk the road back.")
+	end)
+
+	-- the other cleanse (web parity): douse the wellspring and light it.
+	-- Attached here, after the horror exists, so the closure can kill it.
+	mystic:set("onBurned", function(game)
+		if horror:get("dead") then
+			game:say("The network is already ash, root to crown.")
+			return
+		end
+		local fuel = game.player:carrying("flask of gel")
+		if fuel == nil then
+			game:say("Stone does not burn unhelped. It wants dousing "
+				.. "in something that does.")
+			return
+		end
+		if game.player:carrying("plasma-igniter") == nil
+				and game.player:carrying("sparking servo") == nil then
+			game:say("Doused it could be -- but you carry no spark to "
+				.. "put to it.")
+			return
+		end
+		local n = (fuel:get("portions") or 1) - 1
+		fuel:set("portions", n)
+		fuel.description = n > 0
+			and ("a flask of embalming gel (" .. n .. " dose"
+				.. (n ~= 1 and "s" or "") .. ")")
+			or "an empty gel flask"
+		for i = 1, #mystic.contents do
+			if mystic.contents[i].name == "friend's fungus" then
+				mystic:remove(mystic.contents[i])
+				break
+			end
+		end
+		horror:set("dead", true)
+		horror:set("hostile", nil)
+		if horror.location ~= nil then
+			for i = 1, #sphere.characters do
+				if sphere.characters[i] == horror then
+					table.remove(sphere.characters, i)
+					break
+				end
+			end
+			horror.location = nil
+		end
+		mystic.examineText = "A scorched seat of stone. The mystic's "
+			.. "sentence is finished."
+		summit.description = "The tomb's crown, scoured and quiet. A "
+			.. "scorch-mark meditates where the mystic sat."
+		game:say("You splash a dose of gel over the mystic and put a "
+			.. "spark to it. Orange flame ROARS down the chimney -- and "
+			.. "far below the whole rotten network shudders and dies. "
+			.. "The tomb falls silent at last.")
+		game:award("horror", 25, "[+25 -- the Horror is ended]")
 	end)
 
 	-- the win the Parsely books demand: OUT, alive, carrying the Exotica
@@ -1336,6 +1587,15 @@ function BuildTomb(seed)
 		},
 		available = function(game) return game.player:carrying("manifold box") ~= nil end,
 		resolved = function(game) return game.scoredKeys["archivist"] end })
+	g:addHint({ key = "anchor", question = "The coffin drifts when I shove it.",
+		levels = {
+			"Nothing in that room holds you down. Bring your own "
+				.. "floor, or lash the thing still.",
+			"WEAR MAGNETIC BOOTS (the viridian guard kept a pair) -- "
+				.. "or TIE COFFIN with the merchant's spider-silk.",
+		},
+		available = function(_) return sphere.visited end,
+		resolved = function(_) return coffin:get("pried") == true end })
 	g:addHint({ key = "rest", question = "The coffin stands open and wrong.",
 		levels = {
 			"The walls hold three prayers, not two. Read them again.",
