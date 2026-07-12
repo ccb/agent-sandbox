@@ -212,6 +212,14 @@ end
 
 -- Wounds, slice-simple (the full d20 table is M5): three and the tomb
 -- keeps you.
+function Game:heal()
+	if self.wounds > 0 then
+		self.wounds = self.wounds - 1
+		return true
+	end
+	return false
+end
+
 function Game:wound(name, line)
 	self.wounds = self.wounds + 1
 	self:say("* " .. name .. " -- " .. line)
@@ -447,6 +455,13 @@ verb("douse", 1, function(g, thing)
 end, "turn off", "extinguish")
 
 local attackVerb = verb("attack", 1, function(g, thing)
+	if thing:get("mends") then
+		thing:set("aware", true)
+		g:say(thing:get("mendsText")
+			or ("The blade opens a rent in the " .. thing.name
+				.. "; it closes as you watch."))
+		return
+	end
 	if not thing:get("vigor") then
 		g:say("The " .. thing.name .. " takes no notice of violence.")
 		return
@@ -514,6 +529,36 @@ templateVerb("give", { "noun", "to", "noun" }, function(g, item, target)
 		g:say("The " .. target.name .. " wants nothing of yours.")
 	end
 end, "offer")
+
+verb("pry", 1, function(g, thing)
+	local hook = thing:get("onPried")
+	if not hook then
+		g:say("The " .. thing.name .. " offers nothing to lever against.")
+		return
+	end
+	hook(g, thing)
+end, "pry open", "open")
+
+verb("read", 1, function(g, thing)
+	local txt = thing:get("readText")
+	if not txt then
+		g:say("The " .. thing.name .. " has nothing written on it.")
+		return
+	end
+	if type(txt) == "function" then txt = txt(g, thing) end
+	g:say(txt)
+	local hook = thing:get("onRead")
+	if hook then hook(g, thing) end
+end)
+
+verb("say", 1, function(g, thing)
+	local hook = thing:get("onSaid")
+	if not hook then
+		g:say("You say it. The tomb does not answer.")
+		return
+	end
+	hook(g, thing)
+end, "speak", "recite")
 
 local hintVerb = verb("hint", 0, function(g)
 	local open = g:openHints()
@@ -670,8 +715,8 @@ end
 Engine.pools = {
 	-- arming yourself mid-fight is THE move in the warriors hall: take and
 	-- search stay on the wheel (the audit caught their absence)
-	combat = { "attack", "take", "search", "throw", "examine", "look",
-		"douse", "inventory" },
+	combat = { "attack", "say", "read", "pry", "take", "search", "throw",
+		"examine", "look", "douse", "inventory", "hint" },
 }
 
 -- Combat: something hostile shares the room and is either visible to you

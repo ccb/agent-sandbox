@@ -358,6 +358,7 @@ function BuildTomb(seed)
 	memory:addCharacter(silas)
 
 	-- ------------------------------------------------ canopic jars (slice)
+	local sphere -- built after the hall; the plinth hook closes over it
 	local canopic = g:room("Hall of the Canopic Jars",
 		"Five plinths ring a central stair in a pentagon of dressed stone. "
 		.. "Three jars stand answered -- baboon, human, mantis. The falcon "
@@ -383,19 +384,167 @@ function BuildTomb(seed)
 			return
 		end
 		game:say("The jar settles into the talons like a word into a "
-			.. "sentence. The crimson steadies to white -- and somewhere "
-			.. "above, stone parts from stone with a sigh.")
+			.. "sentence. The crimson steadies to white -- and above the "
+			.. "stair, stone parts from stone with a sigh. The way UP "
+			.. "stands open.")
 		game:award("seal", 10, "[+10 -- the seal answers the jars]")
 		plinth.examineText = "The falcon jar sits answered in its talons, "
 			.. "the light gone white. The carving reads as finished."
 		canopic.description = "Five plinths, five jars, one pentagon of "
 			.. "dressed stone -- all of it answered, all of it white. The "
 			.. "stair above stands open on the dark."
-		game.won = true
-		game:say("*** The slice is won. The stair waits for the next "
-			.. "milestone. ***")
+		canopic:connect("up", sphere, "down")
 	end)
 	canopic:add(plinth)
+
+	-- --------------------------------------------------- the burial sphere
+	sphere = g:room("Burial Sphere of Nassak An-Rah",
+		"A spherical chamber carved over every inch with funeral prayers, "
+		.. "and nothing in it obeys the ground. At the dead centre hangs "
+		.. "the Autarch's coffin: clouded glass, its field failing, its "
+		.. "interior a slow orange churn.")
+	sphere:set("dark", true)
+	sphere:set("darkBlurb",
+		"Gloom, and no floor your feet believe in. Somewhere at the centre "
+		.. "something turns over, slowly, like a sleeper.")
+
+	local coffin = Item("coffin", "the Autarch's anti-entropy coffin",
+		"A clouded glass sphere. Past the cloud, shapes drift and turn "
+		.. "like fish under ice: bone, and things buried to be kept. A "
+		.. "seam at its equator, fine as a hair -- it could be PRIED, "
+		.. "with an edge.")
+	coffin:alias("glass sphere", "casket")
+	sphere:add(coffin)
+
+	local prayers = Item("prayers", "funeral prayers, carved everywhere",
+		"Carved to be read from every direction at once. READ them to "
+		.. "study the lines.")
+	prayers:alias("prayer", "carvings", "walls")
+	sphere:add(prayers)
+
+	local wrath = Item("prayer of wrath", "the Prayer of Wrath",
+		"A word with edges. The chamber's law, waiting to be invoked.")
+	wrath:alias("wrath")
+	wrath:set("hidden", true)
+	sphere:add(wrath)
+
+	local balm = Item("prayer of balm", "the Prayer of Balm",
+		"A word like water finding a crack. Said aloud, it mends the sayer.")
+	balm:alias("balm")
+	balm:set("hidden", true)
+	sphere:add(balm)
+
+	prayers:set("readText",
+		"Most of it is names and grief. But two lines are RUNG, cut "
+		.. "deeper than the rest, meant to be SAID aloud: the PRAYER OF "
+		.. "BALM, and the PRAYER OF WRATH.")
+	prayers:set("onRead", function(_game)
+		wrath:set("hidden", nil)
+		balm:set("hidden", nil)
+	end)
+
+	local horror = Engine.Character("fungal horror",
+		"the Fungal Horror, coiled around the Autarch's bones",
+		"A single muscle of orange fungus the size of a river-snake, "
+		.. "moving the Autarch's dead limbs like its own. Where you cut "
+		.. "it, it remembers.")
+	horror:alias("horror", "coil")
+	horror:set("mends", true)
+	horror:set("mendsText", "The blade opens a rent in the orange mass -- "
+		.. "and the rent closes as you watch. Steel is a treadmill here. "
+		.. "The walls were carved for this.")
+
+	coffin:set("onPried", function(game)
+		if coffin:get("pried") then
+			game:say("The coffin already stands open, and regrets it.")
+			return
+		end
+		local edged = false
+		for i = 1, #game.player.contents do
+			if game.player.contents[i]:get("weapon") then edged = true end
+		end
+		if not edged then
+			game:say("The seam wants a lever with an edge. Your fingers "
+				.. "are not that.")
+			return
+		end
+		coffin:set("pried", true)
+		coffin.examineText = "The coffin stands open, its cloud let out. "
+			.. "What it kept is out with it."
+		horror:set("hostile", true)
+		horror:set("aware", true)
+		sphere:addCharacter(horror)
+		game:say("The seam gives. The cloud sighs out -- and the coffin's "
+			.. "tenant UNCOILS, taking the Autarch's bones with it like a "
+			.. "puppet recalled to the stage.")
+	end)
+
+	g:addTrigger("horror_menace", function(game)
+		return game.player.location == sphere
+			and horror.location == sphere
+			and not horror:get("dead")
+	end, function(game)
+		local n = (sphere:get("press") or 0) + 1
+		sphere:set("press", n)
+		if n == 1 then
+			game:say("The coil turns its borrowed skull toward you and "
+				.. "considers.")
+		elseif n % 2 == 1 then
+			game:wound("Coil-Struck",
+				"a limb of fungus finds you across the weightless dark.")
+		else
+			game:say("It drifts nearer, unhurried. It has time.")
+		end
+	end, true)
+
+	balm:set("onSaid", function(game)
+		if balm:get("spent") then
+			game:say("The balm has given what it had.")
+			return
+		end
+		balm:set("spent", true)
+		if game:heal() then
+			game:say("The word goes through you like water finding a "
+				.. "crack. A wound closes, politely.")
+		else
+			game:say("The word finds nothing in you to mend, and settles "
+				.. "for the mood.")
+		end
+	end)
+
+	wrath:set("onSaid", function(game)
+		if horror.location ~= sphere or horror:get("dead") then
+			game:say("The word waits. It knows what it is for, and this "
+				.. "is not it.")
+			return
+		end
+		horror:set("dead", true)
+		horror:set("hostile", nil)
+		for i = 1, #sphere.characters do
+			if sphere.characters[i] == horror then
+				table.remove(sphere.characters, i)
+				break
+			end
+		end
+		horror.location = nil
+		local ash = Item("drift of ash", "the ash of the Fungal Horror",
+			"Fine grey ash shot through with dull orange, hanging "
+			.. "weightless where the Horror burned. Nothing in it mends.")
+		ash:alias("ash")
+		sphere:add(ash)
+		sphere.description = "A spherical chamber carved with funeral "
+			.. "prayers, quiet in the way of a made bed. The coffin hangs "
+			.. "open at the centre; the ash of the Horror turns in a slow "
+			.. "orbit, out of respect."
+		game:say("You say the PRAYER OF WRATH, and the chamber says it "
+			.. "with you. Every carved line ignites at once -- the Horror "
+			.. "is unwritten limb by limb, ash before it can remember how "
+			.. "to mend.")
+		game:award("wrath", 10, "[+10 -- the chamber's law, invoked]")
+		game.won = true
+		game:say("*** The tomb is quiet. The expedition stands. "
+			.. game.score .. "/" .. game.maxScore .. " ***")
+	end)
 
 	-- ------------------------------------------------------------- hints
 	-- The booklet lists only puzzles the player has MET and not yet beaten.
@@ -429,8 +578,19 @@ function BuildTomb(seed)
 		available = function(_) return canopic.visited end,
 		resolved = function(game) return game.won == true end })
 
+	g:addHint({
+		key = "horror",
+		question = "The coffin's tenant will not stay cut.",
+		levels = {
+			"Steel is a treadmill. The room itself disagrees with it.",
+			"READ PRAYERS, then SAY PRAYER OF WRATH.",
+		},
+		available = function(_) return sphere.visited end,
+		resolved = function(game) return game.won == true end,
+	})
+
 	-- ------------------------------------------------------------ start
-	g.maxScore = 40
+	g.maxScore = 50
 	g.player.location = wreck
 	wreck.visited = true
 	return g

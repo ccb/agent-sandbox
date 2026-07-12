@@ -63,6 +63,10 @@ local WIN = {
 	"talk to silas",
 	"go east",
 	"put falcon jar on falcon plinth",
+	"go up",
+	"pry coffin",
+	"read prayers",
+	"say prayer of wrath",
 }
 
 local g = BuildTomb(3)
@@ -78,5 +82,6 @@ end
 assert(g.score == g.maxScore,
 	"walkthrough banks " .. g.score .. " of " .. g.maxScore)
 assert(not g.over, "the winner lives")
+assert(g.won, "the winner won")
 print("audit: every step composable; " .. g.score .. "/" .. g.maxScore
 	.. " in " .. g.turn .. " turns; wounds " .. g.wounds)
