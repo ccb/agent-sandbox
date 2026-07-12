@@ -226,13 +226,16 @@ function playdate.update()
 			return
 		end
 		gfx.clear(gfx.kColorBlack)
-		local img = overlay.t:getImage(math.min(overlay.i, #overlay.t))
-		if img then img:draw((400 - 384) // 2, 0) end
+		-- copy mode: the lingering fill-white text mode would paint the
+		-- whole card as a blank block
+		gfx.setImageDrawMode(gfx.kDrawModeCopy)
+		local n = overlay.t:getLength()
+		local img = overlay.t:getImage(math.min(overlay.i, n))
+		if img then img:draw(8, 0) end
 		overlay.acc = overlay.acc + 12 / 30
 		if overlay.acc >= 1 then
-			overlay.i = overlay.i + math.floor(overlay.acc)
+			overlay.i = math.min(overlay.i + math.floor(overlay.acc), n)
 			overlay.acc = overlay.acc % 1
-			if overlay.i > #overlay.t then overlay.i = #overlay.t end
 		end
 		return
 	end
