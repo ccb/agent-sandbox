@@ -13,13 +13,17 @@ const SHEET_URL = `${import.meta.env.BASE_URL}sprites/player.png`;
 const FRAME = 32;
 
 // Per-persona tints, mirroring viewer.gd's TINTS array (indexed by persona
-// order) so a card's portrait is the same colour as that agent on the map. Godot
-// `modulate` multiplies the sprite by this colour; we reproduce that below.
+// order, wrapping) so a card's portrait is the same colour as that agent on the
+// map. Godot `modulate` multiplies the sprite by this colour; we reproduce that
+// below. Keep the list (and its length — the wrap) in step with viewer.gd.
 export const SPRITE_TINTS = [
-  "#fff2f2", // Maya  — warm white   (Godot Color(1.0, 0.95, 0.95))
-  "#b3d1ff", // Ellis — blue         (Godot Color(0.70, 0.82, 1.0))
-  "#ccffc7", // Diego — green        (Godot Color(0.80, 1.0, 0.78))
-  "#ffdbb3", // spare — orange       (Godot Color(1.0, 0.86, 0.70))
+  "#fff2f2", // warm white  (Godot Color(1.0, 0.95, 0.95))
+  "#b3d1ff", // blue        (Godot Color(0.70, 0.82, 1.0))
+  "#ccffc7", // green       (Godot Color(0.80, 1.0, 0.78))
+  "#ffdbb3", // amber       (Godot Color(1.0, 0.86, 0.70))
+  "#fff28c", // yellow      (Godot Color(1.0, 0.95, 0.55))
+  "#ffc7eb", // pink        (Godot Color(1.0, 0.78, 0.92))
+  "#b3fff7", // cyan        (Godot Color(0.70, 1.0, 0.97))
 ];
 
 // One shared, cached load of the sheet — every card draws the same image.
