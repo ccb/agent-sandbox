@@ -100,6 +100,11 @@ def export(page, key, frames):
         # the dim phosphor lines, and never flickers.
         cells.append(cell.point(lambda v: 255 if v >= 55 else 0, mode="1"))
         page.evaluate("window.TombFigures._tickAll()")
+    # pad the final row with copies of the last frame: the device's
+    # imagetable length counts grid CELLS, and a hold on an empty padding
+    # cell shows black instead of the tableau
+    while len(cells) % COLS != 0:
+        cells.append(cells[-1])
     rows = (len(cells) + COLS - 1) // COLS
     grid = Image.new("1", (CELL_W * COLS, CELL_H * rows), 0)
     for i, cell in enumerate(cells):
