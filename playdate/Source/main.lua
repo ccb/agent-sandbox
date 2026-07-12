@@ -271,10 +271,13 @@ local function pressA()
 	end
 	lastWord[it.lane] = it.word
 	command[#command + 1] = it.word
-	-- walk the verb's slot template: connectors ("to") append themselves
+	-- walk the verb's slot template: connectors ("to") append themselves;
+	-- "noun" and "direction" are SLOTS the player fills, never words
 	local slots = Engine.verbSlots(command[1])
 	local filled = #command - 1
-	while filled < #slots and slots[filled + 1] ~= "noun" do
+	while filled < #slots
+		and slots[filled + 1] ~= "noun"
+		and slots[filled + 1] ~= "direction" do
 		command[#command + 1] = slots[filled + 1]
 		filled = filled + 1
 	end
