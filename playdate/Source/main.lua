@@ -53,8 +53,7 @@ local function newGame(seed)
 	game = BuildTomb(seed)
 	game.out = say
 	transcript = {}
-	say("TOMB OF NASSAK AN-RAH -- a Vaults of Vaarn expedition")
-	say("Crank or left/right turns the word wheel; A speaks; B unsays.")
+	say("VAULTS OF VAARN: TOMB OF NASSAK AN-RAH")
 	game:describe()
 	settleView(0)
 end

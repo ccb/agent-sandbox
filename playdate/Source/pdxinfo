@@ -1,6 +1,6 @@
-name=Tomb of Nassak An-Rah
+name=Vaults of Vaarn: Tomb of Nassak An-Rah
 author=Chris Callison-Burch
-description=A Vaults of Vaarn expedition (M0 composer spike)
+description=A parser expedition for the crank
 bundleID=edu.upenn.ccb.tombofnassakanrah
 version=0.0.1
 buildNumber=1
