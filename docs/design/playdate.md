@@ -46,6 +46,37 @@ Research + port plan (CCB, 2026-07). Branch: `feat/playdate`.
   Dungeonman's dual-mode courtesy (free-input toggle in the system menu)
   and the crank-scrubbed reveal.
 
+  **Thy Dungeonman, dissected** (CCB's copy; structure read from the
+  pdz's debug identifiers -- we build our own engine, but their choices
+  are instructive):
+  - *Two-slot composer, verb-first*: `submitVerb` -> `determineNounsToUse`
+    -> `submitCommand`. Pick the verb, THEN see the nouns. Our lanes allow
+    noun-first too; worth playtesting whether verb-first is actually less
+    load.
+  - *Modal word pools*: `verbs` / `combatVerbs` / `answerVerbs` (yes/no as
+    a pool!) / `directionNouns`, swapped by game state via
+    `determineVerbsToUse`. A fight shows fight verbs; a question shows
+    answers. This is our context-verbs idea generalized into MODES --
+    adopt: the composer's lane sets swap when the engine flags a mode
+    (combat, dialogue question, prayer).
+  - *Per-pool recency*: `previouslySubmittedNoun` / `...DirectionNoun` /
+    `...InventoryNoun` / `...CombatVerb` / `...AnswerVerb` -- they recall
+    the last-used word PER POOL, not globally. Sharper than our
+    'last two verbs' plan; adopt per-pool recall.
+  - *Dual mode exactly as suspected*: a system-menu checkmark item
+    ("Free Input") toggling `useKeyboard`, plus a `forceKeyboard` flag for
+    moments that WANT typing (the GET YE FLASK gag). Our version: the
+    Composer default, keyboard via system menu, and forceKeyboard
+    reserved for the EXAMINE SELF-style easter eggs if ever.
+  - *Room model rhymes with ours*: a Room class per file with `verbTable`
+    (verb -> noun -> response fn), `verbAliases`/`nounAliases`/
+    `commandAliases`, `roomNouns`, `unknownCommand` fallbacks. Their
+    verbTable is the per-room slice of what our engine computes globally;
+    confirms the mini-engine shape.
+  - *Kindred presentation*: a Scanline effect class, a blinking cursor,
+    click/bump/enter sounds -- the CRT-terminal aesthetic already lives
+    happily on this hardware.
+
 ## 2. Why this game can work there
 
 Two properties of our engine were built for other reasons and happen to be
