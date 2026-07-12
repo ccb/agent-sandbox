@@ -88,6 +88,8 @@ local function runCommand(line)
 	autosave()
 end
 
+local VERBS_LANE, NOUNS_LANE = 2, 3
+
 local function pressA()
 	local words = laneWords()
 	if #words == 0 then return end
@@ -102,12 +104,21 @@ local function pressA()
 	if #command >= arity + 1 then
 		runCommand(table.concat(command, " "))
 		command = {}
+		lane = VERBS_LANE -- the loop restarts at the verbs
+		recall()
+	elseif lane == VERBS_LANE then
+		lane = NOUNS_LANE -- a verb that wants a noun advances you to them
+		recall()
 	end
 end
 
 local function pressB()
 	if #command > 0 then
 		command[#command] = nil
+		if #command == 0 and lane == NOUNS_LANE then
+			lane = VERBS_LANE -- unsaying the verb walks you back
+			recall()
+		end
 	else
 		scrollUp = 0
 	end
