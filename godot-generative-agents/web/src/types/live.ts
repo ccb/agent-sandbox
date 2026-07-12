@@ -14,6 +14,8 @@ export interface LlmCallRecord {
   role: string; // decide | converse | reflect | plan
   actor: string | null;
   turn: number | null;
+  attempt: number | null; // retry index (CallRecord's replay seam)
+  prompt_sha256: string | null; // hash of the messages (replay seam)
   provider: string;
   model: string;
   input_tokens: number;

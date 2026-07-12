@@ -35,7 +35,7 @@ state out of Godot.
 ### Data flow
 
 ```
-Python sim ──▶ maps/penn_replay.json ──(copied)──▶ web/public/replay/penn_replay.json
+Python sim ──▶ godot/maps/penn_replay.json ──(copied)──▶ web/public/replay/penn_replay.json
 (backend/penn/generate_penn_replay.py)                              │  Vite serves it at /replay/...
                                                            ▼
 Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,pck,…}
@@ -52,7 +52,7 @@ Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,p
 
 1. **Godot → WebAssembly export.** `scripts/export-godot.sh` runs Godot headless
    (`--export-release "Web"`) using the `Web` preset in
-   [`../export_presets.cfg`](../export_presets.cfg). It writes a self-contained
+   [`../godot/export_presets.cfg`](../godot/export_presets.cfg). It writes a self-contained
    build to `public/godot/`: `index.wasm` (the engine, ~37 MB), `index.pck` (the
    packed game — scenes, scripts, imported textures, **and the `.tmj` maps**), and
    `index.js` (the JS loader that defines Godot's `Engine` class). The script
@@ -61,8 +61,8 @@ Godot project ──(headless export)──▶ web/public/godot/index.{js,wasm,p
    `project.godot`. On web the menu hides its "Open a local file…" button and the
    bundled replay is fetched over HTTP rather than packed (see below).
 
-2. **Replay fetched at runtime, not packed.** `scripts/viewer.gd` (in the
-   Godot project) has a `web` branch: on web it `HTTPRequest`s the replay from
+2. **Replay fetched at runtime, not packed.** `../godot/scripts/viewer.gd` (in
+   the Godot project) has a `web` branch: on web it `HTTPRequest`s the replay from
    `/replay/penn_replay.json` instead of reading it from the `.pck`. So a new sim is
    a one-file swap — no re-export. (The desktop `FileAccess` path is unchanged.)
 
@@ -76,12 +76,15 @@ Cross-origin isolation: Godot's *threaded* WASM only runs on a page that sends
 `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy:
 require-corp`. [`vite.config.ts`](vite.config.ts) sets both (on `dev` and
 `preview`). If they ever cause trouble locally, export single-threaded instead by
-setting `variant/thread_support=false` in `../export_presets.cfg`.
+setting `variant/thread_support=false` in `../godot/export_presets.cfg`.
 
 ### The data contract (replay JSON)
 
-Produced by `backend/penn/generate_penn_replay.py`, consumed by both the Godot canvas and
-(soon) the companion panels. Typed in [`src/types/replay.ts`](src/types/replay.ts):
+Produced by `backend/penn/generate_penn_replay.py`, consumed by both the Godot
+canvas and the companion's agent cards. The contract is pinned on the Python
+side (`../backend/contract.py`, #305); [`src/types/replay.ts`](src/types/replay.ts)
+is its field-for-field mirror, held in lock-step by
+`../tests/test_replay_contract.py`. Abridged:
 
 ```jsonc
 {
@@ -90,14 +93,20 @@ Produced by `backend/penn/generate_penn_replay.py`, consumed by both the Godot c
     "width": 237, "height": 271,
     "steps": 400,             // == frames.length
     "sec_per_step": 10,       // in-game seconds per step
-    "personas": [{ "name": "Maya Chen", "emoji": "📚" }, …]
+    "personas": [{ "name": "Diego Torres", "emoji": "✏️" }, …]
   },
   "frames": [                 // one entry per step
-    { "Maya Chen": { "x": 13, "y": 15, "act": "studying @ …", "e": "📚" }, … },
+    { "Diego Torres": { "x": 13, "y": 15, "act": "sketching @ …", "e": "✏️" }, … },
     …
   ]
 }
 ```
+
+Current files carry more than this sketch: `meta.schema_version`, richer
+personas (blurb / home / schedule, #408), the seed social graph
+(`meta.relationships`, #252), per-frame `reasoning` / `chat` / `memories`,
+plus top-level `memory_streams` and the `events` run record — all optional
+in the TS types, so older files still load. See `replay.ts` for the full shape.
 
 ---
 
@@ -128,7 +137,7 @@ pnpm dev            # open the printed http://localhost:… URL
 ```
 
 You should see the landing menu load over a live campus backdrop; click **Play the
-bundled replay** and Maya, Professor Ellis and Diego walk the campus with name +
+bundled replay** and Diego, Professor Tanaka and Sofia walk the campus with name +
 activity labels — the same viewer as the desktop `viewer.tscn`.
 
 The header's **Docs** link opens the project's MkDocs site at `/docs/` on this
@@ -171,7 +180,7 @@ setting; with neither given, the page stays fully static.
 How it works: [`src/useLlmCalls.ts`](src/useLlmCalls.ts) polls the backend's
 change feed (`GET /events?since=<cursor>`) and keeps the `engine` records whose
 payload is `kind: "llm_call"` — the wire contract is documented in
-[`backend/README.md`](../../backend/README.md). The backend's CORS already
+[`backend/README.md`](../backend/README.md). The backend's CORS already
 allows any localhost origin, so the dev server needs no proxy.
 
 ### Scripts
@@ -217,20 +226,20 @@ one sample `public/replay/penn_replay.json` are committed. `node_modules/`, `dis
 and `public/godot/` are git-ignored — regenerate them with `pnpm install` /
 `pnpm build` / `pnpm export:godot`.
 
-### Adding the companion app (the intended next step)
+### Adding more companion panels
 
-The panels are a pure-data feature — you don't need to touch Godot:
+The first panels exist (the **Agent cards** view — `src/components/AgentPanel.tsx`
+— plus the prompt views); new ones are a pure-data feature and don't need Godot:
 
-1. `fetch('/replay/penn_replay.json')` and parse it as the `Replay` type from
-   [`src/types/replay.ts`](src/types/replay.ts).
-2. Add panel components under `src/components/` and lay them out alongside
-   `<GodotCanvas/>` in [`App.tsx`](src/App.tsx) (the `.app-stage` is a positioned
-   container ready for a sidebar).
-3. To keep panels in step with the canvas, track the current step the same way
-   `viewer.gd` does — `floor(elapsed_seconds / step_seconds)` — or, for tight
-   coupling (e.g. click a panel → highlight that agent in Godot), use Godot's
-   `JavaScriptBridge` to post the current step out and accept calls in. `GodotCanvas`
-   already embeds the engine in-DOM specifically to make that bridge possible.
+1. Read the replay via [`src/useReplay.ts`](src/useReplay.ts) (typed as `Replay`
+   from [`src/types/replay.ts`](src/types/replay.ts)); for live-backend data,
+   follow the [`src/useLlmCalls.ts`](src/useLlmCalls.ts) pattern against the
+   endpoints in [`../backend/README.md`](../backend/README.md).
+2. Add panel components under `src/components/` and give them a view in
+   [`App.tsx`](src/App.tsx)'s hash-routed menu.
+3. To keep panels in step with the canvas, use `useReplayStep` — Godot's
+   `viewer.gd` already posts the current step out through `JavaScriptBridge`
+   (`window.__pennReplayStep`), with a fallback clock when the bridge is absent.
 
 ### Conventions / gotchas
 
