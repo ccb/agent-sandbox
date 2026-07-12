@@ -496,12 +496,12 @@
       "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
       "frontmatter": {
         "name": "reflection",
-        "description": "A persona's own successful action, recorded as a first-person observation memory (backend/smallville_agents.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, or a quoted fallback for any other command. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",
+        "description": "A persona's own successful action, recorded as a first-person observation memory (backend/cognition.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, drinking (with a sick variant for contaminated water, #300), or a quoted fallback for any other command. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",
         "model_api": "",
         "inputs": {
           "verb": {
             "type": "string",
-            "description": "The command verb -- \"travel\", \"perform\", or anything else."
+            "description": "The command verb -- \"travel\", \"perform\", \"drink\", or anything else."
           },
           "location": {
             "type": "string",
@@ -511,20 +511,30 @@
             "type": "string",
             "description": "What the persona is doing (used when verb == \"perform\")."
           },
+          "item": {
+            "type": "string",
+            "description": "What was drunk (used when verb == \"drink\")."
+          },
+          "sick": {
+            "type": "boolean",
+            "description": "Whether this drink just sickened the persona (verb == \"drink\")."
+          },
           "command": {
             "type": "string",
             "description": "The raw command, quoted verbatim in the fallback (any other verb)."
           }
         },
         "sample": {
-          "verb": "travel",
-          "location": "Hobbs Cafe",
+          "verb": "drink",
+          "location": "",
           "activity": "",
+          "item": "cup of murky water",
+          "sick": true,
           "command": ""
         }
       },
-      "raw_source": "{%- if verb == \"travel\" -%}\nI traveled to {{ location }}.\n{%- elif verb == \"perform\" -%}\nI am {{ activity }}.\n{%- else -%}\nI did \"{{ command }}\".\n{%- endif -%}\n",
-      "rendered": "I traveled to Hobbs Cafe."
+      "raw_source": "{%- if verb == \"travel\" -%}\nI traveled to {{ location }}.\n{%- elif verb == \"perform\" -%}\nI am {{ activity }}.\n{%- elif verb == \"drink\" and sick -%}\nI drank the {{ item }} and now I feel terribly sick.\n{%- elif verb == \"drink\" -%}\nI drank the {{ item }}.\n{%- else -%}\nI did \"{{ command }}\".\n{%- endif -%}\n",
+      "rendered": "I drank the cup of murky water and now I feel terribly sick."
     },
     "reflect": {
       "id": "reflect",
