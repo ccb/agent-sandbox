@@ -31,7 +31,7 @@ local function newGame(seed)
 	game.out = say
 	transcript = {}
 	say("TOMB OF NASSAK AN-RAH -- a Vaults of Vaarn expedition")
-	say("Crank turns the word wheel; left/right jumps a lane; A speaks; B unsays.")
+	say("Crank or left/right turns the word wheel; A speaks; B unsays.")
 	game:describe()
 end
 
@@ -150,15 +150,10 @@ function playdate.update()
 	local ticks = playdate.getCrankTicks(6)
 	if ticks ~= 0 then pos = pos + ticks end
 
-	if playdate.buttonJustPressed(playdate.kButtonLeft)
-		or playdate.buttonJustPressed(playdate.kButtonRight) then
-		local items = wheel()
-		if #items > 0 then
-			pos = ((pos - 1) % #items) + 1
-			local cur = items[pos].lane
-			local step = playdate.buttonJustPressed(playdate.kButtonRight) and 1 or -1
-			jumpTo(((cur - 1 + step) % #LANES) + 1)
-		end
+	if playdate.buttonJustPressed(playdate.kButtonLeft) then
+		pos = pos - 1 -- the d-pad steps the wheel, same as the crank
+	elseif playdate.buttonJustPressed(playdate.kButtonRight) then
+		pos = pos + 1
 	elseif playdate.buttonJustPressed(playdate.kButtonUp) then
 		scrollUp = scrollUp + 40
 	elseif playdate.buttonJustPressed(playdate.kButtonDown) then
