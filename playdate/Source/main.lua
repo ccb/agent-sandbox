@@ -193,7 +193,7 @@ function playdate.update()
 		local shown = 0
 		while x < SCREEN_W - 8 and shown < n do
 			local word = words[(i % n) + 1]
-			local ww = gfx.getTextWidth(word)
+			local ww = gfx.getTextSize(word)
 			if shown == 0 then
 				gfx.setColor(gfx.kColorWhite)
 				gfx.fillRect(x - 3, stripY - 1, ww + 6, th + 2)
