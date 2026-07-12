@@ -57,18 +57,48 @@ local function drawCaptions(key, frame)
 	for j = 1, #list do
 		local c = list[j]
 		if frame >= (c.from or 0) and (not c.to or frame < c.to) then
-			local txt = c.text
+			local full = c.text .. (c.text2 or "")
+			local shown = #full
 			if c.type then
-				local n = math.floor((frame - (c.from or 0)) * (c.cps or 2))
-				if n < #txt then txt = string.sub(txt, 1, n) .. "_" end
+				shown = math.floor((frame - (c.from or 0)) * (c.cps or 2))
 			end
-			if c.bold then txt = "*" .. txt .. "*" end
-			if c.align == "center" then
-				gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.center)
-			elseif c.align == "right" then
-				gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.right)
+			if c.text2 then
+				-- a LEDGER line: label, dot leader to the tab stop, value --
+				-- the leader is drawn to fit, so proportional type aligns
+				local label = string.sub(c.text, 1, math.min(shown, #c.text))
+				local value = shown > #c.text
+					and string.sub(c.text2, 1, shown - #c.text) or ""
+				if shown < #full then
+					if #value > 0 then value = value .. "_"
+					else label = label .. "_" end
+				end
+				if c.bold then
+					label = "*" .. label .. "*"
+					if #value > 0 then value = "*" .. value .. "*" end
+				end
+				gfx.drawText(label, c.x, c.y)
+				if shown >= #c.text then
+					local lw = gfx.getTextSize(string.sub(label, 1, -1))
+					local dots = ""
+					local dx = c.x + lw + 4
+					while dx + 5 < c.x2 - 4 do
+						dots = dots .. "."
+						dx = dx + 5
+					end
+					gfx.drawText(dots, c.x + lw + 4, c.y)
+					if #value > 0 then gfx.drawText(value, c.x2, c.y) end
+				end
 			else
-				gfx.drawText(txt, c.x, c.y)
+				local txt = string.sub(full, 1, shown)
+				if shown < #full then txt = txt .. "_" end
+				if c.bold then txt = "*" .. txt .. "*" end
+				if c.align == "center" then
+					gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.center)
+				elseif c.align == "right" then
+					gfx.drawTextAligned(txt, c.x, c.y, kTextAlignment.right)
+				else
+					gfx.drawText(txt, c.x, c.y)
+				end
 			end
 		end
 	end
