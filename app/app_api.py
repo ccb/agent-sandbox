@@ -230,7 +230,9 @@ def boot(seed):
     _store = _make_store()
     _game.save_store = _store
     _visited.clear()
-    _game.show_figure("road")  # the Trail card opens every fresh expedition
+    # The Trail card opens every fresh expedition -- via the wreck's own
+    # arrival figure, which the boot LOOK deals (a second explicit show
+    # here doubled the card once the room property existed).
     _game.parser.parse_command("look")
     return _payload()
 
