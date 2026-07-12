@@ -61,6 +61,8 @@ local WIN = {
 	"throw dates",
 	"go north",
 	"talk to silas",
+	"go east",
+	"put falcon jar on falcon plinth",
 }
 
 local g = BuildTomb(3)

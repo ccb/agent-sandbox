@@ -182,11 +182,11 @@ end
 -- Purely cosmetic -- a surface without cards ignores it, and replay
 -- rebuilds the shown-set without popping overlays (the surface attaches
 -- onFigure only after restore).
-function Game:showFigure(key)
+function Game:showFigure(key, data)
 	self.figuresShown = self.figuresShown or {}
 	if self.figuresShown[key] then return end
 	self.figuresShown[key] = true
-	if self.onFigure then self.onFigure(key) end
+	if self.onFigure then self.onFigure(key, data) end
 end
 
 -- Wounds, slice-simple (the full d20 table is M5): three and the tomb
@@ -196,6 +196,10 @@ function Game:wound(name, line)
 	self:say("* " .. name .. " -- " .. line)
 	if self.wounds >= 3 then
 		self.over = true
+		self:showFigure("epitaph", {
+			cause = string.upper(name),
+			score = self.score .. " OF " .. self.maxScore,
+		})
 		self:say("Your body has no room left to be hurt in. The tomb keeps you.")
 		self:say("(Menu: new game.)")
 	end
@@ -461,6 +465,21 @@ verb("talk to", 1, function(g, thing)
 		g:say("The " .. thing.name .. " has nothing to say to you.")
 	end
 end, "talk", "talk with")
+
+templateVerb("put", { "noun", "on", "noun" }, function(g, item, target)
+	if not g.player:carrying(item.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	local hook = target:get("onReceive")
+	if hook then
+		g.player:remove(item)
+		target:add(item)
+		hook(g, item, target)
+	else
+		g:say("The " .. target.name .. " offers it no purchase.")
+	end
+end, "place", "set")
 
 templateVerb("give", { "noun", "to", "noun" }, function(g, item, target)
 	if not g.player:carrying(item.name) then

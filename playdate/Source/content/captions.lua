@@ -49,3 +49,23 @@ Captions = {
 			text = "DARK UNTIL WOKEN. LIGHT IS DEAR." },
 	},
 }
+
+Captions["bats-c"] = {
+	{ from = 0, x = 8, y = 2, text = "RESIDENTS, HALL OF YOUTH", bold = true,
+		type = true, cps = 2 },
+	{ from = 20, x = 200, y = 216, align = "center", type = true, cps = 1.5,
+		text = "OPINION OF LIGHT: NONE, WHILE FED." },
+}
+
+Captions["epitaph"] = {
+	{ from = 6, x = 200, y = 36, align = "center", type = true, cps = 1.5,
+		text = "HERE LIES" },
+	{ from = 16, x = 200, y = 58, align = "center", type = true, cps = 1.5,
+		text = "A SCAVENGER", bold = true },
+	{ from = 30, x = 200, y = 84, align = "center", type = true, cps = 1.5,
+		dynamic = "cause" },
+	{ from = 48, x = 200, y = 190, align = "center", type = true, cps = 1.5,
+		dynamic = "score" },
+	{ from = 62, x = 200, y = 216, align = "center", type = true, cps = 1.5,
+		text = "THE TOMB KEEPS YOU." },
+}

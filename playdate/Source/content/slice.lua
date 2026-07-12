@@ -201,6 +201,7 @@ function BuildTomb(seed)
 		youth:set("fed", true)
 		youth:set("mob", 0)
 		youth:remove(item)
+		game:showFigure("bats-c") -- the residents, before the text
 		game:say("The ceiling DETACHES. The whole colony falls on the dates "
 			.. "and cares about nothing else; then, gorged, they climb the "
 			.. "walls and fold themselves to sleep.")
@@ -356,8 +357,48 @@ function BuildTomb(seed)
 	end)
 	memory:addCharacter(silas)
 
+	-- ------------------------------------------------ canopic jars (slice)
+	local canopic = g:room("Hall of the Canopic Jars",
+		"Five plinths ring a central stair in a pentagon of dressed stone. "
+		.. "Three jars stand answered -- baboon, human, mantis. The falcon "
+		.. "plinth stands empty, lit crimson, its carved talons cupped "
+		.. "around the shape of something lost.")
+	memory:connect("east", canopic, "west")
+
+	local seated = Item("jars", "three seated canopic jars",
+		"Baboon, human, mantis: sealed, seated, satisfied. Their plinths "
+		.. "glow a settled white.")
+	seated:alias("three jars", "seated jars")
+	canopic:add(seated)
+
+	local plinth = Item("falcon plinth", "the empty falcon plinth",
+		"Carved talons, cupped and waiting. The crimson light over it "
+		.. "burns like an unanswered question.")
+	plinth:alias("plinth")
+	plinth:set("onReceive", function(game, item)
+		if item.name ~= "falcon jar" then
+			game:say("The talons refuse it. They were carved for one thing.")
+			plinth:remove(item)
+			game.player:add(item)
+			return
+		end
+		game:say("The jar settles into the talons like a word into a "
+			.. "sentence. The crimson steadies to white -- and somewhere "
+			.. "above, stone parts from stone with a sigh.")
+		game:award("seal", 10, "[+10 -- the seal answers the jars]")
+		plinth.examineText = "The falcon jar sits answered in its talons, "
+			.. "the light gone white. The carving reads as finished."
+		canopic.description = "Five plinths, five jars, one pentagon of "
+			.. "dressed stone -- all of it answered, all of it white. The "
+			.. "stair above stands open on the dark."
+		game.won = true
+		game:say("*** The slice is won. The stair waits for the next "
+			.. "milestone. ***")
+	end)
+	canopic:add(plinth)
+
 	-- ------------------------------------------------------------ start
-	g.maxScore = 30
+	g.maxScore = 40
 	g.player.location = wreck
 	wreck.visited = true
 	return g
