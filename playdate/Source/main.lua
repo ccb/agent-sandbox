@@ -204,8 +204,6 @@ function playdate.update()
 			if it.lane ~= prevLane then
 				local tag = LANES[it.lane]
 				local tw = gfx.getTextSize(tag)
-				gfx.setColor(gfx.kColorWhite)
-				gfx.drawRect(x - 2, stripY - 1, tw + 6, th + 2)
 				gfx.drawText(tag, x + 1, stripY)
 				x = x + tw + 14
 				prevLane = it.lane
