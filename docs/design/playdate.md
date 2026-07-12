@@ -115,7 +115,79 @@ Pipeline (build-time, from the reel -- same single-source rule as
 
 Cards that are interactive on the web (glowstone click) map to A-button.
 
-## 6. Milestones
+## 6. The small screen: text budget
+
+400×240 with a readable font is roughly 40 characters × 11 transcript lines
+-- about 450 characters visible at once. Our room descriptions routinely run
+3-4× that. Scrolling works but reading four screens per room is not Playdate-
+native. The plan:
+
+- **A terse text pass, kept in the Python source.** Every location and
+  examinable gains an optional `pd_text` (or `brief_text`) variant, capped at
+  ~50 words, written by hand during the content port -- the port IS the
+  editing pass, but the variants live in the canonical Python content so the
+  two engines share one source and the web could grow a BRIEF mode for free.
+- **The Infocom precedent**: VERBOSE on first visit (full text, crank to
+  read), BRIEF on revisits (name, one salient line, exits). SUPERBRIEF as a
+  setting. Revisit text is where most of the squeeze is won.
+- **Writing rule for terse variants**: front-load the interactable nouns --
+  on Playdate the description doubles as the noun lane's table of contents.
+  Anything named should be examinable; anything examinable should be named.
+- Status/score/exits move to a persistent one-line bar (already our web
+  statusbar), not repeated in prose.
+
+## 7. Lane coverage: the verb/noun audit
+
+Today's suggestions channel is honest but incomplete: the VERB row is 18
+curated words, and the tomb has custom actions (BUTCHER, PRAY/SAY, PRY, FIX,
+FEED, GIVE ... TO, POUR ... INTO, REMEMBER, KICK) that never appear. On the
+web a player can always type; on Playdate, **a verb not in the lane does not
+exist**. So:
+
+- **Audit tooling first**: a build-time script walks (a) the parser's full
+  action registry incl. `custom_actions`, (b) the WIN walkthrough, and (c)
+  every `ACTION_ALIASES` phrase, and reports which verbs/nouns a composer
+  could never have produced. This runs in CI so new content can't strand a
+  verb again.
+- **Context verbs**: things already carry `add_command_hint` ("read
+  prayers") -- promote that into the suggestions channel as a per-scope verb
+  contribution: BUTCHER appears only with a corpse in scope, SAY/PRAY only
+  where prayers are, POUR only holding the blood. This is diegetic (the
+  thing itself advertises its affordance) and keeps the resting lane short.
+- **Grammar templates**: multiword commands need composer slots, driven by a
+  small verb table: `GIVE _ TO _`, `THROW _ <direction>`, `POUR _ INTO _`,
+  `SAY <prayer>`. After picking GIVE the noun lane fills, then a TO lane of
+  characters. No free connectors; the template supplies them.
+- Hidden-until-SEARCH stays hidden -- the lanes must never spoil (they
+  already honor perception; the audit checks coverage, not secrets).
+
+## 8. Lane ranking: judicious, stable, un-spoiling
+
+Three principles, in tension, resolved in this order:
+
+1. **Stability beats optimality.** Reranking every turn destroys the
+   player's spatial memory of the lane. Base order is FIXED and learnable:
+   EXITS in compass order (n/s/e/w/up/down/in/out); VERBS in one curated
+   order that never changes; NOUNS grouped -- room things in description
+   order, then characters, then carried items (a separator tick between
+   groups, d-pad up/down jumps groups, crank moves within).
+2. **Bounded recency, visually fenced.** At most the LAST TWO used verbs get
+   pinned above the fixed verb order, behind a tick mark -- a bounded,
+   predictable convenience (take/examine loops) that never reshuffles the
+   rest. Nothing else self-sorts.
+3. **Salience is diegetic, never oracular.** A noun may be boosted only by
+   what the fiction has already foregrounded: mentioned in the CURRENT room
+   text -> room group front (that is what description order gives us for
+   free). We never rank by what progresses the game -- the lane must not be
+   a walkthrough. Context verbs (§7) appear on scope, which is information
+   the prose already gave; that is as far as "smart" goes.
+
+Practical caps: 3 visible words per lane (crank scrolls, detent per word),
+the composed line always visible above, and the resting state of the noun
+lane starts at the top of the room group -- so a glance shows exits, the
+top verbs, and the room's leading nouns without any cranking.
+
+## 9. Milestones
 
 - **M0 -- spike**: install SDK, run Simulator, render scrolling text +
   a crank-driven word lane, sideload to CCB's device. Exit: composing
@@ -124,15 +196,17 @@ Cards that are interactive on the web (glowstone click) map to A-button.
   Drop/Examine, suggestions, transcript, datastore saves (seed+journal).
 - **M2 -- composer**: the full three-lane UI, meta verbs, hold-B clear,
   docked-crank scrollback.
+- **M2.5 -- coverage audit**: the lane audit script in CI; suggestions()
+  grows context verbs (command-hint promotion) and grammar templates.
 - **M3 -- content**: the tomb ported room-by-room (start with Wreck ->
-  Exterior -> Youth vertical slice), then the trigger set; parity harness
-  green on the WIN walkthrough.
+  Exterior -> Youth vertical slice) WITH the terse-text pass as it goes,
+  then the trigger set; parity harness green on the WIN walkthrough.
 - **M4 -- figures**: exporter + imagetable playback, ILLUSTRATIONS toggle.
 - **M5 -- systems**: wounds/slots, hints (the HINT menu is naturally
   crank-scrollable), death/epitaph + restart.
 - **M6 -- ship**: device soak, itch sideload build, Catalog submission.
 
-## 7. Open questions for CCB
+## 10. Open questions for CCB
 
 - Sound? The device has a synth API; the web terminal's beeps would port,
   and the crank could literally click like a ratchet when scrolling.
