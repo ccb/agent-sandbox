@@ -2294,6 +2294,10 @@ def build_game(seed=None):
         "barred by a seal of red crystal. Something in this room is listening; "
         "you can tell, the way one can.",
     )
+    # First arrival draws the hall as found (18-B): three seated, two
+    # wanting, the stair barred. Once-per-game like every arrival cue --
+    # and first arrival is always pre-solve, so the litho never lies.
+    canopic.set_property("figure", "seal-b")
     sphere = things.Location(
         "Burial Sphere of Nassak An-Rah",
         "A spherical chamber carved over every inch with funeral prayers, and "
