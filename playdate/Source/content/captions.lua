@@ -54,7 +54,7 @@ Captions["bats-c"] = {
 	{ from = 0, x = 8, y = 2, text = "RESIDENTS, HALL OF YOUTH", bold = true,
 		type = true, cps = 2 },
 	{ from = 20, x = 200, y = 216, align = "center", type = true, cps = 1.5,
-		text = "OPINION OF LIGHT: NONE, WHILE FED." },
+		text = "DETEST LIGHT, LOVE DATES." },
 }
 
 Captions["epitaph"] = {
