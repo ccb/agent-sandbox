@@ -72,6 +72,23 @@ local function drawCaptions(key, frame)
 					if #value > 0 then value = value .. "_"
 					else label = label .. "_" end
 				end
+				-- the REWRITE beat: backspace the old value one character
+				-- at a time, then retype the new one in its place
+				local rw = c.rewrite
+				if rw and frame >= rw.at then
+					local k = math.floor((frame - rw.at) * (rw.cps or 2))
+					if k < #c.text2 then
+						value = string.sub(c.text2, 1, #c.text2 - k) .. "_"
+					else
+						local typed = k - #c.text2
+						value = string.sub(rw.text2, 1, math.min(typed, #rw.text2))
+						if typed < #rw.text2 then value = value .. "_" end
+					end
+					if rw.bold then
+						label = "*" .. label .. "*"
+						if #value > 0 then value = "*" .. value .. "*" end
+					end
+				end
 				if c.bold then
 					label = "*" .. label .. "*"
 					if #value > 0 then value = "*" .. value .. "*" end
