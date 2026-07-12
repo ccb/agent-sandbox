@@ -17,6 +17,19 @@ local gfx = playdate.graphics
 -- on paper-white, cards included (the litho becomes a print).
 playdate.display.setInverted(true)
 
+-- Type (CCB hardware verdict: bigger): Sasser Slab 18px, with its Bold
+-- for *markup*, as the default; the system font remains selectable.
+local slabFamily = gfx.font.newFamily({
+	[gfx.font.kVariantNormal] = "fonts/Sasser-Slab",
+	[gfx.font.kVariantBold] = "fonts/Sasser-Slab-Bold",
+})
+local systemFamily = {
+	[gfx.font.kVariantNormal] = gfx.getSystemFont(gfx.font.kVariantNormal),
+	[gfx.font.kVariantBold] = gfx.getSystemFont(gfx.font.kVariantBold),
+	[gfx.font.kVariantItalic] = gfx.getSystemFont(gfx.font.kVariantItalic),
+}
+local bigType = true
+
 -- ------------------------------------------------------------- transcript
 local SCREEN_W, TRANS_H = 400, 198
 local MARGIN = 6
@@ -28,6 +41,20 @@ local anchorTop = true -- reading mode: top of turn by default (CCB)
 local function say(text)
 	local _, h = gfx.getTextSizeForMaxWidth(text, SCREEN_W - MARGIN * 2)
 	transcript[#transcript + 1] = { text = text, h = h + 4 }
+end
+
+function applyFont() -- global: called from the menu and the boot tail
+	if bigType and slabFamily then
+		gfx.setFontFamily(slabFamily)
+	else
+		gfx.setFontFamily(systemFamily)
+	end
+	-- line heights were measured in the old font: measure again
+	for i = 1, #transcript do
+		local e = transcript[i]
+		local _, h = gfx.getTextSizeForMaxWidth(e.text, SCREEN_W - MARGIN * 2)
+		e.h = h + 4
+	end
 end
 
 local function totalHeight()
@@ -325,13 +352,19 @@ menu:addOptionsMenuItem("animation",
 			showFigure(value, { cause = "THE DEMO REEL", score = "0 OF 70" })
 		end
 	end)
-menu:addOptionsMenuItem("reading", { "top", "latest" }, (function()
+menu:addOptionsMenuItem("text size", { "large", "small" }, (function()
 	local prefs = playdate.datastore.read("prefs")
-	if prefs ~= nil then anchorTop = (prefs.anchorTop == true) end
-	return anchorTop and "top" or "latest"
+	if prefs ~= nil then
+		anchorTop = (prefs.anchorTop ~= false)
+		bigType = (prefs.bigType ~= false)
+	end
+	return bigType and "large" or "small"
 end)(), function(value)
-	anchorTop = (value == "top")
-	playdate.datastore.write({ anchorTop = anchorTop }, "prefs")
+	bigType = (value == "large")
+	playdate.datastore.write(
+		{ anchorTop = anchorTop, bigType = bigType }, "prefs")
+	applyFont()
+	clampView()
 end)
 
 function playdate.keyboard.keyboardWillHideCallback(okPressed)
@@ -345,6 +378,7 @@ end
 -- whose press+release falls between frames (easy on the real d-pad) is
 -- never lost. update() drains the queue in arrival order.
 local pending = {}
+local heldL, heldR = 0, 0
 local function press(name)
 	return function() pending[#pending + 1] = name end
 end
@@ -382,6 +416,12 @@ function playdate.update()
 
 	local ticks = playdate.getCrankTicks(6)
 	if ticks ~= 0 then pos = pos + ticks end
+
+	-- hold-to-repeat: after a beat, a held left/right walks the wheel
+	heldL = playdate.buttonIsPressed(playdate.kButtonLeft) and (heldL + 1) or 0
+	heldR = playdate.buttonIsPressed(playdate.kButtonRight) and (heldR + 1) or 0
+	if heldL > 9 and heldL % 3 == 0 then pos = pos - 1 end
+	if heldR > 9 and heldR % 3 == 0 then pos = pos + 1 end
 
 	for i = 1, #pending do
 		local btn = pending[i]
