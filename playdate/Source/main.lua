@@ -420,8 +420,8 @@ function playdate.update()
 	-- hold-to-repeat: after a beat, a held left/right walks the wheel
 	heldL = playdate.buttonIsPressed(playdate.kButtonLeft) and (heldL + 1) or 0
 	heldR = playdate.buttonIsPressed(playdate.kButtonRight) and (heldR + 1) or 0
-	if heldL > 9 and heldL % 3 == 0 then pos = pos - 1 end
-	if heldR > 9 and heldR % 3 == 0 then pos = pos + 1 end
+	if heldL > 6 and heldL % 2 == 0 then pos = pos - 1 end
+	if heldR > 6 and heldR % 2 == 0 then pos = pos + 1 end
 
 	for i = 1, #pending do
 		local btn = pending[i]
