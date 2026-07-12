@@ -1,7 +1,7 @@
--- Tomb of Nassak An-Rah -- Playdate (M1: the mini-engine drives the UI)
--- docs/design/playdate.md. The Composer: crank scrolls the active lane,
--- d-pad switches EXITS/VERBS/NOUNS, A speaks, B unsays. Saves are
--- (seed, journal) in the datastore, replayed quietly on boot.
+-- Tomb of Nassak An-Rah -- Playdate (M1+: the continuous Composer)
+-- docs/design/playdate.md. ONE wheel: the crank runs through EXITS, VERBS,
+-- and NOUNS as a single strip with inline section tags; left/right jumps a
+-- section; A speaks; B unsays. Saves are (seed, journal) in the datastore.
 
 import "CoreLibs/graphics"
 import "CoreLibs/crank"
@@ -12,7 +12,7 @@ import "content/slice"
 local gfx = playdate.graphics
 
 -- ------------------------------------------------------------- transcript
-local SCREEN_W, TRANS_H = 400, 198 -- the composer is two lines, not a panel
+local SCREEN_W, TRANS_H = 400, 198
 local MARGIN = 6
 local transcript = {}
 local scrollUp = 0
@@ -31,7 +31,7 @@ local function newGame(seed)
 	game.out = say
 	transcript = {}
 	say("TOMB OF NASSAK AN-RAH -- a Vaults of Vaarn expedition")
-	say("Crank turns the word lane; left/right picks a lane; A speaks; B unsays.")
+	say("Crank turns the word wheel; left/right jumps a lane; A speaks; B unsays.")
 	game:describe()
 end
 
@@ -49,7 +49,7 @@ local function boot()
 		end, snap)
 		game.out = say
 		transcript = {}
-		say("The expedition continues. (Menu: New Game to begin anew.)")
+		say("The expedition continues. (Menu: new game to begin anew.)")
 		game:describe()
 	else
 		newGame(playdate.getSecondsSinceEpoch() % 1000000)
@@ -58,26 +58,34 @@ end
 
 -- ------------------------------------------------------------ the Composer
 local LANES = { "EXITS", "VERBS", "NOUNS" }
-local lane = 1
-local sel = { 1, 1, 1 }
-local lastWord = { nil, nil, nil } -- per-pool recency (Thy Dungeonman's trick)
+local EXITS_LANE, VERBS_LANE, NOUNS_LANE = 1, 2, 3
+local pos = 1
+local lastWord = { nil, nil, nil } -- per-pool recency (Thy Dungeonman)
 local command = {}
 
-local function laneWords()
+-- the whole wheel: every lane's words, in lane order, as one strip
+local function wheel()
 	local sug = game:suggestions()
-	if lane == 1 then return sug.exits end
-	if lane == 2 then return sug.verbs end
-	return sug.nouns
+	local pools = { sug.exits, sug.verbs, sug.nouns }
+	local items, starts = {}, {}
+	for l = 1, 3 do
+		starts[l] = #items + 1
+		for i = 1, #pools[l] do
+			items[#items + 1] = { word = pools[l][i], lane = l }
+		end
+	end
+	return items, starts
 end
 
-local function recall()
-	-- the lane opens on the word you used last, when it still exists
-	local words = laneWords()
-	if lastWord[lane] then
-		for i = 1, #words do
-			if words[i] == lastWord[lane] then
-				sel[lane] = i
-				return
+local function jumpTo(laneIdx)
+	local items, starts = wheel()
+	pos = starts[laneIdx] or 1
+	if lastWord[laneIdx] then
+		for i = starts[laneIdx], #items do
+			if items[i].lane ~= laneIdx then break end
+			if items[i].word == lastWord[laneIdx] then
+				pos = i
+				break
 			end
 		end
 	end
@@ -88,37 +96,34 @@ local function runCommand(line)
 	autosave()
 end
 
-local VERBS_LANE, NOUNS_LANE = 2, 3
-
 local function pressA()
-	local words = laneWords()
-	if #words == 0 then return end
-	local word = words[((sel[lane] - 1) % #words) + 1]
-	lastWord[lane] = word
-	if lane == 1 and #command == 0 then
-		runCommand("go " .. word)
-		return
+	local items = wheel()
+	if #items == 0 then return end
+	pos = ((pos - 1) % #items) + 1
+	local it = items[pos]
+	if it.lane == EXITS_LANE then
+		if #command == 0 then
+			lastWord[EXITS_LANE] = it.word
+			runCommand("go " .. it.word)
+		end
+		return -- an exit is never a noun; mid-command it stays quiet
 	end
-	command[#command + 1] = word
+	lastWord[it.lane] = it.word
+	command[#command + 1] = it.word
 	local arity = Engine.verbArity(command[1])
 	if #command >= arity + 1 then
 		runCommand(table.concat(command, " "))
 		command = {}
-		lane = VERBS_LANE -- the loop restarts at the verbs
-		recall()
-	elseif lane == VERBS_LANE then
-		lane = NOUNS_LANE -- a verb that wants a noun advances you to them
-		recall()
+		jumpTo(VERBS_LANE) -- the loop restarts at the verbs
+	elseif it.lane == VERBS_LANE then
+		jumpTo(NOUNS_LANE) -- a verb that wants a noun advances you
 	end
 end
 
 local function pressB()
 	if #command > 0 then
 		command[#command] = nil
-		if #command == 0 and lane == NOUNS_LANE then
-			lane = VERBS_LANE -- unsaying the verb walks you back
-			recall()
-		end
+		if #command == 0 then jumpTo(VERBS_LANE) end
 	else
 		scrollUp = 0
 	end
@@ -131,9 +136,7 @@ menu:addMenuItem("new game", function()
 	newGame(playdate.getSecondsSinceEpoch() % 1000000)
 end)
 menu:addCheckmarkMenuItem("free input", false, function(on)
-	if on then
-		playdate.keyboard.show("")
-	end
+	if on then playdate.keyboard.show("") end
 end)
 
 function playdate.keyboard.keyboardWillHideCallback(okPressed)
@@ -145,14 +148,17 @@ end
 -- ------------------------------------------------------------ input + draw
 function playdate.update()
 	local ticks = playdate.getCrankTicks(6)
-	if ticks ~= 0 then sel[lane] = sel[lane] + ticks end
+	if ticks ~= 0 then pos = pos + ticks end
 
-	if playdate.buttonJustPressed(playdate.kButtonLeft) then
-		lane = ((lane - 2) % #LANES) + 1
-		recall()
-	elseif playdate.buttonJustPressed(playdate.kButtonRight) then
-		lane = (lane % #LANES) + 1
-		recall()
+	if playdate.buttonJustPressed(playdate.kButtonLeft)
+		or playdate.buttonJustPressed(playdate.kButtonRight) then
+		local items = wheel()
+		if #items > 0 then
+			pos = ((pos - 1) % #items) + 1
+			local cur = items[pos].lane
+			local step = playdate.buttonJustPressed(playdate.kButtonRight) and 1 or -1
+			jumpTo(((cur - 1 + step) % #LANES) + 1)
+		end
 	elseif playdate.buttonJustPressed(playdate.kButtonUp) then
 		scrollUp = scrollUp + 40
 	elseif playdate.buttonJustPressed(playdate.kButtonDown) then
@@ -166,6 +172,7 @@ function playdate.update()
 	gfx.clear(gfx.kColorBlack)
 	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
 
+	-- the transcript, bottom-anchored, clipped
 	gfx.setClipRect(0, 0, SCREEN_W, TRANS_H)
 	local total = 0
 	for i = 1, #transcript do total = total + transcript[i].h end
@@ -180,42 +187,48 @@ function playdate.update()
 	end
 	gfx.clearClipRect()
 
+	-- the command line, and the score at its right
 	gfx.drawLine(0, TRANS_H + 2, SCREEN_W, TRANS_H + 2)
 	gfx.drawText("> " .. table.concat(command, " ") .. "_", MARGIN, TRANS_H + 6)
 	gfx.drawText("*" .. game.score .. "/" .. game.maxScore .. "  T:" .. game.turn .. "*",
 		SCREEN_W - 96, TRANS_H + 6)
 
-	-- one strip: [LANE TAG] word word word -- the selected word inverted,
-	-- crank slides the strip, left/right swaps the tag (and its pool)
+	-- ONE strip: [TAG] word word [TAG] word ... selected word inverted,
+	-- section tags appearing inline as the wheel crosses them
 	local stripY = TRANS_H + 24
-	local tag = LANES[lane]
-	local tw, th = gfx.getTextSize(tag)
-	gfx.setColor(gfx.kColorWhite)
-	gfx.fillRect(MARGIN - 2, stripY - 1, tw + 8, th + 2)
-	gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
-	gfx.drawText(tag, MARGIN + 2, stripY)
-	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-
-	local words = laneWords()
-	local x = MARGIN + tw + 16
-	if #words > 0 then
-		local n = #words
-		local i = ((sel[lane] - 1) % n)
+	local items = wheel()
+	if #items > 0 then
+		pos = ((pos - 1) % #items) + 1
+		local x = MARGIN
+		local i = pos
+		local prevLane = nil
 		local shown = 0
-		while x < SCREEN_W - 8 and shown < n do
-			local word = words[(i % n) + 1]
-			local ww = gfx.getTextSize(word)
-			if shown == 0 then
+		local _, th = gfx.getTextSize("A")
+		while x < SCREEN_W - 8 and shown < #items do
+			local it = items[i]
+			if it.lane ~= prevLane then
+				local tag = LANES[it.lane]
+				local tw = gfx.getTextSize(tag)
 				gfx.setColor(gfx.kColorWhite)
-				gfx.fillRect(x - 3, stripY - 1, ww + 6, th + 2)
-				gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
-				gfx.drawText(word, x, stripY)
-				gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-			else
-				gfx.drawText(word, x, stripY)
+				gfx.drawRect(x - 2, stripY - 1, tw + 6, th + 2)
+				gfx.drawText(tag, x + 1, stripY)
+				x = x + tw + 14
+				prevLane = it.lane
+			end
+			local ww = gfx.getTextSize(it.word)
+			if x < SCREEN_W - 8 then
+				if shown == 0 then
+					gfx.setColor(gfx.kColorWhite)
+					gfx.fillRect(x - 3, stripY - 1, ww + 6, th + 2)
+					gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
+					gfx.drawText(it.word, x, stripY)
+					gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+				else
+					gfx.drawText(it.word, x, stripY)
+				end
 			end
 			x = x + ww + 14
-			i = i + 1
+			i = (i % #items) + 1
 			shown = shown + 1
 		end
 	end
