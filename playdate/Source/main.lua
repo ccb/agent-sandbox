@@ -12,6 +12,11 @@ import "content/captions"
 
 local gfx = playdate.graphics
 
+-- Hardware verdict (CCB): the reflective screen has no backlight, and
+-- white-on-black reads murky. Invert the whole framebuffer -- black ink
+-- on paper-white, cards included (the litho becomes a print).
+playdate.display.setInverted(true)
+
 -- ------------------------------------------------------------- transcript
 local SCREEN_W, TRANS_H = 400, 198
 local MARGIN = 6
