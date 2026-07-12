@@ -72,6 +72,13 @@ def export(page, key, frames):
         """() => {
           document.querySelectorAll('#stage text')
             .forEach((t) => t.setAttribute('display', 'none'));
+          // dim phosphor (#24587c) falls below the 1-bit threshold -- the
+          // wagon's canopy, the dunes. Lift it to full phosphor: at 1-bit,
+          // hierarchy is carried by stroke weight, not tone.
+          document.querySelectorAll('#stage [stroke="#24587c"]')
+            .forEach((e) => e.setAttribute('stroke', '#4db8ff'));
+          document.querySelectorAll('#stage [fill="#24587c"]')
+            .forEach((e) => e.setAttribute('fill', '#4db8ff'));
         }"""
     )
     stage = page.locator("#stage")
