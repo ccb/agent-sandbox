@@ -14,13 +14,36 @@ local gfx = playdate.graphics
 -- ------------------------------------------------------------- transcript
 local SCREEN_W, TRANS_H = 400, 198
 local MARGIN = 6
+local PANE = TRANS_H - MARGIN * 2
 local transcript = {}
-local scrollUp = 0
+local viewY = 0 -- pixels of transcript scrolled past the pane's top
+local anchorTop = false -- reading mode: false = show latest, true = top of turn
 
 local function say(text)
 	local _, h = gfx.getTextSizeForMaxWidth(text, SCREEN_W - MARGIN * 2)
 	transcript[#transcript + 1] = { text = text, h = h + 4 }
-	scrollUp = 0
+end
+
+local function totalHeight()
+	local total = 0
+	for i = 1, #transcript do total = total + transcript[i].h end
+	return total
+end
+
+local function clampView()
+	viewY = math.max(0, math.min(viewY, math.max(0, totalHeight() - PANE)))
+end
+
+-- After a turn's output: LATEST snaps to the end; TOP pins the turn's
+-- first line to the pane top so the player reads down at their own pace
+-- (the web terminal's behavior, CCB).
+local function settleView(turnStartHeight)
+	if anchorTop then
+		viewY = turnStartHeight
+	else
+		viewY = totalHeight() - PANE
+	end
+	clampView()
 end
 
 -- ------------------------------------------------------------------ game
@@ -33,6 +56,7 @@ local function newGame(seed)
 	say("TOMB OF NASSAK AN-RAH -- a Vaults of Vaarn expedition")
 	say("Crank or left/right turns the word wheel; A speaks; B unsays.")
 	game:describe()
+	settleView(0)
 end
 
 local function autosave()
@@ -51,6 +75,7 @@ local function boot()
 		transcript = {}
 		say("The expedition continues. (Menu: new game to begin anew.)")
 		game:describe()
+		settleView(0)
 	else
 		newGame(playdate.getSecondsSinceEpoch() % 1000000)
 	end
@@ -92,8 +117,10 @@ local function jumpTo(laneIdx)
 end
 
 local function runCommand(line)
+	local startH = totalHeight()
 	game:doCommand(line)
 	autosave()
+	settleView(startH)
 end
 
 local function pressA()
@@ -125,7 +152,8 @@ local function pressB()
 		command[#command] = nil
 		if #command == 0 then jumpTo(VERBS_LANE) end
 	else
-		scrollUp = 0
+		viewY = totalHeight() - PANE -- bare B: snap to the latest
+		clampView()
 	end
 end
 
@@ -138,6 +166,17 @@ end)
 menu:addCheckmarkMenuItem("free input", false, function(on)
 	if on then playdate.keyboard.show("") end
 end)
+menu:addOptionsMenuItem("reading", { "latest", "top" }, function(value)
+	anchorTop = (value == "top")
+	playdate.datastore.write({ anchorTop = anchorTop }, "prefs")
+end, (function()
+	local prefs = playdate.datastore.read("prefs")
+	if prefs and prefs.anchorTop then
+		anchorTop = true
+		return "top"
+	end
+	return "latest"
+end)())
 
 function playdate.keyboard.keyboardWillHideCallback(okPressed)
 	if okPressed and playdate.keyboard.text ~= "" then
@@ -155,9 +194,11 @@ function playdate.update()
 	elseif playdate.buttonJustPressed(playdate.kButtonRight) then
 		pos = pos + 1
 	elseif playdate.buttonJustPressed(playdate.kButtonUp) then
-		scrollUp = scrollUp + 40
+		viewY = viewY - 40
+		clampView()
 	elseif playdate.buttonJustPressed(playdate.kButtonDown) then
-		scrollUp = math.max(0, scrollUp - 40)
+		viewY = viewY + 40
+		clampView()
 	elseif playdate.buttonJustPressed(playdate.kButtonA) then
 		pressA()
 	elseif playdate.buttonJustPressed(playdate.kButtonB) then
@@ -169,10 +210,7 @@ function playdate.update()
 
 	-- the transcript, bottom-anchored, clipped
 	gfx.setClipRect(0, 0, SCREEN_W, TRANS_H)
-	local total = 0
-	for i = 1, #transcript do total = total + transcript[i].h end
-	local y = TRANS_H - MARGIN - total + scrollUp
-	if total < TRANS_H - MARGIN * 2 then y = MARGIN end
+	local y = MARGIN - viewY
 	for i = 1, #transcript do
 		local e = transcript[i]
 		if y + e.h > 0 and y < TRANS_H then
