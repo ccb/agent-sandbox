@@ -1790,6 +1790,7 @@ class TossCentipede(actions.Action):
         shard.set_property("is_weapon", True)
         shard.set_property(Property.WIELDABLE, True)
         shard.set_property("edged", True)  # butchery accepts it
+        shard.set_property("figure", "shard")  # the forging litho, on take
         shard.add_alias("shard")
         shard.add_alias("carapace shard")
         shard.add_alias("glass knife")
