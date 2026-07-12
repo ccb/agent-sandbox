@@ -224,6 +224,8 @@ sug = g:suggestions()
 ok(sug.verbs[1] == "attack", "combat pool leads with attack")
 ok(not has(sug.nouns, "spawn of guts"), "but the dark still hides your target")
 g:doCommand("look")
+ok(saw(lines, "It is deciding"), "the even rounds menace without landing")
+g:doCommand("look")
 ok(g.wounds == 1, "the odd rounds lash")
 
 -- lit, armed, and answered
