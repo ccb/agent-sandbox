@@ -22,11 +22,21 @@ function BuildTomb(seed)
 		.. "warrior eastward, far up an old man weeping tendrils from his "
 		.. "open mouth. Each mouth is a door.")
 
+	local youth = g:room("Hall of Youth",
+		"Your light wakes blue statues of the boy-Autarch, swaddled and "
+		.. "adored, rendered with unsettling tenderness. Overhead the vault "
+		.. "seethes: thousands of bats, wheeling lower with every pass.")
+	youth:set("dark", true)
+	youth:set("darkBlurb",
+		"Dark as a pocket. The air moves overhead in slow leathery waves, "
+		.. "and the floor grits underfoot. Your light would wake this room "
+		.. "-- and everything roosting in it.")
+
 	wreck:connect("in", hold, "out")
 	wreck:connect("north", exterior, "south")
-	exterior.blocks.north = "The boy's door breathes cold air. (M2 opens it.)"
-	exterior.blocks.east = "The warrior's door stands sealed. (M2 opens it.)"
-	exterior.blocks.up = "The climb waits for surer milestones. (M2.)"
+	exterior:connect("north", youth, "south")
+	exterior.blocks.east = "The warrior's door stands sealed. (Next milestone.)"
+	exterior.blocks.up = "The climb waits for surer milestones."
 
 	-- the playtesters' phrasings (mirrors the Python direction aliases)
 	wreck:travelAlias("enter wagon", "in"):travelAlias("wagon", "in")
@@ -60,6 +70,10 @@ function BuildTomb(seed)
 	glowstone:alias("stone")
 	glowstone:set("gettable", true)
 	glowstone:set("hidden", true)
+	glowstone:set("lightable", true)
+	glowstone:set("onLit", function(game)
+		game:award("first_light", 5, "[+5 -- light, learned]")
+	end)
 	merchant:add(glowstone)
 
 	local waterskin = Item("waterskin", "a waterskin with 3 rations",
@@ -111,8 +125,63 @@ function BuildTomb(seed)
 	fungus:alias("growth", "tendrils")
 	exterior:add(fungus)
 
+	-- ------------------------------------------------------ hall of youth
+	local statues = Item("statues", "blue statues of the boy-Autarch",
+		"Nassak An-Rah as an infant, a child, a youth -- each rendered with "
+		.. "unsettling tenderness in cold blue stone.")
+	statues:alias("statue", "boy")
+	youth:add(statues)
+
+	local ceiling = Item("ceiling", "the seething ceiling",
+		"Thousands of bats packed wing to wing, folded and dreaming -- and "
+		.. "the nearest have already let go of the stone. They hate your "
+		.. "light. They love something else more.")
+	ceiling:alias("bats", "colony", "vault")
+	youth:add(ceiling)
+
+	-- the dates puzzle: land them in the hall and the colony forgets you
+	dates:set("onLanded", function(game, item)
+		if game.player.location ~= youth or youth:get("fed") then return end
+		youth:set("fed", true)
+		youth:set("mob", 0)
+		youth:remove(item)
+		game:say("The ceiling DETACHES. The whole colony falls on the dates "
+			.. "and cares about nothing else; then, gorged, they climb the "
+			.. "walls and fold themselves to sleep.")
+		youth.description = "Blue statues of the boy-Autarch, swaddled and "
+			.. "adored. The ceiling seethes gently now: the colony, fed and "
+			.. "folded, has no further opinions about your light."
+		ceiling.examineText = "The colony, packed wing to wing and fast "
+			.. "asleep. They have no further opinions about your light."
+		game:award("colony_fed", 5, "[+5 -- the colony, fed]")
+	end)
+
+	-- the bats hate your light: one warning, then the swarm
+	g:addTrigger("bat_menace", function(game)
+		return game.player.location == youth
+			and game:hasLight()
+			and not youth:get("fed")
+	end, function(game)
+		local n = (youth:get("mob") or 0) + 1
+		youth:set("mob", n)
+		if n == 1 then
+			game:say("The rustle overhead deepens. Grit sifts down through "
+				.. "your light; the whole vault has begun, gently, to move.")
+		else
+			game:wound("Raked",
+				"leather and small teeth descend on your light.")
+		end
+	end, true)
+
+	g:addTrigger("bat_calm", function(game)
+		return (youth:get("mob") or 0) > 0
+			and not (game.player.location == youth and game:hasLight())
+	end, function(_game)
+		youth:set("mob", 0)
+	end, true)
+
 	-- ------------------------------------------------------------ start
-	g.maxScore = 5
+	g.maxScore = 15
 	g.player.location = wreck
 	wreck.visited = true
 	return g

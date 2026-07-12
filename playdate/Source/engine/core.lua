@@ -153,8 +153,40 @@ function Game:init(seed)
 	self.journal = {}
 	self.quiet = false
 	self.over = false
+	self.wounds = 0
+	self.triggers = {}
 	self.out = function(_text) end -- the surface's renderer hooks this
 	self.player = Character("you", "you, a scavenger of the Tomblands")
+end
+
+-- React phase: fired after every executed command (also during replay --
+-- determinism is the save system). Same shape as the Python engine.
+function Game:addTrigger(name, pred, effect, repeatable)
+	self.triggers[#self.triggers + 1] =
+		{ name = name, pred = pred, effect = effect, repeatable = repeatable, done = false }
+end
+
+function Game:runTriggers()
+	for i = 1, #self.triggers do
+		local t = self.triggers[i]
+		if (t.repeatable or not t.done) and t.pred(self) then
+			t.done = true
+			t.effect(self)
+			if self.over then return end
+		end
+	end
+end
+
+-- Wounds, slice-simple (the full d20 table is M5): three and the tomb
+-- keeps you.
+function Game:wound(name, line)
+	self.wounds = self.wounds + 1
+	self:say("* " .. name .. " -- " .. line)
+	if self.wounds >= 3 then
+		self.over = true
+		self:say("Your body has no room left to be hurt in. The tomb keeps you.")
+		self:say("(Menu: new game.)")
+	end
 end
 
 function Game:room(name, description)
@@ -174,9 +206,24 @@ function Game:award(key, points, msg)
 	if msg then self:say(msg) end
 end
 
+function Game:hasLight()
+	for i = 1, #self.player.contents do
+		if self.player.contents[i]:get("lit") then return true end
+	end
+	return false
+end
+
+function Game:canSee()
+	return not self.player.location:get("dark") or self:hasLight()
+end
+
 function Game:describe()
 	local room = self.player.location
 	self:say("*" .. string.upper(room.name) .. "*")
+	if not self:canSee() then
+		self:say(room:get("darkBlurb") or "It is pitch dark.")
+		return
+	end
 	self:say(room.description)
 	local seen = {}
 	for i = 1, #room.contents do
@@ -200,10 +247,12 @@ function Game:scope()
 		for i = 1, #inner do put(inner[i]) end
 	end
 	local room = self.player.location
-	for i = 1, #room.contents do
-		if not room.contents[i]:get("hidden") then put(room.contents[i]) end
+	if self:canSee() then
+		for i = 1, #room.contents do
+			if not room.contents[i]:get("hidden") then put(room.contents[i]) end
+		end
+		for i = 1, #room.characters do out[#out + 1] = room.characters[i] end
 	end
-	for i = 1, #room.characters do out[#out + 1] = room.characters[i] end
 	for i = 1, #self.player.contents do put(self.player.contents[i]) end
 	return out
 end
@@ -307,7 +356,50 @@ verb("drop", 1, function(g, thing)
 	g.player:remove(thing)
 	g.player.location:add(thing)
 	g:say("You dropped the " .. thing.name .. ".")
+	local hook = thing:get("onLanded")
+	if hook then hook(g, thing) end
 end)
+
+verb("throw", 1, function(g, thing)
+	if not g.player:carrying(thing.name) then
+		g:say("You aren't carrying that.")
+		return
+	end
+	g.player:remove(thing)
+	g.player.location:add(thing)
+	g:say("You throw the " .. thing.name .. ".")
+	local hook = thing:get("onLanded")
+	if hook then hook(g, thing) end
+end, "toss")
+
+verb("light", 1, function(g, thing)
+	if not thing:get("lightable") then
+		g:say("That's not something that can be lit.")
+		return
+	end
+	if thing:get("lit") then
+		g:say("It is already lit.")
+		return
+	end
+	local dark = not g:canSee()
+	thing:set("lit", true)
+	g:say("The " .. thing.name .. " flares alight and glows.")
+	local hook = thing:get("onLit")
+	if hook then hook(g, thing) end
+	if dark and g:canSee() then g:describe() end -- the light earns the look
+end, "turn on")
+
+verb("douse", 1, function(g, thing)
+	if not thing:get("lit") then
+		g:say("It isn't lit.")
+		return
+	end
+	thing:set("lit", nil)
+	g:say("You douse the " .. thing.name .. ".")
+	if not g:canSee() then
+		g:say((g.player.location:get("darkBlurb")) or "The dark closes in.")
+	end
+end, "turn off", "extinguish")
 
 verb("inventory", 0, function(g)
 	if #g.player.contents == 0 then
@@ -326,6 +418,10 @@ function Game:doCommand(line)
 	line = string.lower(line):gsub("^%s+", ""):gsub("%s+$", "")
 	if line == "" then return end
 	self:say("> " .. line)
+	if self.over then
+		self:say("The expedition is over. (Menu: new game.)")
+		return false
+	end
 	local room = self.player.location
 
 	-- travel: exact per-room phrase, a bare exit name, or GO <exit>
@@ -341,6 +437,7 @@ function Game:doCommand(line)
 		self.journal[#self.journal + 1] = line
 		self.turn = self.turn + 1
 		self:go(dir)
+		self:runTriggers()
 		return true
 	end
 
@@ -374,6 +471,7 @@ function Game:doCommand(line)
 	self.journal[#self.journal + 1] = line
 	self.turn = self.turn + 1
 	v.run(self, thing)
+	self:runTriggers()
 	return true
 end
 
