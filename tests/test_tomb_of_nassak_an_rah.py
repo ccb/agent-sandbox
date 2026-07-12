@@ -1060,7 +1060,7 @@ def test_minor_threats_pay_when_quelled_by_any_means():
     game.do_command("look")
     assert game.scored("spawn_guts") and game.scored("spawn_brain")
     assert game.score == before + 10
-    assert game.max_score == 145
+    assert game.max_score == 170
 
 
 def test_the_pack_answers_to_pack():
@@ -2292,7 +2292,7 @@ def test_the_full_winning_run_scores_100():
             break
         game.do_command(cmd)
     assert game.is_won()
-    assert game.score == 145 == game.max_score
+    assert game.score == 170 == game.max_score
     assert game.player.location.name == "Tomb Exterior"
 
 

@@ -100,6 +100,13 @@ function BuildTomb(seed)
 	exterior:connect("north", youth, "south")
 	exterior:connect("east", warriors, "west")
 	warriors:connect("east", hounds, "west")
+
+	g:addTrigger("threshold", function(game)
+		local r = game.player.location
+		return r ~= wreck and r ~= hold and r ~= exterior and r ~= summit
+	end, function(game)
+		game:award("threshold", 5, "[+5 -- the threshold]")
+	end, false)
 	exterior:connect("up", summit, "down")
 	summit:connect("in", chimney, "out")
 	exterior:travelAlias("warrior door", "east"):travelAlias("enter warrior", "east")
@@ -221,6 +228,9 @@ function BuildTomb(seed)
 	waterskin:set("gettable", true)
 	waterskin:set("hidden", true)
 	waterskin:set("portions", 3)
+	waterskin:set("onTaken", function(game)
+		game:award("water", 5, "[+5 -- an inheritance of water]")
+	end)
 	waterskin:set("onDrunk", function(game, thing)
 		local n = thing:get("portions") or 0
 		if n <= 0 then
@@ -231,6 +241,7 @@ function BuildTomb(seed)
 		if game:heal() then
 			game:say("The water does what water does in Vaarn. A wound "
 				.. "troubles you less.")
+			game:award("healed", 5, "[+5 -- water, spent wisely]")
 		else
 			game:say("You drink. Money never tasted so plain.")
 		end
@@ -241,9 +252,7 @@ function BuildTomb(seed)
 	end)
 	merchant:add(waterskin)
 
-	merchant:set("onSearched", function(game)
-		game:award("inheritance", 5, "[+5 -- an inheritance of water]")
-	end)
+
 
 	local critch = Engine.Character("critch", "Critch, a golden new-hyena teamster",
 		"Critch settles his pack straps like someone already decided to be "
@@ -357,12 +366,13 @@ function BuildTomb(seed)
 		game:say("The ceiling DETACHES. The whole colony falls on the dates "
 			.. "and cares about nothing else; then, gorged, they climb the "
 			.. "walls and fold themselves to sleep.")
+		game:award("colony_fed", 5, "[+5 -- the colony, fed]")
 		youth.description = "Blue statues of the boy-Autarch, swaddled and "
 			.. "adored. The ceiling seethes gently now: the colony, fed and "
 			.. "folded, has no further opinions about your light."
 		ceiling.examineText = "The colony, packed wing to wing and fast "
 			.. "asleep. They have no further opinions about your light."
-		game:award("colony_fed", 5, "[+5 -- the colony, fed]")
+
 	end)
 
 	-- the bats hate your light: one warning, then the swarm
@@ -530,7 +540,7 @@ function BuildTomb(seed)
 			.. "is only a room now."
 		warriors:set("darkBlurb", "Dark as a pocket. Plexiglas gives back "
 			.. "your footsteps. Nothing breathes but you.")
-		game:award("spawn_quelled", 5, "[+5 -- the spawn of guts is quelled]")
+		game:award("spawn_guts", 5, "[+5 -- the spawn of guts is quelled]")
 	end)
 	warriors:addCharacter(spawn)
 
@@ -580,9 +590,38 @@ function BuildTomb(seed)
 
 	local lattice = Item("lattice", "lattices of memory-crystal",
 		"The favoured recollections of Nassak An-Rah, set in lazulite. One "
-		.. "bank is worn smooth at hand-height, as if often consulted.")
+		.. "bank is worn smooth at hand-height, as if often consulted. "
+		.. "Touch it and REMEMBER.")
 	lattice:alias("crystal", "crystals", "walls")
 	memory:add(lattice)
+
+	local FACETS = {
+		"A bath, drawn too hot, and a servant forgiven for it: the king "
+			.. "laughing through the steam.",
+		"A kestrel on a gauntlet, refusing to fly in the rain, and the "
+			.. "king refusing to make it.",
+		"His mother's hand on his brow, the fever breaking, the whole "
+			.. "Autarchy waiting outside one door.",
+		"And beneath the rest, worn smoothest of all: a wax tablet, every "
+			.. "conquest struck through, keeping only the bath, the "
+			.. "kestrel, the hand. The keep-list. The days he chose.",
+	}
+	memory:set("onRemember", function(game)
+		local i = (memory:get("facet") or 0) + 1
+		if i > #FACETS then
+			game:say("The lattice gives back only what it has: the bath, "
+				.. "the kestrel, the hand, and the list that kept them.")
+			return
+		end
+		memory:set("facet", i)
+		game:award("lattice", 5, "[+5 -- a dead king's days]")
+		game:say(FACETS[i])
+		if i == #FACETS then
+			game:award("remembered", 5,
+				"[+5 -- every remembered day, in its order]")
+		end
+	end)
+	lattice:set("readText", "The facets want a steadier verb: REMEMBER.")
 
 	local silas = Engine.Character("silas",
 		"Silas, a synthetic archivist in yellow monk's robes",
@@ -591,7 +630,7 @@ function BuildTomb(seed)
 		.. "Patient, courteous, elsewhere.")
 	silas:alias("synth", "archivist", "monk")
 	silas:set("onTalk", function(game)
-		game:award("archivist", 5, "[+5 -- the archivist's acquaintance]")
+		game:award("silas", 5, "[+5 -- the archivist's acquaintance]")
 		game:say('Silas speaks without turning. "Scavenger. You walk in a '
 			.. 'house of memory; mind what you wake. The lattice remembers '
 			.. 'his embalming, for those who trouble to look. The dead here '
@@ -601,8 +640,7 @@ function BuildTomb(seed)
 		if item.name == "ego-core" then
 			game.player:remove(item)
 			silas:add(item)
-			game:award("archivist_whole", 10,
-				"[+10 -- the archivist, made whole]")
+			game:award("archivist", 5, "[+5 -- the archivist made whole]")
 			game:say('Silas holds the core to his brow. His eyes flicker '
 				.. 'through four thousand years in a breath, and when he '
 				.. 'speaks, it is with two voices in perfect agreement. '
@@ -613,13 +651,12 @@ function BuildTomb(seed)
 		if item.name == "friend's fungus" then
 			game.player:remove(item)
 			silas:add(item)
-			game:award("archivist_dosed", 5,
-				"[+5 -- the archivist, agreeable]")
 			game:say('Silas takes the pouch with both hands, and for the '
 				.. 'first time turns from the wall. "The mystic\'s own. '
 				.. 'You climbed for this." He doses the wafer-port under '
 				.. 'his jaw, and his shoulders settle an inch. "Ask me '
 				.. 'anything. Better: ask the lattice."')
+			game:award("mellowed", 5, "[+5 -- the archivist, agreeable]")
 			local lantern = Item("ulfire lantern", "the ulfire lantern",
 				"A lantern that burns the ninth colour. Things lit by it "
 				.. "show what they are, not what they seem.")
@@ -778,7 +815,7 @@ function BuildTomb(seed)
 			.. "only the tank's slow drip now."
 		hounds:set("darkBlurb", "Dark, and close. Glass somewhere, "
 			.. "sweating. Nothing listens but you.")
-		game:award("brain_quelled", 5, "[+5 -- the spawn of brain is quelled]")
+		game:award("spawn_brain", 5, "[+5 -- the spawn of brain is quelled]")
 	end)
 	hounds:addCharacter(brain)
 
@@ -828,6 +865,9 @@ function BuildTomb(seed)
 	fungus:alias("fungus", "pouch")
 	fungus:set("gettable", true)
 	fungus:set("hidden", true)
+	fungus:set("onTaken", function(game)
+		game:award("fungus", 5, "[+5 -- the Friend's Fungus, claimed]")
+	end)
 	fungus:set("taste", "of a microdose of agreement. For one long minute "
 		.. "the sand seems reasonable, the tomb well-run.")
 	fungus:set("onEaten", function(game)
@@ -857,10 +897,11 @@ function BuildTomb(seed)
 	centipede:set("koText", "The blade finds it mid-flow: the centipede "
 		.. "shatters along its length like a dropped icicle.")
 	centipede:set("onDeath", function(game)
+		game:award("centipede", 5, "[+5 -- the centipede, answered]")
 		chimney.description = "A throat of stone furred with orange "
 			.. "growth. Glass litter glitters in the fur where the "
 			.. "centipede came apart."
-		game:award("centipede_quelled", 5, "[+5 -- the centipede, answered]")
+
 	end)
 	chimney:addCharacter(centipede)
 
@@ -927,7 +968,7 @@ function BuildTomb(seed)
 				.. "once, crimson steadying to white around the ring. Above "
 				.. "the stair, stone parts from stone with a sigh. The way "
 				.. "UP stands open.")
-			game:award("seal", 10, "[+10 -- the seal answers the jars]")
+			game:award("seal", 20, "[+20 -- the seal answers the jars]")
 			canopic.description = "Five plinths, five jars, one pentagon "
 				.. "of dressed stone -- all of it answered, all of it "
 				.. "white. The stair above stands open on the dark."
@@ -1000,7 +1041,22 @@ function BuildTomb(seed)
 	box:alias("box")
 	box:set("gettable", true)
 	box:set("hidden", true)
+	box:set("onTaken", function(game)
+		game:award("box", 5, "[+5 -- the manifold box]")
+	end)
 	coffin:add(box)
+
+	local dagger = Item("synth-hunting dagger", "a synth-hunting dagger",
+		"A dagger grown, not forged: a single tooth of something that "
+		.. "hated synths professionally. It hums near the archivist.")
+	dagger:alias("dagger")
+	dagger:set("gettable", true)
+	dagger:set("hidden", true)
+	dagger:set("weapon", true)
+	dagger:set("onTaken", function(game)
+		game:award("dagger", 5, "[+5 -- the synth-hunting dagger]")
+	end)
+	coffin:add(dagger)
 
 	local core = Item("ego-core", "the Autarch's ego-core",
 		"A spindle of memory-lazulite, warm as a kept promise. It hums "
@@ -1079,6 +1135,7 @@ function BuildTomb(seed)
 			.. "like water under silk. Past the clearing cloud the "
 			.. "Autarch settles among his wrappings -- composed, kept, "
 			.. "DREAMING SOMETHING KIND.")
+		coffin:set("mended", true)
 		game:award("laid_to_rest", 10, "[+10 -- the Autarch, laid to rest]")
 	end)
 
@@ -1109,6 +1166,8 @@ function BuildTomb(seed)
 		end
 		coffin:set("pried", true)
 		coffin:set("closed", nil) -- what it kept is reachable now
+		box:set("hidden", nil) -- the pry is the reveal: no search owed
+		dagger:set("hidden", nil)
 		coffin.examineText = "The coffin stands open, its cloud let out. "
 			.. "What it kept is out with it."
 		horror:set("hostile", true)
@@ -1180,11 +1239,27 @@ function BuildTomb(seed)
 			.. "with you. Every carved line ignites at once -- the Horror "
 			.. "is unwritten limb by limb, ash before it can remember how "
 			.. "to mend.")
-		game:award("wrath", 10, "[+10 -- the chamber's law, invoked]")
-		game.won = true
-		game:say("*** The tomb is quiet. The expedition stands. "
-			.. game.score .. "/" .. game.maxScore .. " ***")
+		game:award("horror", 25, "[+25 -- the Horror is ended]")
+		game:say("The tomb is quiet. What it kept is yours to carry out "
+			.. "-- if you can walk the road back.")
 	end)
+
+	-- the win the Parsely books demand: OUT, alive, carrying the Exotica
+	g:addTrigger("escape", function(game)
+		local r = game.player.location
+		return (r == exterior or r == wreck)
+			and game.scoredKeys["horror"] == true
+			and game.player:carrying("manifold box") ~= nil
+			and game.player:carrying("synth-hunting dagger") ~= nil
+	end, function(game)
+		game:award("escape", 20, "[+20 -- out alive]")
+		game.won = true
+		game:say("You step out of the dead king's shadow into the "
+			.. "horizon's molten light, carrying what four thousand years "
+			.. "kept. You entered the Tomb of Nassak An-Rah, and you "
+			.. "LIVED. (Score " .. game.score .. "/" .. game.maxScore
+			.. ".) THE END.")
+	end, false)
 
 	-- ------------------------------------------------------------- hints
 	-- The booklet lists only puzzles the player has MET and not yet beaten.
@@ -1241,7 +1316,7 @@ function BuildTomb(seed)
 				.. "you for what it holds.",
 		},
 		available = function(_) return summit.visited end,
-		resolved = function(game) return game.scoredKeys["archivist_dosed"] end })
+		resolved = function(_) return silas:carrying("friend's fungus") ~= nil end })
 
 	g:addHint({ key = "jackals", question = "A pack is doing arithmetic at me.",
 		levels = {
@@ -1260,7 +1335,7 @@ function BuildTomb(seed)
 				.. "LANTERN.",
 		},
 		available = function(game) return game.player:carrying("manifold box") ~= nil end,
-		resolved = function(game) return game.scoredKeys["archivist_whole"] end })
+		resolved = function(game) return game.scoredKeys["archivist"] end })
 	g:addHint({ key = "rest", question = "The coffin stands open and wrong.",
 		levels = {
 			"The walls hold three prayers, not two. Read them again.",
@@ -1268,7 +1343,7 @@ function BuildTomb(seed)
 		},
 		available = function(_) return coffin:get("pried") == true
 			and sphere.characters[1] == nil end,
-		resolved = function(game) return game.scoredKeys["laid_to_rest"] end })
+		resolved = function(_) return coffin:get("mended") == true end })
 
 	g:addHint({
 		key = "horror",
@@ -1282,7 +1357,7 @@ function BuildTomb(seed)
 	})
 
 	-- ------------------------------------------------------------ start
-	g.maxScore = 95
+	g.maxScore = 170
 	g.player.location = wreck
 	wreck.visited = true
 	return g

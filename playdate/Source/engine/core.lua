@@ -584,6 +584,15 @@ senseVerb("listen", "soundText",
 senseVerb("smell", "smellText",
 	"Dust, stone, and time.", "sniff")
 
+verb("remember", 0, function(g)
+	local hook = g.player.location:get("onRemember")
+	if hook then
+		hook(g)
+	else
+		g:say("Nothing here asks to be remembered.")
+	end
+end, "recall")
+
 local helpVerb = verb("help", 0, function(g)
 	g:say("Crank or left/right turns the word wheel; A speaks; B unsays; "
 		.. "up/down reads. The wheel only offers what the tomb will "

@@ -1449,6 +1449,10 @@ class SayPrayer(actions.Action):
             coffin = loc.items["coffin"]
             coffin.set_property("pried", False)
             coffin.set_property("is_closed", True)
+            # The prayer and FIX COFFIN are the same repair by different
+            # hands: both leave the vessel whole, so both count as "fixed"
+            # (the laid-to-rest beat, the autarch card).
+            coffin.set_property("fixed", True)
             coffin.description = "the Autarch's anti-entropy coffin, made whole again"
             coffin.examine_text = (
                 "The glass sphere hangs whole at the chamber's heart again, "
@@ -3276,7 +3280,7 @@ def build_game(seed=None):
             DecantBlood,
         ],
     )
-    game.max_score = 145
+    game.max_score = 170
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -4343,6 +4347,23 @@ def build_game(seed=None):
         # dropped by blade or raked down by the bat-swarm, the pack paid
         # its tribute or put down. The clever route and the bloody one
         # score the same.
+        # The Playdate port's beats, adopted here for parity (CCB): the
+        # colony fed, the centipede answered, the archivist agreeable,
+        # the Autarch laid to rest.
+        if any(
+            n in loc.items
+            for loc in g.locations.values()
+            for n in ("roost of bats", "wheel of bats")
+        ):
+            g.award("colony_fed", 5, "[+5 -- the colony, fed]")
+        cent = g.characters.get("glass centipede")
+        if cent is not None and cent.get_property("is_dead"):
+            g.award("centipede", 5, "[+5 -- the centipede, answered]")
+        if silas.get_property("mellowed"):
+            g.award("mellowed", 5, "[+5 -- the archivist, agreeable]")
+        _coffin = g.locations["Burial Sphere of Nassak An-Rah"].items.get("coffin")
+        if _coffin is not None and _coffin.get_property("fixed"):
+            g.award("laid_to_rest", 10, "[+10 -- the Autarch, laid to rest]")
         for sp, key, card in (
             (spawn_guts, "spawn_guts", "guts-c"),
             (spawn_brain, "spawn_brain", "spawn-c"),
@@ -5294,9 +5315,8 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # Loot the wreck (water heals; the glowstone lights the dark Warriors)
-    # -- and bring the dates: the crashes ahead ring the mantis song, the
-    # song calls the jackals, and the pack is BOUGHT, not fought.
+    # Loot the wreck. The dates now feed the COLONY (the pack gets paid in
+    # meat): summit first, where the centipede's fall forges the knife.
     "search merchant",
     "take glowstone",
     "take waterskin",
@@ -5305,62 +5325,82 @@ WIN_WALKTHROUGH = [
     "take crate of dates",
     "out",
     "north",
-    "sneak east",  # Warriors: pitch dark; the kit is sealed in the cylinders
-    "light glowstone",  # safe here -- no bats -- and the colours matter
-    "break amber cylinder",  # the eyeless spawn swings toward the crash --
-    "take respirator",  # -- and the crashes call its brother from next door
-    "wear respirator",
-    "break cerulean cylinder",  # second crash: the song has the pack's ear now
-    "give dates to jackal pack",  # -- so pay the toll the moment they fill the doorways
-    "take blade",
-    "attack spawn of guts with blade",  # answer it: the falcon jar drops
-    "take falcon jar",
-    "attack spawn of brain with blade",  # its brother came to the noise: fell it too
-    "take jackal jar",
-    "drink water",  # a glug; a wound heals (keep the blade: the coffin wants it)
-    "drink water",  # another -- the brain got its thoughts in
-    "drink water",  # the last ration; the skin runs dry
-    "drop waterskin",  # travel light; the climbs refuse a full pack
-    "break orange cylinder",  # the bloom vents against the mask, disappointed
+    "sneak east",  # Warriors first, and briefly: the mask is in the amber
+    "light glowstone",
+    "break amber cylinder",  # one crash only -- under the pack's patience
+    "take respirator",
+    "wear respirator",  # the chimney and the orange bloom are the same spore
+    "drop waterskin",  # stash the bulk here; the summit is climbed light
+    "drop crate of dates",  # the colony takes its tithe where it lies (+5)
+    "sneak west",
+    "up",  # the Summit, masked and travelling light
+    "in",  # the chimney: it springs (venom; water heals later)
+    "out",
+    "wait",  # it hunts you up into the open --
+    "kick centipede",  # -- and the roof's edge answers it (+5)
+    "down",
+    "take crystal shard",  # the fall forges a knife; butchery accepts it
+    "south",
+    "butcher zoxen",  # the haunch stays where it falls; the BLOOD travels
+    "drop crystal shard",  # its work is done
+    "take zox blood",  # one slot, scent-quiet, and the pack drinks too
+    "north",
+    "sneak east",  # back to the dark, where the glowstone kept the room
+    "break cerulean cylinder",  # second crash: yellow eyes ring the doors --
+    "break orange cylinder",  # -- and the third brings the pack in earnest
+    "give zox blood to jackal pack",  # the toll, paid in the better half
     "take igniter",
+    "take waterskin",  # reclaim the stash and close the open accounts:
+    "drink water",  # the venom (+5, water spent wisely)
+    "drink water",  # the acid lash
+    "drink water",  # the mishandled mind -- three slots breathe again
+    "drop waterskin",
+    "take blade",
+    "attack spawn of guts with blade",
+    "attack spawn of brain with blade",
+    "drop blade",  # its work is done; jars ride lighter than swords
+    "take falcon jar",
+    "take jackal jar",
     "break viridian cylinder",
     "take boots",
     "douse glowstone",
-    "drop glowstone",  # the halls ahead light themselves
-    # The archivist's acquaintance and the dead king's days (the full-score
-    # detour: Memory is one quiet hall south, and the lattice lights itself).
+    "drop glowstone",
     "sneak south",
     "talk to silas",
     "x lattice",
     "sneak north",
     "sneak east",
-    "take gel",  # Hounds: gel
-    "sneak up",  # -> Canopic (no luring needed -- the jars came off the dead)
+    "take gel",
+    "sneak up",
     "put falcon jar on falcon plinth",
     "put jackal jar on jackal plinth",  # seal opens
-    "sneak left stairs",  # the left stairs descend to Memory
+    "sneak left stairs",
+    "sneak south",  # the Hall of Youth: gorged and folded, only a room now
     "sneak south",
-    "sneak south",  # Canopic -> Exterior (dark and quiet through the Youth)
     "up",
-    "search corpse",  # the mystic's hands hold the Friend's Fungus...
-    "take fungus",  # ...claimed BEFORE the burn consumes it (+5)
-    "burn corpse",  # Summit: cleanse the root
+    "search corpse",
+    "take fungus",  # claimed BEFORE the burn consumes it (+5)
+    "burn corpse",  # the cleanse: the network dies at its root (+25)
+    "drop igniter",  # spent; the climb ahead wants a light pack
+    "drop gel",
     "down",
     "sneak north",
     "sneak north",
+    "sneak north",  # through to Warriors: the blade kept where it fell
+    "take blade",  # the pry wants an edge, and a fool willing to lose one
+    "sneak south",
     "sneak up",  # back to Canopic
     "up",
     "wear boots",
-    "pry coffin",  # Sphere: loot
+    "pry coffin",  # the blade snaps at the hilt; the coffin gives
     "take dagger",
     "take manifold box",
-    "sneak down",  # Sphere -> Canopic
-    "sneak left stairs",  # -> Memory
-    "give fungus to silas",  # the lonely archivist hands over the lantern
-    "light ulfire lantern",  # ...which opens the manifold box's true interior
-    "give core to silas",  # the stated price: his robes, and an ending (+5)
-    # Consult every remembered day (unseen facets draw first, so nine looks
-    # cover the nine) -- and the tenth look wakes the keep-list (+5).
+    "say prayer of mending",  # the Autarch, laid to rest (+10)
+    "sneak down",
+    "sneak left stairs",
+    "give fungus to silas",  # agreeable (+5); the lantern changes hands
+    "light ulfire lantern",
+    "give core to silas",
     "x lattice",
     "x lattice",
     "x lattice",

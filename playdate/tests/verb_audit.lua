@@ -119,6 +119,7 @@ run("go", "go north")
 run("go", "go north")
 run("throw", "throw dates")
 run("go", "go north")
+run("remember", "remember") -- the lattice answers in the hall of memory
 run("go", "go east")
 run("put", "put falcon jar on falcon plinth")
 -- the sphere set (jackal jar skipped: this run tests verbs, not the win)
