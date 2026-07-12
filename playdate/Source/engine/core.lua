@@ -409,6 +409,38 @@ verb("douse", 1, function(g, thing)
 	end
 end, "turn off", "extinguish")
 
+local attackVerb = verb("attack", 1, function(g, thing)
+	if not thing:get("vigor") then
+		g:say("The " .. thing.name .. " takes no notice of violence.")
+		return
+	end
+	local weapon = nil
+	for i = 1, #g.player.contents do
+		if g.player.contents[i]:get("weapon") then
+			weapon = g.player.contents[i]
+			break
+		end
+	end
+	if not weapon then
+		g:say("Your hands alone won't part it. Something edged might.")
+		return
+	end
+	thing:set("aware", true)
+	local v = thing:get("vigor") - 1
+	thing:set("vigor", v)
+	if v > 0 then
+		g:say(thing:get("struckText")
+			or ("The " .. weapon.name .. " bites; the " .. thing.name .. " does not fall."))
+	else
+		thing:set("dead", true)
+		thing:set("hostile", nil)
+		g:say(thing:get("koText") or ("The " .. thing.name .. " falls, and stays down."))
+		local hook = thing:get("onDeath")
+		if hook then hook(g, thing) end
+	end
+end, "hit", "strike", "kill")
+attackVerb.combatOnly = true
+
 verb("talk to", 1, function(g, thing)
 	local hook = thing:get("onTalk")
 	if hook then
@@ -524,6 +556,26 @@ function Game:doCommand(line)
 end
 
 -- ------------------------------------------------------------- suggestions
+-- Modal word pools (the Thy Dungeonman lesson): the verb lane swaps by
+-- game state. In combat the fight verbs lead; at rest the fight verbs
+-- stay off the wheel entirely.
+Engine.pools = {
+	combat = { "attack", "throw", "examine", "look", "douse", "inventory" },
+}
+
+-- Combat: something hostile shares the room and is either visible to you
+-- or already aware of you (a sound-hunter needs no light to fight).
+function Game:mode()
+	local room = self.player.location
+	for i = 1, #room.characters do
+		local c = room.characters[i]
+		if c:get("hostile") and not c:get("dead") then
+			if self:canSee() or c:get("aware") then return "combat" end
+		end
+	end
+	return "default"
+end
+
 -- The composer's lanes, honesty guaranteed: only words the engine will
 -- accept. Verb order is fixed (ranking doc section 8); noun order is scope
 -- order (the fiction's own salience).
@@ -538,7 +590,15 @@ function Game:suggestions()
 		end
 	end
 	local verbs = {}
-	for i = 1, #Engine.verbs do verbs[#verbs + 1] = Engine.verbs[i].name end
+	local pool = Engine.pools[self:mode()]
+	if pool then
+		for i = 1, #pool do verbs[#verbs + 1] = pool[i] end
+	else
+		for i = 1, #Engine.verbs do
+			local v = Engine.verbs[i]
+			if not v.combatOnly then verbs[#verbs + 1] = v.name end
+		end
+	end
 	return {
 		exits = self.player.location:exitNames(),
 		verbs = verbs,

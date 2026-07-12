@@ -34,9 +34,20 @@ function BuildTomb(seed)
 
 	wreck:connect("in", hold, "out")
 	wreck:connect("north", exterior, "south")
+	local warriors = g:room("Hall of Warriors",
+		"Four plexiglas burial cylinders stand on an uneven floor, each "
+		.. "holding a guard-mummy armed as in life. One lies burst, its "
+		.. "gel dried to amber lace. Something in the room is breathing.")
+	warriors:set("dark", true)
+	warriors:set("darkBlurb",
+		"Dark as a pocket. Your footsteps come back off plexiglas somewhere "
+		.. "close -- and low down, near the floor, something breathes "
+		.. "wetly, in no hurry.")
+
 	exterior:connect("north", youth, "south")
-	exterior.blocks.east = "The warrior's door stands sealed. (Next milestone.)"
+	exterior:connect("east", warriors, "west")
 	exterior.blocks.up = "The climb waits for surer milestones."
+	exterior:travelAlias("warrior door", "east"):travelAlias("enter warrior", "east")
 
 	-- the playtesters' phrasings (mirrors the Python direction aliases)
 	wreck:travelAlias("enter wagon", "in"):travelAlias("wagon", "in")
@@ -224,8 +235,85 @@ function BuildTomb(seed)
 		youth:set("mob", 0)
 	end, true)
 
+	-- --------------------------------------------------- hall of warriors
+	local cylinders = Item("cylinders", "four plexiglas burial cylinders",
+		"Guard-mummies stand sealed in gel, armed as in life. The burst one "
+		.. "gapes; its guard has slumped, and his kit has scattered.")
+	cylinders:alias("cylinder", "mummies", "guards")
+	warriors:add(cylinders)
+
+	local blade = Item("prismatic blade", "a guard's prismatic blade",
+		"An Autarchy guard's blade, its edge fracturing the light into "
+		.. "colours. It wants using.")
+	blade:alias("blade", "sword")
+	blade:set("gettable", true)
+	blade:set("hidden", true)
+	blade:set("weapon", true)
+	cylinders:add(blade)
+
+	local jar = Item("falcon jar", "a falcon-headed canopic jar",
+		"A sealed jar with a falcon's head, wings swept back along the "
+		.. "lid. Something coiled shifts inside.")
+	jar:alias("jar")
+	jar:set("gettable", true)
+
+	local spawn = Engine.Character("spawn of guts",
+		"a fungal spawn, eyeless under its falcon-headed jar, swaying "
+		.. "toward every sound",
+		"An octopus of orange fungus and grave-cured intestine, wearing "
+		.. "the falcon canopic jar on top like a hat. It sways toward any "
+		.. "sound. It has no eyes and does not want any.")
+	spawn:alias("spawn", "fungus thing", "horror")
+	spawn:set("hostile", true)
+	spawn:set("vigor", 2)
+	spawn:set("struckText", "The blade opens a rent in the orange mass; it "
+		.. "seethes, and does not fall.")
+	spawn:set("koText", "The last rent does not close. The spawn folds into "
+		.. "its own skirt of tendrils, and the falcon jar topples, bounces "
+		.. "once, and settles upright.")
+	spawn:set("onDeath", function(game)
+		warriors:add(jar)
+		warriors.description = "Four plexiglas burial cylinders on an uneven "
+			.. "floor, one burst. The spawn lies folded and still; the hall "
+			.. "is only a room now."
+		warriors:set("darkBlurb", "Dark as a pocket. Plexiglas gives back "
+			.. "your footsteps. Nothing breathes but you.")
+		game:award("spawn_quelled", 5, "[+5 -- the spawn of guts is quelled]")
+	end)
+	warriors:addCharacter(spawn)
+
+	jar:set("onTaken", function(game)
+		game:award("falcon_jar", 5, "[+5 -- the falcon jar, claimed]")
+	end)
+
+	-- the spawn hunts sound: your presence IS noise. One swing of warning,
+	-- then acid on the odd rounds -- light or dark, it does not care.
+	g:addTrigger("spawn_menace", function(game)
+		return game.player.location == warriors and not spawn:get("dead")
+	end, function(game)
+		local n = (warriors:get("sway") or 0) + 1
+		warriors:set("sway", n)
+		spawn:set("aware", true)
+		if n == 1 then
+			game:say("Something big swings toward your noise, arms rising "
+				.. "from the floor like kelp in a current.")
+		elseif n % 2 == 1 then
+			game:wound("Acid-Lashed", "a wet arm finds you across the dark.")
+		else
+			game:say("The wet breathing tracks you. It is deciding.")
+		end
+	end, true)
+
+	g:addTrigger("spawn_calm", function(game)
+		return (warriors:get("sway") or 0) > 0
+			and (game.player.location ~= warriors or spawn:get("dead"))
+	end, function(_game)
+		warriors:set("sway", 0)
+		spawn:set("aware", nil)
+	end, true)
+
 	-- ------------------------------------------------------------ start
-	g.maxScore = 15
+	g.maxScore = 25
 	g.player.location = wreck
 	wreck.visited = true
 	return g
