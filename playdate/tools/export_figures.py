@@ -58,6 +58,24 @@ def export(page, key, frames):
     )
     if not ok:
         raise SystemExit(f"no card named {key}")
+    # Boost the type before capture: reel labels are sized for a monitor;
+    # at 0.6x they land at ~6 device px. 1.7x (with tightened tracking)
+    # puts them at ~11 px -- readable 1-bit -- without touching geometry.
+    # (Canvas-drawn text is untouched; those cards await small masters.)
+    page.evaluate(
+        """() => {
+          document.querySelectorAll('#stage text').forEach((t) => {
+            const y = parseFloat(t.getAttribute('y') || '0');
+            if (t.getAttribute('text-anchor') === 'end' && y < 30) {
+              t.setAttribute('display', 'none'); // topline chrome: cut
+              return;
+            }
+            const fs = parseFloat(t.getAttribute('font-size') || '10');
+            t.setAttribute('font-size', Math.round(fs * 1.7));
+            t.setAttribute('letter-spacing', '0.5');
+          });
+        }"""
+    )
     stage = page.locator("#stage")
     # pre-roll past the reveal wipe (cards open covered; ~12 ticks clears it)
     for _ in range(14):
