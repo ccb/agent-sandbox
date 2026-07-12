@@ -262,6 +262,7 @@ def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     # test above pins it): a bare stepper has no run id.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
 
+
 def test_stepper_threads_cognition_tools():
     # The #514 plumbing: the flag rides the stepper into attach_agents, which
     # stamps the engine attribute the decide tool loop and the converse path

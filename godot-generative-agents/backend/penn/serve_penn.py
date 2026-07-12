@@ -638,7 +638,6 @@ def main() -> int:
         "query_knowledge, read_plan; issues #358/#512): up to 3 model "
         "requests per decide tick instead of 1, metered by --max-cost as "
         "usual. --brain llm only; the mock brain never reaches the tool loop",
-
     )
     ap.add_argument(
         "--start-paused",
