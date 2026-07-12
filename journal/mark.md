@@ -4,6 +4,78 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-12
+
+**Focus:** Overnight autonomous sprint (M16–M35) + a hard retrospective + patch waves. Backfilling this journal (sorry for the gap — entries below reconstruct 6/17→7/11 from commit history).
+
+**Done today:**
+- Overnight sprint M16–M35 on the Tingen slice: full canon-style character art (21 portraits + 8 monster forms), all 11 live-playtest bugs cleared, save integrity + LLM budget caps, combat juice + camera, meta-progression, and a complete **second playable pathway** (Hermit: own kit, 2 adversaries, spirituality resource, counter-rites). Suite 2196 → 2732 asserts green.
+- Ran a 24-agent fresh-context review of every sprint commit + an experiential audit. Honest verdict: strong systems (~8/10), weak *felt* game (~4/10) — no audio, static enemies, features green-in-tests but unreachable live (twice). Wrote the lessons into the process.
+- Patch waves 1+2 (both adversarially reviewed, SHIP): live ground-harvest seam (core loop was broken in real play), dry-NPC fallback, earned secret reveals, meter-threats now *fightable* (Notice class-gated; killing a hunter clears its meter), test suite no longer touches the real save profile, codex/payoff UI, asset hygiene (−9.7 MB PNGs). Suite 2839/0/0.
+- Staged for next: 22 CC0 SFX (spectrogram-vetted) + alpha-keyed enemy animation strips.
+
+**Blockers / questions:** none blocking; OpenAI image + Fable credits are the practical budget.
+
+**Next:** the "experiential wave" — audio wiring, enemy tells, run pacing (~60 min target), staged opener, city dressing. Then the #108 map-design notebook tutorial (owed to Maxine + Artemis) and the #92 off-scene-sim probe write-up.
+
+## 2026-07-11
+
+**Focus:** Tingen slice — closing combat dead-ends and the coin loop.
+
+**Done today:**
+- M13 ammo pickups + empty-gun feedback; M14 third adversary (Leland Mack, the Seq-8 meal that closes the 9→7 advancement chain); M15 Franky's shop (buy ammo / sell harvests). Suite 2181/0/0.
+
+## 2026-07-04
+
+**Focus:** Tingen slice — second adversary.
+
+**Done today:**
+- M12 Sable Wren, the Hunter-pathway prey (first real hunt target). Suite 2093/0/0.
+
+## 2026-07-03
+
+**Focus:** The big pivot + first playable slice.
+
+**Done today:**
+- Landed the deterministic two-layer combat engine (resolver/executor/tactics/LLM-intent/player layer, M1–M9 arc) with spec vectors shared with Yumina.
+- **Design pivot:** Tingen is now an occult-noir action-RPG *roguelite* (v2 doc) — investigation dropped; four push-your-luck meters (Doom/Madness/Notice/Heat); rumors→leads; Sequence 9→8→7 advancement.
+- Slice sprints M1–M11 in one day: combat VFX, boot/run shell, meters + rampage, progression, leads, Ritual Night + endings, GM opening, polish. Tag `playable-slice-v1`.
+
+## 2026-07-02
+
+**Focus:** Neutral NPC framework checkpoint.
+
+**Done today:**
+- Engine-neutral NPC framework + behavioral secrecy (facts-not-commands; no NPC-identity branches in engine; secrets never reach LLM payloads) — the architecture the whole slice now sits on. Summoning-MVP handoff doc synced to this branch.
+
+## 2026-06-24
+
+**Focus:** Canon research.
+
+**Done today:**
+- Web-verified LotM summoning/descent canon + the cult-agent step sequence doc (drives the deterministic city plot the agents execute offline).
+
+## 2026-06-23
+
+**Focus:** #108 requirement 1.
+
+**Done today:**
+- Reported on #108: the playable Tingen slice is on `game/tingen` (engine-stress-test build, 669 tests then). Engine probes + the notebook tutorial remain open.
+
+## 2026-06-22
+
+**Focus:** Godot front-end polish.
+
+**Done today:**
+- Scene-transition fade overlay + cinematic room-entry transitions in the Godot port.
+
+## 2026-06-17
+
+**Focus:** Tingen content.
+
+**Done today:**
+- University Archive investigation content (Finch + clues) in the Godot build.
+
 ## 2026-06-16
 
 **Focus:** Follow-up cleanup on the just-landed agent layer — #66 (disambiguate `MockReActClient.tool_calls`).
