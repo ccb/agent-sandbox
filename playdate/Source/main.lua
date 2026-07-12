@@ -306,9 +306,17 @@ menu:addMenuItem("new game", function()
 	playdate.datastore.delete("auto")
 	newGame(playdate.getSecondsSinceEpoch() % 1000000)
 end)
-menu:addCheckmarkMenuItem("free input", false, function(on)
-	if on then playdate.keyboard.show("") end
-end)
+-- TEMPORARY (CCB): an animations picker for review -- plays any card
+-- without a playthrough. Occupies the free-input slot while it lives
+-- here (the system menu caps at three custom items).
+menu:addOptionsMenuItem("animation",
+	{ "-", "road", "glowstone", "guts-a", "bats-c", "epitaph" },
+	"-",
+	function(value)
+		if value ~= "-" then
+			showFigure(value, { cause = "THE DEMO REEL", score = "0 OF 70" })
+		end
+	end)
 menu:addOptionsMenuItem("reading", { "top", "latest" }, (function()
 	local prefs = playdate.datastore.read("prefs")
 	if prefs ~= nil then anchorTop = (prefs.anchorTop == true) end
