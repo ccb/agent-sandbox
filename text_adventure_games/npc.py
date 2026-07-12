@@ -273,10 +273,13 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
     drawn from what that actor can currently see.
 
     *names* limits which verbs are exposed (pass the agent's ``action_names``;
-    ``None`` or empty means every registered verb). The comma-sequence wrapper is
-    always dropped. A name with no registered action still gets a generic
-    free-text tool, so ``action_names`` stays the authoritative menu even when it
-    lists a verb the parser hasn't registered.
+    ``None`` or empty means every registered verb -- "unconstrained", mirroring
+    the legacy ``build_choose_action_tool([])``, NOT "no tools". A game that
+    wants an agent to have no menu must keep it off this path rather than pass
+    ``[]``). The comma-sequence wrapper is always dropped. A name with no
+    registered action still gets a generic free-text tool, so ``action_names``
+    stays the authoritative menu even when it lists a verb the parser hasn't
+    registered.
 
     Token budget: tool definitions count against context and are NOT trimmed by
     :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
@@ -290,14 +293,24 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
     wanted = list(names) if names else list(entries)
     tools = []
     seen = set()
+    verb_by_tool_name: dict[str, str] = {}
     for name in wanted:
         if name in HIDDEN_ACTIONS or name in seen:
             continue
         seen.add(name)
         action, desc, aliases = entries.get(name, (None, "", []))
-        tools.append(
-            _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
-        )
+        tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
+        clash = verb_by_tool_name.get(tool["name"])
+        if clash is not None:
+            # Two verbs sanitizing (or 64-capping) to one tool name would ship
+            # duplicate tools and 400 at the provider; fail at build time with
+            # the colliding verbs named instead.
+            raise ValueError(
+                f"per-action tool name collision: verbs {clash!r} and {name!r} "
+                f"both sanitize to tool name {tool['name']!r}"
+            )
+        verb_by_tool_name[tool["name"]] = name
+        tools.append(tool)
     return tools
 
 
@@ -901,6 +914,15 @@ def _decide_and_route_loop(
     state = {"acted": False, "calls": 0, "attempt": 1}
 
     def execute(name, args):
+        if state["acted"]:
+            # A real provider may emit several tool calls in one assistant turn
+            # (parallel tool use), but an NPC gets ONE act per game turn: the
+            # first successful route wins and the rest are refused here. Each
+            # refusal still returns a tool_result -- the wire protocol requires
+            # one per tool_use. The adapters also ask providers not to
+            # parallelize (disable_parallel_tool_use / parallel_tool_calls),
+            # but that is best-effort; this guard is the authority.
+            return ("Already acted this turn; extra tool call ignored.", True, True)
         state["calls"] += 1
         agent.last_reasoning = (args.get("reasoning") or "").strip() or None
         # `name` is the verb for a per-action tool, or "choose_action" for the
