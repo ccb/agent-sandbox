@@ -62,9 +62,12 @@ local function drawCaptions(key, frame)
 				-- at a time to the tab stop, then the value -- proportional
 				-- type, aligned column
 				local labelW = gfx.getTextSize(c.text)
-				local dotW = gfx.getTextSize(".")
+				-- measure a RUN: a lone "." omits the tracking that real
+				-- runs carry, and the leader overshoots the column
+				local dotW = gfx.getTextSize("..........") / 10
 				local dotsX = c.x + labelW + 4
-				local nDots = math.max(0, math.floor((c.x2 - 6 - dotsX) / dotW))
+				local nDots = math.min(12,
+					math.max(0, math.floor((c.x2 - 6 - dotsX) / dotW)))
 				local total = #c.text + nDots + #c.text2
 				local k = total
 				if c.type then
