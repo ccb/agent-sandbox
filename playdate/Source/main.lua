@@ -12,7 +12,7 @@ import "content/slice"
 local gfx = playdate.graphics
 
 -- ------------------------------------------------------------- transcript
-local SCREEN_W, TRANS_H = 400, 144
+local SCREEN_W, TRANS_H = 400, 198 -- the composer is two lines, not a panel
 local MARGIN = 6
 local transcript = {}
 local scrollUp = 0
@@ -170,32 +170,42 @@ function playdate.update()
 	gfx.clearClipRect()
 
 	gfx.drawLine(0, TRANS_H + 2, SCREEN_W, TRANS_H + 2)
-	gfx.drawText("> " .. table.concat(command, " ") .. "_", MARGIN, TRANS_H + 8)
+	gfx.drawText("> " .. table.concat(command, " ") .. "_", MARGIN, TRANS_H + 6)
 	gfx.drawText("*" .. game.score .. "/" .. game.maxScore .. "  T:" .. game.turn .. "*",
-		SCREEN_W - 100, TRANS_H + 8)
+		SCREEN_W - 96, TRANS_H + 6)
 
-	local tabX = MARGIN
-	for i = 1, #LANES do
-		local label = LANES[i]
-		local w, h = gfx.getTextSize(label)
-		if i == lane then
-			gfx.fillRect(tabX - 2, TRANS_H + 28, w + 6, h + 2)
-			gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
-			gfx.drawText(label, tabX + 1, TRANS_H + 29)
-			gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-		else
-			gfx.drawText(label, tabX + 1, TRANS_H + 29)
-		end
-		tabX = tabX + w + 18
-	end
+	-- one strip: [LANE TAG] word word word -- the selected word inverted,
+	-- crank slides the strip, left/right swaps the tag (and its pool)
+	local stripY = TRANS_H + 24
+	local tag = LANES[lane]
+	local tw, th = gfx.getTextSize(tag)
+	gfx.setColor(gfx.kColorWhite)
+	gfx.fillRect(MARGIN - 2, stripY - 1, tw + 8, th + 2)
+	gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
+	gfx.drawText(tag, MARGIN + 2, stripY)
+	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
 
 	local words = laneWords()
-	local wheelY = TRANS_H + 50
-	for row = -1, 1 do
-		if #words > 0 then
-			local idx = ((sel[lane] - 1 + row) % #words) + 1
-			local marker = row == 0 and "> " or "  "
-			gfx.drawText(marker .. words[idx], MARGIN + 8, wheelY + (row + 1) * 15)
+	local x = MARGIN + tw + 16
+	if #words > 0 then
+		local n = #words
+		local i = ((sel[lane] - 1) % n)
+		local shown = 0
+		while x < SCREEN_W - 8 and shown < n do
+			local word = words[(i % n) + 1]
+			local ww = gfx.getTextWidth(word)
+			if shown == 0 then
+				gfx.setColor(gfx.kColorWhite)
+				gfx.fillRect(x - 3, stripY - 1, ww + 6, th + 2)
+				gfx.setImageDrawMode(gfx.kDrawModeFillBlack)
+				gfx.drawText(word, x, stripY)
+				gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+			else
+				gfx.drawText(word, x, stripY)
+			end
+			x = x + ww + 14
+			i = i + 1
+			shown = shown + 1
 		end
 	end
 end
