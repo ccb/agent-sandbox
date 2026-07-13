@@ -88,3 +88,51 @@ def test_spots_are_walkable_cells_on_or_beside_furniture():
     # Row-major: (0,0)/(3,0) flank the desk, (0,1)/(3,1) flank it, (1,2)/(2,2)
     # sit below it, and (3,2) IS the walkable stool.
     assert got == [(0, 0), (3, 0), (0, 1), (3, 1), (1, 2), (2, 2), (3, 2)]
+
+
+def test_real_map_artifacts_are_consistent():
+    # The committed artifacts stay in lock-step with the tmj + matrices:
+    # every furniture cell sits on a *_furniture layer cell, ids are dense,
+    # and every id has exactly one blocks row.
+    import json
+    import os
+
+    from block_furniture import _solid_layers, read_flat
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+    matrix = os.path.join(
+        repo, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
+    )
+    tmj = json.load(
+        open(
+            os.path.join(
+                repo,
+                "godot-generative-agents",
+                "godot",
+                "maps",
+                "upenn_core_urban.tmj",
+            )
+        )
+    )
+    furn = read_flat(os.path.join(matrix, "maze", "furniture_maze.csv"))
+    assert len(furn) == tmj["width"] * tmj["height"]
+    on_layers = [False] * len(furn)
+    for layer in _solid_layers(tmj):
+        for i, g in enumerate(layer["data"]):
+            if g:
+                on_layers[i] = True
+    ids = set()
+    for i, cell in enumerate(furn):
+        if cell != "0":
+            assert on_layers[i], f"cell {i} claims furniture off any layer"
+            ids.add(int(cell))
+    assert ids, "real map produced no furniture pieces"
+    blocks = (
+        open(os.path.join(matrix, "special_blocks", "furniture_blocks.csv"))
+        .read()
+        .strip()
+        .splitlines()
+    )
+    block_ids = {int(r.split(",")[0]) for r in blocks}
+    assert block_ids == ids == set(range(1, len(ids) + 1))
