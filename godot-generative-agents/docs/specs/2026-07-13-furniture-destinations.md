@@ -68,7 +68,13 @@ Reads the committed tmj (read-only), `furniture_catalog.json`,
   missing from the catalog gets `tile-<gid>` (emitted, not dropped — the
   overlay makes such gaps visible). Two distinct pieces placed touching
   merge into one instance — harmless for spot derivation, visible in the
-  overlay if the label matters later. `sector`/
+  overlay if the label matters later. **Category filter:** cells whose
+  catalog category is `wall`/`window`/`door` are EXCLUDED from
+  furniture_maze and reported to stdout instead — verified need:
+  `williams_furniture` carries 46 window tiles (painted there so
+  block_furniture seals them; relayering is #538's business), and without
+  the filter they would become "furniture" with seat spots along Williams'
+  walls. Unknown (uncataloged) gids stay included as `tile-<gid>`. `sector`/
   `arena` from `arena_maze` majority over the piece's cells (`grounds`
   pieces keep the building sector with arena `grounds`).
 - Both artifacts are committed (like every other matrix) and reproducible;
