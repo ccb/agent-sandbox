@@ -398,6 +398,12 @@ class PennStepper:
             locations=self.world.locations,
         )
         self._step_idx = 0
+        # Per-run ledger baseline (#526): the ledger itself survives resets
+        # on purpose (the cost ceiling is lifetime -- money spent stays
+        # spent), so the per-run view SUBTRACTS this snapshot instead of
+        # rebasing anything. Same boundary as the store's run id above.
+        self._run_ledger_calls_base = len(self.ledger.records)
+        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Open this day's run in the store (#304). The manifest is the same
         # meta() blob the live handshake serves; each _build() gets its own id.
         if self.run_store is not None:
@@ -413,6 +419,20 @@ class PennStepper:
     def run_id(self):
         """The store id of the current day's run, or None when not persisting."""
         return self._run_id
+
+    def run_usage(self) -> dict:
+        """This run's slice of the lifetime ledger (#526).
+
+        ``GET /usage`` probes for this optional method and merges the dict
+        beside the (unchanged) lifetime totals, so the dashboard's run strip
+        can agree with its per-run call log. The budget gate stays lifetime.
+        """
+        return {
+            "run_calls": len(self.ledger.records) - self._run_ledger_calls_base,
+            "run_cost_usd": round(
+                self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6
+            ),
+        }
 
     def meta(self) -> dict:
         """The handshake blob ``GET /live`` serves -- the baked replay's ``meta``
@@ -507,7 +527,9 @@ class PennStepper:
         self._persist_pending_events()
         self.run_store.update_run(
             self._run_id,
-            cost=self.ledger.total_cost_usd(),
+            # The RUN's spend, not the server's lifetime total (#526) -- a
+            # post-reset run's row no longer includes earlier runs' cost.
+            cost=self.ledger.total_cost_usd() - self._run_ledger_cost_base,
             steps=self._step_idx + 1,
         )
 
