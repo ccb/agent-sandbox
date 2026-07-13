@@ -10,6 +10,67 @@
   font-size: 13.5px;
 }
 
+/* ---------- Connect form ----------------------------------------------------- */
+/* Shown until a backend target exists (?api=, env var, or this form): a small
+   card in the placeholder area — no URL editing required. */
+.llm-connect {
+  max-width: 34em;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.6em 1.8em;
+  text-align: left;
+  color: #2b2f3a;
+}
+
+.llm-connect h2 {
+  margin: 0 0 0.4em;
+  font-size: 1.15em;
+  color: #1f2330;
+}
+
+.llm-connect p {
+  margin: 0 0 1em;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: #6b7280;
+  overflow-wrap: anywhere;
+}
+
+.llm-connect-row {
+  display: flex;
+  gap: 0.6em;
+}
+
+.llm-connect input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.95em;
+  padding: 0.5em 0.7em;
+  color: #1f2330;
+  background: #f6f7f9;
+  border: 1px solid #dcdfe4;
+  border-radius: 9px;
+}
+
+.llm-connect button {
+  flex: none;
+  font: inherit;
+  font-size: 0.95em;
+  font-weight: 600;
+  padding: 0.5em 1.1em;
+  color: #fff;
+  background: #2b2f3a;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.llm-connect button:hover {
+  background: #3c4150;
+}
+
 /* ---------- Run strip -------------------------------------------------------- */
 /* Run-level truth at a glance: connection/run state (the agents view's badge),
    exact call + cost totals, budget remaining, and the driving model. Sticky so
@@ -27,6 +88,34 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   padding: 0.75em 1.25em;
   margin-bottom: 16px;
+}
+
+/* Start/Stop + Reset — the backend's pause/resume/reset controls (#519). */
+.llm-strip-controls {
+  display: flex;
+  gap: 0.45em;
+}
+
+.llm-strip-controls button {
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.3em 0.85em;
+  color: #2b2f3a;
+  background: #f6f7f9;
+  border: 1px solid #dcdfe4;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.llm-strip-controls button:hover:not(:disabled) {
+  background: #eceef2;
+}
+
+.llm-strip-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .llm-strip-stat {

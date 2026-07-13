@@ -4,7 +4,7 @@ import { AgentPanel } from "./components/AgentPanel";
 import { LlmDashboard } from "./components/LlmDashboard";
 import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
-import { useLive } from "./useLive";
+import { useLive, initialApiBase } from "./useLive";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -141,10 +141,23 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
 
 export default function App() {
   const { status, replay, error } = useReplay();
-  // The live backend (?api= / VITE_SIM_API_URL): one handshake + one feed
-  // poll, shared by the agents view and its LLM-call log. Idle without ?api=.
-  const live = useLive();
+  // The live backend: one handshake + one feed poll, shared by the agents view
+  // and the LLM dashboard. The target starts from ?api= / VITE_SIM_API_URL and
+  // can also be supplied at runtime by the dashboard's connect form (#519).
+  const [apiUrl, setApiUrl] = useState<string | null>(initialApiBase);
+  const live = useLive(apiUrl);
   const liveReady = live.live && (live.meta?.personas.length ?? 0) > 0;
+
+  // Connecting via the form is the same as arriving with ?api= — the URL is
+  // updated to match (no reload), so a refresh or a shared link sticks.
+  const connectApi = (url: string) => {
+    const clean = url.trim().replace(/\/+$/, "");
+    if (!clean) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("api", clean);
+    window.history.replaceState(null, "", `?${params}${window.location.hash}`);
+    setApiUrl(clean);
+  };
   const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -302,7 +315,7 @@ export default function App() {
             in App's shared useLive poll, so nothing is lost on unmount. */}
         {view === "llm" && (
           <section className="view view-llm">
-            <LlmDashboard replay={replay} live={live} />
+            <LlmDashboard replay={replay} live={live} onConnect={connectApi} />
           </section>
         )}
 
