@@ -169,6 +169,8 @@ def _majority_label(cells, maze, table, width):
         label = table.get(maze[y * width + x])
         if label:
             counts[label] = counts.get(label, 0) + 1
+    # Ties break on first-encountered label (row-major cell order) -- rare:
+    # only a piece split exactly across a sector/arena boundary.
     return max(counts, key=counts.get) if counts else ""
 
 
@@ -240,7 +242,7 @@ def main() -> int:
     with open(os.path.join(maze_dir, "furniture_maze.csv"), "w") as fh:
         fh.write(", ".join(furn))
     with open(os.path.join(blocks_dir, "furniture_blocks.csv"), "w") as fh:
-        fh.write("\n".join(block_rows))
+        fh.write("".join(r + "\n" for r in block_rows))
     print(f"{len(all_pieces)} pieces -> furniture_maze.csv + furniture_blocks.csv")
 
     if args.debug_overlay:
