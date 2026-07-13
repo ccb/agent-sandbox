@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import type { Replay } from "../types/replay";
 import { AgentCard } from "./AgentCard";
 import { LlmCallLog } from "./LlmCallLog";
@@ -8,25 +8,48 @@ import { useLiveMemories, type LiveState } from "../useLive";
 import "./AgentPanel.css";
 
 /**
- * The agent navigator + card + memory column, driven by ONE of two sources:
+ * One agent's card as a pop-up modal (#528) — the persona card, its slice of the
+ * LLM-request stream, and its full memory history over a dimmed backdrop. The web
+ * twin of the Godot persona inspector (#410): opened by clicking an agent's cell
+ * on the unified live dashboard, deep-linked via `?agent=`, and driven by ONE of
+ * two sources:
  *
  * - Live (`?api=` given and the handshake reported a live loop with personas):
- *   roster from the live meta, the card from the feed's latest frame record,
- *   step from the feed, memories from GET /agents/{name}/memory.
- * - Replay (the default): the baked file exactly as before — frames indexed by
- *   the Godot-bridge/wall-clock step, memories from `memory_streams`.
+ *   the card from the feed's latest frame record, step from the feed, memories
+ *   from GET /agents/{name}/memory.
+ * - Replay (the default): the baked file — frames indexed by the
+ *   Godot-bridge/wall-clock step, memories from `memory_streams`.
+ *
+ * Self-gating: an unknown `name` (a stale `?agent=`, or the roster still loading)
+ * renders nothing, so App can mount this on whatever the selected name is without
+ * validating it first. Closes on the backdrop, the × button, or Escape.
  */
-export function AgentPanel({ replay, live }: { replay: Replay | null; live: LiveState }) {
-  // Which agent's card you're looking at. Arrows step through the personas
-  // (wrapping at the ends), like Smallville's agent navigator — switching only
-  // changes WHO you see; the run keeps playing underneath.
-  const [index, setIndex] = useState(0);
+export function AgentCardModal({
+  name,
+  replay,
+  live,
+  onClose,
+}: {
+  name: string;
+  replay: Replay | null;
+  live: LiveState;
+  onClose: () => void;
+}) {
+  // Close on Escape, like the nav dropdown and the prompt modal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const isLive = live.live && (live.meta?.personas.length ?? 0) > 0;
   const meta = isLive ? live.meta : replay?.meta;
   const personas = meta?.personas ?? [];
-  const count = personas.length;
-  const persona = personas[index % Math.max(count, 1)] ?? personas[0];
+  // The persona index also selects the sprite tint, so it must match the map.
+  const index = personas.findIndex((p) => p.name === name);
+  const persona = personas[index];
 
   // Replay path only: the Godot-bridge / wall-clock step. Passing 0 keeps it
   // inert in live mode, where the feed's frame records carry the step instead.
@@ -37,9 +60,10 @@ export function AgentPanel({ replay, live }: { replay: Replay | null; live: Live
   // refetched as the live step advances. Same entry shape as the baked stream.
   const liveMemories = useLiveMemories(isLive, persona?.name ?? "", live.step, live.base);
 
-  if (!meta || !persona) return null; // App gates on personas; belt for types
+  // Hooks are done — safe to bail on an unknown/absent agent (App mounts us on
+  // whatever `?agent=` holds; the roster may not have it, or may still be loading).
+  if (!meta || !persona || index < 0) return null;
 
-  const go = (delta: number) => setIndex((i) => (i + delta + count) % count);
   const frame = isLive
     ? live.frame?.[persona.name]
     : replay?.frames[Math.min(step, replay.frames.length - 1)]?.[persona.name];
@@ -56,52 +80,37 @@ export function AgentPanel({ replay, live }: { replay: Replay | null; live: Live
         .reverse();
 
   return (
-    <aside className="agent-panel">
-      {/* One cohesive panel: a navigator header over a two-column body (the agent's
-          details on the left, its full memory history on the right), so the arrows,
-          the card, and the memory list read as one piece instead of stacked boxes. */}
-      <div className="agent-board">
-        <header className="agent-nav">
-          <button
-            type="button"
-            className="agent-nav-btn"
-            onClick={() => go(-1)}
-            disabled={count < 2}
-            aria-label="Previous agent"
-            title="Previous agent"
-          >
-            ‹
-          </button>
-          <span className="agent-indicator">
-            <span className="agent-indicator-emoji" aria-hidden="true">
+    <div className="agent-modal-backdrop" role="presentation" onClick={onClose}>
+      <aside
+        className="agent-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${persona.name} details`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Title row (replaces the old page navigator): name + live state on the
+            left, close on the right. */}
+        <header className="agent-modal-head">
+          <span className="agent-modal-title">
+            <span className="agent-modal-emoji" aria-hidden="true">
               {persona.emoji}
             </span>
             {persona.name}
-            <span className="agent-indicator-count">
-              {index + 1} / {count}
-            </span>
+            {/* Live mode only: connection + run state at a glance. */}
+            {isLive && (
+              <span
+                className={`agent-live-badge${
+                  !live.connected ? " is-off" : live.paused ? " is-paused" : ""
+                }`}
+              >
+                {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} · step{" "}
+                {live.step}
+              </span>
+            )}
           </span>
-          <button
-            type="button"
-            className="agent-nav-btn"
-            onClick={() => go(1)}
-            disabled={count < 2}
-            aria-label="Next agent"
-            title="Next agent"
-          >
-            ›
+          <button type="button" className="agent-modal-close" aria-label="Close" onClick={onClose}>
+            ×
           </button>
-          {/* Live mode only: connection + run state at a glance. */}
-          {isLive && (
-            <span
-              className={`agent-live-badge${
-                !live.connected ? " is-off" : live.paused ? " is-paused" : ""
-              }`}
-            >
-              {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} ·
-              step {live.step}
-            </span>
-          )}
         </header>
 
         <div className="agent-board-cols">
@@ -134,7 +143,7 @@ export function AgentPanel({ replay, live }: { replay: Replay | null; live: Live
             )}
           </section>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   );
 }
