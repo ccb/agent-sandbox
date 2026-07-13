@@ -84,12 +84,6 @@ export function SpritePreview({
   }, [tint]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={FRAME}
-      height={FRAME}
-      className={className}
-      aria-hidden="true"
-    />
+    <canvas ref={canvasRef} width={FRAME} height={FRAME} className={className} aria-hidden="true" />
   );
 }

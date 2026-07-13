@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
-import { cyStyle, DAGRE_LAYOUT, FALLBACK_LAYOUT } from "./cytoscapeSetup";
+import { useEffect, useRef } from "react";
 import type { ChainElements } from "../../types/promptviz";
+import { cyStyle, DAGRE_LAYOUT, FALLBACK_LAYOUT } from "./cytoscapeSetup";
 
 interface Props {
   elements: ChainElements;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import type { Chain, ChainIndexEntry } from "../../types/promptviz";
 import { PromptChainGraph } from "./PromptChainGraph";
 import { PromptPanel } from "./PromptPanel";
-import type { Chain, ChainIndexEntry } from "../../types/promptviz";
 import "./promptviz.css";
 
 // Static JSON written by scripts/gen_promptviz.py (pnpm gen:promptviz). BASE_URL
@@ -70,7 +70,7 @@ export function PromptChainView() {
     };
   }, [chainId]);
 
-  const detail = chain && selectedNode ? chain.prompts[selectedNode] ?? null : null;
+  const detail = chain && selectedNode ? (chain.prompts[selectedNode] ?? null) : null;
 
   return (
     <div className="pcv">
@@ -101,9 +101,7 @@ export function PromptChainView() {
         <section className="pcv-graph-pane">
           {error && <div className="pcv-status pcv-error">{error}</div>}
           {!error && !chain && <div className="pcv-status">Loading…</div>}
-          {chain && (
-            <PromptChainGraph elements={chain.elements} onSelectNode={setSelectedNode} />
-          )}
+          {chain && <PromptChainGraph elements={chain.elements} onSelectNode={setSelectedNode} />}
           <ul className="pcv-legend" aria-label="legend">
             {LEGEND.map((item) => (
               <li key={item.kind}>
