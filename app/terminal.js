@@ -724,7 +724,7 @@ async function main() {
         return;
       }
       boottext.textContent = TITLE + tail.slice(0, -1);
-      setTimeout(tick, 22);
+      setTimeout(tick, 55);
     };
     tick();
   });
@@ -732,9 +732,9 @@ async function main() {
   const typeInto = (msg) => new Promise((done) => {
     let n = 0;
     const tick = () => {
-      n = Math.min(msg.length, n + 2);
+      n = Math.min(msg.length, n + 1);
       boottext.textContent = TITLE + msg.slice(0, n);
-      if (n < msg.length) setTimeout(tick, 22);
+      if (n < msg.length) setTimeout(tick, 45);
       else done();
     };
     tick();
