@@ -161,6 +161,14 @@
   opacity: 0.7;
 }
 
+/* The hovered cell paints above its grid neighbors, so a row tooltip near the
+   cell's bottom edge isn't covered by the next cell. */
+.llm-cell:hover,
+.llm-cell:focus-within {
+  position: relative;
+  z-index: 3;
+}
+
 /* ---------- Cell header ------------------------------------------------------ */
 .llm-cell-head {
   display: flex;
