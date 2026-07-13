@@ -269,10 +269,11 @@ def main() -> int:
             store.append_frame(run_id, step_idx, frame)
         for name in order:
             store.record_memories(run_id, name, memory_records.get(name, []))
+        store.append_events(run_id, replay["events"])
         store.update_run(
             run_id, status="finished", steps=len(replay["frames"]), cost=0.0
         )
-        print(f"Persisted run {run_id} to {store.root} (frames.jsonl + sim.db).")
+        print(f"Persisted run {run_id} to {store.root} (frames + events + sim.db).")
     return 0
 
 

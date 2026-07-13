@@ -202,6 +202,8 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
     assert run["manifest"] == replay["meta"]
     # Frames: byte-equal to the file's (persisted AFTER meeting injection).
     assert store.read_frames(run["id"]) == replay["frames"]
+    # Events: the store's copy == the file's GameEvent log (#307).
+    assert store.read_events(run["id"]) == replay["events"]
     # Memory streams: the store's lean projection == the file's, per persona.
     for name, stream in replay["memory_streams"].items():
         assert store.memories_for(run["id"], name) == stream
@@ -217,3 +219,20 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
         m["text"] for m in store.query_memories(run["id"], name, "campus day plan", 8)
     ]
     assert got == expected
+    # #307: the exported replay IS the baked file -- the whole live->replay
+    # bridge is byte-faithful -- and it validates against the pinned contract.
+    from backend.contract_models import Replay
+    from backend.penn import export_replay
+
+    exported = export_replay.build_replay(store, run["id"])
+    assert exported == replay
+    Replay.model_validate(exported)
+    # The CLI writes the same thing.
+    out_path = tmp_path / "exported.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["export_replay", run["id"], "--runs-dir", str(runs), "--out", str(out_path)],
+    )
+    assert export_replay.main() == 0
+    assert json.loads(out_path.read_text()) == replay
