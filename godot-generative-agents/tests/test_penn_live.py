@@ -31,6 +31,7 @@ sys.path.insert(0, str(_SIM_DIR))
 from backend.run_simulation import simulate  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
 from text_adventure_games.events import GameEvent  # noqa: E402
+from text_adventure_games.usage import CallRecord, Usage  # noqa: E402
 from penn_world import (  # noqa: E402
     build_penn_world,
     relationships_meta,
@@ -272,6 +273,60 @@ def test_stepper_persists_game_events(tmp_path):
     assert stepper.tick() is None  # end of day -> _finish_run tail-flushes
     assert store.read_events(run_id) == [e.to_primitive() for e in stepper.game.events]
     assert store.read_events(run_id)[-1]["summary"] == "last call"
+
+
+def _spend(ledger, cost):
+    # Synthetic spend: the mock brain bills $0, so tests inject priced
+    # records to make the per-run arithmetic visible.
+    ledger.record(
+        CallRecord(
+            usage=Usage(provider="mock", model="mock", input_tokens=10),
+            cost_usd=cost,
+            actor="Diego Torres",
+        )
+    )
+
+
+def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
+    # The #526 per-run view: run_usage() is this run's slice of the ledger,
+    # reset() re-baselines it, and the lifetime ledger (the budget gate's
+    # basis) keeps counting. The RunStore row now records the RUN's spend --
+    # pre-#526 it stored the lifetime total, so run #2 included run #1.
+    # NOTE: mock-brain ticks append $0 CallRecords (the schedule clients ARE
+    # the brains), so exact run_calls values are only pinned at tick-free
+    # points; across ticks the test pins COST, which $0 records never move.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    assert stepper.run_usage() == {"run_calls": 0, "run_cost_usd": 0.0}
+    _spend(stepper.ledger, 0.25)
+    _spend(stepper.ledger, 0.05)
+    assert stepper.run_usage() == {"run_calls": 2, "run_cost_usd": 0.3}
+    stepper.tick()
+    first = stepper.run_id
+    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(0.3)
+    assert store.get_run(first)["cost"] == pytest.approx(0.3)
+    lifetime_calls = stepper.ledger.summary()["calls"]  # spends + mock records
+    stepper.reset()
+    # The new run starts from zero...
+    assert stepper.run_usage() == {"run_calls": 0, "run_cost_usd": 0.0}
+    # ...while the lifetime ledger keeps everything, so a tripped cost
+    # ceiling stays tripped across the reset.
+    assert stepper.ledger.summary()["calls"] == lifetime_calls
+    assert stepper.ledger.total_cost_usd() == pytest.approx(0.3)
+    stepper.ledger.max_cost_usd = 0.2
+    assert stepper.ledger.over_budget()
+    stepper.ledger.max_cost_usd = None  # disarm so ticks keep running below
+    _spend(stepper.ledger, 0.1)
+    assert stepper.run_usage() == {"run_calls": 1, "run_cost_usd": 0.1}
+    stepper.tick()
+    second = stepper.run_id
+    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(0.1)
+    assert store.get_run(second)["cost"] == pytest.approx(0.1)  # not 0.4
+    # No store required: a bare stepper offers the same view.
+    assert PennStepper(num_steps=1, world=build_penn_world()).run_usage() == {
+        "run_calls": 0,
+        "run_cost_usd": 0.0,
+    }
 
 
 def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
