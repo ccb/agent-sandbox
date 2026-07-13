@@ -69,6 +69,24 @@ export interface LiveStatusResponse {
   meta: LiveMeta | null;
 }
 
+// GET /usage — the run ledger's summary (tokens and dollars, #264).
+// `available: false` means no ledger is wired (same shape, zeroed); the budget
+// fields appear only when the server was started with a cost ceiling.
+export interface UsageSummary {
+  kind: string;
+  available: boolean;
+  calls: number;
+  total_cost_usd: number;
+  by_actor: Record<string, number>;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  over_budget: boolean;
+  max_cost_usd?: number;
+  remaining_budget_usd?: number;
+}
+
 // GET /agents/{name}/memory — the live counterpart of the baked
 // `memory_streams[name]`: same MemoryRecord entries, byte-identical (#298).
 // `total` appears only when a since_turn/kind/limit selector was applied.

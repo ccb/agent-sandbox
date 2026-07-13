@@ -407,6 +407,7 @@
 }
 
 .llm-row {
+  position: relative; /* anchors the .llm-tip hover tooltip */
   display: flex;
   align-items: baseline;
   gap: 0.6em;
@@ -414,6 +415,62 @@
   line-height: 1.4;
   color: #2b2f3a;
   padding: 0.3em 0.1em;
+}
+
+/* The full-detail tooltip behind a row (hover, or Tab onto the row). Sits just
+   below the row so the cursor never covers it; nothing above the log clips. */
+.llm-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 3px);
+  z-index: 30;
+  min-width: 16em;
+  max-width: 24em;
+  padding: 0.6em 0.8em 0.65em;
+  border-radius: 8px;
+  background: #23262f;
+  color: #e8eaf0;
+  font-size: 0.88em;
+  line-height: 1.5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.llm-row:hover .llm-tip,
+.llm-row:focus-visible .llm-tip {
+  display: block;
+}
+
+.llm-tip-head {
+  margin: 0 0 0.4em;
+  font-weight: 600;
+  color: #fff;
+}
+
+.llm-tip dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15em 0.9em;
+}
+
+.llm-tip dt {
+  align-self: baseline;
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa0b0;
+}
+
+.llm-tip dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.llm-tip-dim {
+  color: #9aa0b0;
 }
 
 .llm-row + .llm-row {

@@ -1,0 +1,284 @@
+/* The LLM dashboard (#519): a run strip over a grid of per-agent cells, on the
+   same light palette as the agent cards. The call rows and role pills inside
+   each cell are LlmCallLog's, styled by AgentPanel.css. */
+
+.llm-dash {
+  width: 92%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 22px 0 48px;
+  font-size: 13.5px;
+}
+
+/* ---------- Connect form ----------------------------------------------------- */
+/* Shown until a backend target exists (?api=, env var, or this form): a small
+   card in the placeholder area — no URL editing required. */
+.llm-connect {
+  max-width: 34em;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.6em 1.8em;
+  text-align: left;
+  color: #2b2f3a;
+}
+
+.llm-connect h2 {
+  margin: 0 0 0.4em;
+  font-size: 1.15em;
+  color: #1f2330;
+}
+
+.llm-connect p {
+  margin: 0 0 1em;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: #6b7280;
+  overflow-wrap: anywhere;
+}
+
+.llm-connect-row {
+  display: flex;
+  gap: 0.6em;
+}
+
+.llm-connect input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.95em;
+  padding: 0.5em 0.7em;
+  color: #1f2330;
+  background: #f6f7f9;
+  border: 1px solid #dcdfe4;
+  border-radius: 9px;
+}
+
+.llm-connect button {
+  flex: none;
+  font: inherit;
+  font-size: 0.95em;
+  font-weight: 600;
+  padding: 0.5em 1.1em;
+  color: #fff;
+  background: #2b2f3a;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.llm-connect button:hover {
+  background: #3c4150;
+}
+
+/* ---------- Run strip -------------------------------------------------------- */
+/* Run-level truth at a glance: connection/run state (the agents view's badge),
+   exact call + cost totals, budget remaining, and the driving model. Sticky so
+   the state stays visible while you scroll a tall grid. */
+.llm-strip {
+  position: sticky;
+  top: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5em 1.4em;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 0.75em 1.25em;
+  margin-bottom: 16px;
+}
+
+/* Start/Stop + Reset — the backend's pause/resume/reset controls (#519). */
+.llm-strip-controls {
+  display: flex;
+  gap: 0.45em;
+}
+
+.llm-strip-controls button {
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.3em 0.85em;
+  color: #2b2f3a;
+  background: #f6f7f9;
+  border: 1px solid #dcdfe4;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.llm-strip-controls button:hover:not(:disabled) {
+  background: #eceef2;
+}
+
+.llm-strip-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.llm-strip-stat {
+  font-size: 0.95em;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.llm-strip-stat strong {
+  color: #1f2330;
+  font-weight: 600;
+}
+
+.llm-strip-stat.is-over strong {
+  color: #b3261e;
+}
+
+/* The driving model (live meta's llm block; absent under the mock brain). */
+.llm-strip-model {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: #9aa0b0;
+}
+
+/* ---------- The grid --------------------------------------------------------- */
+.llm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.llm-cell {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.1em 1.25em 1.2em;
+}
+
+/* A quiet agent's whole cell dims a notch, so "who has gone quiet?" reads at a
+   glance across the grid, not just from the dot. */
+.llm-cell.is-idle {
+  opacity: 0.7;
+}
+
+/* The hovered cell paints above its grid neighbors, so a row tooltip near the
+   cell's bottom edge isn't covered by the next cell. */
+.llm-cell:hover,
+.llm-cell:focus-within {
+  position: relative;
+  z-index: 3;
+}
+
+/* ---------- Cell header ------------------------------------------------------ */
+.llm-cell-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+
+.llm-cell-sprite {
+  width: 2.9em;
+  height: 2.9em;
+  flex: none;
+  image-rendering: pixelated;
+  border-radius: 9px;
+  background: #f3f4f7;
+}
+
+/* The unattributed cell has no on-map sprite; a "?" tile stands in. */
+.llm-cell-sprite--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3em;
+  font-weight: 600;
+  color: #9aa0b0;
+}
+
+.llm-cell-title {
+  min-width: 0;
+}
+
+.llm-cell-name {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 1.1em;
+  line-height: 1.2;
+  color: #1f2330;
+  overflow-wrap: anywhere;
+}
+
+.llm-cell-last {
+  margin: 0.2em 0 0;
+  font-size: 0.82em;
+  color: #9aa0b0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Recency pulse ---------------------------------------------------- */
+/* hot = a call landed within ~2 feed polls (green, pulsing), warm = within the
+   last minute (steady green), idle = quiet for a minute or never called. */
+.llm-pulse {
+  flex: none;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: #d6dae2;
+}
+
+.llm-pulse.is-warm {
+  background: #6fbe88;
+}
+
+.llm-pulse.is-hot {
+  background: #2e9e4f;
+  animation: llm-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes llm-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 158, 79, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(46, 158, 79, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llm-pulse.is-hot {
+    animation: none;
+  }
+}
+
+/* ---------- Aggregates row --------------------------------------------------- */
+.llm-cell-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1.5em;
+  margin: 1em 0 0;
+  padding-top: 0.9em;
+  border-top: 1px solid #f1f2f5;
+}
+
+.llm-cell-stats div {
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-cell-stats dt {
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a90a0;
+}
+
+.llm-cell-stats dd {
+  margin: 0;
+  font-size: 0.95em;
+  color: #2b2f3a;
+  font-variant-numeric: tabular-nums;
+}

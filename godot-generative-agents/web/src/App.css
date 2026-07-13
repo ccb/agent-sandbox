@@ -163,7 +163,9 @@
   z-index: 1;
 }
 
-.view-agents {
+/* The agents page and the LLM dashboard (#519) share the same overlay shape. */
+.view-agents,
+.view-llm {
   z-index: 2;
   overflow-y: auto;
   background: #eceef1;
