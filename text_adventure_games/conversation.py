@@ -138,6 +138,7 @@ def converse(
     for _ in range(max_exchanges):
         observation = _dialogue_observation(speaker, listener, convo, turn)
         utterance = speaker.agent.converse(observation, listener.name)
+        _trace_cognition(game, speaker)
         if not utterance or not utterance.strip():
             break
         utterance = utterance.strip()
@@ -147,6 +148,27 @@ def converse(
             break
         speaker, listener = listener, speaker
     return convo
+
+
+def _trace_cognition(game, speaker) -> None:
+    """Emit any cognition-tool calls the speaker made for its line (issue #358).
+
+    An :class:`~text_adventure_games.npc.LLMAgent` with cognition tools on
+    buffers one summary line per ``recall`` / ``read_plan`` call in
+    ``last_cognition_trace`` (the dialogue seam has no parser reference); this
+    loop -- which does hold the game -- emits them on the private
+    AGENT_REASONING channel. Same privacy rule as ``npc._log_decision``: never
+    ``command_history``, so one agent's recall can't leak into another's
+    observation. A no-op for agents without the buffer (scripted, flag off).
+    """
+    lines = getattr(getattr(speaker, "agent", None), "last_cognition_trace", None)
+    if not lines:
+        return
+    trace = getattr(getattr(game, "parser", None), "agent_reasoning", None)
+    if trace is None:
+        return
+    for line in lines:
+        trace(speaker.name, line)
 
 
 def _deliver(speaker, listener, utterance: str, turn: int, importance: float) -> None:

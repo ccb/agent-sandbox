@@ -36,10 +36,12 @@ from __future__ import annotations
 import re
 
 from . import prompt_templates
+from .actions.base import HIDDEN_ACTIONS, registered_action_entries
 from .config import AgentConfig
 from .enums import ReActLabel, Role
 from .llm_client import run_tool_loop
 from .memory import AgentMemory, render_memories
+from .planning import plan_memory_lines
 from .reflection import DEFAULT_REFLECTION_THRESHOLD, reflect, should_reflect
 from .things.characters import Goal, GoalType
 
@@ -155,6 +157,406 @@ def build_choose_action_tool(action_names: list[str]) -> dict:
             "additionalProperties": False,
         },
     }
+
+
+# ----------------------------------------------------------------------
+# Per-action tool schemas, derived from the action registry (issue #356)
+#
+# The idiomatic N-tools shape: one tool per registered verb (used with
+# tool_choice="any"), instead of a single choose_action whose `action` is an
+# enum. build_choose_action_tool above stays the fallback for clients without
+# multi-tool support and for the free-text path.
+# ----------------------------------------------------------------------
+
+# Scope categories a tool argument slot may declare (Action.ARGUMENTS_SCHEMA):
+# each is filled at decision time with an enum of the entities the actor can
+# currently see -- the same scope game.describe_for() renders as prose.
+_SCOPE_KINDS = ("item", "character", "direction")
+# JSON primitives a slot may declare directly (anything else falls back to string).
+_JSON_TYPES = ("string", "integer", "number", "boolean")
+# Cap on how many entities a scope enum may list. Past it we DROP the enum and
+# leave the slot free text: truncating would make a valid entity unnameable, and
+# a very long enum bloats the tool definition -- which counts against context and
+# is NOT trimmed by limit_context_length. Games with big rooms can tune this.
+_MAX_SCOPE_ENUM = 20
+
+
+def _tool_name(verb: str) -> str:
+    """Sanitize a registry verb into a provider-valid tool name (issue #356).
+
+    Anthropic and OpenAI require tool names to match ``^[A-Za-z0-9_-]{1,64}$`` --
+    no spaces -- but multi-word verbs are keyed WITH spaces ("adopt goal", "ghost
+    touch", "take off"). Left as-is these would 400 the moment an agent runs on a
+    real key (the very mode #356 targets), even though the offline mock never
+    validates them. So each run of disallowed characters becomes ``_`` and the
+    result is length-capped. Registry keys never contain ``_`` themselves
+    (``action_name()`` strips it and explicit names use spaces), so
+    :func:`command_from_tool_call` recovers the original verb by matching the
+    registry key whose sanitized form equals the tool name."""
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", verb).strip("_")
+    return safe[:64] or "action"
+
+
+def _scope_enum(kind: str, parser, actor) -> list[str] | None:
+    """In-scope entity names for a scope-category slot, or ``None`` when *kind*
+    is a plain JSON type (not a scope category) or there's no actor to scope to.
+
+    Reuses the parser's own scope resolution so the enum and ``describe_for()``
+    never disagree about what's here: items the actor can see or carry, other
+    characters in the room, or exits."""
+    if kind not in _SCOPE_KINDS or actor is None:
+        return None
+    loc = getattr(actor, "location", None)
+    if kind == "item":
+        return sorted(parser.get_items_in_scope(actor).keys())
+    if loc is None:
+        return []
+    if kind == "character":
+        return sorted(name for name in loc.characters if name != actor.name)
+    return list(loc.connections.keys())  # direction
+
+
+def _slot_property(slot: dict, parser, actor, max_enum: int | None) -> dict:
+    """Translate one ARGUMENTS_SCHEMA slot into a JSON-schema property.
+
+    A scope slot becomes a string constrained to an enum of the actor's in-scope
+    entities (dropped when there are none, or too many to list within
+    *max_enum*); a plain-typed slot passes its JSON type through."""
+    kind = slot.get("type", "string")
+    prop = {"type": "string", "description": slot.get("description", "")}
+    enum = _scope_enum(kind, parser, actor)
+    if enum is None:
+        prop["type"] = kind if kind in _JSON_TYPES else "string"
+    elif enum and (max_enum is None or len(enum) <= max_enum):
+        prop["enum"] = enum
+    return prop
+
+
+def _build_action_tool(name, action, description, aliases, parser, actor, max_enum):
+    """Build one normalized per-action tool. The tool NAME is the verb;
+    ``reasoning`` is always offered (so the trace still shows *why*). A declared
+    ``ARGUMENTS_SCHEMA`` becomes typed slots (with scope enums where the actor's
+    view allows); an undeclared action falls back to a single free-text
+    ``arguments`` field -- the same contract ``choose_action`` used, so no
+    built-in action needs migrating."""
+    desc = description or f"Perform the '{name}' action."
+    if aliases:
+        desc += f" (aliases: {', '.join(aliases)})"
+    properties = {
+        "reasoning": {
+            "type": "string",
+            "description": "one short sentence explaining the choice",
+        }
+    }
+    required: list[str] = []
+    schema = getattr(action, "ARGUMENTS_SCHEMA", None) if action is not None else None
+    if schema:
+        for slot_name, slot in schema.items():
+            properties[slot_name] = _slot_property(slot, parser, actor, max_enum)
+            if slot.get("required"):
+                required.append(slot_name)
+    else:
+        properties["arguments"] = {
+            "type": "string",
+            "description": "the rest of the command, e.g. 'player with club'; '' if none",
+        }
+    return {
+        # Sanitized so multi-word verbs ("adopt goal") are valid provider tool
+        # names; command_from_tool_call recovers the registry verb from it.
+        "name": _tool_name(name),
+        "description": desc,
+        "parameters": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+        },
+    }
+
+
+def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_ENUM):
+    """Derive one normalized tool per registered action (issue #356).
+
+    The N-tools counterpart to :func:`build_choose_action_tool`: instead of one
+    ``choose_action`` whose ``action`` is an enum of verbs, each verb becomes its
+    own tool (offered with ``tool_choice="any"``), typed by its
+    ``ARGUMENTS_SCHEMA`` and -- when *actor* is given -- narrowed with scope enums
+    drawn from what that actor can currently see.
+
+    *names* limits which verbs are exposed (pass the agent's ``action_names``;
+    ``None`` or empty means every registered verb -- "unconstrained", mirroring
+    the legacy ``build_choose_action_tool([])``, NOT "no tools". A game that
+    wants an agent to have no menu must keep it off this path rather than pass
+    ``[]``). The comma-sequence wrapper is always dropped. A name with no
+    registered action still gets a generic free-text tool, so ``action_names``
+    stays the authoritative menu even when it lists a verb the parser hasn't
+    registered.
+
+    Token budget: tool definitions count against context and are NOT trimmed by
+    :func:`~text_adventure_games.llm_client.limit_context_length`, so scope enums
+    are capped (see :data:`_MAX_SCOPE_ENUM`) and a caller may pass a narrower
+    *names* to curate the set per decision.
+    """
+    entries = {
+        name: (action, desc, aliases)
+        for name, action, desc, aliases in registered_action_entries(parser)
+    }
+    wanted = list(names) if names else list(entries)
+    tools = []
+    seen = set()
+    verb_by_tool_name: dict[str, str] = {}
+    for name in wanted:
+        if name in HIDDEN_ACTIONS or name in seen:
+            continue
+        seen.add(name)
+        action, desc, aliases = entries.get(name, (None, "", []))
+        tool = _build_action_tool(name, action, desc, aliases, parser, actor, max_enum)
+        clash = verb_by_tool_name.get(tool["name"])
+        if clash is not None:
+            # Two verbs sanitizing (or 64-capping) to one tool name would ship
+            # duplicate tools and 400 at the provider; fail at build time with
+            # the colliding verbs named instead.
+            raise ValueError(
+                f"per-action tool name collision: verbs {clash!r} and {name!r} "
+                f"both sanitize to tool name {tool['name']!r}"
+            )
+        verb_by_tool_name[tool["name"]] = name
+        tools.append(tool)
+    return tools
+
+
+def command_from_args(verb: str, args: dict, schema: dict | None) -> str:
+    """Reassemble a raw command string from a per-action tool call's arguments.
+
+    An undeclared action carries a single free-text ``arguments`` slot, so the
+    command is just ``"<verb> <arguments>"``. A declared ``ARGUMENTS_SCHEMA``
+    lists its slots in order; each present value is appended after its optional
+    ``connector`` word, so ``{"target": "player", "weapon": "club"}`` on an attack
+    whose weapon slot declares connector ``"with"`` assembles ``"attack player
+    with club"``. The parser's matchers then resolve those names to entities
+    exactly as for typed human input -- and the precondition gate still decides."""
+    if not schema:
+        rest = (args.get("arguments") or "").strip()
+        return f"{verb} {rest}".strip()
+    parts = [verb]
+    for slot_name, slot in schema.items():
+        value = args.get(slot_name)
+        if value is None or value == "":
+            continue
+        connector = slot.get("connector")
+        if connector:
+            parts.append(str(connector))
+        parts.append(str(value))
+    return " ".join(parts).strip()
+
+
+def command_from_tool_call(name: str, args: dict, parser) -> str:
+    """Turn a single tool call into a raw command string for the parser.
+
+    Backward-compatible with the single ``choose_action`` tool -- where the verb
+    rides in ``args['action']`` and the rest is free text -- and with the #356
+    per-action tools, where the verb IS the tool name and the slots come from the
+    action's ``ARGUMENTS_SCHEMA``. Either shape becomes a command string routed
+    through the same precondition gate; schemas only shrink the space of invalid
+    *phrasings*, never the gate's authority over invalid *acts*."""
+    if name == "choose_action":
+        verb = (args.get("action") or "").strip()
+        return command_from_args(verb, args, None)
+    verb, action = _registry_verb(name, parser)
+    schema = getattr(action, "ARGUMENTS_SCHEMA", None) if action is not None else None
+    return command_from_args(verb, args, schema)
+
+
+def _registry_verb(tool_name: str, parser):
+    """Recover ``(verb, action)`` for a per-action tool name (issue #356).
+
+    The name may be a registry verb verbatim, or its sanitized form (see
+    :func:`_tool_name`) when the verb had spaces ("adopt_goal" for "adopt goal").
+    We match the registry key whose sanitized form equals *tool_name* so the
+    reassembled command uses the SPOKEN verb the parser routes on. Falls back to
+    ``(tool_name, None)`` when nothing matches, so an unregistered name still
+    assembles a best-effort command (the gate then rejects it)."""
+    if parser is None:
+        return tool_name, None
+    action = parser.actions.get(tool_name)
+    if action is not None:
+        return tool_name, action
+    for key, act in parser.actions.items():
+        if _tool_name(key) == tool_name:
+            return key, act
+    return tool_name, None
+
+
+# ----------------------------------------------------------------------
+# Cognition tools: agentic memory/knowledge/plan retrieval (issue #358)
+#
+# Optional tools offered ALONGSIDE the action tools in the bounded tool loop,
+# so an agent can consult its own memory / beliefs / plan when IT decides it
+# needs to, instead of the engine guessing (the fixed retrieve-then-prompt
+# pipeline in react_behavior, which remains the default and is kept even when
+# these are on). Opt-in via AgentConfig.cognition_tools; each tool is an
+# in-process call on the agent's own state -- no HTTP, no other agent's data.
+# ----------------------------------------------------------------------
+
+# How many cognition (retrieval) calls an agent may make per decision episode
+# before further ones are refused and it must act. run_tool_loop offers one
+# fixed toolset for every round, so the budget is enforced inside the execute
+# callback (an is_error "budget exhausted" tool_result) rather than by
+# narrowing the offered tools mid-loop -- the smaller diff given the loop's
+# actual shape.
+COGNITION_BUDGET = 2
+
+
+def build_recall_tool() -> dict:
+    """Normalized ``recall`` tool: search the agent's own episodic memory."""
+    return {
+        "name": "recall",
+        "description": (
+            "Search your own memories for what you know about something. "
+            "Returns your most relevant memories."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "what to search your memory for",
+                },
+                "k": {
+                    "type": "integer",
+                    "description": (
+                        "how many memories to return (optional; defaults to a "
+                        "small handful)"
+                    ),
+                },
+            },
+            "required": ["query"],
+        },
+    }
+
+
+def build_query_knowledge_tool() -> dict:
+    """Normalized ``query_knowledge`` tool: look up the agent's own beliefs."""
+    return {
+        "name": "query_knowledge",
+        "description": "Look up what you believe about a topic.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "the topic to look up in your beliefs",
+                },
+            },
+            "required": ["topic"],
+        },
+    }
+
+
+def build_read_plan_tool() -> dict:
+    """Normalized ``read_plan`` tool: read the agent's plan for today."""
+    return {
+        "name": "read_plan",
+        "description": "Read your plan for today (outline, hours, and stops).",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    }
+
+
+def cognition_toolset(agent, knowledge=None, turn=None, trace=None):
+    """Build ``(tools, execute)`` for the agent's cognition tools (issue #358).
+
+    Each tool is offered only when its source is attached AND non-empty (never
+    offer a tool that can only come back empty): ``recall`` reads the agent's
+    own :class:`~text_adventure_games.memory.AgentMemory`, ``query_knowledge``
+    the passed *knowledge* (the character's beliefs -- the caller passes it
+    because knowledge lives on the character, not the agent), and ``read_plan``
+    the sim-builder convention ``agent.plan`` (a
+    :class:`~text_adventure_games.planning.DailyPlan`).
+
+    ``execute(name, args)`` returns the run_tool_loop 3-tuple for a cognition
+    call -- ``(formatted result, False, False)`` so the loop continues and the
+    agent still acts -- or ``None`` when *name* is not a cognition tool (route
+    it as an action). After :data:`COGNITION_BUDGET` calls, further ones get an
+    ``is_error`` "budget exhausted" result; any exception inside a tool becomes
+    an ``is_error`` result too, never a crash of the turn. *trace* (optional,
+    ``(str) -> None``) receives one summary line per successful call for the
+    private AGENT_* channels. *turn* stamps retrieval recency; ``None`` falls
+    back to the newest memory's turn (the conversation path has no game clock).
+    """
+    memory = getattr(agent, "memory", None)
+    plan = getattr(agent, "plan", None)
+    if turn is None:
+        records = getattr(memory, "records", None)
+        turn = records[-1].created_turn if records else 0
+    handlers = {}
+    tools = []
+
+    if memory is not None and memory.records:
+
+        def _recall(args):
+            query = str(args.get("query") or "").strip()
+            kwargs = {}
+            k = args.get("k")
+            if isinstance(k, int) and not isinstance(k, bool) and k > 0:
+                kwargs["max_records"] = k
+            found = memory.retrieve(query=query, turn=turn, **kwargs)
+            text = render_memories(found) or "No relevant memories."
+            return text, f"recall({query!r}) -> {len(found)} memories"
+
+        handlers["recall"] = _recall
+        tools.append(build_recall_tool())
+
+    if knowledge is not None and getattr(knowledge, "beliefs", None):
+
+        def _query_knowledge(args):
+            topic = str(args.get("topic") or "").strip()
+            needle = topic.lower()
+            matched = [
+                b
+                for b in knowledge.beliefs
+                if (b.topic and b.topic.lower() == needle) or needle in b.text.lower()
+            ]
+            summary = f"query_knowledge({topic!r}) -> {len(matched)} beliefs"
+            if not matched:
+                return f"You hold no beliefs about '{topic}'.", summary
+            # Same bullet shape as Knowledge.render, narrowed to the topic.
+            lines = [f"What you know about {topic}:"]
+            lines.extend(f" - {b.text}" for b in matched)
+            return "\n".join(lines), summary
+
+        handlers["query_knowledge"] = _query_knowledge
+        tools.append(build_query_knowledge_tool())
+
+    if plan is not None and (plan.stops or plan.hours or plan.day):
+
+        def _read_plan(args):
+            lines = plan_memory_lines(plan)
+            return "\n".join(lines), f"read_plan() -> {len(lines)} lines"
+
+        handlers["read_plan"] = _read_plan
+        tools.append(build_read_plan_tool())
+
+    state = {"used": 0}
+
+    def execute(name, args):
+        handler = handlers.get(name)
+        if handler is None:
+            return None
+        if state["used"] >= COGNITION_BUDGET:
+            return (
+                "Retrieval budget exhausted -- you must act now.",
+                True,
+                False,
+            )
+        state["used"] += 1
+        try:
+            result, summary = handler(args or {})
+        except Exception as exc:  # never crash the turn on a retrieval bug
+            return (f"{name} failed: {exc}", True, False)
+        if trace is not None:
+            trace(summary)
+        return (result, False, False)
+
+    return tools, execute
 
 
 def _parse_decision(
@@ -303,6 +705,7 @@ class LLMAgent(Agent):
         embedding_client=None,
         reflector=None,
         reflection_threshold: float = DEFAULT_REFLECTION_THRESHOLD,
+        cognition_tools: bool = False,
     ):
         super().__init__(
             persona=persona,
@@ -315,6 +718,15 @@ class LLMAgent(Agent):
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.max_duration = max_duration
+        # Cognition tools (issue #358): when True (and the client supports
+        # call_tools), recall / query_knowledge / read_plan are offered
+        # alongside the action tools so the agent can consult its own state
+        # before acting. Default False keeps every path byte-identical.
+        self.cognition_tools = cognition_tools
+        # One summary line per cognition call the agent made while producing
+        # its last dialogue line (the dialogue seam has no parser reference, so
+        # conversation.converse reads this buffer and emits the AGENT_* trace).
+        self.last_cognition_trace: list[str] = []
 
     def decide(self, observation: str) -> str | None:
         self.last_reasoning = None
@@ -371,12 +783,74 @@ class LLMAgent(Agent):
         flags this as its closing line. A client that can't fill the tool *and*
         returns nothing from chat (e.g. the non-conversational schedule mock)
         yields ``None``, so no conversation happens -- which is what keeps the
-        default offline run silent and byte-identical."""
+        default offline run silent and byte-identical.
+
+        With :attr:`cognition_tools` on (issue #358) and a ``call_tools``-capable
+        client, the agent first gets a bounded chance to ``recall`` /
+        ``read_plan`` before speaking (see :meth:`_converse_with_cognition`);
+        with the flag off, this path is byte-identical to before."""
         self.last_dialogue_done = False
+        self.last_cognition_trace = []
+        if self.cognition_tools and hasattr(self.llm_client, "call_tools"):
+            spoken = self._converse_with_cognition(observation)
+            if spoken is not None:
+                return spoken
         spoken = self._converse_structured(observation)
         if spoken is not None:
             return spoken
         return self._converse_freetext(observation)
+
+    def _converse_with_cognition(self, observation: str) -> str | None:
+        """Dialogue grounded in what the agent chose to recall (issue #358).
+
+        Offers the cognition tools alongside ``speak`` in a bounded
+        :func:`~text_adventure_games.llm_client.run_tool_loop`, so the agent can
+        consult its own memory/plan (up to :data:`COGNITION_BUDGET` calls)
+        before its line. ``query_knowledge`` is not offered here: beliefs live
+        on the character, which the dialogue seam cannot reach. Returns the
+        utterance, or ``None`` to fall back to the plain structured/free-text
+        paths (a declining client, no cognition sources, or no usable line).
+        Each retrieval is buffered in :attr:`last_cognition_trace` for the
+        conversation loop to emit on the private AGENT_* channels.
+        """
+        cog_tools, cognition_execute = cognition_toolset(
+            self, trace=self.last_cognition_trace.append
+        )
+        if not cog_tools:
+            # Nothing to consult -- the plain single-speak path costs less.
+            return None
+        tools = cog_tools + [build_speak_tool()]
+        messages = [
+            {"role": "system", "content": self._structured_system_message()},
+            {"role": "user", "content": observation},
+        ]
+        state: dict = {}
+
+        def execute(name, args):
+            consulted = cognition_execute(name, args)
+            if consulted is not None:
+                return consulted
+            if name == "speak":
+                state["utterance"] = (args.get("utterance") or "").strip()
+                state["done"] = bool(args.get("done"))
+                return ("Done.", False, True)
+            return (f"Unknown tool '{name}'. Use speak.", True, False)
+
+        run_tool_loop(
+            self.llm_client,
+            messages,
+            tools,
+            execute,
+            max_rounds=1 + COGNITION_BUDGET,
+            tool_choice="any",
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
+        utterance = state.get("utterance") or ""
+        if not utterance:
+            return None
+        self.last_dialogue_done = bool(state.get("done"))
+        return utterance
 
     def _converse_structured(self, observation: str) -> str | None:
         """Tool-calling path: fill the ``speak`` schema. Returns ``None`` (so
@@ -674,6 +1148,12 @@ def _decide_and_route_loop(
     Returns ``(handled, acted)``. ``handled`` is ``False`` when the client made no
     tool call at all (a declining or chat-only client), so the caller falls
     through to the legacy path.
+
+    When ``agent.cognition_tools`` is on (issue #358), the cognition tools are
+    offered alongside the action tools and handled in the same ``execute``
+    callback; each successful retrieval is traced on the AGENT_REASONING
+    channel (never ``command_history``, so one agent's recall can't leak into
+    another's observation).
     """
     # Same single-shot reset contract as LLMAgent.decide(): the structured tool
     # carries no duration, so last_duration stays None (-> _resolve_duration uses
@@ -682,7 +1162,34 @@ def _decide_and_route_loop(
     agent.last_duration = None
     mem = getattr(agent, "memory", None)
     turn = getattr(game, "turn", 0)
-    tool = build_choose_action_tool(agent.action_names)
+    # Per-action tools (issue #356): one tool per verb the agent may choose,
+    # typed and scope-narrowed to this actor. Fall back to the single
+    # choose_action tool only if the registry yields nothing (a degenerate game).
+    tools = tools_for(game.parser, actor=character, names=agent.action_names)
+    if not tools:
+        tools = [build_choose_action_tool(agent.action_names)]
+    # Cognition tools (issue #358, opt-in): offer recall / query_knowledge /
+    # read_plan alongside the action tools, each gated on its source existing.
+    # Their rounds ride ON TOP of the historical act/retry budget, so consulting
+    # memory never eats an action attempt; after COGNITION_BUDGET calls the
+    # execute callback refuses further ones (see cognition_toolset).
+    cog_names: set = set()
+    cognition_execute = None
+    if getattr(agent, "cognition_tools", False):
+        cog_tools, cognition_execute = cognition_toolset(
+            agent,
+            knowledge=getattr(character, "knowledge", None),
+            turn=turn,
+            trace=lambda text: game.parser.agent_reasoning(character.name, text),
+        )
+        # A registered action verb keeps priority over a same-named cognition
+        # tool (duplicate tool names would be rejected by real providers).
+        offered = {t["name"] for t in tools}
+        cog_tools = [t for t in cog_tools if t["name"] not in offered]
+        if cog_tools:
+            cog_names = {t["name"] for t in cog_tools}
+            tools = tools + cog_tools
+            max_rounds += COGNITION_BUDGET
     messages = [
         {"role": Role.SYSTEM, "content": agent._structured_system_message()},
         {"role": Role.USER, "content": observation},
@@ -690,11 +1197,24 @@ def _decide_and_route_loop(
     state = {"acted": False, "calls": 0, "attempt": 1}
 
     def execute(name, args):
+        if state["acted"]:
+            # A real provider may emit several tool calls in one assistant turn
+            # (parallel tool use), but an NPC gets ONE act per game turn: the
+            # first successful route wins and the rest are refused here. Each
+            # refusal still returns a tool_result -- the wire protocol requires
+            # one per tool_use. The adapters also ask providers not to
+            # parallelize (disable_parallel_tool_use / parallel_tool_calls),
+            # but that is best-effort; this guard is the authority.
+            return ("Already acted this turn; extra tool call ignored.", True, True)
         state["calls"] += 1
+        if name in cog_names:
+            # An in-process read of the agent's own state: the loop continues
+            # (done=False) so the agent still acts this episode.
+            return cognition_execute(name, args)
         agent.last_reasoning = (args.get("reasoning") or "").strip() or None
-        action = (args.get("action") or "").strip()
-        arguments = (args.get("arguments") or "").strip()
-        command = f"{action} {arguments}".strip()
+        # `name` is the verb for a per-action tool, or "choose_action" for the
+        # fallback; command_from_tool_call handles both and assembles the string.
+        command = command_from_tool_call(name, args, game.parser)
         if not command:
             # The model called the tool but named no action: nothing to route.
             # Terminal (no retry) so the loop ends, mirroring decide()'s "no
@@ -732,7 +1252,7 @@ def _decide_and_route_loop(
     run_tool_loop(
         agent.llm_client,
         messages,
-        [tool],
+        tools,
         execute,
         max_rounds=max_rounds,
         tool_choice="any",
@@ -1005,6 +1525,7 @@ def make_react_behavior(
         embedding_client=embedding_client,
         reflector=reflector,
         reflection_threshold=config.reflection_threshold,
+        cognition_tools=config.cognition_tools,
     )
 
     def behavior(character, game):
@@ -1061,6 +1582,7 @@ def make_hybrid_behavior(
         embedding_client=embedding_client,
         reflector=reflector,
         reflection_threshold=config.reflection_threshold,
+        cognition_tools=config.cognition_tools,
     )
 
     def behavior(character, game):

@@ -389,6 +389,12 @@ def _cacheable_system(system_text: str) -> list[dict]:
 # answer with text or call tools), "any" (must call some tool), and a forced
 # {"name": ...} (must call that one). call_tool's forced-single path passes the
 # {"name": ...} form, so these must reproduce today's forced wire shapes exactly.
+# "auto"/"any" additionally ask the provider for ONE tool call per assistant
+# turn (Anthropic: disable_parallel_tool_use; OpenAI: parallel_tool_calls=False
+# in call_tools): the engine's tool loops execute calls one at a time and an
+# NPC gets one act per game turn, so parallel calls only waste refusals. This
+# is best-effort -- providers may still emit several, and the decide loop's
+# execute guard remains the authority.
 def _openai_tool_choice(tool_choice):
     if tool_choice == "auto":
         return "auto"
@@ -399,9 +405,9 @@ def _openai_tool_choice(tool_choice):
 
 def _anthropic_tool_choice(tool_choice):
     if tool_choice == "auto":
-        return {"type": "auto"}
+        return {"type": "auto", "disable_parallel_tool_use": True}
     if tool_choice == "any":
-        return {"type": "any"}
+        return {"type": "any", "disable_parallel_tool_use": True}
     return {"type": "tool", "name": tool_choice["name"]}
 
 
@@ -942,6 +948,7 @@ class OpenAIClient:
                         max_tokens=max_tokens,
                         tools=openai_tools,
                         tool_choice=_openai_tool_choice(tool_choice),
+                        parallel_tool_calls=False,
                     ),
                     provider="openai",
                     messages=msgs,
@@ -1628,6 +1635,65 @@ def _mock_brain_choose(system: str, observation: str) -> str | None:
     return None  # unknown NPC: safest move is no move
 
 
+def _mock_tool_call_result(command, reasoning, tools, seq):
+    """Build the ``ToolCallResult`` a tool-calling model would return for
+    *command*, matching whichever toolset the agent offered (issue #356).
+
+    With a single ``choose_action`` tool the verb rides in an ``action`` enum
+    field (split via :func:`_split_command`, so a multi-word verb like "ghost
+    touch" stays whole). With the per-action tools the verb IS the tool name --
+    picked as the longest tool name the command starts with -- and the remainder
+    fills the free-text ``arguments`` slot the mock's Action Castle verbs use.
+    Returns ``None`` (a decline) when N per-action tools are offered but none
+    matches the command's verb, so the caller can fall back to its single-tool
+    path."""
+    call_id = f"call_{seq}"
+    choose = next((t for t in tools if t.get("name") == "choose_action"), None)
+    if choose is not None or not tools:
+        tool = choose or {}
+        verb, rest = _split_command(command, tool)
+        return ToolCallResult(
+            text=None,
+            tool_calls=[
+                {
+                    "id": call_id,
+                    "name": tool.get("name", "choose_action"),
+                    "arguments": {
+                        "reasoning": reasoning,
+                        "action": verb,
+                        "arguments": rest,
+                    },
+                }
+            ],
+        )
+    # N per-action tools: the tool NAME is the (possibly sanitized) verb. Recover
+    # the SPOKEN verb -- underscores back to spaces -- to match the brain's flat
+    # command, then echo back the tool's own name, exactly as a real provider
+    # does. Longest spoken verb first so a multi-word verb ("ghost touch") wins
+    # over a shorter overlap.
+    named = sorted(
+        ((t.get("name", ""), t.get("name", "").replace("_", " ")) for t in tools),
+        key=lambda pair: len(pair[1]),
+        reverse=True,
+    )
+    for tool_name, verb in named:
+        if command == verb or command.startswith(verb + " "):
+            rest = command[len(verb) :].strip()
+            tool = next(t for t in tools if t.get("name") == tool_name)
+            props = tool.get("parameters", {}).get("properties", {})
+            arguments = {"reasoning": reasoning}
+            # The mock brain only produces free-text verbs, so fill `arguments`
+            # when the tool offers it; a declared-schema tool's typed slots stay
+            # empty (a scripted client drives those cases in tests).
+            if "arguments" in props:
+                arguments["arguments"] = rest
+            return ToolCallResult(
+                text=None,
+                tool_calls=[{"id": call_id, "name": tool_name, "arguments": arguments}],
+            )
+    return None
+
+
 class MockReActClient(MockLlmClient):
     """A free, offline stand-in for an LLM, smart enough to drive the ReAct loop.
 
@@ -1723,14 +1789,20 @@ class MockReActClient(MockLlmClient):
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
         """Plural counterpart of :meth:`call_tool`, for the bounded tool loop
-        (issue #355). The mock brain is a string rule engine with no memory, so
-        it can't read block-shaped tool_use/tool_result turns directly -- instead
-        we RECONSTRUCT the same reflection observation string ``npc._reflect``
-        would build (last command + the ``is_error`` failure reason) from the
-        conversation, feed it to the brain, and emit a one-call
-        ``ToolCallResult``. That makes a within-conversation retry (e.g. the
-        troll's ``attack player`` -> gated -> ``attack player with club``) work
-        exactly as the across-turn escalation does. Returns ``None`` to decline.
+        (issue #355) and the per-action toolset (issue #356). The mock brain is a
+        string rule engine with no memory, so it can't read block-shaped
+        tool_use/tool_result turns directly -- instead we RECONSTRUCT the same
+        reflection observation string ``npc._reflect`` would build (last command +
+        the ``is_error`` failure reason) from the conversation, feed it to the
+        brain, and emit a one-call ``ToolCallResult``. That makes a
+        within-conversation retry (e.g. the troll's ``attack player`` -> gated ->
+        ``attack player with club``) work exactly as the across-turn escalation
+        does.
+
+        ``_mock_tool_call_result`` answers whichever toolset was offered: a single
+        ``choose_action`` (verb in an ``action`` enum) or the #356 per-action
+        tools (one tool per verb, the verb selecting the tool). Returns ``None``
+        to decline.
         """
         self.tool_calls_log.append(
             {
@@ -1741,7 +1813,6 @@ class MockReActClient(MockLlmClient):
                 "temperature": temperature,
             }
         )
-        tool = tools[0] if tools else {}
         # The system prompt and the base observation are the first string-content
         # system/user turns (messages[0] / messages[1] as the loop builds them).
         system = ""
@@ -1764,9 +1835,18 @@ class MockReActClient(MockLlmClient):
             for block in content:
                 if block.get("type") == "tool_use":
                     args = block.get("arguments", {}) or {}
-                    action = (args.get("action") or "").strip()
+                    # choose_action carries the verb in args['action']; a #356
+                    # per-action tool_use is itself NAMED for the verb.
+                    tool_name = block.get("name", "")
+                    if tool_name and tool_name != "choose_action":
+                        # A per-action tool_use is NAMED for the verb; undo the
+                        # provider-name sanitization (underscores -> spaces) so the
+                        # rebuilt command is the spoken verb the brain reflects on.
+                        verb = tool_name.replace("_", " ")
+                    else:
+                        verb = (args.get("action") or "").strip()
                     arguments = (args.get("arguments") or "").strip()
-                    last_command = f"{action} {arguments}".strip()
+                    last_command = f"{verb} {arguments}".strip()
                 elif block.get("type") == "tool_result" and block.get("is_error"):
                     last_fail = str(block.get("content", ""))
         if last_command and last_fail:
@@ -1787,20 +1867,8 @@ class MockReActClient(MockLlmClient):
             reasoning, command = _split_decision(decision)
             if command:
                 self.decisions.append({"command": command, "system": system})
-                verb, rest = _split_command(command, tool)
-                result = ToolCallResult(
-                    text=None,
-                    tool_calls=[
-                        {
-                            "id": f"call_{len(self.tool_calls_log)}",
-                            "name": tool.get("name", "choose_action"),
-                            "arguments": {
-                                "reasoning": reasoning,
-                                "action": verb,
-                                "arguments": rest,
-                            },
-                        }
-                    ],
+                result = _mock_tool_call_result(
+                    command, reasoning, tools, len(self.tool_calls_log)
                 )
         if result is not None:
             record_call(
