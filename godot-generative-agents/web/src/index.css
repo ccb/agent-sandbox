@@ -15,8 +15,8 @@ body,
      page itself must never scroll. Without this, the embedded Godot canvas —
      which the engine sizes to the whole window — overflows the stage by the
      header's height and makes the document scrollable, so a zoom gesture could
-     scroll the header off the top. The agent view does its own scrolling inside
-     `.view-agents`. */
+     scroll the header off the top. The overlay pages do their own scrolling
+     inside `.view-llm` (and the like). */
   overflow: hidden;
 }
 

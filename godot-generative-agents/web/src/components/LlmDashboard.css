@@ -71,6 +71,16 @@
   background: #3c4150;
 }
 
+/* Compact variant for the run strip (replay-only, #528): drop the card chrome
+   and the h2/p so just the input + button ride inline in the strip. */
+.llm-connect--inline {
+  flex: 1 1 22em;
+  max-width: 32em;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
 /* ---------- Run strip -------------------------------------------------------- */
 /* Run-level truth at a glance: connection/run state (the agents view's badge),
    exact call + cost totals, budget remaining, and the driving model. Sticky so
@@ -174,6 +184,25 @@
   display: flex;
   align-items: center;
   gap: 0.8em;
+}
+
+/* Roster cells are clickable — the header is a button that opens the agent's
+   card modal (#528). Reset the button chrome so it lays out exactly like the
+   plain header; the name underlines on hover/focus to signal it's actionable. */
+.llm-cell-head--btn {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.llm-cell-head--btn:hover .llm-cell-name,
+.llm-cell-head--btn:focus-visible .llm-cell-name {
+  text-decoration: underline;
 }
 
 .llm-cell-sprite {

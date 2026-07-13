@@ -158,13 +158,13 @@
 }
 
 /* The canvas page stays rendered underneath at all times (so Godot never resizes
-   to zero); the agents page is an opaque overlay on top when active. */
+   to zero); the other pages are opaque overlays on top when active. */
 .view-game {
   z-index: 1;
 }
 
-/* The agents page and the LLM dashboard (#519) share the same overlay shape. */
-.view-agents,
+/* The live dashboard (#519, now also the agent-cards home — #528) is an opaque
+   overlay above the canvas. */
 .view-llm {
   z-index: 2;
   overflow-y: auto;
@@ -184,12 +184,6 @@
   visibility: hidden;
 }
 
-/* The agent-cards page is always mounted (so the canvas underneath keeps its
-   size); show it only on its own view. */
-.app:not([data-view="agents"]) .view-agents {
-  display: none;
-}
-
 /* The prompt views (chains graph, reader) are opaque dark overlays, mounted only
    when active (App.tsx), so they just need a layer above the canvas. */
 .view-prompts,
@@ -200,7 +194,7 @@
 }
 
 /* The landing page: an opaque white overlay (mounted only when active) that owns
-   its own vertical scroll, like the agents page. */
+   its own vertical scroll, like the live dashboard. */
 .view-home {
   z-index: 2;
   overflow-y: auto;
