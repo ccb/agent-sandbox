@@ -19,13 +19,6 @@ configures it, the replay bake (``penn.generate_penn_replay``) drives ``simulate
 to a file, and the live server (``penn.serve_penn``) drives ``step`` tick-by-tick.
 """
 
-import os
-
-from text_adventure_games.embedding_client import (
-    EmbeddingConfig,
-    create_embedding_client,
-    embedding_client_from_env,
-)
 from text_adventure_games.planning import (
     ACTION_FAILED,
     BEHIND_SCHEDULE,
@@ -49,39 +42,6 @@ from .sim_config import CognitionConfig
 from .world_map import WorldMap
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
-
-
-def resolve_embedding_client(provider: str | None):
-    """Resolve a semantic-memory embedding client for the sim (issue #102).
-
-    Precedence: an explicit ``--embeddings`` *provider* wins; otherwise fall back
-    to the ``EMBEDDING_PROVIDER`` environment variable (via the engine's
-    ``embedding_client_from_env``). Returns ``None`` -- keyword-overlap relevance,
-    the offline default -- when neither is set, or when the chosen backend can't
-    be created (e.g. the ``embeddings`` extra isn't installed). That graceful
-    degrade is what keeps the plain ``run_simulation`` run free, offline, and
-    CI-safe even with a default-on flag.
-
-    Either way the deterministic mock brain decides from location alone, so the
-    exported replay stays byte-identical; an embedding client only reorders the
-    (mock-ignored) retrieved-memory block.
-    """
-    if not provider:
-        return embedding_client_from_env()
-    try:
-        config = EmbeddingConfig(
-            provider=provider,
-            model=os.environ.get("EMBEDDING_MODEL"),
-            api_key=os.environ.get("EMBEDDING_API_KEY"),
-            base_url=os.environ.get("EMBEDDING_BASE_URL"),
-        )
-        return create_embedding_client(config)
-    except (ImportError, ValueError) as e:
-        print(
-            f"Warning: could not create embedding client ({e}); falling back "
-            "to keyword-overlap relevance."
-        )
-        return None
 
 
 def step(
