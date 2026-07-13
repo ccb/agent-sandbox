@@ -1879,7 +1879,7 @@
       "stroke-dasharray": "3 3" });                          // the ghost tongue
     const shimmer = Array.from({ length: 2 }, (_, i) => el(svg, "path",
       { fill: "none", stroke: PH_DIM, opacity: .3 }));
-    const motto = label(svg, 320, 120, 10, PH_DIM); motto.setAttribute("text-anchor", "middle");
+    const motto = label(svg, 320, 120, 13, PH_BRIGHT); motto.setAttribute("text-anchor", "middle");
     const foot = label(svg, 320, 340, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
