@@ -296,7 +296,7 @@ class Parser:
             if self.get_direction(rest, character.location):
                 return ActionName.DESCRIBE
             return ActionName.EXAMINE
-        elif "examine " in command or command.startswith("x "):
+        elif re.search(r"\bexamine\b", command) or command.startswith("x "):
             return ActionName.EXAMINE
         elif command.startswith("take off") or command.startswith("remove "):
             # Must precede the "take "/get branch -- "take " is a substring of
@@ -311,24 +311,23 @@ class Parser:
             # day" must not EAT). Prefix special cases ("get off", "take
             # off", directions, say/taste/hint, ...) all ran above.
             return initial
-        elif "take " in command or "get " in command:
+        elif re.search(r"\b(take|get)\b", command):
+            # The keyword branches from here down match on WORD BOUNDARIES
+            # (#536): "target" must not GET, "great hall" must not EAT,
+            # "forgive" must not GIVE -- the same fix the longest-match
+            # fallback already carries ("dragon" -> GO).
             return ActionName.GET
-        elif "light" in command:
+        elif re.search(r"\blight(s|ed|ing)?\b", command):
             return ActionName.LIGHT
-        elif "drop " in command:
+        elif re.search(r"\bdrop\b", command):
             return ActionName.DROP
         elif command.startswith("break") or command.startswith("smash"):
             return ActionName.BREAK
-        elif (
-            "eat " in command
-            or "eats " in command
-            or "ate " in command
-            or "eating " in command
-        ):
+        elif re.search(r"\b(eat|eats|ate|eating)\b", command):
             return ActionName.EAT
-        elif "drink" in command:
+        elif re.search(r"\bdrink(s|ing)?\b", command):
             return ActionName.DRINK
-        elif "give" in command or command.startswith("hand "):
+        elif re.search(r"\bgive\b", command) or command.startswith("hand "):
             # A custom give-action ("give gem to wizard") whose item AND
             # recipient both appear -- in ANY word order -- wins over the
             # built-in Give, so "give wizard the gem" / "hand wizard the gem"
@@ -336,15 +335,15 @@ class Parser:
             # which the bare-"give" keyword check used to miss. Falls back to the
             # built-in Give when no custom give-action matches.
             return self._match_give_action(command) or ActionName.GIVE
-        elif "attack" in command or "hit " in command or "hits " in command:
+        elif re.search(r"\battack\w*\b|\bhits?\b", command):
             return ActionName.ATTACK
-        elif "inventory" in command or command == "i":
+        elif re.search(r"\binventory\b", command) or command == "i":
             return ActionName.INVENTORY
         elif command == "wait" or command == "z":
             return ActionName.WAIT
         elif command in ("help", "h", "commands", "?") or command.startswith("help"):
             return ActionName.HELP
-        elif "quit" in command:
+        elif re.search(r"\bquit\b", command):
             return ActionName.QUIT
         else:
             # Longest registered action name -- OR single-word alias -- that

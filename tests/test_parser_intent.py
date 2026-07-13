@@ -92,3 +92,24 @@ def test_give_is_carved_out_for_word_order_resolution():
     # (#171) keeps resolving custom give-actions; with no custom give
     # registered the built-in GIVE wins, exactly as before.
     assert _intent("give wizard the gem") == ActionName.GIVE
+
+
+def test_interior_substrings_no_longer_hijack():
+    # Each of these routed to the named action via a bare substring before
+    # #536's hardening ("great " contains "eat ", "target" contains "get",
+    # "mosquito" contains "quit", ...).
+    assert _intent("admiring the great hall") != ActionName.EAT
+    assert _intent("aim at the target") != ActionName.GET
+    assert _intent("forgiveness is divine") != ActionName.GIVE
+    assert _intent("wave at the mosquito") != ActionName.QUIT
+    assert _intent("polish the flashlight") != ActionName.LIGHT
+    assert _intent("the dewdrop falls") != ActionName.DROP
+    assert _intent("chit chat") != ActionName.ATTACK
+
+
+def test_verb_words_still_match_mid_command():
+    # The branches keep matching genuine words -- including the enumerated
+    # conjugations -- anywhere in the command (NPC-generated phrasings).
+    assert _intent("the troll eats the fish") == ActionName.EAT
+    assert _intent("drinking the potion") == ActionName.DRINK
+    assert _intent("lights the lamp") == ActionName.LIGHT
