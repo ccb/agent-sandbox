@@ -311,6 +311,14 @@ def test_llm_planner_reads_validated_step_counts():
     assert plan.stops[1].steps is None  # omitted -> stay put
 
 
+def test_llm_planner_keeps_hour_with_empty_summary():
+    # An empty summary is schema-valid (no minLength) and renders harmlessly, so
+    # the hour must survive -- a truthiness check would wrongly drop it (#529 review).
+    script = {HOURLY_TOOL["name"]: {"hours": [{"start_hour": 14, "summary": ""}]}}
+    plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
+    assert [h.start_hour for h in plan.hours] == [14]
+
+
 def test_planner_tool_strict_compatibility():
     # #357: day/hourly have all-required fields -> OpenAI strict; minute_plan has
     # genuinely optional emoji/steps -> best-effort (no false strict:true).

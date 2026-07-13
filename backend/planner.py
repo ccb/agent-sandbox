@@ -272,10 +272,11 @@ class LLMPlanner:
         result = self._call(user, HOURLY_TOOL)
         hours = []
         # Validated upstream (#357): start_hour is an int, summary a string.
-        # `is not None` (not truthiness) so a legitimate hour 0 is kept.
+        # `is not None` (not truthiness) so a legitimate hour 0 and an empty
+        # summary are both kept (an empty summary renders harmlessly).
         for h in result.get("hours") or []:
             hour, summary = h.get("start_hour"), h.get("summary")
-            if hour is not None and summary:
+            if hour is not None and summary is not None:
                 hours.append(HourBlock(start_hour=hour, summary=summary))
         return hours
 

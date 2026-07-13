@@ -765,6 +765,14 @@ def _call_tools_with_validation(
         return result
     if not repair:
         return None
+    # ponytail: the repair exchange (failed call + is_error correction) is a
+    # LOCAL retry to obtain a valid result, not woven into the caller's messages
+    # -- like #260's transport retry, the failed attempt isn't persisted. So in a
+    # multi-round run_tool_loop the model can't see it was already corrected and
+    # may repeat the mistake (just re-repaired, one extra round-trip). Harmless
+    # under OpenAI strict (can't violate) and for single-shot call_tool. Upgrade:
+    # have run_tool_loop thread the repair turns into its conversation if a
+    # non-strict provider is measured repeating mid-loop schema mistakes.
     repair_messages = list(messages) + _repair_turn(result, errors)
     result, raw_usage, latency_ms = once(repair_messages)
     still_invalid = result is None or any(_tool_call_errors(result, tools))
@@ -1372,6 +1380,11 @@ class MockLlmClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> dict | None:
+        # NOTE (#357): the mock's own call_tool/call_tools serve scripted replies
+        # verbatim and do NOT run the schema validation/repair layer -- a test
+        # scripts exactly what it wants, so validating it is pointless. The layer
+        # is exercised through the real adapters (which route call_tool ->
+        # call_tools) and by driving call_tools on a MockLlmClient directly.
         self.tool_calls.append(
             {
                 "messages": messages,
