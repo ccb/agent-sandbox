@@ -5,6 +5,7 @@ import { LlmDashboard } from "./components/LlmDashboard";
 import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
 import { useLive, initialApiBase } from "./useLive";
+import { setUrlParam } from "./url";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -153,9 +154,7 @@ export default function App() {
   const connectApi = (url: string) => {
     const clean = url.trim().replace(/\/+$/, "");
     if (!clean) return;
-    const params = new URLSearchParams(window.location.search);
-    params.set("api", clean);
-    window.history.replaceState(null, "", `?${params}${window.location.hash}`);
+    setUrlParam("api", clean);
     setApiUrl(clean);
   };
   const [view, setView] = useState<View>(viewFromHash);
