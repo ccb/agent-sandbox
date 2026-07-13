@@ -1,0 +1,39 @@
+/* Scoped styles for GodotCanvas — the first component on CSS Modules (the
+   convention for new components; see web/README.md). Class names here are local
+   to this file: `styles.wrap` / `styles.canvas` / `styles.status` in the .tsx. */
+
+.wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas {
+  display: block;
+  background: #000;
+  /* Pixel art: never smooth the campus tiles when the canvas is scaled. */
+  image-rendering: pixelated;
+  /* The Godot engine (canvasResizePolicy: 2) sets the canvas to
+     `position:absolute; top:0; left:0` and sizes it to the whole window on every
+     resize. Pin it to the wrap (which fills the stage, below the header) and
+     force its display size to the wrap with !important so that engine-set inline
+     size can't make it overflow the stage or cover the nav bar. The drawing
+     buffer stays window-sized; the browser scales it into this box. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.status {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cfd6e0;
+  text-align: center;
+  max-width: 80%;
+  pointer-events: none;
+}
