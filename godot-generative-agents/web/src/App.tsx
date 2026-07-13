@@ -1,11 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { GodotCanvas } from "./components/GodotCanvas";
+import { Activity, BookOpen, FileText, Gamepad2, Home, Menu, Share2 } from "lucide-react";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { AgentCardModal } from "./components/AgentCardModal";
-import { LlmDashboard } from "./components/LlmDashboard";
+import { GodotCanvas } from "./components/GodotCanvas";
 import { HomeView } from "./components/home/HomeView";
-import { useReplay } from "./useReplay";
-import { useLive, initialApiBase } from "./useLive";
+import { LlmDashboard } from "./components/LlmDashboard";
 import { setUrlParam } from "./url";
+import { initialApiBase, useLive } from "./useLive";
+import { useReplay } from "./useReplay";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -14,7 +15,7 @@ import "./App.css";
 const PromptChainView = lazy(() =>
   import("./components/promptviz/PromptChainView").then((m) => ({
     default: m.PromptChainView,
-  }))
+  })),
 );
 
 // The Prompts reader is its own lazy chunk — it's just a table + modal, so it
@@ -22,7 +23,7 @@ const PromptChainView = lazy(() =>
 const PromptReaderView = lazy(() =>
   import("./components/promptviz/PromptReaderView").then((m) => ({
     default: m.PromptReaderView,
-  }))
+  })),
 );
 
 type View = "home" | "game" | "llm" | "prompts" | "reader";
@@ -41,74 +42,15 @@ function viewFromHash(): View {
   return "home";
 }
 
-// Monochrome line icons for the menu. Stroke is `currentColor`, so each icon
-// inherits its menu item's text color — dark normally, white when active. Kept
-// as inline SVG (like the hamburger trigger) rather than emoji so they render as
-// flat black-and-white glyphs instead of the platform's colored emoji art.
-function NavIcon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      className="nav-icon"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
-}
-
-const ICON_HOME = (
-  <NavIcon>
-    <path d="M3 10.5 12 3l9 7.5" />
-    <path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" />
-    <path d="M9.5 21v-6h5v6" />
-  </NavIcon>
-);
-const ICON_GAME = (
-  <NavIcon>
-    <line x1="7" y1="11" x2="11" y2="11" />
-    <line x1="9" y1="9" x2="9" y2="13" />
-    <line x1="15" y1="12" x2="15.01" y2="12" />
-    <line x1="18" y1="10" x2="18.01" y2="10" />
-    <path d="M17.32 6H6.68a4 4 0 0 0-3.98 3.59c-.08.7-.7 5.66-.7 6.41a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 16h4.34a2 2 0 0 1 1.42.59L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-.75-.62-5.71-.7-6.41A4 4 0 0 0 17.32 6z" />
-  </NavIcon>
-);
-const ICON_LLM = (
-  <NavIcon>
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </NavIcon>
-);
-const ICON_CHAINS = (
-  <NavIcon>
-    <circle cx="18" cy="5" r="3" />
-    <circle cx="6" cy="12" r="3" />
-    <circle cx="18" cy="19" r="3" />
-    <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
-    <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
-  </NavIcon>
-);
-const ICON_READER = (
-  <NavIcon>
-    <path d="M12 7v14" />
-    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
-  </NavIcon>
-);
-const ICON_DOCS = (
-  <NavIcon>
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
-    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-    <line x1="8" y1="13" x2="16" y2="13" />
-    <line x1="8" y1="17" x2="16" y2="17" />
-    <line x1="8" y1="9" x2="10" y2="9" />
-  </NavIcon>
-);
+// Menu icons: lucide line icons sized to the nav's 16px. Each is monochrome and
+// strokes in `currentColor`, so it inherits its menu item's text colour — dark
+// normally, white when the item is active.
+const ICON_HOME = <Home className="nav-icon" size={16} aria-hidden />;
+const ICON_GAME = <Gamepad2 className="nav-icon" size={16} aria-hidden />;
+const ICON_LLM = <Activity className="nav-icon" size={16} aria-hidden />;
+const ICON_CHAINS = <Share2 className="nav-icon" size={16} aria-hidden />;
+const ICON_READER = <BookOpen className="nav-icon" size={16} aria-hidden />;
+const ICON_DOCS = <FileText className="nav-icon" size={16} aria-hidden />;
 
 // The navigable views, grouped into labeled sections for the dropdown menu.
 interface NavItem {
@@ -204,7 +146,7 @@ export default function App() {
   const currentLabel =
     view === "home"
       ? "Home"
-      : NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.view === view)?.label ?? "Menu";
+      : (NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.view === view)?.label ?? "Menu");
 
   return (
     <div className="app" data-view={view}>
@@ -225,17 +167,7 @@ export default function App() {
               aria-label={`Navigate (current: ${currentLabel})`}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              <svg
-                className="nav-burger"
-                width="18"
-                height="18"
-                viewBox="0 0 18 18"
-                aria-hidden="true"
-              >
-                <rect x="1" y="3.5" width="16" height="2" rx="1" />
-                <rect x="1" y="8" width="16" height="2" rx="1" />
-                <rect x="1" y="12.5" width="16" height="2" rx="1" />
-              </svg>
+              <Menu className="nav-burger" size={18} aria-hidden />
             </button>
             {menuOpen && (
               <div className="nav-dropdown" role="menu" aria-label="Navigate">

@@ -92,14 +92,15 @@ jobs:
         run: uv run --no-sync python godot-generative-agents/tools/geo/validate_tmj.py
 
   web:
-    name: web (pnpm build)
+    name: web (lint + test + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # The web companion is TypeScript — nothing above type-checks it, so this
-      # job is its only automated gate (#520 review): a strict `tsc -b` + Vite
-      # build over the committed lockfile. pnpm's version comes from the
-      # `packageManager` pin in web/package.json.
+      # job is its only automated gate (#520 review): Biome (format check + lint),
+      # the Vitest suite, then a strict `tsc -b` + Vite build, all over the
+      # committed lockfile. pnpm's version comes from the `packageManager` pin in
+      # web/package.json.
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: godot-generative-agents/web/package.json
@@ -109,6 +110,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: godot-generative-agents/web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+        working-directory: godot-generative-agents/web
+      # `biome check` gates formatting + lint (lint warnings don't fail; errors do).
+      - run: pnpm lint
+        working-directory: godot-generative-agents/web
+      - run: pnpm test
         working-directory: godot-generative-agents/web
       - run: pnpm build
         working-directory: godot-generative-agents/web

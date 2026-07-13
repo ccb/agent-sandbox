@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import type { PromptEntry } from "../../types/promptviz";
 import { PromptModal } from "./PromptModal";
 import { packageLabel } from "./packageLabel";
-import type { PromptEntry } from "../../types/promptviz";
 import "./promptviz.css";
 
 // Flat catalog written by scripts/gen_promptviz.py (pnpm gen:promptviz).
@@ -43,9 +43,7 @@ export function PromptReaderView() {
           </span>
           <span className="pcv-name">Prompt Reader</span>
         </div>
-        <div className="pcv-controls">
-          {prompts && <span>{prompts.length} templates</span>}
-        </div>
+        <div className="pcv-controls">{prompts && <span>{prompts.length} templates</span>}</div>
       </header>
 
       <div className="pcv-reader-body">

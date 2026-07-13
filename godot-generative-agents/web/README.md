@@ -23,6 +23,9 @@ state out of Godot.
 | **React** | 18.3 | The page shell / component model — the home for future agent-info panels. |
 | **Vite** | 5.4 | Dev server (with the COOP/COEP headers Godot needs) + static build. |
 | **TypeScript** | 5.x | Type-safe app code, incl. the replay-JSON schema and the JS↔Godot seam. |
+| **Biome** | 2.x | One tool for format + lint (replaces Prettier + ESLint). `pnpm format` / `pnpm lint`. |
+| **Vitest** | 3.x | Vite-native unit tests (`pnpm test`); shares `vite.config.ts`, no extra setup. |
+| **lucide-react** | 1.x | Tree-shakeable line-icon set (nav icons); only the icons you import ship. |
 | **esbuild** | 0.21 (via Vite) | Vite's bundler/transpiler (native binary; see [Troubleshooting](#troubleshooting)). |
 | **pnpm** | 11.x | Package manager. Version pinned via `packageManager` in `package.json`. |
 | **Node** | 18+ | Runtime for the tooling (tested on 25). |
@@ -213,6 +216,9 @@ allows any localhost origin, so the dev server needs no proxy.
 | --- | --- |
 | `pnpm dev` | Vite dev server (COOP/COEP headers on). |
 | `pnpm build` | `tsc -b` typecheck + `vite build` → `dist/`. |
+| `pnpm lint` | Biome check — formatting + lint (the CI gate; lint warnings don't fail, errors do). |
+| `pnpm format` | Biome — rewrite files to the canonical format. |
+| `pnpm test` | Vitest — run the unit suite once (use `pnpm exec vitest` to watch). |
 | `pnpm preview` | Serve the production `dist/` build locally. |
 | `pnpm export:godot` | Headless Godot Web export → `public/godot/`. |
 | `pnpm gen:replay [-- <args>]` | Run the sim and copy the replay into `public/replay/`. Args pass through, e.g. `pnpm gen:replay --steps 600`. |
@@ -269,6 +275,18 @@ The first panels exist (the **Agent cards** view — `src/components/AgentPanel.
 
 - **TypeScript is strict** (`noUnusedLocals`/`noUnusedParameters` on). `pnpm build`
   must typecheck clean.
+- **Run `pnpm lint` before pushing** (CI runs it). It's Biome — format check + lint
+  in one. `pnpm format` fixes formatting. A handful of pre-existing lint rules are set
+  to `warn` in `biome.json` (mostly a11y in the older modals); warnings don't fail CI,
+  but new code should avoid adding to them.
+- **Styling: tokens + CSS Modules.** Shared colours/radii live as CSS custom properties
+  in `src/theme.css` (imported once from `index.css`) — reference `var(--color-…)` /
+  `var(--radius-…)` instead of hard-coding a hex or a `Npx` radius. A future dark theme
+  is just a `@media (prefers-color-scheme: dark)` block re-pointing those names. **New
+  components should use a co-located CSS Module** (`Foo.module.css`, imported as
+  `import styles from "./Foo.module.css"`, used as `styles.thing`) so class names are
+  scoped and can't collide — see `components/GodotCanvas.tsx` for the pattern. The older
+  global stylesheets (`App.css`, `AgentPanel.css`, …) migrate opportunistically.
 - **No `<StrictMode>`** in `main.tsx`: it double-invokes effects in dev, which would
   boot the Godot engine twice onto one canvas. Wrap your own (non-Godot) components
   in StrictMode if you want the extra checks.

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { packageLabel } from "./packageLabel";
 import type { PromptEntry } from "../../types/promptviz";
+import { packageLabel } from "./packageLabel";
 
 interface Props {
   entry: PromptEntry;
@@ -38,12 +38,7 @@ export function PromptModal({ entry, onClose }: Props) {
             {entry.template}.prompty
             <span className="pcv-pkg-badge">{packageLabel(entry.package)}</span>
           </h2>
-          <button
-            type="button"
-            className="pcv-modal-close"
-            aria-label="Close"
-            onClick={onClose}
-          >
+          <button type="button" className="pcv-modal-close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
