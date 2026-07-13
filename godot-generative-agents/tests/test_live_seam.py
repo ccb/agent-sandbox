@@ -340,3 +340,63 @@ def test_game_event_rows_ride_the_engine_feed():
         if e["kind"] == "engine" and e["event"].get("kind") == "game_event"
     ]
     assert rows == [record]
+
+
+# --- run registry (#306) -----------------------------------------------------
+
+
+def _stepper_with_store(tmp_path):
+    """A fake live stepper carrying a real store with one finished and one
+    'live' run. Ids chosen so the same-second id-DESC tiebreak lists the
+    live run first (list_runs orders by created DESC, id DESC)."""
+    from backend.run_store import RunStore
+
+    store = RunStore(tmp_path / "runs")
+    manifest = {"schema_version": 1, "personas": [{"name": "a"}], "llm": None}
+    store.create_run(manifest, run_id="run-1-old")
+    store.append_frame("run-1-old", 0, {"a": {"x": 0, "y": 0, "act": "walk", "e": "@"}})
+    store.update_run("run-1-old", status="finished", steps=1)
+    store.create_run(manifest, run_id="run-2-live")
+    stepper = _walker()
+    stepper.run_store = store
+    stepper.run_id = "run-2-live"
+    return stepper, store
+
+
+def test_run_registry_lists_gets_exports_and_deletes(tmp_path):
+    stepper, store = _stepper_with_store(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        listing = client.get("/runs").json()
+        assert listing["available"] is True
+        assert listing["current"] == "run-2-live"
+        assert [r["id"] for r in listing["runs"]] == ["run-2-live", "run-1-old"]
+        assert all("manifest" not in r for r in listing["runs"])
+        row = client.get("/runs/run-1-old").json()
+        assert row["manifest"]["personas"] == [{"name": "a"}]
+        assert row["status"] == "finished"
+        assert row["current"] is False
+        from backend.penn.export_replay import build_replay
+
+        assert client.get("/runs/run-1-old/replay").json() == build_replay(
+            store, "run-1-old"
+        )
+        assert client.get("/runs/missing").status_code == 404
+        assert client.get("/runs/missing/replay").status_code == 404
+        assert client.delete("/runs/run-2-live").status_code == 409  # live run
+        assert client.delete("/runs/run-1-old").json() == {
+            "ok": True,
+            "deleted": "run-1-old",
+        }
+        assert client.get("/runs/run-1-old").status_code == 404
+
+
+def test_run_registry_without_a_store_is_available_false():
+    with _live_client(_walker(), start_paused=True) as client:
+        assert client.get("/runs").json() == {
+            "available": False,
+            "current": None,
+            "runs": [],
+        }
+        assert client.get("/runs/any").status_code == 404
+        assert client.get("/runs/any/replay").status_code == 404
+        assert client.delete("/runs/any").status_code == 404
