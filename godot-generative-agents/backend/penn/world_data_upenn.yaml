@@ -134,7 +134,13 @@ personas:
     emoji: 🎤
     steps: 50
   - place: Meyerson Hall
-    activity: refining the model late into the day
+    # Wording matters: the parser's intent matcher is substring-based, and the
+    # earlier "...late into the day" matched `"ate " in command` -> the EAT
+    # action -> blocked ("I don't know what you want to eat") every turn, so
+    # Diego froze at this stop. Keep activities clear of verb substrings
+    # ("ate ", "eat ", "get ", "take ", "drink", ...) until the parser gives
+    # `perform` precedence.
+    activity: refining the model into the evening
     emoji: ✏️
 # -- MVP cast reduction (continued): Priya Nair + Marcus Webb parked. --
 # - name: Priya Nair
@@ -279,6 +285,27 @@ locations:
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
   address: UPenn:Houston Hall:lobby
+# Named rooms inside Houston Hall (furnished arenas, same pattern as the Van Pelt
+# rooms above). Schedule stops can target these to put an agent in a specific
+# room instead of wherever the whole-building lobby routing settles. Two
+# constraints keep this list curated rather than exhaustive:
+# * Every location entry consumes a slot in the decide tool's location enum
+#   (DECIDE_MAX_ENUM = 20, pinned by test_per_action_decide) -- the other six
+#   Houston arenas (Bathroom, Shuffle Board Room, Ladies Parlor, Secretarys
+#   Office, Chess Room, Correspond) exist in the map and can be promoted here
+#   as needed while slots remain.
+# * The #465 boil-water props (cups/sink/stove/pot) live in the building-level
+#   "Houston Hall" location, so a stop that runs the murky-water commands must
+#   keep targeting "Houston Hall" itself.
+- name: Houston Hall — Reception Hall
+  description: The reception hall just inside Houston Hall's doors.
+  address: UPenn:Houston Hall:Reception Hall
+- name: Houston Hall — Billiard Room
+  description: The billiard room off the student union's main hall.
+  address: UPenn:Houston Hall:Billiard Room
+- name: Houston Hall — Reading Room
+  description: Houston Hall's reading room, armchairs and newspapers.
+  address: UPenn:Houston Hall:Reading Room
 - name: Williams Hall
   description: A classroom and language-department building just off College Green.
   address: UPenn:Williams Hall:lobby
