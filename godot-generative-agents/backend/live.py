@@ -54,6 +54,9 @@ class SimStepper(Protocol):
       loop appends each as a ``kind: "engine"`` record, honoring #262's "reuse
       the JSONRenderer as the log's source" without coupling the loop to the
       game's parser.
+    * ``run_usage() -> dict`` -- additive per-run usage fields
+      (``run_calls``/``run_cost_usd``) merged into ``GET /usage`` beside the
+      lifetime summary (#526); the ledger itself stays lifetime.
     """
 
     @property
@@ -268,8 +271,8 @@ class ScriptedStepper:
     ``on_tick(step)`` (optional) runs *before* the frame lookup each tick --
     "advance the world, then snapshot it" -- and may return engine records
     (the ``JSONRenderer`` shape) to publish; ``on_reset()`` (optional) undoes
-    whatever ``on_tick`` did to external state. Set ``.ledger`` after
-    construction to back ``GET /usage``.
+    whatever ``on_tick`` did to external state. Set ``.ledger`` (and optionally
+    ``.run_usage``) after construction to back ``GET /usage``.
     """
 
     def __init__(
