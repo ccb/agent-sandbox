@@ -304,6 +304,13 @@ class Parser:
             return ActionName.TAKE_OFF
         elif command.startswith("stow ") or command.startswith("unequip "):
             return ActionName.UNWIELD
+        elif (initial := self._match_initial_verb(command)) is not None:
+            # Command-initial verb (#536): the first word IS a registered
+            # verb, so the generic keyword branches below may not hijack its
+            # free-text argument ("perform refining the model late into the
+            # day" must not EAT). Prefix special cases ("get off", "take
+            # off", directions, say/taste/hint, ...) all ran above.
+            return initial
         elif "take " in command or "get " in command:
             return ActionName.GET
         elif "light" in command:
@@ -377,6 +384,29 @@ class Parser:
                     if best is None or len(phrase) > len(best):
                         best, best_name = phrase, action.action_name()
         return best_name
+
+    def _match_initial_verb(self, command):
+        """The registered action whose single-word ACTION_NAME or alias IS
+        the command's first word, or None.
+
+        An imperative's verb is its first word: when that word is a
+        registered verb, the command routes there no matter what the rest of
+        the text contains (#536) -- the say/taste/hint branches are
+        hand-rolled instances of the same rule. "give"/"hand" are excluded:
+        the give branch must keep running _match_give_action's
+        item+recipient resolution (#171). First registration wins a
+        shared-alias tie, like the longest-match fallback.
+        """
+        first = command.split(" ", 1)[0]
+        if first in ("give", "hand"):
+            return None
+        for _, action in self.actions.items():
+            phrases = [action.action_name()] + list(
+                getattr(action, "ACTION_ALIASES", []) or []
+            )
+            if first in phrases:
+                return action.action_name()
+        return None
 
     def _match_give_action(self, command):
         """A registered custom give-action whose item AND recipient both appear
