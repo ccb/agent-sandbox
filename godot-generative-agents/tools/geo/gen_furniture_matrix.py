@@ -173,17 +173,16 @@ def piece_name(piece: dict, names: dict[int, str]) -> str:
 def spots(
     furn: list[str], collision: list[str], width: int, height: int
 ) -> list[tuple[int, int]]:
-    """Walkable cells ON furniture (walkable seats) or 4-adjacent to it,
-    row-major. The same rule WorldMap derives at load; duplicated ~10 lines
-    by design so tools/geo never imports backend."""
+    """Walkable floor cells 4-adjacent to furniture -- "stand AT it",
+    row-major. The furniture tile itself is NOT a spot (no standing on a
+    rug/cushion/sofa seat; a sit target waits for #446). The same rule
+    WorldMap derives at load; duplicated ~10 lines by design so tools/geo
+    never imports backend."""
     out = []
     for y in range(height):
         for x in range(width):
             idx = y * width + x
-            if collision[idx] != "0":
-                continue
-            if furn[idx] != "0":
-                out.append((x, y))
+            if collision[idx] != "0" or furn[idx] != "0":
                 continue
             for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
                 if 0 <= nx < width and 0 <= ny < height:

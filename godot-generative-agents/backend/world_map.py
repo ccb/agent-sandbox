@@ -96,11 +96,14 @@ class WorldMap:
             ys = [y for _, y in tiles]
             self.address_bbox[address] = (min(xs), min(ys), max(xs), max(ys))
 
-        # Furniture-aware seat spots (#537): walkable tiles ON furniture (the
-        # walkable seats of walkable_furniture.json) or 4-adjacent to it,
-        # grouped by arena address, row-major. furniture_maze.csv is optional
-        # -- maps without it (every non-Penn world) get {} and behave exactly
-        # as before.
+        # Furniture-aware seat spots (#537): a walkable floor tile 4-adjacent
+        # to furniture -- "stand AT the desk/table". The furniture tile itself
+        # is NOT a spot: standing on a walk-on piece (a rug, cushion, sofa
+        # seat) is meaningless as a destination and floods big pieces with
+        # dots; a genuine sit-on-the-seat target waits for #446's sit verb,
+        # which can use the named pieces in furniture_blocks. Grouped by arena
+        # address, row-major. furniture_maze.csv is optional -- maps without it
+        # (every non-Penn world) get {} and behave exactly as before.
         self.furniture_spots: dict[str, list[tuple[int, int]]] = {}
         furn_path = os.path.join(maze, "furniture_maze.csv")
         if os.path.exists(furn_path):
@@ -110,9 +113,7 @@ class WorldMap:
                     f"furniture_maze has {len(furn)} cells, expected {expected}"
                 )
 
-            def _at_furniture(x: int, y: int) -> bool:
-                if furn[y * self.width + x] != "0":
-                    return True
+            def _beside_furniture(x: int, y: int) -> bool:
                 for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
                     if 0 <= nx < self.width and 0 <= ny < self.height:
                         if furn[ny * self.width + nx] != "0":
@@ -122,7 +123,11 @@ class WorldMap:
             for y in range(self.height):
                 for x in range(self.width):
                     idx = y * self.width + x
-                    if collision[idx] != "0" or not _at_furniture(x, y):
+                    if (
+                        collision[idx] != "0"
+                        or furn[idx] != "0"
+                        or not _beside_furniture(x, y)
+                    ):
                         continue
                     s = sector.get(sector_m[idx])
                     a = arena.get(arena_m[idx])
