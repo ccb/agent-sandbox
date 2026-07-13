@@ -106,6 +106,30 @@ def test_sheet_firstgids_matches_interior_and_suffixed_names():
     }
 
 
+def test_sheet_firstgids_raises_on_unmatched_sheet():
+    import pytest
+    from gen_furniture_matrix import _sheet_firstgids
+
+    with pytest.raises(ValueError, match="ghost"):
+        _sheet_firstgids(
+            {"sheets": {"ghost": {}}}, [{"name": "interior_franuka", "firstgid": 519}]
+        )
+
+
+def test_sheet_firstgids_raises_on_ambiguous_prefix():
+    import pytest
+    from gen_furniture_matrix import _sheet_firstgids
+
+    with pytest.raises(ValueError, match="several"):
+        _sheet_firstgids(
+            {"sheets": {"music": {}}},
+            [
+                {"name": "music_hall", "firstgid": 1},
+                {"name": "music_room", "firstgid": 9},
+            ],
+        )
+
+
 def test_real_map_artifacts_are_consistent():
     # The committed artifacts stay in lock-step with the tmj + matrices:
     # every furniture cell sits on a *_furniture layer cell, ids are dense,

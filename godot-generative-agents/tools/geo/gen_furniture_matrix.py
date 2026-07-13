@@ -41,8 +41,9 @@ def _sheet_firstgids(catalog: dict, tilesets: list[dict]) -> dict[str, int]:
     """Catalog sheet key -> tmj firstgid. Catalog sheets use short names
     ("franuka"); the tmj's tilesets carry asset-flavored ones
     ("interior_franuka", "kenney_urban") -- match exact, interior_-prefixed,
-    or "<sheet>_"-prefixed names, and fail loudly on an unmatched sheet so a
-    renamed tileset can't silently disable the identity join again."""
+    or a UNIQUE "<sheet>_"-prefixed name. Unmatched or ambiguous sheets
+    raise: a renamed tileset must never silently disable the identity join
+    again (it once turned every piece into tile-<gid> with zero signal)."""
     out: dict[str, int] = {}
     names = {ts.get("name"): ts["firstgid"] for ts in tilesets}
     for sheet in catalog.get("sheets", {}):
@@ -54,6 +55,15 @@ def _sheet_firstgids(catalog: dict, tilesets: list[dict]) -> dict[str, int]:
             prefixed = [n for n in names if n and n.startswith(f"{sheet}_")]
             if len(prefixed) == 1:
                 out[sheet] = names[prefixed[0]]
+            elif len(prefixed) > 1:
+                raise ValueError(
+                    f"catalog sheet {sheet!r} matches several tilesets: {sorted(prefixed)}"
+                )
+            else:
+                raise ValueError(
+                    f"catalog sheet {sheet!r} matches no tmj tileset "
+                    f"(have: {sorted(n for n in names if n)})"
+                )
     return out
 
 
