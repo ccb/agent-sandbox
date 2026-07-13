@@ -1583,6 +1583,9 @@ class Butcher(actions.Action):
         zoxen = self._zoxen()
         cut = int(zoxen.get_property("butchered") or 0) + 1
         zoxen.set_property("butchered", cut)
+        # The first cut is the lesson (CCB): the annotated-butchery litho
+        # plays once, dimension leaders and all.
+        self.game.show_figure("zoxen-b")
         meat = things.Item(
             "zox haunch" if cut == 1 else "lean zox haunch",
             "a briny haunch of zox meat",
@@ -2099,7 +2102,7 @@ def build_game(seed=None):
         "two dead zoxen, half-sanded",
         "The caravan's draught-zoxen, patient in death as in life, already "
         "sanded to the shoulder. By morning the road will have them wholly.",
-    )
+    ).set_property("figure", "zoxen")  # the memorial litho, on examine
     # The merchant himself -- Worry's "the merchant could not". Searching (or
     # examining) him is the wreck's safe rehearsal of the corpse-searching habit
     # that pays off at the Summit.
@@ -2260,6 +2263,7 @@ def build_game(seed=None):
 
     def _teamster_talk(g):
         teamster.set_property("has_spoken", True)
+        g.show_figure("critch")  # the survival pamphlet, with his first words
         return (
             '"They came at moonset, laughing," Critch says, and laughs '
             'herself, without pleasure. "I ran, and the merchant could not, '
@@ -2275,6 +2279,7 @@ def build_game(seed=None):
         )
 
     teamster.talk_text = _teamster_talk
+    teamster.set_property("figure", "critch")
     teamster.add_alias("teamster")
     teamster.add_alias("new-hyena")
     teamster.add_alias("hyena")

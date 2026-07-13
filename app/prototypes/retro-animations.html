@@ -438,6 +438,39 @@
        ~400. The fall that killed it forged a knife. <span class="attach">Attaches: TAKE CRYSTAL SHARD; EXAMINE re-earns.</span></p>
   </section>
 
+  <section>
+    <div class="slate"><h2>35 &mdash; CRITCH (THE ADVICE)</h2><span class="kind">LITHO / THE TEAMSTER</span></div>
+    <div class="screen">
+      <svg id="critch" viewBox="0 0 640 360" aria-label="Critch, the advice"></svg>
+    </div>
+    <p class="spec">His three tips as an instruction plate, lighting in sequence: TAKE
+       WHAT YOU NEED (the merchant doesn't, now); MIND THE BOY'S HALL (the ceiling has
+       opinions about light -- the lamp is crossed out); I WALK SOUTH (and he does, in
+       four frames). <span class="attach">Attaches: TALK TO CRITCH, first words; EXAMINE re-earns.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>36 &mdash; THE ZOXEN, IN LIFE</h2><span class="kind">LITHO / THE MEMORIAL</span></div>
+    <div class="screen">
+      <svg id="zoxen" viewBox="0 0 640 360" aria-label="The zoxen, in life"></svg>
+    </div>
+    <p class="spec">The pair half-buried where the road left them -- and above, in
+       dashes, the memory plays: the yoked team hauling the wind-wagon, marching in
+       place in the heat-shimmer. The proverb arrives whole; the proof is typed out.
+       <span class="attach">Attaches: EXAMINE ZOXEN.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>36-B &mdash; BUTCHERY, ANNOTATED</h2><span class="kind">LITHO / THE TRADE</span></div>
+    <div class="screen">
+      <svg id="zoxen-b" viewBox="0 0 640 360" aria-label="Butchery, annotated"></svg>
+    </div>
+    <p class="spec">The half-buried pair by the wagon, and on the exposed flank two
+       dashed cuts with dimension leaders -- HAUNCH and BLOOD (2 DOSES) -- the yield
+       detaching on cue while scent lines drift toward a pricked ear at the frame's
+       edge. <span class="attach">Attaches: BUTCHER ZOXEN, the first cut.</span></p>
+  </section>
+
 
 
 
@@ -2206,6 +2239,262 @@
       ring.setAttribute("opacity", T >= IMPACT + 12 && t % 6 < 4 ? .8 : 0);
       count.textContent = T >= IMPACT + 12 ? "SURVIVORS: 1 OF ~400" : "";
       typeOn(foot, "THE FALL THAT KILLED IT FORGED A KNIFE.", T, IMPACT + 20, 1.8);
+    });
+  }
+
+  /* ---------------- 35: critch -- the advice ---------------- */
+  {
+    const svg = document.getElementById("critch");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CRITCH / THE SURVIVAL PAMPHLET";
+    const panel = (x) => el(svg, "rect", { x, y: 70, width: 180, height: 170,
+      fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3" });
+    const p1 = el(svg, "g", {}), p2 = el(svg, "g", {}), p3 = el(svg, "g", {});
+    [30, 230, 430].forEach(panel);
+    // 1: take what you need -- the merchant, and a hand relieved of manners
+    el(p1, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M 55 200 Q 70 188 95 192 Q 130 194 150 200 M 60 200 Q 66 208 78 206" });
+    el(p1, "circle", { cx: 62, cy: 192, r: 7, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    el(p1, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
+      points: "120,120 120,168 114,158 120,168 126,158" });
+    el(p1, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
+      d: "M 108 106 L 132 106 M 112 106 L 112 96 M 120 106 L 120 94 M 128 106 L 128 96" });
+    // 2: the boy's hall -- the ceiling, its opinions, the lamp declined
+    el(p2, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M 250 220 L 250 110 Q 320 84 390 110 L 390 220" });
+    [[280, 104], [312, 96], [346, 100]].forEach(([x, y]) =>
+      el(p2, "path", { fill: "none", stroke: PH_DIM,
+        d: `M ${x} ${y} q 5 -6 10 0 q 5 6 10 0` }));
+    el(p2, "circle", { cx: 320, cy: 178, r: 14, fill: "none", stroke: FUNGUS,
+      "stroke-width": 1.3 });
+    el(p2, "line", { x1: 320, y1: 164, x2: 320, y2: 152, stroke: FUNGUS });
+    const no = el(p2, "g", { opacity: 0 });
+    el(no, "circle", { cx: 320, cy: 178, r: 22, fill: "none", stroke: "#ff5a5a",
+      "stroke-width": 1.6 });
+    el(no, "line", { x1: 304, y1: 194, x2: 336, y2: 162, stroke: "#ff5a5a",
+      "stroke-width": 1.6 });
+    // 3: I walk south -- and he does
+    const walker = el(p3, "g", {});
+    el(walker, "circle", { cx: 0, cy: -44, r: 6, fill: "none", stroke: PH, "stroke-width": 1.3 });
+    el(walker, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
+      d: "M -4 -38 Q -8 -20 -6 0 L 6 0 Q 8 -22 4 -38" });
+    const legL = el(walker, "line", { stroke: PH, "stroke-width": 1.3 });
+    const legR = el(walker, "line", { stroke: PH, "stroke-width": 1.3 });
+    el(p3, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
+      points: "560,214 470,214 480,208 470,214 480,220" });
+    const quotes = [
+      label(svg, 120, 262, 10, PH_BRIGHT), label(svg, 320, 262, 10, PH_BRIGHT),
+      label(svg, 520, 262, 10, PH_BRIGHT)];
+    quotes.forEach(q => q.setAttribute("text-anchor", "middle"));
+    const foot = label(svg, 320, 330, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 210;
+      doWipe(T);
+      typeOn(hdr, "CRITCH (THE ADVICE)", T, 4, 1.4);
+      const beat = Math.floor(T / 64);
+      [p1, p2, p3].forEach((p, i) => p.setAttribute("opacity", beat === i ? 1 : .3));
+      typeOn(quotes[0], '"TAKE WHAT YOU NEED."', T, 12, 1.4);
+      typeOn(quotes[1], '"MIND THE BOY\'S HALL."', T, 76, 1.4);
+      typeOn(quotes[2], '"I WALK SOUTH."', T, 140, 1.4);
+      no.setAttribute("opacity", beat === 1 && (t % 4 < 2) ? 1 : beat === 1 ? .6 : 0);
+      const wx = 500 - (beat === 2 ? ((T - 128) % 64) * 1.6 : 0);
+      walker.setAttribute("transform", `translate(${wx} 214)`);
+      const step = (t % 6) < 3 ? 5 : -5;
+      legL.setAttribute("x1", 0); legL.setAttribute("y1", 0);
+      legL.setAttribute("x2", -4 + step); legL.setAttribute("y2", 16);
+      legR.setAttribute("x1", 0); legR.setAttribute("y1", 0);
+      legR.setAttribute("x2", 4 - step); legR.setAttribute("y2", 16);
+      typeOn(foot, "HE NODS AT THE CRATES. THE REST IS YOUR PROBLEM.", T, 180, 1.9);
+    });
+  }
+
+  /* ---------------- 36: the zoxen, in life ---------------- */
+  {
+    const svg = document.getElementById("zoxen");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "ZOXEN / THE MEMORIAL, PLAYED HOURLY";
+    el(svg, "line", { x1: 0, y1: 296, x2: 640, y2: 296, stroke: PH, "stroke-width": 1.4 });
+    const grain = stipple(svg, "dots-zoxen", PH, .7);
+    // below: the pair as they are, half-buried by the heeled wagon
+    const now = el(svg, "g", {});
+    const wg = el(now, "g", { transform: "translate(500 296) rotate(-9) scale(.8)" });
+    el(wg, "line", { x1: -80, y1: -22, x2: 84, y2: -22, stroke: PH, "stroke-width": 1.6 });
+    [-64, -22, 20, 62].forEach(x =>
+      el(wg, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+        d: `M ${x} -22 Q ${x + 21} -74 ${x + 42} -22` }));
+    [[-52, -6], [52, -6]].forEach(([cx, cy]) =>
+      el(wg, "circle", { cx, cy, r: 16, fill: "none", stroke: PH, "stroke-width": 1.4 }));
+    const zr = el(now, "g", { transform: "translate(190 296)" });
+    el(zr, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -54 0 Q -58 -26 -40 -38 Q -12 -50 16 -42 Q 42 -34 46 -12 Q 47 -4 42 0" });
+    el(zr, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
+      d: "M -40 -36 Q -56 -34 -62 -22 Q -74 -20 -78 -12 Q -78 -4 -68 -4 Q -60 -4 -58 -10" });
+    el(zr, "path", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4,
+      d: "M -60 -26 Q -72 -34 -68 -44 M -54 -26 Q -46 -38 -36 -40" });
+    const zf = el(now, "g", { transform: "translate(330 296)" });
+    el(zf, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -46 0 Q -50 -20 -28 -28 Q 2 -36 28 -28 Q 44 -20 46 0" });
+    el(zf, "path", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.4,
+      d: "M -62 -8 Q -68 -20 -60 -26" });
+    el(now, "polygon", { fill: grain, "fill-opacity": .75, points:
+      "120,296 254,296 240,282 200,276 152,280 130,288" });
+    el(now, "polygon", { fill: grain, "fill-opacity": .75, points:
+      "272,296 392,296 382,284 330,278 288,284" });
+    // above: the mirage -- the yoked team hauling, in dashes, in the shimmer
+    const ghost = el(svg, "g", {});
+    const gw = el(ghost, "g", { transform: "translate(430 170) scale(.8)" });
+    el(gw, "line", { x1: -60, y1: 0, x2: 78, y2: 0, stroke: PH_DIM,
+      "stroke-width": 1.4, "stroke-dasharray": "5 4" });
+    [-48, -8, 32].forEach(x =>
+      el(gw, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.3,
+        "stroke-dasharray": "5 4", d: `M ${x} 0 Q ${x + 23} -48 ${x + 46} 0` }));
+    [[-38, 14], [56, 14]].forEach(([cx, cy]) =>
+      el(gw, "circle", { cx, cy, r: 14, fill: "none", stroke: PH_DIM,
+        "stroke-width": 1.3, "stroke-dasharray": "4 3" }));
+    const team = el(ghost, "g", {});
+    const gLegs = [];
+    [[300, 0], [220, 1]].forEach(([bx, k]) => {
+      const g = el(team, "g", { transform: `translate(${bx} 184)` });
+      el(g, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+        "stroke-dasharray": "5 4",
+        d: "M -34 0 Q -38 -24 -18 -32 Q 8 -40 26 -30 Q 38 -22 36 0" });
+      el(g, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.3,
+        "stroke-dasharray": "5 4",
+        d: "M -34 -26 Q -46 -26 -52 -14 Q -58 -12 -60 -6" });
+      el(g, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.2,
+        d: "M -46 -24 Q -54 -32 -50 -38 M -42 -24 Q -36 -34 -28 -34" });
+      [0, 1, 2, 3].forEach(i => gLegs.push([g, i, k]));
+    });
+    const legEls = gLegs.map(([g]) => el(g, "line",
+      { stroke: PH_DIM, "stroke-width": 1.2, "stroke-dasharray": "3 2" }));
+    el(ghost, "line", { x1: 336, y1: 176, x2: 370, y2: 172, stroke: PH_DIM,
+      "stroke-dasharray": "3 3" });                          // the ghost tongue
+    const shimmer = Array.from({ length: 2 }, (_, i) => el(svg, "path",
+      { fill: "none", stroke: PH_DIM, opacity: .3 }));
+    const motto = label(svg, 320, 120, 10, PH_DIM); motto.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 340, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE ZOXEN, IN LIFE", T, 4, 1.4);
+      // the mirage breathes: strongest between the gusts
+      const breath = .25 + Math.max(0, Math.sin(t * .12)) * .6;
+      ghost.setAttribute("opacity", breath);
+      legEls.forEach((L, j) => {
+        const [g, i] = [gLegs[j][0], gLegs[j][1]];
+        const sw = ((t + i + gLegs[j][2]) % 4) < 2 ? 5 : -5; // marching in place
+        L.setAttribute("x1", -26 + i * 18); L.setAttribute("y1", 0);
+        L.setAttribute("x2", -26 + i * 18 + sw); L.setAttribute("y2", 22);
+      });
+      shimmer.forEach((n, i) => {
+        const y = 216 + i * 12, ph2 = t * .5 + i * 2;
+        n.setAttribute("d", `M 140 ${y} q 30 ${Math.sin(ph2) * 4} 60 0 ` +
+          `q 30 ${Math.sin(ph2 + 1) * 4} 60 0 q 30 ${Math.sin(ph2 + 2) * 4} 60 0 ` +
+          `q 30 ${Math.sin(ph2 + 3) * 4} 60 0`);
+      });
+      // the proverb arrives whole; the proof is typed out below
+      motto.textContent = T > 20
+        ? "THE ROAD TO GNOMON IS WALKED ONLY BY THE DESPERATE." : "";
+      typeOn(foot, "LAST NIGHT, THIS WAS PROVEN AGAIN.", T, 110, 1.6);
+    });
+  }
+
+  /* ---------------- 36-B: the zoxen -- butchery, annotated ---------------- */
+  {
+    const svg = document.getElementById("zoxen-b");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "ZOXEN / TWO CUTS BEFORE THE SAND";
+    el(svg, "line", { x1: 0, y1: 288, x2: 640, y2: 288, stroke: PH, "stroke-width": 1.4 });
+    const grain = stipple(svg, "dots-zoxen-b", PH, .7);
+    // the wagon, small, stage right
+    const wg = el(svg, "g", { transform: "translate(544 288) rotate(-9) scale(.7)" });
+    el(wg, "line", { x1: -80, y1: -22, x2: 84, y2: -22, stroke: PH_DIM, "stroke-width": 1.6 });
+    [-64, -22, 20, 62].forEach(x =>
+      el(wg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.4,
+        d: `M ${x} -22 Q ${x + 21} -74 ${x + 42} -22` }));
+    [[-52, -6], [52, -6]].forEach(([cx, cy]) =>
+      el(wg, "circle", { cx, cy, r: 16, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 }));
+    // the subject pair, half-buried; the near one keeps its flank offered
+    const zr = el(svg, "g", { transform: "translate(240 288) scale(1.35)" });
+    el(zr, "path", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      d: "M -54 0 Q -58 -26 -40 -38 Q -12 -50 16 -42 Q 42 -34 46 -12 Q 47 -4 42 0" });
+    el(zr, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
+      d: "M -40 -36 Q -56 -34 -62 -22 Q -74 -20 -78 -12 Q -78 -4 -68 -4 Q -60 -4 -58 -10" });
+    el(zr, "circle", { cx: -64, cy: -16, r: 1.6, fill: PH_BRIGHT });
+    el(zr, "path", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.3,
+      d: "M -60 -26 Q -72 -34 -68 -44" });
+    el(zr, "path", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.3,
+      d: "M -54 -26 Q -46 -38 -36 -40" });
+    const zf = el(svg, "g", { transform: "translate(430 288)" });
+    el(zf, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.5,
+      d: "M -46 0 Q -50 -20 -28 -28 Q 2 -36 28 -28 Q 44 -20 46 0" });
+    el(zf, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 1.3,
+      d: "M -62 -8 Q -68 -20 -60 -26" });
+    // the sand, holding both
+    el(svg, "polygon", { fill: grain, "fill-opacity": .75, points:
+      "150,288 340,288 322,270 258,262 190,270 160,280" });
+    el(svg, "polygon", { fill: grain, "fill-opacity": .75, points:
+      "372,288 490,288 478,276 430,272 388,278" });
+    // the annotations, on what the sand has not claimed
+    const cutH = el(svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.4,
+      "stroke-dasharray": "5 4", d: "M 258 234 Q 276 252 270 276", opacity: 0 });
+    const cutB = el(svg, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.4,
+      "stroke-dasharray": "5 4", d: "M 202 236 Q 210 254 206 274", opacity: 0 });
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3",
+      points: "268,252 360,140 368,140" });
+    label(svg, 372, 144, 10, PH).textContent = "HAUNCH (TRAIL FOOD)";
+    el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3",
+      points: "206,252 120,120 128,120" });
+    label(svg, 132, 124, 10, PH).textContent = "BLOOD (2 DOSES, WARM)";
+    const haunch = el(svg, "g", { opacity: 0 });
+    el(haunch, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.5,
+      d: "M 260 240 Q 282 254 274 278 Q 258 286 248 272 Q 246 252 260 240 Z" });
+    const drops = Array.from({ length: 2 }, () => el(svg, "circle",
+      { r: 1.8, fill: FUNGUS, opacity: 0 }));
+    const scent = Array.from({ length: 3 }, () => el(svg, "path",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 1, opacity: 0 }));
+    const ear = el(svg, "g", { opacity: 0 });
+    el(ear, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      points: "614,180 604,152 624,166" });
+    label(svg, 540, 202, 9, PH_DIM).textContent = "DOWNWIND:";
+    const who = label(svg, 540, 216, 9, FUNGUS);
+    const foot = label(svg, 320, 340, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 180;
+      doWipe(T);
+      typeOn(hdr, "BUTCHERY, ANNOTATED", T, 4, 1.4);
+      cutB.setAttribute("opacity", T > 24 ? (T < 34 ? t % 2 : 1) : 0);
+      cutH.setAttribute("opacity", T > 40 ? (T < 50 ? t % 2 : 1) : 0);
+      const off = Math.min(30, Math.max(0, (T - 56) * 1.5));
+      haunch.setAttribute("transform", `translate(${off * 1.4} ${-off * .5})`);
+      haunch.setAttribute("opacity", T > 56 ? 1 : 0);
+      drops.forEach((n, i) => {
+        n.setAttribute("cx", 206 + i * 4);
+        n.setAttribute("cy", 256 + ((t * 3 + i * 12) % 30));
+        n.setAttribute("opacity", T > 30 ? .8 : 0);
+      });
+      scent.forEach((n, i) => {
+        const q = ((t * 2 + i * 10) % 30) / 30;
+        const sx = 270 + q * 300, sy = 236 - q * 40 - i * 8;
+        n.setAttribute("d", `M ${sx} ${sy} q 6 -5 12 0 q 6 5 12 0`);
+        n.setAttribute("opacity", T > 60 ? Math.max(0, .8 - q * .6) : 0);
+      });
+      ear.setAttribute("opacity", T > 84 ? 1 : 0);
+      ear.setAttribute("transform", (t % 14) < 2 && T > 84 ? "translate(0 -3)" : "");
+      who.textContent = T > 90 ? "EVERYTHING." : "";
+      typeOn(foot, "FOOD, HONESTLY -- AND ANYTHING WITH A NOSE WILL KNOW.", T, 120, 1.9);
     });
   }
 
