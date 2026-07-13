@@ -1,1944 +1,1944 @@
 {
- "_README": "Labeled tile catalog consumed by furnish_building.py (and meant to be edited by an LLM/human placing tiles). Coordinates are (col,row) atlas cells on the named sheet; w/h is the object footprint in tiles. 'category' is one of floor|wall|window|door|furniture|prop|tree; furniture/prop also carry a 'room' or context tag. 'verified': true means the coordinate is taken from a known-good working palette (renders correctly in the map); false means it was read off an annotated contact sheet (region_grid.py / preview_catalog.py / catalog_web.py) and should be eyeballed before relying on it. Four sheets are addressable: franuka (32x32), school (16x16), bath (16x16) \u2014 the appended interior sheets \u2014 and kenney (27x18), the base outdoor tileset already in every map at firstgid 1. Curation note (2026-06-27): franuka furniture is kept to ONE colour per type for now (diversify later); the bath/school/kenney selections follow the user's region picks. Verify/browse tiles visually with: uv run python godot-generative-agents/tools/geo/catalog_web.py --serve",
- "_llm_guidance": {
-  "options_per_category": 12,
-  "max_per_prompt": 30,
-  "note": "When asking an LLM to choose tiles, show at most ~12 options per decision (one floor menu, one wall menu, a short furniture menu) and ~30 total in a single prompt. Past that, selection quality drops: the model starts ignoring options, repeating choices, or picking by list position rather than fit. Always pre-filter to the task (by sheet/category/room) instead of pasting the whole catalog, and prefer verified:true tiles \u2014 unverified ones are candidates, not guarantees."
- },
- "sheets": {
-  "franuka": {
-   "file": "interior_franuka.png",
-   "cols": 32,
-   "rows": 32
+  "_README": "Labeled tile catalog consumed by furnish_building.py (and meant to be edited by an LLM/human placing tiles). Coordinates are (col,row) atlas cells on the named sheet; w/h is the object footprint in tiles. 'category' is one of floor|wall|window|door|furniture|prop|tree; furniture/prop also carry a 'room' or context tag. 'verified': true means the coordinate is taken from a known-good working palette (renders correctly in the map); false means it was read off an annotated contact sheet (region_grid.py / preview_catalog.py / catalog_web.py) and should be eyeballed before relying on it. Four sheets are addressable: franuka (32x32), school (16x16), bath (16x16) \u2014 the appended interior sheets \u2014 and kenney (27x18), the base outdoor tileset already in every map at firstgid 1. Curation note (2026-06-27): franuka furniture is kept to ONE colour per type for now (diversify later); the bath/school/kenney selections follow the user's region picks. Verify/browse tiles visually with: uv run python godot-generative-agents/tools/geo/catalog_web.py --serve",
+  "_llm_guidance": {
+    "options_per_category": 12,
+    "max_per_prompt": 30,
+    "note": "When asking an LLM to choose tiles, show at most ~12 options per decision (one floor menu, one wall menu, a short furniture menu) and ~30 total in a single prompt. Past that, selection quality drops: the model starts ignoring options, repeating choices, or picking by list position rather than fit. Always pre-filter to the task (by sheet/category/room) instead of pasting the whole catalog, and prefer verified:true tiles \u2014 unverified ones are candidates, not guarantees."
   },
-  "school": {
-   "file": "interior_school.png",
-   "cols": 16,
-   "rows": 16
+  "sheets": {
+    "franuka": {
+      "file": "interior_franuka.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "school": {
+      "file": "interior_school.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "bath": {
+      "file": "interior_bath.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "kenney": {
+      "file": "tilemap_packed.png",
+      "cols": 27,
+      "rows": 18
+    },
+    "alchemy": {
+      "file": "interior_alchemy.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "bedroom": {
+      "file": "interior_bedroom.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "clockwork": {
+      "file": "interior_clockwork.png",
+      "cols": 32,
+      "rows": 32
+    },
+    "music": {
+      "file": "interior_music.png",
+      "cols": 32,
+      "rows": 32
+    }
   },
-  "bath": {
-   "file": "interior_bath.png",
-   "cols": 16,
-   "rows": 16
-  },
-  "kenney": {
-   "file": "tilemap_packed.png",
-   "cols": 27,
-   "rows": 18
-  },
-  "alchemy": {
-   "file": "interior_alchemy.png",
-   "cols": 32,
-   "rows": 32
-  },
-  "bedroom": {
-   "file": "interior_bedroom.png",
-   "cols": 32,
-   "rows": 32
-  },
-  "clockwork": {
-   "file": "interior_clockwork.png",
-   "cols": 32,
-   "rows": 32
-  },
-  "music": {
-   "file": "interior_music.png",
-   "cols": 32,
-   "rows": 32
+  "objects": {
+    "_comment_franuka_floors": "--- franuka: floors (planks (6,2)->(8,2) are the three plank textures) ---",
+    "floor_wood_light": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "light wood floorboard",
+      "verified": true
+    },
+    "plank_floor_light": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "plank floor (light)",
+      "verified": true
+    },
+    "plank_floor_orange": {
+      "sheet": "franuka",
+      "col": 7,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "plank floor (orange)",
+      "verified": true
+    },
+    "plank_floor_dark": {
+      "sheet": "franuka",
+      "col": 8,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "plank floor (dark)",
+      "verified": true
+    },
+    "floor_tile_cream": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "cream square tile",
+      "verified": true
+    },
+    "floor_stone_hex": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "grey hex stone floor",
+      "verified": true
+    },
+    "_comment_franuka_walls": "--- franuka: wall autotile sets (0,0)->(2,5), corner caps (3,0)->(4,1), plank-wall panels (9,0)->(14,1), bricks (23,0)->(28,1) ---",
+    "wall_set_red": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 0,
+      "w": 3,
+      "h": 3,
+      "category": "wall",
+      "label": "red wall enclosure (3x3 autotile, empty interior)",
+      "verified": true
+    },
+    "wall_corner_caps_red": {
+      "sheet": "franuka",
+      "col": 3,
+      "row": 0,
+      "w": 2,
+      "h": 2,
+      "category": "wall",
+      "label": "red wall outer-corner caps (4 pieces)",
+      "verified": true
+    },
+    "wall_plank_panel_red": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 0,
+      "w": 3,
+      "h": 2,
+      "category": "wall",
+      "label": "framed plank wall panel (red)",
+      "verified": true
+    },
+    "wall_plank_panel_brown": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 0,
+      "w": 3,
+      "h": 2,
+      "category": "wall",
+      "label": "framed plank/brick wall panel (brown)",
+      "verified": true
+    },
+    "wall_orange_flat": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid orange wall (flat, no brick texture)",
+      "verified": true
+    },
+    "wall_brick": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "brown brick wall top",
+      "verified": true
+    },
+    "wall_brick_red": {
+      "sheet": "franuka",
+      "col": 27,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "terracotta/orange brick wall top",
+      "verified": true
+    },
+    "_comment_franuka_openings": "--- franuka: windows + doors ---",
+    "window": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 6,
+      "w": 2,
+      "h": 2,
+      "category": "window",
+      "label": "window (4-pane)",
+      "verified": true
+    },
+    "door_wood": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "door",
+      "label": "wooden door, square top",
+      "verified": true
+    },
+    "door_wood_arched": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 9,
+      "w": 1,
+      "h": 2,
+      "category": "door",
+      "label": "wooden door, arched top",
+      "verified": true
+    },
+    "_comment_franuka_furniture": "--- franuka: furniture, ONE colour per type (diversify later) ---",
+    "sofa": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 21,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "long padded sofa",
+      "verified": true
+    },
+    "armchair": {
+      "sheet": "franuka",
+      "col": 13,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "living",
+      "label": "single armchair",
+      "verified": true
+    },
+    "side_table": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 13,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "living",
+      "label": "small side table",
+      "verified": true
+    },
+    "bookshelf": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "living",
+      "label": "tall bookshelf with books",
+      "verified": true
+    },
+    "plant": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 13,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "living",
+      "label": "potted plant",
+      "verified": true
+    },
+    "cabinet": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 12,
+      "w": 1,
+      "h": 3,
+      "category": "furniture",
+      "room": "living",
+      "label": "low closed cabinet",
+      "verified": true
+    },
+    "fireplace": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 26,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "living",
+      "label": "lit brick fireplace",
+      "verified": true
+    },
+    "candelabra": {
+      "sheet": "franuka",
+      "col": 28,
+      "row": 22,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "lighting",
+      "label": "standing candelabra",
+      "verified": true
+    },
+    "rug_blue": {
+      "sheet": "franuka",
+      "col": 3,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "room": "living",
+      "label": "blue patterned rug",
+      "verified": true
+    },
+    "bed_single": {
+      "sheet": "franuka",
+      "col": 16,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "bedroom",
+      "label": "single bed",
+      "verified": true
+    },
+    "cushion": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large blue cushion / seat",
+      "verified": true
+    },
+    "cushion_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large orange cushion / seat",
+      "verified": false
+    },
+    "cushion_cream": {
+      "sheet": "franuka",
+      "col": 16,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large cream cushion / seat",
+      "verified": false
+    },
+    "cushion_red": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 15,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "living",
+      "label": "large red cushion / seat",
+      "verified": true
+    },
+    "wardrobe": {
+      "sheet": "franuka",
+      "col": 25,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "bedroom",
+      "label": "tall wardrobe (double door)",
+      "verified": true
+    },
+    "counter": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 23,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "kitchen",
+      "label": "kitchen counter with cabinet",
+      "verified": true
+    },
+    "dining_table": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 23,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "dining",
+      "label": "square dining table (wood)",
+      "verified": true
+    },
+    "dining_table_light": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 23,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "room": "dining",
+      "label": "square dining table (light)",
+      "verified": true
+    },
+    "_comment_franuka_pass2": "--- pass 2: recognizable franuka furniture/props (best-guess, unverified) ---",
+    "kitchen_clutter": {
+      "sheet": "franuka",
+      "col": 2,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "bookshelf with clutter on shelves (red-brown)",
+      "verified": true
+    },
+    "shelf_empty": {
+      "sheet": "franuka",
+      "col": 4,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "empty open shelving unit (red-brown)",
+      "verified": false
+    },
+    "cabinet_wood": {
+      "sheet": "franuka",
+      "col": 10,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall closed cabinet, double door (wood/orange)",
+      "verified": false
+    },
+    "bookshelf_wood": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood bookshelf with items + drawers",
+      "verified": false
+    },
+    "bookshelf_wood_books": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 12,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood bookshelf with colorful books",
+      "verified": false
+    },
+    "armchair_pink": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (pink)",
+      "verified": true
+    },
+    "armchair_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (orange)",
+      "verified": false
+    },
+    "armchair_green": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (green)",
+      "verified": false
+    },
+    "armchair_red": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 22,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "padded armchair (red)",
+      "verified": false
+    },
+    "round_table_small": {
+      "sheet": "franuka",
+      "col": 10,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "small round pedestal table (white top)",
+      "verified": false
+    },
+    "nightstand_candle": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "small nightstand with a lit candle",
+      "verified": false
+    },
+    "stool_wood": {
+      "sheet": "franuka",
+      "col": 8,
+      "row": 17,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "wooden stool",
+      "verified": false
+    },
+    "chair_wood": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 17,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "wooden chair (side view)",
+      "verified": false
+    },
+    "sofa_orange": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 27,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "long padded sofa (orange)",
+      "verified": false
+    },
+    "sofa_orange_sectional": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 27,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "U-shaped sectional sofa (orange)",
+      "verified": true
+    },
+    "dresser_orange": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 26,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "chest of drawers (orange)",
+      "verified": false
+    },
+    "wardrobe_orange": {
+      "sheet": "franuka",
+      "col": 14,
+      "row": 26,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "wardrobe / cupboard (orange)",
+      "verified": false
+    },
+    "dresser_tan": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 29,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "tall chest of drawers (tan)",
+      "verified": false
+    },
+    "wardrobe_tan": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall wardrobe, double door (tan)",
+      "verified": false
+    },
+    "bookshelf_tan": {
+      "sheet": "franuka",
+      "col": 29,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall bookshelf with books (tan)",
+      "verified": false
+    },
+    "cabinet_display": {
+      "sheet": "franuka",
+      "col": 27,
+      "row": 29,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "display cabinet with items + books (tan)",
+      "verified": false
+    },
+    "cabinet_drawers_red": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 27,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "low cabinet with drawers (red-brown)",
+      "verified": false
+    },
+    "stove": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 23,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "kitchen stove / oven, dark counter range",
+      "verified": true
+    },
+    "fireplace_unlit": {
+      "sheet": "franuka",
+      "col": 22,
+      "row": 26,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "stone fireplace, unlit",
+      "verified": false
+    },
+    "plant_large": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 12,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "large leafy potted plant",
+      "verified": true
+    },
+    "floor_lamp": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 18,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "hanging_light",
+      "verified": false
+    },
+    "rug_red": {
+      "sheet": "franuka",
+      "col": 0,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (red)",
+      "verified": false
+    },
+    "rug_orange": {
+      "sheet": "franuka",
+      "col": 6,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (orange/brown)",
+      "verified": false
+    },
+    "rug_green": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (green)",
+      "verified": false
+    },
+    "rug_magenta": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (magenta)",
+      "verified": true
+    },
+    "rug_cyan": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 29,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "patterned rug (cyan)",
+      "verified": false
+    },
+    "barrel": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 13,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "label": "wooden barrel",
+      "verified": false
+    },
+    "basket_fruit": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "wicker basket of red fruit",
+      "verified": false
+    },
+    "basket_wicker": {
+      "sheet": "franuka",
+      "col": 22,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "empty wicker basket",
+      "verified": false
+    },
+    "crate": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "wooden crate",
+      "verified": false
+    },
+    "pot": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "small cooking pot",
+      "verified": true
+    },
+    "chest": {
+      "sheet": "franuka",
+      "col": 25,
+      "row": 14,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "treasure chest (closed)",
+      "verified": false
+    },
+    "mug": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "mug / tankard",
+      "verified": false
+    },
+    "jar": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "storage jar / canister",
+      "verified": false
+    },
+    "bottle_wine": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "green wine bottle",
+      "verified": false
+    },
+    "bottle_purple": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 16,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "purple potion bottle",
+      "verified": false
+    },
+    "bowl": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "bowl / small pot",
+      "verified": false
+    },
+    "knife": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 16,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "kitchen knife / cleaver",
+      "verified": false
+    },
+    "lantern": {
+      "sheet": "franuka",
+      "col": 28,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "hanging lantern (lit)",
+      "verified": true
+    },
+    "hanging_herbs": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 18,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "drying herbs on a rack",
+      "verified": false
+    },
+    "carrot": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "carrot",
+      "verified": false
+    },
+    "bread": {
+      "sheet": "franuka",
+      "col": 25,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "loaf of bread",
+      "verified": false
+    },
+    "book_stack_red": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 23,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "book (red cover)",
+      "verified": false
+    },
+    "quill_ink": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 23,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "quill pen and inkpot",
+      "verified": false
+    },
+    "scroll": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 24,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "rolled paper scroll",
+      "verified": false
+    },
+    "_comment_food": "--- franuka: food props to place on tables (see image refs) ---",
+    "food_salad": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "dining",
+      "label": "salad bowl with spoon",
+      "verified": true
+    },
+    "food_ham": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 22,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "dining",
+      "label": "roast ham",
+      "verified": true
+    },
+    "food_fish": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 19,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "dining",
+      "label": "fish on plate",
+      "verified": true
+    },
+    "food_sausage": {
+      "sheet": "franuka",
+      "col": 23,
+      "row": 18,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "dining",
+      "label": "sausages",
+      "verified": true
+    },
+    "food_bowl": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 18,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "dining",
+      "label": "covered bowl",
+      "verified": true
+    },
+    "_comment_bath": "--- bath: all objects on the sheet ---",
+    "toilet": {
+      "sheet": "bath",
+      "col": 0,
+      "row": 3,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "toilet",
+      "verified": true
+    },
+    "sink": {
+      "sheet": "bath",
+      "col": 6,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "pedestal sink (basin with water)",
+      "verified": true
+    },
+    "sink_empty": {
+      "sheet": "bath",
+      "col": 5,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "empty sink (no water)",
+      "verified": true
+    },
+    "basin": {
+      "sheet": "bath",
+      "col": 11,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "basin on cabinet",
+      "verified": true
+    },
+    "mirror": {
+      "sheet": "bath",
+      "col": 7,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "framed mirror",
+      "verified": true
+    },
+    "towels": {
+      "sheet": "bath",
+      "col": 2,
+      "row": 1,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "stacked towels (small)",
+      "verified": true
+    },
+    "towels_tall": {
+      "sheet": "bath",
+      "col": 4,
+      "row": 1,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "stacked towels (tall)",
+      "verified": true
+    },
+    "basket": {
+      "sheet": "bath",
+      "col": 8,
+      "row": 1,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "small basket",
+      "verified": true
+    },
+    "bathmat": {
+      "sheet": "bath",
+      "col": 3,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "round bath mat (cream)",
+      "verified": true
+    },
+    "bathmat_round": {
+      "sheet": "bath",
+      "col": 2,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "round bath mat (lavender)",
+      "verified": true
+    },
+    "bathmat_oval": {
+      "sheet": "bath",
+      "col": 8,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "room": "bath",
+      "label": "oval bath mat (orange)",
+      "verified": true
+    },
+    "water_splash": {
+      "sheet": "bath",
+      "col": 0,
+      "row": 1,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "room": "bath",
+      "label": "blue water splash/puddle (full 2x1)",
+      "verified": true
+    },
+    "bathtub": {
+      "sheet": "bath",
+      "col": 1,
+      "row": 3,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "empty bathtub",
+      "verified": true
+    },
+    "bathtub_full": {
+      "sheet": "bath",
+      "col": 3,
+      "row": 3,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "bathtub with water",
+      "verified": true
+    },
+    "bathtub_wide": {
+      "sheet": "bath",
+      "col": 5,
+      "row": 3,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "bathtub (alt style)",
+      "verified": true
+    },
+    "vanity_basket": {
+      "sheet": "bath",
+      "col": 10,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "vanity cabinet topped with basket",
+      "verified": true
+    },
+    "vanity_towels": {
+      "sheet": "bath",
+      "col": 12,
+      "row": 1,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "bath",
+      "label": "vanity cabinet topped with towels",
+      "verified": true
+    },
+    "_comment_school": "--- school: top-left desks/chairs (0,0)->(6,5) ---",
+    "table": {
+      "sheet": "school",
+      "col": 0,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "plain table",
+      "verified": true
+    },
+    "student_desk": {
+      "sheet": "school",
+      "col": 2,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "student desk + chair (book)",
+      "verified": true
+    },
+    "student_desk_open": {
+      "sheet": "school",
+      "col": 3,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "student desk + chair (open book)",
+      "verified": true
+    },
+    "student_desk_quill": {
+      "sheet": "school",
+      "col": 5,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "student desk + chair (quill)",
+      "verified": true
+    },
+    "teacher_desk": {
+      "sheet": "school",
+      "col": 4,
+      "row": 2,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "teacher desk with books",
+      "verified": true
+    },
+    "locker": {
+      "sheet": "school",
+      "col": 6,
+      "row": 2,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "tall storage locker",
+      "verified": true
+    },
+    "book_red": {
+      "sheet": "school",
+      "col": 5,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "classroom",
+      "label": "standing red book",
+      "verified": true
+    },
+    "books_green": {
+      "sheet": "school",
+      "col": 4,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "classroom",
+      "label": "stacked green books",
+      "verified": true
+    },
+    "inkwell": {
+      "sheet": "school",
+      "col": 5,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "classroom",
+      "label": "inkwell with quill",
+      "verified": true
+    },
+    "blackboard": {
+      "sheet": "school",
+      "col": 13,
+      "row": 2,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "decorated blackboard",
+      "verified": true
+    },
+    "blackboard_blank": {
+      "sheet": "school",
+      "col": 13,
+      "row": 4,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "room": "classroom",
+      "label": "plain blackboard",
+      "verified": true
+    },
+    "_comment_kenney": "--- kenney (base outdoor tileset, firstgid 1): streetlamps, sign posts, signal, trees ---",
+    "streetlamp_t": {
+      "sheet": "kenney",
+      "col": 3,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "room": "street",
+      "label": "streetlamp, T double-head",
+      "verified": true
+    },
+    "sign_red": {
+      "sheet": "kenney",
+      "col": 4,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "room": "street",
+      "label": "stop sign",
+      "verified": true
+    },
+    "sign_green": {
+      "sheet": "kenney",
+      "col": 5,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "room": "street",
+      "label": "street label sign",
+      "verified": true
+    },
+    "sign_blue": {
+      "sheet": "kenney",
+      "col": 6,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "room": "street",
+      "label": "sign post (blue info + green signs)",
+      "verified": true
+    },
+    "lamp_ornate_green": {
+      "sheet": "kenney",
+      "col": 7,
+      "row": 6,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "room": "street",
+      "label": "ornate green lamp post",
+      "verified": true
+    },
+    "traffic_signal": {
+      "sheet": "kenney",
+      "col": 3,
+      "row": 15,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "room": "street",
+      "label": "traffic signal (red/amber/green)",
+      "verified": true
+    },
+    "tree_green": {
+      "sheet": "kenney",
+      "col": 22,
+      "row": 10,
+      "w": 1,
+      "h": 1,
+      "category": "tree",
+      "label": "small green tree (round, single tile)",
+      "verified": true
+    },
+    "tree_green_small": {
+      "sheet": "kenney",
+      "col": 22,
+      "row": 8,
+      "w": 1,
+      "h": 1,
+      "category": "tree",
+      "label": "small green tree (pointed, single tile)",
+      "verified": true
+    },
+    "tree_green_cluster": {
+      "sheet": "kenney",
+      "col": 18,
+      "row": 8,
+      "w": 3,
+      "h": 3,
+      "category": "tree",
+      "label": "green tree cluster (3x3)",
+      "verified": true
+    },
+    "tree_orange": {
+      "sheet": "kenney",
+      "col": 22,
+      "row": 13,
+      "w": 1,
+      "h": 1,
+      "category": "tree",
+      "label": "small autumn tree (round, single tile)",
+      "verified": true
+    },
+    "tree_orange_small": {
+      "sheet": "kenney",
+      "col": 22,
+      "row": 11,
+      "w": 1,
+      "h": 1,
+      "category": "tree",
+      "label": "small autumn tree (single tile)",
+      "verified": true
+    },
+    "tree_orange_cluster": {
+      "sheet": "kenney",
+      "col": 18,
+      "row": 11,
+      "w": 3,
+      "h": 3,
+      "category": "tree",
+      "label": "autumn tree cluster (3x3)",
+      "verified": true
+    },
+    "_comment_pass3": "--- pass 3: franuka colour variants (diversify; unverified, refine in catalog_web) ---",
+    "wall_red": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid crimson wall top",
+      "verified": false
+    },
+    "wall_blue": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid blue wall top",
+      "verified": false
+    },
+    "wall_cream": {
+      "sheet": "franuka",
+      "col": 15,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid cream/beige wall top",
+      "verified": false
+    },
+    "wall_magenta": {
+      "sheet": "franuka",
+      "col": 18,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid magenta wall top",
+      "verified": false
+    },
+    "wall_green": {
+      "sheet": "franuka",
+      "col": 24,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "solid green wall top",
+      "verified": false
+    },
+    "floor_round_stone": {
+      "sheet": "franuka",
+      "col": 9,
+      "row": 2,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "round cobble stone floor (light)",
+      "verified": false
+    },
+    "floor_cobble": {
+      "sheet": "franuka",
+      "col": 12,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "cobblestone floor",
+      "verified": false
+    },
+    "floor_tile_blue": {
+      "sheet": "franuka",
+      "col": 11,
+      "row": 3,
+      "w": 1,
+      "h": 1,
+      "category": "floor",
+      "label": "blue-grey tile floor",
+      "verified": false
+    },
+    "candelabra_arms": {
+      "sheet": "franuka",
+      "col": 27,
+      "row": 21,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "multi-arm candelabra (lit)",
+      "verified": false
+    },
+    "food_bowl_blue": {
+      "sheet": "franuka",
+      "col": 20,
+      "row": 22,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "blue bowl of food",
+      "verified": true
+    },
+    "food_pot": {
+      "sheet": "franuka",
+      "col": 21,
+      "row": 20,
+      "w": 1,
+      "h": 1,
+      "category": "prop",
+      "label": "small cooking pot of food",
+      "verified": false
+    },
+    "_comment_alchemy": "--- Expansion_AlchemyLab (interior_alchemy.png, firstgid 3000): alchemy lab furniture/props ---",
+    "shelf_metal": {
+      "sheet": "alchemy",
+      "col": 4,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "metal/steel shelving unit (alchemy)",
+      "verified": false
+    },
+    "shelf_alchemy_red": {
+      "sheet": "alchemy",
+      "col": 0,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "red alchemy shelf with items",
+      "verified": false
+    },
+    "bookshelf_alchemy": {
+      "sheet": "alchemy",
+      "col": 2,
+      "row": 16,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "wood alchemy bookshelf",
+      "verified": false
+    },
+    "alchemy_workbench": {
+      "sheet": "alchemy",
+      "col": 0,
+      "row": 11,
+      "w": 3,
+      "h": 2,
+      "category": "furniture",
+      "label": "alchemy workbench with bottles",
+      "verified": true
+    },
+    "wall_stone_grey": {
+      "sheet": "alchemy",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "pale grey stone brick wall",
+      "verified": false
+    },
+    "wall_stone_tan": {
+      "sheet": "alchemy",
+      "col": 11,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "tan stone brick wall",
+      "verified": false
+    },
+    "magic_circle_green": {
+      "sheet": "alchemy",
+      "col": 12,
+      "row": 20,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "green summoning/magic circle (floor)",
+      "verified": false
+    },
+    "magic_circle_red": {
+      "sheet": "alchemy",
+      "col": 15,
+      "row": 20,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "red summoning/magic circle (floor)",
+      "verified": false
+    },
+    "crystal_cluster": {
+      "sheet": "alchemy",
+      "col": 6,
+      "row": 18,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "glowing crystal cluster",
+      "verified": false
+    },
+    "chest_alchemy": {
+      "sheet": "alchemy",
+      "col": 18,
+      "row": 23,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "wooden chest (alchemy)",
+      "verified": true
+    },
+    "_comment_bedroom": "--- Expansion_Bedroom (interior_bedroom.png, firstgid 4024) ---",
+    "double_bed": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 16,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "double bed with headboard",
+      "verified": false
+    },
+    "double_bed_blue": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 19,
+      "w": 3,
+      "h": 3,
+      "category": "furniture",
+      "label": "double bed (blue) with headboard",
+      "verified": false
+    },
+    "bed_single_made": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 13,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "made single bed",
+      "verified": false
+    },
+    "grandfather_clock": {
+      "sheet": "bedroom",
+      "col": 0,
+      "row": 10,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "tall grandfather clock",
+      "verified": true
+    },
+    "painting_moon": {
+      "sheet": "bedroom",
+      "col": 24,
+      "row": 7,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "framed moon painting",
+      "verified": true
+    },
+    "painting_moon_light": {
+      "sheet": "bedroom",
+      "col": 24,
+      "row": 10,
+      "w": 3,
+      "h": 3,
+      "category": "prop",
+      "label": "large framed moon painting",
+      "verified": true
+    },
+    "mirror_standing": {
+      "sheet": "bedroom",
+      "col": 21,
+      "row": 10,
+      "w": 1,
+      "h": 3,
+      "category": "furniture",
+      "label": "standing mirror (gold frame)",
+      "verified": false
+    },
+    "_comment_clockwork": "--- Expansion_ClockworkFactory (interior_clockwork.png, firstgid 5048) ---",
+    "pipe_organ": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 6,
+      "w": 3,
+      "h": 4,
+      "category": "furniture",
+      "label": "copper pipe organ (piano-like)",
+      "verified": true
+    },
+    "clockwork_lamp_floor": {
+      "sheet": "clockwork",
+      "col": 5,
+      "row": 8,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "floor lamp with glowing orb",
+      "verified": false
+    },
+    "clockwork_light": {
+      "sheet": "clockwork",
+      "col": 13,
+      "row": 8,
+      "w": 2,
+      "h": 1,
+      "category": "prop",
+      "label": "glowing ceiling light",
+      "verified": true
+    },
+    "clockwork_machine_copper": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 13,
+      "w": 4,
+      "h": 3,
+      "category": "furniture",
+      "label": "large copper clockwork machine",
+      "verified": false
+    },
+    "clockwork_machine_steel": {
+      "sheet": "clockwork",
+      "col": 0,
+      "row": 16,
+      "w": 4,
+      "h": 3,
+      "category": "furniture",
+      "label": "large steel clockwork machine",
+      "verified": false
+    },
+    "clock_clockwork": {
+      "sheet": "clockwork",
+      "col": 20,
+      "row": 0,
+      "w": 2,
+      "h": 3,
+      "category": "furniture",
+      "label": "copper grandfather clock",
+      "verified": true
+    },
+    "_comment_music": "--- Expansion_Music (interior_music.png, firstgid 6072) ---",
+    "wall_set_silver": {
+      "sheet": "music",
+      "col": 0,
+      "row": 0,
+      "w": 3,
+      "h": 3,
+      "category": "wall",
+      "label": "silver-framed wall enclosure (3x3)",
+      "verified": false
+    },
+    "wall_set_blue": {
+      "sheet": "music",
+      "col": 5,
+      "row": 0,
+      "w": 3,
+      "h": 3,
+      "category": "wall",
+      "label": "blue-framed wall enclosure (3x3)",
+      "verified": false
+    },
+    "wall_wood_herringbone": {
+      "sheet": "music",
+      "col": 10,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "herringbone wood wall top",
+      "verified": false
+    },
+    "piano_upright": {
+      "sheet": "music",
+      "col": 0,
+      "row": 10,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "upright piano",
+      "verified": true
+    },
+    "pipe_brass": {
+      "sheet": "clockwork",
+      "col": 29,
+      "row": 0,
+      "w": 1,
+      "h": 2,
+      "category": "prop",
+      "label": "brass pipe segment",
+      "verified": false
+    },
+    "wall_wood_panel": {
+      "sheet": "music",
+      "col": 15,
+      "row": 0,
+      "w": 1,
+      "h": 1,
+      "category": "wall",
+      "label": "wood plank wall top",
+      "verified": false
+    },
+    "_comment_music_instruments": "--- music: harps, strings, drums, sheet-music stand (rows 5-8) ---",
+    "music_stand": {
+      "sheet": "music",
+      "col": 0,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "sheet-music stand",
+      "verified": false
+    },
+    "harp_gold": {
+      "sheet": "music",
+      "col": 4,
+      "row": 7,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "golden concert harp",
+      "verified": false
+    },
+    "harp_copper": {
+      "sheet": "music",
+      "col": 6,
+      "row": 7,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "copper harp",
+      "verified": false
+    },
+    "harp_silver": {
+      "sheet": "music",
+      "col": 8,
+      "row": 7,
+      "w": 2,
+      "h": 2,
+      "category": "furniture",
+      "label": "silver harp",
+      "verified": false
+    },
+    "cello": {
+      "sheet": "music",
+      "col": 10,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "cello (red-brown)",
+      "verified": false
+    },
+    "violin": {
+      "sheet": "music",
+      "col": 11,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "violin / viola (tan)",
+      "verified": false
+    },
+    "double_bass": {
+      "sheet": "music",
+      "col": 12,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "double bass (silver)",
+      "verified": false
+    },
+    "cello_wood": {
+      "sheet": "music",
+      "col": 13,
+      "row": 7,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "upright cello (wood)",
+      "verified": false
+    },
+    "drum": {
+      "sheet": "music",
+      "col": 15,
+      "row": 5,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "drum with sticks",
+      "verified": false
+    },
+    "drum_white": {
+      "sheet": "music",
+      "col": 17,
+      "row": 5,
+      "w": 1,
+      "h": 2,
+      "category": "furniture",
+      "label": "white drum with sticks",
+      "verified": false
+    },
+    "lute": {
+      "sheet": "music",
+      "col": 16,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "round-body lute",
+      "verified": false
+    },
+    "accordion": {
+      "sheet": "music",
+      "col": 19,
+      "row": 4,
+      "w": 1,
+      "h": 1,
+      "category": "furniture",
+      "label": "red accordion / concertina",
+      "verified": false
+    },
+    "window_dark_pane": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 6,
+      "w": 1,
+      "h": 1,
+      "category": "window",
+      "label": "dark-frame window, light pane (painted on *_furniture faces, e.g. Williams grounds)",
+      "verified": true
+    }
   }
- },
- "objects": {
-  "_comment_franuka_floors": "--- franuka: floors (planks (6,2)->(8,2) are the three plank textures) ---",
-  "floor_wood_light": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 3,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "light wood floorboard",
-   "verified": true
-  },
-  "plank_floor_light": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "plank floor (light)",
-   "verified": true
-  },
-  "plank_floor_orange": {
-   "sheet": "franuka",
-   "col": 7,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "plank floor (orange)",
-   "verified": true
-  },
-  "plank_floor_dark": {
-   "sheet": "franuka",
-   "col": 8,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "plank floor (dark)",
-   "verified": true
-  },
-  "floor_tile_cream": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 4,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "cream square tile",
-   "verified": true
-  },
-  "floor_stone_hex": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 3,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "grey hex stone floor",
-   "verified": true
-  },
-  "_comment_franuka_walls": "--- franuka: wall autotile sets (0,0)->(2,5), corner caps (3,0)->(4,1), plank-wall panels (9,0)->(14,1), bricks (23,0)->(28,1) ---",
-  "wall_set_red": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 0,
-   "w": 3,
-   "h": 3,
-   "category": "wall",
-   "label": "red wall enclosure (3x3 autotile, empty interior)",
-   "verified": true
-  },
-  "wall_corner_caps_red": {
-   "sheet": "franuka",
-   "col": 3,
-   "row": 0,
-   "w": 2,
-   "h": 2,
-   "category": "wall",
-   "label": "red wall outer-corner caps (4 pieces)",
-   "verified": true
-  },
-  "wall_plank_panel_red": {
-   "sheet": "franuka",
-   "col": 9,
-   "row": 0,
-   "w": 3,
-   "h": 2,
-   "category": "wall",
-   "label": "framed plank wall panel (red)",
-   "verified": true
-  },
-  "wall_plank_panel_brown": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 0,
-   "w": 3,
-   "h": 2,
-   "category": "wall",
-   "label": "framed plank/brick wall panel (brown)",
-   "verified": true
-  },
-  "wall_orange_flat": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid orange wall (flat, no brick texture)",
-   "verified": true
-  },
-  "wall_brick": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "brown brick wall top",
-   "verified": true
-  },
-  "wall_brick_red": {
-   "sheet": "franuka",
-   "col": 27,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "terracotta/orange brick wall top",
-   "verified": true
-  },
-  "_comment_franuka_openings": "--- franuka: windows + doors ---",
-  "window": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 6,
-   "w": 2,
-   "h": 2,
-   "category": "window",
-   "label": "window (4-pane)",
-   "verified": true
-  },
-  "door_wood": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "door",
-   "label": "wooden door, square top",
-   "verified": true
-  },
-  "door_wood_arched": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 9,
-   "w": 1,
-   "h": 2,
-   "category": "door",
-   "label": "wooden door, arched top",
-   "verified": true
-  },
-  "_comment_franuka_furniture": "--- franuka: furniture, ONE colour per type (diversify later) ---",
-  "sofa": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 21,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "room": "living",
-   "label": "long padded sofa",
-   "verified": true
-  },
-  "armchair": {
-   "sheet": "franuka",
-   "col": 13,
-   "row": 19,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "living",
-   "label": "single armchair",
-   "verified": true
-  },
-  "side_table": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 13,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "living",
-   "label": "small side table",
-   "verified": true
-  },
-  "bookshelf": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "living",
-   "label": "tall bookshelf with books",
-   "verified": true
-  },
-  "plant": {
-   "sheet": "franuka",
-   "col": 21,
-   "row": 13,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "living",
-   "label": "potted plant",
-   "verified": true
-  },
-  "cabinet": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 12,
-   "w": 1,
-   "h": 3,
-   "category": "furniture",
-   "room": "living",
-   "label": "low closed cabinet",
-   "verified": true
-  },
-  "fireplace": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 26,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "living",
-   "label": "lit brick fireplace",
-   "verified": true
-  },
-  "candelabra": {
-   "sheet": "franuka",
-   "col": 28,
-   "row": 22,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "lighting",
-   "label": "standing candelabra",
-   "verified": true
-  },
-  "rug_blue": {
-   "sheet": "franuka",
-   "col": 3,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "room": "living",
-   "label": "blue patterned rug",
-   "verified": true
-  },
-  "bed_single": {
-   "sheet": "franuka",
-   "col": 16,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "bedroom",
-   "label": "single bed",
-   "verified": true
-  },
-  "cushion": {
-   "sheet": "franuka",
-   "col": 14,
-   "row": 15,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "living",
-   "label": "large blue cushion / seat",
-   "verified": true
-  },
-  "cushion_orange": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 15,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "living",
-   "label": "large orange cushion / seat",
-   "verified": false
-  },
-  "cushion_cream": {
-   "sheet": "franuka",
-   "col": 16,
-   "row": 15,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "living",
-   "label": "large cream cushion / seat",
-   "verified": false
-  },
-  "cushion_red": {
-   "sheet": "franuka",
-   "col": 18,
-   "row": 15,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "living",
-   "label": "large red cushion / seat",
-   "verified": true
-  },
-  "wardrobe": {
-   "sheet": "franuka",
-   "col": 25,
-   "row": 29,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "bedroom",
-   "label": "tall wardrobe (double door)",
-   "verified": true
-  },
-  "counter": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 23,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "kitchen",
-   "label": "kitchen counter with cabinet",
-   "verified": true
-  },
-  "dining_table": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 23,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "dining",
-   "label": "square dining table (wood)",
-   "verified": true
-  },
-  "dining_table_light": {
-   "sheet": "franuka",
-   "col": 14,
-   "row": 23,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "room": "dining",
-   "label": "square dining table (light)",
-   "verified": true
-  },
-  "_comment_franuka_pass2": "--- pass 2: recognizable franuka furniture/props (best-guess, unverified) ---",
-  "kitchen_clutter": {
-   "sheet": "franuka",
-   "col": 2,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "bookshelf with clutter on shelves (red-brown)",
-   "verified": true
-  },
-  "shelf_empty": {
-   "sheet": "franuka",
-   "col": 4,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "empty open shelving unit (red-brown)",
-   "verified": false
-  },
-  "cabinet_wood": {
-   "sheet": "franuka",
-   "col": 10,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "tall closed cabinet, double door (wood/orange)",
-   "verified": false
-  },
-  "bookshelf_wood": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "wood bookshelf with items + drawers",
-   "verified": false
-  },
-  "bookshelf_wood_books": {
-   "sheet": "franuka",
-   "col": 14,
-   "row": 12,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "wood bookshelf with colorful books",
-   "verified": false
-  },
-  "armchair_pink": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 19,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "padded armchair (pink)",
-   "verified": true
-  },
-  "armchair_orange": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 20,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "padded armchair (orange)",
-   "verified": false
-  },
-  "armchair_green": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 21,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "padded armchair (green)",
-   "verified": false
-  },
-  "armchair_red": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 22,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "padded armchair (red)",
-   "verified": false
-  },
-  "round_table_small": {
-   "sheet": "franuka",
-   "col": 10,
-   "row": 19,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "small round pedestal table (white top)",
-   "verified": false
-  },
-  "nightstand_candle": {
-   "sheet": "franuka",
-   "col": 15,
-   "row": 20,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "small nightstand with a lit candle",
-   "verified": false
-  },
-  "stool_wood": {
-   "sheet": "franuka",
-   "col": 8,
-   "row": 17,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "wooden stool",
-   "verified": false
-  },
-  "chair_wood": {
-   "sheet": "franuka",
-   "col": 9,
-   "row": 17,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "wooden chair (side view)",
-   "verified": false
-  },
-  "sofa_orange": {
-   "sheet": "franuka",
-   "col": 9,
-   "row": 27,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "label": "long padded sofa (orange)",
-   "verified": false
-  },
-  "sofa_orange_sectional": {
-   "sheet": "franuka",
-   "col": 18,
-   "row": 27,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "label": "U-shaped sectional sofa (orange)",
-   "verified": true
-  },
-  "dresser_orange": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 26,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "chest of drawers (orange)",
-   "verified": false
-  },
-  "wardrobe_orange": {
-   "sheet": "franuka",
-   "col": 14,
-   "row": 26,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "wardrobe / cupboard (orange)",
-   "verified": false
-  },
-  "dresser_tan": {
-   "sheet": "franuka",
-   "col": 21,
-   "row": 29,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "tall chest of drawers (tan)",
-   "verified": false
-  },
-  "wardrobe_tan": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 29,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "tall wardrobe, double door (tan)",
-   "verified": false
-  },
-  "bookshelf_tan": {
-   "sheet": "franuka",
-   "col": 29,
-   "row": 29,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "tall bookshelf with books (tan)",
-   "verified": false
-  },
-  "cabinet_display": {
-   "sheet": "franuka",
-   "col": 27,
-   "row": 29,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "display cabinet with items + books (tan)",
-   "verified": false
-  },
-  "cabinet_drawers_red": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 27,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "low cabinet with drawers (red-brown)",
-   "verified": false
-  },
-  "stove": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 23,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "kitchen stove / oven, dark counter range",
-   "verified": true
-  },
-  "fireplace_unlit": {
-   "sheet": "franuka",
-   "col": 22,
-   "row": 26,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "stone fireplace, unlit",
-   "verified": false
-  },
-  "plant_large": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 12,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "large leafy potted plant",
-   "verified": true
-  },
-  "floor_lamp": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 18,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "hanging_light",
-   "verified": false
-  },
-  "rug_red": {
-   "sheet": "franuka",
-   "col": 0,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "patterned rug (red)",
-   "verified": false
-  },
-  "rug_orange": {
-   "sheet": "franuka",
-   "col": 6,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "patterned rug (orange/brown)",
-   "verified": false
-  },
-  "rug_green": {
-   "sheet": "franuka",
-   "col": 9,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "patterned rug (green)",
-   "verified": false
-  },
-  "rug_magenta": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "patterned rug (magenta)",
-   "verified": true
-  },
-  "rug_cyan": {
-   "sheet": "franuka",
-   "col": 15,
-   "row": 29,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "patterned rug (cyan)",
-   "verified": false
-  },
-  "barrel": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 13,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "label": "wooden barrel",
-   "verified": false
-  },
-  "basket_fruit": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 14,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "wicker basket of red fruit",
-   "verified": false
-  },
-  "basket_wicker": {
-   "sheet": "franuka",
-   "col": 22,
-   "row": 14,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "empty wicker basket",
-   "verified": false
-  },
-  "crate": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 14,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "wooden crate",
-   "verified": false
-  },
-  "pot": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 14,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "small cooking pot",
-   "verified": true
-  },
-  "chest": {
-   "sheet": "franuka",
-   "col": 25,
-   "row": 14,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "treasure chest (closed)",
-   "verified": false
-  },
-  "mug": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 15,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "mug / tankard",
-   "verified": false
-  },
-  "jar": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 15,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "storage jar / canister",
-   "verified": false
-  },
-  "bottle_wine": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 15,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "green wine bottle",
-   "verified": false
-  },
-  "bottle_purple": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 16,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "purple potion bottle",
-   "verified": false
-  },
-  "bowl": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 20,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "bowl / small pot",
-   "verified": false
-  },
-  "knife": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 16,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "kitchen knife / cleaver",
-   "verified": false
-  },
-  "lantern": {
-   "sheet": "franuka",
-   "col": 28,
-   "row": 19,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "hanging lantern (lit)",
-   "verified": true
-  },
-  "hanging_herbs": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 18,
-   "w": 2,
-   "h": 1,
-   "category": "prop",
-   "label": "drying herbs on a rack",
-   "verified": false
-  },
-  "carrot": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 21,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "carrot",
-   "verified": false
-  },
-  "bread": {
-   "sheet": "franuka",
-   "col": 25,
-   "row": 21,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "loaf of bread",
-   "verified": false
-  },
-  "book_stack_red": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 23,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "book (red cover)",
-   "verified": false
-  },
-  "quill_ink": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 23,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "quill pen and inkpot",
-   "verified": false
-  },
-  "scroll": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 24,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "rolled paper scroll",
-   "verified": false
-  },
-  "_comment_food": "--- franuka: food props to place on tables (see image refs) ---",
-  "food_salad": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 21,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "dining",
-   "label": "salad bowl with spoon",
-   "verified": true
-  },
-  "food_ham": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 22,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "dining",
-   "label": "roast ham",
-   "verified": true
-  },
-  "food_fish": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 19,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "dining",
-   "label": "fish on plate",
-   "verified": true
-  },
-  "food_sausage": {
-   "sheet": "franuka",
-   "col": 23,
-   "row": 18,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "dining",
-   "label": "sausages",
-   "verified": true
-  },
-  "food_bowl": {
-   "sheet": "franuka",
-   "col": 21,
-   "row": 18,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "dining",
-   "label": "covered bowl",
-   "verified": true
-  },
-  "_comment_bath": "--- bath: all objects on the sheet ---",
-  "toilet": {
-   "sheet": "bath",
-   "col": 0,
-   "row": 3,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "toilet",
-   "verified": true
-  },
-  "sink": {
-   "sheet": "bath",
-   "col": 6,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "pedestal sink (basin with water)",
-   "verified": true
-  },
-  "sink_empty": {
-   "sheet": "bath",
-   "col": 5,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "empty sink (no water)",
-   "verified": true
-  },
-  "basin": {
-   "sheet": "bath",
-   "col": 11,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "basin on cabinet",
-   "verified": true
-  },
-  "mirror": {
-   "sheet": "bath",
-   "col": 7,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "framed mirror",
-   "verified": true
-  },
-  "towels": {
-   "sheet": "bath",
-   "col": 2,
-   "row": 1,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "stacked towels (small)",
-   "verified": true
-  },
-  "towels_tall": {
-   "sheet": "bath",
-   "col": 4,
-   "row": 1,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "stacked towels (tall)",
-   "verified": true
-  },
-  "basket": {
-   "sheet": "bath",
-   "col": 8,
-   "row": 1,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "small basket",
-   "verified": true
-  },
-  "bathmat": {
-   "sheet": "bath",
-   "col": 3,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "round bath mat (cream)",
-   "verified": true
-  },
-  "bathmat_round": {
-   "sheet": "bath",
-   "col": 2,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "round bath mat (lavender)",
-   "verified": true
-  },
-  "bathmat_oval": {
-   "sheet": "bath",
-   "col": 8,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "room": "bath",
-   "label": "oval bath mat (orange)",
-   "verified": true
-  },
-  "water_splash": {
-   "sheet": "bath",
-   "col": 0,
-   "row": 1,
-   "w": 2,
-   "h": 1,
-   "category": "prop",
-   "room": "bath",
-   "label": "blue water splash/puddle (full 2x1)",
-   "verified": true
-  },
-  "bathtub": {
-   "sheet": "bath",
-   "col": 1,
-   "row": 3,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "empty bathtub",
-   "verified": true
-  },
-  "bathtub_full": {
-   "sheet": "bath",
-   "col": 3,
-   "row": 3,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "bathtub with water",
-   "verified": true
-  },
-  "bathtub_wide": {
-   "sheet": "bath",
-   "col": 5,
-   "row": 3,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "bathtub (alt style)",
-   "verified": true
-  },
-  "vanity_basket": {
-   "sheet": "bath",
-   "col": 10,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "vanity cabinet topped with basket",
-   "verified": true
-  },
-  "vanity_towels": {
-   "sheet": "bath",
-   "col": 12,
-   "row": 1,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "bath",
-   "label": "vanity cabinet topped with towels",
-   "verified": true
-  },
-  "_comment_school": "--- school: top-left desks/chairs (0,0)->(6,5) ---",
-  "table": {
-   "sheet": "school",
-   "col": 0,
-   "row": 0,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "plain table",
-   "verified": true
-  },
-  "student_desk": {
-   "sheet": "school",
-   "col": 2,
-   "row": 0,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "student desk + chair (book)",
-   "verified": true
-  },
-  "student_desk_open": {
-   "sheet": "school",
-   "col": 3,
-   "row": 0,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "student desk + chair (open book)",
-   "verified": true
-  },
-  "student_desk_quill": {
-   "sheet": "school",
-   "col": 5,
-   "row": 0,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "student desk + chair (quill)",
-   "verified": true
-  },
-  "teacher_desk": {
-   "sheet": "school",
-   "col": 4,
-   "row": 2,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "teacher desk with books",
-   "verified": true
-  },
-  "locker": {
-   "sheet": "school",
-   "col": 6,
-   "row": 2,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "tall storage locker",
-   "verified": true
-  },
-  "book_red": {
-   "sheet": "school",
-   "col": 5,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "classroom",
-   "label": "standing red book",
-   "verified": true
-  },
-  "books_green": {
-   "sheet": "school",
-   "col": 4,
-   "row": 4,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "classroom",
-   "label": "stacked green books",
-   "verified": true
-  },
-  "inkwell": {
-   "sheet": "school",
-   "col": 5,
-   "row": 4,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "classroom",
-   "label": "inkwell with quill",
-   "verified": true
-  },
-  "blackboard": {
-   "sheet": "school",
-   "col": 13,
-   "row": 2,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "decorated blackboard",
-   "verified": true
-  },
-  "blackboard_blank": {
-   "sheet": "school",
-   "col": 13,
-   "row": 4,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "room": "classroom",
-   "label": "plain blackboard",
-   "verified": true
-  },
-  "_comment_kenney": "--- kenney (base outdoor tileset, firstgid 1): streetlamps, sign posts, signal, trees ---",
-  "streetlamp_t": {
-   "sheet": "kenney",
-   "col": 3,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "room": "street",
-   "label": "streetlamp, T double-head",
-   "verified": true
-  },
-  "sign_red": {
-   "sheet": "kenney",
-   "col": 4,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "room": "street",
-   "label": "stop sign",
-   "verified": true
-  },
-  "sign_green": {
-   "sheet": "kenney",
-   "col": 5,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "room": "street",
-   "label": "street label sign",
-   "verified": true
-  },
-  "sign_blue": {
-   "sheet": "kenney",
-   "col": 6,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "room": "street",
-   "label": "sign post (blue info + green signs)",
-   "verified": true
-  },
-  "lamp_ornate_green": {
-   "sheet": "kenney",
-   "col": 7,
-   "row": 6,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "room": "street",
-   "label": "ornate green lamp post",
-   "verified": true
-  },
-  "traffic_signal": {
-   "sheet": "kenney",
-   "col": 3,
-   "row": 15,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "room": "street",
-   "label": "traffic signal (red/amber/green)",
-   "verified": true
-  },
-  "tree_green": {
-   "sheet": "kenney",
-   "col": 22,
-   "row": 10,
-   "w": 1,
-   "h": 1,
-   "category": "tree",
-   "label": "small green tree (round, single tile)",
-   "verified": true
-  },
-  "tree_green_small": {
-   "sheet": "kenney",
-   "col": 22,
-   "row": 8,
-   "w": 1,
-   "h": 1,
-   "category": "tree",
-   "label": "small green tree (pointed, single tile)",
-   "verified": true
-  },
-  "tree_green_cluster": {
-   "sheet": "kenney",
-   "col": 18,
-   "row": 8,
-   "w": 3,
-   "h": 3,
-   "category": "tree",
-   "label": "green tree cluster (3x3)",
-   "verified": true
-  },
-  "tree_orange": {
-   "sheet": "kenney",
-   "col": 22,
-   "row": 13,
-   "w": 1,
-   "h": 1,
-   "category": "tree",
-   "label": "small autumn tree (round, single tile)",
-   "verified": true
-  },
-  "tree_orange_small": {
-   "sheet": "kenney",
-   "col": 22,
-   "row": 11,
-   "w": 1,
-   "h": 1,
-   "category": "tree",
-   "label": "small autumn tree (single tile)",
-   "verified": true
-  },
-  "tree_orange_cluster": {
-   "sheet": "kenney",
-   "col": 18,
-   "row": 11,
-   "w": 3,
-   "h": 3,
-   "category": "tree",
-   "label": "autumn tree cluster (3x3)",
-   "verified": true
-  },
-  "_comment_pass3": "--- pass 3: franuka colour variants (diversify; unverified, refine in catalog_web) ---",
-  "wall_red": {
-   "sheet": "franuka",
-   "col": 15,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid crimson wall top",
-   "verified": false
-  },
-  "wall_blue": {
-   "sheet": "franuka",
-   "col": 18,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid blue wall top",
-   "verified": false
-  },
-  "wall_cream": {
-   "sheet": "franuka",
-   "col": 15,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid cream/beige wall top",
-   "verified": false
-  },
-  "wall_magenta": {
-   "sheet": "franuka",
-   "col": 18,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid magenta wall top",
-   "verified": false
-  },
-  "wall_green": {
-   "sheet": "franuka",
-   "col": 24,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "solid green wall top",
-   "verified": false
-  },
-  "floor_round_stone": {
-   "sheet": "franuka",
-   "col": 9,
-   "row": 2,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "round cobble stone floor (light)",
-   "verified": false
-  },
-  "floor_cobble": {
-   "sheet": "franuka",
-   "col": 12,
-   "row": 3,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "cobblestone floor",
-   "verified": false
-  },
-  "floor_tile_blue": {
-   "sheet": "franuka",
-   "col": 11,
-   "row": 3,
-   "w": 1,
-   "h": 1,
-   "category": "floor",
-   "label": "blue-grey tile floor",
-   "verified": false
-  },
-  "candelabra_arms": {
-   "sheet": "franuka",
-   "col": 27,
-   "row": 21,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "multi-arm candelabra (lit)",
-   "verified": false
-  },
-  "food_bowl_blue": {
-   "sheet": "franuka",
-   "col": 20,
-   "row": 22,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "blue bowl of food",
-   "verified": true
-  },
-  "food_pot": {
-   "sheet": "franuka",
-   "col": 21,
-   "row": 20,
-   "w": 1,
-   "h": 1,
-   "category": "prop",
-   "label": "small cooking pot of food",
-   "verified": false
-  },
-  "_comment_alchemy": "--- Expansion_AlchemyLab (interior_alchemy.png, firstgid 3000): alchemy lab furniture/props ---",
-  "shelf_metal": {
-   "sheet": "alchemy",
-   "col": 4,
-   "row": 16,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "metal/steel shelving unit (alchemy)",
-   "verified": false
-  },
-  "shelf_alchemy_red": {
-   "sheet": "alchemy",
-   "col": 0,
-   "row": 16,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "red alchemy shelf with items",
-   "verified": false
-  },
-  "bookshelf_alchemy": {
-   "sheet": "alchemy",
-   "col": 2,
-   "row": 16,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "wood alchemy bookshelf",
-   "verified": false
-  },
-  "alchemy_workbench": {
-   "sheet": "alchemy",
-   "col": 0,
-   "row": 11,
-   "w": 3,
-   "h": 2,
-   "category": "furniture",
-   "label": "alchemy workbench with bottles",
-   "verified": true
-  },
-  "wall_stone_grey": {
-   "sheet": "alchemy",
-   "col": 15,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "pale grey stone brick wall",
-   "verified": false
-  },
-  "wall_stone_tan": {
-   "sheet": "alchemy",
-   "col": 11,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "tan stone brick wall",
-   "verified": false
-  },
-  "magic_circle_green": {
-   "sheet": "alchemy",
-   "col": 12,
-   "row": 20,
-   "w": 3,
-   "h": 3,
-   "category": "prop",
-   "label": "green summoning/magic circle (floor)",
-   "verified": false
-  },
-  "magic_circle_red": {
-   "sheet": "alchemy",
-   "col": 15,
-   "row": 20,
-   "w": 3,
-   "h": 3,
-   "category": "prop",
-   "label": "red summoning/magic circle (floor)",
-   "verified": false
-  },
-  "crystal_cluster": {
-   "sheet": "alchemy",
-   "col": 6,
-   "row": 18,
-   "w": 2,
-   "h": 1,
-   "category": "prop",
-   "label": "glowing crystal cluster",
-   "verified": false
-  },
-  "chest_alchemy": {
-   "sheet": "alchemy",
-   "col": 18,
-   "row": 23,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "wooden chest (alchemy)",
-   "verified": true
-  },
-  "_comment_bedroom": "--- Expansion_Bedroom (interior_bedroom.png, firstgid 4024) ---",
-  "double_bed": {
-   "sheet": "bedroom",
-   "col": 0,
-   "row": 16,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "double bed with headboard",
-   "verified": false
-  },
-  "double_bed_blue": {
-   "sheet": "bedroom",
-   "col": 0,
-   "row": 19,
-   "w": 3,
-   "h": 3,
-   "category": "furniture",
-   "label": "double bed (blue) with headboard",
-   "verified": false
-  },
-  "bed_single_made": {
-   "sheet": "bedroom",
-   "col": 0,
-   "row": 13,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "made single bed",
-   "verified": false
-  },
-  "grandfather_clock": {
-   "sheet": "bedroom",
-   "col": 0,
-   "row": 10,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "tall grandfather clock",
-   "verified": true
-  },
-  "painting_moon": {
-   "sheet": "bedroom",
-   "col": 24,
-   "row": 7,
-   "w": 3,
-   "h": 3,
-   "category": "prop",
-   "label": "framed moon painting",
-   "verified": true
-  },
-  "painting_moon_light": {
-   "sheet": "bedroom",
-   "col": 24,
-   "row": 10,
-   "w": 3,
-   "h": 3,
-   "category": "prop",
-   "label": "large framed moon painting",
-   "verified": true
-  },
-  "mirror_standing": {
-   "sheet": "bedroom",
-   "col": 21,
-   "row": 10,
-   "w": 1,
-   "h": 3,
-   "category": "furniture",
-   "label": "standing mirror (gold frame)",
-   "verified": false
-  },
-  "_comment_clockwork": "--- Expansion_ClockworkFactory (interior_clockwork.png, firstgid 5048) ---",
-  "pipe_organ": {
-   "sheet": "clockwork",
-   "col": 0,
-   "row": 6,
-   "w": 3,
-   "h": 4,
-   "category": "furniture",
-   "label": "copper pipe organ (piano-like)",
-   "verified": true
-  },
-  "clockwork_lamp_floor": {
-   "sheet": "clockwork",
-   "col": 5,
-   "row": 8,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "floor lamp with glowing orb",
-   "verified": false
-  },
-  "clockwork_light": {
-   "sheet": "clockwork",
-   "col": 13,
-   "row": 8,
-   "w": 2,
-   "h": 1,
-   "category": "prop",
-   "label": "glowing ceiling light",
-   "verified": true
-  },
-  "clockwork_machine_copper": {
-   "sheet": "clockwork",
-   "col": 0,
-   "row": 13,
-   "w": 4,
-   "h": 3,
-   "category": "furniture",
-   "label": "large copper clockwork machine",
-   "verified": false
-  },
-  "clockwork_machine_steel": {
-   "sheet": "clockwork",
-   "col": 0,
-   "row": 16,
-   "w": 4,
-   "h": 3,
-   "category": "furniture",
-   "label": "large steel clockwork machine",
-   "verified": false
-  },
-  "clock_clockwork": {
-   "sheet": "clockwork",
-   "col": 20,
-   "row": 0,
-   "w": 2,
-   "h": 3,
-   "category": "furniture",
-   "label": "copper grandfather clock",
-   "verified": true
-  },
-  "_comment_music": "--- Expansion_Music (interior_music.png, firstgid 6072) ---",
-  "wall_set_silver": {
-   "sheet": "music",
-   "col": 0,
-   "row": 0,
-   "w": 3,
-   "h": 3,
-   "category": "wall",
-   "label": "silver-framed wall enclosure (3x3)",
-   "verified": false
-  },
-  "wall_set_blue": {
-   "sheet": "music",
-   "col": 5,
-   "row": 0,
-   "w": 3,
-   "h": 3,
-   "category": "wall",
-   "label": "blue-framed wall enclosure (3x3)",
-   "verified": false
-  },
-  "wall_wood_herringbone": {
-   "sheet": "music",
-   "col": 10,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "herringbone wood wall top",
-   "verified": false
-  },
-  "piano_upright": {
-   "sheet": "music",
-   "col": 0,
-   "row": 10,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "upright piano",
-   "verified": true
-  },
-  "pipe_brass": {
-   "sheet": "clockwork",
-   "col": 29,
-   "row": 0,
-   "w": 1,
-   "h": 2,
-   "category": "prop",
-   "label": "brass pipe segment",
-   "verified": false
-  },
-  "wall_wood_panel": {
-   "sheet": "music",
-   "col": 15,
-   "row": 0,
-   "w": 1,
-   "h": 1,
-   "category": "wall",
-   "label": "wood plank wall top",
-   "verified": false
-  },
-  "_comment_music_instruments": "--- music: harps, strings, drums, sheet-music stand (rows 5-8) ---",
-  "music_stand": {
-   "sheet": "music",
-   "col": 0,
-   "row": 7,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "sheet-music stand",
-   "verified": false
-  },
-  "harp_gold": {
-   "sheet": "music",
-   "col": 4,
-   "row": 7,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "golden concert harp",
-   "verified": false
-  },
-  "harp_copper": {
-   "sheet": "music",
-   "col": 6,
-   "row": 7,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "copper harp",
-   "verified": false
-  },
-  "harp_silver": {
-   "sheet": "music",
-   "col": 8,
-   "row": 7,
-   "w": 2,
-   "h": 2,
-   "category": "furniture",
-   "label": "silver harp",
-   "verified": false
-  },
-  "cello": {
-   "sheet": "music",
-   "col": 10,
-   "row": 7,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "cello (red-brown)",
-   "verified": false
-  },
-  "violin": {
-   "sheet": "music",
-   "col": 11,
-   "row": 7,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "violin / viola (tan)",
-   "verified": false
-  },
-  "double_bass": {
-   "sheet": "music",
-   "col": 12,
-   "row": 7,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "double bass (silver)",
-   "verified": false
-  },
-  "cello_wood": {
-   "sheet": "music",
-   "col": 13,
-   "row": 7,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "upright cello (wood)",
-   "verified": false
-  },
-  "drum": {
-   "sheet": "music",
-   "col": 15,
-   "row": 5,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "drum with sticks",
-   "verified": false
-  },
-  "drum_white": {
-   "sheet": "music",
-   "col": 17,
-   "row": 5,
-   "w": 1,
-   "h": 2,
-   "category": "furniture",
-   "label": "white drum with sticks",
-   "verified": false
-  },
-  "lute": {
-   "sheet": "music",
-   "col": 16,
-   "row": 4,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "round-body lute",
-   "verified": false
-  },
-  "accordion": {
-   "sheet": "music",
-   "col": 19,
-   "row": 4,
-   "w": 1,
-   "h": 1,
-   "category": "furniture",
-   "label": "red accordion / concertina",
-   "verified": false
-  },
-  "window_dark_pane": {
-   "sheet": "franuka",
-   "col": 26,
-   "row": 6,
-   "w": 1,
-   "h": 1,
-   "category": "window",
-   "label": "dark-frame window, light pane (painted on *_furniture faces, e.g. Williams grounds)",
-   "verified": true
-  }
- }
 }
