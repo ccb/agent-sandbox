@@ -90,6 +90,22 @@ def test_spots_are_walkable_cells_on_or_beside_furniture():
     assert got == [(0, 0), (3, 0), (0, 1), (3, 1), (1, 2), (2, 2), (3, 2)]
 
 
+def test_sheet_firstgids_matches_interior_and_suffixed_names():
+    from gen_furniture_matrix import _sheet_firstgids
+
+    catalog = {"sheets": {"franuka": {}, "kenney": {}, "school": {}}}
+    tilesets = [
+        {"name": "interior_franuka", "firstgid": 519},
+        {"name": "kenney_urban", "firstgid": 1},
+        {"name": "interior_school", "firstgid": 1543},
+    ]
+    assert _sheet_firstgids(catalog, tilesets) == {
+        "franuka": 519,
+        "kenney": 1,
+        "school": 1543,
+    }
+
+
 def test_real_map_artifacts_are_consistent():
     # The committed artifacts stay in lock-step with the tmj + matrices:
     # every furniture cell sits on a *_furniture layer cell, ids are dense,
@@ -136,3 +152,10 @@ def test_real_map_artifacts_are_consistent():
     )
     block_ids = {int(r.split(",")[0]) for r in blocks}
     assert block_ids == ids == set(range(1, len(ids) + 1))
+
+    # The identity join actually fires on the real map: cataloged names
+    # appear (not only tile-<gid> fallbacks), and the cataloged window tile
+    # (gid 737, window_dark_pane) is excluded from the matrix entirely.
+    names = [r.split(", ")[-1] for r in blocks]
+    assert any(not n.startswith("tile-") for n in names), "join emitted no names"
+    assert "tile-737" not in names, "window tiles must not become furniture"

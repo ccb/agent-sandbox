@@ -37,12 +37,32 @@ CATALOG_PATH = os.path.join(
 EXCLUDED_CATEGORIES = {"wall", "window", "door"}
 
 
+def _sheet_firstgids(catalog: dict, tilesets: list[dict]) -> dict[str, int]:
+    """Catalog sheet key -> tmj firstgid. Catalog sheets use short names
+    ("franuka"); the tmj's tilesets carry asset-flavored ones
+    ("interior_franuka", "kenney_urban") -- match exact, interior_-prefixed,
+    or "<sheet>_"-prefixed names, and fail loudly on an unmatched sheet so a
+    renamed tileset can't silently disable the identity join again."""
+    out: dict[str, int] = {}
+    names = {ts.get("name"): ts["firstgid"] for ts in tilesets}
+    for sheet in catalog.get("sheets", {}):
+        for candidate in (sheet, f"interior_{sheet}"):
+            if candidate in names:
+                out[sheet] = names[candidate]
+                break
+        else:
+            prefixed = [n for n in names if n and n.startswith(f"{sheet}_")]
+            if len(prefixed) == 1:
+                out[sheet] = names[prefixed[0]]
+    return out
+
+
 def excluded_gids(catalog: dict, tilesets: list[dict]) -> set[int]:
     """Every footprint gid of catalog entries whose category is structural
     (wall/window/door). Painted on `*_furniture` layers only so
     block_furniture seals them (williams_furniture carries 46 window tiles);
     they are NOT furniture and must not grow seat spots along the walls."""
-    firstgid = {ts.get("name"): ts["firstgid"] for ts in tilesets}
+    firstgid = _sheet_firstgids(catalog, tilesets)
     out: set[int] = set()
     for key, obj in catalog.get("objects", {}).items():
         if key.startswith("_") or not isinstance(obj, dict):
@@ -112,7 +132,7 @@ def gid_names(catalog: dict, tilesets: list[dict]) -> dict[int, str]:
     w*h gids of that atlas block; all of them map to the object's key so a
     piece can be named from any of its cells.
     """
-    firstgid = {ts.get("name"): ts["firstgid"] for ts in tilesets}
+    firstgid = _sheet_firstgids(catalog, tilesets)
     names: dict[int, str] = {}
     for key, obj in catalog.get("objects", {}).items():
         if key.startswith("_") or not isinstance(obj, dict):
