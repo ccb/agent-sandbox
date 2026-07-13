@@ -28,7 +28,8 @@ function roleClass(role: string): string {
  * The live LLM-request log (#398), filtered to one agent: the same
  * one-request-per-line stream the backend's terminal monitor prints and the
  * Godot HUD shows, scoped to the selected persona via each record's `actor`.
- * Newest first; hover a row for the full detail.
+ * `actor: null` selects the unattributed records instead (the dashboard's
+ * catch-all cell, #519). Newest first; hover a row for the full detail.
  */
 export function LlmCallLog({
   calls,
@@ -36,7 +37,7 @@ export function LlmCallLog({
   connected,
 }: {
   calls: LlmCallRecord[];
-  actor: string;
+  actor: string | null;
   connected: boolean;
 }) {
   const mine = calls.filter((c) => c.actor === actor);
@@ -69,7 +70,7 @@ export function LlmCallLog({
       ) : (
         <p className="mem-empty">
           {total > 0
-            ? `No calls from ${actor} yet.`
+            ? `No ${actor === null ? "unattributed calls" : `calls from ${actor}`} yet.`
             : connected
               ? "No LLM requests yet — waiting on the live run."
               : "Waiting for the live backend…"}

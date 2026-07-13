@@ -184,6 +184,16 @@ server runs `--brain llm`. `VITE_SIM_API_URL` works as a `pnpm dev` default for
 the same setting; with neither given, the page stays fully static and the
 agents view plays the baked replay exactly as before.
 
+The **LLM dashboard** page (`#llm`, issue #519) is the "sit back and monitor
+the run" surface over the same stream: one cell per agent — client-side
+aggregates (calls, tokens in→out with the cache-read share, cost, latency) over
+that agent's recent calls, a recency pulse so a stalled agent is spottable at a
+glance, and the agent's own slice of the request log — under a run strip with
+the exact run totals, the remaining budget (from one `GET /usage` read at
+connect), and the driving model. Agents seen on the stream but missing from the
+roster get their own cells, and calls with no `actor` land in an
+*Unattributed* catch-all, so the dashboard works pointed at any live backend.
+
 How it works: [`src/useLive.ts`](src/useLive.ts) reads the `GET /live`
 handshake once (the world's replay-meta shape), then polls the backend's
 change feed (`GET /events?since=<cursor>`) and keeps the latest `frame` and
