@@ -9,6 +9,7 @@ durable, zero-infrastructure home (SQLite is stdlib; frames are plain JSONL):
       <run_id>/
         manifest.json           # mirrors the runs row's manifest column
         frames.jsonl            # line N = the step-N frame (dict[str, AgentFrame])
+        events.jsonl            # the run's GameEvent log (EventState dicts, #467)
 
 Producers: ``serve_penn --persist`` (live, per tick) and
 ``generate_penn_replay --persist`` (bake, post-hoc). Consumers: the #307
@@ -32,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.cognition import memories_for_frame
-from backend.contract import AGENT_FRAME_FIELDS
+from backend.contract import AGENT_FRAME_FIELDS, EVENT_STATE_FIELDS
 from backend.sim_config import RetrievalConfig
 from text_adventure_games.memory import AgentMemory, MemoryRecord
 
@@ -200,6 +201,44 @@ class RunStore:
         if not path.exists():
             raise KeyError(f"unknown run id: {run_id}")
         return path
+
+    # --- events ---------------------------------------------------------------
+
+    def append_events(self, run_id: str, events: list[dict]) -> None:
+        """Append ``GameEvent.to_primitive()`` dicts to the run's events.jsonl.
+
+        Unlike frames there is no step == line invariant: a step can log zero
+        or many events and each carries its own ``turn`` -- order is append
+        order. The whole batch is validated first (#305 EventState, keys
+        only), so one bad event keeps the batch off disk. An empty list is a
+        no-op: a run with no events never grows a file.
+        """
+        path = self._events_path(run_id)
+        for event in events:
+            _validate_event(event)
+        if not events:
+            return
+        with path.open("a", encoding="utf-8") as fh:
+            for event in events:
+                fh.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+                fh.write("\n")
+
+    def read_events(self, run_id: str) -> list[dict]:
+        """The run's persisted GameEvent log, in append order ([] when none)."""
+        path = self._events_path(run_id)
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    def _events_path(self, run_id: str) -> Path:
+        # Existence-check the run DIR, not the file: unlike frames.jsonl
+        # (touch()-ed by create_run), events.jsonl is created lazily on the
+        # first append -- an event-less run never has one.
+        run_dir = self.root / run_id
+        if not run_dir.is_dir():
+            raise KeyError(f"unknown run id: {run_id}")
+        return run_dir / "events.jsonl"
 
     # --- memories ---------------------------------------------------------------
 
@@ -386,3 +425,19 @@ def _validate_frame(frame: dict) -> None:
         missing = [k for k in _FRAME_REQUIRED if k not in entry]
         if missing:
             raise ValueError(f"frame entry for {name!r} is missing {missing}")
+
+
+def _validate_event(event: dict) -> None:
+    """Structural #305 EventState check: the five pinned fields, keys only.
+
+    Same rationale as ``_validate_frame`` -- and keys only on purpose:
+    ``POST /world/event`` records legitimately carry ``actor=None``.
+    """
+    if not isinstance(event, dict):
+        raise ValueError("event must be a dict of EventState fields")
+    unpinned = sorted(set(event) - set(EVENT_STATE_FIELDS))
+    if unpinned:
+        raise ValueError(f"event has unpinned fields: {unpinned}")
+    missing = [k for k in EVENT_STATE_FIELDS if k not in event]
+    if missing:
+        raise ValueError(f"event is missing {missing}")

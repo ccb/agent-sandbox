@@ -1203,9 +1203,10 @@ retyped); additive optional fields don't bump it.
 `tests/test_replay_contract.py` holds the two field-for-field in lock-step,
 alongside conformance tests that validate the real bake output and live meta.
 The RunStore (`backend/run_store.py`, #304) writes `frames.jsonl` lines in the
-`dict[str, AgentFrame]` shape — checked structurally at write time, since the
-base env has no pydantic — and the #307 live-run exporter (emits a `Replay`)
-constructs against these models.
+`dict[str, AgentFrame]` shape and `events.jsonl` lines in the `EventState`
+shape — both checked structurally at write time, since the base env has no
+pydantic — and the #307 exporter (`backend/penn/export_replay.py`) emits a
+full `Replay`-shaped file back out of the store.
 
 ## RunStore: durable runs (#304)
 
@@ -1215,13 +1216,23 @@ constructs against these models.
       sim.db                             # runs + memories tables
       <run_id>/manifest.json             # the run's meta() blob
       <run_id>/frames.jsonl              # line N = the step-N frame (#305 shape)
+      <run_id>/events.jsonl              # the run's GameEvent log (#467 EventState)
 
 Two opt-in producers: `serve_penn.py --persist` records a live run as it ticks
 (each `POST /reset` closes the current run and opens a new id), and
 `generate_penn_replay.py --persist [--runs-dir DIR]` mirrors a bake after the
 fact — round-trip tests pin that a persisted bake equals its replay file.
-Reads: `read_frames`, `memories_for` (the lean wire projection), and
-`query_memories`, which rehydrates rows into engine `MemoryRecord`s and
-delegates to `AgentMemory.retrieve` — store queries score exactly like the
-sim. Consumers on deck: the #307 live→replay exporter and the #306
-run-lifecycle endpoints.
+Reads: `read_frames`, `read_events`, `memories_for` (the lean wire
+projection), and `query_memories`, which rehydrates rows into engine
+`MemoryRecord`s and delegates to `AgentMemory.retrieve` — store queries score
+exactly like the sim. The #307 live→replay bridge reads all of it back out:
+
+    uv run python -m backend.penn.export_replay              # newest run
+    uv run python -m backend.penn.export_replay <run_id> --out my_run.json
+
+writes a `penn_replay.json` (default: beside the run, in
+`<runs-dir>/<run_id>/`) that the viewer opens via the landing menu's "Open a
+local replay file" — a recorded real-LLM day replays offline with bubbles,
+memory streams, and timeline markers intact. A round-trip test pins that a
+persisted bake's export equals its replay file exactly. Consumers on deck:
+the #306 run-lifecycle endpoints.
