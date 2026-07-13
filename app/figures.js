@@ -1745,72 +1745,83 @@
     });
   });
 
-  /* ---------------- 35: critch -- the advice ---------------- */
+  /* ---------------- 35: critch -- the advice, grinning ---------------- */
   FIG._define("critch", "svg", function (svg) {
     el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "CRITCH / THE SURVIVAL PAMPHLET";
-    const panel = (x) => el(svg, "rect", { x, y: 70, width: 180, height: 170,
-      fill: "none", stroke: PH_DIM, "stroke-dasharray": "4 3" });
-    const p1 = el(svg, "g", {}), p2 = el(svg, "g", {}), p3 = el(svg, "g", {});
-    [30, 230, 430].forEach(panel);
-    // 1: take what you need -- the merchant, and a hand relieved of manners
-    el(p1, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
-      d: "M 55 200 Q 70 188 95 192 Q 130 194 150 200 M 60 200 Q 66 208 78 206" });
-    el(p1, "circle", { cx: 62, cy: 192, r: 7, fill: "none", stroke: PH, "stroke-width": 1.4 });
-    el(p1, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
-      points: "120,120 120,168 114,158 120,168 126,158" });
-    el(p1, "path", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
-      d: "M 108 106 L 132 106 M 112 106 L 112 96 M 120 106 L 120 94 M 128 106 L 128 96" });
-    // 2: the boy's hall -- the ceiling, its opinions, the lamp declined
-    el(p2, "path", { fill: "none", stroke: PH, "stroke-width": 1.4,
-      d: "M 250 220 L 250 110 Q 320 84 390 110 L 390 220" });
-    [[280, 104], [312, 96], [346, 100]].forEach(([x, y]) =>
-      el(p2, "path", { fill: "none", stroke: PH_DIM,
-        d: `M ${x} ${y} q 5 -6 10 0 q 5 6 10 0` }));
-    el(p2, "circle", { cx: 320, cy: 178, r: 14, fill: "none", stroke: FUNGUS,
-      "stroke-width": 1.3 });
-    el(p2, "line", { x1: 320, y1: 164, x2: 320, y2: 152, stroke: FUNGUS });
-    const no = el(p2, "g", { opacity: 0 });
-    el(no, "circle", { cx: 320, cy: 178, r: 22, fill: "none", stroke: "#ff5a5a",
-      "stroke-width": 1.6 });
-    el(no, "line", { x1: 304, y1: 194, x2: 336, y2: 162, stroke: "#ff5a5a",
-      "stroke-width": 1.6 });
-    // 3: I walk south -- and he does
-    const walker = el(p3, "g", {});
-    el(walker, "circle", { cx: 0, cy: -44, r: 6, fill: "none", stroke: PH, "stroke-width": 1.3 });
-    el(walker, "path", { fill: "none", stroke: PH, "stroke-width": 1.3,
-      d: "M -4 -38 Q -8 -20 -6 0 L 6 0 Q 8 -22 4 -38" });
-    const legL = el(walker, "line", { stroke: PH, "stroke-width": 1.3 });
-    const legR = el(walker, "line", { stroke: PH, "stroke-width": 1.3 });
-    el(p3, "polyline", { fill: "none", stroke: FUNGUS, "stroke-width": 1.3,
-      points: "560,214 470,214 480,208 470,214 480,220" });
-    const quotes = [
-      label(svg, 120, 262, 10, PH_BRIGHT), label(svg, 320, 262, 10, PH_BRIGHT),
-      label(svg, 520, 262, 10, PH_BRIGHT)];
-    quotes.forEach(q => q.setAttribute("text-anchor", "middle"));
-    const foot = label(svg, 320, 330, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    cls.textContent = "CRITCH / THE LAUGH, PROFESSIONAL";
+    // the face, frontal, per the reference: skull, ears, crest, ruff,
+    // eyes, the tapering muzzle, the nose pad -- golden where fur catches
+    const face = el(svg, "g", { transform: "translate(320 60)" });
+    const F = (d, w, glow) => el(face, "path", { fill: "none",
+      stroke: glow ? PH_BRIGHT : PH, "stroke-width": w || 1.5, d });
+    const gold = d => el(face, "path", { fill: "none", stroke: FUNGUS,
+      "stroke-width": 1.2, d });
+    // ears, great and round, fuzzed on the inner edge
+    F("M -68 92 Q -104 66 -96 24 Q -90 2 -64 8 Q -40 16 -34 52", 1.6);
+    F("M 68 92 Q 104 66 96 24 Q 90 2 64 8 Q 40 16 34 52", 1.6);
+    el(face, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "-84,56 -78,48 -74,56 -68,46 -64,54" });
+    el(face, "polyline", { fill: "none", stroke: PH_DIM, points:
+      "84,56 78,48 74,56 68,46 64,54" });
+    // the skull and cheeks, tapering to the muzzle
+    F("M -66 90 Q -70 130 -42 158 Q -26 176 -14 184", 1.7);
+    F("M 66 90 Q 70 130 42 158 Q 26 176 14 184", 1.7);
+    F("M -34 50 Q 0 30 34 50", 1.6);                        // the brow dome
+    // the crest, golden, standing
+    gold("M -26 40 L -20 20 M -12 34 L -8 12 M 2 32 L 4 10 M 16 34 L 22 16 M 28 42 L 36 26");
+    // the ruff at the jaw, golden
+    gold("M -58 122 L -74 132 M -52 140 L -68 152 M 58 122 L 74 132 M 52 140 L 68 152");
+    // the spots
+    [[-44, 96], [-28, 82], [44, 96], [28, 82], [-52, 116], [52, 116]].forEach(
+      ([cx, cy]) => el(face, "circle", { cx, cy, r: 1.6, fill: FUNGUS,
+        "fill-opacity": .8 }));
+    // eyes: set close, angled, lit
+    F("M -40 96 Q -26 88 -14 98 Q -26 104 -40 96 Z", 1.4);
+    F("M 40 96 Q 26 88 14 98 Q 26 104 40 96 Z", 1.4);
+    const eyeL = el(face, "circle", { cx: -26, cy: 96, r: 2.4, fill: PH_BRIGHT });
+    const eyeR = el(face, "circle", { cx: 26, cy: 96, r: 2.4, fill: PH_BRIGHT });
+    // the muzzle, tapering; the nose pad
+    F("M -14 108 Q -10 150 -8 168", 1.3);
+    F("M 14 108 Q 10 150 8 168", 1.3);
+    F("M -8 168 Q 0 164 8 168 Q 12 182 0 186 Q -12 182 -8 168 Z", 1.6);
+    el(face, "circle", { cx: -4, cy: 175, r: 1.3, fill: BG, stroke: PH_BRIGHT });
+    el(face, "circle", { cx: 4, cy: 175, r: 1.3, fill: BG, stroke: PH_BRIGHT });
+    // the mouth, in two minds: a line, then the famous grin
+    const shut = el(face, "path", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      d: "M -14 184 Q 0 192 14 184" });
+    const grin = el(face, "g", { opacity: 0 });
+    el(grin, "path", { fill: "none", stroke: PH, "stroke-width": 1.6,
+      d: "M -30 168 Q -34 196 -16 214 Q 0 226 16 214 Q 34 196 30 168" });
+    el(grin, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2,
+      points: "-26,176 -20,188 -14,176 -8,186 -2,176 4,186 10,176 16,188 22,176" });
+    el(grin, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.2,
+      points: "-16,212 -10,202 -4,212 2,202 8,212 14,204" });
+    const eyeSquintL = el(face, "path", { fill: "none", stroke: PH,
+      "stroke-width": 1.6, opacity: 0, d: "M -40 96 Q -26 92 -14 98" });
+    const eyeSquintR = el(face, "path", { fill: "none", stroke: PH,
+      "stroke-width": 1.6, opacity: 0, d: "M 40 96 Q 26 92 14 98" });
+    const quote = label(svg, 320, 322, 10, PH_BRIGHT); quote.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 320, 344, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
-      const T = t % 210;
+      const T = t % 160;
       doWipe(T);
       typeOn(hdr, "CRITCH (THE ADVICE)", T, 4, 1.4);
-      const beat = Math.floor(T / 64);
-      [p1, p2, p3].forEach((p, i) => p.setAttribute("opacity", beat === i ? 1 : .3));
-      typeOn(quotes[0], '"TAKE WHAT YOU NEED."', T, 12, 1.4);
-      typeOn(quotes[1], '"MIND THE BOY\'S HALL."', T, 76, 1.4);
-      typeOn(quotes[2], '"I WALK SOUTH."', T, 140, 1.4);
-      no.setAttribute("opacity", beat === 1 && (t % 4 < 2) ? 1 : beat === 1 ? .6 : 0);
-      const wx = 500 - (beat === 2 ? ((T - 128) % 64) * 1.6 : 0);
-      walker.setAttribute("transform", `translate(${wx} 214)`);
-      const step = (t % 6) < 3 ? 5 : -5;
-      legL.setAttribute("x1", 0); legL.setAttribute("y1", 0);
-      legL.setAttribute("x2", -4 + step); legL.setAttribute("y2", 16);
-      legR.setAttribute("x1", 0); legR.setAttribute("y1", 0);
-      legR.setAttribute("x2", 4 - step); legR.setAttribute("y2", 16);
-      typeOn(foot, "HE NODS AT THE CRATES. THE REST IS YOUR PROBLEM.", T, 180, 1.9);
+      const grinning = (T % 80) >= 34;
+      // the ears prick first, then the jaw commits
+      face.setAttribute("transform",
+        `translate(320 60) rotate(${grinning ? 2 : 0} 0 120)`);
+      grin.setAttribute("opacity", grinning ? 1 : 0);
+      shut.setAttribute("opacity", grinning ? 0 : 1);
+      eyeSquintL.setAttribute("opacity", grinning ? 1 : 0);
+      eyeSquintR.setAttribute("opacity", grinning ? 1 : 0);
+      eyeL.setAttribute("opacity", grinning ? 0 : 1);
+      eyeR.setAttribute("opacity", grinning ? 0 : 1);
+      typeOn(quote, '"TOMB PAYS BETTER THAN THE ROAD --', T, 40, 1.6);
+      typeOn(foot, '-- IF THE TOMB LETS YOU KEEP IT."', T, 84, 1.6);
     });
   });
 
