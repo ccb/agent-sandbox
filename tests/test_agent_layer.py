@@ -368,12 +368,21 @@ def test_decide_and_route_attributes_calls_to_actor_and_turn(tiny_game):
 
 
 def _act_call(action, arguments=""):
-    """A scripted choose_action tool call for the loop's call_tools queue."""
+    """A scripted choose_action tool call for the loop's call_tools queue.
+
+    Includes ``reasoning`` because choose_action is now OpenAI-strict (#357):
+    all three fields are required, so an omitted one would trip validation and
+    trigger a repair round rather than exercising the loop's own is_error retry.
+    """
     return {
         "tool_calls": [
             {
                 "name": "choose_action",
-                "arguments": {"action": action, "arguments": arguments},
+                "arguments": {
+                    "reasoning": "because",
+                    "action": action,
+                    "arguments": arguments,
+                },
             }
         ]
     }

@@ -26,6 +26,15 @@ from typing import Protocol, runtime_checkable, Union
 from .enums import LlmProvider
 from .usage import RunLog, UsageLedger, record_call
 
+# Optional: the jsonschema package validates tool arguments precisely when
+# present (an extra, not a base dependency). Absent, a minimal built-in check
+# (type / required / enum, see validate_tool_arguments) covers the schemas we
+# actually ship -- so the base install gains no hard dependency (#357).
+try:
+    import jsonschema as _jsonschema
+except ImportError:
+    _jsonschema = None
+
 # ---------------------------------------------------------------------------
 # Resilience: retry with exponential backoff (issue #260)
 # ---------------------------------------------------------------------------
@@ -300,16 +309,43 @@ class LlmClient(Protocol):
 # know which provider is in use.
 
 
+def _is_strict_compatible(schema) -> bool:
+    """True if *schema* satisfies OpenAI structured-output strict rules, checked
+    recursively: every object sets ``additionalProperties: false`` and lists all
+    of its properties in ``required``. Only then is ``strict: true`` safe to send
+    -- a loose schema with strict on is a 400 (#357). Tightening a schema is what
+    opts it into strict; Anthropic has no equivalent and stays best-effort."""
+    if not isinstance(schema, dict):
+        return True
+    stype = schema.get("type")
+    if stype == "object":
+        if schema.get("additionalProperties") is not False:
+            return False
+        props = schema.get("properties", {}) or {}
+        if set(props) != set(schema.get("required", []) or []):
+            return False
+        return all(_is_strict_compatible(sub) for sub in props.values())
+    if stype == "array":
+        items = schema.get("items")
+        return _is_strict_compatible(items) if isinstance(items, dict) else True
+    return True
+
+
 def _to_openai_tool(tool: dict) -> dict:
-    """Translate a normalized tool dict to OpenAI's function-tool shape."""
-    return {
-        "type": "function",
-        "function": {
-            "name": tool["name"],
-            "description": tool.get("description", ""),
-            "parameters": tool["parameters"],
-        },
+    """Translate a normalized tool dict to OpenAI's function-tool shape.
+
+    Sets ``strict: true`` when the schema is strict-compatible so OpenAI enforces
+    conformance on the wire; a loose/external tool is left best-effort rather than
+    forced (which would 400). See :func:`_is_strict_compatible`."""
+    parameters = tool["parameters"]
+    function = {
+        "name": tool["name"],
+        "description": tool.get("description", ""),
+        "parameters": parameters,
     }
+    if _is_strict_compatible(parameters):
+        function["strict"] = True
+    return {"type": "function", "function": function}
 
 
 def _to_anthropic_tool(tool: dict) -> dict:
@@ -529,6 +565,217 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Tool-argument validation + one bounded repair round (issue #357)
+# ---------------------------------------------------------------------------
+#
+# call_tools trusts the provider to honor the schema, but only OpenAI strict mode
+# guarantees it (Anthropic is best-effort). This layer validates the returned
+# arguments against the tool's parameters, feeds a violation back for one repair
+# round, and counts the outcome -- so a consumer gets a schema-valid dict or an
+# honest, counted failure instead of silently-degraded garbage. call_tool and
+# run_tool_loop both route through call_tools, so wiring this in one place covers
+# every consumer.
+
+_JSON_TYPES = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "integer": int,
+    "number": (int, float),
+    "boolean": bool,
+    "null": type(None),
+}
+
+
+def validate_tool_arguments(arguments, schema) -> list[str]:
+    """Return human-readable violations of *arguments* against JSON-Schema
+    *schema* -- empty when valid. Uses the jsonschema package when installed,
+    else a minimal built-in check of type / required / enum (recursing into
+    object properties and array items), the floor the tools we ship rely on."""
+    if not isinstance(schema, dict) or not schema:
+        return []
+    if _jsonschema is not None:
+        validator = _jsonschema.Draft7Validator(schema)
+        return [e.message for e in sorted(validator.iter_errors(arguments), key=str)]
+    return _builtin_validate(arguments, schema, "")
+
+
+def _builtin_validate(value, schema, path) -> list[str]:
+    """Minimal type / required / enum validation, used when jsonschema is absent."""
+    where = path or "(root)"
+    expected = schema.get("type")
+    if expected in _JSON_TYPES:
+        # bool is a subclass of int -- never accept it as integer/number.
+        bad_bool = expected in ("integer", "number") and isinstance(value, bool)
+        if bad_bool or not isinstance(value, _JSON_TYPES[expected]):
+            return [f"{where}: expected {expected}, got {type(value).__name__}"]
+    errs: list[str] = []
+    if "enum" in schema and value not in schema["enum"]:
+        errs.append(f"{where}: {value!r} is not one of {schema['enum']}")
+    if expected == "object" and isinstance(value, dict):
+        props = schema.get("properties", {}) or {}
+        for req in schema.get("required", []) or []:
+            if req not in value:
+                errs.append(f"{where}: missing required property '{req}'")
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in props:
+                    errs.append(f"{where}: unexpected property '{key}'")
+        for key, sub in props.items():
+            if key in value:
+                child = f"{path}.{key}" if path else key
+                errs.extend(_builtin_validate(value[key], sub, child))
+    if expected == "array" and isinstance(value, list):
+        items = schema.get("items")
+        if isinstance(items, dict):
+            for i, item in enumerate(value):
+                errs.extend(_builtin_validate(item, items, f"{where}[{i}]"))
+    return errs
+
+
+def _tool_call_errors(result, tools) -> list[str]:
+    """Per-call error strings parallel to ``result.tool_calls`` ('' = that call is
+    valid). We validate a call only against a schema we can match: its tool name,
+    or -- in the forced-single / single-tool case, where the model needn't echo
+    the name -- the sole offered tool. A call we can't match (an unknown name
+    among several tools) is left unvalidated rather than flagged: that's a
+    provider quirk, not an argument violation a repair round could fix. A None
+    result yields ``[]`` -- a decline, nothing to validate."""
+    if result is None:
+        return []
+    schemas = {t.get("name"): t.get("parameters") for t in tools}
+    sole = tools[0].get("parameters") if len(tools) == 1 else None
+    per_call: list[str] = []
+    for call in result.tool_calls:
+        schema = schemas.get(call.get("name"), sole)
+        if schema is None:
+            per_call.append("")  # no schema to check against -> not a violation
+            continue
+        per_call.append(
+            "; ".join(validate_tool_arguments(call.get("arguments") or {}, schema))
+        )
+    return per_call
+
+
+def _repair_turn(result, per_call_errors) -> list[dict]:
+    """Feed a schema violation back natively (#355): the model's own tool_use turn
+    followed by a tool_result per call, ``is_error`` on the ones that failed. The
+    message translators render this for both providers, so one repair round works
+    on either wire."""
+    assistant: list[dict] = []
+    if result.text:
+        assistant.append({"type": "text", "text": result.text})
+    for call in result.tool_calls:
+        assistant.append(
+            {
+                "type": "tool_use",
+                "id": call["id"],
+                "name": call["name"],
+                "arguments": call["arguments"],
+            }
+        )
+    tool_results = [
+        {
+            "type": "tool_result",
+            "tool_use_id": call["id"],
+            "content": err or "ok",
+            "is_error": bool(err),
+        }
+        for call, err in zip(result.tool_calls, per_call_errors)
+    ]
+    return [
+        {"role": "assistant", "content": assistant},
+        {"role": "user", "content": tool_results},
+    ]
+
+
+def _tool_response_text(result) -> "str | None":
+    """The text recorded on the ledger for a tool reply: the arguments as JSON, or
+    the prose when the model answered without calling a tool."""
+    if result.tool_calls:
+        return json.dumps([c["arguments"] for c in result.tool_calls])
+    return result.text
+
+
+def _record_tool_call(
+    client,
+    provider,
+    model,
+    raw_usage,
+    messages,
+    result,
+    latency_ms,
+    *,
+    schema_invalid,
+    schema_repaired,
+) -> None:
+    """Record one tool-call round-trip on the client's ledger, skipping a pure
+    decline (a None result bills nothing -- matches the prior per-adapter guard).
+    The schema outcome rides the context dict into the CallRecord (#357)."""
+    if result is None:
+        return
+    context = dict(getattr(client, "context", {}) or {})
+    context["schema_invalid"] = schema_invalid
+    context["schema_repaired"] = schema_repaired
+    record_call(
+        getattr(client, "ledger", None),
+        context,
+        provider,
+        model,
+        raw_usage,
+        messages,
+        _tool_response_text(result),
+        latency_ms,
+    )
+
+
+def _call_tools_with_validation(
+    client, messages, tools, once, *, provider, model, repair
+) -> "ToolCallResult | None":
+    """Validate a call_tools reply against the tool schemas, optionally repair it
+    once, record the outcome, and return the valid result or None.
+
+    *once* ``(messages) -> (ToolCallResult | None, raw_usage, latency_ms)`` is the
+    provider's raw round-trip (it records nothing itself). On a violation with
+    *repair* enabled, one bounded round feeds the error back (never loops); a
+    reply that still violates after that returns None -- an honest failure that
+    flows into the caller's existing fallback, now counted."""
+    result, raw_usage, latency_ms = once(messages)
+    errors = _tool_call_errors(result, tools)
+    invalid = any(errors)
+    _record_tool_call(
+        client,
+        provider,
+        model,
+        raw_usage,
+        messages,
+        result,
+        latency_ms,
+        schema_invalid=invalid,
+        schema_repaired=None,
+    )
+    if not invalid:
+        return result
+    if not repair:
+        return None
+    repair_messages = list(messages) + _repair_turn(result, errors)
+    result, raw_usage, latency_ms = once(repair_messages)
+    still_invalid = result is None or any(_tool_call_errors(result, tools))
+    _record_tool_call(
+        client,
+        provider,
+        model,
+        raw_usage,
+        repair_messages,
+        result,
+        latency_ms,
+        schema_invalid=False,
+        schema_repaired=not still_invalid,
+    )
+    return None if still_invalid else result
+
+
 # The normalized tool for picking one option from a numbered list (used by the
 # LLM parser to resolve intent / item / character / direction). Returning a
 # validated integer index replaces scraping a number out of prose.
@@ -544,6 +791,7 @@ SELECT_OPTION_TOOL = {
             },
         },
         "required": ["index"],
+        "additionalProperties": False,
     },
 }
 
@@ -570,6 +818,9 @@ class LlmConfig:
     # timeout, both wired into the provider SDK. Defaults suit an unattended bake.
     max_retries: int = 2
     timeout_sec: float = 60.0
+    # Tool-schema repair (#357): on a schema-violating tool reply, run one bounded
+    # repair round feeding the error back. On by default; LLM_SCHEMA_REPAIR=0 off.
+    schema_repair: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +857,7 @@ class OpenAIClient:
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
+        self._schema_repair = config.schema_repair
         self._sleep = time.sleep  # injectable in tests to skip real backoff
         # Lazy tokenizer
         self._tokenizer = None
@@ -675,50 +927,53 @@ class OpenAIClient:
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
         try:
-            wire_messages = _to_openai_messages(messages)
-            if self._verbose:
-                print(json.dumps(wire_messages, indent=2))
-            response, latency_ms = _resilient_create(
-                self,
-                lambda: self._client.chat.completions.create(
-                    model=self._model,
-                    messages=wire_messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    tools=[_to_openai_tool(t) for t in tools],
-                    tool_choice=_openai_tool_choice(tool_choice),
-                ),
-                provider="openai",
-                messages=messages,
-            )
-            message = response.choices[0].message
-            tool_calls = []
-            for tc in getattr(message, "tool_calls", None) or []:
-                fn = getattr(tc, "function", None)
-                args_text = getattr(fn, "arguments", None)
-                tool_calls.append(
-                    {
-                        "id": getattr(tc, "id", None),
-                        "name": getattr(fn, "name", None),
-                        "arguments": json.loads(args_text) if args_text else {},
-                    }
+            openai_tools = [_to_openai_tool(t) for t in tools]
+
+            def once(msgs):
+                wire_messages = _to_openai_messages(msgs)
+                if self._verbose:
+                    print(json.dumps(wire_messages, indent=2))
+                response, latency_ms = _resilient_create(
+                    self,
+                    lambda: self._client.chat.completions.create(
+                        model=self._model,
+                        messages=wire_messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        tools=openai_tools,
+                        tool_choice=_openai_tool_choice(tool_choice),
+                    ),
+                    provider="openai",
+                    messages=msgs,
                 )
-            text = getattr(message, "content", None)
-            record_call(
-                getattr(self, "ledger", None),
-                getattr(self, "context", {}),
-                "openai",
-                self._model,
-                getattr(response, "usage", None),
+                message = response.choices[0].message
+                tool_calls = []
+                for tc in getattr(message, "tool_calls", None) or []:
+                    fn = getattr(tc, "function", None)
+                    args_text = getattr(fn, "arguments", None)
+                    tool_calls.append(
+                        {
+                            "id": getattr(tc, "id", None),
+                            "name": getattr(fn, "name", None),
+                            "arguments": json.loads(args_text) if args_text else {},
+                        }
+                    )
+                text = getattr(message, "content", None)
+                return (
+                    ToolCallResult(text=text, tool_calls=tool_calls),
+                    getattr(response, "usage", None),
+                    latency_ms,
+                )
+
+            return _call_tools_with_validation(
+                self,
                 messages,
-                (
-                    json.dumps([c["arguments"] for c in tool_calls])
-                    if tool_calls
-                    else text
-                ),
-                latency_ms,
+                tools,
+                once,
+                provider="openai",
+                model=self._model,
+                repair=getattr(self, "_schema_repair", True),
             )
-            return ToolCallResult(text=text, tool_calls=tool_calls)
         except Exception as e:
             if self._verbose:
                 print(f"OpenAI tool-call error: {e}")
@@ -795,6 +1050,7 @@ class AnthropicClient:
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
+        self._schema_repair = config.schema_repair
         self._sleep = time.sleep  # injectable in tests to skip real backoff
         # Usage accounting (side channel; see usage.py and OpenAIClient.__init__).
         self.ledger = ledger or UsageLedger()
@@ -853,58 +1109,58 @@ class AnthropicClient:
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
         try:
-            system_text, chat_messages = _split_anthropic_messages(messages)
+            anthropic_tools = [_to_anthropic_tool(t) for t in tools]
 
-            if self._verbose:
-                print(json.dumps(messages, indent=2))
+            def once(msgs):
+                system_text, chat_messages = _split_anthropic_messages(msgs)
+                if self._verbose:
+                    print(json.dumps(msgs, indent=2))
+                kwargs = {
+                    "model": self._model,
+                    "messages": chat_messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "tools": anthropic_tools,
+                    "tool_choice": _anthropic_tool_choice(tool_choice),
+                }
+                if system_text:
+                    kwargs["system"] = _cacheable_system(system_text)
+                response, latency_ms = _resilient_create(
+                    self,
+                    lambda: self._client.messages.create(**kwargs),
+                    provider="anthropic",
+                    messages=msgs,
+                )
+                text_parts = []
+                tool_calls = []
+                for block in response.content:
+                    btype = getattr(block, "type", None)
+                    if btype == "tool_use":
+                        tool_calls.append(
+                            {
+                                "id": getattr(block, "id", None),
+                                "name": getattr(block, "name", None),
+                                "arguments": dict(getattr(block, "input", {}) or {}),
+                            }
+                        )
+                    elif btype == "text":
+                        text_parts.append(getattr(block, "text", "") or "")
+                text = "".join(text_parts) or None
+                return (
+                    ToolCallResult(text=text, tool_calls=tool_calls),
+                    getattr(response, "usage", None),
+                    latency_ms,
+                )
 
-            kwargs = {
-                "model": self._model,
-                "messages": chat_messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "tools": [_to_anthropic_tool(t) for t in tools],
-                "tool_choice": _anthropic_tool_choice(tool_choice),
-            }
-            if system_text:
-                kwargs["system"] = _cacheable_system(system_text)
-
-            response, latency_ms = _resilient_create(
+            return _call_tools_with_validation(
                 self,
-                lambda: self._client.messages.create(**kwargs),
-                provider="anthropic",
-                messages=messages,
-            )
-            text_parts = []
-            tool_calls = []
-            for block in response.content:
-                btype = getattr(block, "type", None)
-                if btype == "tool_use":
-                    tool_calls.append(
-                        {
-                            "id": getattr(block, "id", None),
-                            "name": getattr(block, "name", None),
-                            "arguments": dict(getattr(block, "input", {}) or {}),
-                        }
-                    )
-                elif btype == "text":
-                    text_parts.append(getattr(block, "text", "") or "")
-            text = "".join(text_parts) or None
-            record_call(
-                getattr(self, "ledger", None),
-                getattr(self, "context", {}),
-                "anthropic",
-                self._model,
-                getattr(response, "usage", None),
                 messages,
-                (
-                    json.dumps([c["arguments"] for c in tool_calls])
-                    if tool_calls
-                    else text
-                ),
-                latency_ms,
+                tools,
+                once,
+                provider="anthropic",
+                model=self._model,
+                repair=getattr(self, "_schema_repair", True),
             )
-            return ToolCallResult(text=text, tool_calls=tool_calls)
         except Exception as e:
             if self._verbose:
                 print(f"Anthropic tool-call error: {e}")
@@ -1015,11 +1271,16 @@ class MockLlmClient:
         tool_responses=None,
         tool_calls_responses=None,
         ledger: UsageLedger | None = None,
+        schema_repair: bool = True,
     ):
         # Usage accounting: the mock records a zero-cost Usage on every call, so
         # the accounting path is exercised offline (no SDK, no network).
         self.ledger = ledger or UsageLedger()
         self.context: dict = {}
+        # Tool-schema repair toggle (#357), so a test can script an
+        # invalid-then-valid sequence and exercise the repair round -- or turn it
+        # off to assert the clean counted-failure path.
+        self.schema_repair = schema_repair
         if callable(responses):
             self._responder = responses
             self._queue = None
@@ -1137,46 +1398,41 @@ class MockLlmClient:
         max_tokens: int = 256,
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
-        self.tool_calls_log.append(
-            {
-                # A shallow snapshot: run_tool_loop appends to `messages` in
-                # place across rounds, so a reference would show every round the
-                # final list. Copying the list (blocks are never mutated, only
-                # appended) captures what each round's request actually carried.
-                "messages": list(messages),
-                "tools": tools,
-                "tool_choice": tool_choice,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            }
+        def once(msgs):
+            self.tool_calls_log.append(
+                {
+                    # A shallow snapshot: run_tool_loop appends to `messages` in
+                    # place across rounds, so a reference would show every round
+                    # the final list. Copying the list (blocks are never mutated,
+                    # only appended) captures what each round's request carried.
+                    "messages": list(msgs),
+                    "tools": tools,
+                    "tool_choice": tool_choice,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                }
+            )
+            if self._tool_calls_responder is not None:
+                raw = self._tool_calls_responder(
+                    msgs, tools, tool_choice, max_tokens, temperature
+                )
+            elif self._tool_calls_queue:
+                raw = self._tool_calls_queue.pop(0)
+            else:
+                raw = None
+            # No usage/latency: the mock bills nothing. _call_tools_with_validation
+            # records (skipping a None decline) and drives the repair round.
+            return _coerce_tool_call_result(raw), None, None
+
+        return _call_tools_with_validation(
+            self,
+            messages,
+            tools,
+            once,
+            provider="mock",
+            model="mock",
+            repair=self.schema_repair,
         )
-        if self._tool_calls_responder is not None:
-            raw = self._tool_calls_responder(
-                messages, tools, tool_choice, max_tokens, temperature
-            )
-        elif self._tool_calls_queue:
-            raw = self._tool_calls_queue.pop(0)
-        else:
-            raw = None
-        result = _coerce_tool_call_result(raw)
-        # Record usage only on a non-None result: a None return is a decline /
-        # probe (e.g. the loop's first round against a chat-only script), which
-        # bills nothing and must not add a ledger record.
-        if result is not None:
-            record_call(
-                getattr(self, "ledger", None),
-                getattr(self, "context", {}),
-                "mock",
-                "mock",
-                None,
-                messages,
-                (
-                    json.dumps([c["arguments"] for c in result.tool_calls])
-                    if result.tool_calls
-                    else result.text
-                ),
-            )
-        return result
 
     def count_tokens(self, text: str) -> int:
         # Heuristic: ~4 chars per token (matches the Anthropic adapter).
@@ -1594,8 +1850,9 @@ def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
     offline stand-in), plus optional ``LLM_API_KEY``, ``LLM_MODEL``,
     ``LLM_BASE_URL``, ``LLM_VERBOSE``, and the resilience knobs
     ``LLM_MAX_RETRIES`` (int, default 2) and ``LLM_API_TIMEOUT_SEC`` (float,
-    default 60). Returns ``None`` when no provider is set or the client can't be
-    created, so callers can fall back to their non-LLM path.
+    default 60). ``LLM_SCHEMA_REPAIR`` (default on; ``0``/``false`` disables) toggles
+    the tool-schema repair round (#357). Returns ``None`` when no provider is set
+    or the client can't be created, so callers can fall back to their non-LLM path.
 
     Before returning, the client is preflighted: a real provider with no
     resolvable API key fails fast here (returning ``None`` with a clear warning)
@@ -1620,6 +1877,8 @@ def client_from_env(run_log: "RunLog | None" = None) -> LlmClient | None:
             timeout_sec=float(
                 os.environ.get("LLM_API_TIMEOUT_SEC", LlmConfig.timeout_sec)
             ),
+            schema_repair=os.environ.get("LLM_SCHEMA_REPAIR", "1").lower()
+            not in ("0", "false"),
         )
         ledger = UsageLedger()
         client = create_llm_client(config, ledger=ledger)

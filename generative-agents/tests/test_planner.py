@@ -25,6 +25,11 @@ from backend.planner import (
 from backend.sim_clock import SimClock
 from backend.smallville_agents import attach_agents, maybe_revise_plan
 
+from text_adventure_games.llm_client import (
+    _is_strict_compatible,
+    _to_openai_tool,
+    validate_tool_arguments,
+)
 from text_adventure_games.planning import (
     BEHIND_SCHEDULE,
     DailyPlan,
@@ -175,7 +180,13 @@ class _ScriptedClient:
     def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
         self.calls.append(tool["name"])
         self.user_by_tool[tool["name"]] = messages[-1]["content"] if messages else ""
-        return self.by_tool.get(tool["name"])
+        result = self.by_tool.get(tool["name"])
+        # Mimic the real client's validate-or-None contract (#357): a scripted
+        # reply that violates the tool schema surfaces as None, exactly as the
+        # live client now returns None on an unrepairable schema violation.
+        if result is not None and validate_tool_arguments(result, tool["parameters"]):
+            return None
+        return result
 
     def chat(self, *args, **kwargs):
         return None
@@ -258,9 +269,11 @@ def test_llm_planner_satisfies_protocol():
     assert isinstance(LLMPlanner(_ScriptedClient({})), Planner)
 
 
-def test_llm_planner_tolerates_string_array_items():
-    # Reproduces the live failure (#78): the model returned tool arrays whose items
-    # were strings, not objects. Parsing must drop them and degrade, never raise.
+def test_llm_planner_rejects_malformed_array_items():
+    # #78 revisited under #357: the model returned tool arrays whose items were
+    # strings, not objects. Schema validation now rejects the whole reply in the
+    # client (call_tool -> None), so the planner degrades to an empty level rather
+    # than raising -- the defense moved from the planner to the validation layer.
     script = {
         DAY_OUTLINE_TOOL["name"]: {"blocks": ["morning: cafe", "afternoon"]},
         HOURLY_TOOL["name"]: {
@@ -269,9 +282,9 @@ def test_llm_planner_tolerates_string_array_items():
         MINUTE_TOOL["name"]: {"stops": ["Hobbs Cafe: tending", "Johnson Park"]},
     }
     plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
-    assert plan.day == []  # both string blocks dropped
-    assert [h.start_hour for h in plan.hours] == [9]  # only the well-formed hour
-    assert plan.stops == []  # both string stops dropped, no crash
+    assert plan.day == []
+    assert plan.hours == []  # one non-object item invalidates the whole reply
+    assert plan.stops == []
 
 
 def test_llm_planner_tolerates_non_list_tool_value():
@@ -280,19 +293,32 @@ def test_llm_planner_tolerates_non_list_tool_value():
     assert plan.stops == []
 
 
-def test_llm_planner_coerces_numeric_string_fields():
-    # A model may stringify numbers; coerce where sensible, drop garbage to None.
+def test_llm_planner_reads_validated_step_counts():
+    # Coercion retired (#357): steps now arrive schema-validated as ints, so the
+    # planner reads them directly. A positive int is kept; an omitted steps means
+    # "stay put" (None). A stringified number would be rejected upstream
+    # (call_tool -> None), not silently coerced as the old _coerce_steps did.
     script = {
         MINUTE_TOOL["name"]: {
             "stops": [
-                {"place": "Hobbs Cafe", "activity": "tending", "steps": "200"},
-                {"place": "Johnson Park", "activity": "a walk", "steps": "soon"},
+                {"place": "Hobbs Cafe", "activity": "tending", "steps": 200},
+                {"place": "Johnson Park", "activity": "a walk"},  # no steps
             ]
         }
     }
     plan = LLMPlanner(_ScriptedClient(script)).generate(persona={"persona": "x"})
-    assert plan.stops[0].steps == 200  # "200" -> 200
-    assert plan.stops[1].steps is None  # unparseable -> stay put, not a crash
+    assert plan.stops[0].steps == 200
+    assert plan.stops[1].steps is None  # omitted -> stay put
+
+
+def test_planner_tool_strict_compatibility():
+    # #357: day/hourly have all-required fields -> OpenAI strict; minute_plan has
+    # genuinely optional emoji/steps -> best-effort (no false strict:true).
+    for tool in (DAY_OUTLINE_TOOL, HOURLY_TOOL):
+        assert _is_strict_compatible(tool["parameters"]), tool["name"]
+        assert _to_openai_tool(tool)["function"]["strict"] is True
+    assert not _is_strict_compatible(MINUTE_TOOL["parameters"])
+    assert "strict" not in _to_openai_tool(MINUTE_TOOL)["function"]
 
 
 def test_attach_agents_uses_llm_planner_when_client_supplied():

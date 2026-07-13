@@ -59,7 +59,10 @@ Homepage = "https://interactive-fiction-class.org/"
 dev = ["black", "nbformat", "pytest", "httpx"] # httpx backs FastAPI's TestClient (tests/test_api.py)
 openai = ["openai>=1.0", "tiktoken"]
 anthropic = ["anthropic>=0.20"]
-llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20"]
+# jsonschema validates tool-call arguments precisely (#357). Optional: the base
+# install falls back to a minimal built-in type/required/enum check, so the core
+# stays dependency-light and only real-LLM users pull it in.
+llm = ["openai>=1.0", "tiktoken", "anthropic>=0.20", "jsonschema>=4.0"]
 # Optional semantic memory relevance (issue #76). The engine falls back to
 # keyword-overlap relevance when none of these are installed, so they stay
 # optional. `embeddings` is the default backend (model2vec: a small static model,

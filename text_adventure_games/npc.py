@@ -89,7 +89,11 @@ def build_speak_tool() -> dict:
                     "description": "true if this is your final line (wrapping up)",
                 },
             },
-            "required": ["utterance"],
+            # Full required + additionalProperties:false so OpenAI strict mode
+            # enforces the shape (#357). `done` is semantically optional (defaults
+            # false); requiring it just means the model always states it.
+            "required": ["utterance", "done"],
+            "additionalProperties": False,
         },
     }
 
@@ -143,7 +147,12 @@ def build_choose_action_tool(action_names: list[str]) -> dict:
                     ),
                 },
             },
-            "required": ["action"],
+            # Full required + additionalProperties:false so OpenAI strict mode
+            # enforces the shape (#357). `reasoning`/`arguments` are emptyable
+            # (consumers read them as `.get(...) or ''`), so requiring them only
+            # means the model always includes the (possibly empty) field.
+            "required": ["reasoning", "action", "arguments"],
+            "additionalProperties": False,
         },
     }
 

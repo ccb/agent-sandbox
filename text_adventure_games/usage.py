@@ -145,6 +145,12 @@ class CallRecord:
     attempt: int | None = None  # retry index (replay seam)
     prompt_sha256: str | None = None  # hash of the messages (replay seam)
     latency_ms: float | None = None
+    # Tool-argument schema outcome (#357). schema_invalid marks a reply whose
+    # tool call violated its schema; schema_repaired is None when no repair was
+    # attempted, True/False for the repair round's result. Aggregated in
+    # summary() so a misbehaving model is visible, not mysterious.
+    schema_invalid: bool = False
+    schema_repaired: bool | None = None
 
     def to_primitive(self) -> dict:
         """The flattened ``"call"`` line written to a :class:`RunLog`."""
@@ -277,6 +283,14 @@ class UsageLedger:
                 site: round(cost, 6)
                 for site, cost in self.totals_by_call_site().items()
             },
+            # Tool-schema health (#357): failing replies, repair attempts, and
+            # repairs that succeeded -- so a misbehaving model surfaces here and
+            # in GET /usage rather than degrading silently.
+            "validation_failures": sum(1 for r in self.records if r.schema_invalid),
+            "repairs": sum(1 for r in self.records if r.schema_repaired is not None),
+            "repair_successes": sum(
+                1 for r in self.records if r.schema_repaired is True
+            ),
             **self.token_totals(),
         }
 
@@ -360,7 +374,8 @@ def record_call(
 ) -> CallRecord | None:
     """Build a normalized :class:`Usage` from a provider's raw usage object,
     price it, attach attribution from *context* (``actor`` / ``turn`` /
-    ``call_site`` / ``attempt``), append a :class:`CallRecord` to *ledger*, and
+    ``call_site`` / ``attempt``, plus the ``schema_invalid`` / ``schema_repaired``
+    tool-schema outcome, #357), append a :class:`CallRecord` to *ledger*, and
     return it.
 
     This is the single place the four adapter methods (OpenAI/Anthropic x
@@ -390,6 +405,8 @@ def record_call(
             attempt=context.get("attempt"),
             prompt_sha256=(prompt_sha256(messages) if messages is not None else None),
             latency_ms=latency_ms,
+            schema_invalid=context.get("schema_invalid", False),
+            schema_repaired=context.get("schema_repaired"),
         )
         ledger.record(rec, messages=messages, response=response_text)
         return rec
