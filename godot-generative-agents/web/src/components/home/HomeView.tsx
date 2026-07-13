@@ -151,15 +151,14 @@ export function HomeView() {
             <h2 className="nrf-title nrf-title-3">Abstract</h2>
             <div className="nrf-content nrf-justified">
               <p>
-                This is a placeholder abstract. Describe the project here: the question
-                you are asking, the system you built, and what makes it interesting.
-                Keep it to a paragraph or two so a reader can grasp the contribution at
-                a glance.
+                This is a placeholder abstract. Describe the project here: the question you are
+                asking, the system you built, and what makes it interesting. Keep it to a paragraph
+                or two so a reader can grasp the contribution at a glance.
               </p>
               <p>
-                Replace this text, the title, the author list, and the links above with
-                your own. The interactive replay and agent views are one click away in
-                the menu in the top-right corner.
+                Replace this text, the title, the author list, and the links above with your own.
+                The interactive replay and agent views are one click away in the menu in the
+                top-right corner.
               </p>
             </div>
           </div>
@@ -173,9 +172,8 @@ export function HomeView() {
             <h2 className="nrf-title nrf-title-3 nrf-centered">Overview</h2>
             <div className="nrf-content nrf-justified">
               <p>
-                Use sections like this one to walk through your method, show figures,
-                or embed videos. Each section is just a heading and some content — add
-                as many as you need.
+                Use sections like this one to walk through your method, show figures, or embed
+                videos. Each section is just a heading and some content — add as many as you need.
               </p>
               <p>
                 For implementation details and the API reference, see the{" "}
@@ -209,10 +207,10 @@ export function HomeView() {
           <div className="nrf-content nrf-footer-content">
             <p>
               The design of this page is adapted from the{" "}
-              <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a> project
-              page. We thank the authors for releasing their{" "}
-              <a href="https://github.com/nerfies/nerfies.github.io">source code</a>,
-              which is licensed under a{" "}
+              <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a> project page. We
+              thank the authors for releasing their{" "}
+              <a href="https://github.com/nerfies/nerfies.github.io">source code</a>, which is
+              licensed under a{" "}
               <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
                 Creative Commons Attribution-ShareAlike 4.0 International License
               </a>

@@ -16,10 +16,10 @@
   --nrf-footer-bg: #fafafa;
   /* 'Google Sans' / 'Noto Sans' are used by Nerfies but aren't bundled here;
      fall back to a clean system stack so the page needs no font download. */
-  --nrf-title-font: "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --nrf-body-font: "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  --nrf-title-font:
+    "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --nrf-body-font:
+    "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
   min-height: 100%;
   background: #fff;

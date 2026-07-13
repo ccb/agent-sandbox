@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import type { Replay } from "../types/replay";
+import { type LiveState, useLiveMemories } from "../useLive";
+import { useReplayStep } from "../useReplay";
 import { AgentCard } from "./AgentCard";
 import { LlmCallLog } from "./LlmCallLog";
 import { MemoryRows } from "./MemoryList";
-import { useReplayStep } from "../useReplay";
-import { useLiveMemories, type LiveState } from "../useLive";
 import "./AgentPanel.css";
 
 /**
@@ -53,7 +53,7 @@ export function AgentCardModal({
 
   // Replay path only: the Godot-bridge / wall-clock step. Passing 0 keeps it
   // inert in live mode, where the feed's frame records carry the step instead.
-  const replayStep = useReplayStep(isLive ? 0 : replay?.meta.steps ?? 0);
+  const replayStep = useReplayStep(isLive ? 0 : (replay?.meta.steps ?? 0));
   const step = isLive ? live.step : replayStep;
 
   // Live path only (inert otherwise): the selected persona's memory stream,

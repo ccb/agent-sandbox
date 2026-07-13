@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   EventsResponse,
-  LiveStatusResponse,
   LiveMeta,
+  LiveStatusResponse,
   LlmCallRecord,
   MemoryStreamResponse,
   UsageSummary,
@@ -31,12 +31,14 @@ export type ReceivedLlmCall = LlmCallRecord & { receivedAt: number };
 
 // Retention is capped per actor (actor: null is its own bucket), not globally,
 // so one chatty agent can't evict everyone else's rows off the dashboard (#519).
-function capPerAgent(rows: ReceivedLlmCall[]): ReceivedLlmCall[] {
+// `cap` is a parameter (defaulting to the production value) only so the unit test
+// can exercise the eviction with a small, readable bound — callers pass nothing.
+export function capPerAgent(rows: ReceivedLlmCall[], cap = MAX_ROWS_PER_AGENT): ReceivedLlmCall[] {
   const seen = new Map<string | null, number>();
   const keep = new Array<boolean>(rows.length);
   for (let i = rows.length - 1; i >= 0; i--) {
     const n = seen.get(rows[i].actor) ?? 0;
-    keep[i] = n < MAX_ROWS_PER_AGENT;
+    keep[i] = n < cap;
     seen.set(rows[i].actor, n + 1);
   }
   return keep.every(Boolean) ? rows : rows.filter((_, i) => keep[i]);

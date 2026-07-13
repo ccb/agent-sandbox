@@ -1,5 +1,5 @@
-import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin } from "vite";
 
 // Godot's threaded WASM export only runs on a *cross-origin isolated* page, which
 // requires these two response headers. We set them on both the dev server and
