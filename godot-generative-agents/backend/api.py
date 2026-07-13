@@ -1140,14 +1140,20 @@ def create_app(
         over HTTP. Save the body as penn_replay.json and open it via the
         landing menu's "Open a local replay file"."""
         store = _run_store()
-        if store is None or store.get_run(run_id) is None:
+        if store is None:
             raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
         # Lazy on purpose: api.py stays importable without the Penn package,
         # and Penn's is the only replay dialect today. A second world's
         # format is the cue to promote a replay_builder= seam on create_app.
         from backend.penn.export_replay import build_replay
 
-        return build_replay(store, run_id)
+        try:
+            return build_replay(store, run_id)
+        except ValueError:
+            # The single source of truth for "does this run exist" is
+            # build_replay's own lookup -- no check-then-use window (a
+            # concurrent DELETE between two reads used to surface as a 500).
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
 
     @app.delete("/runs/{run_id}")
     def runs_delete(run_id: str, _: None = Depends(require_auth)) -> dict:
