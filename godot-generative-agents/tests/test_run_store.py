@@ -103,6 +103,46 @@ def test_append_frame_validates_the_contract_shape(tmp_path):
     assert store.read_frames("run-a") == []  # nothing hit the disk
 
 
+EVENT = {
+    "turn": 0,
+    "actor": "Ada",
+    "action": "world_event",
+    "summary": "a siren wails",
+    "payload": {},
+}
+
+
+def test_append_and_read_events_in_order(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    # No events yet: no file on disk, and read_events is [] -- not an error.
+    assert store.read_events("run-a") == []
+    assert not (tmp_path / "runs" / "run-a" / "events.jsonl").exists()
+    first = [dict(EVENT, turn=0), dict(EVENT, turn=1, actor=None)]  # None: /world/event
+    second = [dict(EVENT, turn=2, summary="last call")]
+    store.append_events("run-a", first)
+    store.append_events("run-a", [])  # a no-op, not an error
+    store.append_events("run-a", second)
+    assert store.read_events("run-a") == first + second
+
+
+def test_append_events_validates_and_rejects_unknown_runs(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    with pytest.raises(KeyError):
+        store.append_events("missing", [EVENT])
+    with pytest.raises(KeyError):
+        store.read_events("missing")
+    with pytest.raises(ValueError):
+        store.append_events("run-a", [{"turn": 0, "actor": "Ada"}])  # missing fields
+    with pytest.raises(ValueError):
+        store.append_events("run-a", [dict(EVENT, mood="tense")])  # unpinned field
+    # A bad event anywhere in the batch keeps the WHOLE batch off disk.
+    with pytest.raises(ValueError):
+        store.append_events("run-a", [EVENT, "not-a-dict"])
+    assert store.read_events("run-a") == []
+
+
 def _record(i, text, *, turn=0, kind="observation", importance=3.0, embedding=None):
     return MemoryRecord(
         id=i,
