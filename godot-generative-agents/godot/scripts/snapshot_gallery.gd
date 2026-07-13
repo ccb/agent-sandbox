@@ -231,11 +231,6 @@ func count() -> int:
 	return _shots.size()
 
 
-## Is the detail (enlarged) view showing? viewer.gd routes LEFT/RIGHT to us only then.
-func in_detail() -> bool:
-	return _detail_index != -1
-
-
 ## Step to the previous/next snapshot while in the detail view (wraps).
 func nav_detail(delta: int) -> void:
 	if _detail_index == -1 or _shots.is_empty():
