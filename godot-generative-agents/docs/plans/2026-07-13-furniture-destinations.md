@@ -595,10 +595,29 @@ def test_spots_are_walkable_and_furnished_arenas_have_them():
             assert t in wm.tiles_for(address), f"spot {t} outside {address}"
 
 
-def test_bare_shells_have_no_spots():
-    # Williams Hall is unfurnished in the matrices (#538 will change that);
-    # its routing must keep today's centroid behavior.
-    assert not _world_map().furniture_spots.get(WILLIAMS)
+def test_williams_blackboards_are_spots():
+    # Task 2's contact-sheet pass corrected the spec's premise: Williams'
+    # furniture layer carries BLACKBOARDS in the lobby (its 46 window tiles
+    # sit on the grounds and are category-excluded). Tanaka's problem
+    # session should land AT a blackboard, so the lobby has spots.
+    assert _world_map().furniture_spots.get(WILLIAMS)
+
+
+def test_arenas_without_furniture_fall_back_to_centroid():
+    # SOME arena-level addresses genuinely have no furniture spots (bare
+    # rooms, most grounds) — routing to one must keep today's behavior.
+    wm = _world_map()
+    bare = [
+        a
+        for a in wm.address_tiles
+        if a.count(":") == 2
+        and a not in wm.furniture_spots
+        and any(not wm.is_blocked(t) for t in wm.tiles_for(a))
+    ]
+    assert bare, "every arena has spots?! the fallback path would be dead code"
+    path = wm.walk_path((100, 300), bare[0])
+    if path:  # unreachable bare arenas (no door) are allowed to no-path
+        assert path[-1] in wm.tiles_for(bare[0])
 
 
 def test_routing_prefers_a_spot_in_furnished_buildings():
@@ -606,13 +625,6 @@ def test_routing_prefers_a_spot_in_furnished_buildings():
     path = wm.walk_path((100, 300), HOUSTON)  # approach from campus south
     assert path, "no path into Houston Hall"
     assert path[-1] in wm.furniture_spots[HOUSTON]
-
-
-def test_routing_falls_back_to_centroid_for_bare_shells():
-    wm = _world_map()
-    path = wm.walk_path((100, 300), WILLIAMS)
-    assert path, "no path into Williams Hall"
-    assert path[-1] in wm.tiles_for(WILLIAMS)
 
 
 def test_co_arrivals_spread_across_spots():
