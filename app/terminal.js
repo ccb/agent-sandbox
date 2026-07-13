@@ -709,14 +709,40 @@ async function main() {
   // the title takes over.
   await new Promise((r) => setTimeout(r, 1500));
 
-  // The title holds until the player asks for the tomb (CCB). When an
+  // The title holds until the player asks for the tomb (CCB). The warming
+  // line BACKSPACES away and the invitation types into its place -- same
+  // line, same height, so the flex centring never moves the title. When an
   // unfinished expedition is on file, the CHOICE lives here on the title
   // screen -- continue it, or begin anew -- not as a banner in the story.
-  boottext.textContent = "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition";
+  const TITLE = "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition\n\n";
+  await new Promise((done) => {
+    const tick = () => {
+      const tail = boottext.textContent.slice(TITLE.length);
+      if (tail.length <= 1) {
+        boottext.textContent = TITLE + "\u00A0"; // hold the line's height
+        done();
+        return;
+      }
+      boottext.textContent = TITLE + tail.slice(0, -1);
+      setTimeout(tick, 22);
+    };
+    tick();
+  });
   boottext.classList.add("ready");
+  const typeInto = (msg) => new Promise((done) => {
+    let n = 0;
+    const tick = () => {
+      n = Math.min(msg.length, n + 2);
+      boottext.textContent = TITLE + msg.slice(0, n);
+      if (n < msg.length) setTimeout(tick, 22);
+      else done();
+    };
+    tick();
+  });
+  await typeInto(hasAuto ? "an unfinished expedition is on file"
+    : "[ tap or press any key to begin ]");
   const resume = await new Promise((begin) => {
     if (!hasAuto) {
-      boottext.textContent += "\n\n[ tap or press any key to begin ]";
       const go = () => {
         document.removeEventListener("pointerdown", go);
         document.removeEventListener("keydown", go);
@@ -726,7 +752,6 @@ async function main() {
       document.addEventListener("keydown", go);
       return;
     }
-    boottext.textContent += "\n\nan unfinished expedition is on file";
     const menu = document.createElement("div");
     menu.id = "bootmenu";
     for (const [label, value] of [

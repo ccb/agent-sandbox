@@ -315,7 +315,9 @@ body.size-large, body.size-large input { font-size: 18px; }
   to   { opacity: 1; filter: none; }
 }
 /* the begin-invitation breathes until answered */
-#boottext.ready { animation: warmup 1.6s ease-in, invite 2.4s ease-in-out 1.6s infinite; }
+/* only the breathing -- re-listing warmup here restarted the blur-in and
+   made the transition jump */
+#boottext.ready { animation: invite 2.4s ease-in-out infinite; }
 @keyframes invite {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
