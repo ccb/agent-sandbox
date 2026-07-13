@@ -1,6 +1,62 @@
+// ReactNode is only used by the Icon component below, which is commented out
+// together with the link buttons that use it. Re-enable this import when you
+// re-enable that block.
+// import type { ReactNode } from "react";
 import "./home.css";
 
-// The repository this companion lives in — used in the citation block below.
+// The Paper / arXiv / Video / Code buttons in the hero are commented out for now
+// (see the return below). Their inline SVG line-icons are commented out here
+// along with them, since nothing else uses them. (The original Nerfies template
+// pulls Font Awesome / Academicons from a CDN, which COOP/COEP would block —
+// hence inlining.) Re-enable this block and the buttons together.
+/*
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+const PaperIcon = (
+  <Icon>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <line x1="9" y1="13" x2="15" y2="13" />
+    <line x1="9" y1="17" x2="15" y2="17" />
+  </Icon>
+);
+const ArxivIcon = (
+  <Icon>
+    <path d="M22 10 12 5 2 10l10 5 10-5z" />
+    <path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5" />
+  </Icon>
+);
+const VideoIcon = (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <polygon points="10 8 16 12 10 16" fill="currentColor" stroke="currentColor" />
+  </Icon>
+);
+const CodeIcon = (
+  <Icon>
+    <path d="m9 18-6-6 6-6" />
+    <path d="m15 6 6 6-6 6" />
+  </Icon>
+);
+*/
+
+// The repository this companion lives in — a sensible default for the Code link.
 const REPO_URL = "https://github.com/ccb/agent-sandbox";
 
 /**
@@ -40,6 +96,30 @@ export function HomeView() {
 
             {/* Everyone shares one affiliation, so no superscripts are needed. */}
             <div className="nrf-affiliations">University of Pennsylvania</div>
+
+            {/* Paper / arXiv / Video / Code links — commented out for now;
+                re-enable (along with the Icon block at the top of this file)
+                once the paper / arXiv / video URLs exist.
+
+            <div className="nrf-links">
+              <a className="nrf-button" href="#">
+                {PaperIcon}
+                <span>Paper</span>
+              </a>
+              <a className="nrf-button" href="#">
+                {ArxivIcon}
+                <span>arXiv</span>
+              </a>
+              <a className="nrf-button" href="#">
+                {VideoIcon}
+                <span>Video</span>
+              </a>
+              <a className="nrf-button" href={REPO_URL} target="_blank" rel="noreferrer">
+                {CodeIcon}
+                <span>Code</span>
+              </a>
+            </div>
+            */}
           </div>
         </div>
       </section>
