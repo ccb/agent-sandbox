@@ -116,11 +116,11 @@ export function AgentCardModal({
         <div className="agent-board-cols">
           <div className="agent-board-main">
             <AgentCard
-              name={persona.name}
-              emoji={persona.emoji}
+              persona={persona}
               index={index}
               frame={frame}
               secPerStep={meta.sec_per_step}
+              relationships={meta.relationships}
             />
             {/* Live mode only: this agent's slice of the LLM-request stream,
                 under the card so the memory column keeps the full height. */}
