@@ -232,6 +232,9 @@ class RunStore:
             return [json.loads(line) for line in fh if line.strip()]
 
     def _events_path(self, run_id: str) -> Path:
+        # Existence-check the run DIR, not the file: unlike frames.jsonl
+        # (touch()-ed by create_run), events.jsonl is created lazily on the
+        # first append -- an event-less run never has one.
         run_dir = self.root / run_id
         if not run_dir.is_dir():
             raise KeyError(f"unknown run id: {run_id}")
