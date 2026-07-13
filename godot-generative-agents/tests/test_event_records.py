@@ -202,6 +202,8 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
     assert run["manifest"] == replay["meta"]
     # Frames: byte-equal to the file's (persisted AFTER meeting injection).
     assert store.read_frames(run["id"]) == replay["frames"]
+    # Events: the store's copy == the file's GameEvent log (#307).
+    assert store.read_events(run["id"]) == replay["events"]
     # Memory streams: the store's lean projection == the file's, per persona.
     for name, stream in replay["memory_streams"].items():
         assert store.memories_for(run["id"], name) == stream
