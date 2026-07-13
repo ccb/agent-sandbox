@@ -30,6 +30,7 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
+from text_adventure_games.events import GameEvent  # noqa: E402
 from penn_world import (  # noqa: E402
     build_penn_world,
     relationships_meta,
@@ -247,17 +248,50 @@ def test_stepper_persists_frames_memories_and_finish(tmp_path):
     assert store.get_run(run_id)["status"] == "finished"
 
 
+def test_stepper_persists_game_events(tmp_path):
+    # The #307 live wiring: GameEvents flush to events.jsonl on a cursor of
+    # their own -- draining the change feed must not starve persistence --
+    # and the day's close catches events logged after the final tick (the
+    # POST /world/event window).
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    run_id = stepper.run_id
+    stepper.tick()
+    # An intervention lands between ticks (api.py's /world/event shape).
+    stepper.game.events.append(
+        GameEvent(stepper.game.turn, None, "world_event", summary="a siren wails")
+    )
+    stepper.drain_events()  # the feed reads first; persistence must still see all
+    stepper.tick()
+    assert store.read_events(run_id) == [e.to_primitive() for e in stepper.game.events]
+    assert "a siren wails" in {e["summary"] for e in store.read_events(run_id)}
+    # A straggler after the last tick is flushed by the day's close.
+    stepper.game.events.append(
+        GameEvent(stepper.game.turn, None, "world_event", summary="last call")
+    )
+    assert stepper.tick() is None  # end of day -> _finish_run tail-flushes
+    assert store.read_events(run_id) == [e.to_primitive() for e in stepper.game.events]
+    assert store.read_events(run_id)[-1]["summary"] == "last call"
+
+
 def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
     first = stepper.run_id
     stepper.tick()
+    # An event logged after the tick still belongs to the first run --
+    # reset() tail-flushes before closing the row (#307).
+    stepper.game.events.append(
+        GameEvent(stepper.game.turn, None, "world_event", summary="bell rings")
+    )
     stepper.reset()
     second = stepper.run_id
     assert first != second
     assert store.get_run(first)["status"] == "reset"
     assert store.get_run(second)["status"] == "running"
     assert {r["id"] for r in store.list_runs()} == {first, second}
+    assert store.read_events(first)[-1]["summary"] == "bell rings"
+    assert store.read_events(second) == []  # the new day starts clean
     # The default stays storeless (and byte-identical -- the simulate-mirror
     # test above pins it): a bare stepper has no run id.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
