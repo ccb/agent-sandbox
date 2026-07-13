@@ -134,7 +134,7 @@ export function HomeView() {
           </p>
           {/* These hop into the interactive views of this same companion. */}
           <div className="nrf-links">
-            <a className="nrf-button" href="#agents">
+            <a className="nrf-button" href="#llm">
               <span>Explore the agents →</span>
             </a>
             <a className="nrf-button" href="#game">

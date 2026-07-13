@@ -61,24 +61,32 @@ function statsFor(calls: ReceivedLlmCall[]) {
 }
 
 /**
- * The LLM dashboard (#519): the "sit back and monitor the run" surface. One
- * cell per agent over the live request stream (#398) — client-side aggregates
- * and that agent's recent calls side by side, so attribution never means
- * reading names out of an interleaved log. A run strip on top carries the
- * exact run totals (the newest record's call_no / cum_cost_usd, authoritative
- * against GET /usage) plus the budget ceiling from the handshake's /usage read.
+ * The unified live page (#519 dashboard + #528 agent-card modal): the "sit back
+ * and monitor the run" surface. One cell per agent over the live request stream
+ * (#398) — client-side aggregates and that agent's recent calls side by side, so
+ * attribution never means reading names out of an interleaved log. A run strip on
+ * top carries the exact run totals (the newest record's call_no / cum_cost_usd,
+ * authoritative against GET /usage) plus the budget ceiling from the handshake's
+ * /usage read. Clicking a roster cell's header opens that agent's card as a modal
+ * (App owns that state via `onOpenAgent`).
  *
- * Purely a consumer of useLive's existing feed poll — the run buttons POST the
- * backend's pause/resume/reset controls; nothing else new on the wire.
+ * Works pointed at any live backend AND from a baked replay with no backend at
+ * all: the roster then comes from the replay's cast, the call surfaces just stay
+ * empty, and the cards are still clickable (the agents view's old replay-home job,
+ * folded in here). Purely a consumer of useLive's existing feed poll — the run
+ * buttons POST the backend's pause/resume/reset controls; nothing else new on the
+ * wire.
  */
 export function LlmDashboard({
   replay,
   live,
   onConnect,
+  onOpenAgent,
 }: {
   replay: Replay | null;
   live: LiveState;
   onConnect: (url: string) => void;
+  onOpenAgent: (name: string) => void;
 }) {
   // A slow tick so recency (hot/idle) decays while the feed is quiet — useLive
   // deliberately skips state updates when nothing changed.
@@ -88,45 +96,6 @@ export function LlmDashboard({
     return () => window.clearInterval(t);
   }, []);
   const [url, setUrl] = useState("http://127.0.0.1:8080");
-
-  if (!live.enabled) {
-    return (
-      <div className="agents-placeholder">
-        <form
-          className="llm-connect"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onConnect(url);
-          }}
-        >
-          <h2>Follow a live backend</h2>
-          <p>
-            Serve one — <code>uv run python godot-generative-agents/backend/penn/serve_penn.py</code>{" "}
-            — then connect to watch its LLM calls, one cell per agent, and start/stop the run
-            from here.
-          </p>
-          <div className="llm-connect-row">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              aria-label="Backend URL"
-              required
-            />
-            <button type="submit">Connect</button>
-          </div>
-        </form>
-      </div>
-    );
-  }
-
-  // Run controls (#519): fire-and-forget POSTs — the backend appends a status
-  // record to the feed, so the badge, step, and buttons update on the next
-  // poll (~1s). Reset rebuilds t0 but keeps the running/paused state.
-  const ctl = (action: "pause" | "resume" | "reset") => {
-    if (live.base) void fetch(`${live.base}/${action}`, { method: "POST" }).catch(() => {});
-  };
-  const canControl = live.connected && live.live;
 
   // The roster: live personas when the handshake reported a loop (falling back
   // to the baked replay's cast), ∪ actors seen only on the stream, ∪ one
@@ -147,9 +116,57 @@ export function LlmDashboard({
     cells.push({ actor: null, label: "Unattributed", spriteIndex: null });
   }
 
+  // The connect form: shown as a full card when there's nothing to show yet (no
+  // backend and no baked roster), and as a compact strip affordance in
+  // replay-only mode so a viewer can still attach to a live backend.
+  const connectForm = (inline: boolean) => (
+    <form
+      className={inline ? "llm-connect llm-connect--inline" : "llm-connect"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onConnect(url);
+      }}
+    >
+      {!inline && (
+        <>
+          <h2>Follow a live backend</h2>
+          <p>
+            Serve one —{" "}
+            <code>uv run python godot-generative-agents/backend/penn/serve_penn.py</code> — then
+            connect to watch its LLM calls, one cell per agent, and start/stop the run from here.
+          </p>
+        </>
+      )}
+      <div className="llm-connect-row">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          aria-label="Backend URL"
+          required
+        />
+        <button type="submit">Connect</button>
+      </div>
+    </form>
+  );
+
   if (!cells.length) {
-    return <div className="agents-placeholder">Waiting for the live backend…</div>;
+    // No roster yet: a backend was given but hasn't reported personas → waiting;
+    // otherwise (no backend, no baked cast) → the connect card.
+    return (
+      <div className="agents-placeholder">
+        {live.enabled ? "Waiting for the live backend…" : connectForm(false)}
+      </div>
+    );
   }
+
+  // Run controls (#519): fire-and-forget POSTs — the backend appends a status
+  // record to the feed, so the badge, step, and buttons update on the next
+  // poll (~1s). Reset rebuilds t0 but keeps the running/paused state.
+  const ctl = (action: "pause" | "resume" | "reset") => {
+    if (live.base) void fetch(`${live.base}/${action}`, { method: "POST" }).catch(() => {});
+  };
+  const canControl = live.connected && live.live;
 
   // Run totals: the monitor numbers calls and carries the cumulative cost on
   // every record, so the newest row is exact even after old rows fall off; the
@@ -162,46 +179,57 @@ export function LlmDashboard({
   return (
     <div className="llm-dash">
       <header className="llm-strip">
-        <span
-          className={`agent-live-badge${
-            !live.connected ? " is-off" : live.paused ? " is-paused" : ""
-          }`}
-        >
-          {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} · step{" "}
-          {live.step}
-        </span>
-        <span className="llm-strip-controls">
-          {live.paused ? (
-            <button type="button" onClick={() => ctl("resume")} disabled={!canControl}>
-              ▶ Start
-            </button>
-          ) : (
-            <button type="button" onClick={() => ctl("pause")} disabled={!canControl}>
-              ⏸ Stop
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => ctl("reset")}
-            disabled={!canControl}
-            title="Restart the sim day from the beginning"
-          >
-            ↺ Reset
-          </button>
-        </span>
-        <span className="llm-strip-stat">
-          <strong>{totalCalls}</strong> calls
-        </span>
-        <span className="llm-strip-stat">
-          <strong>${totalCost.toFixed(4)}</strong> spent
-        </span>
-        {budget != null && (
-          <span className={`llm-strip-stat${totalCost >= budget ? " is-over" : ""}`}>
-            <strong>${Math.max(budget - totalCost, 0).toFixed(2)}</strong> of $
-            {budget.toFixed(2)} budget left
-          </span>
+        {live.enabled ? (
+          <>
+            <span
+              className={`agent-live-badge${
+                !live.connected ? " is-off" : live.paused ? " is-paused" : ""
+              }`}
+            >
+              {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} · step{" "}
+              {live.step}
+            </span>
+            <span className="llm-strip-controls">
+              {live.paused ? (
+                <button type="button" onClick={() => ctl("resume")} disabled={!canControl}>
+                  ▶ Start
+                </button>
+              ) : (
+                <button type="button" onClick={() => ctl("pause")} disabled={!canControl}>
+                  ⏸ Stop
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => ctl("reset")}
+                disabled={!canControl}
+                title="Restart the sim day from the beginning"
+              >
+                ↺ Reset
+              </button>
+            </span>
+            <span className="llm-strip-stat">
+              <strong>{totalCalls}</strong> calls
+            </span>
+            <span className="llm-strip-stat">
+              <strong>${totalCost.toFixed(4)}</strong> spent
+            </span>
+            {budget != null && (
+              <span className={`llm-strip-stat${totalCost >= budget ? " is-over" : ""}`}>
+                <strong>${Math.max(budget - totalCost, 0).toFixed(2)}</strong> of $
+                {budget.toFixed(2)} budget left
+              </span>
+            )}
+            {live.meta?.llm && <span className="llm-strip-model">{live.meta.llm.model}</span>}
+          </>
+        ) : (
+          // Replay-only: no run to control — show the cast is from the baked file
+          // and offer a compact connect to follow a live backend instead.
+          <>
+            <span className="llm-strip-stat">Replay · no live backend</span>
+            {connectForm(true)}
+          </>
         )}
-        {live.meta?.llm && <span className="llm-strip-model">{live.meta.llm.model}</span>}
       </header>
 
       <div className="llm-grid">
@@ -209,62 +237,91 @@ export function LlmDashboard({
           const s = statsFor(live.calls.filter((c) => c.actor === cell.actor));
           const age = s.last ? now - s.last.receivedAt : null;
           const heat = age === null || age >= IDLE_MS ? "idle" : age < HOT_MS ? "hot" : "warm";
-          return (
-            <article className={`llm-cell is-${heat}`} key={cell.label}>
-              <header className="llm-cell-head">
-                {cell.spriteIndex !== null ? (
-                  <SpritePreview index={cell.spriteIndex} className="llm-cell-sprite" />
-                ) : (
-                  <span className="llm-cell-sprite llm-cell-sprite--none" aria-hidden="true">
-                    ?
-                  </span>
-                )}
-                <div className="llm-cell-title">
-                  <h3 className="llm-cell-name">
-                    {cell.emoji && <span aria-hidden="true">{cell.emoji} </span>}
-                    {cell.label}
+          // Only roster personas have a card (persona meta + frame). Stream-only
+          // "extras" and the Unattributed cell don't, so their headers aren't
+          // clickable.
+          const clickable = cell.actor !== null && known.has(cell.actor);
+          const head = (
+            <>
+              {cell.spriteIndex !== null ? (
+                <SpritePreview index={cell.spriteIndex} className="llm-cell-sprite" />
+              ) : (
+                <span className="llm-cell-sprite llm-cell-sprite--none" aria-hidden="true">
+                  ?
+                </span>
+              )}
+              <div className="llm-cell-title">
+                <h3 className="llm-cell-name">
+                  {cell.emoji && <span aria-hidden="true">{cell.emoji} </span>}
+                  {cell.label}
+                  {/* Recency pulse + last-call line are live-only; in replay mode
+                      there are no calls, so the header is just the roster tile. */}
+                  {live.enabled && (
                     <span
                       className={`llm-pulse is-${heat}`}
                       title={
-                        s.last
-                          ? `last call ${s.last.time} (${heat})`
-                          : "no calls seen this session"
+                        s.last ? `last call ${s.last.time} (${heat})` : "no calls seen this session"
                       }
                     />
-                  </h3>
+                  )}
+                </h3>
+                {live.enabled && (
                   <p className="llm-cell-last">
                     {s.last ? `last: ${s.last.role} · ${s.last.time}` : "no calls yet"}
                   </p>
-                </div>
-              </header>
-              <dl className="llm-cell-stats">
-                <div>
-                  <dt>calls</dt>
-                  <dd>{s.count}</dd>
-                </div>
-                <div>
-                  <dt>tokens</dt>
-                  <dd>
-                    {tok(s.inTok)}→{tok(s.outTok)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>cache hit</dt>
-                  <dd>{s.inTok ? `${Math.round((s.cacheRead / s.inTok) * 100)}%` : "–"}</dd>
-                </div>
-                <div>
-                  <dt>cost</dt>
-                  <dd>${s.cost.toFixed(4)}</dd>
-                </div>
-                <div>
-                  <dt>latency</dt>
-                  <dd>
-                    {s.latencyLast != null ? `${Math.round(s.latencyLast)}ms` : "–"}
-                    {s.latencyAvg != null && ` (avg ${Math.round(s.latencyAvg)})`}
-                  </dd>
-                </div>
-              </dl>
-              <LlmCallLog calls={live.calls} actor={cell.actor} connected={live.connected} />
+                )}
+              </div>
+            </>
+          );
+          return (
+            <article className={`llm-cell${live.enabled ? ` is-${heat}` : ""}`} key={cell.label}>
+              {clickable ? (
+                <button
+                  type="button"
+                  className="llm-cell-head llm-cell-head--btn"
+                  onClick={() => onOpenAgent(cell.actor as string)}
+                  title={`Open ${cell.label}'s card`}
+                >
+                  {head}
+                </button>
+              ) : (
+                <header className="llm-cell-head">{head}</header>
+              )}
+              {/* The call surfaces — aggregates + the per-agent request log — are
+                  live-only. With no backend (replay) the cell is just the roster
+                  tile: identity, clickable to open the card (#528). */}
+              {live.enabled && (
+                <>
+                  <dl className="llm-cell-stats">
+                    <div>
+                      <dt>calls</dt>
+                      <dd>{s.count}</dd>
+                    </div>
+                    <div>
+                      <dt>tokens</dt>
+                      <dd>
+                        {tok(s.inTok)}→{tok(s.outTok)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>cache hit</dt>
+                      <dd>{s.inTok ? `${Math.round((s.cacheRead / s.inTok) * 100)}%` : "–"}</dd>
+                    </div>
+                    <div>
+                      <dt>cost</dt>
+                      <dd>${s.cost.toFixed(4)}</dd>
+                    </div>
+                    <div>
+                      <dt>latency</dt>
+                      <dd>
+                        {s.latencyLast != null ? `${Math.round(s.latencyLast)}ms` : "–"}
+                        {s.latencyAvg != null && ` (avg ${Math.round(s.latencyAvg)})`}
+                      </dd>
+                    </div>
+                  </dl>
+                  <LlmCallLog calls={live.calls} actor={cell.actor} connected={live.connected} />
+                </>
+              )}
             </article>
           );
         })}
