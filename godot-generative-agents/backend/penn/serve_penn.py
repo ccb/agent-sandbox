@@ -341,6 +341,9 @@ class PennStepper:
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
         self._events_seen = 0
+        # ...and how much the #307 persistence hook has flushed to the store.
+        # Its own cursor: --persist must never steal rows from the feed above.
+        self._persist_events_seen = 0
         # Every client records into self.ledger; with a monitor, through a
         # write-through view that also prints one terminal line per call (the
         # base ledger stays the single source GET /usage sums). Under the mock
@@ -501,15 +504,32 @@ class PennStepper:
             if fresh:
                 self.run_store.record_memories(self._run_id, name, fresh)
                 self._mem_synced[name] = fresh[-1]["id"]
+        self._persist_pending_events()
         self.run_store.update_run(
             self._run_id,
             cost=self.ledger.total_cost_usd(),
             steps=self._step_idx + 1,
         )
 
+    def _persist_pending_events(self) -> None:
+        # GameEvents logged since the last flush -> events.jsonl (#307).
+        # Also called by _finish_run() and reset(): POST /world/event can
+        # land an event between the last tick and the day's close, where
+        # the per-tick flush would never see it.
+        if self.run_store is None or self._run_id is None:
+            return
+        pending = self.game.events[self._persist_events_seen :]
+        if pending:
+            self.run_store.append_events(
+                self._run_id, [event.to_primitive() for event in pending]
+            )
+        self._persist_events_seen = len(self.game.events)
+
     def _finish_run(self) -> None:
         # Idempotent: the live loop keeps ticking a finished day (every tick
-        # returns None) and only the first one flips the status.
+        # returns None) and only the first one flips the status. The tail
+        # flush catches events logged after the final tick (#307).
+        self._persist_pending_events()
         if (
             self.run_store is not None
             and self._run_id is not None
@@ -552,6 +572,7 @@ class PennStepper:
         # A reset is a new day AND a new run: close the old run's row first
         # (status "reset" -- its frames stay readable), then _build() opens
         # the next one. A day that already finished keeps "finished".
+        self._persist_pending_events()
         if (
             self.run_store is not None
             and self._run_id is not None
