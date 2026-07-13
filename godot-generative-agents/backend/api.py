@@ -1090,6 +1090,85 @@ def create_app(
                 summary["remaining_budget_usd"] = ledger.remaining_budget_usd()
             return summary
 
+    # ---------------------------------------------------------- run registry
+    # The #306 registry half: browse/fetch/export/delete the #304 RunStore's
+    # run history. The store is probed off the stepper per request (the
+    # ledger/run_usage idiom), so a storeless server -- no --persist, or no
+    # stepper at all -- answers available:false here and 404 on every id
+    # route instead of erroring. Create/resume stay with #306's second half.
+
+    def _run_store():
+        return getattr(stepper, "run_store", None)
+
+    def _current_run_id():
+        return getattr(stepper, "run_id", None)
+
+    @app.get("/runs")
+    def runs_index(_: None = Depends(require_auth)) -> dict:
+        """The run history, newest first: row summaries WITHOUT the manifest
+        blob (a hundred-run history shouldn't ship a hundred manifests --
+        fetch one run for its manifest), plus which id is live right now."""
+        store = _run_store()
+        if store is None:
+            return {"available": False, "current": None, "runs": []}
+        with lock:
+            current = _current_run_id()
+        return {
+            "available": True,
+            "current": current,
+            "runs": [
+                {k: v for k, v in row.items() if k != "manifest"}
+                for row in store.list_runs()
+            ],
+        }
+
+    @app.get("/runs/{run_id}")
+    def runs_get(run_id: str, _: None = Depends(require_auth)) -> dict:
+        """One run's full row, parsed manifest included, plus whether it is
+        the live one."""
+        store = _run_store()
+        row = store.get_run(run_id) if store is not None else None
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        with lock:
+            row["current"] = run_id == _current_run_id()
+        return row
+
+    @app.get("/runs/{run_id}/replay")
+    def runs_replay(run_id: str, _: None = Depends(require_auth)) -> dict:
+        """The run as a viewer-loadable replay: #307's build_replay served
+        over HTTP. Save the body as penn_replay.json and open it via the
+        landing menu's "Open a local replay file"."""
+        store = _run_store()
+        if store is None or store.get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        # Lazy on purpose: api.py stays importable without the Penn package,
+        # and Penn's is the only replay dialect today. A second world's
+        # format is the cue to promote a replay_builder= seam on create_app.
+        from backend.penn.export_replay import build_replay
+
+        return build_replay(store, run_id)
+
+    @app.delete("/runs/{run_id}")
+    def runs_delete(run_id: str, _: None = Depends(require_auth)) -> dict:
+        """Remove a persisted run (row + memories + directory). The CURRENT
+        live run is refused with a 409: the stepper is still appending
+        frames to it -- reset or stop the run first."""
+        store = _run_store()
+        if store is None:
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        with lock:
+            if run_id == _current_run_id():
+                raise HTTPException(
+                    status_code=409,
+                    detail="run is live; reset or stop it before deleting",
+                )
+            try:
+                store.delete_run(run_id)
+            except KeyError:
+                raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        return {"ok": True, "deleted": run_id}
+
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
         """Run exactly one command and return events + the new snapshot.
