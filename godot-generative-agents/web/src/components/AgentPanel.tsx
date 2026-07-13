@@ -35,7 +35,7 @@ export function AgentPanel({ replay, live }: { replay: Replay | null; live: Live
 
   // Live path only (inert otherwise): the selected persona's memory stream,
   // refetched as the live step advances. Same entry shape as the baked stream.
-  const liveMemories = useLiveMemories(isLive, persona?.name ?? "", live.step);
+  const liveMemories = useLiveMemories(isLive, persona?.name ?? "", live.step, live.base);
 
   if (!meta || !persona) return null; // App gates on personas; belt for types
 

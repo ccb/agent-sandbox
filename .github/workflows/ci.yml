@@ -90,3 +90,25 @@ jobs:
       # baseline empty (or shrinking) as drifts are resolved.
       - name: validate_tmj drift gate
         run: uv run --no-sync python godot-generative-agents/tools/geo/validate_tmj.py
+
+  web:
+    name: web (pnpm build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The web companion is TypeScript — nothing above type-checks it, so this
+      # job is its only automated gate (#520 review): a strict `tsc -b` + Vite
+      # build over the committed lockfile. pnpm's version comes from the
+      # `packageManager` pin in web/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: godot-generative-agents/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: godot-generative-agents/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: godot-generative-agents/web
+      - run: pnpm build
+        working-directory: godot-generative-agents/web
