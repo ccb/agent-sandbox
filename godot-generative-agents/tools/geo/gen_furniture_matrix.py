@@ -307,7 +307,22 @@ def main() -> int:
                     "visible": True,
                 }
             )
+        out_dir = os.path.join(here, "out")
+        os.makedirs(out_dir, exist_ok=True)
+        # The overlay lives in tools/geo/out/ -- three dirs from the tmj's own
+        # folder -- so its tilesets' `image` paths (bare filenames Tiled
+        # resolves relative to THIS file) would 404 and every tile would draw
+        # as the missing-texture hatch. Repoint each image at the real PNG
+        # relative to out/, so the base map renders under the debug layer.
+        src_dir = os.path.dirname(os.path.abspath(args.tmj))
+        tilesets = []
+        for ts in tmj.get("tilesets", []):
+            if "image" in ts:
+                img = os.path.normpath(os.path.join(src_dir, ts["image"]))
+                ts = dict(ts, image=os.path.relpath(img, out_dir))
+            tilesets.append(ts)
         overlay = dict(tmj)
+        overlay["tilesets"] = tilesets
         overlay["layers"] = list(tmj["layers"]) + [
             {
                 "type": "objectgroup",
@@ -320,8 +335,6 @@ def main() -> int:
                 "y": 0,
             }
         ]
-        out_dir = os.path.join(here, "out")
-        os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, "upenn_furniture_debug.tmj")
         json.dump(overlay, open(out_path, "w"))
         print(f"wrote {os.path.relpath(out_path, repo)} (open in Tiled)")
