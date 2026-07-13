@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { GodotCanvas } from "./components/GodotCanvas";
 import { AgentPanel } from "./components/AgentPanel";
+import { LlmDashboard } from "./components/LlmDashboard";
 import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
 import { useLive } from "./useLive";
@@ -23,16 +24,17 @@ const PromptReaderView = lazy(() =>
   }))
 );
 
-type View = "home" | "game" | "agents" | "prompts" | "reader";
+type View = "home" | "game" | "agents" | "llm" | "prompts" | "reader";
 
-// Pages selected by the URL hash (#home / #game / #agents / #prompts / #reader)
-// so each is a real, shareable location and the back button works — no router
-// needed. The Nerfies-style project page is the landing view; every other view
-// is one explicit hop away via the menu.
+// Pages selected by the URL hash (#home / #game / #agents / #llm / #prompts /
+// #reader) so each is a real, shareable location and the back button works — no
+// router needed. The Nerfies-style project page is the landing view; every
+// other view is one explicit hop away via the menu.
 function viewFromHash(): View {
   const hash = window.location.hash.replace("#", "");
   if (hash === "game") return "game";
   if (hash === "agents") return "agents";
+  if (hash === "llm") return "llm";
   if (hash === "prompts") return "prompts";
   if (hash === "reader") return "reader";
   return "home";
@@ -83,6 +85,11 @@ const ICON_GAME = (
     <path d="M17.32 6H6.68a4 4 0 0 0-3.98 3.59c-.08.7-.7 5.66-.7 6.41a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.41-1.41A2 2 0 0 1 9.83 16h4.34a2 2 0 0 1 1.42.59L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-.75-.62-5.71-.7-6.41A4 4 0 0 0 17.32 6z" />
   </NavIcon>
 );
+const ICON_LLM = (
+  <NavIcon>
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </NavIcon>
+);
 const ICON_CHAINS = (
   <NavIcon>
     <circle cx="18" cy="5" r="3" />
@@ -120,6 +127,7 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
     items: [
       { view: "agents", label: "Agent cards", icon: ICON_AGENTS },
       { view: "game", label: "Game view", icon: ICON_GAME },
+      { view: "llm", label: "LLM dashboard", icon: ICON_LLM },
     ],
   },
   {
@@ -289,6 +297,14 @@ export default function App() {
             </div>
           )}
         </section>
+
+        {/* The LLM dashboard (#519). Mounted only when active — its data lives
+            in App's shared useLive poll, so nothing is lost on unmount. */}
+        {view === "llm" && (
+          <section className="view view-llm">
+            <LlmDashboard replay={replay} live={live} />
+          </section>
+        )}
 
         {/* The landing page. Mounted only when active — it's a static page with
             no reason to stay alive behind the other views. */}
