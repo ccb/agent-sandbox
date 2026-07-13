@@ -80,14 +80,16 @@ def test_gid_names_expands_footprints_and_resolves_anchor():
     assert names[9] == "stool"
 
 
-def test_spots_are_walkable_cells_on_or_beside_furniture():
+def test_spots_are_walkable_floor_beside_furniture():
     # Collision: the 2x2 desk is solid; the stool (gid 9) is a walkable seat.
     furn = ["0", "1", "1", "0", "0", "1", "1", "0", "0", "0", "0", "2"]
     coll = ["0", "1", "1", "0", "0", "1", "1", "0", "0", "0", "0", "0"]
     got = spots(furn, coll, 4, 3)
-    # Row-major: (0,0)/(3,0) flank the desk, (0,1)/(3,1) flank it, (1,2)/(2,2)
-    # sit below it, and (3,2) IS the walkable stool.
-    assert got == [(0, 0), (3, 0), (0, 1), (3, 1), (1, 2), (2, 2), (3, 2)]
+    # Row-major floor tiles 4-adjacent to furniture: (0,0)/(3,0) flank the desk,
+    # (0,1)/(3,1) flank it, (1,2)/(2,2) sit below it. (3,1) is also beside the
+    # stool. The stool tile (3,2) itself is NOT a spot -- the furniture tile is
+    # never a destination, only the floor around it (no standing on seats/rugs).
+    assert got == [(0, 0), (3, 0), (0, 1), (3, 1), (1, 2), (2, 2)]
 
 
 def test_sheet_firstgids_matches_interior_and_suffixed_names():
