@@ -5,16 +5,40 @@ function tok(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-// The full detail behind a row, shown on hover — the same fields the terminal
-// monitor prints on its one line.
-function rowTitle(c: LlmCallRecord): string {
-  const cache = `${c.cache_creation_input_tokens}w/${c.cache_read_input_tokens}r cache`;
-  const latency = c.latency_ms == null ? "-" : `${Math.round(c.latency_ms)} ms`;
-  const turn = c.turn == null ? "-" : String(c.turn);
+// The full detail behind a row, shown on hover/focus — the same fields the
+// terminal monitor prints on its one line, as a styled tooltip (the native
+// title attribute can't be formatted).
+function RowTip({ c }: { c: LlmCallRecord }) {
   return (
-    `#${c.call_no} ${c.role} — ${c.actor ?? "-"} — turn ${turn} — ${c.model}\n` +
-    `in ${c.input_tokens} (${cache}) → out ${c.output_tokens} — ${latency}\n` +
-    `$${c.cost_usd.toFixed(6)} this call — Σ $${c.cum_cost_usd.toFixed(6)} run`
+    <div className="llm-tip" role="tooltip">
+      <p className="llm-tip-head">
+        #{c.call_no} {c.role} · {c.actor ?? "unattributed"}
+        {c.turn != null && ` · turn ${c.turn}`}
+        {c.attempt != null && c.attempt > 1 && ` · attempt ${c.attempt}`}
+      </p>
+      <dl>
+        <dt>model</dt>
+        <dd>
+          {c.model} <span className="llm-tip-dim">({c.provider})</span>
+        </dd>
+        <dt>tokens</dt>
+        <dd>
+          {c.input_tokens.toLocaleString()} in → {c.output_tokens.toLocaleString()} out
+        </dd>
+        <dt>cache</dt>
+        <dd>
+          {c.cache_creation_input_tokens.toLocaleString()} written ·{" "}
+          {c.cache_read_input_tokens.toLocaleString()} read
+        </dd>
+        <dt>latency</dt>
+        <dd>{c.latency_ms == null ? "–" : `${Math.round(c.latency_ms)} ms`}</dd>
+        <dt>cost</dt>
+        <dd>
+          ${c.cost_usd.toFixed(6)}{" "}
+          <span className="llm-tip-dim">· Σ ${c.cum_cost_usd.toFixed(6)} run</span>
+        </dd>
+      </dl>
+    </div>
   );
 }
 
@@ -57,13 +81,14 @@ export function LlmCallLog({
       {rows.length ? (
         <ul className="llm-log-list">
           {rows.map((c) => (
-            <li key={c.call_no} className="llm-row" title={rowTitle(c)}>
+            <li key={c.call_no} className="llm-row" tabIndex={0}>
               <span className="llm-time">{c.time}</span>
               <span className={`llm-role ${roleClass(c.role)}`}>{c.role}</span>
               <span className="llm-tokens">
                 {tok(c.input_tokens)}→{tok(c.output_tokens)}
               </span>
               <span className="llm-cost">${c.cost_usd.toFixed(4)}</span>
+              <RowTip c={c} />
             </li>
           ))}
         </ul>
