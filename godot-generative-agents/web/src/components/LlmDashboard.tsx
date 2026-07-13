@@ -68,9 +68,18 @@ function statsFor(calls: ReceivedLlmCall[]) {
  * exact run totals (the newest record's call_no / cum_cost_usd, authoritative
  * against GET /usage) plus the budget ceiling from the handshake's /usage read.
  *
- * Purely a consumer of useLive's existing feed poll — nothing new on the wire.
+ * Purely a consumer of useLive's existing feed poll — the run buttons POST the
+ * backend's pause/resume/reset controls; nothing else new on the wire.
  */
-export function LlmDashboard({ replay, live }: { replay: Replay | null; live: LiveState }) {
+export function LlmDashboard({
+  replay,
+  live,
+  onConnect,
+}: {
+  replay: Replay | null;
+  live: LiveState;
+  onConnect: (url: string) => void;
+}) {
   // A slow tick so recency (hot/idle) decays while the feed is quiet — useLive
   // deliberately skips state updates when nothing changed.
   const [now, setNow] = useState(() => Date.now());
@@ -78,16 +87,46 @@ export function LlmDashboard({ replay, live }: { replay: Replay | null; live: Li
     const t = window.setInterval(() => setNow(Date.now()), 5000);
     return () => window.clearInterval(t);
   }, []);
+  const [url, setUrl] = useState("http://127.0.0.1:8080");
 
   if (!live.enabled) {
     return (
       <div className="agents-placeholder">
-        The LLM dashboard follows a live backend. Serve one (see backend/README.md), then
-        open this page with <code>?api=&lt;its URL&gt;</code> — e.g.{" "}
-        <code>/?api=http://127.0.0.1:8080#llm</code>.
+        <form
+          className="llm-connect"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onConnect(url);
+          }}
+        >
+          <h2>Follow a live backend</h2>
+          <p>
+            Serve one — <code>uv run python godot-generative-agents/backend/penn/serve_penn.py</code>{" "}
+            — then connect to watch its LLM calls, one cell per agent, and start/stop the run
+            from here.
+          </p>
+          <div className="llm-connect-row">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              aria-label="Backend URL"
+              required
+            />
+            <button type="submit">Connect</button>
+          </div>
+        </form>
       </div>
     );
   }
+
+  // Run controls (#519): fire-and-forget POSTs — the backend appends a status
+  // record to the feed, so the badge, step, and buttons update on the next
+  // poll (~1s). Reset rebuilds t0 but keeps the running/paused state.
+  const ctl = (action: "pause" | "resume" | "reset") => {
+    if (live.base) void fetch(`${live.base}/${action}`, { method: "POST" }).catch(() => {});
+  };
+  const canControl = live.connected && live.live;
 
   // The roster: live personas when the handshake reported a loop (falling back
   // to the baked replay's cast), ∪ actors seen only on the stream, ∪ one
@@ -130,6 +169,25 @@ export function LlmDashboard({ replay, live }: { replay: Replay | null; live: Li
         >
           {!live.connected ? "reconnecting" : live.paused ? "live · paused" : "live"} · step{" "}
           {live.step}
+        </span>
+        <span className="llm-strip-controls">
+          {live.paused ? (
+            <button type="button" onClick={() => ctl("resume")} disabled={!canControl}>
+              ▶ Start
+            </button>
+          ) : (
+            <button type="button" onClick={() => ctl("pause")} disabled={!canControl}>
+              ⏸ Stop
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => ctl("reset")}
+            disabled={!canControl}
+            title="Restart the sim day from the beginning"
+          >
+            ↺ Reset
+          </button>
         </span>
         <span className="llm-strip-stat">
           <strong>{totalCalls}</strong> calls
