@@ -2273,8 +2273,8 @@ def build_game(seed=None):
             "sand. He carried water, three rations of it, and a glowstone; "
             "search him, he is past minding. The hold is yours too, "
             "whatever you can carry. But mind the tomb, scavenger. The "
-            "caravans give its mouths a wide berth, and a caravan is seldom "
-            'wrong twice." She settles her pack straps as she speaks, the '
+            "tomb pays better than the road, if the tomb lets you keep "
+            'it." She settles her pack straps as she speaks, the '
             "way people do who have already decided to be elsewhere."
         )
 

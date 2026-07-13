@@ -216,7 +216,7 @@ def test_the_teamster_tells_the_story_and_decamps():
     game.do_command("talk to teamster")
     said = " ".join(cap.texts(Channel.NARRATION)).lower()
     assert "they came at moonset" in said
-    assert "caravan is seldom wrong twice" in said
+    assert "tomb pays better than the road" in said
     # She has already decided to be elsewhere.
     assert teamster.name not in wreck.characters
     assert "sets off south along the trail" in " ".join(cap.texts(Channel.NARRATION))
