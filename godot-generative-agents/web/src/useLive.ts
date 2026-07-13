@@ -138,9 +138,19 @@ export function useLive(base: string | null): LiveState {
         }
         cursor = Math.max(cursor, data.latest_cursor);
         const receivedAt = Date.now();
-        const fresh = data.events
-          .filter((r) => r.kind === "engine" && r.event?.kind === "llm_call")
-          .map((r) => ({ ...(r.event as unknown as LlmCallRecord), receivedAt }));
+        // Walk the batch in feed order: a status record with reason "reset"
+        // (the documented new-run signal) drops every call before it — the
+        // retained log and this batch's earlier rows describe the dead run.
+        let wasReset = false;
+        const fresh: ReceivedLlmCall[] = [];
+        for (const r of data.events) {
+          if (r.kind === "status" && r.reason === "reset") {
+            wasReset = true;
+            fresh.length = 0;
+          } else if (r.kind === "engine" && r.event?.kind === "llm_call") {
+            fresh.push({ ...(r.event as unknown as LlmCallRecord), receivedAt });
+          }
+        }
         // Only the newest frame/status matter — the panel shows "now", not history.
         const frames = data.events.filter((r) => r.kind === "frame");
         const lastFrame = frames[frames.length - 1];
@@ -154,7 +164,11 @@ export function useLive(base: string | null): LiveState {
             : {
                 ...s,
                 connected: true,
-                calls: fresh.length ? capPerAgent([...s.calls, ...fresh]) : s.calls,
+                calls: wasReset
+                  ? fresh
+                  : fresh.length
+                    ? capPerAgent([...s.calls, ...fresh])
+                    : s.calls,
                 frame: lastFrame?.agents ?? s.frame,
                 step: lastFrame?.step ?? lastStatus?.step ?? s.step,
                 running: lastStatus?.running ?? s.running,
