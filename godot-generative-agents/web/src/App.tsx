@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { GodotCanvas } from "./components/GodotCanvas";
-import { AgentPanel } from "./components/AgentPanel";
+import { AgentCardModal } from "./components/AgentCardModal";
 import { LlmDashboard } from "./components/LlmDashboard";
 import { HomeView } from "./components/home/HomeView";
 import { useReplay } from "./useReplay";
@@ -25,17 +25,17 @@ const PromptReaderView = lazy(() =>
   }))
 );
 
-type View = "home" | "game" | "agents" | "llm" | "prompts" | "reader";
+type View = "home" | "game" | "llm" | "prompts" | "reader";
 
-// Pages selected by the URL hash (#home / #game / #agents / #llm / #prompts /
-// #reader) so each is a real, shareable location and the back button works — no
-// router needed. The Nerfies-style project page is the landing view; every
-// other view is one explicit hop away via the menu.
+// Pages selected by the URL hash (#home / #game / #llm / #prompts / #reader) so
+// each is a real, shareable location and the back button works — no router
+// needed. The Nerfies-style project page is the landing view; every other view is
+// one explicit hop away via the menu. `#agents` (the old agent-cards page, folded
+// into the live dashboard in #528) redirects here so existing links keep working.
 function viewFromHash(): View {
   const hash = window.location.hash.replace("#", "");
   if (hash === "game") return "game";
-  if (hash === "agents") return "agents";
-  if (hash === "llm") return "llm";
+  if (hash === "llm" || hash === "agents") return "llm";
   if (hash === "prompts") return "prompts";
   if (hash === "reader") return "reader";
   return "home";
@@ -69,12 +69,6 @@ const ICON_HOME = (
     <path d="M3 10.5 12 3l9 7.5" />
     <path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" />
     <path d="M9.5 21v-6h5v6" />
-  </NavIcon>
-);
-const ICON_AGENTS = (
-  <NavIcon>
-    <circle cx="12" cy="7" r="4" />
-    <path d="M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
   </NavIcon>
 );
 const ICON_GAME = (
@@ -126,9 +120,8 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
   {
     heading: "Game",
     items: [
-      { view: "agents", label: "Agent cards", icon: ICON_AGENTS },
       { view: "game", label: "Game view", icon: ICON_GAME },
-      { view: "llm", label: "LLM dashboard", icon: ICON_LLM },
+      { view: "llm", label: "Live dashboard", icon: ICON_LLM },
     ],
   },
   {
@@ -141,13 +134,12 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
 ];
 
 export default function App() {
-  const { status, replay, error } = useReplay();
-  // The live backend: one handshake + one feed poll, shared by the agents view
-  // and the LLM dashboard. The target starts from ?api= / VITE_SIM_API_URL and
+  const { status, replay } = useReplay();
+  // The live backend: one handshake + one feed poll, shared by the live dashboard
+  // and the agent-card modal. The target starts from ?api= / VITE_SIM_API_URL and
   // can also be supplied at runtime by the dashboard's connect form (#519).
   const [apiUrl, setApiUrl] = useState<string | null>(initialApiBase);
   const live = useLive(apiUrl);
-  const liveReady = live.live && (live.meta?.personas.length ?? 0) > 0;
 
   // Connecting via the form is the same as arriving with ?api= — the URL is
   // updated to match (no reload), so a refresh or a shared link sticks.
@@ -157,6 +149,24 @@ export default function App() {
     setUrlParam("api", clean);
     setApiUrl(clean);
   };
+
+  // The open agent-card modal (#528): clicking a dashboard cell opens that
+  // agent's card, deep-linked via ?agent=<name> so a refresh or a shared link
+  // reopens it. The one-shot mount read mirrors initialApiBase; the writes are
+  // the second caller of setUrlParam (#522). AgentCardModal self-gates on the
+  // roster, so a stale name just renders nothing.
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("agent"),
+  );
+  const openAgent = (name: string) => {
+    setSelectedAgent(name);
+    setUrlParam("agent", name);
+  };
+  const closeAgent = () => {
+    setSelectedAgent(null);
+    setUrlParam("agent", null);
+  };
+
   const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -294,28 +304,31 @@ export default function App() {
           <GodotCanvas />
         </section>
 
-        <section className="view view-agents" aria-hidden={view !== "agents"}>
-          {/* A live backend (once its handshake lands) takes over the agents
-              view; otherwise the baked replay drives it exactly as before. */}
-          {liveReady || (status === "ready" && replay.meta.personas.length > 0) ? (
-            <AgentPanel replay={replay} live={live} />
-          ) : live.enabled ? (
-            <div className="agents-placeholder">Waiting for the live backend…</div>
-          ) : (
-            <div className="agents-placeholder">
-              {status === "loading" && "Loading agents…"}
-              {status === "error" && `Couldn't load replay: ${error}`}
-              {status === "ready" && "No agents in this replay."}
-            </div>
-          )}
-        </section>
-
-        {/* The LLM dashboard (#519). Mounted only when active — its data lives
-            in App's shared useLive poll, so nothing is lost on unmount. */}
+        {/* The unified live page (#519 dashboard + #528 agent cards). Mounted only
+            when active — its data lives in App's shared useLive poll, so nothing is
+            lost on unmount. Clicking a roster cell opens that agent's card as the
+            modal below. In replay mode the dashboard shows the baked cast; while
+            that file is still loading (and no backend is set) we hold a placeholder
+            so the connect form doesn't flash. */}
         {view === "llm" && (
           <section className="view view-llm">
-            <LlmDashboard replay={replay} live={live} onConnect={connectApi} />
+            {status === "loading" && !live.enabled ? (
+              <div className="agents-placeholder">Loading agents…</div>
+            ) : (
+              <LlmDashboard
+                replay={replay}
+                live={live}
+                onConnect={connectApi}
+                onOpenAgent={openAgent}
+              />
+            )}
           </section>
+        )}
+
+        {/* The agent-card modal (#528): a full-viewport overlay, so it renders
+            outside any single view section. Self-gates on the roster. */}
+        {view === "llm" && selectedAgent && (
+          <AgentCardModal name={selectedAgent} replay={replay} live={live} onClose={closeAgent} />
         )}
 
         {/* The landing page. Mounted only when active — it's a static page with
