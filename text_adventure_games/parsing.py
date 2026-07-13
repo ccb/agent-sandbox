@@ -296,7 +296,7 @@ class Parser:
             if self.get_direction(rest, character.location):
                 return ActionName.DESCRIBE
             return ActionName.EXAMINE
-        elif "examine " in command or command.startswith("x "):
+        elif re.search(r"\bexamine\b", command) or command.startswith("x "):
             return ActionName.EXAMINE
         elif command.startswith("take off") or command.startswith("remove "):
             # Must precede the "take "/get branch -- "take " is a substring of
@@ -304,24 +304,30 @@ class Parser:
             return ActionName.TAKE_OFF
         elif command.startswith("stow ") or command.startswith("unequip "):
             return ActionName.UNWIELD
-        elif "take " in command or "get " in command:
+        elif (initial := self._match_initial_verb(command)) is not None:
+            # Command-initial verb (#536): the first word IS a registered
+            # verb, so the generic keyword branches below may not hijack its
+            # free-text argument ("perform refining the model late into the
+            # day" must not EAT). Prefix special cases ("get off", "take
+            # off", directions, say/taste/hint, ...) all ran above.
+            return initial
+        elif re.search(r"\b(take|get)\b", command):
+            # The keyword branches from here down match on WORD BOUNDARIES
+            # (#536): "target" must not GET, "great hall" must not EAT,
+            # "forgive" must not GIVE -- the same fix the longest-match
+            # fallback already carries ("dragon" -> GO).
             return ActionName.GET
-        elif "light" in command:
+        elif re.search(r"\blight(s|ed|ing)?\b", command):
             return ActionName.LIGHT
-        elif "drop " in command:
+        elif re.search(r"\bdrop\b", command):
             return ActionName.DROP
         elif command.startswith("break") or command.startswith("smash"):
             return ActionName.BREAK
-        elif (
-            "eat " in command
-            or "eats " in command
-            or "ate " in command
-            or "eating " in command
-        ):
+        elif re.search(r"\b(eat|eats|ate|eating)\b", command):
             return ActionName.EAT
-        elif "drink" in command:
+        elif re.search(r"\bdrink(s|ing)?\b", command):
             return ActionName.DRINK
-        elif "give" in command or command.startswith("hand "):
+        elif re.search(r"\bgive\b", command) or command.startswith("hand "):
             # A custom give-action ("give gem to wizard") whose item AND
             # recipient both appear -- in ANY word order -- wins over the
             # built-in Give, so "give wizard the gem" / "hand wizard the gem"
@@ -329,15 +335,15 @@ class Parser:
             # which the bare-"give" keyword check used to miss. Falls back to the
             # built-in Give when no custom give-action matches.
             return self._match_give_action(command) or ActionName.GIVE
-        elif "attack" in command or "hit " in command or "hits " in command:
+        elif re.search(r"\battack\w*\b|\bhits?\b", command):
             return ActionName.ATTACK
-        elif "inventory" in command or command == "i":
+        elif re.search(r"\binventory\b", command) or command == "i":
             return ActionName.INVENTORY
         elif command == "wait" or command == "z":
             return ActionName.WAIT
         elif command in ("help", "h", "commands", "?") or command.startswith("help"):
             return ActionName.HELP
-        elif "quit" in command:
+        elif re.search(r"\bquit\b", command):
             return ActionName.QUIT
         else:
             # Longest registered action name -- OR single-word alias -- that
@@ -377,6 +383,29 @@ class Parser:
                     if best is None or len(phrase) > len(best):
                         best, best_name = phrase, action.action_name()
         return best_name
+
+    def _match_initial_verb(self, command):
+        """The registered action whose single-word ACTION_NAME or alias IS
+        the command's first word, or None.
+
+        An imperative's verb is its first word: when that word is a
+        registered verb, the command routes there no matter what the rest of
+        the text contains (#536) -- the say/taste/hint branches are
+        hand-rolled instances of the same rule. "give"/"hand" are excluded:
+        the give branch must keep running _match_give_action's
+        item+recipient resolution (#171). First registration wins a
+        shared-alias tie, like the longest-match fallback.
+        """
+        first = command.split(" ", 1)[0]
+        if first in ("give", "hand"):
+            return None
+        for _, action in self.actions.items():
+            phrases = [action.action_name()] + list(
+                getattr(action, "ACTION_ALIASES", []) or []
+            )
+            if first in phrases:
+                return action.action_name()
+        return None
 
     def _match_give_action(self, command):
         """A registered custom give-action whose item AND recipient both appear
