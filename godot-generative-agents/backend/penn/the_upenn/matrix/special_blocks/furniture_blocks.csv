@@ -1,547 +1,503 @@
-1, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-2, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-3, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-4, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-5, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-6, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-7, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-8, UPenn, Claudia Cohen Hall, Cafeteria 1, tile-1267
-9, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-10, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-11, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-12, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-13, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-14, UPenn, Claudia Cohen Hall, Cafeteria 2, tile-1267
-15, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-16, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-17, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-18, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-19, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-20, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-21, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-22, UPenn, Claudia Cohen Hall, Cafeteria 3, tile-1267
-23, UPenn, Sweeten Alumni Building, Room 2: BD 5, tile-3579
-24, UPenn, Sweeten Alumni Building, Room 2: BD 5, tile-1545
-25, UPenn, Sweeten Alumni Building, Room 2: BD 1, tile-3579
-26, UPenn, Sweeten Alumni Building, Room 2: BD 1, tile-1545
-27, UPenn, Sweeten Alumni Building, Room 1: BD 1, tile-3579
-28, UPenn, Sweeten Alumni Building, Room 1: BD 1, tile-1545
-29, UPenn, Sweeten Alumni Building, Room 2: BD 6, tile-3579
-30, UPenn, Sweeten Alumni Building, Room 2: BD 6, tile-1545
-31, UPenn, Sweeten Alumni Building, Room 1: BD 2, tile-3579
-32, UPenn, Sweeten Alumni Building, Room 1: BD 2, tile-1545
-33, UPenn, Sweeten Alumni Building, Room 2: BD 2, tile-3579
-34, UPenn, Sweeten Alumni Building, Room 2: BD 2, tile-1545
-35, UPenn, Sweeten Alumni Building, Room 1: Kitchen, tile-987
-36, UPenn, Sweeten Alumni Building, Room 1: Kitchen, tile-1118
-37, UPenn, Sweeten Alumni Building, Room 1: Kitchen, tile-1267
-38, UPenn, Sweeten Alumni Building, Room 1: BD 3, tile-3579
-39, UPenn, Sweeten Alumni Building, Room 1: BD 3, tile-1545
-40, UPenn, Sweeten Alumni Building, Room 1: Living Room, tile-926
-41, UPenn, Sweeten Alumni Building, Room 2: Kitchen, tile-987
-42, UPenn, Sweeten Alumni Building, Room 2: Kitchen, tile-1118
-43, UPenn, Sweeten Alumni Building, Room 2: BD 3, tile-3579
-44, UPenn, Sweeten Alumni Building, Room 2: BD 3, tile-1545
-45, UPenn, Sweeten Alumni Building, Room 2: Living Room, tile-1267
-46, UPenn, Sweeten Alumni Building, Room 2: Living Room, tile-1375
-47, UPenn, Sweeten Alumni Building, Room 1: BD 4, tile-3579
-48, UPenn, Sweeten Alumni Building, Room 1: BD 4, tile-1545
-49, UPenn, Sweeten Alumni Building, Room 2: BD 4, tile-3579
-50, UPenn, Sweeten Alumni Building, Room 2: BD 4, tile-1545
-51, UPenn, Sweeten Alumni Building, Room 1: Living Room, tile-1013
-52, UPenn, Sweeten Alumni Building, Room 1: Living Room, tile-926
-53, UPenn, Sweeten Alumni Building, Room 2: BR 2, tile-1847
-54, UPenn, Sweeten Alumni Building, Room 2: BR 2, tile-1822
-55, UPenn, Sweeten Alumni Building, Room 1: BR 1, tile-1847
-56, UPenn, Sweeten Alumni Building, Room 2: BR 1, tile-1847
-57, UPenn, Sweeten Alumni Building, Room 2: BR 1, tile-1822
-58, UPenn, Houston Hall, Bathroom, tile-1847
-59, UPenn, Houston Hall, Bathroom, tile-1821
-60, UPenn, Houston Hall, Bathroom, tile-1822
-61, UPenn, Houston Hall, Bathroom, tile-1817
-62, UPenn, Houston Hall, Chess Room, tile-1247
-63, UPenn, Houston Hall, Chess Room, tile-1211
-64, UPenn, Houston Hall, Reception Hall, tile-956
-65, UPenn, Houston Hall, Reception Hall, tile-956
-66, UPenn, Houston Hall, Billiard Room, tile-1267
-67, UPenn, Houston Hall, Billiard Room, tile-1267
-68, UPenn, Houston Hall, Billiard Room, tile-1267
-69, UPenn, Houston Hall, Reception Hall, tile-1191
-70, UPenn, Houston Hall, Reading Room, tile-917
-71, UPenn, Houston Hall, Chess Room, tile-1150
-72, UPenn, Houston Hall, Chess Room, tile-1216
-73, UPenn, Houston Hall, Reception Hall, tile-1013
-74, UPenn, Houston Hall, Reception Hall, tile-1011
-75, UPenn, Houston Hall, Reception Hall, tile-1013
-76, UPenn, Houston Hall, Reception Hall, tile-1011
-77, UPenn, Houston Hall, Reception Hall, tile-1137
-78, UPenn, Houston Hall, Reception Hall, tile-1137
-79, UPenn, Houston Hall, Reading Room, tile-1140
-80, UPenn, Houston Hall, Reception Hall, tile-1251
-81, UPenn, Houston Hall, Chess Room, tile-1116
-82, UPenn, Houston Hall, Chess Room, tile-987
-83, UPenn, Houston Hall, Reception Hall, tile-1015
-84, UPenn, Houston Hall, Reception Hall, tile-1017
-85, UPenn, Houston Hall, Reception Hall, tile-1015
-86, UPenn, Houston Hall, Reception Hall, tile-1017
-87, UPenn, Houston Hall, Billiard Room, tile-1267
-88, UPenn, Houston Hall, Billiard Room, tile-1267
-89, UPenn, Houston Hall, Billiard Room, tile-1267
-90, UPenn, Houston Hall, Reception Hall, tile-1191
-91, UPenn, Houston Hall, Chess Room, tile-956
-92, UPenn, Houston Hall, Billiard Room, tile-956
-93, UPenn, Houston Hall, Reception Hall, tile-956
-94, UPenn, Houston Hall, Reading Room, tile-1140
-95, UPenn, Houston Hall, Correspond, tile-1612
-96, UPenn, Houston Hall, Correspond, tile-1278
-97, UPenn, Houston Hall, Correspond, tile-1476
-98, UPenn, Houston Hall, Shuffle Board Room, tile-956
-99, UPenn, Houston Hall, Ladies Parlor, tile-5531
-100, UPenn, Houston Hall, Secretarys Office, tile-909
-101, UPenn, Houston Hall, Shuffle Board Room, tile-1267
-102, UPenn, Houston Hall, Shuffle Board Room, tile-1267
-103, UPenn, Houston Hall, Ladies Parlor, tile-1191
-104, UPenn, Houston Hall, Correspond, tile-1612
-105, UPenn, Houston Hall, Correspond, tile-1278
-106, UPenn, Houston Hall, Reading Room, tile-1140
-107, UPenn, Houston Hall, Shuffle Board Room, tile-1071
-108, UPenn, Houston Hall, lobby, tile-956
-109, UPenn, Houston Hall, Secretarys Office, tile-956
-110, UPenn, Houston Hall, Correspond, tile-1612
-111, UPenn, Houston Hall, Correspond, tile-1278
-112, UPenn, Irvine Auditorium, Stage, tile-1155
-113, UPenn, Irvine Auditorium, Stage, tile-1251
-114, UPenn, Irvine Auditorium, Stage, tile-1251
-115, UPenn, Irvine Auditorium, Stage, tile-5435
-116, UPenn, Irvine Auditorium, Stage, tile-5435
-117, UPenn, Irvine Auditorium, Stage, tile-5435
-118, UPenn, Irvine Auditorium, Stage, tile-5435
-119, UPenn, Irvine Auditorium, Stage, tile-5435
-120, UPenn, Irvine Auditorium, Stage, tile-5435
-121, UPenn, Irvine Auditorium, Stage, tile-926
-122, UPenn, Irvine Auditorium, West Foyer, tile-1155
-123, UPenn, Irvine Auditorium, West Foyer, tile-956
-124, UPenn, Irvine Auditorium, East Foyer, tile-956
-125, UPenn, Irvine Auditorium, East Foyer, tile-1155
-126, UPenn, Irvine Auditorium, Auditorium, tile-1072
-127, UPenn, Irvine Auditorium, Auditorium, tile-1072
-128, UPenn, Irvine Auditorium, East Foyer, tile-1191
-129, UPenn, Irvine Auditorium, West Foyer, tile-1140
-130, UPenn, Irvine Auditorium, Auditorium, tile-1072
-131, UPenn, Irvine Auditorium, Auditorium, tile-1072
-132, UPenn, Irvine Auditorium, East Foyer, tile-1140
-133, UPenn, Irvine Auditorium, West Foyer, tile-955
-134, UPenn, Irvine Auditorium, East Foyer, tile-955
-135, UPenn, Irvine Auditorium, Auditorium, tile-1072
-136, UPenn, Irvine Auditorium, Auditorium, tile-1072
-137, UPenn, Irvine Auditorium, West Foyer, tile-1171
-138, UPenn, Irvine Auditorium, East Foyer, tile-1171
-139, UPenn, Irvine Auditorium, Auditorium, tile-1072
-140, UPenn, Irvine Auditorium, Auditorium, tile-1072
-141, UPenn, Irvine Auditorium, West Foyer, tile-1191
-142, UPenn, Irvine Auditorium, East Foyer, tile-1191
-143, UPenn, Irvine Auditorium, West Foyer, tile-1137
-144, UPenn, Irvine Auditorium, Auditorium, tile-1072
-145, UPenn, Irvine Auditorium, Auditorium, tile-1072
-146, UPenn, Irvine Auditorium, East Foyer, tile-1137
-147, UPenn, Irvine Auditorium, Auditorium, tile-1072
-148, UPenn, Irvine Auditorium, Auditorium, tile-1072
-149, UPenn, Irvine Auditorium, West Foyer, tile-1121
-150, UPenn, Irvine Auditorium, East Foyer, tile-1121
-151, UPenn, Irvine Auditorium, Auditorium, tile-1072
-152, UPenn, Irvine Auditorium, Auditorium, tile-1072
-153, UPenn, Irvine Auditorium, West Foyer, tile-956
-154, UPenn, Irvine Auditorium, West Foyer, tile-956
-155, UPenn, Irvine Auditorium, East Foyer, tile-956
-156, UPenn, Irvine Auditorium, Lobby, tile-956
-157, UPenn, Irvine Auditorium, Lobby, tile-1155
-158, UPenn, Irvine Auditorium, Lobby, tile-1155
-159, UPenn, Irvine Auditorium, Lobby, tile-956
-160, UPenn, Irvine Auditorium, Lobby, tile-1255
-161, UPenn, Irvine Auditorium, Lobby, tile-1121
-162, UPenn, Irvine Auditorium, Lobby, tile-1191
-163, UPenn, Irvine Auditorium, Lobby, tile-1191
-164, UPenn, Irvine Auditorium, Lobby, tile-1121
-165, UPenn, Irvine Auditorium, Lobby, tile-956
-166, UPenn, Irvine Auditorium, Lobby, tile-956
-167, UPenn, Van Pelt Library, 126, tile-1588
-168, UPenn, Van Pelt Library, 126, tile-1581
-169, UPenn, Van Pelt Library, 127, tile-1588
-170, UPenn, Van Pelt Library, West Wing Books, tile-909
-171, UPenn, Van Pelt Library, 113, tile-1588
-172, UPenn, Van Pelt Library, West Wing Books, tile-956
-173, UPenn, Van Pelt Library, West Wing Books, tile-956
-174, UPenn, Van Pelt Library, West Wing Books, tile-956
-175, UPenn, Van Pelt Library, West Wing Books, tile-956
-176, UPenn, Van Pelt Library, West Wing Books, tile-956
-177, UPenn, Van Pelt Library, West Wing Books, tile-1267
-178, UPenn, Van Pelt Library, West Wing Books, tile-1267
-179, UPenn, Van Pelt Library, West Wing Books, tile-956
-180, UPenn, Van Pelt Library, West Wing Books, tile-956
-181, UPenn, Van Pelt Library, West Wing Books, tile-1267
-182, UPenn, Van Pelt Library, West Wing Books, tile-1267
-183, UPenn, Van Pelt Library, 125, tile-1546
-184, UPenn, Van Pelt Library, 125, tile-1548
-185, UPenn, Van Pelt Library, 114, tile-1588
-186, UPenn, Van Pelt Library, West Wing Books, tile-1267
-187, UPenn, Van Pelt Library, West Wing Books, tile-1267
-188, UPenn, Van Pelt Library, West Wing Books, tile-1267
+1, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+2, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+3, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+4, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+5, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+6, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+7, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+8, UPenn, Claudia Cohen Hall, Cafeteria 1, dining_table
+9, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+10, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+11, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+12, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+13, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+14, UPenn, Claudia Cohen Hall, Cafeteria 2, dining_table
+15, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+16, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+17, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+18, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+19, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+20, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+21, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+22, UPenn, Claudia Cohen Hall, Cafeteria 3, dining_table
+23, UPenn, Sweeten Alumni Building, Room 2: BD 5, bed_single_made
+24, UPenn, Sweeten Alumni Building, Room 2: BD 5, student_desk
+25, UPenn, Sweeten Alumni Building, Room 2: BD 1, bed_single_made
+26, UPenn, Sweeten Alumni Building, Room 2: BD 1, student_desk
+27, UPenn, Sweeten Alumni Building, Room 1: BD 1, bed_single_made
+28, UPenn, Sweeten Alumni Building, Room 1: BD 1, student_desk
+29, UPenn, Sweeten Alumni Building, Room 2: BD 6, bed_single_made
+30, UPenn, Sweeten Alumni Building, Room 2: BD 6, student_desk
+31, UPenn, Sweeten Alumni Building, Room 1: BD 2, bed_single_made
+32, UPenn, Sweeten Alumni Building, Room 1: BD 2, student_desk
+33, UPenn, Sweeten Alumni Building, Room 2: BD 2, bed_single_made
+34, UPenn, Sweeten Alumni Building, Room 2: BD 2, student_desk
+35, UPenn, Sweeten Alumni Building, Room 1: Kitchen, basket_fruit
+36, UPenn, Sweeten Alumni Building, Room 1: Kitchen, food_sausage
+37, UPenn, Sweeten Alumni Building, Room 1: Kitchen, dining_table
+38, UPenn, Sweeten Alumni Building, Room 1: BD 3, bed_single_made
+39, UPenn, Sweeten Alumni Building, Room 1: BD 3, student_desk
+40, UPenn, Sweeten Alumni Building, Room 1: Living Room, plant_large
+41, UPenn, Sweeten Alumni Building, Room 2: Kitchen, basket_fruit
+42, UPenn, Sweeten Alumni Building, Room 2: Kitchen, food_sausage
+43, UPenn, Sweeten Alumni Building, Room 2: BD 3, bed_single_made
+44, UPenn, Sweeten Alumni Building, Room 2: BD 3, student_desk
+45, UPenn, Sweeten Alumni Building, Room 2: Living Room, dining_table
+46, UPenn, Sweeten Alumni Building, Room 2: Living Room, fireplace
+47, UPenn, Sweeten Alumni Building, Room 1: BD 4, bed_single_made
+48, UPenn, Sweeten Alumni Building, Room 1: BD 4, student_desk
+49, UPenn, Sweeten Alumni Building, Room 2: BD 4, bed_single_made
+50, UPenn, Sweeten Alumni Building, Room 2: BD 4, student_desk
+51, UPenn, Sweeten Alumni Building, Room 1: Living Room, cushion
+52, UPenn, Sweeten Alumni Building, Room 1: Living Room, plant_large
+53, UPenn, Sweeten Alumni Building, Room 2: BR 2, toilet
+54, UPenn, Sweeten Alumni Building, Room 2: BR 2, mirror
+55, UPenn, Sweeten Alumni Building, Room 1: BR 1, toilet
+56, UPenn, Sweeten Alumni Building, Room 2: BR 1, toilet
+57, UPenn, Sweeten Alumni Building, Room 2: BR 1, mirror
+58, UPenn, Houston Hall, Bathroom, toilet
+59, UPenn, Houston Hall, Bathroom, sink
+60, UPenn, Houston Hall, Bathroom, mirror
+61, UPenn, Houston Hall, Bathroom, towels
+62, UPenn, Houston Hall, Chess Room, food_ham
+63, UPenn, Houston Hall, Chess Room, food_salad
+64, UPenn, Houston Hall, Reception Hall, plant
+65, UPenn, Houston Hall, Reception Hall, plant
+66, UPenn, Houston Hall, Billiard Room, dining_table
+67, UPenn, Houston Hall, Billiard Room, dining_table
+68, UPenn, Houston Hall, Billiard Room, dining_table
+69, UPenn, Houston Hall, Reception Hall, sofa
+70, UPenn, Houston Hall, Reading Room, bookshelf_wood_books
+71, UPenn, Houston Hall, Chess Room, food_fish
+72, UPenn, Houston Hall, Chess Room, bread
+73, UPenn, Houston Hall, Reception Hall, cushion
+74, UPenn, Houston Hall, Reception Hall, cushion_orange
+75, UPenn, Houston Hall, Reception Hall, cushion
+76, UPenn, Houston Hall, Reception Hall, cushion_orange
+77, UPenn, Houston Hall, Reception Hall, round_table_small
+78, UPenn, Houston Hall, Reception Hall, round_table_small
+79, UPenn, Houston Hall, Reading Room, armchair
+80, UPenn, Houston Hall, Reception Hall, candelabra
+81, UPenn, Houston Hall, Chess Room, food_bowl
+82, UPenn, Houston Hall, Chess Room, basket_fruit
+83, UPenn, Houston Hall, Reception Hall, cushion_cream
+84, UPenn, Houston Hall, Reception Hall, cushion_red
+85, UPenn, Houston Hall, Reception Hall, cushion_cream
+86, UPenn, Houston Hall, Reception Hall, cushion_red
+87, UPenn, Houston Hall, Billiard Room, dining_table
+88, UPenn, Houston Hall, Billiard Room, dining_table
+89, UPenn, Houston Hall, Billiard Room, dining_table
+90, UPenn, Houston Hall, Reception Hall, sofa
+91, UPenn, Houston Hall, Chess Room, plant
+92, UPenn, Houston Hall, Billiard Room, plant
+93, UPenn, Houston Hall, Reception Hall, plant
+94, UPenn, Houston Hall, Reading Room, armchair
+95, UPenn, Houston Hall, Correspond, inkwell
+96, UPenn, Houston Hall, Correspond, quill_ink
+97, UPenn, Houston Hall, Correspond, bookshelf_tan
+98, UPenn, Houston Hall, Shuffle Board Room, plant
+99, UPenn, Houston Hall, Ladies Parlor, piano_upright
+100, UPenn, Houston Hall, Secretarys Office, bookshelf
+101, UPenn, Houston Hall, Shuffle Board Room, dining_table
+102, UPenn, Houston Hall, Shuffle Board Room, dining_table
+103, UPenn, Houston Hall, Ladies Parlor, sofa
+104, UPenn, Houston Hall, Correspond, inkwell
+105, UPenn, Houston Hall, Correspond, quill_ink
+106, UPenn, Houston Hall, Reading Room, armchair
+107, UPenn, Houston Hall, Shuffle Board Room, stool_wood
+108, UPenn, Houston Hall, lobby, plant
+109, UPenn, Houston Hall, Secretarys Office, plant
+110, UPenn, Houston Hall, Correspond, inkwell
+111, UPenn, Houston Hall, Correspond, quill_ink
+112, UPenn, Irvine Auditorium, Stage, lantern
+113, UPenn, Irvine Auditorium, Stage, candelabra
+114, UPenn, Irvine Auditorium, Stage, candelabra
+115, UPenn, Irvine Auditorium, Stage, music_stand
+116, UPenn, Irvine Auditorium, Stage, music_stand
+117, UPenn, Irvine Auditorium, Stage, music_stand
+118, UPenn, Irvine Auditorium, Stage, music_stand
+119, UPenn, Irvine Auditorium, Stage, music_stand
+120, UPenn, Irvine Auditorium, Stage, music_stand
+121, UPenn, Irvine Auditorium, Stage, plant_large
+122, UPenn, Irvine Auditorium, West Foyer, lantern
+123, UPenn, Irvine Auditorium, West Foyer, plant
+124, UPenn, Irvine Auditorium, East Foyer, plant
+125, UPenn, Irvine Auditorium, East Foyer, lantern
+126, UPenn, Irvine Auditorium, Auditorium, chair_wood
+127, UPenn, Irvine Auditorium, Auditorium, chair_wood
+128, UPenn, Irvine Auditorium, East Foyer, sofa
+129, UPenn, Irvine Auditorium, West Foyer, armchair
+130, UPenn, Irvine Auditorium, Auditorium, chair_wood
+131, UPenn, Irvine Auditorium, Auditorium, chair_wood
+132, UPenn, Irvine Auditorium, East Foyer, armchair
+133, UPenn, Irvine Auditorium, West Foyer, side_table
+134, UPenn, Irvine Auditorium, East Foyer, side_table
+135, UPenn, Irvine Auditorium, Auditorium, chair_wood
+136, UPenn, Irvine Auditorium, Auditorium, chair_wood
+137, UPenn, Irvine Auditorium, West Foyer, armchair_orange
+138, UPenn, Irvine Auditorium, East Foyer, armchair_orange
+139, UPenn, Irvine Auditorium, Auditorium, chair_wood
+140, UPenn, Irvine Auditorium, Auditorium, chair_wood
+141, UPenn, Irvine Auditorium, West Foyer, sofa
+142, UPenn, Irvine Auditorium, East Foyer, sofa
+143, UPenn, Irvine Auditorium, West Foyer, round_table_small
+144, UPenn, Irvine Auditorium, Auditorium, chair_wood
+145, UPenn, Irvine Auditorium, Auditorium, chair_wood
+146, UPenn, Irvine Auditorium, East Foyer, round_table_small
+147, UPenn, Irvine Auditorium, Auditorium, chair_wood
+148, UPenn, Irvine Auditorium, Auditorium, chair_wood
+149, UPenn, Irvine Auditorium, West Foyer, floor_lamp
+150, UPenn, Irvine Auditorium, East Foyer, floor_lamp
+151, UPenn, Irvine Auditorium, Auditorium, chair_wood
+152, UPenn, Irvine Auditorium, Auditorium, chair_wood
+153, UPenn, Irvine Auditorium, West Foyer, plant
+154, UPenn, Irvine Auditorium, West Foyer, plant
+155, UPenn, Irvine Auditorium, East Foyer, plant
+156, UPenn, Irvine Auditorium, Lobby, plant
+157, UPenn, Irvine Auditorium, Lobby, lantern
+158, UPenn, Irvine Auditorium, Lobby, lantern
+159, UPenn, Irvine Auditorium, Lobby, plant
+160, UPenn, Irvine Auditorium, Lobby, counter
+161, UPenn, Irvine Auditorium, Lobby, floor_lamp
+162, UPenn, Irvine Auditorium, Lobby, sofa
+163, UPenn, Irvine Auditorium, Lobby, sofa
+164, UPenn, Irvine Auditorium, Lobby, floor_lamp
+165, UPenn, Irvine Auditorium, Lobby, plant
+166, UPenn, Irvine Auditorium, Lobby, plant
+167, UPenn, Van Pelt Library, 126, blackboard
+168, UPenn, Van Pelt Library, 126, locker
+169, UPenn, Van Pelt Library, 127, blackboard
+170, UPenn, Van Pelt Library, West Wing Books, bookshelf
+171, UPenn, Van Pelt Library, 113, blackboard
+172, UPenn, Van Pelt Library, West Wing Books, plant
+173, UPenn, Van Pelt Library, West Wing Books, plant
+174, UPenn, Van Pelt Library, West Wing Books, plant
+175, UPenn, Van Pelt Library, West Wing Books, plant
+176, UPenn, Van Pelt Library, West Wing Books, plant
+177, UPenn, Van Pelt Library, West Wing Books, dining_table
+178, UPenn, Van Pelt Library, West Wing Books, dining_table
+179, UPenn, Van Pelt Library, West Wing Books, plant
+180, UPenn, Van Pelt Library, West Wing Books, plant
+181, UPenn, Van Pelt Library, West Wing Books, dining_table
+182, UPenn, Van Pelt Library, West Wing Books, dining_table
+183, UPenn, Van Pelt Library, 125, student_desk_open
+184, UPenn, Van Pelt Library, 125, student_desk_quill
+185, UPenn, Van Pelt Library, 114, blackboard
+186, UPenn, Van Pelt Library, West Wing Books, dining_table
+187, UPenn, Van Pelt Library, West Wing Books, dining_table
+188, UPenn, Van Pelt Library, West Wing Books, dining_table
 189, UPenn, Van Pelt Library, lobby, tile-674
-190, UPenn, Van Pelt Library, 121, tile-1546
-191, UPenn, Van Pelt Library, 121, tile-1548
-192, UPenn, Van Pelt Library, 122, tile-1546
-193, UPenn, Van Pelt Library, 123, tile-1546
-194, UPenn, Van Pelt Library, 123, tile-1548
-195, UPenn, Van Pelt Library, 124, tile-1546
-196, UPenn, Van Pelt Library, 124, tile-1548
-197, UPenn, Van Pelt Library, 124, tile-1579
-198, UPenn, Van Pelt Library, 124, tile-1581
-199, UPenn, Van Pelt Library, Kamin Gallery, tile-909
-200, UPenn, Van Pelt Library, 120, tile-1588
-201, UPenn, Van Pelt Library, 117, tile-1588
-202, UPenn, Van Pelt Library, 116, tile-1581
-203, UPenn, Van Pelt Library, Study Booths, tile-1581
-204, UPenn, Van Pelt Library, Study Booths, tile-1140
-205, UPenn, Van Pelt Library, Study Booths, tile-955
-206, UPenn, Van Pelt Library, Study Booths, tile-956
-207, UPenn, Van Pelt Library, Study Booths, tile-1588
-208, UPenn, Van Pelt Library, 119, tile-1546
-209, UPenn, Van Pelt Library, 118, tile-1546
-210, UPenn, Van Pelt Library, Study Booths, tile-1548
-211, UPenn, Van Pelt Library, 113, tile-1543
-212, UPenn, Van Pelt Library, Lounge, tile-1588
-213, UPenn, Van Pelt Library, Hallway, tile-1450
-214, UPenn, Van Pelt Library, Lounge, tile-1267
-215, UPenn, Van Pelt Library, Lounge, tile-1013
-216, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1588
-217, UPenn, Van Pelt Library, Lounge, tile-956
-218, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-1588
-219, UPenn, Van Pelt Library, Lounge, tile-1251
-220, UPenn, Van Pelt Library, Lounge, tile-1251
-221, UPenn, Van Pelt Library, Staff Area, tile-909
-222, UPenn, Van Pelt Library, Microtext Collection, tile-1588
-223, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-224, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1013
-225, UPenn, Van Pelt Library, Lounge, tile-1140
-226, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-227, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-228, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-1267
-229, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-1013
-230, UPenn, Van Pelt Library, Staff Area, tile-909
-231, UPenn, Van Pelt Library, Microtext Collection, tile-1267
-232, UPenn, Van Pelt Library, Microtext Collection, tile-1013
-233, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1251
-234, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-956
-235, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-956
-236, UPenn, Van Pelt Library, Microtext Collection, tile-956
-237, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-238, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, tile-1251
-239, UPenn, Van Pelt Library, Lounge, tile-1013
-240, UPenn, Van Pelt Library, Lounge, tile-1140
-241, UPenn, Van Pelt Library, Lounge, tile-1450
-242, UPenn, Van Pelt Library, Microtext Collection, tile-1251
-243, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-244, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-245, UPenn, Van Pelt Library, Lounge, tile-956
-246, UPenn, Van Pelt Library, Staff Area, tile-909
-247, UPenn, Van Pelt Library, Microtext Collection, tile-1140
-248, UPenn, Van Pelt Library, Microtext Collection, tile-1267
-249, UPenn, Van Pelt Library, Kamin Gallery, tile-909
-250, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-251, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1013
-252, UPenn, Van Pelt Library, Lounge, tile-1267
-253, UPenn, Van Pelt Library, Lounge, tile-1013
-254, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-255, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-256, UPenn, Van Pelt Library, Lounge, tile-956
-257, UPenn, Van Pelt Library, Circulation, tile-1588
-258, UPenn, Van Pelt Library, Circulation, tile-956
-259, UPenn, Van Pelt Library, Circulation, tile-1251
-260, UPenn, Van Pelt Library, Circulation, tile-956
-261, UPenn, Van Pelt Library, Circulation, tile-909
-262, UPenn, Van Pelt Library, Circulation, tile-909
-263, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-264, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1013
-265, UPenn, Van Pelt Library, Lounge, tile-1140
-266, UPenn, Van Pelt Library, Lounge, tile-1267
-267, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-956
-268, UPenn, Van Pelt Library, Circulation, tile-1267
-269, UPenn, Van Pelt Library, Circulation, tile-1013
-270, UPenn, Van Pelt Library, Circulation, tile-1140
-271, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1251
-272, UPenn, Van Pelt Library, Circulation, tile-956
-273, UPenn, Van Pelt Library, Circulation, tile-1251
-274, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-275, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1013
-276, UPenn, Van Pelt Library, Entrance, tile-1450
-277, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1267
-278, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, tile-1013
-279, UPenn, Meyerson Hall, Cafe, tile-1255
-280, UPenn, Meyerson Hall, Cafe, tile-1267
-281, UPenn, Meyerson Hall, Cafe, tile-1072
-282, UPenn, Meyerson Hall, East Studio, tile-1267
-283, UPenn, Meyerson Hall, East Studio, tile-956
-284, UPenn, Meyerson Hall, West Studio, tile-1267
-285, UPenn, Meyerson Hall, East Studio, tile-1072
-286, UPenn, Meyerson Hall, West Studio, tile-1072
-287, UPenn, Meyerson Hall, Cafe, tile-4448
-288, UPenn, Meyerson Hall, East Studio, tile-1267
-289, UPenn, Meyerson Hall, West Studio, tile-1267
-290, UPenn, Meyerson Hall, East Studio, tile-1072
-291, UPenn, Meyerson Hall, West Studio, tile-1072
-292, UPenn, Meyerson Hall, Lounge, tile-1191
-293, UPenn, Meyerson Hall, Lounge, tile-1267
-294, UPenn, Meyerson Hall, East Studio, tile-1267
-295, UPenn, Meyerson Hall, West Studio, tile-1267
-296, UPenn, Meyerson Hall, East Studio, tile-1072
-297, UPenn, Meyerson Hall, West Studio, tile-1072
-298, UPenn, Meyerson Hall, Lounge, tile-1191
-299, UPenn, Meyerson Hall, Lounge, tile-1267
-300, UPenn, Meyerson Hall, West Studio, tile-956
-301, UPenn, Meyerson Hall, South Gallery, tile-3411
-302, UPenn, Meyerson Hall, South Gallery, tile-3507
-303, UPenn, Meyerson Hall, South Gallery, tile-1474
-304, UPenn, Meyerson Hall, South Gallery, tile-1474
-305, UPenn, Meyerson Hall, East Offices, tile-1579
-306, UPenn, Meyerson Hall, East Offices, tile-1545
-307, UPenn, Meyerson Hall, East Offices, tile-1579
-308, UPenn, Meyerson Hall, East Offices, tile-1545
-309, UPenn, Meyerson Hall, South Gallery, tile-926
-310, UPenn, Meyerson Hall, South Gallery, tile-956
-311, UPenn, Meyerson Hall, East Offices, tile-956
-312, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-917
-313, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-917
-314, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-917
-315, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-917
-316, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-1140
-317, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, tile-1140
-318, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-956
-319, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-917
-320, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-917
-321, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-917
-322, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-917
-323, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1375
-324, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, tile-1476
-325, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, tile-1476
-326, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, tile-1474
-327, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-328, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-329, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1251
-330, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-331, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-332, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1251
-333, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-334, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-335, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1251
-336, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-337, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1267
-338, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1251
-339, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-1251
-340, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, tile-956
-341, UPenn, Fisher Fine Arts Library, Ross Gallery, tile-1191
-342, UPenn, Fisher Fine Arts Library, Ross Gallery, tile-926
-343, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-344, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-345, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-346, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-347, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-348, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-349, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-350, UPenn, Fisher Fine Arts Library, Ross Gallery, tile-1251
-351, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-352, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-353, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-354, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-355, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-356, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-357, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-1611
-358, UPenn, Fisher Fine Arts Library, Ross Gallery, tile-1474
-359, UPenn, Fisher Fine Arts Library, Ross Gallery, tile-956
-360, UPenn, Fisher Fine Arts Library, Computing & Printing, tile-956
-361, UPenn, Fisher Fine Arts Library, Staff Office, tile-1375
-362, UPenn, Fisher Fine Arts Library, Staff Office, tile-956
-363, UPenn, Fisher Fine Arts Library, Staff Office, tile-1267
-364, UPenn, Fisher Fine Arts Library, Staff Office, tile-1267
-365, UPenn, Fisher Fine Arts Library, Staff Office, tile-990
-366, UPenn, College Hall, Kitchen Out, tile-1255
-367, UPenn, College Hall, Kitchen Out, tile-1255
-368, UPenn, College Hall, Kitchen Out, tile-1255
-369, UPenn, College Hall, Kitchen Out, tile-961
-370, UPenn, College Hall, Kitchen In, tile-1269
-371, UPenn, College Hall, Kitchen In, tile-1269
-372, UPenn, College Hall, Kitchen In, tile-1269
-373, UPenn, College Hall, Kitchen In, tile-1255
-374, UPenn, College Hall, Restrooms, tile-1847
-375, UPenn, College Hall, Restrooms, tile-1821
-376, UPenn, College Hall, Restrooms, tile-1822
-377, UPenn, College Hall, West Wing, tile-1588
-378, UPenn, College Hall, West Wing, tile-1579
-379, UPenn, College Hall, Central Hall, tile-956
-380, UPenn, College Hall, East Wing, tile-917
-381, UPenn, College Hall, East Wing, tile-917
-382, UPenn, College Hall, East Wing, tile-917
-383, UPenn, College Hall, East Wing, tile-917
-384, UPenn, College Hall, East Wing, tile-917
-385, UPenn, College Hall, East Wing, tile-917
-386, UPenn, College Hall, Central Hall, tile-3483
-387, UPenn, College Hall, Central Hall, tile-1191
-388, UPenn, College Hall, Central Hall, tile-1191
-389, UPenn, College Hall, West Wing, tile-1545
-390, UPenn, College Hall, West Wing, tile-1545
-391, UPenn, College Hall, West Wing, tile-1545
-392, UPenn, College Hall, West Wing, tile-1545
-393, UPenn, College Hall, West Wing, tile-1545
-394, UPenn, College Hall, West Wing, tile-1545
-395, UPenn, College Hall, West Wing, tile-1545
-396, UPenn, College Hall, Central Hall, tile-1140
-397, UPenn, College Hall, Central Hall, tile-1140
-398, UPenn, College Hall, Central Hall, tile-1140
-399, UPenn, College Hall, East Wing, tile-1579
-400, UPenn, College Hall, East Wing, tile-1579
-401, UPenn, College Hall, East Wing, tile-1579
-402, UPenn, College Hall, East Wing, tile-1579
-403, UPenn, College Hall, East Wing, tile-1579
-404, UPenn, College Hall, West Wing, tile-1545
-405, UPenn, College Hall, West Wing, tile-1545
-406, UPenn, College Hall, West Wing, tile-1545
-407, UPenn, College Hall, West Wing, tile-1545
-408, UPenn, College Hall, West Wing, tile-1545
-409, UPenn, College Hall, West Wing, tile-1545
-410, UPenn, College Hall, West Wing, tile-1545
-411, UPenn, College Hall, Central Hall, tile-1013
-412, UPenn, College Hall, Central Hall, tile-1017
-413, UPenn, College Hall, Central Hall, tile-1011
-414, UPenn, College Hall, West Wing, tile-1545
-415, UPenn, College Hall, West Wing, tile-1545
-416, UPenn, College Hall, West Wing, tile-1545
-417, UPenn, College Hall, West Wing, tile-1545
-418, UPenn, College Hall, West Wing, tile-1545
-419, UPenn, College Hall, West Wing, tile-1545
-420, UPenn, College Hall, West Wing, tile-1545
-421, UPenn, College Hall, East Wing, tile-1579
-422, UPenn, College Hall, East Wing, tile-1579
-423, UPenn, College Hall, East Wing, tile-1579
-424, UPenn, College Hall, East Wing, tile-1579
-425, UPenn, College Hall, East Wing, tile-1579
-426, UPenn, College Hall, West Wing, tile-1545
-427, UPenn, College Hall, West Wing, tile-1545
-428, UPenn, College Hall, West Wing, tile-1545
-429, UPenn, College Hall, West Wing, tile-1545
-430, UPenn, College Hall, West Wing, tile-1545
-431, UPenn, College Hall, West Wing, tile-1545
-432, UPenn, College Hall, West Wing, tile-1545
-433, UPenn, College Hall, East Wing, tile-1579
-434, UPenn, College Hall, East Wing, tile-1579
-435, UPenn, College Hall, East Wing, tile-1579
-436, UPenn, College Hall, East Wing, tile-1579
-437, UPenn, College Hall, East Wing, tile-1579
-438, UPenn, College Hall, Central Hall, tile-956
-439, UPenn, College Hall, Central Hall, tile-956
-440, UPenn, College Hall, West Pavilion 1, tile-1191
-441, UPenn, College Hall, West Pavilion 2, tile-1545
-442, UPenn, College Hall, West Pavilion 2, tile-1545
-443, UPenn, College Hall, Great Hall, tile-956
-444, UPenn, College Hall, West Pavilion 1, tile-955
-445, UPenn, College Hall, Great Hall, tile-1269
-446, UPenn, College Hall, East Pavilion 1, tile-1579
-447, UPenn, College Hall, East Pavilion 2, tile-1579
-448, UPenn, College Hall, East Pavilion 2, tile-917
-449, UPenn, College Hall, West Pavilion 2, tile-956
-450, UPenn, College Hall, Great Hall, tile-1072
-451, UPenn, College Hall, East Pavilion 1, tile-956
-452, UPenn, College Hall, Great Hall, tile-1269
-453, UPenn, College Hall, East Pavilion 2, tile-1579
-454, UPenn, College Hall, Great Hall, tile-1072
-455, UPenn, College Hall, West Pavilion 1, tile-956
-456, UPenn, College Hall, Great Hall, tile-956
-457, UPenn, College Hall, East Pavilion 2, tile-1579
-458, UPenn, College Hall, East Pavilion 2, tile-956
-459, UPenn, Williams Hall, grounds, tile-737
-460, UPenn, Williams Hall, grounds, tile-737
-461, UPenn, Williams Hall, grounds, tile-737
-462, UPenn, Williams Hall, grounds, tile-737
-463, UPenn, Williams Hall, grounds, tile-737
-464, UPenn, Williams Hall, grounds, tile-737
-465, UPenn, Williams Hall, lobby, tile-1588
-466, UPenn, Williams Hall, grounds, tile-737
-467, UPenn, Williams Hall, grounds, tile-737
-468, UPenn, Williams Hall, grounds, tile-737
-469, UPenn, Williams Hall, grounds, tile-737
-470, UPenn, Williams Hall, grounds, tile-737
-471, UPenn, Williams Hall, lobby, tile-1620
-472, UPenn, Williams Hall, lobby, tile-1545
-473, UPenn, Williams Hall, lobby, tile-1545
-474, UPenn, Williams Hall, lobby, tile-1545
-475, UPenn, Williams Hall, lobby, tile-1545
-476, UPenn, Williams Hall, grounds, tile-737
-477, UPenn, Williams Hall, grounds, tile-737
-478, UPenn, Williams Hall, grounds, tile-737
-479, UPenn, Williams Hall, grounds, tile-737
-480, UPenn, Williams Hall, grounds, tile-737
-481, UPenn, Williams Hall, grounds, tile-737
-482, UPenn, Williams Hall, grounds, tile-737
-483, UPenn, Williams Hall, grounds, tile-737
-484, UPenn, Williams Hall, lobby, tile-1545
-485, UPenn, Williams Hall, lobby, tile-1545
-486, UPenn, Williams Hall, lobby, tile-1545
-487, UPenn, Williams Hall, lobby, tile-1545
-488, UPenn, Williams Hall, lobby, tile-1450
-489, UPenn, Williams Hall, lobby, tile-1545
-490, UPenn, Williams Hall, lobby, tile-1545
-491, UPenn, Williams Hall, lobby, tile-1545
-492, UPenn, Williams Hall, lobby, tile-1545
-493, UPenn, Williams Hall, lobby, tile-1545
-494, UPenn, Williams Hall, lobby, tile-1545
-495, UPenn, Williams Hall, lobby, tile-1545
-496, UPenn, Williams Hall, grounds, tile-737
-497, UPenn, Williams Hall, lobby, tile-1545
-498, UPenn, Williams Hall, lobby, tile-1545
-499, UPenn, Williams Hall, lobby, tile-1545
-500, UPenn, Williams Hall, lobby, tile-1545
-501, UPenn, Williams Hall, grounds, tile-737
-502, UPenn, Williams Hall, grounds, tile-737
-503, UPenn, Williams Hall, grounds, tile-737
-504, UPenn, Williams Hall, grounds, tile-737
-505, UPenn, Williams Hall, grounds, tile-737
-506, UPenn, Williams Hall, lobby, tile-956
-507, UPenn, Williams Hall, grounds, tile-737
-508, UPenn, Williams Hall, lobby, tile-956
-509, UPenn, Williams Hall, lobby, tile-955
-510, UPenn, Williams Hall, grounds, tile-737
-511, UPenn, Williams Hall, lobby, tile-909
-512, UPenn, Williams Hall, lobby, tile-1588
-513, UPenn, Williams Hall, grounds, tile-737
-514, UPenn, Williams Hall, lobby, tile-1579
-515, UPenn, Williams Hall, lobby, tile-1191
-516, UPenn, Williams Hall, lobby, tile-1847
-517, UPenn, Williams Hall, lobby, tile-1821
-518, UPenn, Williams Hall, grounds, tile-737
-519, UPenn, Williams Hall, lobby, tile-956
-520, UPenn, Williams Hall, grounds, tile-737
-521, UPenn, Williams Hall, lobby, tile-1847
-522, UPenn, Williams Hall, lobby, tile-1834
-523, UPenn, Williams Hall, lobby, tile-1821
-524, UPenn, Williams Hall, lobby, tile-1545
-525, UPenn, Williams Hall, lobby, tile-1545
-526, UPenn, Williams Hall, lobby, tile-1545
-527, UPenn, Williams Hall, lobby, tile-1545
-528, UPenn, Williams Hall, lobby, tile-1545
-529, UPenn, Williams Hall, lobby, tile-956
-530, UPenn, Williams Hall, lobby, tile-1579
-531, UPenn, Williams Hall, lobby, tile-956
-532, UPenn, Williams Hall, grounds, tile-737
-533, UPenn, Williams Hall, lobby, tile-956
-534, UPenn, Williams Hall, grounds, tile-737
-535, UPenn, Williams Hall, grounds, tile-737
-536, UPenn, Williams Hall, grounds, tile-737
-537, UPenn, Williams Hall, grounds, tile-737
-538, UPenn, Williams Hall, grounds, tile-737
-539, UPenn, Williams Hall, grounds, tile-737
-540, UPenn, Williams Hall, grounds, tile-737
-541, UPenn, Williams Hall, grounds, tile-737
-542, UPenn, Williams Hall, grounds, tile-737
-543, UPenn, Williams Hall, grounds, tile-737
-544, UPenn, Williams Hall, grounds, tile-737
-545, UPenn, Williams Hall, grounds, tile-737
-546, UPenn, Williams Hall, grounds, tile-737
-547, UPenn, Williams Hall, grounds, tile-737
+190, UPenn, Van Pelt Library, 121, student_desk_open
+191, UPenn, Van Pelt Library, 121, student_desk_quill
+192, UPenn, Van Pelt Library, 122, student_desk_open
+193, UPenn, Van Pelt Library, 123, student_desk_open
+194, UPenn, Van Pelt Library, 123, student_desk_quill
+195, UPenn, Van Pelt Library, 124, student_desk_open
+196, UPenn, Van Pelt Library, 124, student_desk_quill
+197, UPenn, Van Pelt Library, 124, teacher_desk
+198, UPenn, Van Pelt Library, 124, locker
+199, UPenn, Van Pelt Library, Kamin Gallery, bookshelf
+200, UPenn, Van Pelt Library, 120, blackboard
+201, UPenn, Van Pelt Library, 117, blackboard
+202, UPenn, Van Pelt Library, 116, locker
+203, UPenn, Van Pelt Library, Study Booths, locker
+204, UPenn, Van Pelt Library, Study Booths, armchair
+205, UPenn, Van Pelt Library, Study Booths, side_table
+206, UPenn, Van Pelt Library, Study Booths, plant
+207, UPenn, Van Pelt Library, Study Booths, blackboard
+208, UPenn, Van Pelt Library, 119, student_desk_open
+209, UPenn, Van Pelt Library, 118, student_desk_open
+210, UPenn, Van Pelt Library, Study Booths, student_desk_quill
+211, UPenn, Van Pelt Library, 113, table
+212, UPenn, Van Pelt Library, Lounge, blackboard
+213, UPenn, Van Pelt Library, Hallway, rug_blue
+214, UPenn, Van Pelt Library, Lounge, dining_table
+215, UPenn, Van Pelt Library, Lounge, cushion
+216, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, blackboard
+217, UPenn, Van Pelt Library, Lounge, plant
+218, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, blackboard
+219, UPenn, Van Pelt Library, Lounge, candelabra
+220, UPenn, Van Pelt Library, Lounge, candelabra
+221, UPenn, Van Pelt Library, Staff Area, bookshelf
+222, UPenn, Van Pelt Library, Microtext Collection, blackboard
+223, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+224, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, cushion
+225, UPenn, Van Pelt Library, Lounge, armchair
+226, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+227, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+228, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, dining_table
+229, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, cushion
+230, UPenn, Van Pelt Library, Staff Area, bookshelf
+231, UPenn, Van Pelt Library, Microtext Collection, dining_table
+232, UPenn, Van Pelt Library, Microtext Collection, cushion
+233, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, candelabra
+234, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, plant
+235, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, plant
+236, UPenn, Van Pelt Library, Microtext Collection, plant
+237, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+238, UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, candelabra
+239, UPenn, Van Pelt Library, Lounge, cushion
+240, UPenn, Van Pelt Library, Lounge, armchair
+241, UPenn, Van Pelt Library, Lounge, rug_blue
+242, UPenn, Van Pelt Library, Microtext Collection, candelabra
+243, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+244, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+245, UPenn, Van Pelt Library, Lounge, plant
+246, UPenn, Van Pelt Library, Staff Area, bookshelf
+247, UPenn, Van Pelt Library, Microtext Collection, armchair
+248, UPenn, Van Pelt Library, Microtext Collection, dining_table
+249, UPenn, Van Pelt Library, Kamin Gallery, bookshelf
+250, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+251, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, cushion
+252, UPenn, Van Pelt Library, Lounge, dining_table
+253, UPenn, Van Pelt Library, Lounge, cushion
+254, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+255, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+256, UPenn, Van Pelt Library, Lounge, plant
+257, UPenn, Van Pelt Library, Circulation, blackboard
+258, UPenn, Van Pelt Library, Circulation, plant
+259, UPenn, Van Pelt Library, Circulation, candelabra
+260, UPenn, Van Pelt Library, Circulation, plant
+261, UPenn, Van Pelt Library, Circulation, bookshelf
+262, UPenn, Van Pelt Library, Circulation, bookshelf
+263, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+264, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, cushion
+265, UPenn, Van Pelt Library, Lounge, armchair
+266, UPenn, Van Pelt Library, Lounge, dining_table
+267, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, plant
+268, UPenn, Van Pelt Library, Circulation, dining_table
+269, UPenn, Van Pelt Library, Circulation, cushion
+270, UPenn, Van Pelt Library, Circulation, armchair
+271, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, candelabra
+272, UPenn, Van Pelt Library, Circulation, plant
+273, UPenn, Van Pelt Library, Circulation, candelabra
+274, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+275, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, cushion
+276, UPenn, Van Pelt Library, Entrance, rug_blue
+277, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, dining_table
+278, UPenn, Van Pelt Library, Moelis Family Grand Reading Room, cushion
+279, UPenn, Meyerson Hall, Cafe, counter
+280, UPenn, Meyerson Hall, Cafe, dining_table
+281, UPenn, Meyerson Hall, Cafe, chair_wood
+282, UPenn, Meyerson Hall, East Studio, dining_table
+283, UPenn, Meyerson Hall, East Studio, plant
+284, UPenn, Meyerson Hall, West Studio, dining_table
+285, UPenn, Meyerson Hall, East Studio, chair_wood
+286, UPenn, Meyerson Hall, West Studio, chair_wood
+287, UPenn, Meyerson Hall, Cafe, clockwork_lamp_floor
+288, UPenn, Meyerson Hall, East Studio, dining_table
+289, UPenn, Meyerson Hall, West Studio, dining_table
+290, UPenn, Meyerson Hall, East Studio, chair_wood
+291, UPenn, Meyerson Hall, West Studio, chair_wood
+292, UPenn, Meyerson Hall, Lounge, sofa
+293, UPenn, Meyerson Hall, Lounge, dining_table
+294, UPenn, Meyerson Hall, East Studio, dining_table
+295, UPenn, Meyerson Hall, West Studio, dining_table
+296, UPenn, Meyerson Hall, East Studio, chair_wood
+297, UPenn, Meyerson Hall, West Studio, chair_wood
+298, UPenn, Meyerson Hall, Lounge, sofa
+299, UPenn, Meyerson Hall, Lounge, dining_table
+300, UPenn, Meyerson Hall, West Studio, plant
+301, UPenn, Meyerson Hall, South Gallery, painting_moon
+302, UPenn, Meyerson Hall, South Gallery, painting_moon_light
+303, UPenn, Meyerson Hall, South Gallery, cabinet_display
+304, UPenn, Meyerson Hall, South Gallery, cabinet_display
+305, UPenn, Meyerson Hall, East Offices, teacher_desk
+306, UPenn, Meyerson Hall, East Offices, student_desk
+307, UPenn, Meyerson Hall, East Offices, teacher_desk
+308, UPenn, Meyerson Hall, East Offices, student_desk
+309, UPenn, Meyerson Hall, South Gallery, plant_large
+310, UPenn, Meyerson Hall, South Gallery, plant
+311, UPenn, Meyerson Hall, East Offices, plant
+312, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, bookshelf_wood_books
+313, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, bookshelf_wood_books
+314, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, bookshelf_wood_books
+315, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, bookshelf_wood_books
+316, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, armchair
+317, UPenn, Fisher Fine Arts Library, Fisher Core Reading Section, armchair
+318, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, plant
+319, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, bookshelf_wood_books
+320, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, bookshelf_wood_books
+321, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, bookshelf_wood_books
+322, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, bookshelf_wood_books
+323, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, fireplace
+324, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, bookshelf_tan
+325, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, bookshelf_tan
+326, UPenn, Fisher Fine Arts Library, Fisher Rare Books Library, cabinet_display
+327, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+328, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+329, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, candelabra
+330, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+331, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+332, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, candelabra
+333, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+334, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+335, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, candelabra
+336, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+337, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, dining_table
+338, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, candelabra
+339, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, candelabra
+340, UPenn, Fisher Fine Arts Library, Seng Tee Lee Reading Room, plant
+341, UPenn, Fisher Fine Arts Library, Ross Gallery, sofa
+342, UPenn, Fisher Fine Arts Library, Ross Gallery, plant_large
+343, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+344, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+345, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+346, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+347, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+348, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+349, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+350, UPenn, Fisher Fine Arts Library, Ross Gallery, candelabra
+351, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+352, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+353, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+354, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+355, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+356, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+357, UPenn, Fisher Fine Arts Library, Computing & Printing, books_green
+358, UPenn, Fisher Fine Arts Library, Ross Gallery, cabinet_display
+359, UPenn, Fisher Fine Arts Library, Ross Gallery, plant
+360, UPenn, Fisher Fine Arts Library, Computing & Printing, plant
+361, UPenn, Fisher Fine Arts Library, Staff Office, fireplace
+362, UPenn, Fisher Fine Arts Library, Staff Office, plant
+363, UPenn, Fisher Fine Arts Library, Staff Office, dining_table
+364, UPenn, Fisher Fine Arts Library, Staff Office, dining_table
+365, UPenn, Fisher Fine Arts Library, Staff Office, crate
+366, UPenn, College Hall, Kitchen Out, counter
+367, UPenn, College Hall, Kitchen Out, counter
+368, UPenn, College Hall, Kitchen Out, counter
+369, UPenn, College Hall, Kitchen Out, barrel
+370, UPenn, College Hall, Kitchen In, dining_table_light
+371, UPenn, College Hall, Kitchen In, dining_table_light
+372, UPenn, College Hall, Kitchen In, dining_table_light
+373, UPenn, College Hall, Kitchen In, counter
+374, UPenn, College Hall, Restrooms, toilet
+375, UPenn, College Hall, Restrooms, sink
+376, UPenn, College Hall, Restrooms, mirror
+377, UPenn, College Hall, West Wing, blackboard
+378, UPenn, College Hall, West Wing, teacher_desk
+379, UPenn, College Hall, Central Hall, plant
+380, UPenn, College Hall, East Wing, bookshelf_wood_books
+381, UPenn, College Hall, East Wing, bookshelf_wood_books
+382, UPenn, College Hall, East Wing, bookshelf_wood_books
+383, UPenn, College Hall, East Wing, bookshelf_wood_books
+384, UPenn, College Hall, East Wing, bookshelf_wood_books
+385, UPenn, College Hall, East Wing, bookshelf_wood_books
+386, UPenn, College Hall, Central Hall, grandfather_clock
+387, UPenn, College Hall, Central Hall, sofa
+388, UPenn, College Hall, Central Hall, sofa
+389, UPenn, College Hall, West Wing, student_desk
+390, UPenn, College Hall, West Wing, student_desk
+391, UPenn, College Hall, West Wing, student_desk
+392, UPenn, College Hall, West Wing, student_desk
+393, UPenn, College Hall, West Wing, student_desk
+394, UPenn, College Hall, West Wing, student_desk
+395, UPenn, College Hall, West Wing, student_desk
+396, UPenn, College Hall, Central Hall, armchair
+397, UPenn, College Hall, Central Hall, armchair
+398, UPenn, College Hall, Central Hall, armchair
+399, UPenn, College Hall, East Wing, teacher_desk
+400, UPenn, College Hall, East Wing, teacher_desk
+401, UPenn, College Hall, East Wing, teacher_desk
+402, UPenn, College Hall, East Wing, teacher_desk
+403, UPenn, College Hall, East Wing, teacher_desk
+404, UPenn, College Hall, West Wing, student_desk
+405, UPenn, College Hall, West Wing, student_desk
+406, UPenn, College Hall, West Wing, student_desk
+407, UPenn, College Hall, West Wing, student_desk
+408, UPenn, College Hall, West Wing, student_desk
+409, UPenn, College Hall, West Wing, student_desk
+410, UPenn, College Hall, West Wing, student_desk
+411, UPenn, College Hall, Central Hall, cushion
+412, UPenn, College Hall, Central Hall, cushion_red
+413, UPenn, College Hall, Central Hall, cushion_orange
+414, UPenn, College Hall, West Wing, student_desk
+415, UPenn, College Hall, West Wing, student_desk
+416, UPenn, College Hall, West Wing, student_desk
+417, UPenn, College Hall, West Wing, student_desk
+418, UPenn, College Hall, West Wing, student_desk
+419, UPenn, College Hall, West Wing, student_desk
+420, UPenn, College Hall, West Wing, student_desk
+421, UPenn, College Hall, East Wing, teacher_desk
+422, UPenn, College Hall, East Wing, teacher_desk
+423, UPenn, College Hall, East Wing, teacher_desk
+424, UPenn, College Hall, East Wing, teacher_desk
+425, UPenn, College Hall, East Wing, teacher_desk
+426, UPenn, College Hall, West Wing, student_desk
+427, UPenn, College Hall, West Wing, student_desk
+428, UPenn, College Hall, West Wing, student_desk
+429, UPenn, College Hall, West Wing, student_desk
+430, UPenn, College Hall, West Wing, student_desk
+431, UPenn, College Hall, West Wing, student_desk
+432, UPenn, College Hall, West Wing, student_desk
+433, UPenn, College Hall, East Wing, teacher_desk
+434, UPenn, College Hall, East Wing, teacher_desk
+435, UPenn, College Hall, East Wing, teacher_desk
+436, UPenn, College Hall, East Wing, teacher_desk
+437, UPenn, College Hall, East Wing, teacher_desk
+438, UPenn, College Hall, Central Hall, plant
+439, UPenn, College Hall, Central Hall, plant
+440, UPenn, College Hall, West Pavilion 1, sofa
+441, UPenn, College Hall, West Pavilion 2, student_desk
+442, UPenn, College Hall, West Pavilion 2, student_desk
+443, UPenn, College Hall, Great Hall, plant
+444, UPenn, College Hall, West Pavilion 1, side_table
+445, UPenn, College Hall, Great Hall, dining_table_light
+446, UPenn, College Hall, East Pavilion 1, teacher_desk
+447, UPenn, College Hall, East Pavilion 2, teacher_desk
+448, UPenn, College Hall, East Pavilion 2, bookshelf_wood_books
+449, UPenn, College Hall, West Pavilion 2, plant
+450, UPenn, College Hall, Great Hall, chair_wood
+451, UPenn, College Hall, East Pavilion 1, plant
+452, UPenn, College Hall, Great Hall, dining_table_light
+453, UPenn, College Hall, East Pavilion 2, teacher_desk
+454, UPenn, College Hall, Great Hall, chair_wood
+455, UPenn, College Hall, West Pavilion 1, plant
+456, UPenn, College Hall, Great Hall, plant
+457, UPenn, College Hall, East Pavilion 2, teacher_desk
+458, UPenn, College Hall, East Pavilion 2, plant
+459, UPenn, Williams Hall, lobby, blackboard
+460, UPenn, Williams Hall, lobby, blackboard_blank
+461, UPenn, Williams Hall, lobby, student_desk
+462, UPenn, Williams Hall, lobby, student_desk
+463, UPenn, Williams Hall, lobby, student_desk
+464, UPenn, Williams Hall, lobby, student_desk
+465, UPenn, Williams Hall, lobby, student_desk
+466, UPenn, Williams Hall, lobby, student_desk
+467, UPenn, Williams Hall, lobby, student_desk
+468, UPenn, Williams Hall, lobby, student_desk
+469, UPenn, Williams Hall, lobby, plant
+470, UPenn, Williams Hall, lobby, rug_blue
+471, UPenn, Williams Hall, lobby, student_desk
+472, UPenn, Williams Hall, lobby, student_desk
+473, UPenn, Williams Hall, lobby, student_desk
+474, UPenn, Williams Hall, lobby, student_desk
+475, UPenn, Williams Hall, lobby, student_desk
+476, UPenn, Williams Hall, lobby, student_desk
+477, UPenn, Williams Hall, lobby, student_desk
+478, UPenn, Williams Hall, lobby, student_desk
+479, UPenn, Williams Hall, lobby, student_desk
+480, UPenn, Williams Hall, lobby, student_desk
+481, UPenn, Williams Hall, lobby, student_desk
+482, UPenn, Williams Hall, lobby, plant
+483, UPenn, Williams Hall, lobby, plant
+484, UPenn, Williams Hall, lobby, side_table
+485, UPenn, Williams Hall, lobby, bookshelf
+486, UPenn, Williams Hall, lobby, blackboard
+487, UPenn, Williams Hall, lobby, teacher_desk
+488, UPenn, Williams Hall, lobby, sofa
+489, UPenn, Williams Hall, lobby, toilet
+490, UPenn, Williams Hall, lobby, sink
+491, UPenn, Williams Hall, lobby, plant
+492, UPenn, Williams Hall, lobby, toilet
+493, UPenn, Williams Hall, lobby, bathmat
+494, UPenn, Williams Hall, lobby, sink
+495, UPenn, Williams Hall, lobby, student_desk
+496, UPenn, Williams Hall, lobby, student_desk
+497, UPenn, Williams Hall, lobby, student_desk
+498, UPenn, Williams Hall, lobby, student_desk
+499, UPenn, Williams Hall, lobby, student_desk
+500, UPenn, Williams Hall, lobby, plant
+501, UPenn, Williams Hall, lobby, teacher_desk
+502, UPenn, Williams Hall, lobby, plant
+503, UPenn, Williams Hall, lobby, plant
