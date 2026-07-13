@@ -156,6 +156,14 @@ body, input {
   white-space: nowrap;
 }
 .boot-option:active { background: var(--phosphor-dim); color: var(--bg); }
+/* the choices arrive one at a time, each fading up out of the dark */
+#bootmenu .boot-option { opacity: 0; animation: optfade 1.1s ease forwards; }
+#bootmenu .boot-option:nth-child(1) { animation-delay: 0.5s; }
+#bootmenu .boot-option:nth-child(2) { animation-delay: 1.9s; }
+@keyframes optfade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  #bootmenu .boot-option { opacity: 1; animation: none; }
+}
 
 /* scanlines + vignette overlay, with the phosphor's faint breathing (M3) */
 #scanlines {
