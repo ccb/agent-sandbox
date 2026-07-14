@@ -89,6 +89,12 @@ def compute_relayer(tmj):
     layers = _tile_layers(tmj)
     floor = layers["williams_floor"]["data"]
     furn = layers["williams_furniture"]["data"]
+    # Idempotency seed: on an already-relayered map the walls layer holds the
+    # geometry, so a re-run reproduces it. The derive-fresh path (no walls layer)
+    # is correct ONLY for a *faithful* pre-splice map -- wall_brick/window tiles
+    # still on williams_floor/williams_furniture. A map with the walls layer merely
+    # stripped is NOT faithful (the tiles aren't back on the floor), so it won't
+    # round-trip -- do not write a test that assumes it does.
     existing = layers.get("williams_walls")
     new_walls = list(existing["data"]) if existing else [0] * len(floor)
     new_floor = list(floor)
