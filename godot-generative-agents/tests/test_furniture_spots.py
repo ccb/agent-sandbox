@@ -76,3 +76,27 @@ def test_co_arrivals_spread_across_spots():
     a = wm.walk_path(start, HOUSTON)[-1]
     b = wm.walk_path(start, HOUSTON)[-1]
     assert a != b, "round-robin should hand co-arrivals different spots"
+
+
+def test_furniture_spots_loaded_from_the_committed_artifact():
+    # WorldMap now LOADS spots from furniture_spots.csv (generated tmj-aware),
+    # not re-derived. Every loaded spot's address is a real w:s:a string and
+    # its tile is walkable; a furnished arena has some.
+    import os
+
+    wm = _world_map()
+    blocks = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "backend",
+        "penn",
+        "the_upenn",
+        "matrix",
+        "special_blocks",
+    )
+    assert os.path.exists(os.path.join(blocks, "furniture_spots.csv"))
+    assert wm.furniture_spots, "no spots loaded from furniture_spots.csv"
+    for address, tiles in wm.furniture_spots.items():
+        assert address.count(":") >= 2  # world:sector:arena
+        for x, y in tiles:
+            assert wm.collision[y][x] == 0  # every spot is walkable
