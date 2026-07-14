@@ -74,3 +74,43 @@ def grouped_sections(tmj):
         else:
             groups[g] = (c0, r0, c1, r1)
     return groups
+
+
+def _tile_layers(tmj):
+    return {L["name"]: L for L in tmj["layers"] if L.get("type") == "tilelayer"}
+
+
+def compute_relayer(tmj):
+    """Return (new_walls, new_floor, new_furn) flat gid arrays: move wall_brick
+    off williams_floor and window off williams_furniture onto williams_walls,
+    painting floor under the moved walls. Windows win over walls on the walls
+    layer. Idempotent -- an existing williams_walls layer seeds the geometry, so
+    a second run (floor/furniture already cleaned) reproduces the same arrays."""
+    layers = _tile_layers(tmj)
+    floor = layers["williams_floor"]["data"]
+    furn = layers["williams_furniture"]["data"]
+    existing = layers.get("williams_walls")
+    new_walls = list(existing["data"]) if existing else [0] * len(floor)
+    new_floor = list(floor)
+    new_furn = list(furn)
+    for i, g in enumerate(floor):
+        if (g & GID_MASK) == WALL_GID:
+            new_walls[i] = WALL_GID
+            new_floor[i] = FLOOR_GID
+    for i, g in enumerate(furn):
+        if (g & GID_MASK) == WINDOW_GID:
+            new_walls[i] = WINDOW_GID
+            new_furn[i] = 0
+    return new_walls, new_floor, new_furn
+
+
+def williams_wall_cells(tmj):
+    """The {(x,y)} cells on williams_walls -- the authoritative wall geometry
+    (the tiles furnish_building painted, relayered). add_entrances seals the
+    interior subset; the perimeter is sealed by the main carve loop."""
+    W = tmj["width"]
+    layers = _tile_layers(tmj)
+    wl = layers.get("williams_walls")
+    if not wl:
+        return set()
+    return {(i % W, i // W) for i, g in enumerate(wl["data"]) if g}
