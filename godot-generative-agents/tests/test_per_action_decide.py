@@ -217,6 +217,16 @@ def test_penn_campus_fits_under_the_enum_cap():
     assert destination["enum"] == sorted(game.locations)
 
 
+def test_decide_location_enum_within_budget():
+    # Task 5 (#538): Williams Hall — Classroom A brings the campus to 18
+    # nameable locations (was 17) -- still comfortably under the enum cap,
+    # so the travel tool's destination enum keeps every venue nameable.
+    pw = build_penn_world()
+    game, _chars = pw.build_world_fn(pw.world_map)
+
+    assert len(game.locations) == 18 <= DECIDE_MAX_ENUM
+
+
 # --------------------------------------------------- the determinism gates
 
 
