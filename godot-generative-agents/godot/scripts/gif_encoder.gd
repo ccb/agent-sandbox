@@ -268,7 +268,12 @@ static func _lzw_codes(indices: PackedByteArray, min_code_size: int) -> Array:
 			out.append({"code": prefix, "width": code_size})
 			dict[key] = next_code
 			next_code += 1
-			if next_code == (1 << code_size) and code_size < 12:
+			# GIF's "early change": the code width must grow one code LATER than a
+			# naive LZW would (hence +1). Standard decoders (PIL / browsers /
+			# Preview) add their table entry lagging by one code, so bumping at
+			# exactly 2^code_size desyncs them mid-stream -> garbage codes and a
+			# black/broken image. Verified against PIL. (#488)
+			if next_code == (1 << code_size) + 1 and code_size < 12:
 				code_size += 1
 			if next_code == 4096:
 				out.append({"code": clear_code, "width": code_size})
