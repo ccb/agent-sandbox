@@ -27,6 +27,8 @@ var _markers: Array = []       # all collected markers (replay_markers.gd shape)
 var _visible_markers: Array = []  # after the agent filter
 var _total := 0                # last frame index (the scrubber's max_value)
 var _filter := ""              # "" = all agents; else only this agent's markers
+var _clip_a := -1              # marked clip span (issue #488); -1 = unset
+var _clip_b := -1
 
 
 func _ready() -> void:
@@ -48,6 +50,12 @@ func set_filter(agent: String) -> void:
 	_apply_filter()
 
 
+func set_clip_span(a: int, b: int) -> void:
+	_clip_a = a
+	_clip_b = b
+	queue_redraw()
+
+
 func _apply_filter() -> void:
 	if _filter == "":
 		_visible_markers = _markers
@@ -60,6 +68,10 @@ func _apply_filter() -> void:
 func _draw() -> void:
 	if _total <= 0:
 		return
+	if _clip_a >= 0 and _clip_b >= _clip_a:
+		var x0 := _step_to_x(_clip_a)
+		var x1 := _step_to_x(_clip_b)
+		draw_rect(Rect2(x0, 0, maxf(x1 - x0, 2.0), size.y), Color(1.0, 0.85, 0.30, 0.35))
 	for m in _visible_markers:
 		var x := _step_to_x(int(m["step"]))
 		draw_rect(Rect2(x - TICK_HALF_WIDTH, 0, TICK_HALF_WIDTH * 2, size.y),
