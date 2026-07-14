@@ -1,6 +1,6 @@
 """gen_furniture_matrix unit tests (#537): synthetic tmj fixtures, no files."""
 
-from gen_furniture_matrix import gid_names, pieces, spots, structural_cells
+from gen_furniture_matrix import gid_names, pieces, piece_spot, structural_cells
 
 # A 4x3 map, one furniture layer. Layout (gids):
 #   0 5 6 0
@@ -80,39 +80,67 @@ def test_gid_names_expands_footprints_and_resolves_anchor():
     assert names[9] == "stool"
 
 
-def test_spots_are_walkable_floor_beside_furniture():
-    # Collision: the 2x2 desk is solid; the stool (gid 9) is a walkable seat.
-    furn = ["0", "1", "1", "0", "0", "1", "1", "0", "0", "0", "0", "2"]
-    coll = ["0", "1", "1", "0", "0", "1", "1", "0", "0", "0", "0", "0"]
-    arena = ["1"] * 12  # one arena; no structural cells
-    got = spots(furn, coll, arena, set(), 4, 3)
-    # Floor tiles 4-adjacent to same-arena furniture: (0,0)/(3,0) flank the
-    # desk, (0,1)/(3,1) flank it, (1,2)/(2,2) sit below it. (3,1) is also
-    # beside the stool. The stool tile (3,2) itself is NOT a spot -- the
-    # furniture tile is never a destination, only the floor around it.
-    assert got == [(0, 0), (3, 0), (0, 1), (3, 1), (1, 2), (2, 2)]
+def _piece(cells, anchor_gid=5):
+    return {"cells": cells, "anchor_gid": anchor_gid, "gids": [anchor_gid]}
 
 
-def test_spots_exclude_structural_cells():
-    # A wall drawn on a floor layer beside furniture (Williams' case): the
-    # cell is walkable in collision but must not become a spot.
-    furn = ["0", "1", "0"]
-    coll = ["0", "1", "0"]
+def test_piece_spot_walk_on_lands_on_the_piece():
+    # A 1x1 chair (name "chair_wood") that is walkable -> the spot is the
+    # chair tile itself.
+    names = {5: "chair_wood"}
+    furn = ["5"] + ["0"] * 8  # 3x3, chair at (0,0)
+    coll = ["0"] * 9
+    arena = ["1"] * 9
+    got = piece_spot(
+        _piece([(0, 0)]), furn, coll, arena, {"1": "room"}, set(), names, 3, 3
+    )
+    assert got == (0, 0)
+
+
+def test_piece_spot_front_lands_on_nearest_floor():
+    # A solid 1x1 blackboard (not a walk-on name) with walkable floor to its
+    # right -> the spot is that front floor tile, not the piece.
+    names = {5: "blackboard"}
+    furn = ["5", "0", "0"]
+    coll = ["1", "0", "0"]  # blackboard solid; floor to the right
     arena = ["1", "1", "1"]
-    assert spots(furn, coll, arena, set(), 3, 1) == [(0, 0), (2, 0)]
-    # Mark (0,0) structural -> only (2,0) survives.
-    assert spots(furn, coll, arena, {0}, 3, 1) == [(2, 0)]
+    got = piece_spot(
+        _piece([(0, 0)]), furn, coll, arena, {"1": "room"}, set(), names, 3, 1
+    )
+    assert got == (1, 0)  # the adjacent floor cell
 
 
-def test_spots_require_same_arena_furniture():
-    # A floor cell whose only adjacent furniture is in ANOTHER arena is not a
-    # spot (the doorway-threshold cross-arena case).
-    furn = ["0", "1", "0"]
-    coll = ["0", "1", "0"]
-    arena = ["1", "2", "2"]  # (1,0) furniture is arena 2
-    # (0,0) is arena 1, borders only the arena-2 desk -> not a spot;
-    # (2,0) is arena 2, borders the arena-2 desk -> a spot.
-    assert spots(furn, coll, arena, set(), 3, 1) == [(2, 0)]
+def test_piece_spot_front_requires_same_arena_non_structural():
+    # The only adjacent floor is cross-arena (or structural) -> no spot.
+    names = {5: "blackboard"}
+    furn = ["5", "0"]
+    coll = ["1", "0"]
+    arena = ["1", "2"]  # the floor cell is a different arena
+    assert (
+        piece_spot(
+            _piece([(0, 0)]),
+            furn,
+            coll,
+            arena,
+            {"1": "a", "2": "b"},
+            set(),
+            names,
+            2,
+            1,
+        )
+        is None
+    )
+
+
+def test_piece_spot_walk_on_with_no_walkable_tile_falls_to_front():
+    # A "sofa" whose tile is somehow solid -> falls through to the front rule.
+    names = {5: "sofa"}
+    furn = ["5", "0"]
+    coll = ["1", "0"]
+    arena = ["1", "1"]
+    assert piece_spot(
+        _piece([(0, 0)]), furn, coll, arena, {"1": "room"}, set(), names, 2, 1
+    ) == (1, 0)
 
 
 def test_sheet_firstgids_matches_interior_and_suffixed_names():
