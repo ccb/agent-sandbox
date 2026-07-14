@@ -217,7 +217,7 @@ personas:
     # after a long spell in the gallery) arrives while she is still there (see
     # `meetings`).
     steps: 800
-  - place: Williams Hall
+  - place: Williams Hall — Classroom A
     activity: holding a problem session for her physics class
     emoji: 🧮
 - name: Sofia Ramirez
@@ -309,6 +309,9 @@ locations:
 - name: Williams Hall
   description: A classroom and language-department building just off College Green.
   address: UPenn:Williams Hall:lobby
+- name: Williams Hall — Classroom A
+  description: A Williams Hall classroom with a blackboard, where problem sessions meet.
+  address: UPenn:Williams Hall:Classroom A
 - name: Meyerson Hall
   description: Home of the Weitzman School of Design, full of architecture studios.
   address: UPenn:Meyerson Hall:lobby

@@ -12,6 +12,7 @@ from penn_world import build_penn_world  # noqa: E402
 
 HOUSTON = "UPenn:Houston Hall:lobby"
 WILLIAMS = "UPenn:Williams Hall:lobby"
+WILLIAMS_CLASSROOM_A = "UPenn:Williams Hall:Classroom A"
 
 
 def _world_map():
@@ -33,6 +34,17 @@ def test_williams_blackboards_are_spots():
     # sit on the grounds and are category-excluded). Tanaka's problem
     # session should land AT a blackboard, so the lobby has spots.
     assert _world_map().furniture_spots.get(WILLIAMS)
+
+
+def test_classroom_a_address_resolves_and_has_spots():
+    # Task 5 (#538): Williams Hall — Classroom A is now a schedulable
+    # location (Professor Tanaka's problem session). Its address must
+    # resolve to real tiles and carry furniture spots (the blackboard),
+    # just like the other furnished Williams arenas.
+    wm = _world_map()
+    tiles = wm.tiles_for(WILLIAMS_CLASSROOM_A)
+    assert tiles, "Classroom A address has no tiles"
+    assert wm.furniture_spots.get(WILLIAMS_CLASSROOM_A)
 
 
 def test_arenas_without_furniture_fall_back_to_centroid():
