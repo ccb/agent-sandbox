@@ -200,15 +200,73 @@ def _wrap_indent(text, dstart):
     return text[nl + 1 : j]
 
 
+def _layer_name_count(text, name):
+    return text.count(f'"name":"{name}"')
+
+
+def _find_block_bounds(text, name):
+    """(start, end) byte offsets of the JSON object whose "name" is `name` — the
+    enclosing `{` before the name key through its matching `}` (brace-depth walk,
+    string-aware so braces inside string values don't miscount). Raises unless the
+    name occurs exactly once."""
+    n = _layer_name_count(text, name)
+    if n != 1:
+        raise ValueError(f"expected exactly one '{name}' layer, found {n}")
+    nidx = text.find(f'"name":"{name}"')
+    bstart = text.rfind("{", 0, nidx)
+    depth, i, in_str, esc = 0, bstart, False, False
+    while i < len(text):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return bstart, i + 1
+        i += 1
+    raise ValueError(f"unterminated layer block for {name}")
+
+
+def _strip_layer(text, name):
+    """Remove the one named layer's JSON block + one adjacent separator, leaving
+    the layers array valid and Tiled-formatted. No-op if the layer is absent.
+    Raises (via _find_block_bounds) if the name appears more than once."""
+    if _layer_name_count(text, name) == 0:
+        return text
+    bstart, bend = _find_block_bounds(text, name)
+    after = text[bend:]
+    m = re.match(r",\s*", after)
+    if m:  # not the last layer: drop block + trailing separator
+        return text[:bstart] + after[m.end() :]
+    before = text[:bstart]  # last layer: drop the leading separator instead
+    m2 = re.search(r",\s*$", before)
+    return (before[: m2.start()] if m2 else before) + after
+
+
 def _replace_layer_data(text, layer_name, new_data, W):
     """Replace the data array of one named tile layer, preserving Tiled's
-    W-per-line wrapping so unchanged rows stay byte-identical."""
+    W-per-line wrapping so unchanged rows stay byte-identical. Fails loudly if the
+    name is not unique or the data array is not flat."""
+    n = _layer_name_count(text, layer_name)
+    if n != 1:
+        raise ValueError(f"expected exactly one '{layer_name}' layer, found {n}")
     nidx = text.find(f'"name":"{layer_name}"')
-    if nidx < 0:
-        raise ValueError(f"layer {layer_name} not found")
     bstart = text.rfind("{", 0, nidx)
     dstart = text.find('"data":[', bstart)
     dend = text.find("]", dstart)
+    # flat-array invariant: tile-layer data is a flat int array (no nested [...]),
+    # which is what lets us stop at the first ']'.
+    if "[" in text[dstart + len('"data":[') : dend]:
+        raise ValueError(f"{layer_name} data is not a flat array")
     wi = _wrap_indent(text, dstart)
     return text[:dstart] + '"data":[' + _fmt_data(new_data, W, wi) + text[dend:]
 
