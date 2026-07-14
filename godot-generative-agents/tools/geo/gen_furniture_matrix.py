@@ -170,23 +170,55 @@ def piece_name(piece: dict, names: dict[int, str]) -> str:
     return f"tile-{piece['anchor_gid']}"
 
 
+def structural_cells(tmj: dict, structural_gids: set[int]) -> set[int]:
+    """Flat indices of cells drawing a wall/window/door tile on ANY layer.
+
+    ``excluded_gids`` only matters on ``*_furniture`` layers (it keeps
+    structural tiles out of furniture_maze). This is broader: Williams'
+    interior walls are painted on ``williams_floor`` and left
+    collision-walkable, so a furniture-adjacent floor scan would drop seat
+    spots onto them -- this mask (from the tmj, the only place the wall
+    identity survives) excludes them."""
+    out: set[int] = set()
+    for layer in tmj.get("layers", []):
+        if layer.get("type") != "tilelayer" or "data" not in layer:
+            continue
+        for i, g in enumerate(layer["data"]):
+            if g and (g & GID_MASK) in structural_gids:
+                out.add(i)
+    return out
+
+
 def spots(
-    furn: list[str], collision: list[str], width: int, height: int
+    furn: list[str],
+    collision: list[str],
+    arena_m: list[str],
+    structural: set[int],
+    width: int,
+    height: int,
 ) -> list[tuple[int, int]]:
-    """Walkable floor cells 4-adjacent to furniture -- "stand AT it",
-    row-major. The furniture tile itself is NOT a spot (no standing on a
-    rug/cushion/sofa seat; a sit target waits for #446). The same rule
-    WorldMap derives at load; duplicated ~10 lines by design so tools/geo
-    never imports backend."""
+    """Walkable floor cells 4-adjacent to furniture in the SAME arena --
+    "stand AT it", row-major. Excludes: the furniture tile itself (no
+    standing on a rug/seat -- a sit target waits for #446); structural cells
+    (walls drawn on a floor layer); and cross-arena adjacency (a lobby spot
+    must border the lobby's OWN furniture, not a neighbor room's through a
+    doorway). The single source WorldMap loads and --debug-overlay draws."""
     out = []
     for y in range(height):
         for x in range(width):
             idx = y * width + x
-            if collision[idx] != "0" or furn[idx] != "0":
+            if (
+                collision[idx] != "0"
+                or furn[idx] != "0"
+                or idx in structural
+                or arena_m[idx] == "0"
+            ):
                 continue
+            a = arena_m[idx]
             for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
                 if 0 <= nx < width and 0 <= ny < height:
-                    if furn[ny * width + nx] != "0":
+                    nidx = ny * width + nx
+                    if furn[nidx] != "0" and arena_m[nidx] == a:
                         out.append((x, y))
                         break
     return out
@@ -274,6 +306,19 @@ def main() -> int:
         fh.write("".join(r + "\n" for r in block_rows))
     print(f"{len(all_pieces)} pieces -> furniture_maze.csv + furniture_blocks.csv")
 
+    structural = structural_cells(tmj, skip)
+    spot_cells = spots(furn, collision, arena_m, structural, W, H)
+    spot_rows = []
+    for x, y in spot_cells:
+        idx = y * W + x
+        spot_rows.append(
+            f"{world}, {sector_t.get(sector_m[idx], '')}, "
+            f"{arena_t.get(arena_m[idx], '')}, {x}, {y}"
+        )
+    with open(os.path.join(blocks_dir, "furniture_spots.csv"), "w") as fh:
+        fh.write("".join(r + "\n" for r in spot_rows))
+    print(f"{len(spot_cells)} seat spots -> furniture_spots.csv")
+
     if args.debug_overlay:
         tile = tmj.get("tilewidth", 16)
         objects = []
@@ -294,7 +339,7 @@ def main() -> int:
                     "visible": True,
                 }
             )
-        for i, (x, y) in enumerate(spots(furn, collision, W, H)):
+        for i, (x, y) in enumerate(spot_cells):
             objects.append(
                 {
                     "id": len(all_pieces) + 1 + i,
