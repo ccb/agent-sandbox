@@ -85,6 +85,7 @@ def _pin_building_meeting_points(world_map, offset=5.0):
     """
     orig_walk_path = world_map.walk_path
     centres: dict = {}
+    spot_cursor: dict = {}
 
     def centre_of(address):
         if address not in centres:
@@ -100,7 +101,32 @@ def _pin_building_meeting_points(world_map, offset=5.0):
         return centres[address]
 
     def walk_path(from_tile, address):
+        # Furniture first (#537): when the arena has seat spots, walk to one
+        # of the k nearest to the approach-offset point -- consumed
+        # round-robin per address so co-arrivals spread across furniture
+        # instead of stacking -- and only fall through to the centroid pick
+        # (below) when every candidate is unreachable. Bare arenas
+        # (Williams, grounds) have no spots and keep today's behavior.
+        spots = getattr(world_map, "furniture_spots", {}).get(address)
         info = centre_of(address)
+        if spots and info:
+            cx, cy, _tiles = info
+            dx, dy = from_tile[0] - cx, from_tile[1] - cy
+            dist = (dx * dx + dy * dy) ** 0.5 or 1.0
+            tx, ty = cx + dx / dist * offset, cy + dy / dist * offset
+            near = sorted(spots, key=lambda t: (t[0] - tx) ** 2 + (t[1] - ty) ** 2)
+            near = near[:4]
+            n = spot_cursor.get(address, 0)
+            spot_cursor[address] = n + 1
+            for j in range(len(near)):
+                target = near[(n + j) % len(near)]
+                if tuple(from_tile) == target:
+                    return []
+                path = path_finder.path_finder(
+                    world_map.collision, tuple(from_tile), target, 1
+                )
+                if path and len(path) > 1:
+                    return [tuple(t) for t in path[1:]]
         if info:
             cx, cy, tiles = info
             dx, dy = from_tile[0] - cx, from_tile[1] - cy
