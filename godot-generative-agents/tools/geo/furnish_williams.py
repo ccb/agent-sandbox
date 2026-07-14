@@ -114,3 +114,219 @@ def williams_wall_cells(tmj):
     if not wl:
         return set()
     return {(i % W, i // W) for i, g in enumerate(wl["data"]) if g}
+
+
+WILLIAMS_ARENA_OBJECTS = [
+    {
+        "name": "Classroom A",
+        "type": "classroom",
+        "x": 208,
+        "y": 3648,
+        "width": 158,
+        "height": 224.666666666667,
+    },
+    {
+        "name": "Classroom B 1",
+        "type": "classroom",
+        "x": 830.666666666667,
+        "y": 3777.33333333333,
+        "width": 242.666666666667,
+        "height": 76.6666666666665,
+    },
+    {
+        "name": "Office",
+        "type": "office",
+        "x": 224,
+        "y": 3952,
+        "width": 205.333333333333,
+        "height": 145.333333333333,
+    },
+    {
+        "name": "Restroom",
+        "type": "restroom",
+        "x": 493.333333333333,
+        "y": 3981.33333333333,
+        "width": 162.666666666667,
+        "height": 114,
+    },
+    {
+        "name": "Classroom C",
+        "type": "classroom",
+        "x": 897.333333333333,
+        "y": 3954,
+        "width": 174,
+        "height": 141.333333333333,
+    },
+    {
+        "name": "Classroom B 2",
+        "type": "classroom",
+        "x": 911.999833333333,
+        "y": 3712.99998333333,
+        "width": 159.333666666667,
+        "height": 62.0000333333335,
+    },
+    {
+        "name": "Lobby 1",
+        "type": "",
+        "x": 560.666666666667,
+        "y": 3778,
+        "width": 254,
+        "height": 190.666666666667,
+    },
+    {
+        "name": "Lobby 2",
+        "type": "",
+        "x": 674.666666666667,
+        "y": 3971.33333333333,
+        "width": 203.333333333333,
+        "height": 138.666666666667,
+    },
+]
+
+
+def _fmt_data(data, W, wrap_indent):
+    """Render a flat gid array as Tiled does: W values per line (one map row),
+    `, ` between values, `,\\n<wrap_indent>` between rows."""
+    rows = [", ".join(str(g) for g in data[r : r + W]) for r in range(0, len(data), W)]
+    return (",\n" + wrap_indent).join(rows)
+
+
+def _wrap_indent(text, dstart):
+    """The continuation indent Tiled uses inside a layer's data array."""
+    nl = text.find("\n", dstart)
+    j = nl + 1
+    while j < len(text) and text[j] == " ":
+        j += 1
+    return text[nl + 1 : j]
+
+
+def _replace_layer_data(text, layer_name, new_data, W):
+    """Replace the data array of one named tile layer, preserving Tiled's
+    W-per-line wrapping so unchanged rows stay byte-identical."""
+    nidx = text.find(f'"name":"{layer_name}"')
+    if nidx < 0:
+        raise ValueError(f"layer {layer_name} not found")
+    bstart = text.rfind("{", 0, nidx)
+    dstart = text.find('"data":[', bstart)
+    dend = text.find("]", dstart)
+    wi = _wrap_indent(text, dstart)
+    return text[:dstart] + '"data":[' + _fmt_data(new_data, W, wi) + text[dend:]
+
+
+def _tile_layer_block(data, layer_id, name, W, H, k9):
+    """Tiled-format tile layer object text (alphabetical keys, inline W-wrapped
+    data); k9 is the 9-space field indent from a sibling layer."""
+    k8 = k9[:-1]
+    arr = _fmt_data(data, W, k9 + "   ")
+    return (
+        "{\n"
+        f'{k9}"data":[{arr}],\n'
+        f'{k9}"height":{H},\n'
+        f'{k9}"id":{layer_id},\n'
+        f'{k9}"name":"{name}",\n'
+        f'{k9}"opacity":1,\n'
+        f'{k9}"type":"tilelayer",\n'
+        f'{k9}"visible":true,\n'
+        f'{k9}"width":{W},\n'
+        f'{k9}"x":0,\n'
+        f'{k9}"y":0\n'
+        f"{k8}}}"
+    )
+
+
+def _object_layer_block(objects, layer_id, name, next_obj, k9):
+    """Tiled-format objectgroup text with rectangle objects (matches the sibling
+    *_arenas layers: objects indented 7 spaces past the layer fields)."""
+    k8 = k9[:-1]
+    ko = k9 + "       "
+    kof = ko + " "
+    parts = []
+    oid = next_obj
+    for o in objects:
+        parts.append(
+            "{\n"
+            f'{kof}"height":{o["height"]},\n'
+            f'{kof}"id":{oid},\n'
+            f'{kof}"name":"{o["name"]}",\n'
+            f'{kof}"opacity":1,\n'
+            f'{kof}"rotation":0,\n'
+            f'{kof}"type":"{o.get("type", "")}",\n'
+            f'{kof}"visible":true,\n'
+            f'{kof}"width":{o["width"]},\n'
+            f'{kof}"x":{o["x"]},\n'
+            f'{kof}"y":{o["y"]}\n'
+            f"{ko}}}"
+        )
+        oid += 1
+    objs = (", \n" + ko).join(parts)
+    return (
+        "{\n"
+        f'{k9}"draworder":"topdown",\n'
+        f'{k9}"id":{layer_id},\n'
+        f'{k9}"name":"{name}",\n'
+        f'{k9}"objects":[\n{ko}{objs}\n{k9}],\n'
+        f'{k9}"opacity":1,\n'
+        f'{k9}"type":"objectgroup",\n'
+        f'{k9}"visible":true,\n'
+        f'{k9}"x":0,\n'
+        f'{k9}"y":0\n'
+        f"{k8}}}"
+    )
+
+
+def apply_to_file(tmj_path):
+    """Splice williams_walls + williams_arenas into the committed tmj and update
+    williams_floor/williams_furniture data, preserving Tiled formatting (only the
+    changed rows + the two new layers differ). Backs up to <path>.bak first."""
+    tmj = json.load(open(tmj_path))
+    W, H = tmj["width"], tmj["height"]
+    new_walls, new_floor, new_furn = compute_relayer(tmj)
+    maxid = max(L.get("id", 0) for L in tmj["layers"])
+    walls_id, arenas_id = maxid + 1, maxid + 2
+    next_obj = tmj.get("nextobjectid", 1)
+
+    text = open(tmj_path).read()
+    shutil.copy2(tmj_path, tmj_path + ".bak")
+    text = _replace_layer_data(text, "williams_floor", new_floor, W)
+    text = _replace_layer_data(text, "williams_furniture", new_furn, W)
+
+    fidx = text.find('"name":"williams_furniture"')
+    fstart = text.rfind("{", 0, fidx)
+    line0 = text.rfind("\n", 0, fstart) + 1
+    k8 = text[line0:fstart]
+    k9 = k8 + " "
+    walls_block = _tile_layer_block(new_walls, walls_id, "williams_walls", W, H, k9)
+    arenas_block = _object_layer_block(
+        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", next_obj, k9
+    )
+    insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
+    text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
+
+    text = re.sub(r'"nextlayerid":\d+', f'"nextlayerid":{maxid + 3}', text, count=1)
+    text = re.sub(
+        r'"nextobjectid":\d+',
+        f'"nextobjectid":{next_obj + len(WILLIAMS_ARENA_OBJECTS)}',
+        text,
+        count=1,
+    )
+    with open(tmj_path, "w") as fh:
+        fh.write(text)
+
+
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--tmj",
+        default=os.path.join(
+            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
+        ),
+    )
+    args = ap.parse_args()
+    apply_to_file(args.tmj)
+    print(f"spliced williams_walls + williams_arenas into {args.tmj}")
+
+
+if __name__ == "__main__":
+    main()

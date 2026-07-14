@@ -88,3 +88,51 @@ def test_williams_wall_cells_reads_walls_layer():
     walls = _grid({(5, 5): fw.WALL_GID, (6, 5): fw.WINDOW_GID})
     cells = fw.williams_wall_cells(_tmj_tiles(floor, furn, walls=walls))
     assert cells == {(5, 5), (6, 5)}
+
+
+import json, shutil
+
+
+def test_apply_to_file_content_and_order(tmp_path):
+    src = os.path.join(
+        os.path.dirname(os.path.dirname(HERE)), "godot", "maps", "upenn_core_urban.tmj"
+    )
+    # note: HERE is tools/geo; the committed tmj is under godot/maps
+    repo_map = os.path.normpath(
+        os.path.join(HERE, "..", "..", "godot", "maps", "upenn_core_urban.tmj")
+    )
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(repo_map, dst)
+    fw.apply_to_file(dst)
+    t = json.load(open(dst))  # must parse
+    layers = {L["name"]: L for L in t["layers"] if L.get("type") == "tilelayer"}
+    W = t["width"]
+    walls = layers["williams_walls"]["data"]
+    from collections import Counter
+
+    wc = Counter(g & fw.GID_MASK for g in walls if g)
+    assert wc == {fw.WALL_GID: 340, fw.WINDOW_GID: 46}
+    assert (
+        sum(
+            1
+            for g in layers["williams_floor"]["data"]
+            if (g & fw.GID_MASK) == fw.WALL_GID
+        )
+        == 0
+    )
+    assert (
+        sum(
+            1
+            for g in layers["williams_furniture"]["data"]
+            if (g & fw.GID_MASK) == fw.WINDOW_GID
+        )
+        == 0
+    )
+    ar = next(L for L in t["layers"] if L.get("name") == "williams_arenas")
+    assert len(ar["objects"]) == 8
+    names = [L["name"] for L in t["layers"]]
+    assert (
+        names.index("williams_floor")
+        < names.index("williams_walls")
+        < names.index("williams_furniture")
+    )
