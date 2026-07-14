@@ -384,3 +384,22 @@ def test_main_exit_code_and_json(tmp_path, capsys):
     parsed = _json.loads(out)
     assert isinstance(parsed, list)
     assert code == 0
+
+
+def test_no_ghost_doors_on_real_map():
+    # After Task 2 sealed Sweeten, every FORCED_CLOSED door is drawn WALL.
+    w = real_world()
+    c = v.Checker(w)
+    c.check_entrance_floor_sealed()
+    assert [f for f in c.findings if f.code == "ghost_door"] == []
+
+
+def test_ghost_door_detected_when_forced_closed_drawn_open():
+    # Re-open a FORCED_CLOSED door in the drawn layer -> a ghost door error.
+    w = real_world()
+    W = w.W
+    fx, fy = next(iter(next(iter(v.FORCED_CLOSED.values()))))
+    w.tile_layers["entrance_floor"]["data"][fy * W + fx] = v.FLOOR
+    c = v.Checker(w)
+    c.check_entrance_floor_sealed()
+    assert any(f.code == "ghost_door" and f.severity == "error" for f in c.findings)
