@@ -445,6 +445,15 @@ def paint_interior(floor, perimeter, foot, door, W):
         floor[y * W + x] = FLOOR
 
 
+def seal_forced_closed_floor(floor, W):
+    """Repaint FORCED_CLOSED door cells as WALL in the entrance_floor tile data,
+    so the drawn tile matches the sealed collision and a regen never re-opens a
+    hand-sealed door (issue #556). Complements the collision seal in main()."""
+    for cells in FORCED_CLOSED.values():
+        for fx, fy in cells:
+            floor[fy * W + fx] = WALL
+
+
 # --------------------------------------------------------------------------- #
 # Room-subdivision helpers
 # --------------------------------------------------------------------------- #
@@ -879,6 +888,9 @@ def main():
         fb.clear_roof_on(tmj, "buildings", foot, W)
         fb.clear_roof_on(tmj, "trees", foot, W)
         paint_interior(floor, perimeter, foot, door, W)
+    seal_forced_closed_floor(
+        floor, W
+    )  # #556: closed doors are wall art, not open floor
     insert_entrance_layers(tmj, W, H, floor)
     with open(args.tmj, "w") as fh:
         json.dump(tmj, fh, separators=(",", ":"))
