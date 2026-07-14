@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import sqlite3
 import struct
 from contextlib import contextmanager
@@ -169,6 +170,23 @@ class RunStore:
         run = dict(row)
         run["manifest"] = json.loads(run["manifest"])
         return run
+
+    def delete_run(self, run_id: str) -> None:
+        """Remove a run everywhere: its row, its memories, its directory.
+
+        The row is the source of truth, so it and the memories go first in
+        one transaction; the directory sweep ignores errors -- a half-removed
+        dir can be re-swept, but a lingering row would resurrect the run in
+        every listing. Unknown id raises KeyError (the update_run precedent).
+        Refusing to delete the CURRENT live run is the API layer's job (409)
+        -- the store itself has no notion of "live".
+        """
+        with self._db() as con:
+            cur = con.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+            if cur.rowcount == 0:
+                raise KeyError(f"unknown run id: {run_id}")
+            con.execute("DELETE FROM memories WHERE run_id = ?", (run_id,))
+        shutil.rmtree(self.root / run_id, ignore_errors=True)
 
     # --- frames ---------------------------------------------------------------
 

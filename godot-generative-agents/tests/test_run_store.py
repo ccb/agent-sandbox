@@ -248,3 +248,23 @@ def test_query_memories_matches_engine_retrieve(tmp_path):
         for m in store.query_memories("run-a", "Ada", "library books", 10, retrieval=rc)
     ]
     assert got == expected and len(got) == 3
+
+
+def test_delete_run_removes_row_memories_and_dir(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    store.create_run(MANIFEST, run_id="run-b")
+    store.append_frame("run-a", 0, FRAME)
+    store.record_memories("run-a", "Ada", [_record(0, "saw a book")])
+    store.record_memories("run-b", "Ada", [_record(0, "kept")])
+    store.delete_run("run-a")
+    assert store.get_run("run-a") is None
+    assert not (tmp_path / "runs" / "run-a").exists()
+    assert store.last_memory_id("run-a", "Ada") == -1  # memories rows gone
+    # Nothing else was touched: run-b's row, dir, and memories survive.
+    assert store.get_run("run-b") is not None
+    assert (tmp_path / "runs" / "run-b" / "frames.jsonl").exists()
+    assert store.last_memory_id("run-b", "Ada") == 0
+    # Idempotence is NOT silent: a second delete (or an unknown id) raises.
+    with pytest.raises(KeyError):
+        store.delete_run("run-a")
