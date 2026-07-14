@@ -62,12 +62,14 @@ def test_25_van_pelt_room_arenas_present(tmp_path):
     assert any(r[2] == "Van Pelt Library" and r[3] == "lobby" for r in rows)
 
 
-def test_williams_unchanged(tmp_path):
+def test_williams_has_lobby_and_grounds(tmp_path):
+    """Williams keeps its grounds + lobby arenas alongside its room subdivision
+    (#538): the atrium (Lobby*) stays "lobby", it isn't absorbed into a room."""
     mdir = _run(str(tmp_path))
     rows = _arena_blocks(mdir)
     will = [r for r in rows if r[2] == "Williams Hall"]
-    kinds = sorted(r[3] for r in will)
-    assert kinds == ["grounds", "lobby"]  # no room subdivision
+    kinds = {r[3] for r in will}
+    assert {"grounds", "lobby"} <= kinds
 
 
 def test_every_room_arena_reachable_from_a_door(tmp_path):
