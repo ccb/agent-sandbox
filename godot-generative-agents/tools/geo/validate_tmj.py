@@ -611,7 +611,7 @@ class Checker:
         for name, cells in FORCED_CLOSED.items():
             for fx, fy in cells:
                 i = fy * W + fx
-                if i < len(data) and (data[i] & 0x1FFFFFFF) == FLOOR:
+                if i < len(data) and (data[i] & GID_MASK) == FLOOR:
                     ghosts.append((name, fx, fy))
         if ghosts:
             shown = ", ".join(f"{n} ({x},{y})" for n, x, y in ghosts[:8])
