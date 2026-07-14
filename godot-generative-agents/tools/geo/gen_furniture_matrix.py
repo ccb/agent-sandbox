@@ -189,39 +189,70 @@ def structural_cells(tmj: dict, structural_gids: set[int]) -> set[int]:
     return out
 
 
-def spots(
+_WALK_ON = ("cushion", "armchair", "chair", "stool", "sofa", "desk")
+
+
+def piece_spot(
+    piece: dict,
     furn: list[str],
     collision: list[str],
     arena_m: list[str],
+    arena_t: dict[str, str],
     structural: set[int],
+    names: dict[int, str],
     width: int,
     height: int,
-) -> list[tuple[int, int]]:
-    """Walkable floor cells 4-adjacent to furniture in the SAME arena --
-    "stand AT it", row-major. Excludes: the furniture tile itself (no
-    standing on a rug/seat -- a sit target waits for #446); structural cells
-    (walls drawn on a floor layer); and cross-arena adjacency (a lobby spot
-    must border the lobby's OWN furniture, not a neighbor room's through a
-    doorway). The single source WorldMap loads and --debug-overlay draws."""
-    out = []
-    for y in range(height):
-        for x in range(width):
-            idx = y * width + x
-            if (
-                collision[idx] != "0"
-                or furn[idx] != "0"
-                or idx in structural
-                or arena_m[idx] == "0"
-            ):
+) -> tuple[int, int] | None:
+    """The single interaction spot for one furniture piece, or None (#537).
+
+    Walk-on pieces (cushion/armchair/chair/stool/sofa/desk-with-chair) get a
+    tile ON the piece -- its walkable seat/cushion/chair tile nearest the
+    centre. Every other piece (blackboard/sink/bookshelf/table/...) gets the
+    floor tile in front -- the nearest walkable, non-structural, same-arena
+    cell 4-adjacent to the piece. Nearest-to-centre with a row-major
+    tiebreak, so the choice is deterministic. Merged-blob-robust: no
+    per-type table, no orientation data."""
+    cells = piece["cells"]
+    cx = sum(x for x, _ in cells) / len(cells)
+    cy = sum(y for _, y in cells) / len(cells)
+
+    def nearest(cands):
+        return (
+            min(cands, key=lambda p: ((p[0] - cx) ** 2 + (p[1] - cy) ** 2, p[1], p[0]))
+            if cands
+            else None
+        )
+
+    name = names.get(piece["anchor_gid"], "").lower()
+    if any(stem in name for stem in _WALK_ON):
+        on_piece = [
+            (x, y)
+            for (x, y) in cells
+            if collision[y * width + x] == "0" and (y * width + x) not in structural
+        ]
+        spot = nearest(on_piece)
+        if spot is not None:
+            return spot
+
+    # Front bucket: nearest same-arena floor tile touching the piece.
+    arena = _majority_label(cells, arena_m, arena_t, width)
+    if not arena:
+        return None
+    cellset = set(cells)
+    front = set()
+    for x, y in cells:
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if not (0 <= nx < width and 0 <= ny < height) or (nx, ny) in cellset:
                 continue
-            a = arena_m[idx]
-            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                if 0 <= nx < width and 0 <= ny < height:
-                    nidx = ny * width + nx
-                    if furn[nidx] != "0" and arena_m[nidx] == a:
-                        out.append((x, y))
-                        break
-    return out
+            nidx = ny * width + nx
+            if (
+                furn[nidx] == "0"
+                and collision[nidx] == "0"
+                and nidx not in structural
+                and arena_t.get(arena_m[nidx], "") == arena
+            ):
+                front.add((nx, ny))
+    return nearest(front)
 
 
 def _majority_label(cells, maze, table, width):
@@ -307,17 +338,22 @@ def main() -> int:
     print(f"{len(all_pieces)} pieces -> furniture_maze.csv + furniture_blocks.csv")
 
     structural = structural_cells(tmj, skip)
-    spot_cells = spots(furn, collision, arena_m, structural, W, H)
+    spot_cells = []
     spot_rows = []
-    for x, y in spot_cells:
-        idx = y * W + x
-        spot_rows.append(
-            f"{world}, {sector_t.get(sector_m[idx], '')}, "
-            f"{arena_t.get(arena_m[idx], '')}, {x}, {y}"
+    for piece in all_pieces:
+        spot = piece_spot(
+            piece, furn, collision, arena_m, arena_t, structural, names, W, H
         )
+        if spot is None:
+            continue
+        x, y = spot
+        sector = _majority_label(piece["cells"], sector_m, sector_t, W)
+        arena = _majority_label(piece["cells"], arena_m, arena_t, W)
+        spot_cells.append((x, y))
+        spot_rows.append(f"{world}, {sector}, {arena}, {x}, {y}")
     with open(os.path.join(blocks_dir, "furniture_spots.csv"), "w") as fh:
         fh.write("".join(r + "\n" for r in spot_rows))
-    print(f"{len(spot_cells)} seat spots -> furniture_spots.csv")
+    print(f"{len(spot_rows)} interaction spots (one per piece) -> furniture_spots.csv")
 
     if args.debug_overlay:
         tile = tmj.get("tilewidth", 16)
