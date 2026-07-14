@@ -1489,13 +1489,15 @@ func _set_clip_marker(is_in: bool) -> void:
 
 
 func _downscale(img: Image) -> Image:
-	# Cap GIF frames at 640px wide; full-res 720p GIFs are enormous.
-	var maxw := 640
+	# Cap GIF frames at 960px wide (a clean 2x decimation from the 1920 viewport;
+	# full-res is enormous and slow to encode). NEAREST, not bilinear: the campus
+	# is pixel art, so nearest keeps edges crisp where bilinear muddied them. (#488)
+	var maxw := 960
 	if img.get_width() <= maxw:
 		return img
 	var out := img.duplicate()
 	var h := int(round(img.get_height() * maxw / float(img.get_width())))
-	out.resize(maxw, h, Image.INTERPOLATE_BILINEAR)
+	out.resize(maxw, h, Image.INTERPOLATE_NEAREST)
 	return out
 
 
