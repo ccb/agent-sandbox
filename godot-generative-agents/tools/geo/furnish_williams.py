@@ -89,6 +89,12 @@ def compute_relayer(tmj):
     layers = _tile_layers(tmj)
     floor = layers["williams_floor"]["data"]
     furn = layers["williams_furniture"]["data"]
+    # Idempotency seed: on an already-relayered map the walls layer holds the
+    # geometry, so a re-run reproduces it. The derive-fresh path (no walls layer)
+    # is correct ONLY for a *faithful* pre-splice map -- wall_brick/window tiles
+    # still on williams_floor/williams_furniture. A map with the walls layer merely
+    # stripped is NOT faithful (the tiles aren't back on the floor), so it won't
+    # round-trip -- do not write a test that assumes it does.
     existing = layers.get("williams_walls")
     new_walls = list(existing["data"]) if existing else [0] * len(floor)
     new_floor = list(floor)
@@ -200,17 +206,82 @@ def _wrap_indent(text, dstart):
     return text[nl + 1 : j]
 
 
+def _layer_name_count(text, name):
+    return text.count(f'"name":"{name}"')
+
+
+def _find_block_bounds(text, name):
+    """(start, end) byte offsets of the JSON object whose "name" is `name` — the
+    enclosing `{` before the name key through its matching `}` (brace-depth walk,
+    string-aware so braces inside string values don't miscount). Raises unless the
+    name occurs exactly once."""
+    n = _layer_name_count(text, name)
+    if n != 1:
+        raise ValueError(f"expected exactly one '{name}' layer, found {n}")
+    nidx = text.find(f'"name":"{name}"')
+    bstart = text.rfind("{", 0, nidx)
+    depth, i, in_str, esc = 0, bstart, False, False
+    while i < len(text):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return bstart, i + 1
+        i += 1
+    raise ValueError(f"unterminated layer block for {name}")
+
+
+def _strip_layer(text, name):
+    """Remove the one named layer's JSON block + one adjacent separator, leaving
+    the layers array valid and Tiled-formatted. No-op if the layer is absent.
+    Raises (via _find_block_bounds) if the name appears more than once."""
+    if _layer_name_count(text, name) == 0:
+        return text
+    bstart, bend = _find_block_bounds(text, name)
+    after = text[bend:]
+    m = re.match(r",\s*", after)
+    if m:  # not the last layer: drop block + trailing separator
+        return text[:bstart] + after[m.end() :]
+    before = text[:bstart]  # last layer: drop the leading separator instead
+    m2 = re.search(r",\s*$", before)
+    return (before[: m2.start()] if m2 else before) + after
+
+
 def _replace_layer_data(text, layer_name, new_data, W):
     """Replace the data array of one named tile layer, preserving Tiled's
-    W-per-line wrapping so unchanged rows stay byte-identical."""
+    W-per-line wrapping so unchanged rows stay byte-identical. Fails loudly if the
+    name is not unique or the data array is not flat."""
+    n = _layer_name_count(text, layer_name)
+    if n != 1:
+        raise ValueError(f"expected exactly one '{layer_name}' layer, found {n}")
     nidx = text.find(f'"name":"{layer_name}"')
-    if nidx < 0:
-        raise ValueError(f"layer {layer_name} not found")
     bstart = text.rfind("{", 0, nidx)
     dstart = text.find('"data":[', bstart)
     dend = text.find("]", dstart)
+    # flat-array invariant: tile-layer data is a flat int array (no nested [...]),
+    # which is what lets us stop at the first ']'.
+    if "[" in text[dstart + len('"data":[') : dend]:
+        raise ValueError(f"{layer_name} data is not a flat array")
     wi = _wrap_indent(text, dstart)
     return text[:dstart] + '"data":[' + _fmt_data(new_data, W, wi) + text[dend:]
+
+
+def _bump_header(text, key, atleast):
+    """Set a top-level header field to max(current, atleast) so ids never regress."""
+    m = re.search(rf'"{key}":(\d+)', text)
+    cur = int(m.group(1)) if m else 0
+    return re.sub(rf'"{key}":\d+', f'"{key}":{max(cur, atleast)}', text, count=1)
 
 
 def _tile_layer_block(data, layer_id, name, W, H, k9):
@@ -275,18 +346,59 @@ def _object_layer_block(objects, layer_id, name, next_obj, k9):
 
 
 def apply_to_file(tmj_path):
-    """Splice williams_walls + williams_arenas into the committed tmj and update
-    williams_floor/williams_furniture data, preserving Tiled formatting (only the
-    changed rows + the two new layers differ). Backs up to <path>.bak first."""
+    """Idempotently splice williams_walls + williams_arenas into the committed tmj
+    and update williams_floor/williams_furniture data, preserving Tiled formatting.
+    Strips any prior spliced layers first and reuses their exact ids, so a re-run
+    (and a run on the already-spliced committed tmj) is byte-identical. Backs up to
+    <path>.bak first."""
     tmj = json.load(open(tmj_path))
     W, H = tmj["width"], tmj["height"]
     new_walls, new_floor, new_furn = compute_relayer(tmj)
-    maxid = max(L.get("id", 0) for L in tmj["layers"])
-    walls_id, arenas_id = maxid + 1, maxid + 2
-    next_obj = tmj.get("nextobjectid", 1)
+
+    # Capture-and-reuse ids: if a spliced layer already exists, reuse its id;
+    # else derive from the max id among the OTHER layers. Never read the
+    # nextlayerid/nextobjectid headers for this (a strip doesn't lower them).
+    by_name = {L.get("name"): L for L in tmj["layers"]}
+    other_max_layer = max(
+        (
+            L.get("id", 0)
+            for L in tmj["layers"]
+            if L.get("name") not in ("williams_walls", "williams_arenas")
+        ),
+        default=0,
+    )
+    walls_id = (
+        by_name["williams_walls"]["id"]
+        if "williams_walls" in by_name
+        else other_max_layer + 1
+    )
+    arenas_id = (
+        by_name["williams_arenas"]["id"]
+        if "williams_arenas" in by_name
+        else other_max_layer + 2
+    )
+
+    arenas_layer = by_name.get("williams_arenas")
+    if arenas_layer and arenas_layer.get("objects"):
+        obj_base = min(o["id"] for o in arenas_layer["objects"])
+    else:
+        other_obj_max = max(
+            (
+                o["id"]
+                for L in tmj["layers"]
+                if L.get("type") == "objectgroup" and L.get("name") != "williams_arenas"
+                for o in L.get("objects", [])
+            ),
+            default=0,
+        )
+        obj_base = other_obj_max + 1
 
     text = open(tmj_path).read()
     shutil.copy2(tmj_path, tmj_path + ".bak")
+
+    # Idempotency: remove any prior spliced layers before re-inserting.
+    text = _strip_layer(text, "williams_walls")
+    text = _strip_layer(text, "williams_arenas")
     text = _replace_layer_data(text, "williams_floor", new_floor, W)
     text = _replace_layer_data(text, "williams_furniture", new_furn, W)
 
@@ -297,18 +409,13 @@ def apply_to_file(tmj_path):
     k9 = k8 + " "
     walls_block = _tile_layer_block(new_walls, walls_id, "williams_walls", W, H, k9)
     arenas_block = _object_layer_block(
-        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", next_obj, k9
+        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", obj_base, k9
     )
     insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
     text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
 
-    text = re.sub(r'"nextlayerid":\d+', f'"nextlayerid":{maxid + 3}', text, count=1)
-    text = re.sub(
-        r'"nextobjectid":\d+',
-        f'"nextobjectid":{next_obj + len(WILLIAMS_ARENA_OBJECTS)}',
-        text,
-        count=1,
-    )
+    text = _bump_header(text, "nextlayerid", max(walls_id, arenas_id) + 1)
+    text = _bump_header(text, "nextobjectid", obj_base + len(WILLIAMS_ARENA_OBJECTS))
     with open(tmj_path, "w") as fh:
         fh.write(text)
 

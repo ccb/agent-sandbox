@@ -136,3 +136,120 @@ def test_apply_to_file_content_and_order(tmp_path):
         < names.index("williams_walls")
         < names.index("williams_furniture")
     )
+
+
+def _layers_text(*blocks):
+    """A minimal tmj-shaped text: a layers array of the given raw layer blocks,
+    joined Tiled-style (',\\n        ' between blocks, 8-space indent)."""
+    joined = ",\n        ".join(blocks)
+    return '{\n "nextlayerid":9,\n "layers":[\n        ' + joined + "\n ]\n}"
+
+
+def _tile_block(name, lid, data="0, 0, 0"):
+    return (
+        "{\n"
+        f'         "data":[{data}],\n'
+        f'         "id":{lid},\n'
+        f'         "name":"{name}",\n'
+        '         "type":"tilelayer"\n'
+        "        }"
+    )
+
+
+def _obj_block(name, lid):
+    return (
+        "{\n"
+        f'         "id":{lid},\n'
+        f'         "name":"{name}",\n'
+        '         "objects":[\n                {\n                 "id":1,\n                 "name":"R"\n                }],\n'
+        '         "type":"objectgroup"\n'
+        "        }"
+    )
+
+
+def test_strip_layer_removes_middle_block_valid_json():
+    import json
+
+    text = _layers_text(
+        _tile_block("a", 1), _tile_block("williams_walls", 2), _tile_block("b", 3)
+    )
+    out = fw._strip_layer(text, "williams_walls")
+    parsed = json.loads(out)  # still valid JSON
+    names = [L["name"] for L in parsed["layers"]]
+    assert names == ["a", "b"]
+
+
+def test_strip_layer_removes_last_block_valid_json():
+    import json
+
+    text = _layers_text(_tile_block("a", 1), _obj_block("williams_arenas", 2))
+    out = fw._strip_layer(text, "williams_arenas")
+    parsed = json.loads(out)
+    assert [L["name"] for L in parsed["layers"]] == ["a"]
+
+
+def test_strip_layer_absent_is_noop():
+    text = _layers_text(_tile_block("a", 1))
+    assert fw._strip_layer(text, "williams_walls") == text
+
+
+def test_strip_layer_duplicate_raises():
+    import pytest
+
+    text = _layers_text(
+        _tile_block("williams_walls", 1), _tile_block("williams_walls", 2)
+    )
+    with pytest.raises(ValueError):
+        fw._strip_layer(text, "williams_walls")
+
+
+def test_replace_layer_data_duplicate_name_raises():
+    import pytest
+
+    text = _layers_text(_tile_block("dup", 1), _tile_block("dup", 2))
+    with pytest.raises(ValueError):
+        fw._replace_layer_data(text, "dup", [1, 2, 3], 3)
+
+
+import os, shutil, subprocess, sys
+
+
+def _committed_tmj():
+    return os.path.normpath(
+        os.path.join(HERE, "..", "..", "godot", "maps", "upenn_core_urban.tmj")
+    )
+
+
+def test_apply_to_file_reproduces_committed_tmj(tmp_path):
+    """Running the hardened splice on a copy of the committed tmj yields a
+    byte-identical file (strip-then-reinsert reuses the existing ids)."""
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    with open(src, "rb") as a, open(dst, "rb") as b:
+        assert a.read() == b.read(), "hardened apply_to_file changed the committed tmj"
+
+
+def test_apply_to_file_idempotent_second_run(tmp_path):
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    after_one = open(dst, "rb").read()
+    fw.apply_to_file(dst)
+    assert open(dst, "rb").read() == after_one, "second run was not a no-op"
+
+
+def test_apply_to_file_no_duplicate_layers(tmp_path):
+    import json
+
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    fw.apply_to_file(dst)  # twice
+    t = json.load(open(dst))
+    names = [L["name"] for L in t["layers"]]
+    assert names.count("williams_walls") == 1
+    assert names.count("williams_arenas") == 1
