@@ -213,6 +213,8 @@ ATRIUM_PLANTS = [
     (39, 248),
 ]
 # Main entrance: a gap in the south perimeter wall, near the lobby.
+# STALE: the real carved gap is at columns 43-44 (see add_entrances.WILLIAMS_DOOR_X
+# and #552). Only used when repainting Williams; the committed art's door is at 43-44.
 SOUTH_DOOR_X = (40, 41)
 
 

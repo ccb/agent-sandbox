@@ -121,6 +121,9 @@ UNNAMED = [
 # ring (Task 538's relayer moved the wall art; re-verify against williams_walls if
 # the art changes again). We carve its collision to match, and skip its picture so
 # we don't paint over the furniture.
+# Columns of the real walkable gap in Williams' south perimeter (the carved
+# door), matching the committed art. NOTE: furnish_building.SOUTH_DOOR_X is a
+# stale (40, 41) and disagrees -- see #552 to realign the art/furniture.
 WILLIAMS_DOOR_X = (43, 44)
 
 # Extra entrances to open beyond the one(s) path-proximity finds, keyed by
