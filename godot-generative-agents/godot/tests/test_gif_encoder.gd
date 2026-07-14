@@ -131,6 +131,21 @@ func _initialize() -> void:
 
 	_check(GifEncoder.encode([], 10).is_empty(), "no frames -> empty buffer (failure signaled)")
 
+	# --- ordered dithering is active: a flat colour region maps across >1 index ---
+	# (also guards the encoder still COMPILES with the dither path -- a type-infer
+	# slip there previously made the whole script fail to load. #488)
+	var flat := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	flat.fill(Color8(128, 128, 128))
+	# A palette straddling the flat colour (two greys either side of 128): with no
+	# dither every pixel would pick the same nearest entry; the Bayer bias pushes
+	# some pixels to each, so a working dither yields both indices.
+	var two_greys := PackedByteArray([120, 120, 120, 136, 136, 136])
+	var flat_idx := GifEncoder._map_indices(flat, 16, 16, GifEncoder._build_lut(two_greys))
+	var distinct := {}
+	for v in flat_idx:
+		distinct[v] = true
+	_check(distinct.size() > 1, "dithering stipples a flat region across >1 palette index")
+
 	if _failures == 0:
 		print("test_gif_encoder: all checks passed")
 	quit(1 if _failures > 0 else 0)

@@ -13,6 +13,23 @@ extends RefCounted
 const MAX_COLORS := 256
 const SAMPLE_CAP := 16384  # palette is built from at most this many sampled pixels
 
+# Ordered (Bayer 8x8) dithering: a per-pixel threshold bias that breaks up the
+# banding a flat 256-colour palette leaves on the tinted map. Chosen over
+# Floyd-Steinberg because it is O(1)/pixel -- FS error-diffusion in pure GDScript
+# makes a long clip's encode take minutes. DITHER_SPREAD ~ the palette's per-
+# channel step; 0 disables. (#488)
+const DITHER_SPREAD := 32
+const BAYER8 := [
+	0, 32, 8, 40, 2, 34, 10, 42,
+	48, 16, 56, 24, 50, 18, 58, 26,
+	12, 44, 4, 36, 14, 46, 6, 38,
+	60, 28, 52, 20, 62, 30, 54, 22,
+	3, 35, 11, 43, 1, 33, 9, 41,
+	51, 19, 59, 27, 49, 17, 57, 25,
+	15, 47, 7, 39, 13, 45, 5, 37,
+	63, 31, 55, 23, 61, 29, 53, 21,
+]
+
 
 static func encode(frames: Array, delay_cs: int) -> PackedByteArray:
 	if frames.is_empty():
@@ -169,13 +186,24 @@ static func _build_lut(palette: PackedByteArray) -> PackedByteArray:
 
 
 static func _map_indices(frame: Image, w: int, h: int, lut: PackedByteArray) -> PackedByteArray:
+	# Nearest-palette index per pixel, with ordered (Bayer 8x8) dithering: each
+	# pixel's channels get a small position-dependent bias before the lookup, so
+	# a flat colour region is stippled across nearby palette entries instead of
+	# banding to one. See DITHER_SPREAD/BAYER8. (#488)
 	var data: PackedByteArray = frame.get_data()
 	var out := PackedByteArray()
 	out.resize(w * h)
-	for i in w * h:
-		var o := i * 4
-		var key := ((data[o] >> 3) << 10) | ((data[o + 1] >> 3) << 5) | (data[o + 2] >> 3)
-		out[i] = lut[key]
+	var i := 0
+	for y in h:
+		var row := (y & 7) * 8
+		for x in w:
+			var o := i * 4
+			var bias: int = (BAYER8[row + (x & 7)] * DITHER_SPREAD) / 64 - DITHER_SPREAD / 2
+			var r := clampi(data[o] + bias, 0, 255)
+			var g := clampi(data[o + 1] + bias, 0, 255)
+			var b := clampi(data[o + 2] + bias, 0, 255)
+			out[i] = lut[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)]
+			i += 1
 	return out
 
 
