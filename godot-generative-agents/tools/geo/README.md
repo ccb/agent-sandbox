@@ -262,7 +262,8 @@ uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area core --ou
 uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams interior
 uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors + interiors
 uv run python godot-generative-agents/tools/geo/block_grass.py                               # lawns become un-walkable
-uv run python godot-generative-agents/tools/geo/gen_furniture_matrix.py                      # furniture_maze + furniture_blocks (#537)
+uv run python godot-generative-agents/tools/geo/block_furniture.py                           # seal furniture into collision
+uv run python godot-generative-agents/tools/geo/gen_furniture_matrix.py                      # furniture_maze + furniture_blocks + furniture_spots (#537)
 # add --debug-overlay to also write tools/geo/out/upenn_furniture_debug.tmj —
 # open it in Tiled and toggle the furniture_debug layer to eyeball placements.
 uv run python godot-generative-agents/backend/penn/generate_building_labels.py
