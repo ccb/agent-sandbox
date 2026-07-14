@@ -456,48 +456,48 @@
 456, UPenn, College Hall, Great Hall, plant
 457, UPenn, College Hall, East Pavilion 2, teacher_desk
 458, UPenn, College Hall, East Pavilion 2, plant
-459, UPenn, Williams Hall, lobby, blackboard
-460, UPenn, Williams Hall, lobby, blackboard_blank
-461, UPenn, Williams Hall, lobby, student_desk
-462, UPenn, Williams Hall, lobby, student_desk
-463, UPenn, Williams Hall, lobby, student_desk
-464, UPenn, Williams Hall, lobby, student_desk
-465, UPenn, Williams Hall, lobby, student_desk
-466, UPenn, Williams Hall, lobby, student_desk
-467, UPenn, Williams Hall, lobby, student_desk
-468, UPenn, Williams Hall, lobby, student_desk
+459, UPenn, Williams Hall, Classroom A, blackboard
+460, UPenn, Williams Hall, Classroom B, blackboard_blank
+461, UPenn, Williams Hall, Classroom A, student_desk
+462, UPenn, Williams Hall, Classroom A, student_desk
+463, UPenn, Williams Hall, Classroom A, student_desk
+464, UPenn, Williams Hall, Classroom A, student_desk
+465, UPenn, Williams Hall, Classroom A, student_desk
+466, UPenn, Williams Hall, Classroom A, student_desk
+467, UPenn, Williams Hall, Classroom A, student_desk
+468, UPenn, Williams Hall, Classroom A, student_desk
 469, UPenn, Williams Hall, lobby, plant
 470, UPenn, Williams Hall, lobby, rug_blue
-471, UPenn, Williams Hall, lobby, student_desk
-472, UPenn, Williams Hall, lobby, student_desk
-473, UPenn, Williams Hall, lobby, student_desk
-474, UPenn, Williams Hall, lobby, student_desk
-475, UPenn, Williams Hall, lobby, student_desk
-476, UPenn, Williams Hall, lobby, student_desk
-477, UPenn, Williams Hall, lobby, student_desk
-478, UPenn, Williams Hall, lobby, student_desk
-479, UPenn, Williams Hall, lobby, student_desk
-480, UPenn, Williams Hall, lobby, student_desk
-481, UPenn, Williams Hall, lobby, student_desk
+471, UPenn, Williams Hall, Classroom B, student_desk
+472, UPenn, Williams Hall, Classroom B, student_desk
+473, UPenn, Williams Hall, Classroom B, student_desk
+474, UPenn, Williams Hall, Classroom B, student_desk
+475, UPenn, Williams Hall, Classroom B, student_desk
+476, UPenn, Williams Hall, Classroom B, student_desk
+477, UPenn, Williams Hall, Classroom B, student_desk
+478, UPenn, Williams Hall, Classroom A, student_desk
+479, UPenn, Williams Hall, Classroom A, student_desk
+480, UPenn, Williams Hall, Classroom A, student_desk
+481, UPenn, Williams Hall, Classroom A, student_desk
 482, UPenn, Williams Hall, lobby, plant
 483, UPenn, Williams Hall, lobby, plant
 484, UPenn, Williams Hall, lobby, side_table
-485, UPenn, Williams Hall, lobby, bookshelf
-486, UPenn, Williams Hall, lobby, blackboard
-487, UPenn, Williams Hall, lobby, teacher_desk
+485, UPenn, Williams Hall, Office, bookshelf
+486, UPenn, Williams Hall, Classroom C, blackboard
+487, UPenn, Williams Hall, Office, teacher_desk
 488, UPenn, Williams Hall, lobby, sofa
-489, UPenn, Williams Hall, lobby, toilet
-490, UPenn, Williams Hall, lobby, sink
+489, UPenn, Williams Hall, Restroom, toilet
+490, UPenn, Williams Hall, Restroom, sink
 491, UPenn, Williams Hall, lobby, plant
-492, UPenn, Williams Hall, lobby, toilet
-493, UPenn, Williams Hall, lobby, bathmat
-494, UPenn, Williams Hall, lobby, sink
-495, UPenn, Williams Hall, lobby, student_desk
-496, UPenn, Williams Hall, lobby, student_desk
-497, UPenn, Williams Hall, lobby, student_desk
-498, UPenn, Williams Hall, lobby, student_desk
-499, UPenn, Williams Hall, lobby, student_desk
+492, UPenn, Williams Hall, Restroom, toilet
+493, UPenn, Williams Hall, Restroom, bathmat
+494, UPenn, Williams Hall, Restroom, sink
+495, UPenn, Williams Hall, Classroom C, student_desk
+496, UPenn, Williams Hall, Classroom C, student_desk
+497, UPenn, Williams Hall, Classroom C, student_desk
+498, UPenn, Williams Hall, Classroom C, student_desk
+499, UPenn, Williams Hall, Classroom C, student_desk
 500, UPenn, Williams Hall, lobby, plant
 501, UPenn, Williams Hall, lobby, teacher_desk
 502, UPenn, Williams Hall, lobby, plant
-503, UPenn, Williams Hall, lobby, plant
+503, UPenn, Williams Hall, Office, plant

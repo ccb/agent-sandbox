@@ -77,6 +77,7 @@ IRVINE = "Irvine Auditorium"
 COLLEGE = "College Hall"
 COHEN = "Claudia Cohen Hall"
 ALUMNI = "Sweeten Alumni Building"
+WILLIAMS = "Williams Hall"
 ROOM_SUBDIVIDE = {
     VAN_PELT,
     FISHER,
@@ -86,6 +87,7 @@ ROOM_SUBDIVIDE = {
     COLLEGE,
     COHEN,
     ALUMNI,
+    WILLIAMS,
 }  # buildings split into rooms
 MIN_INTERIOR = 4  # footprints with fewer inside tiles stay solid (too small)
 MAX_DOOR_WIDTH = 6  # per-door cap; also stops a wall fronting a wide plaza from
@@ -115,10 +117,11 @@ UNNAMED = [
 ]
 
 # Williams Hall is already a furnished cutaway (furnish_building.py) with its door
-# in the south wall at these columns. We carve its collision to match, and skip its
-# picture so we don't paint over the furniture.
-WILLIAMS = "Williams Hall"
-WILLIAMS_DOOR_X = (40, 41)
+# in the south wall at these columns -- the floor gap in the painted williams_walls
+# ring (Task 538's relayer moved the wall art; re-verify against williams_walls if
+# the art changes again). We carve its collision to match, and skip its picture so
+# we don't paint over the furniture.
+WILLIAMS_DOOR_X = (43, 44)
 
 # Extra entrances to open beyond the one(s) path-proximity finds, keyed by
 # building name -> list of door-cell sets (each set is one opening in the
@@ -583,6 +586,21 @@ def load_alumni_plan(tmj, W, H, interior):
     return rooms, wall_cells
 
 
+def load_williams_plan(tmj, W, H, interior):
+    """(rooms, wall_cells) for Williams from the williams_arenas object layer +
+    the relayered williams_walls tiles. Rooms are the grouped sections (numbered
+    sub-boxes merged, Lobby* excluded so the atrium stays lobby); wall_cells is
+    the authoritative painted wall geometry, so collision matches the picture.
+    Returns ([], set()) if williams_arenas is absent."""
+    import furnish_williams as fw
+
+    grouped = fw.grouped_sections(tmj)
+    if not grouped:
+        return [], set()
+    rooms = [{"name": nm, "rect": list(rect)} for nm, rect in grouped.items()]
+    return rooms, fw.williams_wall_cells(tmj)
+
+
 def _punch_doorway(room_cells, walk, collision, W, H):
     """Carve one cell gap between sealed room_cells and the adjacent walk.
 
@@ -816,6 +834,8 @@ def main():
                 plan = load_cohen_plan(tmj, W, H, interior)
             elif name == ALUMNI:
                 plan = load_alumni_plan(tmj, W, H, interior)
+            elif name == WILLIAMS:
+                plan = load_williams_plan(tmj, W, H, interior)
             else:
                 plan = load_meyerson_plan(tmj, W, interior)
             subdivide_rooms(
