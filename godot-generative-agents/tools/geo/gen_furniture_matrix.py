@@ -192,6 +192,15 @@ def structural_cells(tmj: dict, structural_gids: set[int]) -> set[int]:
 _WALK_ON = ("cushion", "armchair", "chair", "stool", "sofa", "desk")
 
 
+def _decorative(name: str) -> bool:
+    """Rugs and floor-lamps are decorative area-fills, not interaction
+    targets, so they get no spot (#537). Matched by name: any ``rug`` and
+    floor-standing lamps (``floor``+``lamp`` -- floor_lamp, clockwork_lamp_
+    floor -- but not candelabra/lantern/lights, which carry no "lamp")."""
+    n = name.lower()
+    return "rug" in n or ("lamp" in n and "floor" in n)
+
+
 def piece_spot(
     piece: dict,
     furn: list[str],
@@ -224,6 +233,8 @@ def piece_spot(
         )
 
     name = names.get(piece["anchor_gid"], "").lower()
+    if _decorative(name):
+        return None
     if any(stem in name for stem in _WALK_ON):
         on_piece = [
             (x, y)

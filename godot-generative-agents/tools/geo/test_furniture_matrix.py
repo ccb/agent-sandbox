@@ -143,6 +143,24 @@ def test_piece_spot_walk_on_with_no_walkable_tile_falls_to_front():
     ) == (1, 0)
 
 
+def test_piece_spot_skips_rugs_and_floor_lamps():
+    # Decorative area-fills get no spot (#537), even with walkable floor beside
+    # them. Candelabra/lantern (no "lamp") are unaffected -> still get a spot.
+    furn = ["5", "0"]
+    coll = ["1", "0"]
+    arena = ["1", "1"]
+    at = {"1": "room"}
+    for deco in ("rug_blue", "floor_lamp", "clockwork_lamp_floor"):
+        assert (
+            piece_spot(_piece([(0, 0)]), furn, coll, arena, at, set(), {5: deco}, 2, 1)
+            is None
+        )
+    # A candelabra is not decorative-excluded -> it still gets its front spot.
+    assert piece_spot(
+        _piece([(0, 0)]), furn, coll, arena, at, set(), {5: "candelabra"}, 2, 1
+    ) == (1, 0)
+
+
 def test_sheet_firstgids_matches_interior_and_suffixed_names():
     from gen_furniture_matrix import _sheet_firstgids
 
