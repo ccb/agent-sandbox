@@ -13,7 +13,7 @@
 - **Targets `godot-ga-main`** (geo tooling + map + geo tests). Branch `feat/entrance-floor-seal-556` (already created off `godot-ga-main`).
 - **`FLOOR` = 621 (open door art), `WALL` = 543** (`add_entrances.py:103-104`, from `block_furniture`). Use the constants, never hardcode the gids in `add_entrances.py`.
 - **Never commit a regenerated (minified) tmj.** The committed tmj is Tiled-pretty (data is one map-row per line, 245 values, `, `-separated). Task 2's edit is a surgical, format-preserving one-line change verified to leave the full JSON identical except the target cell.
-- **The ghost-door guard checks ONE direction only:** a cell drawn `FLOOR` in `entrance_floor` while `collision=="1"` is an error. Do NOT add the reverse (walkable-but-not-floor-drawn) — legitimately walkable cells get floor art from other layers and would false-positive.
+- **The ghost-door guard is scoped to `FORCED_CLOSED` cells only:** it asserts each `FORCED_CLOSED` cell is drawn `WALL` (not `FLOOR`) in `entrance_floor`. Do NOT sweep the whole `entrance_floor` layer for "any `FLOOR` over sealed collision" — `entrance_floor` is a whole-footprint floor plan (`paint_interior` paints `FLOOR` over the entire building), so a blanket sweep flags ~2954 legitimately-furnished interior cells. The real drift class is narrow: a `FORCED_CLOSED` door re-drawn open.
 - The collision seal (`add_entrances.py:835-836`) stays where it is — it must run before the collision matrix is written (~line 867); the `floor` array doesn't exist until ~line 877, so the tile repaint is necessarily a separate call after `paint_interior`.
 - Commits end with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. Run git from the repo root `/Users/yh/Documents/GitHub/agent-sandbox`.
 - No changes to collision/matrix content, other buildings' doors, `FORCED_DOORS`, or the sim. The layer-id churn in `insert_entrance_layers` is explicitly out of scope.
@@ -218,8 +218,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Test: `godot-generative-agents/tools/geo/test_validate_tmj.py`
 
 **Interfaces:**
-- Consumes: `add_entrances.FLOOR` (621); `self.w.tile_layers["entrance_floor"]`, `self.w.collision`, `self.w.W`; `self.add(severity, category, building, code, message)` (all existing).
-- Produces: `Checker.check_entrance_floor_sealed(self)` — emits an `error` Finding with code `ghost_door` per run when any `FLOOR`-drawn cell is collision-sealed.
+- Consumes: `add_entrances.FLOOR` (621) and `add_entrances.FORCED_CLOSED`; `self.w.tile_layers["entrance_floor"]`, `self.w.W`; `self.add(severity, category, building, code, message)` (all existing).
+- Produces: `Checker.check_entrance_floor_sealed(self)` — emits an `error` Finding with code `ghost_door` per run when any `FORCED_CLOSED` cell is drawn `FLOOR` in `entrance_floor`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -227,19 +227,19 @@ Append to `godot-generative-agents/tools/geo/test_validate_tmj.py`:
 
 ```python
 def test_no_ghost_doors_on_real_map():
-    # After Task 2 sealed Sweeten, the committed map has zero ghost doors.
+    # After Task 2 sealed Sweeten, every FORCED_CLOSED door is drawn WALL.
     w = real_world()
     c = v.Checker(w)
     c.check_entrance_floor_sealed()
     assert [f for f in c.findings if f.code == "ghost_door"] == []
 
 
-def test_ghost_door_detected_when_open_tile_over_sealed_collision():
-    # Draw open-floor art (FLOOR) on a currently-sealed cell -> a ghost door.
+def test_ghost_door_detected_when_forced_closed_drawn_open():
+    # Re-open a FORCED_CLOSED door in the drawn layer -> a ghost door error.
     w = real_world()
-    ef = w.tile_layers["entrance_floor"]["data"]
-    idx = next(i for i, g in enumerate(ef) if w.collision[i] == "1")
-    ef[idx] = v.FLOOR
+    W = w.W
+    fx, fy = next(iter(next(iter(v.FORCED_CLOSED.values()))))
+    w.tile_layers["entrance_floor"]["data"][fy * W + fx] = v.FLOOR
     c = v.Checker(w)
     c.check_entrance_floor_sealed()
     assert any(f.code == "ghost_door" and f.severity == "error" for f in c.findings)
@@ -252,11 +252,12 @@ Expected: FAIL — `AttributeError: 'Checker' object has no attribute 'check_ent
 
 - [ ] **Step 3: Import `FLOOR` and add the check**
 
-In `godot-generative-agents/tools/geo/validate_tmj.py`, add `FLOOR` to the existing `from add_entrances import (...)` block (line 22):
+In `godot-generative-agents/tools/geo/validate_tmj.py`, add `FLOOR` and `FORCED_CLOSED` to the existing `from add_entrances import (...)` block (line 22):
 
 ```python
 from add_entrances import (
     FLOOR,
+    FORCED_CLOSED,
     # ...existing names, unchanged...
 )
 ```
@@ -265,26 +266,33 @@ Add the check method to `class Checker` (place it right after `check_collision_v
 
 ```python
     def check_entrance_floor_sealed(self):
-        # A "ghost door": an entrance_floor cell drawn as open floor art (FLOOR)
-        # whose collision is sealed ("1"). The tile lies about walkability and a
-        # regen re-opens it (#556). ONE direction only -- walkable cells legit-
-        # imately get floor art from other layers, so the reverse is not an error.
+        # Every FORCED_CLOSED door must be drawn as WALL in entrance_floor, not
+        # left as open-door FLOOR art (issue #556): a regen that reverts a hand-
+        # seal re-draws the door open. Scoped to FORCED_CLOSED cells ON PURPOSE --
+        # entrance_floor is a whole-footprint floor plan (paint_interior paints
+        # FLOOR over the entire building), so a blanket "FLOOR over sealed
+        # collision" sweep would flag every furnished interior cell. A
+        # FORCED_CLOSED cell is meant to be sealed, so it must read as wall.
         layer = self.w.tile_layers.get("entrance_floor")
         if layer is None:
             self.add("info", "MATRIX_TMJ", "", "entrance_floor_absent",
                      "no entrance_floor layer -- ghost-door check skipped")
             return
+        data = layer.get("data", [])
         W = self.w.W
         ghosts = []
-        for i, gid in enumerate(layer.get("data", [])):
-            if (gid & 0x1FFFFFFF) == FLOOR and self.w.collision[i] == "1":
-                ghosts.append((i % W, i // W))
+        for name, cells in FORCED_CLOSED.items():
+            for fx, fy in cells:
+                i = fy * W + fx
+                if i < len(data) and (data[i] & 0x1FFFFFFF) == FLOOR:
+                    ghosts.append((name, fx, fy))
         if ghosts:
-            shown = ", ".join(f"({x},{y})" for x, y in ghosts[:8])
+            shown = ", ".join(f"{n} ({x},{y})" for n, x, y in ghosts[:8])
             more = "" if len(ghosts) <= 8 else f" (+{len(ghosts) - 8} more)"
             self.add("error", "MATRIX_TMJ", "", "ghost_door",
-                     f"{len(ghosts)} entrance_floor cell(s) drawn open (FLOOR/{FLOOR}) "
-                     f"but collision-sealed: {shown}{more} -- repaint the tile to WALL")
+                     f"{len(ghosts)} FORCED_CLOSED door cell(s) drawn open "
+                     f"(FLOOR/{FLOOR}) in entrance_floor: {shown}{more} -- "
+                     f"repaint the tile to WALL")
 ```
 
 Register it in `run()` (the method list around lines 763-780), right after `self.check_collision_vs_walls()`:

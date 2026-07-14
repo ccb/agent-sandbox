@@ -71,14 +71,21 @@ doors, so the guard (§3) passes clean.
 
 ### 3. `validate_tmj.py` — ghost-door guard
 
-A new check method: for every cell drawn as `FLOOR` (621) in `entrance_floor`
-whose `collision` is `1`, append an `error` Finding (category e.g.
-`entrance_floor`, code e.g. `ghost_door`, message naming the cell). This is the
-**one direction that is a real defect** (drawn-open but sealed). The reverse
-(walkable cell not drawn as `entrance_floor` floor) is deliberately **not**
-checked — legitimately-walkable cells get their floor art from other layers, so
-the reverse would false-positive. Runs in the existing drift-gate; passes on the
-committed map after §2.
+A new check method asserts **every `FORCED_CLOSED` door cell is drawn as `WALL`
+(not open-door `FLOOR`) in `entrance_floor`**; any `FORCED_CLOSED` cell drawn
+`FLOOR` (621) gets an `error` Finding (code `ghost_door`, naming the building +
+cell). Runs in the existing drift-gate; passes on the committed map after §2.
+
+**Why scoped to `FORCED_CLOSED`, not a whole-layer sweep:** `entrance_floor` is
+**not** a doors-only layer — `paint_interior` paints `FLOOR` over each building's
+*entire footprint*, so a naive "any `FLOOR` cell that's collision-sealed →
+ghost door" check flags ~2954 legitimately-furnished interior cells (floor drawn
+under furniture/interior walls sealed on top). The real drift class is narrow and
+specific: a hand-closed door (`FORCED_CLOSED`) that a regen re-draws open. So the
+guard checks exactly those cells — zero false positives, and any future
+`FORCED_CLOSED` entry is covered automatically. (No collision read is needed: a
+`FORCED_CLOSED` cell is by definition meant to be sealed, so it must be drawn as
+wall.)
 
 ## Verification
 
@@ -87,8 +94,9 @@ committed map after §2.
     small fixture), assert a `FORCED_CLOSED` cell has `entrance_floor` `floor`
     == `WALL` **and** `collision` == `"1"` (extends the Van Pelt geo tests, e.g.
     `test_van_pelt_asset.py`, or a focused new test).
-  - Guard: a synthetic tmj with a `FLOOR`-drawn cell at a `collision==1` position
-    yields a `ghost_door` error Finding; a consistent one yields none
+  - Guard: re-opening a `FORCED_CLOSED` cell in `entrance_floor` (set it to
+    `FLOOR`) yields a `ghost_door` error Finding; the committed map (all
+    `FORCED_CLOSED` cells drawn `WALL` after §2) yields none
     (`test_validate_tmj.py`).
 - **Real map:** `validate_tmj.py` on the committed tmj exits 0 (no un-baselined
   errors) after the Sweeten seal; `add_entrances.py` re-run no longer flips the
