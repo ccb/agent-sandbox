@@ -1929,6 +1929,16 @@
       "category": "furniture",
       "label": "red accordion / concertina",
       "verified": false
+    },
+    "window_dark_pane": {
+      "sheet": "franuka",
+      "col": 26,
+      "row": 6,
+      "w": 1,
+      "h": 1,
+      "category": "window",
+      "label": "dark-frame window, light pane (painted on *_furniture faces, e.g. Williams grounds)",
+      "verified": true
     }
   }
 }
