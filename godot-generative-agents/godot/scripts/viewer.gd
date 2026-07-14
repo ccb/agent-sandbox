@@ -121,6 +121,8 @@ const TRAIL_DIM_ALPHA := 0.18
 # Marker collection for the timeline strip (issue #249) — also the single home
 # of the act-address building parser (_building_of delegates to it).
 const ReplayMarkers := preload("res://scripts/replay_markers.gd")
+const GifEncoder := preload("res://scripts/gif_encoder.gd")
+const ClipExport := preload("res://scripts/clip_export.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -188,6 +190,10 @@ var _speech_style: StyleBoxFlat
 # whose shader clears a circle around the tracked agent each frame.
 var _tracked_name := ""
 var _vision_r := FOG_FALLBACK_VISION_R
+# Clip export (issue #488): the marked in/out step span, -1 = unset. [ sets in,
+# ] sets out; the panel highlights the span and enables Export when both are set.
+var _clip_in := -1
+var _clip_out := -1
 var _fog: CanvasLayer
 var _fog_rect: ColorRect
 var _fog_mat: ShaderMaterial
@@ -273,6 +279,7 @@ func _ready() -> void:
 	# Playback controls: pause/resume, seek along the timeline, change speed.
 	_panel.play_pause_requested.connect(_on_play_pause)
 	_panel.seek_requested.connect(_on_seek)
+	_panel.clip_export_requested.connect(_export_clip)
 	_panel.speed_changed.connect(func(m: float) -> void: _speed = m)
 	_panel.set_playing(not _paused)
 
@@ -1358,6 +1365,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _heatmap.visible:
 				_heatmap.cycle_view(-1 if event.keycode == KEY_LEFT else 1)
 				get_viewport().set_input_as_handled()
+		KEY_BRACKETLEFT:
+			_set_clip_marker(true)
+			get_viewport().set_input_as_handled()
+		KEY_BRACKETRIGHT:
+			_set_clip_marker(false)
+			get_viewport().set_input_as_handled()
 
 
 func _toggle_heatmap() -> void:
@@ -1456,6 +1469,90 @@ func _take_snapshot() -> void:
 	$UI.visible = true
 	_gallery.add_snapshot(ImageTexture.create_from_image(img), label)
 	_flash()
+
+
+func _current_step() -> int:
+	if step_seconds <= 0.0 or _frames.is_empty():
+		return 0
+	return clampi(int(_t / step_seconds), 0, maxi(_frames.size() - 1, 0))
+
+
+func _set_clip_marker(is_in: bool) -> void:
+	# [ marks the span start at the playhead, ] marks the end. Baked replay only.
+	if _is_live or _frames.is_empty():
+		return
+	if is_in:
+		_clip_in = _current_step()
+	else:
+		_clip_out = _current_step()
+	_panel.set_clip_span(_clip_in, _clip_out)
+
+
+func _downscale(img: Image) -> Image:
+	# Cap GIF frames at 640px wide; full-res 720p GIFs are enormous.
+	var maxw := 640
+	if img.get_width() <= maxw:
+		return img
+	var out := img.duplicate()
+	var h := int(round(img.get_height() * maxw / float(img.get_width())))
+	out.resize(maxw, h, Image.INTERPOLATE_BILINEAR)
+	return out
+
+
+func _capture_span(from_step: int, to_step: int, sink: Callable) -> void:
+	# Render each step in [from,to] offscreen and hand (seq_index, Image) to sink.
+	# _paused stops _process advancing _t, so setting _t to an exact step multiple
+	# renders that step with zero interpolation (see _process). UI chrome is hidden
+	# so grabs are the bare campus; everything is restored on the way out.
+	var last := maxi(_frames.size() - 1, 0)
+	from_step = clampi(from_step, 0, last)
+	to_step = clampi(to_step, from_step, last)
+	var saved_t := _t
+	var saved_paused := _paused
+	_paused = true
+	$UI.visible = false
+	for step in range(from_step, to_step + 1):
+		_t = float(step) * step_seconds
+		await RenderingServer.frame_post_draw
+		sink.call(step - from_step, get_viewport().get_texture().get_image())
+	$UI.visible = true
+	_t = saved_t
+	_paused = saved_paused
+
+
+func _export_clip(kind: String) -> void:
+	# Dispatch the marked span to the GIF or the PNG-frames path (issue #488).
+	if _is_live or _frames.is_empty():
+		return
+	if _clip_in < 0 or _clip_out < 0:
+		_panel.set_clip_status("Mark a clip span first: [ sets start, ] sets end.", "")
+		return
+	var a := mini(_clip_in, _clip_out)
+	var b := maxi(_clip_in, _clip_out)
+	_panel.set_clip_status("Exporting %d frames…" % (b - a + 1), "")
+	if kind == "gif":
+		var frames: Array = []
+		await _capture_span(a, b, func(_i: int, img: Image) -> void:
+			frames.append(_downscale(img)))
+		var bytes := GifEncoder.encode(frames, 10)
+		var path := ClipExport.save_gif(bytes, a, b)
+		if path == "":
+			_panel.set_clip_status("GIF export failed — see console.", "")
+		else:
+			_panel.set_clip_status("saved → %s" % path,
+				"" if OS.has_feature("web") else path)
+	else:  # "frames"
+		var dir := ClipExport.make_frame_dir(a, b)
+		if dir == "":
+			_panel.set_clip_status("Frame export failed — see console.", "")
+			return
+		var count := [0]
+		await _capture_span(a, b, func(i: int, img: Image) -> void:
+			if ClipExport.save_frame(img, dir, i):
+				count[0] += 1)
+		var gdir := ProjectSettings.globalize_path(dir)
+		_panel.set_clip_status("%d frames → %s\n%s" % [count[0], gdir,
+			ClipExport.ffmpeg_command(dir)], gdir)
 
 
 func _flash() -> void:
