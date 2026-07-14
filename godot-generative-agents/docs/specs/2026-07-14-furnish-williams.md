@@ -92,11 +92,14 @@ preview into the committed tmj as a **surgical insert** (see §4).
 
 ### 3. `world_data_upenn.yaml` — surface one classroom, re-route Tanaka
 
-- Add `UPenn:Williams Hall:Classroom A` as a schedulable location (18/20 enum).
-- Re-address Professor Tanaka's problem-session stop and the Tanaka↔Sofia meeting
-  from `UPenn:Williams Hall:lobby` to `UPenn:Williams Hall:Classroom A` so routing
-  targets the classroom (Classroom A has the decorated blackboard — fits a physics
-  demo session). Other Williams references, if any, stay `:lobby`.
+- Add a `Williams Hall — Classroom A` location (`UPenn:Williams Hall:Classroom A`)
+  after the `Williams Hall` entry, mirroring the Houston room entries (18/20 enum).
+- Re-point Professor Tanaka's **solo** problem-session stop from `place: Williams
+  Hall` to `place: Williams Hall — Classroom A` so routing targets the classroom
+  (Classroom A has the decorated blackboard — fits a physics demo session).
+- **No meeting change:** the only Tanaka↔Sofia meeting (`Before the guest lecture
+  at Irvine`) is at Irvine Auditorium; Sofia never visits Williams. The Williams
+  stop has no meeting.
 
 ### 4. Regenerate matrices + commit the tmj surgically
 
