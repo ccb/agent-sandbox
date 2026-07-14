@@ -209,3 +209,47 @@ def test_replace_layer_data_duplicate_name_raises():
     text = _layers_text(_tile_block("dup", 1), _tile_block("dup", 2))
     with pytest.raises(ValueError):
         fw._replace_layer_data(text, "dup", [1, 2, 3], 3)
+
+
+import os, shutil, subprocess, sys
+
+
+def _committed_tmj():
+    return os.path.normpath(
+        os.path.join(HERE, "..", "..", "godot", "maps", "upenn_core_urban.tmj")
+    )
+
+
+def test_apply_to_file_reproduces_committed_tmj(tmp_path):
+    """Running the hardened splice on a copy of the committed tmj yields a
+    byte-identical file (strip-then-reinsert reuses the existing ids)."""
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    with open(src, "rb") as a, open(dst, "rb") as b:
+        assert a.read() == b.read(), "hardened apply_to_file changed the committed tmj"
+
+
+def test_apply_to_file_idempotent_second_run(tmp_path):
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    after_one = open(dst, "rb").read()
+    fw.apply_to_file(dst)
+    assert open(dst, "rb").read() == after_one, "second run was not a no-op"
+
+
+def test_apply_to_file_no_duplicate_layers(tmp_path):
+    import json
+
+    src = _committed_tmj()
+    dst = str(tmp_path / "map.tmj")
+    shutil.copy2(src, dst)
+    fw.apply_to_file(dst)
+    fw.apply_to_file(dst)  # twice
+    t = json.load(open(dst))
+    names = [L["name"] for L in t["layers"]]
+    assert names.count("williams_walls") == 1
+    assert names.count("williams_arenas") == 1

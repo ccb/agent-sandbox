@@ -271,6 +271,13 @@ def _replace_layer_data(text, layer_name, new_data, W):
     return text[:dstart] + '"data":[' + _fmt_data(new_data, W, wi) + text[dend:]
 
 
+def _bump_header(text, key, atleast):
+    """Set a top-level header field to max(current, atleast) so ids never regress."""
+    m = re.search(rf'"{key}":(\d+)', text)
+    cur = int(m.group(1)) if m else 0
+    return re.sub(rf'"{key}":\d+', f'"{key}":{max(cur, atleast)}', text, count=1)
+
+
 def _tile_layer_block(data, layer_id, name, W, H, k9):
     """Tiled-format tile layer object text (alphabetical keys, inline W-wrapped
     data); k9 is the 9-space field indent from a sibling layer."""
@@ -333,18 +340,59 @@ def _object_layer_block(objects, layer_id, name, next_obj, k9):
 
 
 def apply_to_file(tmj_path):
-    """Splice williams_walls + williams_arenas into the committed tmj and update
-    williams_floor/williams_furniture data, preserving Tiled formatting (only the
-    changed rows + the two new layers differ). Backs up to <path>.bak first."""
+    """Idempotently splice williams_walls + williams_arenas into the committed tmj
+    and update williams_floor/williams_furniture data, preserving Tiled formatting.
+    Strips any prior spliced layers first and reuses their exact ids, so a re-run
+    (and a run on the already-spliced committed tmj) is byte-identical. Backs up to
+    <path>.bak first."""
     tmj = json.load(open(tmj_path))
     W, H = tmj["width"], tmj["height"]
     new_walls, new_floor, new_furn = compute_relayer(tmj)
-    maxid = max(L.get("id", 0) for L in tmj["layers"])
-    walls_id, arenas_id = maxid + 1, maxid + 2
-    next_obj = tmj.get("nextobjectid", 1)
+
+    # Capture-and-reuse ids: if a spliced layer already exists, reuse its id;
+    # else derive from the max id among the OTHER layers. Never read the
+    # nextlayerid/nextobjectid headers for this (a strip doesn't lower them).
+    by_name = {L.get("name"): L for L in tmj["layers"]}
+    other_max_layer = max(
+        (
+            L.get("id", 0)
+            for L in tmj["layers"]
+            if L.get("name") not in ("williams_walls", "williams_arenas")
+        ),
+        default=0,
+    )
+    walls_id = (
+        by_name["williams_walls"]["id"]
+        if "williams_walls" in by_name
+        else other_max_layer + 1
+    )
+    arenas_id = (
+        by_name["williams_arenas"]["id"]
+        if "williams_arenas" in by_name
+        else other_max_layer + 2
+    )
+
+    arenas_layer = by_name.get("williams_arenas")
+    if arenas_layer and arenas_layer.get("objects"):
+        obj_base = min(o["id"] for o in arenas_layer["objects"])
+    else:
+        other_obj_max = max(
+            (
+                o["id"]
+                for L in tmj["layers"]
+                if L.get("type") == "objectgroup" and L.get("name") != "williams_arenas"
+                for o in L.get("objects", [])
+            ),
+            default=0,
+        )
+        obj_base = other_obj_max + 1
 
     text = open(tmj_path).read()
     shutil.copy2(tmj_path, tmj_path + ".bak")
+
+    # Idempotency: remove any prior spliced layers before re-inserting.
+    text = _strip_layer(text, "williams_walls")
+    text = _strip_layer(text, "williams_arenas")
     text = _replace_layer_data(text, "williams_floor", new_floor, W)
     text = _replace_layer_data(text, "williams_furniture", new_furn, W)
 
@@ -355,18 +403,13 @@ def apply_to_file(tmj_path):
     k9 = k8 + " "
     walls_block = _tile_layer_block(new_walls, walls_id, "williams_walls", W, H, k9)
     arenas_block = _object_layer_block(
-        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", next_obj, k9
+        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", obj_base, k9
     )
     insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
     text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
 
-    text = re.sub(r'"nextlayerid":\d+', f'"nextlayerid":{maxid + 3}', text, count=1)
-    text = re.sub(
-        r'"nextobjectid":\d+',
-        f'"nextobjectid":{next_obj + len(WILLIAMS_ARENA_OBJECTS)}',
-        text,
-        count=1,
-    )
+    text = _bump_header(text, "nextlayerid", max(walls_id, arenas_id) + 1)
+    text = _bump_header(text, "nextobjectid", obj_base + len(WILLIAMS_ARENA_OBJECTS))
     with open(tmj_path, "w") as fh:
         fh.write(text)
 
