@@ -146,8 +146,6 @@ UPenn, Irvine Auditorium, Auditorium, 203, 231
 UPenn, Irvine Auditorium, East Foyer, 214, 230
 UPenn, Irvine Auditorium, Auditorium, 191, 233
 UPenn, Irvine Auditorium, Auditorium, 203, 233
-UPenn, Irvine Auditorium, West Foyer, 175, 234
-UPenn, Irvine Auditorium, East Foyer, 209, 234
 UPenn, Irvine Auditorium, Auditorium, 191, 235
 UPenn, Irvine Auditorium, Auditorium, 203, 235
 UPenn, Irvine Auditorium, West Foyer, 175, 235
@@ -158,10 +156,8 @@ UPenn, Irvine Auditorium, Lobby, 189, 238
 UPenn, Irvine Auditorium, Lobby, 201, 238
 UPenn, Irvine Auditorium, Lobby, 209, 240
 UPenn, Irvine Auditorium, Lobby, 181, 239
-UPenn, Irvine Auditorium, Lobby, 181, 245
 UPenn, Irvine Auditorium, Lobby, 186, 245
 UPenn, Irvine Auditorium, Lobby, 206, 245
-UPenn, Irvine Auditorium, Lobby, 208, 245
 UPenn, Irvine Auditorium, Lobby, 180, 246
 UPenn, Irvine Auditorium, Lobby, 211, 246
 UPenn, Van Pelt Library, 126, 30, 22
@@ -237,7 +233,6 @@ UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 142, 40
 UPenn, Van Pelt Library, Research Data and Digital Scholarship Exchange, 74, 41
 UPenn, Van Pelt Library, Lounge, 96, 41
 UPenn, Van Pelt Library, Lounge, 102, 41
-UPenn, Van Pelt Library, Lounge, 106, 40
 UPenn, Van Pelt Library, Microtext Collection, 130, 41
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 144, 40
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 154, 40
@@ -272,7 +267,6 @@ UPenn, Van Pelt Library, Circulation, 115, 52
 UPenn, Van Pelt Library, Circulation, 111, 55
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 142, 55
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 149, 56
-UPenn, Van Pelt Library, Entrance, 115, 65
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 142, 60
 UPenn, Van Pelt Library, Moelis Family Grand Reading Room, 149, 61
 UPenn, Meyerson Hall, Cafe, 202, 62
@@ -283,7 +277,6 @@ UPenn, Meyerson Hall, East Studio, 220, 66
 UPenn, Meyerson Hall, West Studio, 184, 68
 UPenn, Meyerson Hall, East Studio, 219, 68
 UPenn, Meyerson Hall, West Studio, 188, 69
-UPenn, Meyerson Hall, Cafe, 202, 72
 UPenn, Meyerson Hall, East Studio, 215, 73
 UPenn, Meyerson Hall, West Studio, 184, 74
 UPenn, Meyerson Hall, East Studio, 219, 74
@@ -466,7 +459,6 @@ UPenn, Williams Hall, lobby, 16, 237
 UPenn, Williams Hall, lobby, 18, 237
 UPenn, Williams Hall, lobby, 20, 237
 UPenn, Williams Hall, lobby, 46, 236
-UPenn, Williams Hall, lobby, 38, 239
 UPenn, Williams Hall, lobby, 53, 238
 UPenn, Williams Hall, lobby, 55, 238
 UPenn, Williams Hall, lobby, 57, 238
