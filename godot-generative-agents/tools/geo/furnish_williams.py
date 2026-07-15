@@ -40,6 +40,17 @@ def _arenas_layer(tmj):
     )
 
 
+def _arena_objects(tmj):
+    """Objects to splice into williams_arenas. The authored layer is the source
+    of truth (edited in Tiled, checked in), so when it exists we re-emit its own
+    objects. WILLIAMS_ARENA_OBJECTS is only a seed for a fresh bake that has no
+    arenas layer yet (see #552)."""
+    layer = _arenas_layer(tmj)
+    if layer and layer.get("objects"):
+        return layer["objects"]
+    return WILLIAMS_ARENA_OBJECTS
+
+
 def read_sections(tmj):
     """name -> (c0,r0,c1,r1) inclusive tile rect, from the williams_arenas object
     layer (px/16 rounded, same idiom as furnish_college_hall.read_sections)."""
@@ -378,6 +389,9 @@ def apply_to_file(tmj_path):
         else other_max_layer + 2
     )
 
+    # Pairs with _arena_objects() below: when the authored williams_arenas layer
+    # exists we reuse ITS objects (source of truth) and their id base; both
+    # branches must agree on that choice or the splice wouldn't be byte-stable.
     arenas_layer = by_name.get("williams_arenas")
     if arenas_layer and arenas_layer.get("objects"):
         obj_base = min(o["id"] for o in arenas_layer["objects"])
@@ -408,14 +422,15 @@ def apply_to_file(tmj_path):
     k8 = text[line0:fstart]
     k9 = k8 + " "
     walls_block = _tile_layer_block(new_walls, walls_id, "williams_walls", W, H, k9)
+    arena_objects = _arena_objects(tmj)
     arenas_block = _object_layer_block(
-        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", obj_base, k9
+        arena_objects, arenas_id, "williams_arenas", obj_base, k9
     )
     insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
     text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
 
     text = _bump_header(text, "nextlayerid", max(walls_id, arenas_id) + 1)
-    text = _bump_header(text, "nextobjectid", obj_base + len(WILLIAMS_ARENA_OBJECTS))
+    text = _bump_header(text, "nextobjectid", obj_base + len(arena_objects))
     with open(tmj_path, "w") as fh:
         fh.write(text)
 

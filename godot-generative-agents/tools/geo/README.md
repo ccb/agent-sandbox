@@ -182,6 +182,15 @@ lamps, signs, trees) already present at firstgid 1. Each entry carries
 `(sheet, col, row)`, a footprint `w×h`, a `category`
 (floor/wall/window/door/furniture/prop/tree) and a `room`/context tag.
 
+> **Legacy — retired for Williams.** `furnish_building.py` is the original
+> whole-cloth generator (it paints floor + walls + furniture from code). Williams
+> Hall has since moved to the repo's authored-art model: its `williams_floor`,
+> `williams_furniture`, and `williams_arenas` layers are **hand-authored in Tiled
+> and checked in**, and its walls + matrices are **derived** by `furnish_williams.py`
+> + `add_entrances.py` (below). Running `furnish_building.py` now refuses (it would
+> overwrite the authored layers and minify the map); the module is kept only as a
+> library of palette constants + helpers those scripts import. See #552.
+
 - The script loads the catalog and exposes `block_named("bed_single")` /
   `tile_named("wall_brick")`, so **an LLM furnishing a room references objects by
   name** instead of raw atlas coordinates. The `_llm_guidance` block in the JSON
@@ -259,7 +268,8 @@ footprint from an invariant mask, so re-runs are byte-stable):
 ```bash
 uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
 uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area core --out godot-generative-agents/backend/penn/the_upenn
-uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams interior
+# (no furnish_building.py step — it's RETIRED; Williams' floor/furniture are authored, committed art. See the "Legacy" note above.)
+uv run python godot-generative-agents/tools/geo/furnish_williams.py                          # Williams walls (derived from authored arenas)
 uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors + interiors
 uv run python godot-generative-agents/tools/geo/block_grass.py                               # lawns become un-walkable
 uv run python godot-generative-agents/tools/geo/block_furniture.py                           # seal furniture into collision
@@ -270,6 +280,20 @@ uv run python godot-generative-agents/tools/geo/gen_furniture_matrix.py         
 uv run python godot-generative-agents/backend/penn/generate_building_labels.py
 LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py
 ```
+
+**Williams: authored vs derived.** The `williams_floor` / `williams_furniture` /
+`williams_arenas` layers are authored inputs — edit them in Tiled, commit them.
+`furnish_williams.py` *derives* the `williams_walls` layer from them (a
+format-preserving splice, so re-running it is byte-identical), and re-splices the
+authored `williams_arenas` unchanged. Everything downstream — the collision /
+arena / furniture matrices — is derived by `add_entrances.py` → `block_grass.py`
+→ `block_furniture.py` → `gen_furniture_matrix.py`. Re-running the whole chain on
+the committed inputs reproduces the committed derived artifacts byte-for-byte
+(`test_williams_reproducible.py` guards this). Note: `add_entrances.py` and
+`gen_furniture_matrix.py` write the `.tmj` *minified*, but they do not touch the
+Williams layers (only the matrices + other buildings' `entrance_floor`), so
+Williams' tmj reproducibility is unaffected — don't commit their minified tmj
+output.
 
 `--dry-run` reports each building's footprint/interior size and chosen door cell
 without writing.
