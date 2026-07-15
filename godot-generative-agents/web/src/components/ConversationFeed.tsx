@@ -1,4 +1,5 @@
 import type { Frame, Persona } from "../types/replay";
+import "./AgentPanel.css"; // .agent-field/.chat-line/.chat-speaker/.mem-empty + .convo-speaker-btn
 
 /**
  * A companion-level view of the dialogue happening across all agents at the
@@ -12,8 +13,12 @@ import type { Frame, Persona } from "../types/replay";
 // Both participants of a conversation carry the same window transcript on their
 // own `chat` (generate_penn_replay.py paints it onto each; live maybe_converse
 // does the same), so collecting across agents double-counts every line — dedup
-// by (speaker, line). Newest-last on the wire → reverse for newest-first, cap
-// like LlmCallLog.
+// by (speaker, line). Deliberate bounds of that key: an exact-duplicate line by
+// the same speaker in one window coalesces (authored dialogue doesn't repeat a
+// line verbatim), and it stays robust if one participant's transcript lags by a
+// line. Newest-last on the wire → reverse; ordering is newest-first within a
+// conversation and reverse-of-first-seen across concurrent ones (no per-line
+// timestamp to sort on — windows are short). Cap like LlmCallLog.
 export function collectConversations(
   frame: Frame | null | undefined,
   cap = 30,
@@ -50,8 +55,9 @@ export function ConversationFeed({
         {lines.length > 0 && <span className="agent-history-count">{lines.length}</span>}
       </span>
       {lines.length ? (
-        lines.map(([speaker, line], i) => (
-          <div key={i} className="chat-line">
+        lines.map(([speaker, line]) => (
+          // collectConversations dedupes by (speaker, line), so it's a unique key.
+          <div key={`${speaker}\n${line}`} className="chat-line">
             {/* When the speaker is a roster persona, the name deep-links to their
                 card, mirroring the dashboard's clickable cell header (#534). */}
             {known.has(speaker) ? (

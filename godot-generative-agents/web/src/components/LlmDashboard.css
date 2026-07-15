@@ -205,22 +205,6 @@
   text-decoration: underline;
 }
 
-/* A conversation-feed speaker who's a known agent (#534): reset the button
-   chrome so it reads as plain `.chat-speaker` text, keeping its colour/weight,
-   and underline on hover/focus to signal it opens that agent's card. */
-.convo-speaker-btn {
-  font: inherit;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.convo-speaker-btn:hover,
-.convo-speaker-btn:focus-visible {
-  text-decoration: underline;
-}
-
 .llm-cell-sprite {
   width: 2.9em;
   height: 2.9em;
