@@ -44,8 +44,8 @@ class SimStepper(Protocol):
     served ``Game`` -- but ``reset()`` must restore that *same* object in place,
     because every route closes over it.
 
-    Two optional attributes are probed with ``getattr`` (they are not part of
-    the protocol, so a minimal stepper can skip them):
+    Three optional attributes are probed with ``getattr`` (they are not part
+    of the protocol, so a minimal stepper can skip them):
 
     * ``ledger`` -- a :class:`~text_adventure_games.usage.UsageLedger`; when
       present, ``GET /usage`` reports it (tokens/cost -- ~0 under the mock

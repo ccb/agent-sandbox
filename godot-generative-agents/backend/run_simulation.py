@@ -113,14 +113,29 @@ def step(
     turn-start snapshot (the engine's gather->resolve simultaneous round is the
     semantic precedent), and effects still resolve serially in ``order``. A
     decision that outlives ``decide_timeout`` seconds degrades to ``None``
-    (idle this tick, re-ask next tick -- exactly the brain-outage behavior) and
-    its still-running future is parked in the caller-owned ``decide_pending``
-    dict so the agent is never asked twice at once. ``decide_info`` (optional
-    out-param dict, the ``out_memories`` pattern) is filled with
+    (idle this tick -- exactly the brain-outage behavior) and its still-running
+    future is parked in the caller-owned ``decide_pending`` dict so the agent
+    is never asked twice at once; once the parked call resolves, its answer is
+    *applied* at the agent's next decision point rather than discarded --
+    throwing a completed decision away would desync any stateful brain (the
+    mock consumes an authored command per ask) and pay a real provider twice
+    for one decision. Because the timeout contract and the double-ask guard
+    only work when both knobs are supplied, passing ``decide_executor``
+    without ``decide_timeout`` or ``decide_pending`` raises ``ValueError``
+    instead of silently waiting forever / dropping the guard. ``decide_info``
+    (optional out-param dict, the ``out_memories`` pattern) is filled with
     ``{"deciders": int, "timeouts": [names]}`` for pacing/observability. With
     ``decide_executor=None`` (the default, and always for :func:`simulate`'s
     deterministic bakes) the path is byte-identical serial.
     """
+    if decide_executor is not None:
+        # Fail loud: with a timeout of None one hung decide would block wait()
+        # forever, and without the registry a timed-out agent would be
+        # re-submitted every tick while its old call still runs.
+        if decide_timeout is None:
+            raise ValueError("decide_executor requires decide_timeout")
+        if decide_pending is None:
+            raise ValueError("decide_executor requires decide_pending")
     conversation_cooldowns = (
         conversation_cooldowns if conversation_cooldowns is not None else {}
     )
@@ -177,19 +192,25 @@ def step(
     decided = {}
     timeouts = []
     if decide_executor is not None and due:
-        pending = decide_pending if decide_pending is not None else {}
+        pending = decide_pending
         futs = {}
         for name in due:
             stale = pending.pop(name, None)
             if stale is not None:
                 if stale.done():
-                    stale.exception()  # retrieve + discard; re-ask fresh below
-                else:
-                    # Still thinking since an earlier tick: keep idling, never
-                    # double-submit -- one in-flight decision per agent.
-                    pending[name] = stale
-                    decided[name] = None
+                    # The parked call from an earlier timeout has resolved:
+                    # apply its answer now (a failed call degrades to None,
+                    # same as an outage). No new decide is submitted.
+                    try:
+                        decided[name] = stale.result()
+                    except Exception:
+                        decided[name] = None
                     continue
+                # Still thinking since an earlier tick: keep idling, never
+                # double-submit -- one in-flight decision per agent.
+                pending[name] = stale
+                decided[name] = None
+                continue
             futs[name] = decide_executor.submit(
                 _decide_for, game, chars[name], step_idx, retrieval
             )
@@ -209,13 +230,19 @@ def step(
                         decided[name] = None
                 else:
                     # Timed out. A sync call can't be cancelled, so park the
-                    # future (when it eventually completes, its usage still
-                    # lands in the shared ledger -- list.append is GIL-atomic,
-                    # and over_budget() is only read between ticks) and idle
-                    # the agent for this tick.
+                    # future and idle the agent for this tick. When the hung
+                    # call eventually completes its usage still lands in the
+                    # shared ledger -- crash-free because CPython's list
+                    # append/iterate are GIL-atomic, though the cost ceiling
+                    # check at the top of the next tick may miss a cost that
+                    # hasn't landed yet (the kill-switch can fire one tick
+                    # late; the lag is bounded by the client's own #260
+                    # timeout budget).
                     # ponytail: the straggler may read `game` while the serial
-                    # phase below mutates it -- torn perception is possible but
-                    # contained, because a parked result is always discarded.
+                    # phase below mutates it -- torn perception is possible
+                    # but contained: its observations were already recorded
+                    # before the blocking call, and its answer is applied only
+                    # at a decision point.
                     pending[name] = fut
                     decided[name] = None
                     timeouts.append(name)
@@ -237,13 +264,17 @@ def step(
             # Capture the thinking behind this decision for the replay card: the
             # reasoning the agent produced and the memories it retrieved (stashed
             # on the agent by observe_and_decide). They persist on st until the
-            # agent's next decision.
-            st["reasoning"] = (
-                getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
-            )
-            st["memories"] = memories_for_frame(
-                getattr(char.agent, "last_retrieved", None)
-            )
+            # agent's next decision. Skipped while a timed-out decision is still
+            # in flight -- the straggler thread owns those attributes just then,
+            # and the card should keep showing the last real decision instead of
+            # a half-made one.
+            if decide_pending is None or name not in decide_pending:
+                st["reasoning"] = (
+                    getattr(char.agent, "last_reasoning", None) or "(no reasoning)"
+                )
+                st["memories"] = memories_for_frame(
+                    getattr(char.agent, "last_retrieved", None)
+                )
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
                 # Periodic memory synthesis (issue #84): now that this step's

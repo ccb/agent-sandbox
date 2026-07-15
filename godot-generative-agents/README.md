@@ -288,8 +288,9 @@ than the sum — and the loop's sleep subtracts each tick's wall time, so
 walk-only ticks keep the `--tick-seconds` cadence while decision ticks start
 the next tick immediately. A decision that outlives `--decide-timeout`
 (default 30 s) leaves that agent idle for the tick — the skip is printed, the
-in-flight call still lands in the ledger, and the agent is re-asked once it
-resolves; a provider outage degrades the same way (failed calls record no
+in-flight call's usage still lands in the ledger, and its answer is applied at
+the agent's next decision point once it resolves (never billed twice); a
+provider outage degrades to the same idle-and-retry (failed calls record no
 cost, so a stalled tokens/min meter in the run monitor — not the budget row —
 is the outage signal). Every `frame` feed record carries `tick_ms` (+
 `deciders`), so a client can tell "thinking" from "stuck" (the viewer-side
