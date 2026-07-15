@@ -375,8 +375,7 @@ class RunStore:
         rc = retrieval if retrieval is not None else RetrievalConfig()
         memory = AgentMemory(owner=agent, embedding_client=embedding_client)
         memory.records = [
-            MemoryRecord.from_primitive(rec)
-            for rec in self._full_records(run_id, agent)
+            MemoryRecord.from_primitive(rec) for rec in self.full_records(run_id, agent)
         ]
         top = memory.retrieve(
             query,
@@ -391,8 +390,10 @@ class RunStore:
         )
         return memories_for_frame(top)
 
-    def _full_records(self, run_id: str, agent: str) -> list[dict]:
-        # The lossless to_primitive() dicts back out of columns + extra + blob.
+    def full_records(self, run_id: str, agent: str) -> list[dict]:
+        """The lossless ``to_primitive()`` dicts back out of columns + extra +
+        blob, ordered by record id -- what ``query_memories`` scores over, and
+        what a resumed run rehydrates its agents' memory from (#543)."""
         with self._db() as con:
             rows = con.execute(
                 "SELECT * FROM memories WHERE run_id = ? AND agent = ?"

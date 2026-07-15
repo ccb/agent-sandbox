@@ -1099,10 +1099,11 @@ def create_app(
 
     # ---------------------------------------------------------- run registry
     # The #306 registry half: browse/fetch/export/delete the #304 RunStore's
-    # run history. The store is probed off the stepper per request (the
-    # ledger/run_usage idiom), so a storeless server -- no --persist, or no
-    # stepper at all -- answers available:false here and 404 on every id
-    # route instead of erroring. Create/resume stay with #306's second half.
+    # run history, plus #543's resume (adopt a persisted run as the live one).
+    # The store is probed off the stepper per request (the ledger/run_usage
+    # idiom), so a storeless server -- no --persist, or no stepper at all --
+    # answers available:false here and 404 on every id route instead of
+    # erroring. POST /runs (create with a world-factory seam) stays deferred.
 
     def _run_store():
         return getattr(stepper, "run_store", None)
@@ -1181,6 +1182,61 @@ def create_app(
             except KeyError:
                 raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
         return {"ok": True, "deleted": run_id}
+
+    @app.post("/runs/{run_id}/resume")
+    async def runs_resume(run_id: str, _: None = Depends(require_auth)) -> dict:
+        """Adopt a persisted run as the live one (#543, the second half of
+        #306): the stepper rebuilds its world picking the run up where the
+        store left off, and because everything reads through the stepper,
+        ``/world_state``, ``/events`` and ``/agents/{name}/memory`` serve the
+        resumed run from here on -- run-scoping by adoption.
+
+        Not to be confused with ``POST /resume`` (the play button): that
+        un-pauses ticking, this swaps WHICH run is ticking. The loop's paused
+        state is deliberately untouched, consistent with ``POST /reset``.
+
+        Followers see a ``status`` record with ``reason: "reset"`` -- the
+        documented "the world was rebuilt, refetch meta and follow from here"
+        signal, so both frontends handle a resume with zero client changes
+        (the record's additive ``run_id`` field says which run took over).
+        Plain dict like the rest of the registry: a ``RunControlResponse``
+        model would strip the ``run_id`` key."""
+        store = _run_store()
+        if store is None:
+            raise HTTPException(status_code=404, detail=f"unknown run id: {run_id}")
+        resume_run = getattr(stepper, "resume_run", None)
+        if not callable(resume_run):
+            raise HTTPException(
+                status_code=501, detail="this stepper cannot resume persisted runs"
+            )
+
+        # A store implies a stepper, and create_app wires a controller for
+        # every stepper -- both are non-None past the guards above.
+        def _swap():
+            # The controller.reset() pattern: rebuild under the app lock in a
+            # worker thread, bump the generation so an in-flight tick of the
+            # OLD world is dropped instead of published. The already-current
+            # check lives inside the lock, atomic with the swap.
+            with lock:
+                if run_id == _current_run_id():
+                    raise HTTPException(
+                        status_code=409, detail=f"run {run_id} is already live"
+                    )
+                resume_run(run_id)
+                controller.generation += 1
+
+        try:
+            await asyncio.get_running_loop().run_in_executor(None, _swap)
+        except KeyError as exc:
+            # exc.args[0] keeps the message unquoted (str() of a KeyError
+            # wraps it in repr quotes).
+            raise HTTPException(status_code=404, detail=str(exc.args[0]))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        record = log.append(
+            "status", reason="reset", run_id=run_id, **controller.status()
+        )
+        return {**controller.status(), "cursor": record["cursor"], "run_id": run_id}
 
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
