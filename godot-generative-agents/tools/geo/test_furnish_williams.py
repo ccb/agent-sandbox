@@ -111,7 +111,10 @@ def test_apply_to_file_content_and_order(tmp_path):
     from collections import Counter
 
     wc = Counter(g & fw.GID_MASK for g in walls if g)
-    assert wc == {fw.WALL_GID: 340, fw.WINDOW_GID: 46}
+    # 309 wall_brick after the #572 de-thin + windows->walls: 340 doubled walls
+    # thinned to 263, plus the 46 exterior windows solidified into wall. No
+    # window tiles remain on williams_walls.
+    assert wc == {fw.WALL_GID: 309}
     assert (
         sum(
             1
