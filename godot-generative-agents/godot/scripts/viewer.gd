@@ -1553,8 +1553,19 @@ func _export_clip(kind: String) -> void:
 			if ClipExport.save_frame(img, dir, i):
 				count[0] += 1)
 		var gdir := ProjectSettings.globalize_path(dir)
-		_panel.set_clip_status("%d frames → %s\n%s" % [count[0], gdir,
-			ClipExport.ffmpeg_command(dir)], gdir)
+		# Encode the frames to mp4 + a high-quality gif with ffmpeg so the user
+		# gets finished files. Paint the status first (the encode blocks a few
+		# seconds); fall back to the copy-paste command if ffmpeg isn't found.
+		_panel.set_clip_status("Encoding %d frames with ffmpeg…" % count[0], "")
+		await get_tree().process_frame
+		var res := ClipExport.run_ffmpeg(dir)
+		if res.get("ok", false):
+			_panel.set_clip_status("saved → %s\n(+ clip.gif in the same folder)" % res["mp4"], gdir)
+		elif String(res.get("error", "")) == "ffmpeg not found":
+			_panel.set_clip_status("%d frames → %s\nffmpeg not found — run:\n%s" % [
+				count[0], gdir, ClipExport.ffmpeg_command(dir)], gdir)
+		else:
+			_panel.set_clip_status("ffmpeg failed — see console; frames → %s" % gdir, gdir)
 
 
 func _flash() -> void:

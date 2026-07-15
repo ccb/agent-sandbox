@@ -55,6 +55,13 @@ func _initialize() -> void:
 		and cmd.contains("/tmp/penn-clip-0003-0017"),
 		"ffmpeg_command references the dir + GIF and MP4 recipes")
 
+	# run_ffmpeg with a missing binary reports failure (not a crash), so the caller
+	# can fall back to the printed command. Real ffmpeg output is a manual-
+	# acceptance path -- CI and other machines may not have ffmpeg installed. The
+	# ERROR line this prints is expected, not a test failure.
+	var ff := ClipExport.run_ffmpeg(TEST_DIR, "/nonexistent/ffmpeg")
+	_check(not ff.get("ok", true), "run_ffmpeg with a missing binary -> ok=false")
+
 	# Clean up scratch.
 	var d := DirAccess.open(TEST_DIR.path_join("penn-clip-0003-0017"))
 	if d != null:
