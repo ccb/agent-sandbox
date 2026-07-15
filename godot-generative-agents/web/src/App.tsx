@@ -6,7 +6,7 @@ import { HomeView } from "./components/home/HomeView";
 import { LlmDashboard } from "./components/LlmDashboard";
 import { setUrlParam } from "./url";
 import { initialApiBase, useLive } from "./useLive";
-import { useReplay } from "./useReplay";
+import { useReplay, useReplayStep } from "./useReplay";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -77,6 +77,11 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
 
 export default function App() {
   const { status, replay } = useReplay();
+  // The replay step has a SINGLE owner: useReplayStep registers one global
+  // window.__pennReplayStep and deletes it on unmount, so App holds it and hands
+  // it to both consumers (the dashboard's conversation feed and the agent-card
+  // modal). The Godot canvas stays mounted on #llm, so the step keeps advancing.
+  const replayStep = useReplayStep(replay?.meta.steps ?? 0);
   // The live backend: one handshake + one feed poll, shared by the live dashboard
   // and the agent-card modal. The target starts from ?api= / VITE_SIM_API_URL and
   // can also be supplied at runtime by the dashboard's connect form (#519).
@@ -250,6 +255,7 @@ export default function App() {
               <LlmDashboard
                 replay={replay}
                 live={live}
+                replayStep={replayStep}
                 onConnect={connectApi}
                 onOpenAgent={openAgent}
               />
@@ -260,7 +266,13 @@ export default function App() {
         {/* The agent-card modal (#528): a full-viewport overlay, so it renders
             outside any single view section. Self-gates on the roster. */}
         {view === "llm" && selectedAgent && (
-          <AgentCardModal name={selectedAgent} replay={replay} live={live} onClose={closeAgent} />
+          <AgentCardModal
+            name={selectedAgent}
+            replay={replay}
+            live={live}
+            replayStep={replayStep}
+            onClose={closeAgent}
+          />
         )}
 
         {/* The landing page. Mounted only when active — it's a static page with
