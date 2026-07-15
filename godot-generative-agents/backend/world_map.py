@@ -104,15 +104,19 @@ class WorldMap:
         # by address. Optional -- a world without the file (every non-Penn
         # map) gets {} and behaves exactly as before.
         self.furniture_spots: dict[str, list[tuple[int, int]]] = {}
+        self.furniture_spot_type: dict[tuple[int, int], str] = {}
         spots_path = os.path.join(blocks, "furniture_spots.csv")
         if os.path.exists(spots_path):
             for row in open(spots_path).read().splitlines():
                 if not row.strip():
                     continue
-                w, s, a, x, y = (c.strip() for c in row.split(","))
-                self.furniture_spots.setdefault(f"{w}:{s}:{a}", []).append(
-                    (int(x), int(y))
-                )
+                fields = [c.strip() for c in row.split(",")]
+                w, s, a, x, y = fields[:5]
+                name = fields[5] if len(fields) > 5 else ""
+                tile = (int(x), int(y))
+                self.furniture_spots.setdefault(f"{w}:{s}:{a}", []).append(tile)
+                if name:
+                    self.furniture_spot_type[tile] = name
 
     def tiles_for(self, address: str) -> set[tuple[int, int]]:
         """Return the set of ``(x, y)`` tiles belonging to ``address``."""

@@ -147,3 +147,16 @@ def test_furniture_spots_csv_carries_the_piece_type():
         names.count("blackboard") == 1
     ), f"Classroom A blackboard spot missing: {names}"
     assert names.count("student_desk") == 12, f"Classroom A desks wrong: {names}"
+
+
+def test_worldmap_exposes_spot_furniture_type():
+    # #559: the piece name loads into a parallel furniture_spot_type map keyed
+    # by tile; furniture_spots keeps its (x, y) tile shape.
+    wm = _world_map()
+    assert hasattr(wm, "furniture_spot_type"), "WorldMap missing furniture_spot_type"
+    classroom_spots = wm.furniture_spots.get(WILLIAMS_CLASSROOM_A)
+    assert classroom_spots, "Classroom A has no spots"
+    types = {wm.furniture_spot_type.get(t) for t in classroom_spots}
+    assert "blackboard" in types, f"no blackboard spot in Classroom A: {types}"
+    # Shape unchanged: spots are still plain (x, y) tiles.
+    assert all(isinstance(t, tuple) and len(t) == 2 for t in classroom_spots)
