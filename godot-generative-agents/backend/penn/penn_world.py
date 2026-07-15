@@ -100,16 +100,23 @@ def _pin_building_meeting_points(world_map, offset=5.0):
                 centres[address] = None
         return centres[address]
 
-    def walk_path(from_tile, address):
+    def walk_path(from_tile, address, furniture=None):
         # Furniture first (#537): when the arena has seat spots, walk to one
         # of the k nearest to the approach-offset point -- consumed
         # round-robin per address so co-arrivals spread across furniture
         # instead of stacking -- and only fall through to the centroid pick
         # (below) when every candidate is unreachable. Bare arenas
         # (Williams, grounds) have no spots and keep today's behavior.
+        # A furniture hint (#559) biases the pick to spots serving that piece
+        # (a teacher -> blackboard); no match -> the full spot set, as before.
         spots = getattr(world_map, "furniture_spots", {}).get(address)
         info = centre_of(address)
         if spots and info:
+            if furniture:
+                types = getattr(world_map, "furniture_spot_type", {})
+                matching = [t for t in spots if types.get(t) == furniture]
+                if matching:
+                    spots = matching
             cx, cy, _tiles = info
             dx, dy = from_tile[0] - cx, from_tile[1] - cy
             dist = (dx * dx + dy * dy) ** 0.5 or 1.0
@@ -197,7 +204,7 @@ def _pin_meeting_rendezvous(world_map, venues):
     orig_walk_path = world_map.walk_path
     counts: dict = {address: 0 for address in venues}
 
-    def walk_path(from_tile, address):
+    def walk_path(from_tile, address, furniture=None):
         cluster = venues.get(address)
         if cluster:
             target = tuple(cluster[counts[address] % len(cluster)])
@@ -209,7 +216,7 @@ def _pin_meeting_rendezvous(world_map, venues):
             )
             if path and len(path) > 1:
                 return [tuple(t) for t in path[1:]]
-        return orig_walk_path(from_tile, address)
+        return orig_walk_path(from_tile, address, furniture=furniture)
 
     world_map.walk_path = walk_path
     return world_map
