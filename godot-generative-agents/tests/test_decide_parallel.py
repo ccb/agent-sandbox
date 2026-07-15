@@ -3,8 +3,9 @@
 Pins the live loop's latency contract, fully offline:
 
 * a decision tick with N agents due costs ~the slowest decision, not the sum
-  (a thread pool fans ``observe_and_decide`` out against the turn-start
-  snapshot; ``--mock-latency`` injects provider-shaped latency into the mock);
+  (a daemon thread per decision fans ``observe_and_decide`` out against the
+  turn-start snapshot; ``--mock-latency`` injects provider-shaped latency
+  into the mock);
 * a decision that outlives its wall-clock budget degrades to idle (the pinned
   brain-outage behavior), is never double-submitted while still in flight, and
   its late answer is applied -- not discarded -- once the straggler resolves
@@ -54,39 +55,37 @@ MOCK_LATENCY = 0.3  # per-decision sleep injected into the mock brain
 # ------------------------------------------------- wall-clock: T, not N*T
 
 
-def test_parallel_decision_tick_costs_the_slowest_decision_not_the_sum():
+def _first_tick_wall(**kwargs):
+    """Build a fresh latency-injected stepper and time its t=0 tick, when
+    every persona is idle and therefore decides."""
     stepper = PennStepper(
         num_steps=5,
         world=build_penn_world(),
-        decide_workers=8,
         mock_latency=MOCK_LATENCY,
+        **kwargs,
     )
-    n = len(stepper.order)
+    started = time.monotonic()
+    assert stepper.tick() is not None
+    return stepper, time.monotonic() - started
+
+
+def test_parallel_decision_tick_costs_the_slowest_decision_not_the_sum():
+    parallel, wall_parallel = _first_tick_wall(decide_workers=8)
+    serial, wall_serial = _first_tick_wall()
+    n = len(parallel.order)
     assert n >= 3  # the fan-out needs a real crowd to prove anything
-    started = time.monotonic()
-    frame = stepper.tick()
-    elapsed = time.monotonic() - started
-    assert frame is not None
-    # Everyone was idle at t=0, so all N decided -- but in parallel: ~one
-    # latency, nowhere near N of them (serial would be >= n * MOCK_LATENCY).
-    # 0.85 rather than a tighter bound: the sleeps overlap but each worker's
-    # perceive/retrieve CPU tail serializes under the GIL, and a loaded CI
-    # runner needs the headroom.
-    assert stepper.last_deciders == n
-    assert elapsed < (n * MOCK_LATENCY) * 0.85
-
-
-def test_serial_default_pays_the_sum_and_builds_no_executor():
-    stepper = PennStepper(
-        num_steps=5, world=build_penn_world(), mock_latency=MOCK_LATENCY
-    )
-    assert stepper._decide_executor is None  # decide_workers=0 is the default
-    n = len(stepper.order)
-    started = time.monotonic()
-    stepper.tick()
-    elapsed = time.monotonic() - started
-    assert elapsed >= n * MOCK_LATENCY  # one latency per agent, in sequence
-    assert stepper.last_deciders == n  # the due-count reports either way
+    assert serial._decide_executor is None  # decide_workers=0 is the default
+    assert parallel.last_deciders == n  # the due-count reports either way
+    assert serial.last_deciders == n
+    # The serial tick pays every agent's injected latency in sequence...
+    assert wall_serial >= n * MOCK_LATENCY
+    # ...and the parallel tick overlaps them, so it must beat serial by about
+    # the (n - 1) sleeps it no longer stacks. Asserting the DIFFERENCE of two
+    # measured ticks (not an absolute ceiling) is what keeps this stable on
+    # slow, loaded CI runners: each worker's perceive/retrieve CPU tail
+    # serializes under the GIL and inflates both runs equally, so it cancels
+    # out of the diff -- an absolute ceiling flaked on exactly that tail.
+    assert wall_serial - wall_parallel > (n - 1) * MOCK_LATENCY * 0.6
 
 
 # --------------------------------------- timeout -> idle -> re-ask later
