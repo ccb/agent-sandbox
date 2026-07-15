@@ -13,7 +13,37 @@ on top; copy the template block each working day.
 **Next:**
 - ...
 -->
+## 2026-07-14
 
+**Focus:** HW1 (Action Castle) — custom actions + Darkness block
+
+**Done today:**
+- Mostly debugged `Read_Runes` and `Propose` — few bugs left,
+- Implemented all blocks
+- Read the Generative Agents ("Human Simulacra") paper
+
+**Blockers / questions:**
+- Command/movement mixup bug to `input()`.
+
+**Next:**
+- Finish debugging HW1 
+- Read `npc.py`/`memory.py`/`triggers.py`
+- Read REACT paper.
+
+## 2026-07-13
+
+**Focus:** HW1 (Action Castle) — custom actions + Darkness block
+
+**Done today:**
+- Fixed graphviz `dot` PATH issue for the map visualization
+- Implemented `Unlock_Door`, `Wear_Crown`, `Sit_On_Throne` — workingw
+
+**Blockers / questions:**
+- None blocking
+**Next:**
+- Finish remaining HW1 
+
+Still need your first name for the journal/<firstname>.md filename if you want me to create it.
 ## 2026-07-10
 
 **Focus:** onboarding — finished environment setup and got oriented on the plan.
