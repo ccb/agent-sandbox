@@ -1,3 +1,21 @@
+## 2026-07-14
+**Focus:** a full clip-export + geo push on `godot-ga-main` — merged three features (via brainstorm→spec→plan→SDD each), then chased a black-GIF bug, GIF quality, and a geo regression through several rounds of the user testing locally.
+
+**Done today:**
+- Merged to `godot-ga-main`: **#544** furniture-aware destinations (closed #537), **#550** clip export (closed #488), **#558** `entrance_floor` FORCED_CLOSED repaint + surgical Sweeten ghost-door seal + a `validate_tmj` guard (closed #556); deleted the branches. Assigned nine environment issues to myself; filed **#548** (live clips), **#551** (shared "deciding" signal), **#556**. **#555** (thinking indicator) shipped + green but still open.
+- Clip export (#550) went several user-testing rounds: fixed a **pitch-black GIF** — a real LZW code-width early-change bug the self-mirroring round-trip test missed (now pinned against a standard decoder + verified with PIL); then muddy quality → **960px/nearest + Bayer dithering**; then a one-click **Export MP4 + GIF** that runs ffmpeg directly (no copy-paste from the status line).
+- Caught a geo regression from a manual pipeline re-run (a tmj regen re-opened Van Pelt's east door + churned a layer id) → reverted, root-caused, filed+fixed as **#556**; the SDD run then caught my own mis-scoped guard (whole-layer sweep → 2954 false positives) and I narrowed it to `FORCED_CLOSED` cells.
+
+**Blockers / questions:**
+- **#555** needs live-backend acceptance (`--brain llm` for real 5–10 s decision stalls) before merge — no headless test by design.
+- **#543** (resume a persisted run) stays blocked on Alistair's **#542** (#306 first half) still open.
+- Godot viewer code isn't CI-covered (no Godot job — checks are Python/geo/web), so the **local smoke suite** is the real gate on viewer changes; a GDScript parse error once hid for a whole debug loop because of this.
+
+**Next:**
+- Acceptance-pass + merge **#555**, then a fresh bake to see the thinking cue + furniture destinations together.
+- Start the cognition/live-loop cluster (**#371/#370/#368/#366**), or **#543** once #542 lands.
+- Later: migrate #555's inferred cue (and #525's web-companion thinking state) onto the authoritative **#551** "deciding" signal once it's built.
+
 ## 2026-07-10
 **Focus:** landed the whole reconciled PR queue on `godot-ga-main` (nine merges over the #481/#482 base moves), closed out the delivered issues, then shipped two viewer timeline features — event markers (#249, **PR #508**, merged) and the day-plans ribbon pop-up (#251, **PR #509**, CI green).
 
