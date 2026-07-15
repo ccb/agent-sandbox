@@ -110,6 +110,12 @@ class ScheduleMockClient(MockReActClient):
         """Steps to perform the current activity, or ``None`` to stay put."""
         return self._stop["steps"]
 
+    @property
+    def furniture(self):
+        """Furniture the agent should occupy at the current stop, or ``None``
+        (#559). Read at travel time by run_simulation to bias walk_path."""
+        return self._stop.get("furniture")
+
     def advance(self) -> bool:
         """Move to the next scheduled stop. Returns ``False`` if none remain."""
         if self.stop_index + 1 < len(self.schedule):
@@ -127,37 +133,43 @@ class ScheduleMockClient(MockReActClient):
         differs. The mock never calls this (its day is static); it exists for the
         revision seam a real planner drives (``cognition.maybe_revise_plan``).
 
-        Carrying over authored ``commands`` (#300): the engine's
-        ``planning.Stop`` has no ``commands`` field, so any schedule that has been
-        through a ``Stop`` round-trip (``to_schedule_entry`` / ``from_schedule_entry``,
-        e.g. every ``MockPlanner``/``LLMPlanner`` plan) silently drops the
-        per-stop commands an author put in ``world_data.yaml`` / persona schedule.
-        Rather than teach the engine's ``Stop`` about a backend-only field
+        Carrying over authored ``commands`` (#300) and ``furniture`` (#559): the
+        engine's ``planning.Stop`` has neither field, so any schedule that has
+        been through a ``Stop`` round-trip (``to_schedule_entry`` /
+        ``from_schedule_entry``, e.g. every ``MockPlanner``/``LLMPlanner`` plan --
+        which ``attach_agents`` commits for every agent, mock included) silently
+        drops both the per-stop commands and the per-stop furniture hint an author
+        put in ``world_data.yaml`` / persona schedule.
+        Rather than teach the engine's ``Stop`` about these backend-only fields
         (upstreaming tracked in #464), we patch the loss back in here: for each
         incoming entry that lines up positionally with the *current* schedule's
         entry at the same index (same ``place`` and ``activity``) and itself
-        carries no ``commands`` (missing key or empty list), we carry over the
-        current stop's ``commands``. An entry that differs in ``place`` or
-        ``activity`` is a genuinely revised/new stop (e.g. a future LLM planner's
-        tail-replace) and gets no carry-over -- it has no authored commands to
-        inherit. This does not touch ``_commands_used``: the current stop (index
+        carries no ``commands``/``furniture``, we carry over the current stop's
+        value. An entry that differs in ``place`` or ``activity`` is a genuinely
+        revised/new stop (e.g. a future LLM planner's tail-replace) and gets no
+        carry-over -- it has no authored value to inherit. This does not touch
+        ``_commands_used``: the current stop (index
         ``stop_index``), if it matched, is the *same* authored stop the agent may
         already be partway through, so its progress must survive the swap.
         """
         current = self.schedule
         patched = []
         for i, entry in enumerate(schedule):
-            if entry.get("commands"):
-                patched.append(entry)
-                continue
+            # Carry backend-only per-stop fields the engine's Stop round-trip
+            # drops (#300 `commands`, #559 `furniture`) back onto a positionally
+            # matching entry -- same `place` and `activity`, i.e. the same
+            # authored stop, just stripped by the round-trip -- that lost them.
+            # An entry that still carries the field keeps its own; a genuinely
+            # revised/new stop (different place/activity) inherits nothing.
             if i < len(current):
                 prior = current[i]
-                if (
-                    prior.get("place") == entry.get("place")
-                    and prior.get("activity") == entry.get("activity")
-                    and prior.get("commands")
-                ):
+                matches = prior.get("place") == entry.get("place") and prior.get(
+                    "activity"
+                ) == entry.get("activity")
+                if matches and not entry.get("commands") and prior.get("commands"):
                     entry = {**entry, "commands": list(prior["commands"])}
+                if matches and not entry.get("furniture") and prior.get("furniture"):
+                    entry = {**entry, "furniture": prior["furniture"]}
             patched.append(entry)
         self.schedule = patched
 

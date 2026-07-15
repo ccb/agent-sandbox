@@ -80,6 +80,10 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     # stop, one per decision, before settling into `perform`
                     # (#300 -- e.g. "get ..." then "drink ..." at Houston Hall).
                     "commands": list(stop.get("commands") or []),
+                    # Optional furniture the agent should occupy at this stop
+                    # (#559 -- e.g. "blackboard" for a teacher). None => the
+                    # router's default nearest-spot pick.
+                    "furniture": stop.get("furniture"),
                 }
                 for stop in spec["schedule"]
             ]
@@ -93,6 +97,7 @@ def _normalize_personas(personas: list[dict]) -> list[dict]:
                     "emoji": spec["emoji"],
                     "steps": None,
                     "commands": [],
+                    "furniture": None,
                 }
             ]
     return personas
