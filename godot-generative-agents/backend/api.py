@@ -1088,6 +1088,13 @@ def create_app(
             if ledger.max_cost_usd is not None:
                 summary["max_cost_usd"] = ledger.max_cost_usd
                 summary["remaining_budget_usd"] = ledger.remaining_budget_usd()
+            # The per-run slice (#526): additive fields the dashboard's run
+            # strip shows beside the (unchanged) lifetime totals + budget --
+            # probed like `ledger`/`drain_events`, so steppers without it
+            # serve exactly the pre-#526 shape.
+            run_usage = getattr(stepper, "run_usage", None)
+            if callable(run_usage):
+                summary.update(run_usage())
             return summary
 
     # ---------------------------------------------------------- run registry

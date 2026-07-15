@@ -1222,6 +1222,8 @@ Two opt-in producers: `serve_penn.py --persist` records a live run as it ticks
 (each `POST /reset` closes the current run and opens a new id), and
 `generate_penn_replay.py --persist [--runs-dir DIR]` mirrors a bake after the
 fact — round-trip tests pin that a persisted bake equals its replay file.
+A live run row's `cost` is that run's own spend (per-run ledger baseline,
+#526); the budget gate (`max_cost_usd`) stays lifetime.
 Reads: `read_frames`, `read_events`, `memories_for` (the lean wire
 projection), and `query_memories`, which rehydrates rows into engine
 `MemoryRecord`s and delegates to `AgentMemory.retrieve` — store queries score

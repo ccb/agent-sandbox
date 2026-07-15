@@ -43,6 +43,7 @@ import argparse
 import concurrent.futures
 import os
 import threading
+import time
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -69,6 +70,11 @@ from text_adventure_games.usage import UsageLedger
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
 DEFAULT_STEPS = 1200
+
+# --stall-seconds (debug) holds every Nth step to fake a real brain's decision
+# latency, so the viewer's "thinking…" indicator (#372) is testable under the
+# free mock brain. Off unless --stall-seconds > 0.
+STALL_EVERY_STEPS = 10
 
 # The model --brain llm falls back to if the world's llm: block names none.
 # Claude Haiku: a campus day is dozens-to-hundreds of low-stakes calls, so the
@@ -309,6 +315,7 @@ class PennStepper:
         decide_workers=0,
         decide_timeout=30.0,
         mock_latency=0.0,
+        stall_seconds=0.0,
     ):
         self.num_steps = num_steps
         self.endless = endless
@@ -328,6 +335,10 @@ class PennStepper:
         # live loop stamps it onto each frame record (live.py) so a viewer can
         # tell "thinking" from "frozen" (#372).
         self.last_deciders = None
+        # DEBUG (#372): hold every STALL_EVERY_STEPS-th step this long to fake a
+        # real brain's decision latency so the viewer's "thinking…" cue can be
+        # exercised under the free mock brain. 0.0 = off (byte-identical timing).
+        self.stall_seconds = stall_seconds
         # The #304 persistence seam: a backend.run_store.RunStore, or None (the
         # default -- nothing is written, byte-identical to before). Set before
         # the _build() below so every build, first boot and each POST /reset,
@@ -482,6 +493,12 @@ class PennStepper:
             locations=self.world.locations,
         )
         self._step_idx = 0
+        # Per-run ledger baseline (#526): the ledger itself survives resets
+        # on purpose (the cost ceiling is lifetime -- money spent stays
+        # spent), so the per-run view SUBTRACTS this snapshot instead of
+        # rebasing anything. Same boundary as the store's run id above.
+        self._run_ledger_calls_base = len(self.ledger.records)
+        self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Open this day's run in the store (#304). The manifest is the same
         # meta() blob the live handshake serves; each _build() gets its own id.
         if self.run_store is not None:
@@ -497,6 +514,20 @@ class PennStepper:
     def run_id(self):
         """The store id of the current day's run, or None when not persisting."""
         return self._run_id
+
+    def run_usage(self) -> dict:
+        """This run's slice of the lifetime ledger (#526).
+
+        ``GET /usage`` probes for this optional method and merges the dict
+        beside the (unchanged) lifetime totals, so the dashboard's run strip
+        can agree with its per-run call log. The budget gate stays lifetime.
+        """
+        return {
+            "run_calls": len(self.ledger.records) - self._run_ledger_calls_base,
+            "run_cost_usd": round(
+                self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6
+            ),
+        }
 
     def meta(self) -> dict:
         """The handshake blob ``GET /live`` serves -- the baked replay's ``meta``
@@ -550,6 +581,16 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        # DEBUG (#372): fake a decision stall so the head stops growing long
+        # enough for the viewer's "thinking…" indicator to fire. Holding the app
+        # lock here is the point -- pollers wait, exactly like a real brain mid-
+        # decision. Off (0.0) leaves timing byte-identical.
+        if (
+            self.stall_seconds > 0.0
+            and self._step_idx > 0
+            and self._step_idx % STALL_EVERY_STEPS == 0
+        ):
+            time.sleep(self.stall_seconds)
         decide_info = {}
         raw, _chats = step(
             self.game,
@@ -606,7 +647,11 @@ class PennStepper:
         self._persist_pending_events()
         self.run_store.update_run(
             self._run_id,
-            cost=self.ledger.total_cost_usd(),
+            # The RUN's spend, not the server's lifetime total (#526) -- a
+            # post-reset run's row no longer includes earlier runs' cost.
+            # Rounded to match run_usage()'s run_cost_usd so GET /usage and
+            # store.get_run(id)["cost"] agree to the cent (review nit).
+            cost=round(self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6),
             steps=self._step_idx + 1,
         )
 
@@ -740,6 +785,16 @@ def main() -> int:
         "step_seconds default so live playback paces like a 1x replay",
     )
     ap.add_argument(
+        "--stall-seconds",
+        type=float,
+        default=0.0,
+        help="DEBUG: the mock brain never stalls, so every %d steps hold the "
+        "step this many seconds to fake the decision-latency pauses a real LLM "
+        "brain produces -- lets the viewer's 'thinking…' indicator (#372) be "
+        "exercised for free (set >~2s to clear the viewer's stall threshold; 0 "
+        "= off)" % STALL_EVERY_STEPS,
+    )
+    ap.add_argument(
         "--brain",
         choices=("mock", "llm"),
         default="mock",
@@ -871,6 +926,7 @@ def main() -> int:
             decide_workers=decide_workers,
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
+            stall_seconds=args.stall_seconds,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")

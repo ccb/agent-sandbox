@@ -44,7 +44,7 @@ class SimStepper(Protocol):
     served ``Game`` -- but ``reset()`` must restore that *same* object in place,
     because every route closes over it.
 
-    Three optional attributes are probed with ``getattr`` (they are not part
+    Four optional attributes are probed with ``getattr`` (they are not part
     of the protocol, so a minimal stepper can skip them):
 
     * ``ledger`` -- a :class:`~text_adventure_games.usage.UsageLedger`; when
@@ -58,6 +58,9 @@ class SimStepper(Protocol):
     * ``last_deciders`` -- how many agents were at a decision point in the last
       ``tick()`` (#366); when present, the loop stamps it onto each ``frame``
       record so a viewer can tell a "thinking" stall from a frozen sim (#372).
+    * ``run_usage() -> dict`` -- additive per-run usage fields
+      (``run_calls``/``run_cost_usd``) merged into ``GET /usage`` beside the
+      lifetime summary (#526); the ledger itself stays lifetime.
     """
 
     @property
@@ -301,8 +304,8 @@ class ScriptedStepper:
     ``on_tick(step)`` (optional) runs *before* the frame lookup each tick --
     "advance the world, then snapshot it" -- and may return engine records
     (the ``JSONRenderer`` shape) to publish; ``on_reset()`` (optional) undoes
-    whatever ``on_tick`` did to external state. Set ``.ledger`` after
-    construction to back ``GET /usage``.
+    whatever ``on_tick`` did to external state. Set ``.ledger`` (and optionally
+    ``.run_usage``) after construction to back ``GET /usage``.
     """
 
     def __init__(
