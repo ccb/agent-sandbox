@@ -124,6 +124,7 @@ const ReplayMarkers := preload("res://scripts/replay_markers.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
+const LivePacer := preload("res://scripts/live_pacer.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -224,6 +225,11 @@ var _is_live := false
 # Live "thinking" cue (issue #372): wall-clock ms when the live head last grew,
 # and whether the cue is currently showing (so the sidebar text flips on edges).
 const THINKING_STALL_MS := 1500
+# Live interpolation buffer (issue #372): hold ~LEAD_TARGET ticks of lead so
+# motion stays smooth across irregular arrivals; drain a post-stall backlog at
+# up to CATCHUP_MAX x the normal rate rather than teleporting. See LivePacer.
+const LEAD_TARGET := 2.0
+const CATCHUP_MAX := 3.0
 var _last_frame_ms := 0
 var _thinking := false
 var _thinking_badge: Control
@@ -1699,8 +1705,16 @@ func _process(delta: float) -> void:
 	# the day-night tint) still updates the view while paused.
 	var last := _frames.size() - 1
 	if not _paused:
-		_t += delta * _speed
-		_anim_t += delta * _speed
+		# Live mode paces the clock by how many ticks are buffered ahead (issue
+		# #372): hold a small lead, decelerate to a stop into a stall, and drain a
+		# backlog at a bounded catch-up. Baked replay keeps pace == 1.0, so the
+		# advance below is arithmetically identical to before -- byte-identical playback.
+		var pace := 1.0
+		if _is_live:
+			var lead := float(last) - _t / step_seconds
+			pace = LivePacer.factor(lead, LEAD_TARGET, CATCHUP_MAX)
+		_t += delta * _speed * pace
+		_anim_t += delta * _speed * pace
 		# Hold the playhead at the final step: the replay has no more frames, so the
 		# clock must stop here rather than tick on past the end of the simulation.
 		_t = min(_t, float(last) * step_seconds)
