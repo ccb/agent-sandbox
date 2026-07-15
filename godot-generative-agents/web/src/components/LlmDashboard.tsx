@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Replay } from "../types/replay";
 import type { LiveState, ReceivedLlmCall } from "../useLive";
+import { ConversationFeed } from "./ConversationFeed";
 import { LlmCallLog } from "./LlmCallLog";
 import { SpritePreview } from "./SpritePreview";
 import "./AgentPanel.css"; // the llm-log row/pill styles LlmCallLog renders with
@@ -80,11 +81,14 @@ function statsFor(calls: ReceivedLlmCall[]) {
 export function LlmDashboard({
   replay,
   live,
+  replayStep,
   onConnect,
   onOpenAgent,
 }: {
   replay: Replay | null;
   live: LiveState;
+  /** The current replay step, owned by App (single useReplayStep registrant). */
+  replayStep: number;
   onConnect: (url: string) => void;
   onOpenAgent: (name: string) => void;
 }) {
@@ -176,6 +180,14 @@ export function LlmDashboard({
   const totalCost = newest?.cum_cost_usd ?? live.usage?.total_cost_usd ?? 0;
   const budget = live.usage?.max_cost_usd;
 
+  // The current step's frame map for the conversation feed (#534): the live feed's
+  // latest frame when following a live loop, else the baked frame at the
+  // Godot-bridge step. Switches on live.live (like `personas` above), not persona
+  // count — a live run still shows live chat before/without persona meta.
+  const feedFrame = live.live
+    ? live.frame
+    : replay?.frames[Math.min(replayStep, (replay?.frames.length ?? 1) - 1)];
+
   return (
     <div className="llm-dash">
       <header className="llm-strip">
@@ -231,6 +243,8 @@ export function LlmDashboard({
           </>
         )}
       </header>
+
+      <ConversationFeed frame={feedFrame} personas={personas} onOpenAgent={onOpenAgent} />
 
       <div className="llm-grid">
         {cells.map((cell) => {

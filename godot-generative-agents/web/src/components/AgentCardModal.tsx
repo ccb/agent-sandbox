@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import type { Replay } from "../types/replay";
 import { type LiveState, useLiveMemories } from "../useLive";
-import { useReplayStep } from "../useReplay";
 import { AgentCard } from "./AgentCard";
 import { LlmCallLog } from "./LlmCallLog";
 import { MemoryRows } from "./MemoryList";
@@ -28,11 +27,14 @@ export function AgentCardModal({
   name,
   replay,
   live,
+  replayStep,
   onClose,
 }: {
   name: string;
   replay: Replay | null;
   live: LiveState;
+  /** The current replay step, owned by App (single useReplayStep registrant). */
+  replayStep: number;
   onClose: () => void;
 }) {
   // Close on Escape, like the nav dropdown and the prompt modal.
@@ -51,9 +53,8 @@ export function AgentCardModal({
   const index = personas.findIndex((p) => p.name === name);
   const persona = personas[index];
 
-  // Replay path only: the Godot-bridge / wall-clock step. Passing 0 keeps it
-  // inert in live mode, where the feed's frame records carry the step instead.
-  const replayStep = useReplayStep(isLive ? 0 : (replay?.meta.steps ?? 0));
+  // Replay path only: the Godot-bridge / wall-clock step (owned by App). Live
+  // mode ignores it — the feed's frame records carry the step instead.
   const step = isLive ? live.step : replayStep;
 
   // Live path only (inert otherwise): the selected persona's memory stream,
