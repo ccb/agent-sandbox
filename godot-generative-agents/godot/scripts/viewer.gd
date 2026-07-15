@@ -648,6 +648,15 @@ func _on_live_handshake_completed(
 		_schedule_retry(_request_handshake)
 		return
 
+	# A handshake cursor below the newest we've applied can only mean the
+	# backend *restarted* — the feed cursor is in-memory and only climbs
+	# within one server lifetime, even across resets (#549). Rejoin from
+	# scratch: drop the dead run's cast and refetch the new run's history,
+	# exactly like a fresh join (the emptied _names respawns below).
+	if _last_cursor > int((data as Dictionary).get("cursor", 0)):
+		_teardown_cast()
+		_last_cursor = -1
+
 	# Spawn the cast once (a handshake retry after a hiccup must not re-spawn).
 	if _names.is_empty():
 		_spawn_from_meta(meta)
@@ -966,7 +975,10 @@ func _poll_ws() -> void:
 				_note_socket(false)
 			_ws_open = false
 			_panel.set_live_status("reconnecting…")
-			_schedule_retry(_connect_ws)
+			# Reconnect through the handshake, not straight to the socket: its
+			# callback re-runs the backfill and — if the cursor came back below
+			# ours — re-anchors after a backend restart (#549).
+			_schedule_retry(_request_handshake)
 		_:
 			pass  # CONNECTING / CLOSING: keep polling
 
