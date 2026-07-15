@@ -160,3 +160,26 @@ def test_worldmap_exposes_spot_furniture_type():
     assert "blackboard" in types, f"no blackboard spot in Classroom A: {types}"
     # Shape unchanged: spots are still plain (x, y) tiles.
     assert all(isinstance(t, tuple) and len(t) == 2 for t in classroom_spots)
+
+
+def test_walk_path_furniture_hint_routes_to_the_named_piece():
+    # #559: a furniture hint biases the spot pick to the matching piece.
+    wm = _world_map()
+    start = (100, 50)  # walkable outdoor point south of campus (as other tests use)
+    assert not wm.is_blocked(start)
+    classroom_spots = wm.furniture_spots[WILLIAMS_CLASSROOM_A]
+    blackboard = [
+        t for t in classroom_spots if wm.furniture_spot_type.get(t) == "blackboard"
+    ]
+    assert len(blackboard) == 1, f"expected one blackboard spot: {blackboard}"
+
+    # With the hint, the route ends on the blackboard spot.
+    hinted = wm.walk_path(start, WILLIAMS_CLASSROOM_A, furniture="blackboard")
+    assert hinted, "no path into Classroom A with a blackboard hint"
+    assert hinted[-1] == blackboard[0], f"hint ignored: ended at {hinted[-1]}"
+
+    # A hint naming furniture absent from the arena falls back to a normal spot
+    # (one of the arena's spots), not stranded.
+    absent = wm.walk_path(start, WILLIAMS_CLASSROOM_A, furniture="lectern")
+    assert absent, "absent-furniture hint stranded the agent"
+    assert absent[-1] in classroom_spots
