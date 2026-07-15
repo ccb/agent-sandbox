@@ -529,7 +529,9 @@ class PennStepper:
             self._run_id,
             # The RUN's spend, not the server's lifetime total (#526) -- a
             # post-reset run's row no longer includes earlier runs' cost.
-            cost=self.ledger.total_cost_usd() - self._run_ledger_cost_base,
+            # Rounded to match run_usage()'s run_cost_usd so GET /usage and
+            # store.get_run(id)["cost"] agree to the cent (review nit).
+            cost=round(self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6),
             steps=self._step_idx + 1,
         )
 
