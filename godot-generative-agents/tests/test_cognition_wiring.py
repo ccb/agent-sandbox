@@ -236,3 +236,58 @@ def test_schedule_mock_client_exposes_current_stop_furniture():
     assert sched.furniture == "blackboard"
     sched.advance()
     assert sched.furniture is None  # next stop has no hint
+
+
+def test_furniture_hint_survives_the_planner_schedule_commit():
+    # #559 regression: attach_agents ALWAYS commits the plan via
+    # ScheduleMockClient.replace_schedule([stop.to_schedule_entry() ...]), and
+    # Stop.to_schedule_entry() carries only {place, activity, emoji, steps} --
+    # so the backend-only `furniture` hint is dropped by the round-trip unless
+    # replace_schedule carries it back (as it already does for `commands`).
+    # Without the carry-over agent.schedule.furniture is None at the travel
+    # decision and the router never sees the hint (Tanaka -> desk, not board).
+    personas = [
+        {
+            "name": "Ada",
+            "home": "The Green",
+            "persona": "I am Ada, a curious first-year.",
+            "emoji": "\U0001f4d6",
+            "start_tile": [0, 0],
+            "destination": "Library",
+            "activity": "teaching at the board",
+            "schedule": [
+                {
+                    "place": "Library",
+                    "activity": "teaching at the board",
+                    "emoji": "\U0001f4d6",
+                    "steps": None,
+                    "furniture": "blackboard",
+                }
+            ],
+        }
+    ]
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    assert chars["Ada"].agent.schedule.furniture == "blackboard"
+
+
+def test_replace_schedule_carries_furniture_over_positionally():
+    # Unit-level root cause: a Stop round-trip yields entries without
+    # `furniture`; replace_schedule must restore it for an entry that lines up
+    # (same place+activity) with the current stop -- exactly like `commands`.
+    sched = ScheduleMockClient(
+        [
+            {
+                "place": "Library",
+                "activity": "teaching",
+                "emoji": "x",
+                "steps": None,
+                "furniture": "blackboard",
+            }
+        ]
+    )
+    # Incoming entries, as Stop.to_schedule_entry() produces them, lack furniture.
+    sched.replace_schedule(
+        [{"place": "Library", "activity": "teaching", "emoji": "x", "steps": None}]
+    )
+    assert sched.furniture == "blackboard"
