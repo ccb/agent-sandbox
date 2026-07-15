@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 
 # --------------------------------------------------------------------------- #
 # Tileset wiring. Each interior sheet becomes one Tiled tileset appended to the
@@ -486,69 +487,23 @@ def insert_interior_layers(tmj, W, H, floor, furn):
 
 
 def main():
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    # RETIRED. furnish_building.py was the original whole-cloth Williams
+    # generator. Williams is now authored art (williams_floor /
+    # williams_furniture / williams_arenas, edited in Tiled) with its walls +
+    # matrices DERIVED by furnish_williams.py + add_entrances.py. Re-running
+    # this legacy generator would overwrite the authored layers and minify the
+    # committed map. The module is kept only as a library of palette constants
+    # (WALL / WINDOW / FLOOR / SOUTH_DOOR_X) and helpers that those scripts
+    # import. See tools/geo/README.md and #552.
+    sys.stderr.write(
+        "furnish_building.py is retired for Williams Hall.\n"
+        "Williams is now authored art (williams_floor / williams_furniture /\n"
+        "williams_arenas, edited in Tiled); its walls + matrices are derived by\n"
+        "furnish_williams.py + add_entrances.py. This legacy generator would\n"
+        "overwrite the authored layers and minify the map. Aborting.\n"
+        "See tools/geo/README.md (#552).\n"
     )
-    ap.add_argument(
-        "--tmj",
-        default=os.path.join(
-            repo, "godot-generative-agents", "godot", "maps", "upenn_core_urban.tmj"
-        ),
-    )
-    ap.add_argument(
-        "--matrix",
-        default=os.path.join(
-            repo, "godot-generative-agents", "backend", "penn", "the_upenn", "matrix"
-        ),
-    )
-    ap.add_argument("--sector", default="Williams Hall")
-    ap.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="report footprint + cell counts, do not write",
-    )
-    args = ap.parse_args()
-
-    tmj = json.load(open(args.tmj))
-    W, H = tmj["width"], tmj["height"]
-    sid, roof, _apron = load_matrix_sector(args.matrix, args.sector, W, H)
-    xs = [x for x, _ in roof]
-    ys = [y for _, y in roof]
-    print(
-        f"{args.sector}: sector #{sid}  roof={len(roof)} cells  "
-        f"bbox x{min(xs)}-{max(xs)} y{min(ys)}-{max(ys)}"
-    )
-
-    floor = [0] * (W * H)
-    furn = [0] * (W * H)
-    paint_shell(floor, W, roof)
-    for room in ROOMS:
-        furnish_room(furn, floor, W, roof, room)
-    furnish_atrium(furn, floor, W, roof)
-    add_windows(furn, floor, W, roof)
-
-    painted_floor = sum(1 for v in floor if v)
-    painted_furn = sum(1 for v in furn if v)
-    print(
-        f"  floor layer: {painted_floor} cells   furniture layer: {painted_furn} cells"
-    )
-    # sanity: nothing painted outside the footprint
-    out = sum(1 for i, v in enumerate(floor) if v and (i % W, i // W) not in roof)
-    print(f"  floor cells outside footprint: {out} (should be 0)")
-
-    if args.dry_run:
-        return
-
-    strip_previous(tmj)
-    append_tilesets(tmj)
-    clear_roof_on(tmj, "buildings", roof, W)
-    clear_roof_on(tmj, "trees", roof, W)
-    insert_interior_layers(tmj, W, H, floor, furn)
-    with open(args.tmj, "w") as fh:
-        json.dump(tmj, fh, separators=(",", ":"))
-    print(f"  wrote {args.tmj}")
+    raise SystemExit(2)
 
 
 if __name__ == "__main__":
