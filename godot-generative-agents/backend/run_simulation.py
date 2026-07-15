@@ -19,6 +19,8 @@ configures it, the replay bake (``penn.generate_penn_replay``) drives ``simulate
 to a file, and the live server (``penn.serve_penn``) drives ``step`` tick-by-tick.
 """
 
+import concurrent.futures
+
 from text_adventure_games.planning import (
     ACTION_FAILED,
     BEHIND_SCHEDULE,
@@ -44,6 +46,30 @@ from .world_map import WorldMap
 WALK_EMOJI = "\U0001f6b6"  # person walking
 
 
+def _decide_for(game, char, step_idx, retrieval):
+    """Stamp the agent's LLM-usage context, then observe + decide (one call).
+
+    The single decision entry point for both the serial path (called inline
+    from :func:`step`'s main loop) and the parallel path (submitted to the
+    decide executor, issue #366). The context stamp targets *this agent's own*
+    client -- under a real brain the live server gives every agent its own
+    instance precisely so concurrent stamps can't clobber each other.
+    """
+    # Attribute this LLM call to the persona and step (usage.py). The
+    # "role" key is read by the terminal request monitor (llm_monitor)
+    # to label the line; plain UsageLedgers ignore it.
+    ctx = getattr(char.agent.llm_client, "context", None)
+    if ctx is not None:
+        ctx.update(
+            {"actor": char.name, "turn": step_idx, "attempt": 0, "role": "decide"}
+        )
+    # Observe (perceive + retrieve memories) -> decide -> remember the
+    # outcome, the same shape react_behavior gives engine NPCs. The usage
+    # context above is set first so the decide() call inside
+    # observe_and_decide is attributed to this persona/step.
+    return observe_and_decide(game, char, step_idx, retrieval=retrieval)
+
+
 def step(
     game,
     chars: dict,
@@ -58,6 +84,10 @@ def step(
     conversation_enabled: bool = False,
     conversation_cooldowns: dict | None = None,
     cog: CognitionConfig | None = None,
+    decide_executor: concurrent.futures.Executor | None = None,
+    decide_timeout: float | None = None,
+    decide_pending: dict | None = None,
+    decide_info: dict | None = None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -77,6 +107,19 @@ def step(
     ``conversation_cooldowns`` defaults to a throwaway dict and ``cog`` to
     ``CognitionConfig()`` so a caller can drive a bare tick without threading
     every knob; :func:`simulate` always passes the run-level ones it owns.
+
+    Concurrent decisions (issue #366): when ``decide_executor`` is given, every
+    agent at a decision point this tick decides *in parallel* against the
+    turn-start snapshot (the engine's gather->resolve simultaneous round is the
+    semantic precedent), and effects still resolve serially in ``order``. A
+    decision that outlives ``decide_timeout`` seconds degrades to ``None``
+    (idle this tick, re-ask next tick -- exactly the brain-outage behavior) and
+    its still-running future is parked in the caller-owned ``decide_pending``
+    dict so the agent is never asked twice at once. ``decide_info`` (optional
+    out-param dict, the ``out_memories`` pattern) is filled with
+    ``{"deciders": int, "timeouts": [names]}`` for pacing/observability. With
+    ``decide_executor=None`` (the default, and always for :func:`simulate`'s
+    deterministic bakes) the path is byte-identical serial.
     """
     conversation_cooldowns = (
         conversation_cooldowns if conversation_cooldowns is not None else {}
@@ -88,7 +131,13 @@ def step(
     # calls end_turn, so without this game.turn would stay 0 and recency could
     # never tell memories apart.
     game.turn = step_idx
-    frame = {}
+
+    # Schedule-advance pre-pass. Hoisted from the main loop (issue #366): each
+    # block reads and mutates only its own agent's state, so running them for
+    # everyone before anyone decides is byte-identical to the old interleaving
+    # -- and it means the full set of decision-due agents is known up front,
+    # which is what the concurrent fan-out below needs.
+    due = []
     for name in order:
         char = chars[name]
         st = state[name]
@@ -118,21 +167,73 @@ def step(
                 st["performing"] = False
             st["perform_until"] = None
 
+        if not st["path"] and not st["performing"]:
+            due.append(name)
+
+    # Concurrent decisions (#366): everyone due this tick decides in parallel
+    # against the turn-start snapshot; effects still resolve serially below.
+    # The decide phase is read-only on `game` and writes only per-agent memory,
+    # which is what makes the fan-out safe.
+    decided = {}
+    timeouts = []
+    if decide_executor is not None and due:
+        pending = decide_pending if decide_pending is not None else {}
+        futs = {}
+        for name in due:
+            stale = pending.pop(name, None)
+            if stale is not None:
+                if stale.done():
+                    stale.exception()  # retrieve + discard; re-ask fresh below
+                else:
+                    # Still thinking since an earlier tick: keep idling, never
+                    # double-submit -- one in-flight decision per agent.
+                    pending[name] = stale
+                    decided[name] = None
+                    continue
+            futs[name] = decide_executor.submit(
+                _decide_for, game, chars[name], step_idx, retrieval
+            )
+        if futs:
+            # One shared wall-clock window: the futures started together, so
+            # this IS the per-decision budget. It composes with (rather than
+            # replaces) the client's internal #260 retry/timeout budget --
+            # whatever those would allow, the tick moves on at this deadline.
+            concurrent.futures.wait(futs.values(), timeout=decide_timeout)
+            for name, fut in futs.items():
+                if fut.done():
+                    try:
+                        decided[name] = fut.result()
+                    except Exception:
+                        # Same degrade as a brain outage: None idles the agent
+                        # this tick; it is re-asked at its next decision point.
+                        decided[name] = None
+                else:
+                    # Timed out. A sync call can't be cancelled, so park the
+                    # future (when it eventually completes, its usage still
+                    # lands in the shared ledger -- list.append is GIL-atomic,
+                    # and over_budget() is only read between ticks) and idle
+                    # the agent for this tick.
+                    # ponytail: the straggler may read `game` while the serial
+                    # phase below mutates it -- torn perception is possible but
+                    # contained, because a parked result is always discarded.
+                    pending[name] = fut
+                    decided[name] = None
+                    timeouts.append(name)
+    if decide_info is not None:
+        decide_info.update(deciders=len(due), timeouts=timeouts)
+
+    frame = {}
+    for name in order:
+        char = chars[name]
+        st = state[name]
+
         # Decision point: idle and not yet settled into an activity.
         if not st["path"] and not st["performing"]:
-            # Attribute this LLM call to the persona and step (usage.py). The
-            # "role" key is read by the terminal request monitor (llm_monitor)
-            # to label the line; plain UsageLedgers ignore it.
-            ctx = getattr(char.agent.llm_client, "context", None)
-            if ctx is not None:
-                ctx.update(
-                    {"actor": name, "turn": step_idx, "attempt": 0, "role": "decide"}
-                )
-            # Observe (perceive + retrieve memories) -> decide -> remember the
-            # outcome, the same shape react_behavior gives engine NPCs. The usage
-            # context above is set first so the decide() call inside
-            # observe_and_decide is attributed to this persona/step.
-            command = observe_and_decide(game, char, step_idx, retrieval=retrieval)
+            command = (
+                decided[name]
+                if name in decided
+                else _decide_for(game, char, step_idx, retrieval)
+            )
             # Capture the thinking behind this decision for the replay card: the
             # reasoning the agent produced and the memories it retrieved (stashed
             # on the agent by observe_and_decide). They persist on st until the
