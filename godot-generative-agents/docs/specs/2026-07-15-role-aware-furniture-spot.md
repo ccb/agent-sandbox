@@ -71,12 +71,21 @@ A schedule stop is `{place, activity, emoji?, steps?}`; add an optional `furnitu
   Tanaka's Classroom A stop gains `furniture: blackboard`. No other stop changes.
 - **`backend/build_world.py`** `_normalize_personas`: carry
   `"furniture": stop.get("furniture")` in **both** normalized-stop branches (the
-  authored-stop branch and the implicit final-stop branch), defaulting to `None`.
-- **`backend/contract_models.py`** `ScheduleStop`: add `furniture: str | None = None`.
+  authored-stop branch and the implicit final-stop branch), defaulting to `None` —
+  exactly parallel to the existing `commands` key on the normalized dict.
 - **`backend/cognition.py`** `ScheduleMockClient`: add a `furniture` `@property` returning
-  `self._stop.get("furniture")`, beside the existing `emoji`/`steps` properties. During
-  travel the current stop (`self._stop`) is the destination, so this reads the
+  `self._stop.get("furniture")`, beside the existing `emoji`/`steps` properties.
+  `ScheduleMockClient` reads raw normalized dicts (`self._stop`), so it sees the new key.
+  During travel the current stop (`self._stop`) is the destination, so this reads the
   destination stop's hint.
+
+**Not touched — the replay contract.** The hint lives only on the internal normalized
+schedule dict, never on the `ScheduleStop` pydantic model. `persona_meta_entry`
+(`penn_world.py:454`) projects each stop to exactly `{place, activity, emoji, steps}` for
+the serialized `meta.personas`, so `furniture` (like the existing `commands` key) never
+reaches `ScheduleStop` (which is `extra="forbid"`). Therefore **no `contract_models`
+change, no `SCHEMA_VERSION` bump, and `tests/test_replay_contract.py` stays green
+untouched** — the hint is a backend routing input, not viewer-facing replay data.
 
 ### 3. Furniture-biased spot pick (`_pin_building_meeting_points`)
 
@@ -135,8 +144,8 @@ dependency on the schedule type.
 
 ```
 world_data_upenn.yaml (furniture: blackboard)
-  -> build_world._normalize_personas  -> ScheduleStop.furniture
-  -> ScheduleMockClient.furniture (current/destination stop)
+  -> build_world._normalize_personas  -> normalized stop dict (furniture key)
+  -> ScheduleMockClient.furniture (current/destination stop; reads the dict)
   -> run_simulation.py:157  walk_path(tile, address, furniture=...)
   -> _pin_building_meeting_points: filter spots by name, k-nearest round-robin
   -> blackboard spot tile
@@ -162,10 +171,10 @@ gen_furniture_matrix.py -> furniture_spots.csv (+furniture col)
   ending on the blackboard spot; `furniture=None` reproduces the pre-change pick;
   `furniture="lectern"` (absent) falls back to the all-spots pick, not stranded.
 - **Schedule**: `_normalize_personas` carries `furniture` (and defaults `None` when
-  absent); `ScheduleStop` accepts and defaults it; `ScheduleMockClient.furniture` returns
-  the current stop's value.
-- **Regression**: existing Penn routing tests and the geo drift-gate (`tmj ⇄ matrix`)
-  stay green.
+  absent); `ScheduleMockClient.furniture` returns the current stop's value; a built
+  Tanaka advanced to her Classroom A stop reports `schedule.furniture == "blackboard"`.
+- **Regression**: existing Penn routing tests, `tests/test_replay_contract.py` (the
+  contract is unchanged), and the geo drift-gate (`tmj ⇄ matrix`) stay green.
 
 ## Scope / non-goals
 
@@ -195,7 +204,7 @@ gen_furniture_matrix.py -> furniture_spots.csv (+furniture col)
 - **Modify** `backend/penn/penn_world.py` (`walk_path` `furniture` bias in both wrappers)
 - **Modify** `backend/run_simulation.py` (pass the hint at the call site)
 - **Modify** `backend/build_world.py` (`_normalize_personas` carries `furniture`)
-- **Modify** `backend/contract_models.py` (`ScheduleStop.furniture`)
 - **Modify** `backend/cognition.py` (`ScheduleMockClient.furniture` property)
+- *(No change to `backend/contract_models.py` — hint stays off the serialized contract.)*
 - **Modify** `backend/penn/world_data_upenn.yaml` (Tanaka's stop → `furniture: blackboard`)
 - **Tests** for generator, WorldMap load, routing bias, schedule normalization
