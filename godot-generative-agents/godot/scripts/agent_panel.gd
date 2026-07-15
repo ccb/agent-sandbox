@@ -387,8 +387,8 @@ func _ready() -> void:
 	clip_row.add_child(_clip_gif_btn)
 
 	_clip_frames_btn = Button.new()
-	_clip_frames_btn.text = "Export frames"
-	_clip_frames_btn.tooltip_text = "Write the span as PNG frames + an ffmpeg command"
+	_clip_frames_btn.text = "Export MP4 + GIF"
+	_clip_frames_btn.tooltip_text = "Render the span to clip.mp4 + a high-quality clip.gif via ffmpeg (falls back to PNG frames + a printed command if ffmpeg is missing)"
 	_clip_frames_btn.focus_mode = Control.FOCUS_NONE
 	_clip_frames_btn.disabled = true
 	_clip_frames_btn.visible = not OS.has_feature("web")

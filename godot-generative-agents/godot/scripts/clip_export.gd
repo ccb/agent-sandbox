@@ -78,6 +78,7 @@ static func save_frames(frames: Array, start: int, end: int, dir_override := "")
 
 static func ffmpeg_command(dir: String) -> String:
 	# Ready-to-paste ffmpeg lines turning the frame folder into a GIF or an MP4.
+	# The fallback when run_ffmpeg() can't find an ffmpeg to run itself.
 	var frames := dir.path_join("frame_%04d.png")
 	var gif := dir.path_join("clip.gif")
 	var mp4 := dir.path_join("clip.mp4")
@@ -85,3 +86,44 @@ static func ffmpeg_command(dir: String) -> String:
 		+ "-vf 'split[a][b];[a]palettegen[p];[b][p]paletteuse' '%s'\n"
 		+ "# MP4:\nffmpeg -framerate 10 -i '%s' -c:v libx264 -pix_fmt yuv420p '%s'") \
 		% [frames, gif, frames, mp4]
+
+
+static func _ffmpeg_bin() -> String:
+	# Resolve an ffmpeg executable: PATH first (works when the viewer was launched
+	# from a shell, e.g. run.sh), then the usual Homebrew/Unix locations for a
+	# Finder-launched app whose PATH is minimal. "" if none run. Desktop only.
+	var out: Array = []
+	for bin in ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]:
+		if OS.execute(bin, ["-version"], out) == 0:
+			return bin
+	return ""
+
+
+static func run_ffmpeg(dir: String, bin_override := "") -> Dictionary:
+	# Encode the frame folder to BOTH clip.mp4 (libx264) and a high-quality
+	# clip.gif (palettegen/paletteuse) in-place, so the user gets finished files
+	# instead of a command to copy. Blocking (a few seconds). Returns
+	# {ok:true, mp4, gif} or {ok:false, error} -- callers fall back to
+	# ffmpeg_command() so it can still be run by hand. `bin_override` is for tests.
+	var bin := bin_override if bin_override != "" else _ffmpeg_bin()
+	if bin == "":
+		return {"ok": false, "error": "ffmpeg not found"}
+	var frames := dir.path_join("frame_%04d.png")
+	var mp4 := dir.path_join("clip.mp4")
+	var gif := dir.path_join("clip.gif")
+	var log: Array = []
+	var r_mp4 := OS.execute(bin, [
+		"-y", "-framerate", "10", "-i", frames,
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", mp4], log, true)
+	var r_gif := OS.execute(bin, [
+		"-y", "-framerate", "10", "-i", frames,
+		"-vf", "split[a][b];[a]palettegen[p];[b][p]paletteuse", gif], log, true)
+	if r_mp4 != 0 or r_gif != 0:
+		push_error("clip_export: ffmpeg failed (mp4=%d gif=%d)\n%s" % [
+			r_mp4, r_gif, "\n".join(log)])
+		return {"ok": false, "error": "ffmpeg exit mp4=%d gif=%d" % [r_mp4, r_gif]}
+	return {
+		"ok": true,
+		"mp4": ProjectSettings.globalize_path(mp4),
+		"gif": ProjectSettings.globalize_path(gif),
+	}
