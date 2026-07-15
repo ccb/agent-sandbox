@@ -874,17 +874,23 @@ def maybe_converse(
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls to the initiator/step. converse()
-        # alternates speakers through each speaker's OWN client, so stamp both
-        # (a shared client is the same dict stamped twice; per-agent clients --
-        # the #366 parallel-decide wiring -- each get the right turn/role). The
+        # Attribute the meeting's LLM calls per speaker: converse() alternates
+        # speakers through each speaker's OWN client, so when the two clients
+        # are separate instances (#366 per-agent brains) each gets its owner's
+        # name and GET /usage's by_actor splits the dialogue correctly. Under
+        # the classic SHARED client both `ctx` are the same dict, so only the
+        # initiator is stamped -- the pre-#366 behavior, byte-identical. The
         # "role" key labels the terminal request monitor's line (llm_monitor).
-        for who in (a, b):
-            ctx = getattr(who.agent.llm_client, "context", None)
-            if ctx is not None:
-                ctx.update(
-                    {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
-                )
+        ctx_a = getattr(a.agent.llm_client, "context", None)
+        ctx_b = getattr(b.agent.llm_client, "context", None)
+        if ctx_a is not None:
+            ctx_a.update(
+                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
+            )
+        if ctx_b is not None and ctx_b is not ctx_a:
+            ctx_b.update(
+                {"actor": b.name, "turn": step, "attempt": 0, "role": "converse"}
+            )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )

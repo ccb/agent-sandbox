@@ -5,9 +5,10 @@ Pins the live loop's latency contract, fully offline:
 * a decision tick with N agents due costs ~the slowest decision, not the sum
   (a thread pool fans ``observe_and_decide`` out against the turn-start
   snapshot; ``--mock-latency`` injects provider-shaped latency into the mock);
-* a decision that outlives its wall-clock budget degrades to idle-and-retry
-  (the pinned brain-outage behavior), is never double-submitted while still in
-  flight, and the agent is re-asked fresh once the straggler resolves;
+* a decision that outlives its wall-clock budget degrades to idle (the pinned
+  brain-outage behavior), is never double-submitted while still in flight, and
+  its late answer is applied -- not discarded -- once the straggler resolves
+  (discarding would desync a stateful brain and bill a real one twice);
 * ``run_loop`` subtracts each tick's wall time from the next sleep (``_pace``)
   and stamps ``tick_ms`` / ``deciders`` onto every ``frame`` record;
 * the default path (``decide_workers=0``) builds no executor at all -- the
@@ -24,6 +25,8 @@ import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from backend.live import (
     EventLog,
@@ -66,8 +69,11 @@ def test_parallel_decision_tick_costs_the_slowest_decision_not_the_sum():
     assert frame is not None
     # Everyone was idle at t=0, so all N decided -- but in parallel: ~one
     # latency, nowhere near N of them (serial would be >= n * MOCK_LATENCY).
+    # 0.85 rather than a tighter bound: the sleeps overlap but each worker's
+    # perceive/retrieve CPU tail serializes under the GIL, and a loaded CI
+    # runner needs the headroom.
     assert stepper.last_deciders == n
-    assert elapsed < (n * MOCK_LATENCY) * 0.75
+    assert elapsed < (n * MOCK_LATENCY) * 0.85
 
 
 def test_serial_default_pays_the_sum_and_builds_no_executor():
@@ -142,14 +148,7 @@ class _GatedBrain:
         return len(text) // 4
 
 
-def _wait_done(future, deadline=5.0):
-    end = time.monotonic() + deadline
-    while not future.done():
-        assert time.monotonic() < end, "straggler future never resolved"
-        time.sleep(0.01)
-
-
-def test_timeout_degrades_to_idle_never_double_asks_then_reconsults(
+def test_timeout_degrades_to_idle_never_double_asks_then_applies_the_late_answer(
     monkeypatch, capsys
 ):
     gates = {}
@@ -168,24 +167,25 @@ def test_timeout_degrades_to_idle_never_double_asks_then_reconsults(
     )
     hung = stepper.order[0]
     gates[hung] = threading.Event()
-    brain_of = lambda name: stepper.chars[name].agent.llm_client  # noqa: E731
 
     # Per-agent clients (#366): parallel decides must not share one mutable
     # `context`, so every agent gets its own instance; the shared one stays
     # as the mode flag only.
-    brains = {name: brain_of(name) for name in stepper.order}
+    brains = {name: stepper.chars[name].agent.llm_client for name in stepper.order}
     assert len({id(b) for b in brains.values()}) == len(stepper.order)
     assert all(b is not stepper.llm_client for b in brains.values())
 
     # Tick 1: the gated decision blows its 0.2 s budget -> the agent idles
     # exactly like a brain outage (path empty, not performing, still waking
     # up), the skip is printed, and the future is parked, still in flight.
+    # The replay card is NOT refreshed from the half-made decision.
     started = time.monotonic()
     stepper.tick()
     assert time.monotonic() - started < 2.0  # bounded by the budget, not 5 s
     st = stepper.state[hung]
     assert st["path"] == [] and not st["performing"]
     assert st["desc"].startswith("waking up")
+    assert st["reasoning"] == "(waking up)"  # card untouched while parked
     assert f"DECIDE TIMEOUT {hung}" in capsys.readouterr().out
     assert hung in stepper._decide_pending
     assert brains[hung].tool_calls.count("choose_action") == 1
@@ -201,14 +201,29 @@ def test_timeout_degrades_to_idle_never_double_asks_then_reconsults(
     assert brains[hung].tool_calls.count("choose_action") == 1
     assert hung in stepper._decide_pending
 
-    # Release the straggler; its late answer is discarded (the agent stayed
-    # idle), and the next decision point re-asks fresh.
+    # Release the straggler. Its late answer is APPLIED at the next decision
+    # point (not discarded -- a stateful brain like the mock consumes
+    # schedule state per ask, and a real one bills per ask), so the brain is
+    # NOT consulted a second time.
     gates[hung].set()
-    _wait_done(stepper._decide_pending[hung])
+    stepper._decide_pending[hung].result(timeout=5)
     stepper.tick()
-    assert brains[hung].tool_calls.count("choose_action") == 2
+    assert brains[hung].tool_calls.count("choose_action") == 1
     assert hung not in stepper._decide_pending
-    assert stepper.state[hung]["performing"]  # the fresh decide landed
+    assert stepper.state[hung]["performing"]  # the late answer landed
+
+
+def test_step_fails_loud_when_executor_lacks_timeout_or_registry():
+    # Passing an executor without its companion knobs must raise, not
+    # silently wait forever / drop the never-double-ask guard.
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), decide_workers=1)
+    stepper.decide_timeout = None
+    with pytest.raises(ValueError, match="decide_timeout"):
+        stepper.tick()
+    stepper.decide_timeout = 30.0
+    stepper._decide_pending = None
+    with pytest.raises(ValueError, match="decide_pending"):
+        stepper.tick()
 
 
 # ------------------------------------------------- pacing + feed metadata

@@ -115,13 +115,33 @@ class LlmCallMonitor:
 
     # -------------------------------------------------------------- hooks
 
-    def on_call(self, rec: CallRecord, role: str, base: UsageLedger) -> None:
-        """Print one row for *rec* (already stored in *base*) tagged *role*."""
+    def on_call(
+        self,
+        rec: CallRecord,
+        role: str,
+        base: UsageLedger,
+        *,
+        messages: list[dict] | None = None,
+        response: str | None = None,
+    ) -> None:
+        """Store *rec* into *base* and print one row tagged *role*.
+
+        Storing and snapshotting the cumulative cost happen under one lock:
+        with concurrent decide threads (#366) a store-then-report split would
+        let a later call's cost land between an earlier row's store and its
+        Σ snapshot, printing a non-monotonic cumulative column. The header
+        flag lives under the same lock so exactly one thread prints it.
+        A failure while storing propagates (the record matters); a failure
+        while formatting/printing is swallowed (the row is a luxury).
+        """
         wall = time.strftime("%H:%M:%S")
         with self._lock:
+            base.record(rec, messages=messages, response=response)
             self.calls += 1
             n = self.calls
             cum = base.total_cost_usd()
+            first = not self._header_printed
+            self._header_printed = True
             kept = rec.to_primitive()
             # The extras the printed row has over the raw record -- kept on the
             # buffered copy too, so a viewer can render the same line.
@@ -134,21 +154,24 @@ class LlmCallMonitor:
                 }
             )
             self._kept.append(kept)
-        line = self._fmt_row(n, wall, role, rec, cum)
-        if self.color:
-            line = self._colorize(line, role, base.over_budget())
-        out = ""
-        if not self._header_printed:
-            self._header_printed = True
-            header = (
-                " LLM calls -- one line per model request "
-                "(#, time, role, actor, sim turn, model, tokens in (cache w/r), "
-                "tokens out, latency, $ this call, Σ $ run):"
-            )
-            out += (f"{_DIM}{header}{_RESET}" if self.color else header) + "\n"
-        # One write + flush per row so lines never shear against uvicorn's logs.
-        self.stream.write(out + line + "\n")
-        self.stream.flush()
+        try:
+            line = self._fmt_row(n, wall, role, rec, cum)
+            if self.color:
+                line = self._colorize(line, role, base.over_budget())
+            out = ""
+            if first:
+                header = (
+                    " LLM calls -- one line per model request "
+                    "(#, time, role, actor, sim turn, model, tokens in (cache w/r), "
+                    "tokens out, latency, $ this call, Σ $ run):"
+                )
+                out += (f"{_DIM}{header}{_RESET}" if self.color else header) + "\n"
+            # One write + flush per row so lines never shear against uvicorn's
+            # logs.
+            self.stream.write(out + line + "\n")
+            self.stream.flush()
+        except Exception:
+            pass  # the printed line is a luxury; the stored record is not
 
     def drain(self) -> list[dict]:
         """Return (and clear) the buffered primitive records -- the seam the
@@ -201,9 +224,11 @@ class RoleTaggedLedger(UsageLedger):
         messages: list[dict] | None = None,
         response: str | None = None,
     ) -> None:
-        self._base.record(rec, messages=messages, response=response)
-        try:
-            role = (self._ctx or {}).get("role") or self._role
-            self._monitor.on_call(rec, role, self._base)
-        except Exception:
-            pass  # the printed line is a luxury; the stored record is not
+        # on_call stores into the base ledger and reports as ONE locked step
+        # (#366: concurrent decide threads would otherwise interleave a later
+        # call's cost into this row's Σ). It swallows print failures itself
+        # and lets storage failures propagate, exactly as before.
+        role = (self._ctx or {}).get("role") or self._role
+        self._monitor.on_call(
+            rec, role, self._base, messages=messages, response=response
+        )
