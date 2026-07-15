@@ -27,6 +27,8 @@ signal zoom_out_requested
 signal play_pause_requested
 # The user dragged the timeline scrubber to `step` (0-based frame index).
 signal seek_requested(step: int)
+# The user asked to export the marked clip span (issue #488). kind = "gif" | "frames".
+signal clip_export_requested(kind: String)
 # The user picked a playback speed (1.0 = real-time per the replay's step rate).
 signal speed_changed(multiplier: float)
 # The "Reset view" button was pressed.
@@ -233,6 +235,10 @@ var _col: VBoxContainer             # the sidebar's main column (set_live adds r
 var _transport_row: HBoxContainer   # pause/resume toggle + the step counter
 var _step_label: Label              # "step N / total"
 var _updating_scrubber := false     # true while we set the scrubber from playback
+var _clip_gif_btn: Button           # export the marked span as a GIF (#488)
+var _clip_frames_btn: Button        # export PNG frames for ffmpeg (desktop only)
+var _clip_status: Label             # where the last export went
+var _clip_reveal_btn: Button        # Reveal in Finder for the last export
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row, button, status: Label}
 var _active := ""                   # name of the tracked character, or "" when free
@@ -365,6 +371,41 @@ func _ready() -> void:
 	_scrubber.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scrubber.value_changed.connect(_on_scrubber_changed)
 	col.add_child(_scrubber)
+
+	# Clip export (issue #488): mark an in/out span with [ and ] (viewer.gd owns
+	# the keys), then export the span. Frames+ffmpeg is desktop-only.
+	var clip_row := HBoxContainer.new()
+	clip_row.add_theme_constant_override("separation", 6)
+	col.add_child(clip_row)
+
+	_clip_gif_btn = Button.new()
+	_clip_gif_btn.text = "Export GIF"
+	_clip_gif_btn.tooltip_text = "Export the marked span ([ … ]) as an animated GIF"
+	_clip_gif_btn.focus_mode = Control.FOCUS_NONE
+	_clip_gif_btn.disabled = true
+	_clip_gif_btn.pressed.connect(func() -> void: clip_export_requested.emit("gif"))
+	clip_row.add_child(_clip_gif_btn)
+
+	_clip_frames_btn = Button.new()
+	_clip_frames_btn.text = "Export MP4 + GIF"
+	_clip_frames_btn.tooltip_text = "Render the span to clip.mp4 + a high-quality clip.gif via ffmpeg (falls back to PNG frames + a printed command if ffmpeg is missing)"
+	_clip_frames_btn.focus_mode = Control.FOCUS_NONE
+	_clip_frames_btn.disabled = true
+	_clip_frames_btn.visible = not OS.has_feature("web")
+	_clip_frames_btn.pressed.connect(func() -> void: clip_export_requested.emit("frames"))
+	clip_row.add_child(_clip_frames_btn)
+
+	_clip_reveal_btn = Button.new()
+	_clip_reveal_btn.text = "Reveal"
+	_clip_reveal_btn.focus_mode = Control.FOCUS_NONE
+	_clip_reveal_btn.visible = false
+	clip_row.add_child(_clip_reveal_btn)
+
+	_clip_status = Label.new()
+	_clip_status.add_theme_font_size_override("font_size", 12)
+	_clip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_clip_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(_clip_status)
 
 	_speed_row = HBoxContainer.new()
 	_speed_row.add_theme_constant_override("separation", 6)
@@ -580,6 +621,10 @@ func set_live(live: bool) -> void:
 	# Speed picker (the backend sets the pace, not the viewer).
 	_scrubber.visible = not live
 	_markers_strip.visible = not live
+	_clip_gif_btn.visible = not live
+	_clip_frames_btn.visible = not live and not OS.has_feature("web")
+	_clip_reveal_btn.visible = false
+	_clip_status.visible = not live
 	_speed_row.visible = not live
 	if live and _live_badge == null:
 		_live_badge = Label.new()
@@ -645,6 +690,26 @@ func set_progress(step: int, total: int) -> void:
 	_scrubber.value = step
 	_updating_scrubber = false
 	_step_label.text = "step %d / %d" % [step, total]
+
+
+func set_clip_span(a: int, b: int) -> void:
+	# Reflect the marked in/out span: highlight the strip, enable Export when the
+	# span is valid (0 <= a <= b). A cleared span (a<0) disables export.
+	var valid := a >= 0 and b >= a
+	_markers_strip.set_clip_span(a if valid else -1, b if valid else -1)
+	_clip_gif_btn.disabled = not valid
+	_clip_frames_btn.disabled = not valid
+
+
+func set_clip_status(text: String, reveal_path: String) -> void:
+	_clip_status.text = text
+	_clip_reveal_btn.visible = reveal_path != ""
+	# Rewire Reveal to the newest path (disconnect any prior binding first).
+	for c in _clip_reveal_btn.pressed.get_connections():
+		_clip_reveal_btn.pressed.disconnect(c["callable"])
+	if reveal_path != "":
+		_clip_reveal_btn.pressed.connect(func() -> void:
+			OS.shell_show_in_file_manager(reveal_path))
 
 
 func set_timeline_markers(markers: Array, total: int) -> void:
