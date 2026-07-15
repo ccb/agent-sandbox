@@ -4,13 +4,6 @@ extends RefCounted
 ## them headless. VIEW-ONLY: these offsets nudge where a sprite is DRAWN; an
 ## agent's logical tile is unchanged (see the viewer.gd wiring).
 
-# Ring geometry as fractions of the tile size, so it scales with tile_px and the
-# sprites stay on/near the tile.
-const _RADIUS_BASE := 0.15
-const _RADIUS_STEP := 0.06
-const _RADIUS_CAP := 0.36
-
-
 static func groups(tiles: Dictionary) -> Dictionary:
 	# tiles: {name(String): Vector2i}. Returns {Vector2i: Array[String]} of the
 	# names sharing each tile, sorted by name so an agent's index within its group
@@ -26,15 +19,16 @@ static func groups(tiles: Dictionary) -> Dictionary:
 	return by_tile
 
 
-static func offset(index: int, count: int, tile_px: float) -> Vector2:
-	# Sub-tile displacement for agent `index` of `count` co-located agents.
-	# count <= 1 -> ZERO (the common case, no cost). Otherwise a point on a ring:
-	# angle TAU*index/count, radius scaling gently with count and capped near the
-	# tile edge so the sprite stays on/around the tile.
+static func offset(index: int, count: int, spacing_px: float) -> Vector2:
+	# Displacement for agent `index` of `count` co-located agents, arranged on a
+	# ring. count <= 1 -> ZERO (the common case, no cost). The ring radius is
+	# chosen so ADJACENT agents are always ~spacing_px apart regardless of count
+	# (chord = 2*r*sin(PI/count) = spacing), so the cluster reads consistently
+	# whether it's 2 or 6 agents. Callers pass a spacing tied to the on-screen
+	# sprite size (viewer: SPRITE_HALF_PX) so the sprites visibly clear each other
+	# -- the campus sprites are ~4x the tile, so a tile-sized offset is too tight.
 	if count <= 1:
 		return Vector2.ZERO
-	var radius := minf(
-		tile_px * (_RADIUS_BASE + _RADIUS_STEP * count), tile_px * _RADIUS_CAP
-	)
+	var radius := spacing_px / (2.0 * sin(PI / float(count)))
 	var angle := TAU * float(index) / float(count)
 	return Vector2(cos(angle), sin(angle)) * radius
