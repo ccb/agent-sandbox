@@ -1777,8 +1777,10 @@ func _process(delta: float) -> void:
 		agent["node"].position = pa.lerp(pb, frac)
 		var grp: Array = fanout_groups[Vector2i(int(a["x"]), int(a["y"]))]
 		if grp.size() > 1:
+			# Space by the sprite's on-screen size (SPRITE_HALF_PX), not the tile,
+			# so the ~2x-scaled sprites visibly clear each other (#560).
 			agent["node"].position += AgentFanout.offset(
-				grp.find(name), grp.size(), float(_tile_px)
+				grp.find(name), grp.size(), SPRITE_HALF_PX
 			)
 		if show_trail:
 			_update_trail(agent["trail"], name, i, agent["node"].position)
