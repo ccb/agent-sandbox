@@ -110,6 +110,12 @@ class ScheduleMockClient(MockReActClient):
         """Steps to perform the current activity, or ``None`` to stay put."""
         return self._stop["steps"]
 
+    @property
+    def furniture(self):
+        """Furniture the agent should occupy at the current stop, or ``None``
+        (#559). Read at travel time by run_simulation to bias walk_path."""
+        return self._stop.get("furniture")
+
     def advance(self) -> bool:
         """Move to the next scheduled stop. Returns ``False`` if none remain."""
         if self.stop_index + 1 < len(self.schedule):

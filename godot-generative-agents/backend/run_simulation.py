@@ -154,7 +154,13 @@ def step(
                     dest = char.location
                     address = getattr(dest, "tile_address", None)
                     st["path"] = (
-                        world_map.walk_path(st["tile"], address) if address else []
+                        world_map.walk_path(
+                            st["tile"],
+                            address,
+                            furniture=getattr(char.agent.schedule, "furniture", None),
+                        )
+                        if address
+                        else []
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
