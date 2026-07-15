@@ -33,7 +33,11 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.build_world import build_world  # noqa: E402
-from backend.cognition import attach_agents, observe_and_decide  # noqa: E402
+from backend.cognition import (  # noqa: E402
+    ScheduleMockClient,
+    attach_agents,
+    observe_and_decide,
+)
 from text_adventure_games.llm_client import (  # noqa: E402
     MockLlmClient,
     ToolCallResult,
@@ -195,3 +199,40 @@ def test_attach_agents_stamps_the_engine_flag_for_converse():
     # Off (default): the LLMAgent constructor default (False) is untouched.
     _game, ada = _world()
     assert ada.agent.cognition_tools is False
+
+
+def test_normalized_schedule_carries_the_furniture_hint():
+    from backend.build_world import _normalize_personas
+
+    personas = [
+        {
+            "name": "Teacher",
+            "emoji": "🧮",
+            "schedule": [
+                {"place": "Room", "activity": "teaching", "furniture": "blackboard"},
+                {"place": "Hall", "activity": "resting"},  # no hint
+            ],
+        }
+    ]
+    _normalize_personas(personas)
+    stops = personas[0]["schedule"]
+    assert stops[0]["furniture"] == "blackboard"
+    assert stops[1]["furniture"] is None  # absent hint defaults to None
+
+
+def test_schedule_mock_client_exposes_current_stop_furniture():
+    sched = ScheduleMockClient(
+        [
+            {
+                "place": "Room",
+                "activity": "teaching",
+                "emoji": "🧮",
+                "steps": 5,
+                "furniture": "blackboard",
+            },
+            {"place": "Hall", "activity": "resting", "emoji": "🧮", "steps": None},
+        ]
+    )
+    assert sched.furniture == "blackboard"
+    sched.advance()
+    assert sched.furniture is None  # next stop has no hint
