@@ -389,6 +389,9 @@ def apply_to_file(tmj_path):
         else other_max_layer + 2
     )
 
+    # Pairs with _arena_objects() below: when the authored williams_arenas layer
+    # exists we reuse ITS objects (source of truth) and their id base; both
+    # branches must agree on that choice or the splice wouldn't be byte-stable.
     arenas_layer = by_name.get("williams_arenas")
     if arenas_layer and arenas_layer.get("objects"):
         obj_base = min(o["id"] for o in arenas_layer["objects"])
