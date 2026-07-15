@@ -116,15 +116,13 @@ UNNAMED = [
     {"name": "Locust Walk Annex", "seed": (29, 76)},
 ]
 
-# Williams Hall is already a furnished cutaway (furnish_building.py) with its door
-# in the south wall at these columns -- the floor gap in the painted williams_walls
-# ring (Task 538's relayer moved the wall art; re-verify against williams_walls if
-# the art changes again). We carve its collision to match, and skip its picture so
-# we don't paint over the furniture.
-# Columns of the real walkable gap in Williams' south perimeter (the carved
-# door), matching the committed art. NOTE: furnish_building.SOUTH_DOOR_X is a
-# stale (40, 41) and disagrees -- see #552 to realign the art/furniture.
-WILLIAMS_DOOR_X = (43, 44)
+# Williams Hall is authored art (williams_floor / williams_furniture /
+# williams_arenas, edited in Tiled) whose south door is a floor gap in the
+# painted williams_walls ring. We carve its collision to match, and skip its
+# picture so we don't paint over the furniture. The door columns are single-
+# sourced from furnish_building so the collision door and the art can't drift
+# (#552); re-verify against williams_walls if the art changes again.
+WILLIAMS_DOOR_X = fb.SOUTH_DOOR_X
 
 # Extra entrances to open beyond the one(s) path-proximity finds, keyed by
 # building name -> list of door-cell sets (each set is one opening in the
