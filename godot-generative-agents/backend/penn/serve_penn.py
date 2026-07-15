@@ -41,6 +41,7 @@ The pieces:
 
 import argparse
 import os
+import time
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -67,6 +68,11 @@ from text_adventure_games.usage import UsageLedger
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
 # for every authored meeting to convene and the whole cast to finish its rounds.
 DEFAULT_STEPS = 1200
+
+# --stall-seconds (debug) holds every Nth step to fake a real brain's decision
+# latency, so the viewer's "thinking…" indicator (#372) is testable under the
+# free mock brain. Off unless --stall-seconds > 0.
+STALL_EVERY_STEPS = 10
 
 # The model --brain llm falls back to if the world's llm: block names none.
 # Claude Haiku: a campus day is dozens-to-hundreds of low-stakes calls, so the
@@ -275,9 +281,14 @@ class PennStepper:
         llm=None,
         run_store=None,
         cognition_tools=False,
+        stall_seconds=0.0,
     ):
         self.num_steps = num_steps
         self.endless = endless
+        # DEBUG (#372): hold every STALL_EVERY_STEPS-th step this long to fake a
+        # real brain's decision latency so the viewer's "thinking…" cue can be
+        # exercised under the free mock brain. 0.0 = off (byte-identical timing).
+        self.stall_seconds = stall_seconds
         # The #304 persistence seam: a backend.run_store.RunStore, or None (the
         # default -- nothing is written, byte-identical to before). Set before
         # the _build() below so every build, first boot and each POST /reset,
@@ -486,6 +497,16 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        # DEBUG (#372): fake a decision stall so the head stops growing long
+        # enough for the viewer's "thinking…" indicator to fire. Holding the app
+        # lock here is the point -- pollers wait, exactly like a real brain mid-
+        # decision. Off (0.0) leaves timing byte-identical.
+        if (
+            self.stall_seconds > 0.0
+            and self._step_idx > 0
+            and self._step_idx % STALL_EVERY_STEPS == 0
+        ):
+            time.sleep(self.stall_seconds)
         raw, _chats = step(
             self.game,
             self.chars,
@@ -646,6 +667,16 @@ def main() -> int:
         "step_seconds default so live playback paces like a 1x replay",
     )
     ap.add_argument(
+        "--stall-seconds",
+        type=float,
+        default=0.0,
+        help="DEBUG: the mock brain never stalls, so every %d steps hold the "
+        "step this many seconds to fake the decision-latency pauses a real LLM "
+        "brain produces -- lets the viewer's 'thinking…' indicator (#372) be "
+        "exercised for free (set >~2s to clear the viewer's stall threshold; 0 "
+        "= off)" % STALL_EVERY_STEPS,
+    )
+    ap.add_argument(
         "--brain",
         choices=("mock", "llm"),
         default="mock",
@@ -735,6 +766,7 @@ def main() -> int:
             llm=llm,
             run_store=RunStore(DEFAULT_RUNS_DIR) if args.persist else None,
             cognition_tools=args.cognition_tools,
+            stall_seconds=args.stall_seconds,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
