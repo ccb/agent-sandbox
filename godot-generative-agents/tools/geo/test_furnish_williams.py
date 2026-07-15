@@ -253,3 +253,23 @@ def test_apply_to_file_no_duplicate_layers(tmp_path):
     names = [L["name"] for L in t["layers"]]
     assert names.count("williams_walls") == 1
     assert names.count("williams_arenas") == 1
+
+
+def test_arena_objects_prefers_authored_layer():
+    # When a williams_arenas layer exists, its own objects are the source of
+    # truth -- NOT the WILLIAMS_ARENA_OBJECTS constant.
+    authored = [_obj("Custom Room", 100, 200, 300, 400, t="classroom")]
+    tmj = _tmj_with_arenas(authored)
+    assert fw._arena_objects(tmj) == authored
+    assert fw._arena_objects(tmj) is not fw.WILLIAMS_ARENA_OBJECTS
+
+
+def test_arena_objects_falls_back_to_constant_when_absent():
+    # Fresh bake with no arenas layer yet: seed from the constant.
+    tmj = {"width": 245, "height": 279, "layers": []}
+    assert fw._arena_objects(tmj) == fw.WILLIAMS_ARENA_OBJECTS
+
+
+def test_arena_objects_falls_back_when_layer_empty():
+    tmj = _tmj_with_arenas([])
+    assert fw._arena_objects(tmj) == fw.WILLIAMS_ARENA_OBJECTS
