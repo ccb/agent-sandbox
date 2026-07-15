@@ -43,6 +43,25 @@ run simply becomes walkable interior. The invariants to preserve are therefore:
 - keep the **door gap** at cols 43–44 open,
 - keep the **outer silhouette** (erase the inner line, not the outer edge).
 
+**Owner also resized the arenas.** In the same Tiled pass the owner adjusted the
+`williams_arenas` object layer to match the de-thinned room boundaries. This is
+supported *because of* #571: `furnish_williams._arena_objects` now reads the arenas
+from the tmj layer (the constant is fallback-only), so the resized rooms are the
+source of truth and reproduce. It means the **arena matrices** (`arena_maze`,
+`arena_blocks`) change too, and the `grouped_sections` view still resolves to the
+five rooms (Lobby\* dropped, `Classroom B 1/2` merged).
+
+**Format normalization (discovered).** Tiled writes the arenas objectgroup in a
+slightly different whitespace style than `furnish_williams._object_layer_block` (e.g.
+`}, ` with a trailing space; the objects array closed inline as `}]`). So a raw Tiled
+save is *not* byte-identical to what `furnish_williams` would re-emit, which would
+break #571's round-trip test. Resolution: `furnish_williams` is the **canonical
+writer** of `williams_walls` + `williams_arenas`; run it once after the Tiled edit to
+normalize the format, and commit *that*. Verified: the normalized tmj is
+formatting-only vs the Tiled save (all `williams_*` tile data identical, arenas
+identical by name+geometry) and it **self-reproduces byte-identically**, so the
+round-trip test stays green.
+
 ## Workflow
 
 1. **Guide (tooling).** Generate an annotated map of the current `williams_walls`:
@@ -50,29 +69,42 @@ run simply becomes walkable interior. The invariants to preserve are therefore:
    suggested erase coordinates that favors keeping the outer silhouette. The suggested
    set is a *starting point* — the owner refines for clean, continuous 1-thick lines.
    Artifact: `godot-generative-agents/tools/geo/out/williams_dethin_guide.txt` (+ a PNG
-   for visual reference). This is a work aid, not committed product.
-2. **Edit (owner, in Tiled).** Erase the redundant inner line on the `williams_walls`
-   layer, honoring the four invariants above. Save + commit the tmj (Tiled-pretty).
-3. **Re-derive + test (tooling).**
-   - Run the matrix chain (`add_entrances` → `block_grass` → `block_furniture` →
-     `gen_furniture_matrix`) on a *copy*; commit only the regenerated **matrix CSVs**
-     (`collision_maze`, `arena_maze`, `arena_blocks`, `furniture_maze`,
-     `furniture_blocks`, `furniture_spots`). **Never commit the minified tmj** those
-     scripts write.
-   - Confirm `furnish_williams` still reproduces the cleaned `williams_walls`
-     byte-identically (self-seed) — i.e. #571's round-trip test stays green
-     unchanged (it is self-referential to the committed files).
-   - Add a regression test asserting **no 2×2 window in `williams_walls` is fully
+   for visual reference). This is a work aid, not committed product. *(Done.)*
+2. **Edit (owner, in Tiled).** Erase the redundant inner line on `williams_walls`
+   (honoring the four invariants above) and resize `williams_arenas` to match. Save.
+   *(Done — verified: 340→263 wall cells, all-wall 2×2 40→0, windows + door gap
+   preserved, only `williams_walls`/`williams_arenas` changed.)*
+3. **Normalize + re-derive + test (tooling).**
+   - **Normalize:** run `furnish_williams` on the edited tmj to re-emit
+     `williams_walls`/`williams_arenas` in the canonical splice format; commit that
+     tmj (Tiled-pretty, format-preserving). Verify it is formatting-only vs the Tiled
+     save (tile data + arena geometry unchanged).
+   - **Re-derive matrices:** run the matrix chain (`add_entrances` → `block_grass` →
+     `block_furniture` → `gen_furniture_matrix`) on a *copy*; commit only the
+     regenerated **matrix CSVs** (`collision_maze`, `arena_maze`, `arena_blocks`,
+     `furniture_maze`, `furniture_blocks`, `furniture_spots`). **Never commit the
+     minified tmj** those scripts write.
+   - **Reproducibility:** confirm #571's round-trip test stays green on the committed
+     (normalized) tmj — `furnish_williams` reproduces it byte-identically and the
+     matrix chain reproduces the CSVs.
+   - **New regression test:** assert **no 2×2 window in `williams_walls` is fully
      `wall_brick`** (mirroring the sibling buildings' tests).
+   - **Tidy the constant:** update `WILLIAMS_ARENA_OBJECTS` to match the new committed
+     arenas. It is fallback-only (no effect on committed output, since the layer is
+     read), but a stale constant would seed the wrong rooms on a fresh bake.
 
 ## Deliverables (this issue's tooling)
 
-- The de-thin guide generator + its output.
-- Regenerated matrix CSVs reflecting the cleaned walls.
-- New test: `williams_walls` has zero all-`wall_brick` 2×2 windows.
-- No production-code change is required in `furnish_williams` (it already self-seeds
-  the authored walls); if a shared 2×2-check helper already exists in a sibling
-  furnisher, reuse it rather than duplicating.
+- The committed tmj: the owner's edit, normalized through `furnish_williams` (cleaned
+  `williams_walls` + resized `williams_arenas`).
+- Regenerated matrix CSVs reflecting the cleaned walls + resized rooms (collision +
+  arena + furniture).
+- New test: `williams_walls` has zero all-`wall_brick` 2×2 windows. If a sibling
+  furnisher already exposes a 2×2-check helper, reuse it rather than duplicating.
+- `WILLIAMS_ARENA_OBJECTS` updated to match the new committed arenas (fallback-only,
+  no effect on committed output).
+- `furnish_williams`'s relayer/splice logic is otherwise unchanged — it already
+  self-seeds the authored walls + reads the authored arenas (#571).
 
 ## Out of scope
 
@@ -91,8 +123,11 @@ run simply becomes walkable interior. The invariants to preserve are therefore:
   exit via the 43–44 door) and all 5 rooms remain reachable — check the regenerated
   `arena_maze`/`collision_maze` the same way #538's `test_williams_arenas` does.
 - Visual: walls render 1-thick in the viewer, windows intact, no gaps in wall lines.
-- `git status` shows changes only to the tmj (owner's edit) + the six matrix CSVs +
-  the new test + guide tooling — no unrelated files, no minified tmj.
+- The committed (normalized) tmj self-reproduces: re-running `furnish_williams` on it
+  leaves it byte-identical.
+- `git status` shows changes only to the normalized tmj + the six matrix CSVs + the
+  new test + the `WILLIAMS_ARENA_OBJECTS` constant — no unrelated files, no minified
+  tmj (the committed tmj stays Tiled-pretty).
 
 ## Risks
 
