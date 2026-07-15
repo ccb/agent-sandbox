@@ -40,6 +40,7 @@ The pieces:
 """
 
 import argparse
+import concurrent.futures
 import os
 
 from backend.api import run
@@ -275,9 +276,32 @@ class PennStepper:
         llm=None,
         run_store=None,
         cognition_tools=False,
+        decide_workers=0,
+        decide_timeout=30.0,
+        mock_latency=0.0,
     ):
         self.num_steps = num_steps
         self.endless = endless
+        # Concurrent decisions (#366): with workers > 0, every agent at a
+        # decision point decides in parallel inside step(), each bounded by
+        # decide_timeout seconds of wall clock. 0 = today's serial path,
+        # byte-identical (and what the simulate-equivalence test pins).
+        # mock_latency > 0 makes each ScheduleMockClient decide sleep that
+        # long -- an offline stand-in for real provider latency.
+        self.decide_workers = decide_workers
+        self.decide_timeout = decide_timeout
+        self.mock_latency = mock_latency
+        self._decide_executor = (
+            concurrent.futures.ThreadPoolExecutor(
+                max_workers=decide_workers, thread_name_prefix="decide"
+            )
+            if decide_workers > 0
+            else None
+        )
+        # How many agents were at a decision point in the last tick() -- the
+        # live loop stamps it onto each frame record (live.py) so a viewer can
+        # tell "thinking" from "frozen" (#372).
+        self.last_deciders = None
         # The #304 persistence seam: a backend.run_store.RunStore, or None (the
         # default -- nothing is written, byte-identical to before). Set before
         # the _build() below so every build, first boot and each POST /reset,
@@ -310,6 +334,7 @@ class PennStepper:
         self.reflector_client = None
         if llm is not None:
             config = LlmConfig(provider="anthropic", model=llm.get("model"))
+            self._llm_config = config  # per-agent brains re-use it (#366)
             brain_ledger = self._recording_ledger("decide")
             self.llm_client = create_llm_client(config, ledger=brain_ledger)
             ctx = getattr(self.llm_client, "context", None)
@@ -365,6 +390,28 @@ class PennStepper:
             reflector_client=self.reflector_client,
             extra_action_names=PENN_ACTION_VERBS,
         )
+        # In-flight decisions from earlier ticks ({name: Future}, #366). Fresh
+        # per build: a straggler still running across a reset references the
+        # OLD world -- harmless, because parked results are always discarded.
+        self._decide_pending = {}
+        if self.mock_latency > 0:
+            for char in self.chars.values():
+                char.agent.schedule.latency_s = self.mock_latency
+        if self.llm is not None and self._decide_executor is not None:
+            # Parallel decides need one client instance PER AGENT: the engine
+            # clients carry a single mutable `context` dict that the decide
+            # path stamps per call (and _resilient_create writes mid-call), so
+            # N threads through one shared client would clobber each other's
+            # attribution. Each instance records into the same base ledger;
+            # self.llm_client stays as the mode flag (injector gate,
+            # conversation_enabled) and the serial fallback.
+            for char in self.chars.values():
+                view = self._recording_ledger("decide")
+                client = create_llm_client(self._llm_config, ledger=view)
+                ctx = getattr(client, "context", None)
+                if isinstance(view, RoleTaggedLedger) and ctx is not None:
+                    view.bind_context(ctx)
+                char.agent.llm_client = client
         # Real conversations pace themselves through a per-pair cooldown that
         # must OUTLIVE each tick (simulate() keeps one for its whole run;
         # step()'s default is a throwaway dict, which would let a settled pair
@@ -466,6 +513,7 @@ class PennStepper:
         if not self.endless and self._step_idx >= self.num_steps:
             self._finish_run()
             return None
+        decide_info = {}
         raw, _chats = step(
             self.game,
             self.chars,
@@ -479,7 +527,21 @@ class PennStepper:
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
             conversation_cooldowns=self._convo_cooldowns,
+            # Concurrent decides (#366): None executor = the serial path the
+            # simulate-equivalence test pins; workers > 0 fans decisions out.
+            decide_executor=self._decide_executor,
+            decide_timeout=self.decide_timeout,
+            decide_pending=self._decide_pending,
+            decide_info=decide_info,
         )
+        self.last_deciders = decide_info.get("deciders", 0)
+        for name in decide_info.get("timeouts", ()):
+            # Mirror the injector's FIRE print: the skipped decision must be
+            # visible in the run log (#366 acceptance).
+            print(
+                f"  - DECIDE TIMEOUT {name} @ step {self._step_idx} -- "
+                "idling this tick; the call is still in flight"
+            )
         frame = {name: replay_frame_entry(raw[name]) for name in self.order}
         # Paint authored dialogue post-step, exactly where the bake's injector
         # runs (on the converted frames, never the engine state) -- so a future
@@ -661,6 +723,29 @@ def main() -> int:
         "usual. --brain llm only; the mock brain never reaches the tool loop",
     )
     ap.add_argument(
+        "--decide-workers",
+        default="auto",
+        help="how many agent decisions may run concurrently inside one tick "
+        "(#366). 'auto' (default) = one per persona (capped at 8) under "
+        "--brain llm, 0 under mock; 0 = strictly serial (deterministic)",
+    )
+    ap.add_argument(
+        "--decide-timeout",
+        type=float,
+        default=30.0,
+        help="wall-clock budget in seconds for one decision when decides run "
+        "concurrently; past it the agent idles this tick and is re-asked "
+        "once the in-flight call resolves (the skip is printed)",
+    )
+    ap.add_argument(
+        "--mock-latency",
+        type=float,
+        default=0.0,
+        help="sleep this many seconds inside every mock-brain decision -- an "
+        "offline stand-in for real provider latency (pair with "
+        "--decide-workers N to demo #366 pacing / #372 thinking stalls)",
+    )
+    ap.add_argument(
         "--start-paused",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -702,6 +787,13 @@ def main() -> int:
     start_paused = (
         args.start_paused if args.start_paused is not None else llm is not None
     )
+    # 'auto' concurrency (#366): a real brain gets one decide worker per
+    # persona (LLM latency is the whole point), the mock stays serial so the
+    # default offline run remains deterministic. An explicit integer wins.
+    if args.decide_workers == "auto":
+        decide_workers = min(8, len(world.personas)) if llm is not None else 0
+    else:
+        decide_workers = int(args.decide_workers)
     try:
         stepper = PennStepper(
             num_steps=args.steps,
@@ -711,6 +803,9 @@ def main() -> int:
             llm=llm,
             run_store=RunStore(DEFAULT_RUNS_DIR) if args.persist else None,
             cognition_tools=args.cognition_tools,
+            decide_workers=decide_workers,
+            decide_timeout=args.decide_timeout,
+            mock_latency=args.mock_latency,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
@@ -751,6 +846,12 @@ def main() -> int:
             if llm is not None
             else "Cognition tools: ON, but the mock brain never reaches the "
             "tool loop -- pair it with --brain llm for any effect."
+        )
+    if decide_workers > 0:
+        print(
+            f"Concurrent decides: up to {decide_workers} at once, "
+            f"{args.decide_timeout:g}s budget each -- a decision tick costs "
+            "the slowest decision, not the sum (#366)."
         )
     print(
         f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"

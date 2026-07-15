@@ -21,6 +21,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 """
 
 import json
+import time
 from dataclasses import replace
 
 from text_adventure_games import conversation as convo
@@ -78,6 +79,12 @@ class ScheduleMockClient(MockReActClient):
     each agent keep acting -- and keep accumulating memories -- all run long,
     instead of freezing in a single activity.
     """
+
+    # Artificial per-decision latency in seconds (#366): lets an offline run
+    # feel like a real provider -- serve_penn's --mock-latency stamps it, the
+    # parallel-decide tests assert wall-clock against it, and it drives the
+    # #372 "thinking" stall demo. 0.0 = today's instant mock, byte-identical.
+    latency_s = 0.0
 
     def __init__(self, schedule: list[dict], config=None, ledger=None):
         super().__init__(config, ledger=ledger)
@@ -169,6 +176,8 @@ class ScheduleMockClient(MockReActClient):
         return ""
 
     def _choose(self, observation: str) -> str:
+        if self.latency_s:
+            time.sleep(self.latency_s)  # the single funnel both routes share
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
         queued = self._stop.get("commands") or []
@@ -865,14 +874,17 @@ def maybe_converse(
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls to the initiator/step (best effort:
-        # the shared client alternates speakers within one converse()). The
+        # Attribute the meeting's LLM calls to the initiator/step. converse()
+        # alternates speakers through each speaker's OWN client, so stamp both
+        # (a shared client is the same dict stamped twice; per-agent clients --
+        # the #366 parallel-decide wiring -- each get the right turn/role). The
         # "role" key labels the terminal request monitor's line (llm_monitor).
-        ctx = getattr(a.agent.llm_client, "context", None)
-        if ctx is not None:
-            ctx.update(
-                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
-            )
+        for who in (a, b):
+            ctx = getattr(who.agent.llm_client, "context", None)
+            if ctx is not None:
+                ctx.update(
+                    {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
+                )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )

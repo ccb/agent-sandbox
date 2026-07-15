@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import threading
+import time
 from typing import Callable, Protocol, runtime_checkable
 
 
@@ -54,6 +55,9 @@ class SimStepper(Protocol):
       loop appends each as a ``kind: "engine"`` record, honoring #262's "reuse
       the JSONRenderer as the log's source" without coupling the loop to the
       game's parser.
+    * ``last_deciders`` -- how many agents were at a decision point in the last
+      ``tick()`` (#366); when present, the loop stamps it onto each ``frame``
+      record so a viewer can tell a "thinking" stall from a frozen sim (#372).
     """
 
     @property
@@ -194,11 +198,13 @@ class LiveRunController:
             agents = self._stepper.tick()
             drain = getattr(self._stepper, "drain_events", None)
             events = list(drain()) if drain is not None else []
+            deciders = getattr(self._stepper, "last_deciders", None)
         return {
             "generation": generation,
             "step": step,
             "agents": agents,
             "events": events,
+            "deciders": deciders,
         }
 
     def pause(self) -> None:
@@ -224,6 +230,14 @@ class LiveRunController:
         }
 
 
+def _pace(tick_seconds: float, elapsed: float) -> float:
+    """How long to sleep before the next tick, given how long the last one
+    took (#366's adaptive pacing): ticks where nobody decided cost ~nothing
+    and sleep the full ``tick_seconds``; a decision tick that already spent
+    its budget on LLM latency starts the next tick immediately."""
+    return max(0.0, tick_seconds - elapsed)
+
+
 async def run_loop(
     controller: LiveRunController, log: EventLog, tick_seconds: float
 ) -> None:
@@ -234,23 +248,42 @@ async def run_loop(
     every ``WS /ws`` subscriber. Pausing keeps the task alive (reads keep
     working; ticking stops); cancellation is the clean shutdown path and still
     publishes a final ``status(reason="stopped")`` record.
+
+    ``tick_seconds`` is the *target* cadence: each sleep subtracts the wall
+    time the previous tick actually took (:func:`_pace`), so LLM-heavy
+    decision ticks don't pay a sleep on top of their latency (#366). Every
+    ``frame`` record carries that wall time as ``tick_ms`` (plus ``deciders``
+    when the stepper reports it) for the viewer's pacing/"thinking" UI (#372).
     """
     loop = asyncio.get_running_loop()
     controller.running = True
     log.append("status", reason="started", **controller.status())
+    elapsed = 0.0
     try:
         while True:
-            await asyncio.sleep(tick_seconds)
+            await asyncio.sleep(_pace(tick_seconds, elapsed))
             if controller.paused:
+                elapsed = 0.0  # a paused loop keeps its full-tick cadence
                 continue
+            started = time.monotonic()
             result = await loop.run_in_executor(None, controller.tick_once)
+            elapsed = time.monotonic() - started
             if result["generation"] != controller.generation:
                 continue  # a reset raced this tick; drop the stale frame
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
                 log.append("status", reason="finished", **controller.status())
                 continue
-            log.append("frame", step=result["step"], agents=result["agents"])
+            extra = (
+                {} if result["deciders"] is None else {"deciders": result["deciders"]}
+            )
+            log.append(
+                "frame",
+                step=result["step"],
+                agents=result["agents"],
+                tick_ms=round(elapsed * 1000, 1),
+                **extra,
+            )
             for event in result["events"]:
                 log.append("engine", step=result["step"], event=event)
     finally:
