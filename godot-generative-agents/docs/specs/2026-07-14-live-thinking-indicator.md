@@ -126,8 +126,9 @@ bubbles — a translucent pill near the top-centre of the view):
   a running live backend, so they are **not** headless-unit-tested — stated
   boundary.
 - **Manual acceptance (user):** run a live backend with artificial 5–10 s
-  decision stalls (e.g. `serve_penn.py --brain llm`, or a mock brain with an
-  injected delay). Confirm: agents glide (already), the badge + sidebar show
+  decision stalls — free, no keys: `serve_penn.py --stall-seconds 5`
+  (the mock-brain debug flag that pauses every 10th step; `--brain llm` also
+  stalls, for real). Confirm: agents glide (already), the badge + sidebar show
   "thinking…" during the stall, both clear and playback resumes smoothly when
   frames arrive, and baked-replay mode is unaffected.
 
