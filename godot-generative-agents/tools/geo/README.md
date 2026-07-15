@@ -268,7 +268,7 @@ footprint from an invariant mask, so re-runs are byte-stable):
 ```bash
 uv run python godot-generative-agents/tools/geo/osm_to_tiled.py --area core --theme urban   # bake the map
 uv run python godot-generative-agents/tools/geo/osm_to_ville.py --area core --out godot-generative-agents/backend/penn/the_upenn
-uv run python godot-generative-agents/tools/geo/furnish_building.py                          # Williams interior
+# (no furnish_building.py step — it's RETIRED; Williams' floor/furniture are authored, committed art. See the "Legacy" note above.)
 uv run python godot-generative-agents/tools/geo/furnish_williams.py                          # Williams walls (derived from authored arenas)
 uv run python godot-generative-agents/tools/geo/add_entrances.py                             # doors + interiors
 uv run python godot-generative-agents/tools/geo/block_grass.py                               # lawns become un-walkable
