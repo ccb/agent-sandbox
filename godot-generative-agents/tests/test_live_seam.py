@@ -46,6 +46,7 @@ from backend.live import (  # noqa: E402
     run_loop,
 )
 from text_adventure_games import games, things  # noqa: E402
+from text_adventure_games.usage import UsageLedger  # noqa: E402
 
 # The world the API serves when a test only cares about the loop, not the game.
 # A live SimStepper is what advances things; this game just answers /world_state.
@@ -400,3 +401,30 @@ def test_run_registry_without_a_store_is_available_false():
         assert client.get("/runs/any").status_code == 404
         assert client.get("/runs/any/replay").status_code == 404
         assert client.delete("/runs/any").status_code == 404
+
+
+# --- GET /usage per-run view (#526) -----------------------------------------
+
+
+def test_usage_merges_the_stepper_run_view():
+    # A stepper offering run_usage() gets its per-run fields merged beside
+    # the lifetime summary; the lifetime fields themselves are untouched.
+    stepper = _walker()
+    stepper.ledger = UsageLedger()
+    stepper.run_usage = lambda: {"run_calls": 3, "run_cost_usd": 0.02}
+    with _live_client(stepper, start_paused=True) as client:
+        body = client.get("/usage").json()
+    assert body["available"] is True
+    assert body["calls"] == 0  # lifetime summary unchanged
+    assert (body["run_calls"], body["run_cost_usd"]) == (3, 0.02)
+
+
+def test_usage_without_run_view_keeps_todays_shape():
+    # A stepper without run_usage (the generic case) serves the pre-#526
+    # response exactly -- no run_* keys appear.
+    stepper = _walker()
+    stepper.ledger = UsageLedger()
+    with _live_client(stepper, start_paused=True) as client:
+        body = client.get("/usage").json()
+    assert body["available"] is True
+    assert "run_calls" not in body and "run_cost_usd" not in body

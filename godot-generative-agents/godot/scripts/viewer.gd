@@ -123,6 +123,7 @@ const TRAIL_DIM_ALPHA := 0.18
 const ReplayMarkers := preload("res://scripts/replay_markers.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
+const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -220,6 +221,12 @@ var _hud_running := false
 # so a drop loses nothing and re-applies nothing (records at or below it are
 # skipped as duplicates).
 var _is_live := false
+# Live "thinking" cue (issue #372): wall-clock ms when the live head last grew,
+# and whether the cue is currently showing (so the sidebar text flips on edges).
+const THINKING_STALL_MS := 1500
+var _last_frame_ms := 0
+var _thinking := false
+var _thinking_badge: Control
 var _live_url := ""
 var _live_token := ""
 var _ws: WebSocketPeer = null
@@ -304,6 +311,10 @@ func _ready() -> void:
 	# the current campus view into the gallery; the gallery button toggles the pop-up of
 	# captures taken this session. Both live only in memory (no file export yet).
 	_panel.snapshot_requested.connect(_take_snapshot)
+	# The live "thinking…" overlay (issue #372) lives on the same UI layer as the
+	# sidebar so it draws in screen space above the world; hidden until a stall.
+	_thinking_badge = preload("res://scripts/thinking_badge.gd").new()
+	$UI.add_child(_thinking_badge)
 	_panel.gallery_requested.connect(_toggle_gallery)
 	_gallery.close_requested.connect(_close_gallery)
 
@@ -734,12 +745,17 @@ func _apply_live_frame(step: int, agents: Variant) -> void:
 	# trails and the heatmap index the live array the same way they index a
 	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
 	# holding the previous pose rather than crashing the renderer.
+	var prev_size := _frames.size()
 	while _frames.size() < step:
 		_frames.append(_frames[-1] if not _frames.is_empty() else agents)
 	if step == _frames.size():
 		_frames.append(agents)
 	else:
 		_frames[step] = agents
+	# A genuinely new step (the head grew) resets the stall clock; a backfill
+	# rewrite of an existing index does not (issue #372).
+	if _frames.size() > prev_size:
+		_last_frame_ms = Time.get_ticks_msec()
 	_register_frame_buildings(agents as Dictionary)
 
 
@@ -1699,6 +1715,20 @@ func _process(delta: float) -> void:
 	var frac: float = 0.0 if looped else fpos - float(i)
 	var j: int = i if looped else i + 1
 	_panel.set_progress(i, last)
+
+	# Live "thinking" cue (issue #372): while the backend is running but the head
+	# hasn't grown for a beat and we've caught it, flag that it's deciding. Gated
+	# on _is_live, so baked replay never shows it. Edge-triggered so the sidebar
+	# text is only rewritten on change.
+	if _is_live:
+		var stalled := ThinkingIndicator.should_show(
+			_is_live, _backend_run_state, i >= last,
+			Time.get_ticks_msec() - _last_frame_ms, THINKING_STALL_MS)
+		if stalled != _thinking:
+			_thinking = stalled
+			_thinking_badge.set_active(stalled)
+			if _backend_run_state == "running":
+				_panel.set_live_status("thinking…" if stalled else "following backend")
 
 	# Keep the run monitor honest about whether the "run" is advancing: the
 	# simulated meter accrues spend only while the replay actually plays (not
