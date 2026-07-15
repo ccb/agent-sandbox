@@ -221,6 +221,26 @@
   color: #5b6478;
 }
 
+/* A conversation-feed speaker who's a known agent (#534): strip the button
+   chrome so it reads as plain `.chat-speaker` text, then underline on
+   hover/focus to signal it opens that agent's card. Reset font family/size/
+   line-height only — NOT the `font` shorthand, which would also reset
+   font-weight and lose .chat-speaker's 600. Colour is untouched (kept). */
+.convo-speaker-btn {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.convo-speaker-btn:hover,
+.convo-speaker-btn:focus-visible {
+  text-decoration: underline;
+}
+
 /* ---------- Full memory history (right column) ------------------------------ */
 .agent-history-head {
   display: flex;

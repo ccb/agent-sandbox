@@ -6,7 +6,7 @@ import { HomeView } from "./components/home/HomeView";
 import { LlmDashboard } from "./components/LlmDashboard";
 import { setUrlParam } from "./url";
 import { initialApiBase, useLive } from "./useLive";
-import { useReplay } from "./useReplay";
+import { useReplay, useReplayStep } from "./useReplay";
 import "./App.css";
 
 // Lazy-loaded: the prompt-chain view pulls in Cytoscape (~430 kB), which only
@@ -112,6 +112,14 @@ export default function App() {
   const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // The replay step has a SINGLE owner: useReplayStep registers one global
+  // window.__pennReplayStep and deletes it on unmount, so App holds it and hands
+  // it to both consumers (the dashboard's conversation feed and the agent-card
+  // modal), which only render on #llm. Gated on that view so the always-mounted
+  // Godot canvas's per-step callback doesn't re-render the app on other views;
+  // passing 0 elsewhere makes useReplayStep a no-op (it needs totalSteps > 0).
+  const replayStep = useReplayStep(view === "llm" ? (replay?.meta.steps ?? 0) : 0);
 
   useEffect(() => {
     const onHash = () => setView(viewFromHash());
@@ -250,6 +258,7 @@ export default function App() {
               <LlmDashboard
                 replay={replay}
                 live={live}
+                replayStep={replayStep}
                 onConnect={connectApi}
                 onOpenAgent={openAgent}
               />
@@ -260,7 +269,13 @@ export default function App() {
         {/* The agent-card modal (#528): a full-viewport overlay, so it renders
             outside any single view section. Self-gates on the roster. */}
         {view === "llm" && selectedAgent && (
-          <AgentCardModal name={selectedAgent} replay={replay} live={live} onClose={closeAgent} />
+          <AgentCardModal
+            name={selectedAgent}
+            replay={replay}
+            live={live}
+            replayStep={replayStep}
+            onClose={closeAgent}
+          />
         )}
 
         {/* The landing page. Mounted only when active — it's a static page with
