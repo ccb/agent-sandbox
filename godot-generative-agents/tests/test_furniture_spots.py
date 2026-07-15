@@ -114,3 +114,36 @@ def test_furniture_spots_loaded_from_the_committed_artifact():
         assert address.count(":") >= 2  # world:sector:arena
         for x, y in tiles:
             assert wm.collision[y][x] == 0  # every spot is walkable
+
+
+def test_furniture_spots_csv_carries_the_piece_type():
+    # #559: each spot row gains a 6th field, the furniture piece's name, so the
+    # router can prefer a specific piece (a teacher -> blackboard, not a desk).
+    import os
+
+    blocks = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "backend",
+        "penn",
+        "the_upenn",
+        "matrix",
+        "special_blocks",
+    )
+    rows = [
+        r
+        for r in open(os.path.join(blocks, "furniture_spots.csv")).read().splitlines()
+        if r.strip()
+    ]
+    for r in rows:
+        assert len(r.split(",")) == 6, f"expected 6 fields (incl. furniture): {r!r}"
+    classroom = [
+        [c.strip() for c in r.split(",")]
+        for r in rows
+        if "Williams Hall" in r and "Classroom A" in r
+    ]
+    names = [c[5] for c in classroom]
+    assert (
+        names.count("blackboard") == 1
+    ), f"Classroom A blackboard spot missing: {names}"
+    assert names.count("student_desk") == 12, f"Classroom A desks wrong: {names}"
