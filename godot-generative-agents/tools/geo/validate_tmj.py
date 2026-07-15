@@ -20,6 +20,8 @@ from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 
 from add_entrances import (
+    FLOOR,
+    FORCED_CLOSED,
     INTERIOR_ARENA_BASE,
     ROOM_ARENA_BASE,
     ROOM_SUBDIVIDE,
@@ -585,6 +587,45 @@ class Checker:
                 f"({walkable}/{drawn} walkable overall, from {source})",
             )
 
+    def check_entrance_floor_sealed(self):
+        # Every FORCED_CLOSED door must be drawn as WALL in entrance_floor, not
+        # left as open-door FLOOR art (issue #556): a regen that reverts a hand-
+        # seal re-draws the door open. Scoped to FORCED_CLOSED cells ON PURPOSE --
+        # entrance_floor is a whole-footprint floor plan (paint_interior paints
+        # FLOOR over the entire building), so a blanket "FLOOR over sealed
+        # collision" sweep would flag every furnished interior cell. A
+        # FORCED_CLOSED cell is meant to be sealed, so it must read as wall.
+        layer = self.w.tile_layers.get("entrance_floor")
+        if layer is None:
+            self.add(
+                "info",
+                "MATRIX_TMJ",
+                "",
+                "entrance_floor_absent",
+                "no entrance_floor layer -- ghost-door check skipped",
+            )
+            return
+        data = layer.get("data", [])
+        W = self.w.W
+        ghosts = []
+        for name, cells in FORCED_CLOSED.items():
+            for fx, fy in cells:
+                i = fy * W + fx
+                if i < len(data) and (data[i] & GID_MASK) == FLOOR:
+                    ghosts.append((name, fx, fy))
+        if ghosts:
+            shown = ", ".join(f"{n} ({x},{y})" for n, x, y in ghosts[:8])
+            more = "" if len(ghosts) <= 8 else f" (+{len(ghosts) - 8} more)"
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "ghost_door",
+                f"{len(ghosts)} FORCED_CLOSED door cell(s) drawn open "
+                f"(FLOOR/{FLOOR}) in entrance_floor: {shown}{more} -- "
+                f"repaint the tile to WALL",
+            )
+
     def check_furniture_solidity(self):
         """Every *_furniture cell must be collision=1 unless its base gid is in
         block_furniture.WALKABLE_FURNITURE (chair seats). Lock-step: the matrix
@@ -772,6 +813,7 @@ class Checker:
         self.check_drawn_vs_present()
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
+        self.check_entrance_floor_sealed()
         self.check_furniture_solidity()
         self.check_walkable_allowlist_fresh()
         self.check_game_object_orphans()
