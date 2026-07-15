@@ -124,6 +124,7 @@ const ReplayMarkers := preload("res://scripts/replay_markers.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
+const AgentFanout := preload("res://scripts/agent_fanout.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -1757,6 +1758,16 @@ func _process(delta: float) -> void:
 		_last_plan_step = i
 		_day_plans.show_up_to(i)
 
+	# Fan out co-located agents so stacked sprites stay visible (#560). Group by
+	# each agent's tile THIS step; the per-agent offset below is VIEW-ONLY -- it
+	# nudges where the sprite is drawn, not the agent's logical tile, so nothing
+	# that reasons about tiles (heatmap dwell, picking, conversations) is affected.
+	var fanout_tiles := {}
+	for name in _names:
+		var fa: Dictionary = _frames[i][name]
+		fanout_tiles[name] = Vector2i(int(fa["x"]), int(fa["y"]))
+	var fanout_groups: Dictionary = AgentFanout.groups(fanout_tiles)
+
 	for name in _names:
 		var a: Dictionary = _frames[i][name]
 		var b: Dictionary = _frames[j][name]
@@ -1764,6 +1775,11 @@ func _process(delta: float) -> void:
 		var pb := _tile_to_world(int(b["x"]), int(b["y"]))
 		var agent: Dictionary = _agents[name]
 		agent["node"].position = pa.lerp(pb, frac)
+		var grp: Array = fanout_groups[Vector2i(int(a["x"]), int(a["y"]))]
+		if grp.size() > 1:
+			agent["node"].position += AgentFanout.offset(
+				grp.find(name), grp.size(), float(_tile_px)
+			)
 		if show_trail:
 			_update_trail(agent["trail"], name, i, agent["node"].position)
 
