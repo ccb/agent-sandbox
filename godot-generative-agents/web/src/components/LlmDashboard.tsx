@@ -180,14 +180,13 @@ export function LlmDashboard({
   const totalCost = newest?.cum_cost_usd ?? live.usage?.total_cost_usd ?? 0;
   const budget = live.usage?.max_cost_usd;
 
-  // The current step's frame map for the conversation feed (#534), source-switched
-  // like the agent-card modal: the live feed's latest frame, else the baked frame
-  // at the Godot-bridge step.
-  const isLive = live.live && (live.meta?.personas.length ?? 0) > 0;
-  const step = isLive ? live.step : replayStep;
-  const feedFrame = isLive
+  // The current step's frame map for the conversation feed (#534): the live feed's
+  // latest frame when following a live loop, else the baked frame at the
+  // Godot-bridge step. Switches on live.live (like `personas` above), not persona
+  // count — a live run still shows live chat before/without persona meta.
+  const feedFrame = live.live
     ? live.frame
-    : replay?.frames[Math.min(step, (replay?.frames.length ?? 1) - 1)];
+    : replay?.frames[Math.min(replayStep, (replay?.frames.length ?? 1) - 1)];
 
   return (
     <div className="llm-dash">

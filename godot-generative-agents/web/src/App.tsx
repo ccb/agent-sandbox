@@ -77,11 +77,6 @@ const NAV_SECTIONS: { heading: string; items: NavItem[] }[] = [
 
 export default function App() {
   const { status, replay } = useReplay();
-  // The replay step has a SINGLE owner: useReplayStep registers one global
-  // window.__pennReplayStep and deletes it on unmount, so App holds it and hands
-  // it to both consumers (the dashboard's conversation feed and the agent-card
-  // modal). The Godot canvas stays mounted on #llm, so the step keeps advancing.
-  const replayStep = useReplayStep(replay?.meta.steps ?? 0);
   // The live backend: one handshake + one feed poll, shared by the live dashboard
   // and the agent-card modal. The target starts from ?api= / VITE_SIM_API_URL and
   // can also be supplied at runtime by the dashboard's connect form (#519).
@@ -117,6 +112,14 @@ export default function App() {
   const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // The replay step has a SINGLE owner: useReplayStep registers one global
+  // window.__pennReplayStep and deletes it on unmount, so App holds it and hands
+  // it to both consumers (the dashboard's conversation feed and the agent-card
+  // modal), which only render on #llm. Gated on that view so the always-mounted
+  // Godot canvas's per-step callback doesn't re-render the app on other views;
+  // passing 0 elsewhere makes useReplayStep a no-op (it needs totalSteps > 0).
+  const replayStep = useReplayStep(view === "llm" ? (replay?.meta.steps ?? 0) : 0);
 
   useEffect(() => {
     const onHash = () => setView(viewFromHash());
