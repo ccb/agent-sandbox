@@ -45,6 +45,12 @@ from .world_map import WorldMap
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
 
+# A backend-local revision reason (#581): the brain performed somewhere other
+# than the scheduled stop. RevisionTrigger.reason is a plain string
+# (planning.py), so this needs no engine change -- it rides godot-ga-main with
+# the rest of the pacing work.
+DEVIATED = "deviated"
+
 
 def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
@@ -198,22 +204,30 @@ def step(
         ):
             maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, step_idx), clock)
 
-        # Has the current activity run its course? Un-latch and point the brain
-        # at the next scheduled stop, so the agent becomes idle below and walks
-        # on. When the schedule is exhausted, just stop the timer and let it
-        # settle into this last activity for the rest of the run.
+        # Has the current activity run its course? (#581) Advance the stop
+        # pointer ONLY if the completed activity happened at the scheduled place
+        # (on-plan). A deviation keeps the pointer -- the scheduled stop never
+        # ran, so advancing would silently skip it -- and just un-latches so the
+        # agent re-decides. The mock is always on-plan, so this is byte-identical.
         if (
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
         ):
-            if char.agent.schedule.advance():
+            if st.get("on_plan", True):
+                if char.agent.schedule.advance():
+                    st["performing"] = False
+                    # A new stop begins now: the decide-context block (#580)
+                    # measures "how long on this stop" from here (re-anchored
+                    # again on arrival if the stop needs a walk).
+                    st["stop_since"] = step_idx
+                st["perform_until"] = None
+            else:
+                # Deviation completed: keep the pointer, un-latch, re-anchor the
+                # elapsed clock so the next decision starts fresh.
                 st["performing"] = False
-                # A new stop begins now: the decide-context block (#580)
-                # measures "how long on this stop" from here (re-anchored
-                # again on arrival if the stop needs a walk).
+                st["perform_until"] = None
                 st["stop_since"] = step_idx
-            st["perform_until"] = None
 
         if not st["path"] and not st["performing"]:
             due.append(name)
@@ -325,12 +339,18 @@ def step(
                 if command.startswith("travel"):
                     dest = char.location
                     address = getattr(dest, "tile_address", None)
+                    # Furniture is a per-stop bias; on a deviation the scheduled
+                    # stop's furniture is for the wrong place, so drop it. The
+                    # mock only ever travels to its scheduled stop, so it keeps
+                    # the hint -> byte-identical.
+                    stop_place = getattr(char.agent.schedule, "destination", None)
+                    furniture = (
+                        getattr(char.agent.schedule, "furniture", None)
+                        if dest is not None and dest.name == stop_place
+                        else None
+                    )
                     st["path"] = (
-                        world_map.walk_path(
-                            st["tile"],
-                            address,
-                            furniture=getattr(char.agent.schedule, "furniture", None),
-                        )
+                        world_map.walk_path(st["tile"], address, furniture=furniture)
                         if address
                         else []
                     )
@@ -359,6 +379,23 @@ def step(
                     )
                     st["on_plan"] = matched
                     activity = char.get_property("activity") or "spending time"
+                    if not matched:
+                        # Off-plan: let the planner rewrite the stale tail so the
+                        # written plan (and #580's context block / read_plan)
+                        # catch up with reality. Cooldown-guarded because each
+                        # revise is a real LLM call under a live planner; the
+                        # mock's revise is a no-op regardless, so the bake is
+                        # untouched. Stamp on every attempt (not just successes)
+                        # to bound planner-call frequency.
+                        last_dev = st.get("last_deviation_revision")
+                        cooldown = cog.deviation_cooldown_steps
+                        if last_dev is None or step_idx - last_dev >= cooldown:
+                            st["last_deviation_revision"] = step_idx
+                            maybe_revise_plan(
+                                char,
+                                RevisionTrigger(DEVIATED, step_idx, activity),
+                                clock,
+                            )
                     # Emoji: the model's pick wins; else the stop's emoji only
                     # when on-plan (a deviation must not wear the wrong stop's
                     # emoji); else the persona default.
