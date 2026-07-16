@@ -98,9 +98,9 @@ Two constraints shape the responder, both pointing the same way:
      scripted scenario that exercises it.
    - **cognition** `recall` / `query_knowledge` / `read_plan`: issue one before the
      decide in a bounded, deterministic way so `cognition_tool` usage is non-empty.
-   - **converse** (`chat` / `speak`): return a short templated line keyed on the
-     speaker + addressee parsed from the prompt, so a real `chat`-kind memory and an
-     emergent relationship edge land.
+   - **converse** (`speak`): return a short templated line keyed on the speaker +
+     addressee parsed from the prompt, so a real `chat`-kind memory lands in both
+     participants' streams (via `maybe_converse` → `conversation.converse`).
    - **reflect**: return a schema-valid reflection reply (matching `LLMReflector`'s
      `salient_questions` / `record_insight` tools) so reflection memories are written.
    - **repair (deferred):** exercising #357's bounded repair round is **out of scope
@@ -136,8 +136,12 @@ Two constraints shape the responder, both pointing the same way:
   - reflection memories present;
   - tool-call records in the ledger (per-verb typed tools exercised);
   - cognition-tool usage (`recall` / `query_knowledge` / `read_plan`) non-empty;
-  - at least one emergent relationship edge beyond the t=0 YAML seed graph;
   - a non-empty usage ledger surface (zero-cost mock records still count).
+
+  *(Deferred: an **emergent relationship edge** from a conversation is out of scope —
+  today `maybe_converse` writes CHAT memories only; there is no conversation→social-graph
+  edge code yet, #563's own audit says the graph is "partial: only the t=0 seed". The
+  CHAT-memory assertion above covers the social dimension that is actually wired.)*
 - Determinism: same seed/run → identical frames across two runs (assert in the test).
 - `--brain mock` bake stays **byte-identical** (existing determinism suite green);
   `test_replay_contract.py` still green for the scripted bake (shape unchanged).
@@ -176,8 +180,9 @@ Two constraints shape the responder, both pointing the same way:
   picks through the same `command_from_tool_call` the real brain uses, so a scripted
   reply is shaped exactly like a real one.
 - **Coverage test asserts shape not population (the original bug) (mitigated):** each
-  assertion checks a *value* is present (non-empty memory list, ≥1 edge, ≥1 repair
-  count), and the spec requires the disable-a-branch spot-check.
+  assertion checks a *value* is present (non-empty memory list, ≥1 CHAT memory in both
+  participants, non-empty ledger), and the spec requires the disable-a-branch
+  spot-check.
 
 ## Relates to
 
