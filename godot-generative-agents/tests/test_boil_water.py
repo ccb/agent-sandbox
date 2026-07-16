@@ -6,7 +6,15 @@ Spec: godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md
 import pytest
 
 from backend.build_world import _normalize_personas, build_world
-from backend.actions import DrinkPenn, Activate, Deactivate
+from backend.actions import DrinkPenn, Activate, Deactivate, BoilWater
+from backend.penn.penn_world import (
+    PENN_EXTRA_ACTIONS,
+    _furnish_boil_water,
+    build_penn_world,
+    make_boil_stove,
+    make_murky_pot,
+)
+from backend.run_simulation import SICK_EMOJI, _resting_pron, simulate
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -94,16 +102,9 @@ def test_boiled_water_is_safe_to_drink():
     assert not [e for e in game.events if e.action == "sickness"]
 
 
-def _stove():
-    stove = Item("stove", "a small electric stove", "A single coil burner.")
-    stove.set_property(Property.GETTABLE, False)
-    stove.set_property("is_device", True)
-    return stove
-
-
 def test_activate_and_deactivate_toggle_a_device():
     game, char = _tiny_world(extra_actions=[Activate, Deactivate])
-    game.locations["Union"].add_item(_stove())
+    game.locations["Union"].add_item(make_boil_stove())
     assert game.parser.parse_command("activate stove", actor=char)
     stove = game.locations["Union"].items["stove"]
     assert stove.get_property("is_on") is True
@@ -234,6 +235,29 @@ def test_action_names_include_authored_verbs():
     assert chars["Testa"].agent.action_names == ["travel", "perform", "drink", "get"]
 
 
+def test_wait_commands_never_enter_the_tool_enum():
+    """Finding A (#590 review): `wait` is a deliberately-excluded idle verb, so
+    even if an authored stop uses it as a spacer it must never be promoted to a
+    real brain's tool enum -- a Wait schema on every decide is token spend that
+    invites idling."""
+    persona = _persona(
+        [
+            {
+                "place": "Union",
+                "activity": "hanging out",
+                "steps": 5,
+                "commands": ["wait", "get cup of murky water", "wait"],
+            }
+        ]
+    )
+    personas = _normalize_personas([persona])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    names = chars["Testa"].agent.action_names
+    assert "wait" not in names
+    assert "get" in names  # the real authored verb still made it in
+
+
 # -- extra_action_names: Penn's real-brain verb set (spec §3, final review) --
 
 PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate"]
@@ -296,12 +320,16 @@ def test_sick_drink_is_remembered_at_high_importance():
     # just_sickened (one-shot transition marker remember_outcome keys off).
     char.set_property("is_sick", True)
     char.set_property("just_sickened", True)
-    remember_outcome(char, "drink cup of murky water", 7)
+    remember_outcome(char, "drink pot of murky water", 7)
     entries = memory_stream_for_persona(char.agent)
     sick = [e for e in entries if "terribly sick" in e["text"]]
     assert sick, f"no sick memory in {[e['text'] for e in entries]}"
     assert sick[-1]["importance"] == 8.0
-    assert "I drank the cup of murky water" in sick[-1]["text"]
+    # Full render pinned (README says these are exact-pinned to guard escaping).
+    assert (
+        sick[-1]["text"]
+        == "I drank the pot of murky water and now I feel terribly sick."
+    )
     # The one-shot marker is consumed so a later clean drink doesn't reuse it.
     assert char.get_property("just_sickened") is False
 
@@ -312,12 +340,36 @@ def test_recovered_drink_is_remembered_at_mid_importance():
     # mid importance (5.0), and the one-shot marker is consumed.
     char = _attached_char()
     char.set_property("just_recovered", True)
-    remember_outcome(char, "drink pot of boiled water", 9)
+    remember_outcome(char, "drink pot of murky water", 9)
     entries = memory_stream_for_persona(char.agent)
     rec = [e for e in entries if "feel much better" in e["text"]]
     assert rec, f"no recovery memory in {[e['text'] for e in entries]}"
     assert rec[-1]["importance"] == 5.0
-    assert "I drank the pot of boiled water" in rec[-1]["text"]
+    # Finding 13: pin the full render, not a substring -- the punctuation in
+    # the middle is exactly what the escaping-guard convention protects.
+    assert (
+        rec[-1]["text"]
+        == "I drank the pot of murky water, and the sickness has finally "
+        "passed -- I feel much better."
+    )
+    assert char.get_property("just_recovered") is False
+
+
+def test_transition_markers_are_consumed_regardless_of_verb_token():
+    """Finding 2 (#590 review): the sicken/recover markers must be consumed by
+    their presence, not by a first-token verb == "drink". A comma
+    ActionSequence ("get ..., drink ...") parses with verb "get" and free brain
+    text ("have a drink ...") with "have", so a verb gate would leak the marker
+    into the NEXT drink -- recording it as BOTH sickened and recovered and
+    inverting the arc's payoff."""
+    char = _attached_char()
+    char.set_property("just_recovered", True)
+    # verb token is "have", not "drink":
+    remember_outcome(char, "have a drink of the clean water", 9)
+    entries = memory_stream_for_persona(char.agent)
+    assert any("feel much better" in e["text"] for e in entries)
+    assert entries[-1]["importance"] == 5.0
+    # Consumed: a later drink can't re-fire the recovery memory.
     assert char.get_property("just_recovered") is False
 
 
@@ -346,6 +398,32 @@ def test_clean_drink_is_remembered_at_normal_importance():
     assert drank and drank[-1]["importance"] == 2.0
 
 
+def test_boil_is_remembered_as_the_arc_hinge():
+    """Finding 3 (#590 review): boiling is the corrective hinge of the arc, so
+    it must rank as a meaningful causal memory -- above a plain get (2.0) and
+    the passive recovery drink (5.0) -- not fall to the 1.0 catch-all where the
+    #299/#301 importance-weighted retrieval would treat it as noise."""
+    char = _attached_char()
+    remember_outcome(char, "boil water", 5)
+    entries = memory_stream_for_persona(char.agent)
+    boiled = [e for e in entries if "boiled the water" in e["text"]]
+    assert boiled, f"no boil memory in {[e['text'] for e in entries]}"
+    assert boiled[-1]["text"] == "I boiled the water to make it safe to drink."
+    assert boiled[-1]["importance"] == 6.0
+
+
+def test_wait_is_not_remembered_at_all():
+    """Finding 5 (#590 review): a `wait` writes no memory -- otherwise a run
+    accrues identical 1.0 "I did wait" entries that crowd the card and feed the
+    reflection accumulator with filler."""
+    char = _attached_char()
+    before = len(memory_stream_for_persona(char.agent))
+    remember_outcome(char, "wait", 4)
+    after = memory_stream_for_persona(char.agent)
+    assert len(after) == before
+    assert not any(e["text"] == 'I did "wait".' for e in after)
+
+
 def test_get_is_remembered_at_normal_importance():
     char = _attached_char()
     remember_outcome(char, "get pot", 3)
@@ -370,9 +448,37 @@ def test_device_verbs_are_remembered_at_normal_importance(command):
     assert got and got[-1]["importance"] == 2.0
 
 
-# -- the real Penn world: furnished Houston Hall + Sofia's authored stop (#300) -
+# -- the sickness emoji rides the frame's pron authority chain (#590 finding 1) -
 
-from backend.penn.penn_world import build_penn_world
+
+def test_resting_pron_routes_sickness_below_the_model_pick():
+    """Finding 1 (#590 review): the #300 health cue is folded into the emoji
+    authority chain (a low-priority overlay), not stamped as a frame-time
+    override. A model's explicit pick still wins; else a sick agent wears the
+    queasy face; else the stop / persona emoji."""
+    char = _attached_char()
+    schedule = char.agent.schedule
+    default = "🙂"
+
+    # Healthy, on-plan: the stop's emoji (or persona default).
+    char.set_property("is_sick", False)
+    char.agent.last_emoji = None
+    assert (
+        _resting_pron(char, schedule, True, "Testa", {"Testa": default}) != SICK_EMOJI
+    )
+
+    # Sick, no model pick: the sickness cue.
+    char.set_property("is_sick", True)
+    assert (
+        _resting_pron(char, schedule, True, "Testa", {"Testa": default}) == SICK_EMOJI
+    )
+
+    # Sick, but the model chose an emoji: the model's pick still wins.
+    char.agent.last_emoji = "😀"
+    assert _resting_pron(char, schedule, True, "Testa", {"Testa": default}) == "😀"
+
+
+# -- the real Penn world: furnished Houston Hall + Sofia's authored stop (#300) -
 
 
 def test_houston_hall_is_stocked_and_the_scenario_plays():
@@ -388,27 +494,28 @@ def test_houston_hall_is_stocked_and_the_scenario_plays():
     assert game.parser.parse_command("drink pot of murky water", actor=sofia)
     assert sofia.get_property("is_sick") is True
     assert any(e.action == "sickness" for e in game.events)
-    # 2) boil it -> the pot becomes "pot of boiled water"
+    # 2) boil it -> the pot is marked safe (name kept: still "pot of murky water")
     assert game.parser.parse_command("boil water", actor=sofia)
-    assert "pot of boiled water" in sofia.inventory
-    # 3) drink the boiled water -> recover
-    assert game.parser.parse_command("drink pot of boiled water", actor=sofia)
+    pot = sofia.inventory["pot of murky water"]
+    assert pot.get_property("is_boiled") is True
+    # 3) drink the same (now boiled) pot -> recover
+    assert game.parser.parse_command("drink pot of murky water", actor=sofia)
     assert sofia.get_property("is_sick") is False
     assert any(e.action == "recovery" for e in game.events)
 
 
-def test_boil_renames_the_real_houston_pot_and_makes_it_safe():
-    """In the furnished Houston Hall, boiling the carried pot renames it and the
-    boiled water no longer sickens on the safe (recovery-less) path."""
+def test_boil_marks_the_real_houston_pot_safe_and_keeps_its_name():
+    """In the furnished Houston Hall, boiling the carried pot marks it safe
+    without renaming it, and the boiled water no longer sickens."""
     pw = build_penn_world()
     game, chars = pw.build_world_fn(pw.world_map)
     sofia = chars["Sofia Ramirez"]
     assert game.parser.parse_command("travel to Houston Hall", actor=sofia)
     assert game.parser.parse_command("get pot of murky water", actor=sofia)
     assert game.parser.parse_command("boil water", actor=sofia)
-    pot = sofia.inventory["pot of boiled water"]
+    pot = sofia.inventory["pot of murky water"]  # name unchanged
     assert pot.get_property("is_boiled") is True
-    assert game.parser.parse_command("drink pot of boiled water", actor=sofia)
+    assert game.parser.parse_command("drink pot of murky water", actor=sofia)
     assert not sofia.get_property("is_sick")
 
 
@@ -423,94 +530,38 @@ def test_penn_action_verbs_include_boil():
 
 
 def test_sofias_houston_hall_stop_carries_the_arc_commands():
-    # Sofia's Houston stop runs the arc; `wait` spacers (which just pass time to
-    # separate the events on the timeline) are dropped to check the real steps.
+    # Sofia's arc runs across the same-place Houston Hall stops (no `wait`
+    # spacers -- the stops' `steps:` gaps separate the events). Gather the
+    # authored commands across those stops in order.
     pw = build_penn_world()
     sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
-    stop = next(s for s in sofia["schedule"] if s["place"] == "Houston Hall")
-    cmds = [c for c in stop["commands"] if c != "wait"]
+    cmds = [
+        c
+        for s in sofia["schedule"]
+        if s["place"] == "Houston Hall"
+        for c in (s.get("commands") or [])
+    ]
     assert cmds == [
         "get pot of murky water",
         "drink pot of murky water",
         "boil water",
-        "drink pot of boiled water",
+        "drink pot of murky water",
     ]
-
-
-# -- end-to-end acceptance: a mock-brain run drinks, sickens, remembers (#300) -
-
-from backend.penn.penn_world import PENN_EXTRA_ACTIONS, _furnish_boil_water
-from backend.run_simulation import simulate
-
-
-def test_end_to_end_mock_run_agent_drinks_and_gets_sick():
-    """#300 acceptance: in a mock-brain run, an agent drinks, gets sick, and the
-    high-importance observation lands in its memory stream."""
-    pw = build_penn_world()
-    persona = {
-        "name": "Testa Sip",
-        "home": "Houston Hall",
-        "persona": "I am Testa Sip, a thirsty test persona.",
-        "emoji": "🥤",
-        "start_tile": [25, 109],
-        "schedule": [
-            {
-                "place": "Houston Hall",
-                "activity": "getting a drink of water",
-                "emoji": "🥤",
-                "steps": 3,
-                "commands": ["get pot of murky water", "drink pot of murky water"],
-            }
-        ],
-    }
-    personas = _normalize_personas([persona])
-
-    def build_fn(wm):
-        game, characters = build_world(
-            wm, personas, pw.locations, extra_actions=PENN_EXTRA_ACTIONS
-        )
-        _furnish_boil_water(game)
-        return game, characters
-
-    memories = {}
-    simulate(
-        pw.world_map,
-        10,
-        personas=personas,
-        build_world_fn=build_fn,
-        out_memories=memories,
-    )
-    stream = memories["Testa Sip"]
-    sick = [m for m in stream if "terribly sick" in m["text"]]
-    assert sick, f"no sickness memory in {[m['text'] for m in stream]}"
-    assert sick[0]["importance"] == 8.0
+    # No wait spacers survived the de-clumping (finding 7).
+    assert "wait" not in cmds
 
 
 # -- BoilWater: the self-contained boil superaction (#300 test scaffold) -----
 
-from backend.actions import BoilWater
-
-
-def _murky_pot():
-    pot = Item(
-        "pot of murky water",
-        "a pot of murky water",
-        "Cloudy, untreated tap water in a dented steel pot.",
-    )
-    pot.set_property(Property.DRINKABLE, True)
-    pot.set_property("requires_boiling", True)
-    pot.set_property("is_boiled", False)
-    pot.set_property("portions", 3)  # reusable vessel: drinking keeps the pot
-    return pot
-
 
 def _boil_world():
     """Tiny world with the boil verb + drink override; Union holds a stove and
-    a reusable pot of murky water."""
+    a reusable pot of murky water (the SAME factories the real Houston Hall
+    uses, so the tiny-world props can't drift -- finding 12)."""
     game, char = _tiny_world(extra_actions=[BoilWater, DrinkPenn, Activate])
     union = game.locations["Union"]
-    union.add_item(_stove())
-    union.add_item(_murky_pot())
+    union.add_item(make_boil_stove())
+    union.add_item(make_murky_pot())
     return game, char, union
 
 
@@ -519,28 +570,30 @@ def test_boil_is_registered():
     assert game.parser.actions["boil"] is BoilWater
 
 
-def test_boil_renames_water_and_turns_stove_on():
-    # The visible state change: the vessel is re-keyed murky -> boiled in place.
+def test_boil_marks_water_safe_and_turns_stove_on():
+    # The visible state change: the vessel is marked is_boiled IN PLACE (name
+    # kept), its description updated, and the stove switched on.
     game, char, union = _boil_world()
     assert game.parser.parse_command("boil water", actor=char)
-    assert "pot of murky water" not in union.items
-    boiled = union.items["pot of boiled water"]
-    assert boiled.get_property("is_boiled") is True
+    pot = union.items["pot of murky water"]  # name unchanged
+    assert pot.get_property("is_boiled") is True
+    assert "boiled" in pot.description.lower()
     assert union.items["stove"].get_property("is_on") is True
 
 
-def test_boiled_event_is_logged():
+def test_boiled_event_is_logged_with_a_scalar_item():
     game, char, union = _boil_world()
     assert game.parser.parse_command("boil water", actor=char)
     boiled = [e for e in game.events if e.action == "boiled"]
     assert len(boiled) == 1
     assert boiled[0].payload["location"] == "Union"
-    assert boiled[0].payload["items"] == ["pot of boiled water"]
+    # Scalar "item" matching the sibling sickness/recovery events (finding 10).
+    assert boiled[0].payload["item"] == "pot of murky water"
 
 
 def test_full_arc_sicken_then_boil_then_recover():
-    # The whole watchable arc against the tiny world: drink raw -> sick;
-    # boil (also exercises the carried-pot rename re-key); drink boiled -> well.
+    # The whole watchable arc against the tiny world: drink raw -> sick; boil
+    # (marks the carried pot safe in place); drink the SAME pot -> well.
     game, char, union = _boil_world()
     assert game.parser.parse_command("get pot of murky water", actor=char)
     assert game.parser.parse_command("drink pot of murky water", actor=char)
@@ -549,17 +602,37 @@ def test_full_arc_sicken_then_boil_then_recover():
 
     assert game.parser.parse_command("boil water", actor=char)
     assert [e for e in game.events if e.action == "boiled"]
-    assert "pot of boiled water" in char.inventory  # re-keyed while carried
+    pot = char.inventory["pot of murky water"]  # name unchanged
+    assert pot.get_property("is_boiled") is True
 
-    assert game.parser.parse_command("drink pot of boiled water", actor=char)
+    assert game.parser.parse_command("drink pot of murky water", actor=char)
     assert char.get_property("is_sick") is False
     assert [e for e in game.events if e.action == "recovery"]
+
+
+def test_recovery_requires_boiled_water_not_just_any_safe_drink():
+    """Finding 4 (#590 review): the cure is gated on is_boiled, not "any
+    successful drink while sick". A sick agent drinking an unrelated safe
+    beverage must NOT recover -- otherwise the #301 "did it learn to boil?"
+    comparison can't tell boiling from drinking anything."""
+    game, char, union = _boil_world()
+    # Get sick off the raw water.
+    assert game.parser.parse_command("get pot of murky water", actor=char)
+    assert game.parser.parse_command("drink pot of murky water", actor=char)
+    assert char.get_property("is_sick") is True
+    # A clean, never-contaminated beverage (no is_boiled) does NOT cure.
+    juice = Item("cup of juice", "a cup of juice", "Cold apple juice.")
+    juice.set_property(Property.DRINKABLE, True)
+    char.add_to_inventory(juice)
+    assert game.parser.parse_command("drink cup of juice", actor=char)
+    assert char.get_property("is_sick") is True
+    assert not [e for e in game.events if e.action == "recovery"]
 
 
 def test_boil_fails_without_a_stove():
     game, char = _tiny_world(extra_actions=[BoilWater])
     union = game.locations["Union"]
-    union.add_item(_murky_pot())
+    union.add_item(make_murky_pot())
     assert not game.parser.parse_command("boil water", actor=char)
     assert union.items["pot of murky water"].get_property("is_boiled") is False
 
@@ -568,42 +641,28 @@ def test_boil_fails_with_nothing_to_boil():
     # Stove present but the only water is already boiled -> clean failure.
     game, char = _tiny_world(extra_actions=[BoilWater])
     union = game.locations["Union"]
-    union.add_item(_stove())
-    pot = _murky_pot()
+    union.add_item(make_boil_stove())
+    pot = make_murky_pot()
     pot.set_property("is_boiled", True)
     union.add_item(pot)
     assert not game.parser.parse_command("boil water", actor=char)
 
 
-def _event_actions(events):
-    return [e["action"] if isinstance(e, dict) else e.action for e in events]
+# -- end-to-end acceptance: mock-brain runs of the arc (#300) ----------------
 
 
-def test_end_to_end_mock_run_full_arc_sick_boil_recover():
-    """The scaffold's payoff in a mock run: the authored arc fires end to end --
-    a high-importance sickness memory lands, and the sickness -> boiled ->
-    recovery events all appear (the exact sequence the viewer's timeline shows)."""
+def _mock_penn_run(schedule, steps, name="Testa Boil", emoji="🍵"):
+    """Run a single-persona mock bake in the furnished Penn world and return
+    ``(memories, events)``. Shared by the end-to-end tests so they can't drift
+    in their persona/build_fn/simulate scaffolding (finding 12)."""
     pw = build_penn_world()
     persona = {
-        "name": "Testa Boil",
+        "name": name,
         "home": "Houston Hall",
-        "persona": "I am Testa Boil, a careful test persona.",
-        "emoji": "🍵",
+        "persona": f"I am {name}, a test persona.",
+        "emoji": emoji,
         "start_tile": [25, 109],
-        "schedule": [
-            {
-                "place": "Houston Hall",
-                "activity": "sorting out the water",
-                "emoji": "🍵",
-                "steps": 6,
-                "commands": [
-                    "get pot of murky water",
-                    "drink pot of murky water",
-                    "boil water",
-                    "drink pot of boiled water",
-                ],
-            }
-        ],
+        "schedule": schedule,
     }
     personas = _normalize_personas([persona])
 
@@ -617,13 +676,56 @@ def test_end_to_end_mock_run_full_arc_sick_boil_recover():
     memories, events = {}, []
     simulate(
         pw.world_map,
-        14,
+        steps,
         personas=personas,
         build_world_fn=build_fn,
         out_memories=memories,
         out_events=events,
     )
-    actions = _event_actions(events)
+    return memories, events
+
+
+def test_end_to_end_mock_run_agent_drinks_and_gets_sick():
+    """#300 acceptance: in a mock-brain run, an agent drinks, gets sick, and the
+    high-importance observation lands in its memory stream."""
+    schedule = [
+        {
+            "place": "Houston Hall",
+            "activity": "getting a drink of water",
+            "emoji": "🥤",
+            "steps": 3,
+            "commands": ["get pot of murky water", "drink pot of murky water"],
+        }
+    ]
+    memories, _ = _mock_penn_run(schedule, 10, name="Testa Sip", emoji="🥤")
+    stream = memories["Testa Sip"]
+    sick = [m for m in stream if "terribly sick" in m["text"]]
+    assert sick, f"no sickness memory in {[m['text'] for m in stream]}"
+    assert sick[0]["importance"] == 8.0
+
+
+def test_end_to_end_mock_run_full_arc_sick_boil_recover():
+    """The scaffold's payoff in a mock run: the authored arc fires end to end --
+    a high-importance sickness memory lands, and the sickness -> boiled ->
+    recovery events all appear (the exact sequence the viewer's timeline shows).
+    The recovery drink names the same pot ("pot of murky water"): boiling only
+    flipped its is_boiled flag."""
+    schedule = [
+        {
+            "place": "Houston Hall",
+            "activity": "sorting out the water",
+            "emoji": "🍵",
+            "steps": 6,
+            "commands": [
+                "get pot of murky water",
+                "drink pot of murky water",
+                "boil water",
+                "drink pot of murky water",
+            ],
+        }
+    ]
+    memories, events = _mock_penn_run(schedule, 14)
+    actions = [e["action"] for e in events]
     assert "sickness" in actions
     assert "boiled" in actions
     assert "recovery" in actions

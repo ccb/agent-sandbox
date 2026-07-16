@@ -309,27 +309,31 @@ class PennWorld:
     relationships: list = field(default_factory=list)
 
 
-def _furnish_boil_water(game) -> None:
-    """Stock Houston Hall with the boil-water props (#300).
-
-    A single reusable pot of unboiled water (``requires_boiling`` +
-    ``is_boiled: False``, with ``portions`` so drinking keeps the vessel), plus
-    a sink and a stove device. The full arc: drink the murky water and DrinkPenn
-    makes you sick; the ``boil`` action renames the pot "pot of boiled water"
-    and clears the hazard; drinking the boiled water then cures the sickness.
-    (Whether an agent *chooses* to boil before drinking is the experiment; the
-    self-coded variant is #301.)"""
-    hall = game.locations.get("Houston Hall")
-    if hall is None:
-        return
+def make_boil_sink() -> Item:
+    """The boil-water sink prop (#300). A plain on/off device."""
     sink = Item("sink", "a utility sink", "An old utility sink. The tap runs cloudy.")
     sink.set_property(Property.GETTABLE, False)
     sink.set_property("is_device", True)
+    return sink
+
+
+def make_boil_stove() -> Item:
+    """The boil-water stove prop (#300). The heat source BoilWater gates on."""
     stove = Item(
         "stove", "a small electric stove", "A single coil burner, dusty but working."
     )
     stove.set_property(Property.GETTABLE, False)
     stove.set_property("is_device", True)
+    return stove
+
+
+def make_murky_pot() -> Item:
+    """The reusable pot of unboiled water (#300).
+
+    ``requires_boiling`` + ``is_boiled: False`` so DrinkPenn sickens on it and
+    BoilWater can mark it safe; ``portions`` so drinking keeps the vessel. The
+    single source of this item so the tiny-world tests can't drift from the
+    furnished Houston Hall (finding 12)."""
     pot = Item(
         "pot of murky water",
         "a pot of murky water",
@@ -339,9 +343,25 @@ def _furnish_boil_water(game) -> None:
     pot.set_property("requires_boiling", True)
     pot.set_property("is_boiled", False)
     pot.set_property("portions", 3)
-    hall.add_item(sink)
-    hall.add_item(stove)
-    hall.add_item(pot)
+    return pot
+
+
+def _furnish_boil_water(game) -> None:
+    """Stock Houston Hall with the boil-water props (#300).
+
+    A single reusable pot of unboiled water (``requires_boiling`` +
+    ``is_boiled: False``, with ``portions`` so drinking keeps the vessel), plus
+    a sink and a stove device. The full arc: drink the murky water and DrinkPenn
+    makes you sick; the ``boil`` action marks the pot ``is_boiled`` (keeping its
+    name) and clears the hazard; drinking that same pot, now boiled, cures the
+    sickness. (Whether an agent *chooses* to boil before drinking is the
+    experiment; the self-coded variant is #301.)"""
+    hall = game.locations.get("Houston Hall")
+    if hall is None:
+        return
+    hall.add_item(make_boil_sink())
+    hall.add_item(make_boil_stove())
+    hall.add_item(make_murky_pot())
 
 
 def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
