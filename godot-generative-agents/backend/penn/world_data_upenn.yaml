@@ -243,17 +243,39 @@ personas:
     activity: sitting in on a guest lecture
     emoji: 🎤
     steps: 60
+  # The full boil-water arc (#300), watchable end-to-end. The `wait` commands are
+  # spacers: the mock brain issues one authored command per step, so without them
+  # sickness/boiled/recovery fire on three consecutive frames (impossible to see).
+  # The waits push the three events ~10 steps apart on the timeline. (Multi-stop
+  # spacing doesn't work here -- the planner round-trip merges same-place stops.)
   - place: Houston Hall
     activity: sorting out the water at dinner
-    # The full boil-water arc (#300), watchable end-to-end: she drinks the raw
-    # water and gets sick, boils it (the pot becomes "pot of boiled water"),
-    # then drinks the boiled water and recovers -- three timeline events
-    # (sickness -> boiled -> recovery).
+    steps: 20
     commands:
     - get pot of murky water
-    - drink pot of murky water
-    - boil water
-    - drink pot of boiled water
+    - drink pot of murky water   # -> sickness
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - boil water                 # -> boiled (pot becomes "pot of boiled water")
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - drink pot of boiled water  # -> recovery
 
 locations:
 - name: Penn campus

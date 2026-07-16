@@ -407,11 +407,14 @@ def test_penn_action_verbs_include_boil():
     assert "boil" in chars["Testa"].agent.action_names
 
 
-def test_sofias_houston_hall_stop_carries_the_commands():
+def test_sofias_houston_hall_stop_carries_the_arc_commands():
+    # Sofia's Houston stop runs the arc; `wait` spacers (which just pass time to
+    # separate the events on the timeline) are dropped to check the real steps.
     pw = build_penn_world()
     sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
     stop = next(s for s in sofia["schedule"] if s["place"] == "Houston Hall")
-    assert stop["commands"] == [
+    cmds = [c for c in stop["commands"] if c != "wait"]
+    assert cmds == [
         "get pot of murky water",
         "drink pot of murky water",
         "boil water",
