@@ -39,6 +39,7 @@ from penn_world import build_penn_world  # noqa: E402
 from serve_penn import DEFAULT_LLM_MODEL, PennStepper, resolve_llm  # noqa: E402
 from text_adventure_games.memory import MemoryKind  # noqa: E402
 from text_adventure_games.usage import UsageLedger, record_call  # noqa: E402
+from backend.planner import LLMPlanner, MockPlanner  # noqa: E402
 
 # -------------------------------------------------------------- resolve_llm
 
@@ -156,7 +157,25 @@ class _ScriptedBrain:
         if self.fail:
             self._record(messages, None)
             return None
-        if tool["name"] == "speak":
+        if tool["name"] == "day_outline":
+            result = {"blocks": [{"label": "midday", "summary": "lunch then study"}]}
+        elif tool["name"] == "hourly_plan":
+            result = {"hours": [{"start_hour": 12, "summary": "lunch at Houston Hall"}]}
+        elif tool["name"] == "minute_plan":
+            # Houston Hall is a real Penn location, so validate_stops keeps it and
+            # the plan source is "llm" (a hallucinated place would be dropped ->
+            # empty plan -> static fallback).
+            result = {
+                "stops": [
+                    {
+                        "place": "Houston Hall",
+                        "activity": "eating lunch",
+                        "emoji": "\U0001f37d️",
+                        "steps": 10,
+                    }
+                ]
+            }
+        elif tool["name"] == "speak":
             result = {"utterance": "Want to compare notes on campus?", "done": True}
         else:  # choose_action
             result = {
@@ -171,7 +190,7 @@ class _ScriptedBrain:
         return len(text) // 4
 
 
-def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None):
+def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None, plan="schedule"):
     """A PennStepper in --brain llm mode, with the factory swapped for fakes."""
 
     def fake_create(config, ledger=None):
@@ -185,7 +204,13 @@ def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None):
         "model": "claude-haiku-4-5",
         "max_cost_usd": max_cost,
     }
-    return PennStepper(num_steps=50, world=build_penn_world(), monitor=monitor, llm=llm)
+    return PennStepper(
+        num_steps=50,
+        world=build_penn_world(),
+        monitor=monitor,
+        llm=llm,
+        plan_mode=plan,
+    )
 
 
 def _move(char, location):
@@ -234,6 +259,37 @@ def test_real_brain_is_wired_and_the_injector_stands_down(monkeypatch):
     assert stepper.ledger.max_cost_usd == 5.0
     assert stepper.llm_client.ledger is stepper.ledger
     assert stepper.reflector_client.ledger is stepper.ledger
+
+
+def test_llm_plan_mode_authors_each_agents_day(monkeypatch):
+    stepper = _llm_stepper(monkeypatch, plan="llm")
+    # A dedicated planner client (its own instance), recording into the ledger.
+    assert isinstance(stepper.planner_client, _ScriptedBrain)
+    assert stepper.planner_client is not stepper.llm_client
+    assert stepper.planner_client.ledger is stepper.ledger
+    # The three planning levels each ran (once per agent) at attach time.
+    calls = stepper.planner_client.tool_calls
+    assert calls.count("minute_plan") == len(stepper.order)
+    assert "day_outline" in calls and "hourly_plan" in calls
+    # Every agent now runs a model-authored plan, not the mock, and the
+    # generated day (Houston Hall) replaced the authored schedule.
+    for name in stepper.order:
+        agent = stepper.chars[name].agent
+        assert isinstance(agent.planner, LLMPlanner)
+        assert [s.place for s in agent.plan.stops] == ["Houston Hall"]
+
+
+def test_schedule_plan_mode_keeps_the_mock_planner(monkeypatch):
+    stepper = _llm_stepper(monkeypatch)  # default plan="schedule"
+    assert stepper.planner_client is None
+    for name in stepper.order:
+        assert isinstance(stepper.chars[name].agent.planner, MockPlanner)
+
+
+def test_llm_plan_mode_requires_a_real_brain():
+    # No llm dict (== --brain mock): the planner has no client to share.
+    with pytest.raises(SystemExit, match="--plan llm needs --brain llm"):
+        PennStepper(num_steps=2, world=build_penn_world(), plan_mode="llm")
 
 
 def test_real_conversation_fires_once_and_cools_down(monkeypatch):
