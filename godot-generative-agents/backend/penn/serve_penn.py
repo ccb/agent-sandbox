@@ -409,7 +409,7 @@ class PennStepper:
         # reports the budget and tick() can end the day at it.
         self.llm = llm
         self.ledger = UsageLedger(  # backs GET /usage across resets
-            max_cost_usd=(llm if isinstance(llm, dict) else {}).get("max_cost_usd")
+            max_cost_usd=(llm if _is_paid(llm) else {}).get("max_cost_usd")
         )
         # The terminal request monitor (backend.llm_monitor), or None for quiet.
         # Like the ledger it lives here, not in _build(), so its call counter
