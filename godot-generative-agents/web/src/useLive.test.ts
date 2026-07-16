@@ -129,6 +129,10 @@ class FakeWS {
 describe("followLive", () => {
   let state: LiveState;
   let fetched: string[];
+  // Mutable server bodies, so a test can change what /live and /events report
+  // mid-run (the restart tests rewind the cursor this way).
+  let live: Record<string, unknown>;
+  let events: Record<string, unknown>;
   let stop: () => void = () => {};
   const setState = (up: (s: LiveState) => LiveState) => {
     state = up(state);
@@ -139,6 +143,8 @@ describe("followLive", () => {
     vi.useFakeTimers();
     state = idle();
     fetched = [];
+    live = { enabled: true, running: true, paused: false, step: 3, cursor: 0, meta: null };
+    events = { latest_cursor: 9, oldest_cursor: null, events: [call(9, 9)] };
     FakeWS.all = [];
     vi.stubGlobal("WebSocket", FakeWS);
     vi.stubGlobal(
@@ -146,10 +152,10 @@ describe("followLive", () => {
       vi.fn(async (url: string) => {
         fetched.push(url);
         const body = url.endsWith("/live")
-          ? { enabled: true, running: true, paused: false, step: 3, cursor: 0, meta: null }
+          ? live
           : url.endsWith("/usage")
             ? { available: false }
-            : { latest_cursor: 9, oldest_cursor: null, events: [call(9, 9)] };
+            : events;
         return { ok: true, json: async () => body };
       }),
     );
@@ -210,6 +216,7 @@ describe("followLive", () => {
     sock.open();
     sock.push(call(1, 5));
     await vi.advanceTimersByTimeAsync(0);
+    live.cursor = 5; // the server's head has advanced with the feed (no restart)
     sock.drop(); // e.g. the server's 1011 "events evicted" close
     expect(state.connected).toBe(false); // push-based outage signal
     await vi.advanceTimersByTimeAsync(1000);
@@ -228,6 +235,7 @@ describe("followLive", () => {
     sock.open();
     sock.push(call(1, 5));
     await vi.advanceTimersByTimeAsync(0);
+    live.cursor = 5;
     sock.drop();
     await vi.advanceTimersByTimeAsync(1000);
     const resumed = FakeWS.last;
@@ -236,6 +244,59 @@ describe("followLive", () => {
     resumed.push(call(2, 9)); // 9 > 5 + 1: rows were evicted while we were away
     await vi.advanceTimersByTimeAsync(0);
     expect(urls("/live")).toHaveLength(3); // background resync of meta/step/usage
+    // The background refresh read a cursor (5) below the client's (9) — a stale
+    // read racing the open socket, not a restart. It must NOT rewind or clear
+    // the log (#549's guard): only a fresh connect/reconnect may re-anchor.
     expect(state.calls.map((c) => c.call_no)).toEqual([1, 2]); // the socket stays good
+  });
+
+  it("keeps the log when a drop races a background refresh (the guard is read at fire time)", async () => {
+    const sock = await start();
+    sock.open();
+    sock.push(call(1, 5));
+    await vi.advanceTimersByTimeAsync(0);
+    live.cursor = 5; // the backend head is genuinely at 5 (below our cursor after the gap)
+    sock.drop();
+    await vi.advanceTimersByTimeAsync(1000); // reconnect handshake → socket at since=5
+    const resumed = FakeWS.last;
+    resumed.open();
+    resumed.push(call(2, 9)); // gap (9 > 5+1) fires the background eviction refresh...
+    resumed.drop(); // ...then the socket drops *during* it, flipping `handshook` false
+    await vi.advanceTimersByTimeAsync(0); // the refresh resolves and reads the flag
+    // Captured at fire time it's still "background", so no rewind: a late read of
+    // the flipped flag would have wrongly cleared a healthy follower's log (#549).
+    expect(state.calls.map((c) => c.call_no)).toEqual([1, 2]);
+  });
+
+  it("re-anchors at the handshake's cursor when a reconnect finds it rewound (restart)", async () => {
+    const sock = await start();
+    sock.open();
+    sock.push(call(1, 5));
+    await vi.advanceTimersByTimeAsync(0);
+    sock.drop(); // the restarting backend takes every socket down with it
+    // The new process: its in-memory feed restarted near zero.
+    live = { ...live, step: 1, cursor: 2 };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeWS.last.url).toBe("ws://b/ws?since=2"); // re-anchored, not since=5
+    expect(state.calls).toEqual([]); // the dead run's log is cleared, like a reset
+    FakeWS.last.open();
+    FakeWS.last.push(call(2, 3));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([2]); // the new run's rows flow
+  });
+
+  it("re-anchors under the poll fallback when /events reports a rewound cursor", async () => {
+    const sock = await start();
+    sock.drop(); // never opened: this target polls for good
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([9]); // old run, cursor at 9
+    // Restart: the new process's feed is behind the client's cursor.
+    live = { ...live, step: 1, cursor: 4 };
+    events = { latest_cursor: 4, oldest_cursor: null, events: [] };
+    await vi.advanceTimersByTimeAsync(1000); // rewind detected — re-handshake queued
+    events = { latest_cursor: 5, oldest_cursor: null, events: [call(2, 5)] };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(urls("/events?since=4")).toHaveLength(1); // re-anchored at the handshake's cursor
+    expect(state.calls.map((c) => c.call_no)).toEqual([2]); // old log cleared, new rows flow
   });
 });
