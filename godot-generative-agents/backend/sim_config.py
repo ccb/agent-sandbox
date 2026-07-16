@@ -109,6 +109,15 @@ class CognitionConfig:
     # (cognition.decide_with_action_tools) and before each dialogue line (the
     # engine's converse path). Default False keeps every run byte-identical.
     cognition_tools: bool = False
+    # Brain-authoritative pacing (issue #581): bounds on a *model-chosen*
+    # activity duration (in minutes -- the unit the #580 decide-context block
+    # shows the brain). Only a model's own estimate is clamped; an authored
+    # ``schedule.steps`` is trusted as-is, so the mock bake is untouched.
+    duration_min_minutes: int = 1  # floor; guards a 0/negative estimate
+    duration_max_minutes: int = 90  # ceiling; forces a re-decision at least this often
+    # Min steps between deviation-driven plan revisions for one agent, so a
+    # wandering brain can't storm its planner (each revise is a real LLM call).
+    deviation_cooldown_steps: int = 30
 
 
 @dataclass
