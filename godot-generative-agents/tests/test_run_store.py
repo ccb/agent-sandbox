@@ -204,9 +204,12 @@ def test_embedding_round_trips_losslessly(tmp_path):
     store.create_run(MANIFEST, run_id="run-a")
     # Values exactly representable as float32, so unpack == input.
     store.record_memories("run-a", "Ada", [_record(0, "x", embedding=[0.5, -1.0, 2.0])])
-    (rec,) = store._full_records("run-a", "Ada")
+    (rec,) = store.full_records("run-a", "Ada")
     assert rec["embedding"] == [0.5, -1.0, 2.0]
     assert MemoryRecord.from_primitive(rec).embedding == [0.5, -1.0, 2.0]
+    # hydrated_records is exactly that rehydration, as a store read.
+    (hydrated,) = store.hydrated_records("run-a", "Ada")
+    assert hydrated.to_primitive() == rec
 
 
 def test_query_memories_matches_engine_retrieve(tmp_path):
