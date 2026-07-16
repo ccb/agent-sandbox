@@ -55,6 +55,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig
 from backend.cognition import attach_agents
+from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
@@ -83,6 +84,18 @@ STALL_EVERY_STEPS = 10
 # cheapest current Anthropic model is the right default (issue #261).
 DEFAULT_LLM_MODEL = "claude-haiku-4-5"
 
+# The scripted full-feature mock brain (#563): a deterministic, key-free brain
+# that -- unlike the schedule mock -- is a DISTINCT client object, so it opens
+# the llm_client-gated paths (tool loop, cognition tools, conversation,
+# reflection) offline. resolve_llm returns this sentinel; it is not a paid run.
+SCRIPTED = "scripted"
+
+
+def _is_paid(llm) -> bool:
+    """True only for a real, paying LLM config (a dict). None (mock) and the
+    SCRIPTED sentinel are free."""
+    return isinstance(llm, dict)
+
 
 def resolve_llm(world_llm, brain, model=None, max_cost=None):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
@@ -106,6 +119,8 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
     schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
     is follow-up work; decide/converse/reflect are the model's here.
     """
+    if brain == "scripted":
+        return SCRIPTED
     if brain != "llm":
         return None
     llm = dict(world_llm or {})
@@ -360,6 +375,20 @@ class PennStepper:
         # long -- an offline stand-in for real provider latency.
         self.decide_timeout = decide_timeout
         self.mock_latency = mock_latency
+        # The scripted brain (#563) is a SINGLE shared object whose decision reads
+        # context["actor"] (stamped per decide); a concurrent fan-out would race
+        # that field across threads and consult the wrong persona's schedule. So
+        # scripted decides serially only -- reject an explicit --decide-workers > 0
+        # rather than silently desync (--brain llm gives every agent its own
+        # client and is the way to parallelize; --decide-workers auto already
+        # maps scripted -> 0).
+        if llm == SCRIPTED and decide_workers > 0:
+            raise SystemExit(
+                "--brain scripted decides serially (one shared deterministic "
+                "brain) and has no --decide-workers > 0 mode. Drop --decide-workers "
+                "(auto already uses 0 for scripted), or use --brain llm to "
+                "parallelize."
+            )
         self._decide_executor = (
             _DecideThreads(decide_workers) if decide_workers > 0 else None
         )
@@ -388,13 +417,13 @@ class PennStepper:
         # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
-        self.cognition_tools = cognition_tools
+        self.cognition_tools = cognition_tools or (llm == SCRIPTED)
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
         # reports the budget and tick() can end the day at it.
         self.llm = llm
         self.ledger = UsageLedger(  # backs GET /usage across resets
-            max_cost_usd=(llm or {}).get("max_cost_usd")
+            max_cost_usd=(llm if _is_paid(llm) else {}).get("max_cost_usd")
         )
         # The terminal request monitor (backend.llm_monitor), or None for quiet.
         # Like the ledger it lives here, not in _build(), so its call counter
@@ -407,7 +436,23 @@ class PennStepper:
         # fresh agents by every _build().
         self.llm_client = None
         self.reflector_client = None
-        if llm is not None:
+        if llm == SCRIPTED:
+            # Free, key-free full-feature brain (#563): distinct client objects,
+            # so the llm_client-gated paths open. Record each role through the
+            # same _recording_ledger view the paid path uses, so --monitor tags
+            # decide/converse vs reflect request lines (GET /usage still sums the
+            # base ledger). Bind the decide view to the brain's context so the
+            # monitor's per-call actor/role stamps read live -- mirrors
+            # _decide_client().
+            decide_view = self._recording_ledger("decide")
+            self.llm_client, self.reflector_client = build_scripted_brains(
+                decide_ledger=decide_view,
+                reflect_ledger=self._recording_ledger("reflect"),
+            )
+            ctx = getattr(self.llm_client, "context", None)
+            if isinstance(decide_view, RoleTaggedLedger) and ctx is not None:
+                decide_view.bind_context(ctx)
+        elif llm is not None:
             self._llm_config = LlmConfig(provider="anthropic", model=llm.get("model"))
             self.llm_client = self._decide_client()
             self.reflector_client = create_llm_client(
@@ -500,7 +545,7 @@ class PennStepper:
         if self.mock_latency > 0:
             for char in self.chars.values():
                 char.agent.schedule.latency_s = self.mock_latency
-        if self.llm is not None and self._decide_executor is not None:
+        if _is_paid(self.llm) and self._decide_executor is not None:
             # Parallel decides need one client instance PER AGENT: the engine
             # clients carry a single mutable `context` dict that the decide
             # path stamps per call (and _resilient_create writes mid-call), so
@@ -722,7 +767,7 @@ class PennStepper:
             # provider/model, so the viewer can say which model it is watching.
             "llm": (
                 {"provider": self.llm["provider"], "model": self.llm["model"]}
-                if self.llm is not None
+                if _is_paid(self.llm)
                 else None
             ),
         }
@@ -1002,10 +1047,12 @@ def main() -> int:
     )
     ap.add_argument(
         "--brain",
-        choices=("mock", "llm"),
+        choices=("mock", "scripted", "llm"),
         default="mock",
         help="mock (default): the deterministic schedule brain -- offline, free, "
-        "authored meeting dialogue on. llm: the model named by the world's "
+        "authored meeting dialogue on. scripted: a deterministic, key-free brain "
+        "that drives the full backend offline (tool loop, cognition tools, "
+        "conversation, reflection; #563). llm: the model named by the world's "
         "llm: block (Anthropic Claude Haiku) makes every decide/converse/"
         "reflect call; needs ANTHROPIC_API_KEY and `uv sync --extra llm`",
     )
@@ -1115,16 +1162,16 @@ def main() -> int:
     # llm the loop boots paused and the viewer's Start button (POST /resume)
     # opens the day. The free mock keeps auto-starting. --[no-]start-paused
     # overrides either way.
-    start_paused = (
-        args.start_paused if args.start_paused is not None else llm is not None
-    )
+    start_paused = args.start_paused if args.start_paused is not None else _is_paid(llm)
     store = RunStore(DEFAULT_RUNS_DIR) if args.persist else None
     resume_id = resolve_resume(store, args.resume) if args.resume else None
     # 'auto' concurrency (#366): a real brain decides in parallel (LLM latency
-    # is the whole point), the mock stays serial so the default offline run
-    # remains deterministic. An explicit integer wins.
+    # is the whole point); the mock AND the scripted brain (#563) stay serial so
+    # the offline run stays deterministic -- the scripted brain reads
+    # context["actor"] per decide, which a parallel decide would race. An
+    # explicit integer wins.
     if args.decide_workers == "auto":
-        decide_workers = len(world.personas) if llm is not None else 0
+        decide_workers = len(world.personas) if _is_paid(llm) else 0
     else:
         decide_workers = args.decide_workers
     if args.mock_latency > 0 and llm is not None:
@@ -1166,7 +1213,7 @@ def main() -> int:
         f"meetings. Stepping every {args.tick_seconds}s "
         f"({'endless' if args.endless else f'{args.steps}-step day'})."
     )
-    if llm is not None:
+    if _is_paid(llm):
         ceiling = llm.get("max_cost_usd")
         print(
             f"Brain: LIVE LLM -- anthropic/{llm['model']} makes every "
@@ -1179,6 +1226,12 @@ def main() -> int:
             )
         )
         print("Authored meeting dialogue: OFF -- the cast speaks through the model.")
+    elif llm == SCRIPTED:
+        print(
+            "Brain: scripted (deterministic, free) -- drives the full backend "
+            "offline: tool loop, cognition tools, conversation, reflection (#563). "
+            "For the real thing: --brain llm."
+        )
     else:
         print(
             "Brain: mock (deterministic, free; authored meeting dialogue ON). "

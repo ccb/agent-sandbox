@@ -169,6 +169,14 @@ def main() -> int:
         default=str(DEFAULT_RUNS_DIR),
         help="RunStore root for --persist (default: godot-generative-agents/runs/)",
     )
+    ap.add_argument(
+        "--brain",
+        choices=("mock", "scripted"),
+        default="mock",
+        help="mock (default): the deterministic schedule brain -- byte-identical "
+        "bake. scripted: the key-free full-feature brain (#563) -- bakes a replay "
+        "that exercises the tool loop, cognition tools, conversation, reflection.",
+    )
     args = ap.parse_args()
 
     # The configured Penn: personas + locations + meetings, the routing-patched
@@ -193,15 +201,38 @@ def main() -> int:
     # --persist hands the RunStore; the lean memory_streams cannot rehydrate.
     memory_records: dict = {}
     events: list = []
+
+    # --brain scripted (#563): a key-free, deterministic brain that still drives
+    # the full tool loop -- cognition tools, conversation, reflection -- so the
+    # baked replay exercises those paths without a real LLM. --brain mock (the
+    # default) leaves brain/reflector/cognition/ledger at None, which is exactly
+    # what `simulate` saw before this flag existed, so that bake stays
+    # byte-identical.
+    brain = reflector = None
+    cognition = None
+    ledger = None
+    if args.brain == "scripted":
+        from backend.sim_config import CognitionConfig
+        from text_adventure_games.usage import UsageLedger
+        from scripted_brain import build_scripted_brains
+
+        ledger = UsageLedger()
+        brain, reflector = build_scripted_brains(ledger=ledger)
+        cognition = CognitionConfig(cognition_tools=True)
+
     frames = simulate(
         pw.world_map,
         args.steps,
+        ledger=ledger,
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
         out_memories=memory_streams,
         out_memory_records=memory_records,
         out_events=events,
         extra_action_names=PENN_ACTION_VERBS,
+        cognition=cognition,
+        reflector_client=reflector,
+        llm_client=brain,
     )
 
     # Godot-friendly replay: meta + one entry per step per persona (see
