@@ -55,6 +55,7 @@ from backend.run_store import DEFAULT_RUNS_DIR, RunStore
 from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig
 from backend.cognition import attach_agents
+from scripted_brain import build_scripted_brains
 from penn_world import (
     DIALOGUE_FADE_STEPS,
     DIALOGUE_LINE_STEPS,
@@ -402,7 +403,7 @@ class PennStepper:
         # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
-        self.cognition_tools = cognition_tools
+        self.cognition_tools = cognition_tools or (llm == SCRIPTED)
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
         # reports the budget and tick() can end the day at it.
@@ -421,7 +422,13 @@ class PennStepper:
         # fresh agents by every _build().
         self.llm_client = None
         self.reflector_client = None
-        if llm is not None:
+        if llm == SCRIPTED:
+            # Free, key-free full-feature brain (#563): distinct client objects,
+            # so the llm_client-gated paths open; both record into self.ledger.
+            self.llm_client, self.reflector_client = build_scripted_brains(
+                ledger=self.ledger
+            )
+        elif llm is not None:
             self._llm_config = LlmConfig(provider="anthropic", model=llm.get("model"))
             self.llm_client = self._decide_client()
             self.reflector_client = create_llm_client(
@@ -514,7 +521,7 @@ class PennStepper:
         if self.mock_latency > 0:
             for char in self.chars.values():
                 char.agent.schedule.latency_s = self.mock_latency
-        if self.llm is not None and self._decide_executor is not None:
+        if _is_paid(self.llm) and self._decide_executor is not None:
             # Parallel decides need one client instance PER AGENT: the engine
             # clients carry a single mutable `context` dict that the decide
             # path stamps per call (and _resilient_create writes mid-call), so
@@ -736,7 +743,7 @@ class PennStepper:
             # provider/model, so the viewer can say which model it is watching.
             "llm": (
                 {"provider": self.llm["provider"], "model": self.llm["model"]}
-                if self.llm is not None
+                if _is_paid(self.llm)
                 else None
             ),
         }
