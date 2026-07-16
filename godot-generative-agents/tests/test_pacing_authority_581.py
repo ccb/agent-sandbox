@@ -377,3 +377,30 @@ def test_on_plan_perform_still_advances_the_pointer():
         )
     # The mock reached + performed stop 0 (on-plan) so the pointer advanced.
     assert ada.agent.schedule.stop_index >= 1
+
+
+def test_off_plan_perform_without_duration_is_bounded_not_frozen():
+    # A deviation whose scheduled stop is "stay put" (steps=None) and that
+    # carries no model duration must NOT inherit "stay forever" -- that would
+    # freeze the agent (perform_until=None => the settle-completion check never
+    # fires again => it never re-decides). It gets the max-duration ceiling so
+    # the brain re-decides. Ada is scheduled at Cafe (steps=None) but performs
+    # at The Green (home, where she starts) => off-plan.
+    brain = PerActionBrain("perform", {"activity": "wandering"})
+    game, ada = _world(llm_client=brain, place="Cafe", steps=None)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert state["Ada"]["on_plan"] is False
+    # 90-minute ceiling at 10s/step = 540 steps, not None (frozen).
+    assert state["Ada"]["perform_until"] == 0 + 540
+
+
+def test_stray_duration_on_a_non_pacing_verb_is_ignored():
+    # A model that hallucinates duration_minutes onto a verb that never
+    # advertised the slot (travel) must have it popped (no leak into the
+    # command) but NOT stashed -- else a one-tick verb would settle.
+    brain = PerActionBrain("travel", {"destination": "Cafe", "duration_minutes": 30})
+    game, ada = _world(llm_client=brain, place="Cafe")
+    command = observe_and_decide(game, ada, 0)
+    assert command == "travel to Cafe"  # clean -- no "30" spliced in
+    assert ada.agent.last_duration_minutes is None
