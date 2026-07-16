@@ -9,18 +9,34 @@ live in `godot-generative-agents/backend/actions.py`, not the shared engine).
 > the Godot timeline. Changes vs. the original spec:
 > - **Reusable pot, not cups.** Houston holds one `pot of murky water` with
 >   `portions` (drinking keeps the vessel), replacing the two `cup`s + empty `pot`.
-> - **Boil renames in place.** `boil` re-keys the vessel `pot of murky water` →
->   `pot of boiled water` (updating its owner/location dict) so the state change is
->   legible, alongside `is_boiled=True` + the `boiled` event.
 > - **Cure added** (reverses the original "no cure" non-goal, intentionally):
 >   `DrinkPenn` now clears `is_sick` and logs a `recovery` event when a sick agent
->   drinks *safe* water — so the arc is drink → **sickness** → boil → **boiled** →
->   drink → **recovery**, three timeline events.
-> - **Sofia's schedule** runs the 4-command arc; a 1100-step bake fires all three
->   events at steps 945/946/947.
-> These are backend-local (still #464 for the engine lift). The rename re-keys a
-> dict by hand — fine for a scaffold, but a recurring object-transform would want a
-> proper engine primitive. The sections below describe the original minimal design.
+>   drinks the *boiled* water — so the arc is drink → **sickness** → boil →
+>   **boiled** → drink → **recovery**, three timeline events.
+> - **Sofia's schedule** runs the arc across same-place Houston Hall stops.
+> These are backend-local (still #464 for the engine lift). The sections below
+> describe the original minimal design.
+>
+> **Update (2026-07-16) — #590 review response (@aking526).** Rebased onto the
+> post-#581/#586 pacing rewrite and reworked per the review:
+> - **No rename.** Boiling keeps the vessel's name and carries the change on
+>   `is_boiled` + the description + the `boiled` event, instead of mutating
+>   `.name` and hand-re-keying its owner/location dict (fragile for worn/container
+>   items, and it would break another agent's authored `drink pot of murky water`
+>   once the shared pot were renamed). The same `drink pot of murky water` command
+>   therefore sickens while raw and cures once boiled.
+> - **Cure gated on `is_boiled`** (not "any safe drink") + a survived-the-drink
+>   guard, so the #301 "did it learn to boil?" comparison stays meaningful and a
+>   poisoned drink can't log a recovery on a corpse.
+> - **Sickness emoji via the pron authority chain** (`_resting_pron`), a low
+>   priority overlay under a model's explicit pick — not a frame-time override
+>   that masked a real brain's emoji for the whole sick window.
+> - **De-clumped without `wait` filler:** the arc is three same-place Houston
+>   stops whose `steps:` gaps space the events, so no `wait` commands flood the
+>   card with 1.0 memories / events. `boil` is remembered at 6.0 (the arc's
+>   hinge); `wait` is never remembered nor offered as a real-brain tool.
+> - **`boil` takes npc.py's free-text slot** (dropped the advisory-but-ignored
+>   `target` schema); single-vessel effect + scalar `item` event payload.
 
 ## Problem
 

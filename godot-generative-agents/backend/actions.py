@@ -143,13 +143,22 @@ class DrinkPenn(consume.Drink):
     would sicken every future drinkable; ``requires_boiling`` scopes the rule
     to raw water, and a (self-coded, #301) boil action clears it by setting
     ``is_boiled``. Registered with the same "drink" action name, so it
-    overrides the built-in for this game only. Drinking *safe* water -- boiled,
-    or anything not flagged ``requires_boiling`` -- while ``is_sick`` clears the
-    sickness and logs a ``recovery`` event, so a full drink -> sicken -> boil ->
-    drink -> recover arc is watchable (upstreaming the generic slice is #464)."""
+    overrides the built-in for this game only. Drinking specifically *boiled*
+    water (``is_boiled``) while ``is_sick`` clears the sickness and logs a
+    ``recovery`` event, so a full drink -> sicken -> boil -> drink -> recover arc
+    is watchable. The cure is gated on ``is_boiled`` (not "any safe drink") on
+    purpose: the #301 comparison asks whether an agent *learned to boil*, which
+    a cure that any beverage could trigger would erase (upstreaming the generic
+    slice is #464)."""
 
     def apply_effects(self):
         super().apply_effects()
+        # If the drink just killed the drinker (the engine's Drink sets is_dead
+        # on a poisonous item), the #300 health twist is moot: don't sicken or
+        # "recover" a corpse -- a recovery on a dead agent would log the event
+        # and a feel-better memory for someone who just died.
+        if self.character.get_property("is_dead"):
+            return
         if self.item.get_property("requires_boiling") and not self.item.get_property(
             "is_boiled"
         ):
@@ -160,7 +169,7 @@ class DrinkPenn(consume.Drink):
             # the high-importance memory attaches to the actual transition.
             self.character.set_property("just_sickened", True)
             self.parser.ok(
-                f"{self.character.name.capitalize()} clutches their stomach -- "
+                f"{self.character.name} clutches their stomach -- "
                 "that water was foul."
             )
             self.game.log_event(
@@ -172,16 +181,21 @@ class DrinkPenn(consume.Drink):
                     "location": getattr(self.character.location, "name", None),
                 },
             )
-        elif self.character.get_property("is_sick"):
-            # The recovery half of the arc: safe water (boiled, or never
-            # contaminated) rehydrates and cures a sick drinker. Only fires on
-            # the sick->well transition, so a healthy drinker logs nothing.
+        elif self.character.get_property("is_sick") and self.item.get_property(
+            "is_boiled"
+        ):
+            # The recovery half of the arc: drinking the *boiled* water cures a
+            # sick drinker. Gated on is_boiled (not merely "not raw") so an
+            # unrelated safe beverage can't stand in for boiling -- that's the
+            # behavior the #301 "did it learn to boil?" comparison rests on.
+            # Only fires on the sick->well transition, so a healthy drinker
+            # logs nothing.
             self.character.set_property("is_sick", False)
             # One-shot marker mirroring just_sickened: cognition.remember_outcome
             # keys off it to write the "feel better" memory to the agent's card.
             self.character.set_property("just_recovered", True)
             self.parser.ok(
-                f"{self.character.name.capitalize()} drinks deep -- the clean "
+                f"{self.character.name} drinks deep -- the clean "
                 "water settles their stomach, and the sickness passes."
             )
             self.game.log_event(
@@ -269,53 +283,60 @@ class BoilWater(base.Action):
     """Boil the raw water so it's safe to drink (#300 test scaffold).
 
     A deliberately self-contained "superaction": it gates on a stove in scope
-    and an unboiled water vessel (in the room or carried), and in one step marks
-    every such vessel ``is_boiled``, renames it "pot of murky water" -> "pot of
-    boiled water" so the state change is legible, and switches the stove on. It
+    and an unboiled water vessel (in the room or carried) and, in one step,
+    marks that vessel ``is_boiled`` (updating its description) and switches the
+    stove on. The vessel keeps its name -- the state change rides on
+    ``is_boiled`` + the ``boiled`` event, not a rename, so another agent boiling
+    the shared pot can never break an authored ``drink pot of murky water``. It
     does NOT model the multi-step recipe -- fill from the sink, put the pot on
     the stove, heat over time -- because that emergent assembly is the
     self-coding experiment (#299/#301). This is the hand-authored "correct
     answer" so we can test whether an agent chooses to boil raw water before
     drinking it. Registered under a new "boil" verb; the engine has no such
-    action, so nothing is overridden."""
+    action, so nothing is overridden.
+
+    No ``ARGUMENTS_SCHEMA``: like ``Activate``/``Deactivate`` it takes npc.py's
+    synthesized free-text slot. Advertising a typed ``target`` it then ignores
+    (the effect is on the raw water in scope regardless of the words) would only
+    let a tool brain's stated pick diverge from the world's effect."""
 
     ACTION_NAME = "boil"
     ACTION_DESCRIPTION = "Boil water on a stove to make it safe to drink"
-    # Typed tool slot (issues #356/#485). ``target`` is optional and advisory:
-    # the action boils all the raw water in the room regardless of the exact
-    # string, so "boil water" (the schedule mock's phrasing) and a tool brain's
-    # structured pick parse identically.
-    ARGUMENTS_SCHEMA = {
-        "target": {
-            "type": "string",
-            "description": "what to boil, e.g. 'water'",
-            "required": False,
-        },
-    }
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
         self.command = command
         self.character = self.acting_character(command, hint="cook")
-
-    def _scope(self):
-        return self.parser.get_items_in_scope(self.character)
-
-    def _stove(self):
-        for item in self._scope().values():
-            if item.name == "stove" and item.get_property("is_device"):
-                return item
-        return None
-
-    def _unboiled_water(self):
-        # In scope = the room's items plus anything the character carries, so a
-        # pot the agent picked up boils just as a pot left on the counter would.
-        return [
-            item
-            for item in self._scope().values()
-            if item.get_property("requires_boiling")
-            and not item.get_property("is_boiled")
-        ]
+        # Bind the matches once, in __init__, like every sibling action (rather
+        # than rescanning scope in both check_preconditions and apply_effects).
+        # Scope = the room's items plus anything the character carries, so a pot
+        # the agent picked up boils just like one left on the counter.
+        scope = (
+            self.parser.get_items_in_scope(self.character)
+            if self.character is not None
+            else {}
+        )
+        # Match the heat source by token, not exact name, so an aliased fixture
+        # ("gas stove") still works -- mirroring how match_item finds a device.
+        self.stove = next(
+            (
+                it
+                for it in scope.values()
+                if it.get_property("is_device") and "stove" in it.name.lower()
+            ),
+            None,
+        )
+        # The first raw-water vessel in scope (one pot in this world; taking the
+        # first keeps the effect + narration + event payload singular).
+        self.water = next(
+            (
+                it
+                for it in scope.values()
+                if it.get_property("requires_boiling")
+                and not it.get_property("is_boiled")
+            ),
+            None,
+        )
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is here to boil water."):
@@ -323,56 +344,36 @@ class BoilWater(base.Action):
         if self.character.location is None:
             self.parser.fail("There is nowhere to boil water.")
             return False
-        if self._stove() is None:
+        if self.stove is None:
             self.parser.fail("There's no stove here to heat it on.")
             return False
-        if not self._unboiled_water():
+        if self.water is None:
             self.parser.fail("There's nothing here that needs boiling.")
             return False
         return True
 
     def apply_effects(self):
-        stove = self._stove()
-        stove.set_property("is_on", True)
-        boiled = self._unboiled_water()
-        for water in boiled:
-            water.set_property("is_boiled", True)
-            self._rename_to_boiled(water)
+        self.stove.set_property("is_on", True)
+        # Keep the vessel's identity stable: the state change rides on
+        # is_boiled + the description (what DrinkPenn and an inspecting reader
+        # see) + the `boiled` event (what the viewer's timeline shows). No
+        # rename -- that would re-key its owner/location dict by hand (fragile
+        # for worn/container items, and it would break another agent's authored
+        # "drink pot of murky water" once the shared pot is renamed).
+        self.water.set_property("is_boiled", True)
+        self.water.description = (
+            "A steel pot of water, boiled clear and now safe to drink."
+        )
         self.game.log_event(
             self.character.name,
             "boiled",
-            summary=f"{self.character.name} boiled water on the {stove.name}",
+            summary=f"{self.character.name} boiled water on the {self.stove.name}",
             payload={
+                "item": self.water.name,
                 "location": getattr(self.character.location, "name", None),
-                "items": [w.name for w in boiled],
             },
         )
         return self.parser.ok(
-            f"{self.character.name.capitalize()} sets the pot on the {stove.name} "
+            f"{self.character.name} sets the pot on the {self.stove.name} "
             "and boils it until the water runs clear and safe."
         )
-
-    def _rename_to_boiled(self, water):
-        # Make the state change legible: "pot of murky water" -> "pot of boiled
-        # water", re-keyed wherever it lives (a carried item is keyed by name in
-        # the owner's inventory; a room item in the location's items dict), so
-        # the renamed vessel is still matchable by "drink pot of boiled water".
-        new_name = water.name.replace("murky", "boiled")
-        if new_name == water.name:
-            return
-        owner = getattr(water, "owner", None)
-        loc = getattr(water, "location", None)
-        if (
-            owner is not None
-            and getattr(owner, "inventory", {}).get(water.name) is water
-        ):
-            owner.inventory.pop(water.name)
-            water.name = new_name
-            owner.inventory[water.name] = water
-        elif loc is not None and getattr(loc, "items", {}).get(water.name) is water:
-            loc.items.pop(water.name)
-            water.name = new_name
-            loc.items[water.name] = water
-        else:
-            water.name = new_name
-        water.description = "A steel pot of clean, boiled water -- safe to drink."

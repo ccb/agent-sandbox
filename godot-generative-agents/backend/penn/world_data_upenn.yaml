@@ -243,61 +243,34 @@ personas:
     activity: sitting in on a guest lecture
     emoji: 🎤
     steps: 60
-  # The full boil-water arc (#300), watchable end-to-end. The `wait` commands are
-  # spacers: the mock brain issues one authored command per step, so without them
-  # sickness/boiled/recovery fire on three consecutive frames (impossible to see).
-  # The waits push the three events ~20 steps apart on the timeline. (Multi-stop
-  # spacing doesn't work here -- the planner round-trip merges same-place stops.
-  # For a fully de-clumped demo the arc wants to be earlier / in a shorter replay
-  # -- tracked as a follow-up; here it's still late in Sofia's long day.)
+  # The boil-water arc (#300), watchable end-to-end, as three same-place Houston
+  # Hall stops. The mock brain issues one authored command per step and then
+  # `perform`s the stop's activity for the rest of its `steps:`, so splitting the
+  # arc across stops spaces the sickness / boiled / recovery events ~20 steps
+  # apart on the timeline -- WITHOUT filler `wait` commands (each of which logged
+  # a 1.0 "I did wait" memory and a GameEvent onto this showcase card). Same-place
+  # stops advance fine: the planner's positional carry-over handles distinct
+  # activities at one place -- there is no same-place merge to work around.
+  # Activities stay free of action verbs so the terminal `perform` can't re-parse
+  # one as a command (#535). The pot keeps its name; boiling only flips its
+  # is_boiled flag, so the SAME `drink pot of murky water` sickens while raw and
+  # cures once boiled. (The arc still sits late in Sofia's long day; a fully
+  # de-clumped short demo is the dedicated boil replay, #592.)
   - place: Houston Hall
-    activity: sorting out the water at dinner
+    activity: settling in for dinner at the union
     steps: 20
     commands:
     - get pot of murky water
-    - drink pot of murky water   # -> sickness
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - boil water                 # -> boiled (pot becomes "pot of boiled water")
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - wait
-    - drink pot of boiled water  # -> recovery
+    - drink pot of murky water   # -> sickness (raw water)
+  - place: Houston Hall
+    activity: feeling queasy at the table
+    steps: 20
+    commands:
+    - boil water                 # -> boiled (pot marked safe; name unchanged)
+  - place: Houston Hall
+    activity: feeling much better at last
+    commands:
+    - drink pot of murky water   # -> recovery (same pot, now boiled)
 
 locations:
 - name: Penn campus
