@@ -33,6 +33,22 @@ def _last_user_content(messages) -> str:
     return ""
 
 
+def _has_tool_result(messages) -> bool:
+    """True once run_tool_loop has appended a tool_result block (i.e. a cognition
+    call already ran this decide episode). Pure function of the prompt."""
+    for m in messages or []:
+        content = m.get("content")
+        if isinstance(content, list) and any(
+            isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+        ):
+            return True
+    return False
+
+
+def _line_for(actor) -> str:
+    return f"Hello, it's {actor or 'me'} -- good to see you."
+
+
 class ScriptedPennBrain(MockLlmClient):
     """A distinct ``MockLlmClient`` that follows registered schedules."""
 
@@ -54,11 +70,30 @@ class ScriptedPennBrain(MockLlmClient):
     # -- responders ---------------------------------------------------------
 
     def _on_call_tools(self, messages, tools, tool_choice, max_tokens, temperature):
-        # (converse + cognition branches are added in Task 3.)
+        names = {t.get("name") for t in tools}
+        if "speak" in names:
+            actor = (self.context or {}).get("actor")
+            return {
+                "tool_calls": [
+                    {
+                        "name": "speak",
+                        "arguments": {"utterance": _line_for(actor), "done": True},
+                    }
+                ]
+            }
+        # Decide: consult memory once (if offered) before acting, so the
+        # cognition-tool path is exercised.
+        if "recall" in names and not _has_tool_result(messages):
+            return {
+                "tool_calls": [{"name": "recall", "arguments": {"query": "my plan"}}]
+            }
         return self._decide(messages, tools)
 
     def _on_call_tool(self, messages, tool, max_tokens, temperature):
-        return None  # (speak fallback is added in Task 3.)
+        if tool.get("name") == "speak":
+            actor = (self.context or {}).get("actor")
+            return {"utterance": _line_for(actor), "done": True}
+        return None
 
     def _on_chat(self, messages, max_tokens, temperature):
         return None  # decide/converse go through the tool routes.
