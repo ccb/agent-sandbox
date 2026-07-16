@@ -387,6 +387,12 @@ def attach_agents(
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
         agent.schedule = schedule
+        # Scripted brain (#563): a distinct client that follows the authored
+        # schedule reads it from here. Guarded so real clients / None / the
+        # default mock path are untouched (byte-identical).
+        register = getattr(llm_client, "register_schedule", None)
+        if callable(register):
+            register(char.name, schedule)
         # How far this resident perceives, in tiles (issue #82). The TiledGame's
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
