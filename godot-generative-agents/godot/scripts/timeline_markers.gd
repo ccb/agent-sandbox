@@ -20,14 +20,16 @@ const KIND_COLORS := {
 	"arrival": Color("3e8948"),
 }
 # Per-event-type signature (issue #593): a game event's `action` picks a color +
-# a hover emoji so the boil-water arc reads at a glance (sickness red / boiled
-# amber / recovery green). Sickness reuses the default event red; unknown action
-# types fall back to it too, so new events still render. #302 will add
-# `code_rewrite` here.
+# a hover emoji so the boil-water arc reads at a glance. The colors are chosen to
+# stay clear of the other tick kinds already on the strip: sickness is a deep
+# crimson (NOT the default event red the lifecycle go/perform/travel ticks use),
+# boiled is amber, recovery is a teal (NOT the arrival green). Unknown action
+# types still fall back to the default event red so new events render. #302 will
+# add `code_rewrite` here.
 const EVENT_STYLE := {
-	"sickness": {"color": Color(0.82, 0.20, 0.15), "emoji": "🤢"},
-	"boiled": {"color": Color(0.95, 0.65, 0.15), "emoji": "🍵"},
-	"recovery": {"color": Color(0.24, 0.56, 0.28), "emoji": "💚"},
+	"sickness": {"color": Color("b3122b"), "emoji": "🤢"},   # crimson
+	"boiled": {"color": Color(0.95, 0.65, 0.15), "emoji": "🍵"},  # amber
+	"recovery": {"color": Color("1fa8a0"), "emoji": "💚"},   # teal
 }
 
 

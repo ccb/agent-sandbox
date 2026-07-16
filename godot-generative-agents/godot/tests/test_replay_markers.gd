@@ -32,6 +32,11 @@ func _of_kind(markers: Array, kind: String) -> Array:
 	return markers.filter(func(m: Dictionary) -> bool: return m["kind"] == kind)
 
 
+func _far(a: Color, b: Color, thresh: float) -> bool:
+	# Manhattan distance in RGB; a cheap perceptual "these read as different".
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) > thresh
+
+
 func _initialize() -> void:
 	var names := ["Ada"]
 	# A 4-step day: walk to the library (0), study there (1, 2), walk off (3).
@@ -99,6 +104,14 @@ func _initialize() -> void:
 		"non-event kinds keep their KIND_COLORS color")
 	_check(TimelineMarkers.color_for("weird", "") == Color.WHITE,
 		"unknown kind falls back to white")
+	# Collision guards (#596 review): the strip already paints every lifecycle
+	# event (go/perform/travel) in the default event red and arrivals in green,
+	# so sickness must not read as an ordinary event tick and recovery must not
+	# read as an arrival. Perceptual distance, not mere != inequality.
+	_check(_far(c_sick, c_default, 0.15),
+		"sickness color is perceptually distinct from the default event red")
+	_check(_far(c_rec, TimelineMarkers.KIND_COLORS["arrival"], 0.15),
+		"recovery color is perceptually distinct from the arrival green")
 
 	# tooltip_line prefixes known event types with an emoji + the type name.
 	var sick_tip := TimelineMarkers.tooltip_line(
