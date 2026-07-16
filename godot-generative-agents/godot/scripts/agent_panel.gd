@@ -243,6 +243,7 @@ var _clip_reveal_btn: Button        # Reveal in Finder for the last export
 # Live-mode "export last N" row (#548): shown only in live mode, mutually
 # exclusive with the baked marker buttons above. Reuses _clip_status +
 # _clip_reveal_btn for the result line.
+var _clip_row: HBoxContainer        # the baked marker row (Reveal reparents in/out)
 var _live_clip_row: HBoxContainer   # the whole live clip row (toggled by set_live)
 var _clip_n_spin: SpinBox           # how many recent steps to grab (default 60)
 var _live_clip_gif_btn: Button      # export the last N steps as a GIF
@@ -385,6 +386,7 @@ func _ready() -> void:
 	var clip_row := HBoxContainer.new()
 	clip_row.add_theme_constant_override("separation", 6)
 	col.add_child(clip_row)
+	_clip_row = clip_row
 
 	_clip_gif_btn = Button.new()
 	_clip_gif_btn.text = "Export GIF"
@@ -668,6 +670,13 @@ func set_live(live: bool) -> void:
 	_clip_status.visible = true  # shared by both modes now (#548)
 	_speed_row.visible = not live
 	_live_clip_row.visible = live  # live "export last N" row (#548)
+	# Keep Reveal at the end of whichever clip row is showing (#548): the baked row
+	# stays in the tree in live mode with its buttons hidden, so a reused Reveal
+	# would otherwise render on an orphan line above the live controls. Reparent it
+	# into the live row (last child, after the buttons) in live mode, back otherwise.
+	var reveal_home := _live_clip_row if live else _clip_row
+	if _clip_reveal_btn.get_parent() != reveal_home:
+		_clip_reveal_btn.reparent(reveal_home)
 	if live and _live_badge == null:
 		_live_badge = Label.new()
 		_live_badge.text = "● LIVE"

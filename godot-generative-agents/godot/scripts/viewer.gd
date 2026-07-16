@@ -1563,6 +1563,11 @@ func _capture_span(from_step: int, to_step: int, sink: Callable) -> void:
 func _on_clip_export_requested(kind: String) -> void:
 	# The sidebar's clip buttons fire in both modes (#488 marked span in replay,
 	# #548 last-N in live). Route on mode.
+	# Ignore a second press while a capture is already rendering (#548): both
+	# captures would share _t/_paused/$UI/_capturing, and the first to finish would
+	# reset _capturing and unfreeze live polling mid-render for the second.
+	if _capturing:
+		return
 	if _is_live:
 		await _export_live_clip(kind)
 	else:
