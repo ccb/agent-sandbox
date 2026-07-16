@@ -40,6 +40,17 @@ def _arenas_layer(tmj):
     )
 
 
+def _arena_objects(tmj):
+    """Objects to splice into williams_arenas. The authored layer is the source
+    of truth (edited in Tiled, checked in), so when it exists we re-emit its own
+    objects. WILLIAMS_ARENA_OBJECTS is only a seed for a fresh bake that has no
+    arenas layer yet (see #552)."""
+    layer = _arenas_layer(tmj)
+    if layer and layer.get("objects"):
+        return layer["objects"]
+    return WILLIAMS_ARENA_OBJECTS
+
+
 def read_sections(tmj):
     """name -> (c0,r0,c1,r1) inclusive tile rect, from the williams_arenas object
     layer (px/16 rounded, same idiom as furnish_college_hall.read_sections)."""
@@ -128,48 +139,48 @@ WILLIAMS_ARENA_OBJECTS = [
         "type": "classroom",
         "x": 208,
         "y": 3648,
-        "width": 158,
-        "height": 224.666666666667,
+        "width": 174,
+        "height": 224.666666667,
     },
     {
         "name": "Classroom B 1",
         "type": "classroom",
         "x": 830.666666666667,
         "y": 3777.33333333333,
-        "width": 242.666666666667,
-        "height": 76.6666666666665,
+        "width": 258.666666667,
+        "height": 76.666666667,
     },
     {
         "name": "Office",
         "type": "office",
-        "x": 224,
+        "x": 208,
         "y": 3952,
-        "width": 205.333333333333,
-        "height": 145.333333333333,
+        "width": 221.333333333,
+        "height": 161.333333333,
     },
     {
         "name": "Restroom",
         "type": "restroom",
         "x": 493.333333333333,
         "y": 3981.33333333333,
-        "width": 162.666666666667,
-        "height": 114,
+        "width": 162.666666667,
+        "height": 130,
     },
     {
         "name": "Classroom C",
         "type": "classroom",
         "x": 897.333333333333,
         "y": 3954,
-        "width": 174,
-        "height": 141.333333333333,
+        "width": 190,
+        "height": 157.333333333,
     },
     {
         "name": "Classroom B 2",
         "type": "classroom",
         "x": 911.999833333333,
         "y": 3712.99998333333,
-        "width": 159.333666666667,
-        "height": 62.0000333333335,
+        "width": 176,
+        "height": 62.000033333,
     },
     {
         "name": "Lobby 1",
@@ -378,6 +389,9 @@ def apply_to_file(tmj_path):
         else other_max_layer + 2
     )
 
+    # Pairs with _arena_objects() below: when the authored williams_arenas layer
+    # exists we reuse ITS objects (source of truth) and their id base; both
+    # branches must agree on that choice or the splice wouldn't be byte-stable.
     arenas_layer = by_name.get("williams_arenas")
     if arenas_layer and arenas_layer.get("objects"):
         obj_base = min(o["id"] for o in arenas_layer["objects"])
@@ -408,14 +422,15 @@ def apply_to_file(tmj_path):
     k8 = text[line0:fstart]
     k9 = k8 + " "
     walls_block = _tile_layer_block(new_walls, walls_id, "williams_walls", W, H, k9)
+    arena_objects = _arena_objects(tmj)
     arenas_block = _object_layer_block(
-        WILLIAMS_ARENA_OBJECTS, arenas_id, "williams_arenas", obj_base, k9
+        arena_objects, arenas_id, "williams_arenas", obj_base, k9
     )
     insertion = walls_block + ",\n" + k8 + arenas_block + ",\n" + k8
     text = text[:line0] + k8 + insertion + text[line0 + len(k8) :]
 
     text = _bump_header(text, "nextlayerid", max(walls_id, arenas_id) + 1)
-    text = _bump_header(text, "nextobjectid", obj_base + len(WILLIAMS_ARENA_OBJECTS))
+    text = _bump_header(text, "nextobjectid", obj_base + len(arena_objects))
     with open(tmj_path, "w") as fh:
         fh.write(text)
 

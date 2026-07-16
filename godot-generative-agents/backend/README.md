@@ -689,7 +689,7 @@ advancing **on its own** while frontends follow along:
   Record shapes (passed through as plain JSON; `kind` is the discriminator):
 
   ```json
-  { "cursor": 12, "kind": "frame",  "step": 11, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
+  { "cursor": 12, "kind": "frame",  "step": 11, "tick_ms": 3.1, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
   { "cursor": 13, "kind": "status", "reason": "paused", "running": true, "paused": true, "step": 12 }
   { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
   { "cursor": 16, "kind": "intervention", "intervention": "say", "name": "Maya Chen", "speaker": "Alistair", "text": "The market closes at noon.", "turn": 12 }

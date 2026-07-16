@@ -280,12 +280,24 @@ as `game_event` records (#467); the HUD's generic rows currently render only
 along with the exact tool schemas and prompts the model gets). The config's
 `max_cost_usd` (default $5) is a hard kill-switch: the moment cumulative spend
 reaches it the day ends — the live loop pauses and the run monitor's budget
-row shows **TRIPPED**. Two operational notes: ticks run serially, so each
-decision stretches its tick to the model's latency (the viewer just paces
-slower; `--tick-seconds` still sets the floor), and a provider outage never
-crashes the day — a failed call leaves that agent idle for one tick and it
-simply asks again, but failed calls record no cost, so a stalled tokens/min
-meter in the run monitor (not the budget row) is the outage signal.
+row shows **TRIPPED**. Two operational notes on latency (#366): under
+`--brain llm` the agents at a decision point decide **concurrently** (one
+worker per persona by default; `--decide-workers N` caps how many model calls
+run at once — tune it under your provider's rate limit — and `0` restores the
+strictly serial path), so a decision tick costs roughly the *slowest* decision rather
+than the sum — and the loop's sleep subtracts each tick's wall time, so
+walk-only ticks keep the `--tick-seconds` cadence while decision ticks start
+the next tick immediately. A decision that outlives `--decide-timeout`
+(default 30 s) leaves that agent idle for the tick — the skip is printed, the
+in-flight call's usage still lands in the ledger, and its answer is applied at
+the agent's next decision point once it resolves (never billed twice); a
+provider outage degrades to the same idle-and-retry (failed calls record no
+cost, so a stalled tokens/min meter in the run monitor — not the budget row —
+is the outage signal). Every `frame` feed record carries `tick_ms` (+
+`deciders`), so a client can tell "thinking" from "stuck" (the viewer-side
+indicator is #372). To *feel* the
+stalls without spending anything: `--mock-latency 5 --decide-workers 3` under
+the mock brain.
 
 ### The run monitor (top-right)
 
