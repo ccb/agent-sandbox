@@ -41,6 +41,11 @@ from text_adventure_games.things.items import Item
 _SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 
 WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
+# A one-persona boil-water DEMO world (#592): the same map + factory, a single
+# Houston-homed resident running the full boil arc early so it doesn't cluster at
+# the far-right of a long bundled bake. `generate_penn_replay.py --scenario boil`
+# loads this instead of the full cast.
+WORLD_DATA_BOIL = os.path.join(_SIM_DIR, "world_data_boil.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 
 # The Penn-local verb set (#300): registered on top of Travel/Act via
