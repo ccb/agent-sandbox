@@ -6,6 +6,7 @@ extends SceneTree
 ## this before the scene smoke).
 
 const ReplayMarkers := preload("res://scripts/replay_markers.gd")
+const TimelineMarkers := preload("res://scripts/timeline_markers.gd")
 
 var _failures := 0
 
@@ -81,6 +82,38 @@ func _initialize() -> void:
 	var evts := _of_kind(ReplayMarkers.collect(frames, names, {}, events), "event")
 	_check(evts.size() == 1 and evts[0]["step"] == 3, "in-range event kept, out-of-range dropped")
 	_check(String(evts[0]["label"]) == "Ada: drank unboiled water", "event label is 'actor: summary'")
+	_check(String(evts[0]["action"]) == "drink", "event marker carries the action type (#593)")
+
+	# --- per-event-type styling (timeline_markers.gd), #593 ---
+	var c_sick := TimelineMarkers.color_for("event", "sickness")
+	var c_boil := TimelineMarkers.color_for("event", "boiled")
+	var c_rec := TimelineMarkers.color_for("event", "recovery")
+	_check(c_sick != c_boil and c_boil != c_rec and c_sick != c_rec,
+		"sickness/boiled/recovery get three distinct colors")
+	var c_default: Color = TimelineMarkers.KIND_COLORS["event"]
+	_check(TimelineMarkers.color_for("event", "mystery") == c_default,
+		"unknown event type falls back to the default event color")
+	_check(TimelineMarkers.color_for("event", "") == c_default,
+		"missing action falls back to the default event color")
+	_check(TimelineMarkers.color_for("chat", "") == TimelineMarkers.KIND_COLORS["chat"],
+		"non-event kinds keep their KIND_COLORS color")
+	_check(TimelineMarkers.color_for("weird", "") == Color.WHITE,
+		"unknown kind falls back to white")
+
+	# tooltip_line prefixes known event types with an emoji + the type name.
+	var sick_tip := TimelineMarkers.tooltip_line(
+		{"step": 945, "kind": "event", "action": "sickness", "label": "Sofia: got sick"})
+	_check("🤢" in sick_tip and "sickness" in sick_tip and "Sofia: got sick" in sick_tip,
+		"tooltip enriches a known event with emoji + type + label")
+	_check("945" in sick_tip, "tooltip keeps the step number")
+	var plain_tip := TimelineMarkers.tooltip_line(
+		{"step": 3, "kind": "event", "action": "drink", "label": "Ada: drank"})
+	_check(plain_tip == "step 3 — Ada: drank",
+		"unknown event type keeps the plain 'step N — label' tooltip")
+	var chat_tip := TimelineMarkers.tooltip_line(
+		{"step": 2, "kind": "chat", "label": "Ada starts a conversation"})
+	_check(chat_tip == "step 2 — Ada starts a conversation",
+		"non-event kinds keep the plain tooltip")
 
 	# --- robustness + ordering ---
 	var all := ReplayMarkers.collect(frames, names, streams, events)
