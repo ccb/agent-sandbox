@@ -67,6 +67,19 @@ DEFAULT_VISION_R = 8
 DECIDE_MAX_ENUM = 20
 
 
+def first_line_location(observation: str) -> str:
+    """The current location as the mock/scripted brains read it: ``describe_for``
+    puts the location name (UPPERCASE) on the first non-empty line; return it
+    lowercased for comparison. Shared by
+    :meth:`ScheduleMockClient._current_location` and the Penn scripted brain
+    (issue #563) so the first-line convention lives in one place and can't drift
+    if ``describe_for``'s format changes."""
+    for line in (observation or "").splitlines():
+        if line.strip():
+            return line.strip().lower()
+    return ""
+
+
 class ScheduleMockClient(MockReActClient):
     """Deterministic mock LLM that walks a persona through a *schedule* of stops.
 
@@ -181,11 +194,7 @@ class ScheduleMockClient(MockReActClient):
         self.schedule = patched
 
     def _current_location(self, observation: str) -> str:
-        """describe_for() puts the location name (UPPERCASE) on the first line."""
-        for line in (observation or "").splitlines():
-            if line.strip():
-                return line.strip().lower()
-        return ""
+        return first_line_location(observation)
 
     def _choose(self, observation: str) -> str:
         if self.latency_s:

@@ -14,16 +14,8 @@ state -- never a call counter, because the client is shared across personas and
 decisions may run in parallel (#366).
 """
 
+from backend.cognition import first_line_location
 from text_adventure_games.llm_client import MockLlmClient
-
-
-def _first_line_location(observation: str) -> str:
-    """``describe_for`` puts the location name (UPPERCASE) on the first non-empty
-    line; mirror ``ScheduleMockClient._current_location`` (lowercased)."""
-    for line in (observation or "").splitlines():
-        if line.strip():
-            return line.strip().lower()
-    return ""
 
 
 def _last_user_content(messages) -> str:
@@ -71,6 +63,15 @@ class ScriptedPennBrain(MockLlmClient):
 
     def _on_call_tools(self, messages, tools, tool_choice, max_tokens, temperature):
         names = {t.get("name") for t in tools}
+        # Consult memory once (if offered) before speaking OR acting, so the
+        # cognition-tool loop (#358) is exercised on BOTH paths: decide (recall
+        # alone) and converse (recall offered alongside speak, #512's
+        # _converse_with_cognition). Round 2 -- a tool_result is already present
+        # -- falls through to the speak/decide below.
+        if "recall" in names and not _has_tool_result(messages):
+            return {
+                "tool_calls": [{"name": "recall", "arguments": {"query": "my plan"}}]
+            }
         if "speak" in names:
             actor = (self.context or {}).get("actor")
             return {
@@ -80,12 +81,6 @@ class ScriptedPennBrain(MockLlmClient):
                         "arguments": {"utterance": _line_for(actor), "done": True},
                     }
                 ]
-            }
-        # Decide: consult memory once (if offered) before acting, so the
-        # cognition-tool path is exercised.
-        if "recall" in names and not _has_tool_result(messages):
-            return {
-                "tool_calls": [{"name": "recall", "arguments": {"query": "my plan"}}]
             }
         return self._decide(messages, tools)
 
@@ -118,7 +113,7 @@ class ScriptedPennBrain(MockLlmClient):
                 ]
             }
         destination = schedule.destination
-        if _first_line_location(observation) != destination.lower():
+        if first_line_location(observation) != destination.lower():
             return {
                 "tool_calls": [
                     {
@@ -156,9 +151,17 @@ def _reflect_responder(messages, tool, max_tokens, temperature):
     return None
 
 
-def build_scripted_brains(ledger=None):
-    """Return ``(brain, reflector)`` for a --brain scripted run. Both record into
-    ``ledger`` when supplied, so GET /usage / the run log are non-empty offline."""
-    brain = ScriptedPennBrain(ledger=ledger)
-    reflector = MockLlmClient(tool_responses=_reflect_responder, ledger=ledger)
+def build_scripted_brains(ledger=None, decide_ledger=None, reflect_ledger=None):
+    """Return ``(brain, reflector)`` for a --brain scripted run.
+
+    Both record into ``ledger`` so GET /usage / the run log are non-empty
+    offline. Pass ``decide_ledger`` / ``reflect_ledger`` to record each role
+    through its own view instead (they default to ``ledger``) -- the live server
+    passes monitor-tagged (:class:`RoleTaggedLedger`) views so
+    ``serve_penn --brain scripted --monitor`` prints decide/converse vs reflect
+    request lines, exactly like the paid brain."""
+    brain = ScriptedPennBrain(ledger=decide_ledger or ledger)
+    reflector = MockLlmClient(
+        tool_responses=_reflect_responder, ledger=reflect_ledger or ledger
+    )
     return brain, reflector
