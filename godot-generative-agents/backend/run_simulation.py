@@ -90,6 +90,12 @@ def _result_or_none(fut):
         return None
 
 
+def _minutes_to_steps(minutes, clock) -> int:
+    """Whole steps spanning ``minutes`` of in-game time (at least 1) via the run's
+    SimClock -- the single minutes->steps conversion the pacing code uses (#581)."""
+    return max(1, clock.steps_for_seconds(int(minutes * 60)))
+
+
 def _model_duration_steps(agent, clock, cog) -> int | None:
     """The model's chosen activity duration in *steps*, clamped, or None (#581).
 
@@ -102,7 +108,7 @@ def _model_duration_steps(agent, clock, cog) -> int | None:
     if minutes is None or clock is None:
         return None
     minutes = max(cog.duration_min_minutes, min(cog.duration_max_minutes, minutes))
-    return max(1, clock.steps_for_seconds(int(minutes * 60)))
+    return _minutes_to_steps(minutes, clock)
 
 
 def step(
@@ -336,6 +342,10 @@ def step(
                 # A no-op unless a reflector was wired on (real provider only), so
                 # the mock replay stays byte-identical.
                 maybe_reflect(char.agent, game)
+                # #581: the model duration this decision carried (clamped, in
+                # steps) or None -- computed once here, driving both the settle
+                # trigger and perform_until below.
+                model_duration_steps = _model_duration_steps(char.agent, clock, cog)
                 if command.startswith("travel"):
                     dest = char.location
                     address = getattr(dest, "tile_address", None)
@@ -356,10 +366,7 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif (
-                    command.startswith("perform")
-                    or _model_duration_steps(char.agent, clock, cog) is not None
-                ):
+                elif command.startswith("perform") or model_duration_steps is not None:
                     # Settle into an in-place activity. The trigger is "perform,
                     # OR any action that carried a model duration" -- so a future
                     # duration-bearing verb (#446 study/eat) settles here too,
@@ -406,20 +413,32 @@ def step(
                         st["pron"] = schedule.emoji or emoji[name]
                     else:
                         st["pron"] = emoji[name]
-                    st["desc"] = f"{activity} @ {char.location.tile_address}"
-                    # Duration: the model's clamped estimate (in steps) if it
-                    # gave one, else the authored schedule.steps (trusted as-is,
-                    # so the mock bake is untouched); None => stay put.
-                    duration_steps = _model_duration_steps(char.agent, clock, cog)
-                    if duration_steps is not None:
-                        st["perform_until"] = step_idx + duration_steps
+                    # char.location can be None (the `matched` guard above assumes
+                    # so); don't crash the desc line if it is.
+                    where = char.location.tile_address if char.location else "?"
+                    st["desc"] = f"{activity} @ {where}"
+                    # Duration: the model's clamped estimate (in steps) if it gave
+                    # one, else the authored schedule.steps (trusted as-is, so the
+                    # mock bake is untouched). A None schedule step means "stay put"
+                    # -- correct for an on-plan end-of-day stop, but a deviation
+                    # must never freeze there with no way to re-decide, so an
+                    # off-plan perform with no bound gets the max-duration ceiling.
+                    if model_duration_steps is not None:
+                        st["perform_until"] = step_idx + model_duration_steps
                     else:
                         schedule_steps = schedule.steps
-                        st["perform_until"] = (
-                            step_idx + schedule_steps
-                            if schedule_steps is not None
-                            else None
-                        )
+                        if schedule_steps is not None:
+                            st["perform_until"] = step_idx + schedule_steps
+                        elif matched or clock is None:
+                            # On-plan stay-put (or offline, no clock to bound with):
+                            # settle here for the rest of the run, as before.
+                            st["perform_until"] = None
+                        else:
+                            # Off-plan with no bound anywhere: cap it so the brain
+                            # re-decides instead of freezing on the deviation.
+                            st["perform_until"] = step_idx + _minutes_to_steps(
+                                cog.duration_max_minutes, clock
+                            )
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 # Offer its planner a chance to re-plan around the blocked action
