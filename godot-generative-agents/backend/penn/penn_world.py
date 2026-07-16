@@ -30,7 +30,7 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
-from backend.actions import Activate, Deactivate, DrinkPenn
+from backend.actions import Activate, Deactivate, DrinkPenn, BoilWater
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
 from text_adventure_games.enums import Property
@@ -44,12 +44,12 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # The Penn-local verb set (#300): registered on top of Travel/Act via
 # build_world(extra_actions=...). DrinkPenn overrides the engine's "drink".
 # Upstreaming these into the engine library is #464.
-PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn]
+PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, BoilWater]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
 # boil-water scenario wires in, on top of the base travel/perform. Handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
-PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate"]
+PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate", "boil"]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
