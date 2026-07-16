@@ -282,19 +282,28 @@ def test_stepper_default_mock_is_still_brainless():
     assert stepper.reflector_client is None
 
 
-def test_bake_simulate_under_scripted_populates_chat_and_reflection():
+def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection():
+    """A --brain scripted bake: the brain reaches the tool loop, a cognition
+    tool (recall) is offered and used, the shared ledger records calls (a
+    non-empty GET /usage surface), and reflection memories get written once
+    accumulated importance crosses the threshold over a full simulated day
+    (400 steps). Chat population is NOT asserted here -- chat needs two
+    agents co-located and settled, which isn't reliable in this bake; that's
+    Task 8's full-length stepper run instead.
+    """
     from backend.run_simulation import simulate
     from backend.sim_config import CognitionConfig
     from text_adventure_games.usage import UsageLedger
+    from text_adventure_games.memory import MemoryKind
     from penn_world import build_penn_world, PENN_ACTION_VERBS
 
     pw = build_penn_world()
-    brain, reflector = build_scripted_brains()
     ledger = UsageLedger()
+    brain, reflector = build_scripted_brains(ledger=ledger)
     mems: dict = {}
     frames = simulate(
         pw.world_map,
-        120,
+        400,
         ledger=ledger,
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
@@ -311,5 +320,13 @@ def test_bake_simulate_under_scripted_populates_chat_and_reflection():
     assert any(
         "recall" in {t.get("name") for t in c["tools"]} for c in brain.tool_calls_log
     )
-    # The ledger recorded calls (non-empty GET /usage surface).
-    assert ledger.summary()
+    # The shared ledger (passed into the factory, not a separate instance)
+    # recorded calls -- a non-empty GET /usage surface.
+    assert ledger.summary()["calls"] > 0
+    # Reflection actually fired: at least one persona's memory stream
+    # contains a REFLECTION-kind memory over the full simulated day.
+    assert any(
+        m.get("kind") == MemoryKind.REFLECTION.value
+        for stream in mems.values()
+        for m in stream
+    )
