@@ -43,6 +43,14 @@ def test_steps_per_hour_default_and_custom():
     assert SimClock(START, sec_per_step=3600).steps_per_hour == 1
 
 
+def test_minutes_for_steps_floors():
+    clock = SimClock(START)
+    assert clock.minutes_for_steps(240) == 40  # 240 steps * 10s = 40 min
+    assert clock.minutes_for_steps(5) == 0  # 50s: under a minute floors to 0
+    with pytest.raises(ValueError):
+        clock.minutes_for_steps(-1)
+
+
 def test_steps_for_seconds_floors():
     clock = SimClock(START, sec_per_step=10)
     assert clock.steps_for_seconds(3600) == 360

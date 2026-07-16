@@ -625,11 +625,14 @@ def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
     Sim time of day, the plan's current stop, and how long the agent has been
-    on it (``stop_since`` is the step the stop began; walking there counts) --
-    the always-relevant slice a live brain needs on every decision without
-    spending a ``read_plan`` tool round. Needs a clock (the bake and the
-    offline tests thread none, so their prompts are unchanged) and a schedule
-    (every attach_agents persona has one; a bare engine agent yields "").
+    on it (``stop_since`` is the step the stop began -- stamped when the
+    schedule advances and re-anchored on arrival, so once the agent is at the
+    place ``elapsed`` counts time *at* the stop, commensurate with the planned
+    minutes) -- the always-relevant slice a live brain needs on every decision
+    without spending a ``read_plan`` tool round. Needs a clock (the bake and
+    the offline tests thread none, so their prompts are unchanged) and a
+    schedule (every attach_agents persona has one; a bare engine agent
+    yields "").
     """
     schedule = getattr(agent, "schedule", None)
     if clock is None or schedule is None:
@@ -640,8 +643,8 @@ def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
         time=clock.time_at(step).strftime("%A %I:%M %p"),
         place=schedule.destination,
         activity=schedule.activity,
-        minutes=steps * clock.sec_per_step // 60 if steps is not None else None,
-        elapsed=max(0, step - stop_since) * clock.sec_per_step // 60,
+        minutes=clock.minutes_for_steps(steps) if steps is not None else None,
+        elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
     )
 
 

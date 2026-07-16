@@ -26,8 +26,9 @@ inputs:
   elapsed:
     type: integer
     description: >
-      Minutes the agent has been on this stop so far (walking toward it
-      counts). The sentence is dropped at 0 -- the stop just began.
+      Minutes the agent has been on this stop so far, re-anchored on arrival
+      so it counts time AT the stop (commensurate with the planned minutes).
+      The sentence is dropped at 0 -- the stop just began.
 sample:
   time: Monday 12:05 PM
   place: Houston Hall
