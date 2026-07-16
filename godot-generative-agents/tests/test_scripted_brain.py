@@ -179,3 +179,31 @@ def test_call_tool_speak_fallback_returns_an_utterance():
     }
     result = brain.call_tool([{"role": "user", "content": "hi"}], speak_tool)
     assert result["utterance"]
+
+
+from scripted_brain import build_scripted_brains  # noqa: E402
+from text_adventure_games.reflection import (
+    SALIENT_QUESTIONS_TOOL,
+    INSIGHT_TOOL,
+)  # noqa: E402
+
+
+def test_build_scripted_brains_returns_brain_and_reflector():
+    brain, reflector = build_scripted_brains()
+    assert isinstance(brain, ScriptedPennBrain)
+    q = reflector.call_tool(
+        [{"role": "user", "content": "recent memories"}], SALIENT_QUESTIONS_TOOL
+    )
+    assert isinstance(q["questions"], list) and q["questions"]
+    i = reflector.call_tool(
+        [{"role": "user", "content": "question + memories"}], INSIGHT_TOOL
+    )
+    assert i["insight"] and isinstance(i["evidence"], list)
+
+
+def test_scripted_brains_share_a_ledger_when_passed_one():
+    from text_adventure_games.usage import UsageLedger
+
+    ledger = UsageLedger()
+    brain, reflector = build_scripted_brains(ledger=ledger)
+    assert brain.ledger is ledger and reflector.ledger is ledger
