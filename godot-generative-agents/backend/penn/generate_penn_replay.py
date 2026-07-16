@@ -208,14 +208,14 @@ def main() -> int:
     # default) leaves brain/reflector/cognition/ledger at None, which is exactly
     # what `simulate` saw before this flag existed, so that bake stays
     # byte-identical.
-    from backend.sim_config import CognitionConfig
-    from text_adventure_games.usage import UsageLedger
-    from scripted_brain import build_scripted_brains
-
     brain = reflector = None
     cognition = None
     ledger = None
     if args.brain == "scripted":
+        from backend.sim_config import CognitionConfig
+        from text_adventure_games.usage import UsageLedger
+        from scripted_brain import build_scripted_brains
+
         ledger = UsageLedger()
         brain, reflector = build_scripted_brains(ledger=ledger)
         cognition = CognitionConfig(cognition_tools=True)
