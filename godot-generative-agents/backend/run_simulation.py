@@ -72,7 +72,9 @@ def _resting_pron(char, schedule, matched, name, emoji):
 DEVIATED = "deviated"
 
 
-def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
+def _decide_for(
+    game, char, step_idx, retrieval, clock=None, stop_since=0, deciding_sink=None
+):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
 
     The single decision entry point for both the serial path (called inline
@@ -95,9 +97,20 @@ def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     # outcome, the same shape react_behavior gives engine NPCs. The usage
     # context above is set first so the decide() call inside
     # observe_and_decide is attributed to this persona/step.
-    return observe_and_decide(
-        game, char, step_idx, retrieval=retrieval, clock=clock, stop_since=stop_since
-    )
+    if deciding_sink is not None:
+        deciding_sink(char.name, "begin", step_idx)
+    try:
+        return observe_and_decide(
+            game,
+            char,
+            step_idx,
+            retrieval=retrieval,
+            clock=clock,
+            stop_since=stop_since,
+        )
+    finally:
+        if deciding_sink is not None:
+            deciding_sink(char.name, "end", step_idx)
 
 
 def _result_or_none(fut):
@@ -151,6 +164,7 @@ def step(
     decide_timeout: float | None = None,
     decide_pending: dict | None = None,
     decide_info: dict | None = None,
+    deciding_sink=None,
 ) -> tuple[dict, int]:
     """Run exactly one 10-second tick and return ``(frame, chats_this_step)``.
 
@@ -317,6 +331,7 @@ def step(
                 retrieval,
                 clock=clock,
                 stop_since=state[name].get("stop_since", 0),
+                deciding_sink=deciding_sink,
             )
         if futs:
             # One shared wall-clock window: the futures started together, so
@@ -376,6 +391,7 @@ def step(
                     retrieval,
                     clock=clock,
                     stop_since=st.get("stop_since", 0),
+                    deciding_sink=deciding_sink,
                 )
             )
             # Capture the thinking behind this decision for the replay card: the
