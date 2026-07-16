@@ -41,6 +41,7 @@ The pieces:
 
 import argparse
 import concurrent.futures
+import datetime
 import os
 import threading
 import time
@@ -51,6 +52,7 @@ from backend.env import load_dotenv
 from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
 from backend.run_simulation import step
 from backend.run_store import DEFAULT_RUNS_DIR, RunStore
+from backend.sim_clock import SimClock
 from backend.sim_config import CognitionConfig
 from backend.cognition import attach_agents
 from penn_world import (
@@ -455,6 +457,14 @@ class PennStepper:
         # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
         self.cog = CognitionConfig(cognition_tools=self.cognition_tools)
+        # The live analogue of the bake's meta start/sec_per_step (#580): one
+        # SimClock so the decide-context block and the hourly BEHIND_SCHEDULE
+        # revision seam see the same in-game time the viewer's navbar shows.
+        # Mock-safe: the mock brain reads only the observation's first line,
+        # and MockPlanner.revise is a no-op.
+        self.clock = SimClock(
+            datetime.datetime.fromisoformat(SIM_START), sec_per_step=SEC_PER_STEP
+        )
         self.game, self.chars = self.world.build_world_fn(self.world.world_map)
         # How much of game.events drain_events() has already published
         # (#467). Lives in _build so reset() restarts it with the new game.
@@ -523,6 +533,7 @@ class PennStepper:
                 "reasoning": "(waking up)",
                 "memories": [],
                 "chat": None,
+                "stop_since": 0,
             }
         self.injector = LiveMeetingInjector(
             # Under a real brain the authored dialogue stands down entirely:
@@ -627,6 +638,9 @@ class PennStepper:
                 # performing) and overwrites them all.
         for name in self.order:
             agent = self.chars[name].agent
+            # Elapsed-on-stop (#580) restarts at the resume point: the
+            # fast-forwarded schedule below IS the stop the agent is on now.
+            self.state[name]["stop_since"] = self._step_idx
             _fast_forward_schedule(agent.schedule, self._step_idx)
             records = self.run_store.hydrated_records(run_id, name)
             if records:
@@ -752,6 +766,7 @@ class PennStepper:
             world_map=self.world.world_map,
             emoji=self.emoji,
             cog=self.cog,
+            clock=self.clock,
             # Real conversations only when a real brain drives -- the same gate
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
