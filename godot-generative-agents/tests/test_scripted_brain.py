@@ -207,3 +207,52 @@ def test_scripted_brains_share_a_ledger_when_passed_one():
     ledger = UsageLedger()
     brain, reflector = build_scripted_brains(ledger=ledger)
     assert brain.ledger is ledger and reflector.ledger is ledger
+
+
+from backend.build_world import build_world  # noqa: E402
+from backend.cognition import attach_agents  # noqa: E402
+
+_LOCATIONS = [
+    {"name": "The Green", "description": "lawn", "address": None, "hub": True},
+    {"name": "Cafe", "description": "coffee", "address": "T:Cafe:counter"},
+]
+
+
+def _personas():
+    return [
+        {
+            "name": "Ada",
+            "home": "The Green",
+            "persona": "I am Ada.",
+            "emoji": "\U0001f4d6",
+            "start_tile": [0, 0],
+            "destination": "Cafe",
+            "activity": "reading",
+            "schedule": [
+                {
+                    "place": "Cafe",
+                    "activity": "reading",
+                    "emoji": "\U0001f4d6",
+                    "steps": None,
+                }
+            ],
+        }
+    ]
+
+
+def test_attach_agents_registers_schedules_on_a_scripted_brain():
+    brain, _ = build_scripted_brains()
+    personas = _personas()
+    chars = build_world(None, personas, _LOCATIONS)[1]
+    attach_agents(chars, personas, llm_client=brain, cognition_tools=True)
+    assert "Ada" in brain._schedules
+    assert brain._schedules["Ada"] is chars["Ada"].agent.schedule
+
+
+def test_attach_agents_is_a_noop_for_a_client_without_register_schedule():
+    from text_adventure_games.llm_client import MockLlmClient
+
+    plain = MockLlmClient()  # no register_schedule -> must not raise
+    personas = _personas()
+    chars = build_world(None, personas, _LOCATIONS)[1]
+    attach_agents(chars, personas, llm_client=plain)  # no error
