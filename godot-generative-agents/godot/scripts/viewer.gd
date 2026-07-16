@@ -126,6 +126,7 @@ const TRAIL_DIM_ALPHA := 0.18
 const ReplayMarkers := preload("res://scripts/replay_markers.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
+const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
@@ -226,9 +227,15 @@ var _hud_running := false
 # so a drop loses nothing and re-applies nothing (records at or below it are
 # skipped as duplicates).
 var _is_live := false
+# True only during an offscreen clip capture (issue #548): while set, _process
+# suspends live socket polling so _frames/last hold still for the render.
+var _capturing := false
 # Live "thinking" cue (issue #372): wall-clock ms when the live head last grew,
 # and whether the cue is currently showing (so the sidebar text flips on edges).
 const THINKING_STALL_MS := 1500
+# Live clip export (issue #548): the smallest exportable clip is 2 frames; the
+# live buttons stay disabled and span_last_n returns {} below this.
+const LIVE_CLIP_MIN_N := 2
 # Live interpolation buffer (issue #372): hold ~LEAD_TARGET ticks of lead so
 # motion stays smooth across irregular arrivals; drain a post-stall backlog at
 # up to CATCHUP_MAX x the normal rate rather than teleporting. See LivePacer.
@@ -296,7 +303,7 @@ func _ready() -> void:
 	# Playback controls: pause/resume, seek along the timeline, change speed.
 	_panel.play_pause_requested.connect(_on_play_pause)
 	_panel.seek_requested.connect(_on_seek)
-	_panel.clip_export_requested.connect(_export_clip)
+	_panel.clip_export_requested.connect(_on_clip_export_requested)
 	_panel.speed_changed.connect(func(m: float) -> void: _speed = m)
 	_panel.set_playing(not _paused)
 
@@ -1560,10 +1567,13 @@ func _capture_span(from_step: int, to_step: int, sink: Callable) -> void:
 	# Render each step in [from,to] offscreen and hand (seq_index, Image) to sink.
 	# _paused stops _process advancing _t, so setting _t to an exact step multiple
 	# renders that step with zero interpolation (see _process). UI chrome is hidden
-	# so grabs are the bare campus; everything is restored on the way out.
+	# so grabs are the bare campus; everything is restored on the way out. In live
+	# mode _capturing also freezes socket polling so _frames/last hold still, and we
+	# resume at the (grown) live head rather than the pre-capture _t (issue #548).
 	var last := maxi(_frames.size() - 1, 0)
 	from_step = clampi(from_step, 0, last)
 	to_step = clampi(to_step, from_step, last)
+	_capturing = true
 	var saved_t := _t
 	var saved_paused := _paused
 	_paused = true
@@ -1573,12 +1583,32 @@ func _capture_span(from_step: int, to_step: int, sink: Callable) -> void:
 		await RenderingServer.frame_post_draw
 		sink.call(step - from_step, get_viewport().get_texture().get_image())
 	$UI.visible = true
-	_t = saved_t
 	_paused = saved_paused
+	if _is_live:
+		# Frames kept arriving on the socket during the freeze; the next _process
+		# drains the buffered records. Resume at the current head, not saved_t.
+		_t = float(maxi(_frames.size() - 1, 0)) * step_seconds
+	else:
+		_t = saved_t
+	_capturing = false
+
+
+func _on_clip_export_requested(kind: String) -> void:
+	# The sidebar's clip buttons fire in both modes (#488 marked span in replay,
+	# #548 last-N in live). Route on mode.
+	# Ignore a second press while a capture is already rendering (#548): both
+	# captures would share _t/_paused/$UI/_capturing, and the first to finish would
+	# reset _capturing and unfreeze live polling mid-render for the second.
+	if _capturing:
+		return
+	if _is_live:
+		await _export_live_clip(kind)
+	else:
+		await _export_clip(kind)
 
 
 func _export_clip(kind: String) -> void:
-	# Dispatch the marked span to the GIF or the PNG-frames path (issue #488).
+	# Replay: export the marked [ … ] span (issue #488). Baked replay only.
 	if _is_live or _frames.is_empty():
 		return
 	if _clip_in < 0 or _clip_out < 0:
@@ -1586,6 +1616,24 @@ func _export_clip(kind: String) -> void:
 		return
 	var a := mini(_clip_in, _clip_out)
 	var b := maxi(_clip_in, _clip_out)
+	await _render_and_save_clip(a, b, kind)
+
+
+func _export_live_clip(kind: String) -> void:
+	# Live: export the last N elapsed steps, ending at the live head (issue #548).
+	if not _is_live or _frames.is_empty():
+		return
+	var head := _frames.size() - 1
+	var span := LiveClipSpan.span_last_n(head, _panel.live_clip_count(), LIVE_CLIP_MIN_N)
+	if span.is_empty():
+		_panel.set_clip_status("Not enough history yet — let the sim run a moment.", "")
+		return
+	await _render_and_save_clip(int(span["from"]), int(span["to"]), kind)
+
+
+func _render_and_save_clip(a: int, b: int, kind: String) -> void:
+	# Shared clip render+save for both modes (issue #488 body, factored out for #548).
+	# _capture_span suspends live polling while it renders (see its _capturing guard).
 	_panel.set_clip_status("Exporting %d frames…" % (b - a + 1), "")
 	if kind == "gif":
 		var frames: Array = []
@@ -1608,9 +1656,6 @@ func _export_clip(kind: String) -> void:
 			if ClipExport.save_frame(img, dir, i):
 				count[0] += 1)
 		var gdir := ProjectSettings.globalize_path(dir)
-		# Encode the frames to mp4 + a high-quality gif with ffmpeg so the user
-		# gets finished files. Paint the status first (the encode blocks a few
-		# seconds); fall back to the copy-paste command if ffmpeg isn't found.
 		_panel.set_clip_status("Encoding %d frames with ffmpeg…" % count[0], "")
 		await get_tree().process_frame
 		var res := ClipExport.run_ffmpeg(dir)
@@ -1730,7 +1775,7 @@ func _process(delta: float) -> void:
 	# Live mode: pump the socket first, so records that just arrived render in
 	# this same frame. Everything below is mode-agnostic -- live just means
 	# _frames is still growing, and the _t clamp keeps playback at its head.
-	if _is_live:
+	if _is_live and not _capturing:
 		_poll_ws()
 	if _frames.is_empty():
 		return
@@ -1845,6 +1890,8 @@ func _process(delta: float) -> void:
 	# changes (per-frame work is wasted — the text is identical within a step).
 	if i != _last_status_step:
 		_last_status_step = i
+		if _is_live:
+			_panel.set_live_clip_ready(_frames.size() >= LIVE_CLIP_MIN_N)
 		for name in _names:
 			var a: Dictionary = _frames[i][name]
 			# The current activity shows in the sidebar row (not as a map bubble); the
