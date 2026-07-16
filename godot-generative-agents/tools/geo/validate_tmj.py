@@ -587,6 +587,65 @@ class Checker:
                 f"({walkable}/{drawn} walkable overall, from {source})",
             )
 
+    def check_wall_tiles_solid(self):
+        """A wall-art tile painted OUTSIDE a `*_walls` layer must be solid in
+        collision (#561, generalizing #538/#556). Wall art is identified
+        gid-wise -- every gid drawn on any `*_walls` layer is wall art -- and
+        then sought on the *other* tile layers (`*_floor`, `entrance_floor`,
+        `ground`, ...). A wall-art gid on a collision=0 cell there means the A*
+        pathfinder routes agents straight across a drawn wall: exactly the
+        Williams bug (walls painted on `williams_floor`, left walkable, #538)
+        and the entrance perimeter ring (`wall_brick`/gid 543 on
+        `entrance_floor`, which must stay sealed, #556).
+
+        `*_walls` layers are excluded on purpose: they legitimately carry a few
+        walkable doorway cells, and `check_collision_vs_walls` already covers
+        them with a tolerance. Wall identity is derived from the walls layers
+        rather than the catalog so the check is self-contained and needs no
+        firstgid remap; a gid that appears on no `*_walls` layer at all is not
+        recognized as wall art (acceptable -- every real wall gid does)."""
+        wall_gids: set[int] = set()
+        for name, layer in self.w.tile_layers.items():
+            if name.endswith("_walls"):
+                wall_gids.update(g & GID_MASK for g in layer.get("data", []) if g)
+        if not wall_gids:
+            self.add(
+                "info",
+                "MATRIX_TMJ",
+                "",
+                "wall_tiles_no_walls",
+                "no `*_walls` layers -- wall-solidity check skipped",
+            )
+            return
+        offenders = []
+        for name, layer in self.w.tile_layers.items():
+            if name.endswith("_walls"):
+                continue
+            for i, g in enumerate(layer.get("data", [])):
+                if g and (g & GID_MASK) in wall_gids and self.w.collision[i] == "0":
+                    offenders.append((name, i % self.w.W, i // self.w.W))
+        if offenders:
+            shown = ", ".join(f"{n} ({x},{y})" for n, x, y in offenders[:8])
+            more = "" if len(offenders) <= 8 else f" (+{len(offenders) - 8} more)"
+            self.add(
+                "error",
+                "MATRIX_TMJ",
+                "",
+                "wall_on_walkable",
+                f"{len(offenders)} wall-art tile(s) on walkable cells outside a "
+                f"`*_walls` layer: {shown}{more} -- seal in collision_maze or "
+                f"repaint the cell (agents will path across the drawn wall)",
+            )
+        else:
+            self.add(
+                "ok",
+                "MATRIX_TMJ",
+                "",
+                "wall_tiles_solid_ok",
+                "all wall-art tiles outside `*_walls` layers are solid in "
+                "collision_maze",
+            )
+
     def check_entrance_floor_sealed(self):
         # Every FORCED_CLOSED door must be drawn as WALL in entrance_floor, not
         # left as open-door FLOOR art (issue #556): a regen that reverts a hand-
@@ -813,6 +872,7 @@ class Checker:
         self.check_drawn_vs_present()
         self.check_arena_layer_resolved()
         self.check_collision_vs_walls()
+        self.check_wall_tiles_solid()
         self.check_entrance_floor_sealed()
         self.check_furniture_solidity()
         self.check_walkable_allowlist_fresh()
