@@ -198,6 +198,13 @@ moment every participant is genuinely settled at its venue within perception
 range — watch Diego showing Sofia around the Kamin Gallery partway into the
 default run.
 
+**`--brain scripted`** — a deterministic, key-free brain that drives the *full*
+backend offline: the per-verb tool loop, cognition tools, conversation, and
+reflection all run (unlike `--brain mock`, which stays on the schedule driver and
+never reaches them). No `ANTHROPIC_API_KEY`, no spend. Use it to exercise or test
+the live-brain code paths without a provider. Works for both `serve_penn.py` and
+`generate_penn_replay.py`. (Issue #563.)
+
 If the backend disappears the viewer holds the last pose, shows
 "reconnecting…", and retries with backoff; on reconnect the socket re-attaches
 with `?since=<last cursor>`, so no frame is lost or applied twice. `POST
