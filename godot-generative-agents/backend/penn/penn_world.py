@@ -312,12 +312,13 @@ class PennWorld:
 def _furnish_boil_water(game) -> None:
     """Stock Houston Hall with the boil-water props (#300).
 
-    The first Item instances in the Penn world: two cups of unboiled water
-    (``requires_boiling`` + ``is_boiled: False`` -- drink one and DrinkPenn
-    makes you sick), a pot, and two fixed devices. Activating the stove sets
-    ``is_on`` and deliberately nothing else -- no heat process exists, so
-    nothing in this world can flip ``is_boiled``; that capability gap is the
-    point of the self-coding experiment (#299)."""
+    A single reusable pot of unboiled water (``requires_boiling`` +
+    ``is_boiled: False``, with ``portions`` so drinking keeps the vessel), plus
+    a sink and a stove device. The full arc: drink the murky water and DrinkPenn
+    makes you sick; the ``boil`` action renames the pot "pot of boiled water"
+    and clears the hazard; drinking the boiled water then cures the sickness.
+    (Whether an agent *chooses* to boil before drinking is the experiment; the
+    self-coded variant is #301.)"""
     hall = game.locations.get("Houston Hall")
     if hall is None:
         return
@@ -329,13 +330,15 @@ def _furnish_boil_water(game) -> None:
     )
     stove.set_property(Property.GETTABLE, False)
     stove.set_property("is_device", True)
-    pot = Item("pot", "a cooking pot", "An empty steel pot. It could hold water.")
-    for name in ("cup of murky water", "second cup of murky water"):
-        cup = Item(name, "a cup of murky water", "Cloudy, untreated tap water.")
-        cup.set_property(Property.DRINKABLE, True)
-        cup.set_property("requires_boiling", True)
-        cup.set_property("is_boiled", False)
-        hall.add_item(cup)
+    pot = Item(
+        "pot of murky water",
+        "a pot of murky water",
+        "A dented steel pot of cloudy, untreated tap water.",
+    )
+    pot.set_property(Property.DRINKABLE, True)
+    pot.set_property("requires_boiling", True)
+    pot.set_property("is_boiled", False)
+    pot.set_property("portions", 3)
     hall.add_item(sink)
     hall.add_item(stove)
     hall.add_item(pot)
