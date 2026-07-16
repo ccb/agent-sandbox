@@ -68,7 +68,7 @@ def test_scripted_run_populates_every_gated_feature():
     assert MemoryKind.REFLECTION.value in kinds, "no reflection memories"
 
     # 5. The usage ledger is non-empty (GET /usage surface populated offline).
-    assert stepper.ledger.summary(), "empty usage ledger"
+    assert stepper.ledger.summary()["calls"] > 0, "empty usage ledger"
 
 
 def test_scripted_run_is_deterministic():
