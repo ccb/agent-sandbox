@@ -238,3 +238,96 @@ class Deactivate(base.Action):
     def apply_effects(self):
         self.item.set_property("is_on", False)
         return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
+
+
+class BoilWater(base.Action):
+    """Boil the raw water in the room so it's safe to drink (#300 test scaffold).
+
+    A deliberately self-contained "superaction": it gates on the real props
+    being present (a pot, a stove, and water that needs boiling) and, in one
+    step, marks every unboiled water item at the location ``is_boiled`` and
+    switches the stove on. It does NOT model the multi-step recipe -- filling
+    from the sink, putting the pot on the stove, heating over time -- because
+    that emergent assembly is the self-coding experiment (#299/#301). This is
+    the hand-authored "correct answer" so we can test, today, whether an agent
+    chooses to boil raw water before drinking it. Registered under a new "boil"
+    verb; the engine has no such action, so nothing is overridden."""
+
+    ACTION_NAME = "boil"
+    ACTION_DESCRIPTION = "Boil water on a stove to make it safe to drink"
+    # Typed tool slot (issues #356/#485). ``target`` is optional and advisory:
+    # the action boils all the raw water in the room regardless of the exact
+    # string, so "boil water" (the schedule mock's phrasing) and a tool brain's
+    # structured pick parse identically.
+    ARGUMENTS_SCHEMA = {
+        "target": {
+            "type": "string",
+            "description": "what to boil, e.g. 'water'",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="cook")
+
+    def _scope(self):
+        return self.parser.get_items_in_scope(self.character)
+
+    def _has_named_item(self, name: str) -> bool:
+        return name in self._scope()
+
+    def _stove(self):
+        for item in self._scope().values():
+            if item.name == "stove" and item.get_property("is_device"):
+                return item
+        return None
+
+    def _unboiled_water(self):
+        loc = self.character.location
+        if loc is None:
+            return []
+        return [
+            item
+            for item in loc.items.values()
+            if item.get_property("requires_boiling")
+            and not item.get_property("is_boiled")
+        ]
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is here to boil water."):
+            return False
+        if self.character.location is None:
+            self.parser.fail("There is nowhere to boil water.")
+            return False
+        if not self._has_named_item("pot"):
+            self.parser.fail("There's no pot here to boil water in.")
+            return False
+        if self._stove() is None:
+            self.parser.fail("There's no stove here to heat it on.")
+            return False
+        if not self._unboiled_water():
+            self.parser.fail("There's nothing here that needs boiling.")
+            return False
+        return True
+
+    def apply_effects(self):
+        stove = self._stove()
+        stove.set_property("is_on", True)
+        boiled = self._unboiled_water()
+        for water in boiled:
+            water.set_property("is_boiled", True)
+        self.game.log_event(
+            self.character.name,
+            "boiled",
+            summary=f"{self.character.name} boiled water on the {stove.name}",
+            payload={
+                "location": getattr(self.character.location, "name", None),
+                "items": [w.name for w in boiled],
+            },
+        )
+        return self.parser.ok(
+            f"{self.character.name.capitalize()} fills the pot at the {stove.name} "
+            "and boils the water until it's safe to drink."
+        )
