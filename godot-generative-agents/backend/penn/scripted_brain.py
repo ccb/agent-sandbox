@@ -141,3 +141,24 @@ class ScriptedPennBrain(MockLlmClient):
                 }
             ]
         }
+
+
+def _reflect_responder(messages, tool, max_tokens, temperature):
+    """Answer LLMReflector's two tools with schema-valid, deterministic replies."""
+    name = tool.get("name")
+    if name == "salient_questions":
+        return {"questions": ["What am I learning as my day unfolds?"]}
+    if name == "record_insight":
+        return {
+            "insight": "I move between campus places to keep my plan.",
+            "evidence": [1],
+        }
+    return None
+
+
+def build_scripted_brains(ledger=None):
+    """Return ``(brain, reflector)`` for a --brain scripted run. Both record into
+    ``ledger`` when supplied, so GET /usage / the run log are non-empty offline."""
+    brain = ScriptedPennBrain(ledger=ledger)
+    reflector = MockLlmClient(tool_responses=_reflect_responder, ledger=ledger)
+    return brain, reflector
