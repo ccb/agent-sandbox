@@ -105,3 +105,77 @@ def test_decide_is_deterministic_and_pure_of_call_order():
     a = _call(brain, "THE GREEN\nx").tool_calls[0]
     b = _call(brain, "THE GREEN\nx").tool_calls[0]
     assert a == b  # same prompt -> same call, no hidden counter
+
+
+def _tool_result_msg():
+    # Shape run_tool_loop appends after a cognition call (see test_cognition_wiring).
+    return {
+        "role": "user",
+        "content": [{"type": "tool_result", "is_error": False, "content": "a memory"}],
+    }
+
+
+def test_decide_recalls_first_then_acts_when_cognition_offered():
+    brain = ScriptedPennBrain()
+    brain.register_schedule("Maya", _FakeSchedule("Hobbs Cafe", "reading"))
+    tools = _decide_tools() + [
+        {
+            "name": "recall",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+            },
+        }
+    ]
+    brain.context["actor"] = "Maya"
+    msgs = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "THE GREEN\nx"},
+    ]
+    # Round 1: no tool_result yet -> recall.
+    first = brain.call_tools(msgs, tools, tool_choice="any")
+    assert first.tool_calls[0]["name"] == "recall"
+    # Round 2: a tool_result is present -> the action.
+    first_round_call = first.tool_calls[0]
+    msgs2 = msgs + [
+        {"role": "assistant", "content": [{"type": "tool_use", "name": "recall"}]},
+        _tool_result_msg(),
+    ]
+    second = brain.call_tools(msgs2, tools, tool_choice="any")
+    assert second.tool_calls[0]["name"] == "travel"
+
+
+def test_converse_branch_speaks_when_speak_is_offered():
+    brain = ScriptedPennBrain()
+    brain.context["actor"] = "Maya"
+    speak_tool = {
+        "name": "speak",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "utterance": {"type": "string"},
+                "done": {"type": "boolean"},
+            },
+        },
+    }
+    result = brain.call_tools(
+        [{"role": "user", "content": "Priya is here."}], [speak_tool], tool_choice="any"
+    )
+    call = result.tool_calls[0]
+    assert call["name"] == "speak"
+    assert call["arguments"]["utterance"]  # non-empty line
+    assert call["arguments"]["done"] is True
+
+
+def test_call_tool_speak_fallback_returns_an_utterance():
+    brain = ScriptedPennBrain()
+    brain.context["actor"] = "Maya"
+    speak_tool = {
+        "name": "speak",
+        "parameters": {
+            "type": "object",
+            "properties": {"utterance": {"type": "string"}},
+        },
+    }
+    result = brain.call_tool([{"role": "user", "content": "hi"}], speak_tool)
+    assert result["utterance"]
