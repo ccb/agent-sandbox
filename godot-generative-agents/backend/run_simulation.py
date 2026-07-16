@@ -46,7 +46,7 @@ from .world_map import WorldMap
 WALK_EMOJI = "\U0001f6b6"  # person walking
 
 
-def _decide_for(game, char, step_idx, retrieval):
+def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
 
     The single decision entry point for both the serial path (called inline
@@ -67,7 +67,9 @@ def _decide_for(game, char, step_idx, retrieval):
     # outcome, the same shape react_behavior gives engine NPCs. The usage
     # context above is set first so the decide() call inside
     # observe_and_decide is attributed to this persona/step.
-    return observe_and_decide(game, char, step_idx, retrieval=retrieval)
+    return observe_and_decide(
+        game, char, step_idx, retrieval=retrieval, clock=clock, stop_since=stop_since
+    )
 
 
 def _result_or_none(fut):
@@ -190,6 +192,9 @@ def step(
         ):
             if char.agent.schedule.advance():
                 st["performing"] = False
+                # A new stop begins now: the decide-context block (#580)
+                # measures "how long on this stop" from here.
+                st["stop_since"] = step_idx
             st["perform_until"] = None
 
         if not st["path"] and not st["performing"]:
@@ -218,7 +223,13 @@ def step(
                     decided[name] = None
                 continue
             futs[name] = decide_executor.submit(
-                _decide_for, game, chars[name], step_idx, retrieval
+                _decide_for,
+                game,
+                chars[name],
+                step_idx,
+                retrieval,
+                clock,
+                state[name].get("stop_since", 0),
             )
         if futs:
             # One shared wall-clock window: the futures started together, so
@@ -263,7 +274,9 @@ def step(
             command = (
                 decided[name]
                 if name in decided
-                else _decide_for(game, char, step_idx, retrieval)
+                else _decide_for(
+                    game, char, step_idx, retrieval, clock, st.get("stop_since", 0)
+                )
             )
             # Capture the thinking behind this decision for the replay card: the
             # reasoning the agent produced and the memories it retrieved (stashed
@@ -531,6 +544,9 @@ def simulate(
             # #86). None until this agent has a conversation; then it persists
             # (like reasoning/desc) until the next one.
             "chat": None,
+            # The step the agent's current schedule stop began (walking there
+            # counts) -- feeds the decide-context block (#580).
+            "stop_since": 0,
         }
 
     # Conversation is gated on a real brain (issue #86): the deterministic mock
