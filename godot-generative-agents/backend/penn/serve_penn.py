@@ -375,6 +375,20 @@ class PennStepper:
         # long -- an offline stand-in for real provider latency.
         self.decide_timeout = decide_timeout
         self.mock_latency = mock_latency
+        # The scripted brain (#563) is a SINGLE shared object whose decision reads
+        # context["actor"] (stamped per decide); a concurrent fan-out would race
+        # that field across threads and consult the wrong persona's schedule. So
+        # scripted decides serially only -- reject an explicit --decide-workers > 0
+        # rather than silently desync (--brain llm gives every agent its own
+        # client and is the way to parallelize; --decide-workers auto already
+        # maps scripted -> 0).
+        if llm == SCRIPTED and decide_workers > 0:
+            raise SystemExit(
+                "--brain scripted decides serially (one shared deterministic "
+                "brain) and has no --decide-workers > 0 mode. Drop --decide-workers "
+                "(auto already uses 0 for scripted), or use --brain llm to "
+                "parallelize."
+            )
         self._decide_executor = (
             _DecideThreads(decide_workers) if decide_workers > 0 else None
         )
@@ -424,10 +438,20 @@ class PennStepper:
         self.reflector_client = None
         if llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
-            # so the llm_client-gated paths open; both record into self.ledger.
+            # so the llm_client-gated paths open. Record each role through the
+            # same _recording_ledger view the paid path uses, so --monitor tags
+            # decide/converse vs reflect request lines (GET /usage still sums the
+            # base ledger). Bind the decide view to the brain's context so the
+            # monitor's per-call actor/role stamps read live -- mirrors
+            # _decide_client().
+            decide_view = self._recording_ledger("decide")
             self.llm_client, self.reflector_client = build_scripted_brains(
-                ledger=self.ledger
+                decide_ledger=decide_view,
+                reflect_ledger=self._recording_ledger("reflect"),
             )
+            ctx = getattr(self.llm_client, "context", None)
+            if isinstance(decide_view, RoleTaggedLedger) and ctx is not None:
+                decide_view.bind_context(ctx)
         elif llm is not None:
             self._llm_config = LlmConfig(provider="anthropic", model=llm.get("model"))
             self.llm_client = self._decide_client()

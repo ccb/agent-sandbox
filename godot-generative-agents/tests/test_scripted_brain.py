@@ -166,6 +166,41 @@ def test_converse_branch_speaks_when_speak_is_offered():
     assert call["arguments"]["done"] is True
 
 
+def test_converse_recalls_before_speaking_when_cognition_offered():
+    # #587 review: _converse_with_cognition offers recall ALONGSIDE speak. The
+    # scripted brain must consult memory once (round 1) before speaking (round 2),
+    # so the cognition-during-conversation loop (#358) is exercised offline, not
+    # only the decide path.
+    brain = ScriptedPennBrain()
+    brain.context["actor"] = "Maya"
+    speak_tool = {
+        "name": "speak",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "utterance": {"type": "string"},
+                "done": {"type": "boolean"},
+            },
+        },
+    }
+    recall_tool = {
+        "name": "recall",
+        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+    }
+    tools = [recall_tool, speak_tool]
+    msgs = [{"role": "user", "content": "Priya is here."}]
+    # Round 1: no tool_result yet -> recall, even though speak is offered.
+    first = brain.call_tools(msgs, tools, tool_choice="any")
+    assert first.tool_calls[0]["name"] == "recall"
+    # Round 2: a tool_result is present -> speak.
+    msgs2 = msgs + [
+        {"role": "assistant", "content": [{"type": "tool_use", "name": "recall"}]},
+        _tool_result_msg(),
+    ]
+    second = brain.call_tools(msgs2, tools, tool_choice="any")
+    assert second.tool_calls[0]["name"] == "speak"
+
+
 def test_call_tool_speak_fallback_returns_an_utterance():
     brain = ScriptedPennBrain()
     brain.context["actor"] = "Maya"
@@ -280,6 +315,32 @@ def test_stepper_default_mock_is_still_brainless():
     stepper = PennStepper(num_steps=5)  # --brain mock
     assert stepper.llm_client is None
     assert stepper.reflector_client is None
+
+
+def test_stepper_scripted_rejects_parallel_decides():
+    # #587 review: scripted builds ONE shared brain whose decision reads
+    # context["actor"] (stamped per decide); a #366 concurrent fan-out would race
+    # that field across threads -> wrong persona's schedule. An explicit
+    # --decide-workers > 0 is rejected at construction (auto already maps to 0).
+    import pytest
+
+    with pytest.raises(SystemExit, match="scripted decides serially"):
+        PennStepper(num_steps=5, llm=serve_penn.SCRIPTED, decide_workers=4)
+
+
+def test_stepper_scripted_monitor_wires_role_tagged_ledgers():
+    # #587 review: under --monitor the scripted brains must record through the
+    # RoleTaggedLedger view (like the paid path) so per-call request lines print;
+    # without a monitor they record into the base ledger directly (GET /usage
+    # still sums it).
+    from backend.llm_monitor import LlmCallMonitor, RoleTaggedLedger
+
+    mon = PennStepper(num_steps=5, llm=serve_penn.SCRIPTED, monitor=LlmCallMonitor())
+    assert isinstance(mon.llm_client.ledger, RoleTaggedLedger)
+    assert isinstance(mon.reflector_client.ledger, RoleTaggedLedger)
+
+    plain = PennStepper(num_steps=5, llm=serve_penn.SCRIPTED)  # no monitor
+    assert plain.llm_client.ledger is plain.ledger
 
 
 def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection():
