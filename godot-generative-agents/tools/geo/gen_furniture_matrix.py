@@ -211,6 +211,7 @@ def piece_spot(
     names: dict[int, str],
     width: int,
     height: int,
+    taken: frozenset | set = frozenset(),
 ) -> tuple[int, int] | None:
     """The single interaction spot for one furniture piece, or None (#537).
 
@@ -220,7 +221,13 @@ def piece_spot(
     floor tile in front -- the nearest walkable, non-structural, same-arena
     cell 4-adjacent to the piece. Nearest-to-centre with a row-major
     tiebreak, so the choice is deterministic. Merged-blob-robust: no
-    per-type table, no orientation data."""
+    per-type table, no orientation data.
+
+    ``taken`` tiles are excluded from both candidate pools so two pieces never
+    resolve to the same spot -- one spot per piece, keyed uniquely (#574).
+    Callers pass the running set of already-assigned spots; the deterministic
+    piece order makes the nudge stable. A piece with no free candidate returns
+    None rather than colliding."""
     cells = piece["cells"]
     cx = sum(x for x, _ in cells) / len(cells)
     cy = sum(y for _, y in cells) / len(cells)
@@ -239,7 +246,9 @@ def piece_spot(
         on_piece = [
             (x, y)
             for (x, y) in cells
-            if collision[y * width + x] == "0" and (y * width + x) not in structural
+            if collision[y * width + x] == "0"
+            and (y * width + x) not in structural
+            and (x, y) not in taken
         ]
         spot = nearest(on_piece)
         if spot is not None:
@@ -260,6 +269,7 @@ def piece_spot(
                 furn[nidx] == "0"
                 and collision[nidx] == "0"
                 and nidx not in structural
+                and (nx, ny) not in taken
                 and arena_t.get(arena_m[nidx], "") == arena
             ):
                 front.add((nx, ny))
@@ -351,12 +361,14 @@ def main() -> int:
     structural = structural_cells(tmj, skip)
     spot_cells = []
     spot_rows = []
+    taken: set[tuple[int, int]] = set()  # one spot per tile (#574)
     for piece in all_pieces:
         spot = piece_spot(
-            piece, furn, collision, arena_m, arena_t, structural, names, W, H
+            piece, furn, collision, arena_m, arena_t, structural, names, W, H, taken
         )
         if spot is None:
             continue
+        taken.add(spot)
         x, y = spot
         sector = _majority_label(piece["cells"], sector_m, sector_t, W)
         arena = _majority_label(piece["cells"], arena_m, arena_t, W)

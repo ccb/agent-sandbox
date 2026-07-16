@@ -161,6 +161,55 @@ def test_piece_spot_skips_rugs_and_floor_lamps():
     ) == (1, 0)
 
 
+def test_piece_spot_nudges_off_an_already_taken_tile():
+    # Two solid desks flank one aisle floor tile (1,0); a third floor at (2,1).
+    # The desk at (2,0) would front-resolve to (1,0) (nearest, row-major
+    # tiebreak) -- but if another piece already claimed (1,0), it must nudge to
+    # its next-best candidate (2,1) so no two spots share a tile (#574).
+    #   idx: (0,0)=0 (1,0)=1 (2,0)=2 / (0,1)=3 (1,1)=4 (2,1)=5
+    furn = ["0", "0", "2", "0", "0", "0"]  # the desk-at-(2,0) is piece "2"
+    coll = ["0", "0", "1", "0", "0", "0"]  # its own tile solid -> front rule
+    arena = ["1"] * 6
+    at = {"1": "room"}
+    names = {5: "student_desk"}
+    piece = _piece([(2, 0)])
+    # Without contention it lands on the nearest aisle tile.
+    assert piece_spot(piece, furn, coll, arena, at, set(), names, 3, 2) == (1, 0)
+    # With (1, 0) already taken it nudges to the next-best free floor tile.
+    assert piece_spot(
+        piece, furn, coll, arena, at, set(), names, 3, 2, taken={(1, 0)}
+    ) == (2, 1)
+
+
+def test_real_furniture_spots_have_unique_tiles():
+    # Every interaction spot must own a distinct tile: #559's
+    # WorldMap.furniture_spot_type is keyed by (x, y), so a tile claimed by two
+    # pieces silently last-wins (#574). The committed artifact must carry no
+    # duplicate (x, y) spot.
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+    spots = os.path.join(
+        repo,
+        "godot-generative-agents",
+        "backend",
+        "penn",
+        "the_upenn",
+        "matrix",
+        "special_blocks",
+        "furniture_spots.csv",
+    )
+    tiles = []
+    for row in open(spots).read().strip().splitlines():
+        if not row.strip():
+            continue
+        cols = [c.strip() for c in row.split(",")]
+        tiles.append((cols[3], cols[4]))
+    dupes = {t for t in tiles if tiles.count(t) > 1}
+    assert not dupes, f"furniture spot tiles claimed by >1 piece: {sorted(dupes)}"
+
+
 def test_sheet_firstgids_matches_interior_and_suffixed_names():
     from gen_furniture_matrix import _sheet_firstgids
 
