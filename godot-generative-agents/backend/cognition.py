@@ -621,7 +621,33 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     return command or None
 
 
-def observe_and_decide(game, char, step: int, retrieval=None):
+def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
+    """Render the always-on decide context (issue #580), or ``""``.
+
+    Sim time of day, the plan's current stop, and how long the agent has been
+    on it (``stop_since`` is the step the stop began; walking there counts) --
+    the always-relevant slice a live brain needs on every decision without
+    spending a ``read_plan`` tool round. Needs a clock (the bake and the
+    offline tests thread none, so their prompts are unchanged) and a schedule
+    (every attach_agents persona has one; a bare engine agent yields "").
+    """
+    schedule = getattr(agent, "schedule", None)
+    if clock is None or schedule is None:
+        return ""
+    steps = schedule.steps
+    return render(
+        "decide_context",
+        time=clock.time_at(step).strftime("%A %I:%M %p"),
+        place=schedule.destination,
+        activity=schedule.activity,
+        minutes=steps * clock.sec_per_step // 60 if steps is not None else None,
+        elapsed=max(0, step - stop_since) * clock.sec_per_step // 60,
+    )
+
+
+def observe_and_decide(
+    game, char, step: int, retrieval=None, *, clock=None, stop_since=0
+):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
     The step loop (``run_simulation.simulate``) calls the engine's
@@ -640,6 +666,9 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     3. **Augment** the observation with that retrieved block (appended *after*
        the environment text, so it never changes what the mock brain reads off
        the first line -- the decision stays deterministic).
+    4. **Contextualize** (#580): when the loop threads a ``clock``, append the
+       decide-context block -- sim time, current plan stop, elapsed -- after
+       the environment text (never read by the deterministic mock).
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
     retrieval scoring (weights / decay / how many memories surface); ``None``
@@ -672,6 +701,13 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     # the replay's per-agent card (run_simulation -> exporter). This is a plain
     # attribute on our own LLMAgent instance -- the engine class is untouched.
     agent.last_retrieved = relevant
+    # Decide-context block (#580): sim time + current stop + elapsed. Appended
+    # AFTER the environment text (the mock brain reads only the first line)
+    # and AFTER the retrieve above ran on the plain `base` -- the block must
+    # never shift which memories surface, because frames embed that list.
+    context = decide_context_block(agent, step, clock, stop_since)
+    if context:
+        base = f"{base}\n\n{context}"
     observation = format_observation_with_memories(base, relevant)
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
