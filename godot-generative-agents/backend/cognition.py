@@ -564,8 +564,10 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     -- the caller then falls back to ``agent.decide()``.
     """
     agent = char.agent
-    # Same reset contract as LLMAgent.decide(): reasoning is per-call, and the
-    # per-action tools carry no duration estimate.
+    # Same reset contract as LLMAgent.decide(): reasoning is per-call. This
+    # resets the engine's own turns-based `last_duration`, distinct from the
+    # port's `last_duration_minutes`, which `_take_pacing_args` now populates
+    # from the `perform` tool's optional `duration_minutes` slot (#581).
     agent.last_reasoning = None
     agent.last_duration = None
     messages = [
