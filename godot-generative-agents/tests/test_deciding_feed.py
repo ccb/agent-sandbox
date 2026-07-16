@@ -75,3 +75,37 @@ def test_no_sink_is_a_noop(monkeypatch):
 
     # Default deciding_sink=None: no error, decision returned unchanged.
     assert run_simulation._decide_for(None, _Char(), 0, None) == "look"
+
+
+def test_stepper_drains_deciding_records_under_a_real_brain(monkeypatch):
+    # Reuse the live-llm fake-client stepper helper.
+    import test_penn_live_llm as tll
+
+    stepper = tll._llm_stepper(monkeypatch)  # --brain llm mode, fakes swapped in
+    # Tick until at least one agent hits a decision point and emits records.
+    seen = []
+    for _ in range(6):
+        stepper.tick()
+        seen.extend(stepper.drain_deciding())
+        if seen:
+            break
+    assert seen, "no deciding records emitted under a real brain"
+    kinds = {(r["state"]) for r in seen}
+    assert "begin" in kinds
+    for r in seen:
+        assert set(r) >= {"agent", "state", "step"}
+        if r["state"] == "end":
+            assert isinstance(r["elapsed_ms"], int) and r["elapsed_ms"] >= 0
+    # Draining twice is idempotent (buffer cleared).
+    assert stepper.drain_deciding() == []
+
+
+def test_mock_stepper_emits_no_deciding_records():
+    sys.path.insert(0, str(_SIM_DIR))
+    from serve_penn import PennStepper
+    from penn_world import build_penn_world
+
+    stepper = PennStepper(num_steps=5, world=build_penn_world())  # --brain mock
+    for _ in range(5):
+        stepper.tick()
+    assert stepper.drain_deciding() == []  # byte-identical mock feed
