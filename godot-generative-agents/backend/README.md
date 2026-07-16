@@ -1258,10 +1258,10 @@ fact — round-trip tests pin that a persisted bake equals its replay file.
 A live run row's `cost` is that run's own spend (per-run ledger baseline,
 #526); the budget gate (`max_cost_usd`) stays lifetime.
 Reads: `read_frames`, `read_events`, `memories_for` (the lean wire
-projection), `full_records` (the lossless per-record dicts a resumed run
-rehydrates from, #543), and `query_memories`, which rehydrates rows into
-engine `MemoryRecord`s and delegates to `AgentMemory.retrieve` — store queries
-score exactly like the sim.
+projection), `full_records` (the lossless per-record dicts), `hydrated_records`
+(those rows back as live engine `MemoryRecord`s — what a resumed run restores
+from, #543), and `query_memories`, which scores the hydrated records via
+`AgentMemory.retrieve` — store queries score exactly like the sim.
 
 A persisted run can also be **picked back up** (#543): boot with
 `serve_penn.py --persist --resume [RUN_ID]` (bare `--resume` means the newest
@@ -1270,7 +1270,10 @@ from the store: the step counter, each agent's position (the last frame),
 schedule cursors (fast-forwarded by authored dwell times), the full memory
 streams, and the run's spend so far. What starts this-morning fresh, by
 design: item properties, conversation cooldowns, meeting-injector arming, and
-perform timers — memory-first resume; the memories are the identity. The #307
+perform timers — memory-first resume; the memories are the identity. A run is
+only resumable into the world it was recorded in: the stored manifest's cast
+and map geometry (`schema_version`/`width`/`height`) must match the current
+build, checked before any teardown. The #307
 live→replay bridge reads all of it back out:
 
     uv run python -m backend.penn.export_replay              # newest run

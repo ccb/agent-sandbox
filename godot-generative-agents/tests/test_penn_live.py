@@ -459,6 +459,16 @@ def test_stepper_resume_guards(tmp_path):
     # finishes again (pass --endless or a larger --steps to actually continue).
     done = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
     done_id = done.run_id
+    # Same cast but a different campus map (regenerating the tmj is routine):
+    # tiles from the old map's last frame could be out of bounds here.
+    store.create_run(dict(done.meta(), width=999), run_id="run-oldmap")
+    with pytest.raises(ValueError, match="different map"):
+        PennStepper(
+            num_steps=2,
+            world=build_penn_world(),
+            run_store=store,
+            resume_run_id="run-oldmap",
+        )
     for _ in range(2):
         done.tick()
     assert done.tick() is None
@@ -488,7 +498,14 @@ def test_stepper_resume_run_mid_process(tmp_path):
     stepper.reset()
     b = stepper.run_id
     stepper.tick()
+    # The pre-teardown guard's parse is THE parse: _adopt_run reuses it
+    # instead of re-reading the whole frames file under the app lock.
+    reads = []
+    real_read_frames = store.read_frames
+    store.read_frames = lambda rid: (reads.append(rid), real_read_frames(rid))[1]
     stepper.resume_run(a)
+    store.read_frames = real_read_frames
+    assert reads == [a]
     assert stepper.run_id == a
     assert stepper.step == 2
     assert store.get_run(b)["status"] == "reset"  # the abandoned day closed

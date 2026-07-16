@@ -49,14 +49,18 @@ the live one, at boot (`--resume`) or on a running server
 4. **Resumability is broad.** Any run the store still has can be adopted —
    including rows orphaned at `running` by a crash (nothing else can reopen
    those). Guard: the stored manifest's cast must equal the cast the current
-   world YAML builds, checked before any teardown. A `finished` run resumed
+   world YAML builds, and its map geometry (`schema_version`/`width`/`height`)
+   must match the current campus (map regen is routine, and tiles seeded from
+   another map's last frame could be out of bounds) — both checked before any
+   teardown. A `finished` run resumed
    under the same `--steps` finishes again immediately (the boot print says
    so; pass `--endless` or a larger `--steps`).
 
 ## What shipped
 
-- `RunStore.full_records` — the former `_full_records`, made public: the
-  lossless per-record read both `query_memories` and resume rehydrate from.
+- `RunStore.full_records` / `RunStore.hydrated_records` — the former
+  `_full_records` made public, plus the rehydrating read (`from_primitive`,
+  id-ordered) that `query_memories` and resume share.
 - `PennStepper(resume_run_id=...)` / `PennStepper.resume_run(run_id)` — both
   funnel into `_build(resume_run_id=...)` → `_adopt_run()`. The mid-process
   path guards **before** teardown (a failure after the rebuild would leave
@@ -71,7 +75,10 @@ the live one, at boot (`--resume`) or on a running server
   requires `--persist`; bad ids exit with a clean message.
 - Fixed en route: `_persist_tick` used to write `cost=ledger.total_cost_usd()`
   absolute, which would have clobbered a resumed real-LLM run's recorded
-  spend with ~$0.
+  spend with ~$0. The run's row and `GET /usage` now share one
+  `_run_cost_usd()` sum — #526's per-run ledger baseline plus the resumed
+  run's stored spend (`_cost_base`) — so the two agree structurally and
+  same-process re-adoption counts correctly.
 
 ## Out of scope (deliberate)
 
@@ -85,9 +92,6 @@ the live one, at boot (`--resume`) or on a running server
   payload with exact dict equality, so the field routes a PR to `main`; the
   resume response, the status record, and `GET /runs`' `current` already
   carry the id. One-line follow-up when something needs it.
-- **Per-run cost attribution** — `_cost_base` tops up correctly across a
-  restart, but re-adopting a run in the *same* process can over-count (the
-  ledger is cumulative across resets). Flagged in code.
 
 ## Verification
 
