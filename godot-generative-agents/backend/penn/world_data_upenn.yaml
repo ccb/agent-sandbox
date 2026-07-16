@@ -246,8 +246,10 @@ personas:
   # The full boil-water arc (#300), watchable end-to-end. The `wait` commands are
   # spacers: the mock brain issues one authored command per step, so without them
   # sickness/boiled/recovery fire on three consecutive frames (impossible to see).
-  # The waits push the three events ~10 steps apart on the timeline. (Multi-stop
-  # spacing doesn't work here -- the planner round-trip merges same-place stops.)
+  # The waits push the three events ~20 steps apart on the timeline. (Multi-stop
+  # spacing doesn't work here -- the planner round-trip merges same-place stops.
+  # For a fully de-clumped demo the arc wants to be earlier / in a shorter replay
+  # -- tracked as a follow-up; here it's still late in Sofia's long day.)
   - place: Houston Hall
     activity: sorting out the water at dinner
     steps: 20
@@ -264,7 +266,27 @@ personas:
     - wait
     - wait
     - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
     - boil water                 # -> boiled (pot becomes "pot of boiled water")
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
+    - wait
     - wait
     - wait
     - wait

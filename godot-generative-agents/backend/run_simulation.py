@@ -460,9 +460,13 @@ def step(
                 # activity itself, not the walk there.
                 st["stop_since"] = step_idx
 
+        # A sick agent shows a distinct emoji (#300 arc): health state isn't
+        # otherwise carried in the frame, so this is the on-screen `is_sick` cue
+        # -- the icon flips to the queasy face on sickness and back on recovery.
+        pron = "\U0001f922" if char.get_property("is_sick") else st["pron"]  # 🤢
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],
-            "pronunciatio": st["pron"],
+            "pronunciatio": pron,
             "description": st["desc"],
             # The agent's latest dialogue line (issue #86), or None. Updated below
             # by maybe_converse for any pair that talks this step.

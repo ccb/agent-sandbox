@@ -177,6 +177,9 @@ class DrinkPenn(consume.Drink):
             # contaminated) rehydrates and cures a sick drinker. Only fires on
             # the sick->well transition, so a healthy drinker logs nothing.
             self.character.set_property("is_sick", False)
+            # One-shot marker mirroring just_sickened: cognition.remember_outcome
+            # keys off it to write the "feel better" memory to the agent's card.
+            self.character.set_property("just_recovered", True)
             self.parser.ok(
                 f"{self.character.name.capitalize()} drinks deep -- the clean "
                 "water settles their stomach, and the sickness passes."

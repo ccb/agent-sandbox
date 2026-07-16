@@ -929,8 +929,16 @@ def remember_outcome(char, command: str, step: int) -> None:
         sick = bool(char.get_property("just_sickened"))
         if sick:
             char.set_property("just_sickened", False)
-        text = render("reflection", verb=verb, item=rest.strip(), sick=sick)
-        importance = 8.0 if sick else 2.0
+        # Its mirror (#300 arc): DrinkPenn sets "just_recovered" on the
+        # sick->well transition when safe water cures the drinker, so the card
+        # shows a "feel better" memory (mid-importance) as the arc's payoff.
+        recovered = bool(char.get_property("just_recovered"))
+        if recovered:
+            char.set_property("just_recovered", False)
+        text = render(
+            "reflection", verb=verb, item=rest.strip(), sick=sick, recovered=recovered
+        )
+        importance = 8.0 if sick else 5.0 if recovered else 2.0
     elif verb in ("get", "activate", "deactivate"):
         # World-mutating one-shot verbs (#300): worth a normal-importance
         # memory, unlike the 1.0 catch-all below.
