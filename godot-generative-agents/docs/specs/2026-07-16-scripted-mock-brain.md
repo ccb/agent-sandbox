@@ -102,9 +102,12 @@ Two constraints shape the responder, both pointing the same way:
      speaker + addressee parsed from the prompt, so a real `chat`-kind memory and an
      emergent relationship edge land.
    - **reflect**: return a schema-valid reflection reply (matching `LLMReflector`'s
-     expected structure) so reflection memories are written.
-   - **repair**: script one invalid-then-valid tool reply for a single persona/turn so
-     #357's bounded repair round is exercised and counted.
+     `salient_questions` / `record_insight` tools) so reflection memories are written.
+   - **repair (deferred):** exercising #357's bounded repair round is **out of scope
+     here** — #357 is not yet implemented (no validation/repair layer in
+     `llm_client.py`, no validation fields in the usage ledger). The scripted brain is
+     the natural place to add an invalid-then-valid reply *once #357 lands*; tracked as
+     a follow-up, not built in this plan.
 5. **End-to-end coverage test** (`godot-generative-agents/tests/test_full_feature_mock.py`).
    Run the Penn stepper on `--brain scripted` to completion and assert each
    `AgentFrame`/`Meta` field and feature is **populated, not merely shape-valid** — the
@@ -115,7 +118,7 @@ Two constraints shape the responder, both pointing the same way:
 - `resolve_llm` `"scripted"` outcome + the `--brain scripted` CLI choice in
   `serve_penn.py`, mirrored in `generate_penn_replay.py`.
 - `backend/penn/scripted_brain.py`: the deterministic, prompt-pure Penn responders
-  (decide / cognition / converse / reflect / repair).
+  (decide / cognition / converse / reflect).
 - Stepper + bake wiring that builds `MockLlmClient` brains under `scripted`
   (`llm_client`, `reflector_client`), recording into the run ledger; `cognition_tools`
   on by default under scripted.
@@ -134,8 +137,7 @@ Two constraints shape the responder, both pointing the same way:
   - tool-call records in the ledger (per-verb typed tools exercised);
   - cognition-tool usage (`recall` / `query_knowledge` / `read_plan`) non-empty;
   - at least one emergent relationship edge beyond the t=0 YAML seed graph;
-  - one tool-result validation **repair** round counted (#357);
-  - a non-empty, non-zero-only usage ledger surface.
+  - a non-empty usage ledger surface (zero-cost mock records still count).
 - Determinism: same seed/run → identical frames across two runs (assert in the test).
 - `--brain mock` bake stays **byte-identical** (existing determinism suite green);
   `test_replay_contract.py` still green for the scripted bake (shape unchanged).
@@ -168,9 +170,11 @@ Two constraints shape the responder, both pointing the same way:
 - **Responder drifts toward call-order state (mitigated):** the pure-function-of-prompt
   rule is a hard design constraint; the determinism assertion under parallel decides
   (#366) catches an accidental counter.
-- **Scripted brain diverges from real-brain schema (mitigated):** reuse the same tool
-  schemas the real path offers; #357's validation runs over scripted replies too, so a
-  malformed scripted reply is caught by the same layer.
+- **Scripted brain diverges from real-brain schema (mitigated):** reuse the exact tool
+  schemas the real path offers (`action_tools_for`, `build_speak_tool`,
+  `SALIENT_QUESTIONS_TOOL` / `INSIGHT_TOOL`, `cognition_toolset`), and reassemble decide
+  picks through the same `command_from_tool_call` the real brain uses, so a scripted
+  reply is shaped exactly like a real one.
 - **Coverage test asserts shape not population (the original bug) (mitigated):** each
   assertion checks a *value* is present (non-empty memory list, ≥1 edge, ≥1 repair
   count), and the spec requires the disable-a-branch spot-check.
