@@ -76,16 +76,22 @@ const DEFAULT_PLAYER_LOADOUT: Dictionary = {"revolver": 1, "revolver_round": 12}
 func ensure_player_proxy(pos: Vector2, room: String) -> Agent:
 	var p: Agent = _agents.get(PLAYER_ID, null)
 	if p == null:
-		p = Agent.new(PLAYER_ID)
-		p.display_name = "The Investigator"
-		p.role = "investigator"
-		p.deliberates = false   # the brain never decides for the player
+		p = _new_player_proxy()
 		var loadout := _player_loadout()
 		for item_id in loadout:
 			p.add_item(String(item_id), int(loadout[item_id]))
 		_agents[PLAYER_ID] = p
 	p.position = pos
 	p.room = room
+	return p
+
+## Bare proxy construction, shared by ensure_player_proxy (which grants the fresh-run loadout) and
+## from_dict (which hydrates a SAVED inventory instead — N2 A2: a restore must never re-grant day-1).
+func _new_player_proxy() -> Agent:
+	var p := Agent.new(PLAYER_ID)
+	p.display_name = "The Investigator"
+	p.role = "investigator"
+	p.deliberates = false   # the brain never decides for the player
 	return p
 
 ## The starting kit from data/scenario.json's "player_loadout" {item_id: count}, shape-guarded
@@ -135,7 +141,17 @@ func to_dict() -> Dictionary:
 		if id == PLAYER_ID:
 			continue   # the player proxy is ephemeral — re-created from the live player each frame, never saved
 		d[id] = (_agents[id] as Agent).to_dict()
-	return {"agents": d}
+	var out: Dictionary = {"agents": d}
+	# N2 (A2): the player proxy's INVENTORY is real run state — rounds spent, shillings earned,
+	# tools/ingredients gathered, harvested Characteristics (the advance fuel) — and this to_dict is
+	# the ONE seam both persistence paths share (SaveManager.subsystem_dump feeds the disk save AND
+	# RunManager's in-memory nightly checkpoint), so carrying it here fixes both at once. Every
+	# restore used to wake the player with the day-1 loadout. The proxy ITSELF stays ephemeral
+	# (position/room re-mirrored from the live body each frame); only its carried stock persists.
+	var p: Agent = _agents.get(PLAYER_ID, null)
+	if p != null:
+		out["player_inventory"] = p.inventory.duplicate(true)
+	return out
 
 func from_dict(data: Dictionary) -> void:
 	var d: Dictionary = data.get("agents", {})
@@ -145,3 +161,13 @@ func from_dict(data: Dictionary) -> void:
 			a = Agent.new(String(id))
 		a.from_dict(d[id])
 		_agents[id] = a
+	# N2 (A2): restore the player proxy's carried stock. A restore rebuilds the roster first, so the
+	# proxy usually does not exist yet — create it WITHOUT the fresh-run loadout grant (the saved
+	# inventory IS the loadout); the per-frame ensure_player_proxy then sees it present and never
+	# re-grants. Older saves without the key change nothing (the fresh grant covers them).
+	if data.get("player_inventory") is Dictionary:
+		var p: Agent = _agents.get(PLAYER_ID, null)
+		if p == null:
+			p = _new_player_proxy()
+			_agents[PLAYER_ID] = p
+		p.inventory = (data["player_inventory"] as Dictionary).duplicate(true)

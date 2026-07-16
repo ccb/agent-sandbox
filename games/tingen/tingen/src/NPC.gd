@@ -56,8 +56,16 @@ func _ready() -> void:
 	_def = NpcDB.get_def(npc_id)
 	if _def.is_empty():
 		push_warning("NPC: no def for '%s'" % npc_id)
+	# N4: resolve the bound agent BEFORE skinning — a body bound to an agent already wearing a
+	# monster form must render that form's art from frame one (_apply_sprite reads _agent).
+	_agent = Agents.get_agent(npc_id)
 	_apply_sprite()
-	_name_label.text = String(_def.get("name", npc_id))
+	# N6 (B2): a def-less runtime body (meter threat, crypt roster) labels itself with its
+	# bound agent's diegetic display_name — the raw id only when nothing better exists.
+	var label := String(_def.get("name", ""))
+	if label == "" and _agent != null and String(_agent.display_name) != "":
+		label = String(_agent.display_name)
+	_name_label.text = label if label != "" else npc_id
 	_prompt.visible = false
 	_prompt.text = "Talk"
 	_target = global_position
@@ -69,13 +77,31 @@ func _ready() -> void:
 	area.body_exited.connect(_on_body_exited)
 	area.input_pickable = true
 	area.input_event.connect(_on_talk_area_input)
-	_agent = Agents.get_agent(npc_id)
+	# P3: the banded hp-pip widget is LIVE-ONLY (a real display) — headless bodies stay bare,
+	# so the deterministic harnesses never see a cosmetic node.
+	if DisplayServer.get_name() != "headless":
+		_mount_pips()
 
-## Skin this body: show its real character portrait the moment art exists, else the tinted
-## icon.svg placeholder. Convention/data driven (resolve_sprite_path) — no per-NPC logic. When a
-## real sprite loads it carries its own colour, so the flat identity tint is dropped and the
-## portrait is scaled to a body-sized silhouette; otherwise the legacy tinted placeholder stands.
+## Skin this body: the bound agent's CURRENT combat_form art first (N4 — a dispatched hunter, the
+## backlash wave, the half-landed avatar bind ALREADY monstrous and must read as the fightable
+## threat from frame one; also a transformed Beyonder whose body respawns on room re-entry), then
+## its real character portrait, else the tinted icon.svg placeholder. Convention/data driven
+## through the SAME resolution seam the mask-drop swap uses (CombatExecutor.resolve_form_sprite_
+## path + resolve_sprite_path) — no per-NPC logic. Real art carries its own colour, so the flat
+## identity tint is dropped; the form standee is scaled to the mask-drop height, a portrait to a
+## body-sized silhouette; otherwise the legacy tinted placeholder stands.
 func _apply_sprite() -> void:
+	if _agent != null:
+		var form_path := CombatExecutor.resolve_form_sprite_path(String(_agent.combat_form))
+		if form_path != "":
+			var form_tex: Texture2D = load(form_path)
+			if form_tex != null:
+				_sprite.texture = form_tex
+				_sprite.modulate = Color(1, 1, 1, 1)   # real art brings its own palette
+				var fh := float(form_tex.get_height())
+				if fh > 0.0:
+					_sprite.scale = Vector2.ONE * (CombatExecutor.FORM_SPRITE_TARGET_H / fh)
+				return
 	var path := resolve_sprite_path(npc_id, _def)
 	if path != "":
 		var tex: Texture2D = load(path)
@@ -122,6 +148,129 @@ func _step_hit_flash(delta: float) -> void:
 	if _hit_flash_t <= 0.0:
 		_sprite.modulate = _hit_flash_base
 		_hit_flash_active = false
+
+## ---- P3 combat readability: banded enemy hp pips (combat mode only) --------------------------
+## The pip COUNT mirrors the ONE peer-hp banding (Perception.hp_band — the same coarse bands the
+## LLM payloads expose; never exact numbers): healthy=3, hurt=2, critical=1, downed=0. The pip
+## NODE is live-only (never spawned headless), so the deterministic harnesses see state only.
+const PIPS_NODE_NAME: String = "HpPips"
+
+func combat_pips() -> int:
+	if _agent == null:
+		return 0
+	match Perception.hp_band(_agent.hp, _agent.max_hp, _agent.downed):
+		"healthy":
+			return 3
+		"hurt":
+			return 2
+		"critical":
+			return 1
+	return 0
+
+## Pips show ONLY while the agent fights (combat mode) and stands — a corpse needs no bar, and
+## a calm street never leaks health bars.
+func pips_visible_now() -> bool:
+	return _agent != null and _agent.in_combat and not _agent.downed
+
+## Mount the live-only pip widget (called from _ready when a real display exists).
+func _mount_pips() -> void:
+	if has_node(PIPS_NODE_NAME):
+		return
+	var pips := HpPips.new()
+	pips.name = PIPS_NODE_NAME
+	pips.owner_body = self
+	pips.position = Vector2(0, -28)
+	pips.z_index = 10
+	add_child(pips)
+
+## The segmented pip bar: three coarse slots above the body, filled per combat_pips(), tinted by
+## band (3 = bone-green, 2 = amber, 1 = red). Redraws only when the band steps.
+class HpPips:
+	extends Node2D
+	var owner_body: Node = null
+	var _last: int = -1
+
+	func _process(_delta: float) -> void:
+		if owner_body == null:
+			return
+		visible = bool(owner_body.call("pips_visible_now"))
+		if not visible:
+			return
+		var n: int = int(owner_body.call("combat_pips"))
+		if n != _last:
+			_last = n
+			queue_redraw()
+
+	func _draw() -> void:
+		var n := maxi(0, _last)
+		var w := 9.0
+		var h := 3.5
+		var gap := 2.0
+		var total := w * 3.0 + gap * 2.0
+		var x0 := -total / 2.0
+		var filled := Color(0.62, 0.85, 0.44)
+		if n == 2:
+			filled = Color(0.95, 0.75, 0.30)
+		elif n <= 1:
+			filled = Color(0.95, 0.30, 0.25)
+		draw_rect(Rect2(x0 - 1.5, -h / 2.0 - 1.5, total + 3.0, h + 3.0), Color(0.05, 0.05, 0.06, 0.6))
+		for i in 3:
+			var r := Rect2(x0 + float(i) * (w + gap), -h / 2.0, w, h)
+			draw_rect(r, filled if i < n else Color(0.22, 0.20, 0.18, 0.85))
+
+## ---- P4 staged opener: the spoken-line BARK bubble --------------------------------------------
+## A one-line speech bubble above this body — how a spoken NPC line (e.g. the constable's door-knock
+## tip) is SEEN in the world, not just read off the top bar. The bark TEXT is state (headless-
+## observable via bark_text()); the bubble NODE is live-only (never mounted under --headless), the
+## exact HpPips pattern — deterministic harnesses never see a cosmetic node. Content comes from the
+## caller (scenario/dialogue data); nothing here names an NPC.
+const BARK_NODE_NAME: String = "Bark"
+const BARK_SECONDS: float = 7.0
+var _bark_text: String = ""
+var _bark_node: Control = null
+
+func bark_text() -> String:
+	return _bark_text
+
+func show_bark(text: String, duration: float = BARK_SECONDS) -> void:
+	if text == "":
+		return
+	_bark_text = text
+	if DisplayServer.get_name() == "headless":
+		return   # live-only visual; the state above is the headless-observable fact
+	if _bark_node != null and is_instance_valid(_bark_node):
+		_bark_node.queue_free()
+	var lbl := Label.new()
+	lbl.name = BARK_NODE_NAME
+	lbl.text = text
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.custom_minimum_size = Vector2(200, 0)
+	lbl.size = Vector2(200, 0)
+	lbl.position = Vector2(-100, -104)
+	lbl.z_index = 20
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", Color(0.93, 0.90, 0.82))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.07, 0.09, 0.92)
+	sb.border_color = Color(0.56, 0.50, 0.38, 0.9)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 8.0
+	sb.content_margin_right = 8.0
+	sb.content_margin_top = 5.0
+	sb.content_margin_bottom = 5.0
+	lbl.add_theme_stylebox_override("normal", sb)
+	add_child(lbl)
+	_bark_node = lbl
+	# Real-time expiry (immune to pause / the combat hit-stop time_scale dip).
+	get_tree().create_timer(maxf(1.0, duration), true, false, true).timeout.connect(_clear_bark)
+
+func _clear_bark() -> void:
+	_bark_text = ""
+	if _bark_node != null and is_instance_valid(_bark_node):
+		_bark_node.queue_free()
+	_bark_node = null
 
 ## True when this node is the rendered body of a live registry Agent.
 func is_bound() -> bool:

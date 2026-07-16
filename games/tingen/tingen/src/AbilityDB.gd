@@ -171,8 +171,20 @@ func is_monster_form(form: String) -> bool:
 func is_hidden_beyonder_form(form: String) -> bool:
 	return bool((_forms.get(form, {}) as Dictionary).get("hidden_beyonder", false))
 
+## N6 (B2) — a combat_form's DIEGETIC name (`display_name` in combat_forms.json), "" when the
+## row authors none. The generic names table for ANONYMOUS runtime spawns (meter threats, the
+## crypt roster): a spawner with no npcs.json def to draw a name from asks the FORM instead —
+## "a Nighthawk pursuer", never "nighthawk_pursuer__1". Pure read, engine-neutral (data only).
+func form_display_name(form: String) -> String:
+	return String((_forms.get(form, {}) as Dictionary).get("display_name", ""))
+
 func all_ability_ids() -> Array:
 	return _abilities.keys()
+
+## M_cast — every loaded combat_form id (the Cast dossier's pure builder walks form families from
+## this + form_def; the reserved `_player_base_kits` table is already excluded at load). Read-only.
+func all_form_ids() -> Array:
+	return _forms.keys()
 
 ## Cross-reference check, pure so the suite can probe it with doctored data: every kit entry and
 ## reflex `do.cast` must name a known ability; every `transform` effect must name a known form;

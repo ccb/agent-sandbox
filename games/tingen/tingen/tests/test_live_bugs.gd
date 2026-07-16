@@ -26,8 +26,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	await _b1_city_scene_has_no_summoning_node_and_keeps_pacing()
 	_b1_summoning_climax_noops_without_ritual_night()
@@ -57,13 +58,15 @@ func _b1_city_scene_has_no_summoning_node_and_keeps_pacing() -> void:
 	var RM: Object = root.get_node("/root/RunManager")
 	var AG: Object = root.get_node("/root/Agents")
 	var CL: Object = root.get_node("/root/Clock")
-	# Snapshot the pacing so a (RED) bootstrap override is detectable, and restore it after.
-	var mpb_before: int = CL.minutes_per_beat
-	var rspm_before: float = CL.real_seconds_per_game_minute
-	var speed_before: float = AG.fallback_speed
 
 	RM.start_run()
 	_ok(RM.run_active(), "the run is active after start_run")
+	# Snapshot the pacing AFTER start_run — P1: run start now explicitly applies the run pace
+	# (RunManager.RUN_SECONDS_PER_GAME_MINUTE), so the RUN values are the baseline the city scene
+	# must not touch. The pin is unchanged: entering the city never overrides the live pacing.
+	var mpb_before: int = CL.minutes_per_beat
+	var rspm_before: float = CL.real_seconds_per_game_minute
+	var speed_before: float = AG.fallback_speed
 
 	var scene: Node = (load("res://scenes/City.tscn") as PackedScene).instantiate()
 	root.add_child(scene)

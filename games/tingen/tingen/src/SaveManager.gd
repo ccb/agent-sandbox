@@ -16,6 +16,14 @@ signal loaded(path: String)
 const SAVE_PATH: String = "user://save.json"
 const SAVE_VERSION: int = 1
 
+## N1 (sprint safety): the ACTIVE save slot — REDIRECTABLE so test harnesses never overwrite the
+## real player's user://save.json (the nightly-checkpoint disk save used to stomp it on every
+## harness run). Live play never touches this default; every harness redirects it into
+## user://test_sandbox/<run>/ via src/TestSandbox.gd `activate()`, whose write guard also REFUSES
+## any out-of-sandbox write while a harness is running.
+var save_path: String = SAVE_PATH
+const _TSandbox := preload("res://src/TestSandbox.gd")
+
 ## THE single source of truth for which run-scoped subsystems get persisted, and in what RESTORE
 ## order (each entry: [json_key, autoload_name]). BOTH the disk save (save_game/load_game) AND the
 ## in-memory checkpoint (RunManager._snapshot/_restore) build their subsystem payload from THIS list,
@@ -42,10 +50,36 @@ const SUBSYSTEMS: Array = [
 	["progression", "Progression"],
 	["leads", "LeadSystem"],
 	["shop", "Shop"],
+	# N3 (B-F2): the RUN SESSION block — day / live flag / ritual latch / checkpoint day / run
+	# knowledge ledger (RunManager.to_dict, deliberately WITHOUT the checkpoint payload: the disk
+	# save IS the nightly checkpoint mirror, so RunManager.resume_from_save rebuilds the in-memory
+	# checkpoint from this whole payload instead of nesting snapshots inside snapshots). LAST so
+	# its from_dict can lean on the already-restored Clock.
+	["run_manager", "RunManager"],
 ]
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(save_path)
+
+## N3 (B-F5): a run that ENDED (win / lose / final death) must not leave a resumable ghost —
+## RunManager's full-run-end finalizer deletes the save slot so the title's Continue greys out.
+## Routed through the sandbox write guard like every persistent mutation; idempotent (a missing
+## file is already invalid).
+func invalidate_save(path: String = "") -> void:
+	if path.is_empty():
+		path = save_path
+	if not _TSandbox.guard_write(path):
+		return
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+## N3 — the payload of the most recent successful load_game() (a deep copy). The seam
+## RunManager.resume_from_save() reads to rebuild the in-memory nightly checkpoint after a
+## cross-session Continue (the disk save IS the checkpoint mirror). {} until a load succeeds.
+var _last_loaded: Dictionary = {}
+
+func last_loaded_payload() -> Dictionary:
+	return _last_loaded.duplicate(true)
 
 ## Build {json_key: subsystem.to_dict()} for every present subsystem in the manifest. The ONE seam
 ## the disk save and the in-memory checkpoint share, so their key sets are identical by construction.
@@ -65,7 +99,12 @@ func apply_subsystem_dump(data: Dictionary) -> void:
 		if node != null and node.has_method("from_dict"):
 			node.from_dict(data.get(String(entry[0]), {}))
 
-func save_game(path: String = SAVE_PATH) -> bool:
+func save_game(path: String = "") -> bool:
+	if path.is_empty():
+		path = save_path
+	# N1: under an active test sandbox, a save targeted outside user://test_sandbox/ is refused.
+	if not _TSandbox.guard_write(path):
+		return false
 	var gc := _game_controller()
 	var data: Dictionary = subsystem_dump()
 	data["version"] = SAVE_VERSION
@@ -80,7 +119,9 @@ func save_game(path: String = SAVE_PATH) -> bool:
 	saved.emit(path)
 	return true
 
-func load_game(path: String = SAVE_PATH) -> bool:
+func load_game(path: String = "") -> bool:
+	if path.is_empty():
+		path = save_path
 	if not FileAccess.file_exists(path):
 		push_warning("SaveManager: no save at %s" % path)
 		return false
@@ -89,6 +130,7 @@ func load_game(path: String = SAVE_PATH) -> bool:
 		push_error("SaveManager: %s is not a JSON object" % path)
 		return false
 	var data: Dictionary = parsed
+	_last_loaded = data.duplicate(true)
 
 	# Restore data-only subsystems first (manifest order); the scene swap below reads from them.
 	apply_subsystem_dump(data)

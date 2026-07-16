@@ -25,8 +25,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	_test_starts_hunter_seq9_and_resets_per_run()
 	_test_snapshot_restore_within_run()
@@ -354,6 +355,20 @@ func _test_hud_shows_sequence_rank() -> void:
 	P.advance()   # -> Seq 8, fires `advanced` which refreshes the line synchronously
 	_ok(seq_line != null and seq_line.text == "Hunter · Seq 8",
 		"the rank line follows an advance to 'Hunter · Seq 8' (got '%s')" % (seq_line.text if seq_line != null else "<null>"))
+	# REGRESSION (N5 probe shot 25 — the stale "Hunter · Seq 9" flash): a NON-default pathway picked
+	# at the New-Run picker must show its rank line THE MOMENT the run starts. Meters.reset() fires
+	# meter_changed MID-reset (BEFORE Progression.select_pathway applies the pick), so the label used
+	# to render the reset default and only corrected on the next meter tick — seconds into a live run.
+	# Unlock Hermit via the REAL win seam (mirrors test_hermit_live._unlock_hermit), start a Hermit
+	# run with the HUD mounted, and read the label with NO manual refresh() and NO awaited frame.
+	_RM().reset_meta()
+	_RM().start_run()
+	_RM().end_run("win", {"outcome": "descent_stopped"})
+	_RM().reload_meta()
+	_RM().start_run("hermit")
+	_ok(seq_line != null and seq_line.text == "Hermit · Seq 9",
+		"the rank line reads 'Hermit · Seq 9' immediately after start_run(\"hermit\") — no stale Hunter flash (got '%s')" % (seq_line.text if seq_line != null else "<null>"))
+	_RM().reset_meta()   # scrub the unlock/runs-played this block wrote into the sandboxed meta slot
 	hud.queue_free()
 	await process_frame
 	_RM().start_run()

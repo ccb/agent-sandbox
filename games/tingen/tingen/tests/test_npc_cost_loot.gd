@@ -20,6 +20,9 @@ var _passes: int = 0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	print("=== test_npc_cost_loot: NPC costs real + downed bodies lootable ===")
 	_scenario_fire_until_dry()
 	_scenario_no_weapon()

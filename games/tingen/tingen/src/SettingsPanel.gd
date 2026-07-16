@@ -27,8 +27,28 @@ func is_open() -> bool:
 func open() -> void:
 	if _open:
 		return
+	_fit_to_viewport()
 	_build()
 	_open = true
+
+## Pin this root overlay to the WHOLE viewport (the CastPanel fix). A runtime-built Control
+## mounted under a CanvasLayer — BOTH real callers: BootController's Title layer AND the PauseMenu
+## autoload — is NOT sized by anchors applied after add_child, so the card collapsed to content
+## size at top-left. Set the rect explicitly and track window resizes.
+func _fit_to_viewport() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if not is_inside_tree():
+		return
+	position = Vector2.ZERO
+	size = get_viewport_rect().size
+	var vp := get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_on_viewport_resized):
+		vp.size_changed.connect(_on_viewport_resized)
+
+func _on_viewport_resized() -> void:
+	if is_inside_tree():
+		position = Vector2.ZERO
+		size = get_viewport_rect().size
 
 func close() -> void:
 	if is_instance_valid(_card):
@@ -100,7 +120,9 @@ func _build() -> void:
 	sizes.add_item("Large (1.25x)")
 	sizes.add_item("Huge (1.5x)")
 	var scales := [0.85, 1.0, 1.25, 1.5]
-	var cur := s.get_number("text_scale") if s != null else 1.0
+	# Explicit float: `:=` cannot infer from the unsafe (Variant) get_number call — a parse error
+	# that left the whole panel unloadable (the title/pause Settings buttons silently dead).
+	var cur: float = s.get_number("text_scale") if s != null else 1.0
 	var sel := 1
 	for i in scales.size():
 		if abs(float(scales[i]) - cur) < 0.001:

@@ -20,8 +20,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	await _test_settings_persist_and_take_effect()
 	await _test_pause_menu_lifecycle()
@@ -114,7 +115,7 @@ func _test_settings_persist_and_take_effect() -> void:
 	S.set_value("colorblind", true)
 	S.set_value("text_scale", 1.25)
 	S.set_value("master_volume", 0.3)
-	var tmp := "user://test_settings.json"
+	var tmp: String = preload("res://src/TestSandbox.gd").path("test_settings.json")
 	_ok(S.save_to(tmp), "settings save writes a file")
 	# Corrupt the live values, then reload from disk.
 	S.reset_defaults()
@@ -145,6 +146,13 @@ func _test_pause_menu_lifecycle() -> void:
 		return
 
 	# Start a real run so quit-to-title has something to abandon.
+	# N1 repair (was the 53/3 flake): this harness pins the PAUSE lifecycle, not the New-Run flow —
+	# under a multi-pathway meta (a previous harness's win unlocked Hermit), start_new_run()
+	# legitimately opens the M30 G1 pathway PICKER instead of starting a run, so the old blind
+	# `run_active()` expectation flaked with whatever meta the shared user dir happened to hold.
+	# Pin a FRESH single-pathway profile (sandbox-scoped) so start_new_run() starts directly; the
+	# picker flow itself is pinned by tests/hermit_full_run.gd (folded into the suite).
+	RM.reset_meta()
 	boot.start_new_run()
 	await process_frame
 	_ok(RM.run_active(), "a run is active after start_new_run")

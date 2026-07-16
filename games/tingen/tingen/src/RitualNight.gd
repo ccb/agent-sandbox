@@ -38,6 +38,10 @@ const SCENARIO_PATH := "res://data/scenario.json"
 
 # --- authored config (scenario.json "ritual_night") -------------------------------------------
 var _site_room: String = "cathedral_crypt"
+## N2 (A4): the AUTHORED site room, remembered at config load — a tipped-relocation mutates
+## _site_room in place, so reset() must restore THIS (it used to leak the relocated crypt into
+## every later run: the site never came home).
+var _site_room_default: String = "cathedral_crypt"
 var _celebrant_tpl: String = "clerk_voss"
 var _fuse_beats_start: int = 12
 var _avatar_threshold: int = 3
@@ -45,6 +49,10 @@ var _door_defenders: Dictionary = {"front": 3, "side": 1}
 var _relocate_rooms: Array = []
 var _avatar_form: String = "descended_avatar"
 var _backlash_form: String = "cult_thrall"
+# N6 (B2+B3): the door defenders' human-phase form — DATA (scenario.json ritual_night.
+# defender_form); the fallback matches the shipped scenario row so a config-less test
+# still stages the diegetic roster.
+var _defender_form: String = "cult_guard"
 var _backlash_extra: int = 2
 # M22 B9: the backlash wave's own BACKSTOP countdown (beats). The main fuse FREEZES on interrupt
 # (an interrupted rite can never fire its climax), so before this a player who interrupts but cannot
@@ -112,6 +120,7 @@ func _load_config() -> void:
 	if rn.is_empty():
 		return
 	_site_room = String(rn.get("site_room", _site_room))
+	_site_room_default = _site_room   # N2 (A4): the authored home reset() restores
 	_celebrant_tpl = String(rn.get("celebrant", _celebrant_tpl))
 	_fuse_beats_start = int(rn.get("fuse_beats", _fuse_beats_start))
 	_avatar_threshold = int(rn.get("avatar_threshold", _avatar_threshold))
@@ -121,6 +130,7 @@ func _load_config() -> void:
 	_relocate_rooms = (rn.get("relocate_rooms", []) as Array).duplicate()
 	_avatar_form = String(rn.get("avatar_form", _avatar_form))
 	_backlash_form = String(rn.get("backlash_form", _backlash_form))
+	_defender_form = String(rn.get("defender_form", _defender_form))
 	_backlash_extra = int(rn.get("backlash_extra", _backlash_extra))
 	_backlash_beats = int(rn.get("backlash_beats", _backlash_beats))   # M22 B9 backstop window
 
@@ -132,6 +142,9 @@ func reset() -> void:
 	_resolved = false
 	_tipped = false
 	_relocated = false
+	# N2 (A4): a tipped-relocation moved the site in place — bring it home to the AUTHORED room,
+	# else the relocated crypt leaks into every later run (reset cleared _relocated but not the room).
+	_site_room = _site_room_default
 	_door = "front"
 	_seed = 0
 	_fuse = 0
@@ -220,7 +233,7 @@ func _stage_encounter() -> void:
 	var n := int(_door_defenders.get(_door, 1))
 	_defender_ids = []
 	for i in range(n):
-		var d := _spawn_agent("ritual_defender_%d" % i, "butcher_human")
+		var d := _spawn_agent("ritual_defender_%d" % i, _defender_form)
 		d.room = _site_room
 		_defender_ids.append(d.id)
 
@@ -229,7 +242,11 @@ func _spawn_agent(id: String, form: String) -> Agent:
 	var a: Agent = reg.get_agent(id)
 	if a == null:
 		a = Agent.new(id)
-		a.display_name = id
+		# N6 (B2): a runtime spawn with no npcs.json name reads DIEGETIC off its form's
+		# data display_name ("Cult defender"), the raw id only as the last fallback.
+		var adb := _al("AbilityDB")
+		var dn: String = String(adb.form_display_name(form)) if adb != null else ""
+		a.display_name = dn if dn != "" else id
 		reg.register_agent(a)
 	a.combat_form = form
 	a.hp = a.max_hp

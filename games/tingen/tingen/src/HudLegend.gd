@@ -10,11 +10,13 @@ extends Control
 ## the live meters agree even under the colorblind-safe palette.
 
 var _open: bool = false
-var _panel: Panel = null
+var _panel: Control = null   # the full-rect align chain holding the LegendPanel card
 var _hint: Label = null
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# anchors AND offsets — anchors alone leave this root zero-sized, which is why the legend card
+	# and its corner hint were laid out against a 0x0 rect (off-screen) until P4 pixel-checked it.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_hint()
 	_open = false
@@ -27,14 +29,17 @@ func _on_settings_changed(_key: String) -> void:
 	if _open:
 		_rebuild_panel()
 
-## The corner hint that tells the player the legend exists ("[H] Legend").
+## The corner hint that tells the player the legend exists ("[H] Keys & legend"). P4: the raw
+## always-on hotkey line was removed from the HUD — this hint is now the ONE pointer to the keys.
 func _build_hint() -> void:
 	_hint = Label.new()
 	_hint.name = "LegendHint"
-	_hint.text = "[H] Legend"
+	_hint.text = "[H] Keys & legend"
 	_hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8, 0.7))
-	_hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_hint.position = Vector2(12, -28)
+	# P4 probe lesson: Control.position is PARENT-relative — the old preset+position pair parked
+	# this hint ABOVE the screen. The preset's own MINSIZE mode + margin pins it for real; bottom-
+	# RIGHT, because the combat readout owns the bottom-left corner.
+	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
 	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hint)
 
@@ -57,25 +62,48 @@ func _close() -> void:
 		_panel.queue_free()
 	_panel = null
 
+## P4 probe lesson: the old Panel used preset+position (PARENT-relative), which parked the card
+## off-screen top-left — the legend was never actually visible in live play. Rebuilt with real
+## container layout: a full-rect margin -> right-aligned HBox -> a PanelContainer that sizes to
+## its content and centers vertically. Pixel-verified by the probe's on-screen rect assert.
 func _rebuild_panel() -> void:
 	if is_instance_valid(_panel):
 		_panel.queue_free()
 		_panel = null
 	var s := get_node_or_null("/root/Settings")
 
-	var panel := Panel.new()
+	var outer := MarginContainer.new()
+	outer.name = "LegendAlign"
+	outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	outer.add_theme_constant_override("margin_left", 20)
+	outer.add_theme_constant_override("margin_right", 20)
+	outer.add_theme_constant_override("margin_top", 48)
+	outer.add_theme_constant_override("margin_bottom", 20)
+	outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var align_row := HBoxContainer.new()
+	align_row.alignment = BoxContainer.ALIGNMENT_END
+	align_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	outer.add_child(align_row)
+
+	var panel := PanelContainer.new()
 	panel.name = "LegendPanel"
-	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	panel.position = Vector2(-360, -220)
-	panel.custom_minimum_size = Vector2(340, 380)
+	panel.custom_minimum_size = Vector2(340, 0)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.085, 0.11, 0.94)
+	sb.border_color = Color(0.45, 0.42, 0.34, 0.9)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", sb)
+	align_row.add_child(panel)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)
 	margin.add_theme_constant_override("margin_right", 16)
 	margin.add_theme_constant_override("margin_top", 14)
 	margin.add_theme_constant_override("margin_bottom", 14)
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(margin)
 
 	var box := VBoxContainer.new()
@@ -118,8 +146,18 @@ func _rebuild_panel() -> void:
 		s.apply_text_scale(combat, 14)
 	box.add_child(combat)
 
-	add_child(panel)
-	_panel = panel
+	# P4: the panel keys live HERE now (the always-on HUD cheat-line was removed).
+	box.add_child(HSeparator.new())
+	var keys := Label.new()
+	keys.text = _keys_text()
+	keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	keys.custom_minimum_size = Vector2(300, 0)
+	if s != null:
+		s.apply_text_scale(keys, 14)
+	box.add_child(keys)
+
+	add_child(outer)
+	_panel = outer
 
 func _meter_rows() -> Array:
 	return [
@@ -135,10 +173,19 @@ func _combat_readout_text() -> String:
 		+ "• cooldown pips — dash / charm recharge (full = ready).\n"
 		+ "• telegraph line — an enemy is winding up a strike you can see; dodge or interrupt it.")
 
-## The full legend text (test seam: proves the panel explains the meters + readout).
+## P4: the panel/tool keys, folded in from the removed always-on HUD line.
+func _keys_text() -> String:
+	return ("KEYS\n"
+		+ "• Tab — investigation board   ·   M — city map\n"
+		+ "• I — inventory   ·   C — cult progress\n"
+		+ "• R — rituals   ·   P — prayer   ·   L — play log\n"
+		+ "• H — this panel   ·   ` — dev console")
+
+## The full legend text (test seam: proves the panel explains the meters + readout + keys).
 func legend_text() -> String:
 	var parts: Array = []
 	for row in _meter_rows():
 		parts.append(String(row[1]))
 	parts.append(_combat_readout_text())
+	parts.append(_keys_text())
 	return "\n".join(parts)

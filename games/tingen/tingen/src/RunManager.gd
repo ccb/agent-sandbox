@@ -30,6 +30,19 @@ signal checkpoint_saved(day: int)
 const TOTAL_DAYS: int = 7
 const RUN_START_MINUTE: int = 480   # 08:00 — Clock's canonical morning start.
 
+## P1 (experiential wave) — the RUN PACE, the ~60-minute budget (§13) made an EXPLICIT run constant.
+## Clock's own default (1.0 s/game-min = 24 real-min/day) was ~2.3x over budget, and the only thing
+## that ever set a faster pace (CitySummoning._bootstrap's demo override) has been DEAD/unmounted
+## since M20 — so every live run silently played at the slow default. The pace is now RunManager's
+## to own: applied at run start / wipe / checkpoint-restore / disk-load (never a scene side-effect).
+## The arithmetic (from MeterDrivers' passive Doom fill, the run's real pacer — pinned by
+## tests/test_run_pace.gd so a retune moves the pin too):
+##   passive fill/day = DOOM_PER_HOUR 0.3*24 + DOOM_PER_PHASE 1.7*6      = 17.4 Doom/day
+##   idle Doom-100    = 100 / 17.4 = ~5.75 days                          = ~8280 game-minutes
+##   at 0.42 s/game-min: 8280 * 0.42 = ~3478 s                           = ~58 real minutes  ✓
+##   (the full 7-day calendar ceiling: 10080 * 0.42 = ~71 real minutes)
+const RUN_SECONDS_PER_GAME_MINUTE: float = 0.42
+
 ## Where the player wakes: the LODGING (the existing IntroRoom scene, reused as Klein's bedroom).
 const LODGING_SCENE: String = "res://scenes/IntroRoom.tscn"
 
@@ -40,7 +53,10 @@ const META_VERSION: int = 1
 ## profile (tests share user:// with the live game; the suite used to reset_meta()/end_run straight
 ## into the real user://meta.json). Live play never touches this default; every test harness points
 ## it at a test-scoped file (user://meta_test.json) and reload_meta()s before driving any meta seam.
+## N1 (sprint safety): harnesses now redirect it via src/TestSandbox.gd `activate()` into
+## user://test_sandbox/<run>/, whose write guard also REFUSES out-of-sandbox meta writes.
 var meta_path: String = META_PATH
+const _TSandbox := preload("res://src/TestSandbox.gd")
 
 ## M27 (backlog "M21") — the meta PAYOFF constants (the roguelite's reason to replay). All three
 ## payoffs (codex / Fool unlock / differential currency) are DATA, not NPC/id branches (§8, engine
@@ -52,12 +68,14 @@ const SCENARIO_PATH: String = "res://data/scenario.json"
 ## unlocks Fool + pays currency; descent_complete is the LOSE.
 const WIN_OUTCOMES: Array = ["avatar_slain", "descent_stopped"]
 
-## The pathway the FIRST win unlocks. M28 (direction v2 §6) retargets this from the Fool STUB to the
-## HERMIT — now a REAL second build (a distinct star/ritual base kit, the old_neil prey, the Hermit
-## ladder + counter-rites), so a first win unlocks a genuinely playable second pathway. Writing it into
-## _meta.unlocked_pathways is the whole unlock; available_pathways()/select_pathway honor it next run.
-## Fool stays a FUTURE stub (no kit/prey/ladder yet) and is intentionally no longer the first-win grant.
-const FIRST_WIN_PATHWAY: String = "hermit"
+## M_death — the WIN-UNLOCK CHAIN (replaces the single FIRST_WIN_PATHWAY const): each WIN unlocks the
+## FIRST chain entry not yet owned (at most ONE per win — the roguelite drip). Win 1 -> hermit
+## (byte-identical to the pinned first-win behavior for a fresh profile); win 2 -> death (the third
+## playable build: censer/grave kit, the sister_auber/brother_cassian prey, the Death ladder). Writing
+## an entry into _meta.unlocked_pathways is the whole unlock; available_pathways()/select_pathway honor
+## it next run. Data-driven: a table walk, no pathway/id branch — a future 4th pathway is one more
+## entry. Losses grant nothing; a win past the chain end grants nothing (asserted in test_meta_payoff).
+const WIN_UNLOCK_CHAIN: Array = ["hermit", "death"]
 
 ## The win-grade DIFFERENTIAL payout (M27): the two wins pay UNEQUAL meta-currency — the push-your-
 ## luck harder win (avatar_slain) pays more than the safer win (descent_stopped); a LOSE pays nothing.
@@ -121,7 +139,20 @@ func _ready() -> void:
 	# parallel outcome tables. A future win added to one but not the other would unlock Fool yet pay 0
 	# currency silently. Fail loud at boot if they ever drift out of sync (see meta_reward_tables_ok()).
 	assert(meta_reward_tables_ok(), "M27: a WIN_OUTCOMES entry has no positive META_REWARD currency — the two meta tables drifted")
+	# P1: the Continue path (BootController -> SaveManager.load_game) never passes through start_run,
+	# and the pace is a run CONSTANT (not snapshot state — Clock.to_dict never carries it), so a loaded
+	# run must have the pace re-applied here. Idempotent connect across world swaps.
+	if not SaveManager.loaded.is_connected(_on_save_loaded):
+		SaveManager.loaded.connect(_on_save_loaded)
 	_load_meta()
+
+## P1 — apply the run's explicit pace to the Clock. The ONE pace writer (run start, day-1 wipe,
+## checkpoint restore, disk load all route here); scenes never set the pace as a side-effect.
+func _apply_run_pace() -> void:
+	Clock.real_seconds_per_game_minute = RUN_SECONDS_PER_GAME_MINUTE
+
+func _on_save_loaded(_path: String) -> void:
+	_apply_run_pace()
 
 # --- Ritual Night (M4 hook; the climax SCREEN is M7) ------------------------------------------
 ## True once Doom has reached 100 this run — the descent's fuse is lit. The playable climax is M7;
@@ -169,6 +200,11 @@ func _on_clock_day_rolled(day: int) -> void:
 ## at most once per day and only from the safe house — a death out in the streets can't checkpoint.
 func _on_clock_phase_changed(phase: String, _day: int) -> void:
 	if not _run_active:
+		return
+	# P1: the rest-until-morning fast-forward crosses nightfall on its way to 08:00 — the verb takes
+	# its OWN single checkpoint at the morning landing, so the nightly auto-snapshot must stand down
+	# for the duration (else one rest would checkpoint twice: nightfall + morning).
+	if _resting:
 		return
 	if phase != "night":
 		return
@@ -236,14 +272,17 @@ func _restart_fresh(pathway_id: String = "") -> void:
 	_run_knowledge = {}
 	# B3: a stale prior-run payoff must never render on a NEW run's ending screen.
 	_last_payoff = {}
+	# N3: re-arm the payoff latch — the NEW run's eventual end pays exactly once.
+	_payoff_flushed = false
 	_run_active = true
 
 ## Reset every run-scoped singleton to its run-start values. Reuses each subsystem's OWN reset
 ## (never reaches into internals) so this list is the complete "what makes a run" manifest. This is
 ## the single seam the leak test pins: after this, a fresh run == the very first run.
 func _reset_run_world(pathway_id: String = "") -> void:
-	# Time: back to day 1, 08:00 morning.
+	# Time: back to day 1, 08:00 morning, at the run's explicit pace (P1 — the ~60-min budget).
 	Clock.set_time(1, RUN_START_MINUTE)
+	_apply_run_pace()
 	# World pressures + lead.
 	WorldState.reset()
 	# The four meters (Doom/Madness/Notice/Heat) — re-derived from the freshly-reset pressures +
@@ -377,6 +416,17 @@ func _stock_supply_cache() -> void:
 ## Snapshot the run at a safe-house night. In-memory (fast, and the authoritative restore target);
 ## also mirrored to the SaveManager slot on disk so a real night is a persisted safe point.
 func checkpoint_night() -> void:
+	# N2 (A4): once the Ritual Night fuse is lit there is NO safe night. A checkpoint taken during
+	# the live climax would freeze Doom at 100 with Meters' ritual_night_fired latch already spent —
+	# restoring it could never relight the fuse (RitualNight is reset by _restore, but the Doom-100
+	# edge never re-fires), a softlocked descent. Refuse, exactly like rest_until_morning refuses:
+	# the descent won't wait, and the LAST pre-climax checkpoint stays the honest restore target.
+	# (The rest verb's own refusal covers the pre-sleep case; this single seam also covers Doom
+	# topping out DURING the rest fast-forward and a nightfall crossed inside the live climax.)
+	var rn_cp := get_node_or_null("/root/RitualNight")
+	var climax_live: bool = rn_cp != null and rn_cp.has_method("active") and bool(rn_cp.active())
+	if _ritual_night or climax_live:
+		return
 	# B2 (M20): a night's Cogitation at the safe house is the live Madness REST sink (-10, §4) — the
 	# nightly half of the Madness cycle that had no caller (only tests reached relieve_madness_rest).
 	# Applied BEFORE the snapshot so the checkpoint captures the post-rest Madness. Guarded on
@@ -390,6 +440,50 @@ func checkpoint_night() -> void:
 	if SaveManager.has_method("save_game"):
 		SaveManager.save_game()
 	checkpoint_saved.emit(_checkpoint_day)
+
+## P1 (experiential wave) — REST UNTIL MORNING: the lodging bed's dead-time skip (the run finally
+## has a way to spend the boring hours). Fast-forwards the Clock to the NEXT morning phase (08:00,
+## the run's canonical day start) through the normal minute pipeline — so NPC schedules, meter
+## drivers, and the day roll all tick exactly as if the time had passed; sleeping is push-your-luck,
+## not free (Doom keeps creeping while you lie still). Then takes the ONE nightly safe-house
+## checkpoint at the morning landing (checkpoint_night — which also applies the existing rest
+## Madness relief, the B2 Cogitation). Refuses cleanly (typed reason, no clock movement, no
+## checkpoint) during Ritual Night or while the player is in combat.
+## Returns {ok, day, minutes} on success; {ok:false, reason} on refusal.
+var _resting: bool = false
+
+func rest_until_morning() -> Dictionary:
+	if not _run_active:
+		return {"ok": false, "reason": "no_run"}
+	# Ritual Night: once the fuse is lit (Doom 100 latch) or the climax is live, there is no morning
+	# to sleep toward — the descent won't wait for the player to wake.
+	var rn := get_node_or_null("/root/RitualNight")
+	var climax_live: bool = rn != null and rn.has_method("active") and bool(rn.active())
+	if _ritual_night or climax_live:
+		return {"ok": false, "reason": "ritual_night"}
+	if _player_in_combat():
+		return {"ok": false, "reason": "in_combat"}
+	# Minutes to the NEXT 08:00: later today when we're before it (post-midnight late-night),
+	# else across the midnight roll. Resting AT 08:00 sleeps a full day (never a no-op).
+	var mins: int = RUN_START_MINUTE - Clock.minute_of_day
+	if mins <= 0:
+		mins += Clock.DAY_MINUTES
+	_resting = true
+	Clock.advance_minutes(mins)
+	_resting = false
+	# The verb's single checkpoint, taken at the morning landing (so a later death restores to the
+	# rested morning, not the pre-sleep evening). checkpoint_night applies the rest Madness relief.
+	checkpoint_night()
+	return {"ok": true, "day": current_day(), "minutes": mins}
+
+## True while the player's combat proxy is engaged (the CombatMode in_combat mask on the neutral
+## "player" proxy id — the same neutral fact the meta writer reads; no NPC-identity branch).
+func _player_in_combat() -> bool:
+	var reg := get_node_or_null("/root/Agents")
+	if reg == null:
+		return false
+	var a: Object = reg.get_agent("player")
+	return a != null and bool(a.in_combat)
 
 func has_checkpoint() -> bool:
 	return not _checkpoint.is_empty()
@@ -410,7 +504,8 @@ func checkpoint_player_pos() -> Vector2:
 
 ## End the current run. reason ∈ { "death", "lost_control", "win", "lose" }.
 ##   death / lost_control -> restore to the LAST NIGHTLY CHECKPOINT (costs the current day). With no
-##       checkpoint yet (day-1 pre-checkpoint), restart the run fresh.
+##       checkpoint yet (day-1 pre-checkpoint): a DEATH is a normal run LOSS (meta flushed, emitted
+##       as "lose" -> title, N2 A1); a lost_control restarts the same run fresh.
 ##   win / lose (Ritual Night; comes later) -> full run-end. Meta already persisted; the boot
 ##       controller returns to the title. State is left for the caller to start_run() again.
 ## `context` (M27): optional run-end payload — the RitualNight resolver passes {"outcome": <climax
@@ -432,9 +527,19 @@ func end_run(reason: String, context: Dictionary = {}) -> void:
 				# (_restart_fresh does this via _reset_run_world; the restore branch must too).
 				if EndGame.has_method("rearm"):
 					EndGame.rearm()
+			elif reason == "death":
+				# N2 (A1): a combat death BEFORE the first nightly checkpoint has no safe point to
+				# wake back to — it is a normal RUN LOSS, not a silent same-run wipe. Flush the meta
+				# payoff exactly like a climax lose (the codex keeps what this run learned; a
+				# "player_downed" outcome unlocks nothing and pays nothing), then hand every listener
+				# the loss: the boot controller returns to the title and the ending screen's payoff
+				# section renders through the ONE run-end seam. The next run starts only via New Run.
+				_finalize_run_end(_end_outcome(context))
+				reason = "lose"
 			else:
-				# day-1 pre-checkpoint: no safe point yet -> the SAME run continues, fresh. PRESERVE the
-				# run's chosen pathway (M30 G1) so a Hermit run that dies on day 1 doesn't silently
+				# lost_control day-1 pre-checkpoint: no safe point yet -> the SAME run continues,
+				# fresh (the Madness rampage burns the day, never the whole run). PRESERVE the run's
+				# chosen pathway (M30 G1) so a Hermit run that rampages on day 1 doesn't silently
 				# restart as Hunter (read it BEFORE _restart_fresh scrubs Progression).
 				_restart_fresh(Progression.pathway())
 		"win", "lose":
@@ -442,8 +547,8 @@ func end_run(reason: String, context: Dictionary = {}) -> void:
 			# grows with what this run learned, the FIRST win unlocks the Fool pathway, and the win-grade
 			# differential currency pays out. All three key off the climax OUTCOME (avatar_slain /
 			# descent_stopped / descent_complete), which arrives in `context` from the resolver. Title
-			# handoff stays the boot controller's job; this only touches the meta slot.
-			_flush_meta_on_run_end(_end_outcome(context))
+			# handoff stays the boot controller's job; this touches only the meta + save slots.
+			_finalize_run_end(_end_outcome(context))
 		_:
 			push_warning("RunManager.end_run: unknown reason '%s'" % reason)
 	run_ended.emit(reason)
@@ -467,6 +572,78 @@ func _on_summoning_climax(strength: float) -> void:
 	# The resolver's Gate 1: a strong descent unmade the city (lose); a stopped descent is a win.
 	var reason := "lose" if strength > EndGameResolver.STOP_THRESHOLD else "win"
 	end_run(reason)
+
+# --- N3: the run SESSION block (SaveManager SUBSYSTEMS entry) + the Continue resume seam -------
+## The persisted RUN SESSION (B-F2): the day, the live flag, the ritual latch, the checkpoint day,
+## and the run knowledge ledger. Deliberately WITHOUT the in-memory checkpoint payload — the disk
+## save IS the nightly checkpoint mirror, so resume_from_save() rebuilds the checkpoint from the
+## whole loaded payload instead of nesting snapshots inside snapshots (the block also rides along
+## inertly inside each nightly _snapshot(), which _restore() ignores — RunManager manages its own
+## fields explicitly around a within-run restore, exactly as before).
+func to_dict() -> Dictionary:
+	var ids: Array = _run_knowledge.keys()
+	ids.sort()   # deterministic payload (the ledger is a set)
+	return {
+		"day": current_day(),
+		"run_active": _run_active,
+		"ritual_night": _ritual_night,
+		"checkpoint_day": _checkpoint_day,
+		"knowledge": ids,
+	}
+
+## Restore the session DATA half (called by SaveManager.apply_subsystem_dump on every disk load,
+## AFTER the Clock so the day default can lean on it). The LIVE flag is deliberately NOT flipped
+## here — a bare load_game() (harness round-trips) stays side-effect-light; the player-facing
+## Continue goes through resume_from_save(), which re-arms the session. Knowledge MERGES (union)
+## so a load can only add facts, never erase what the live run has since learned.
+func from_dict(d: Dictionary) -> void:
+	_current_day = int(d.get("day", Clock.day))
+	_ritual_night = bool(d.get("ritual_night", _ritual_night))
+	_checkpoint_day = int(d.get("checkpoint_day", _checkpoint_day))
+	var kn: Variant = d.get("knowledge", [])
+	if kn is Array:
+		for fid in (kn as Array):
+			_note_knowledge(String(fid))
+
+## N3 (B-F1) — make a cross-session Continue a FIRST-CLASS RESUME. Called by the REAL
+## BootController.continue_run() after SaveManager.load_game() has hydrated every world subsystem
+## (including this manager's session block via from_dict). This re-arms everything a fresh boot
+## loses: the LIVE flag (nightly checkpoints, codex recording, Ritual Night arming, pause and the
+## endings all gate on it), the run pace, the payoff latch, and the in-memory checkpoint rebuilt
+## from the loaded payload — so a post-resume death restores to this resumed morning exactly like
+## a never-quit run. Returns false when there is no loaded payload to resume from.
+func resume_from_save() -> bool:
+	var data: Dictionary = SaveManager.last_loaded_payload()
+	if data.is_empty():
+		return false
+	_run_active = true
+	_current_day = Clock.day
+	_payoff_flushed = false   # the resumed run has not ended — its eventual end pays exactly once
+	_apply_run_pace()
+	# Rebuild the nightly checkpoint from the payload: the same shape _snapshot() builds (the
+	# manifest subsystem dump + the wake placement), so end_run("death") restores correctly.
+	var snap: Dictionary = {}
+	for entry in SaveManager.SUBSYSTEMS:
+		var key := String(entry[0])
+		if data.has(key):
+			snap[key] = data[key]
+	snap["day"] = _current_day
+	var scene := String(data.get("scene_path", ""))
+	snap["scene"] = scene if scene != "" else LODGING_SCENE
+	var pp: Variant = data.get("player_pos", [])
+	var has_pp: bool = pp is Array and (pp as Array).size() >= 2
+	snap["player_pos"] = {
+		"x": float((pp as Array)[0]) if has_pp else 0.0,
+		"y": float((pp as Array)[1]) if has_pp else 0.0,
+	}
+	_checkpoint = snap.duplicate(true)
+	if _checkpoint_day <= 0:
+		_checkpoint_day = _current_day   # legacy saves predate the session block
+	# Re-derive the ritual latch from the RESTORED Doom (single source of truth — the _restore
+	# lesson): a save can only exist pre-climax (checkpoint_night refuses once the fuse is lit),
+	# but a legacy/hand-edited payload must not resume with a stale latch either way.
+	_ritual_night = Meters.get_meter("doom") >= 100.0 if Meters != null else _ritual_night
+	return true
 
 # --- Snapshot / restore (same contract as SaveManager) ----------------------------------------
 ## Build an in-memory data snapshot of the run-scoped subsystems. Mirrors SaveManager's key set so
@@ -507,6 +684,9 @@ func _restore(snap: Dictionary) -> void:
 	WorldManager.from_dict(snap.get("world_manager", {}))
 	ClueDB.from_dict(snap.get("clues", {}))
 	Clock.from_dict(snap.get("clock", {}))
+	# P1: the pace is a run CONSTANT, never snapshot state — re-apply it so a stale snapshot (or
+	# anything that fiddled the Clock between checkpoint and restore) can't drag the run pace back.
+	_apply_run_pace()
 	WorldState.from_dict(snap.get("world_state", {}))
 	# Meters AFTER WorldState (it re-derives Doom/Notice from the just-restored pressures, then
 	# overlays the meter-only Madness/Heat/disclosure fields).
@@ -623,11 +803,31 @@ func _end_outcome(context: Dictionary) -> String:
 		return String(r.get("outcome", ""))
 	return ""
 
+## N3 — the ONE full-run-end finalizer (every path that truly ENDS a run lands here: climax win/
+## lose, the abandon-to-title lose, the pre-checkpoint final death). Two effects: the meta payoff
+## flush (latched — see _flush_meta_on_run_end) and the save-slot invalidation (B-F5: an ended run
+## must not leave a resumable ghost — the title's Continue greys out).
+func _finalize_run_end(outcome: String) -> void:
+	_flush_meta_on_run_end(outcome)
+	if SaveManager.has_method("invalidate_save"):
+		SaveManager.invalidate_save()
+
+## N3 — the payoff IDEMPOTENCE LATCH: end_run can be reached more than once for the SAME run (a
+## climax lose then a pause-menu abandon; a double player_downed edge) — the payoff must count
+## EXACTLY once per run. Re-armed by a genuinely new run (_restart_fresh) and by a Continue resume
+## (resume_from_save) — never by a within-run checkpoint restore (the run hasn't ended).
+var _payoff_flushed: bool = false
+
 ## The single meta-payoff seam, run on a win/lose end_run. Writes THREE persistent effects, all data-
 ## keyed off `outcome` (no NPC/id branch): (1) append this run's learned facts to _meta.codex, deduped;
-## (2) on a WIN, add the Fool pathway to _meta.unlocked_pathways (first win only — additive/deduped);
-## (3) pay the outcome's differential meta-currency. Persists to the meta slot. NO stat inheritance.
+## (2) on a WIN, walk WIN_UNLOCK_CHAIN and grant the first pathway not yet owned (ONE per win — the
+## roguelite drip; additive/deduped); (3) pay the outcome's differential meta-currency. Persists to
+## the meta slot. NO stat inheritance. LATCHED (N3): a second call for the same run is a no-op —
+## an unlatched double flush would double-pay currency AND walk the unlock chain twice per win.
 func _flush_meta_on_run_end(outcome: String) -> void:
+	if _payoff_flushed:
+		return
+	_payoff_flushed = true
 	_load_meta()
 	# (1) the always-learned facts of THIS run: the ending reached + the pathway the player walked.
 	if outcome != "":
@@ -653,13 +853,16 @@ func _flush_meta_on_run_end(outcome: String) -> void:
 		new_entries.append(entry.duplicate(true))
 		known[fid_s] = true
 	_meta["codex"] = codex
-	# (2) the FIRST WIN unlocks the Fool pathway (additive + deduped; a loss unlocks nothing).
+	# (2) M_death — a WIN walks the unlock chain: grant the FIRST entry not yet owned (at most ONE
+	# per win, the roguelite drip; a loss unlocks nothing; past the chain end nothing is granted).
 	var new_unlocks: Array = []   # B3: an unlock granted by THIS flush (not one already owned)
 	if _is_win_outcome(outcome):
 		var unlocks: Array = _meta.get("unlocked_pathways", []) as Array
-		if not unlocks.has(FIRST_WIN_PATHWAY):
-			unlocks.append(FIRST_WIN_PATHWAY)
-			new_unlocks.append(FIRST_WIN_PATHWAY)
+		for pw_id in WIN_UNLOCK_CHAIN:
+			if not unlocks.has(pw_id):
+				unlocks.append(pw_id)
+				new_unlocks.append(pw_id)
+				break   # ONE unlock per win — the drip
 		_meta["unlocked_pathways"] = unlocks
 	# (3) the win-grade DIFFERENTIAL currency payout (avatar_slain > descent_stopped; lose = 0).
 	var reward: Dictionary = META_REWARD.get(outcome, {}) if META_REWARD.get(outcome) is Dictionary else {}
@@ -746,6 +949,9 @@ func _load_meta() -> void:
 		_meta = _default_meta()
 
 func _save_meta() -> void:
+	# N1: under an active test sandbox, a meta write outside user://test_sandbox/ is refused.
+	if not _TSandbox.guard_write(meta_path):
+		return
 	var f := FileAccess.open(meta_path, FileAccess.WRITE)
 	if f == null:
 		push_warning("RunManager: cannot write meta to %s" % meta_path)

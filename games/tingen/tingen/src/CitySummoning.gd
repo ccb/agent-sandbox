@@ -85,10 +85,13 @@ func _bootstrap() -> void:
 		# that default on re-entry in case something narrowed it, so cult AND civilians stay rendered.
 		RoomView.set_tracked([])
 		return
-	# Watchable pacing: a deliberation beat every ~2.5s instead of every 15s, and longer strides so
-	# the cross-room journey finishes inside the doomsday countdown.
+	# Watchable DEMO pacing: a deliberation beat every ~2.5s instead of every 15s, and longer strides
+	# so the cross-room journey finishes inside the doomsday countdown. NOTE (P1): the run's Clock
+	# pace (real_seconds_per_game_minute) is RunManager-owned — RUN_SECONDS_PER_GAME_MINUTE, applied
+	# at run start — and must NEVER be set as a scene side-effect. This node's 0.5 override (dead/
+	# unmounted since M20) was the only faster-pace setter, masking that live runs played at the slow
+	# 1.0 default (~2.3x the ~60-min budget).
 	Clock.minutes_per_beat = 5
-	Clock.real_seconds_per_game_minute = 0.5
 	Agents.fallback_speed = DEMO_SPEED
 
 	# The rite needs the offerings laid at the altar before it can advance — start from a clean ledger.

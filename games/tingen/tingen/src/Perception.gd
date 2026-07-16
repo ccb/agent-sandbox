@@ -62,6 +62,10 @@ static func build_snapshot(agent: Agent, _player_center: Vector2) -> Dictionary:
 		"task": agent.task.duplicate(true),
 		"position": [agent.position.x, agent.position.y],
 		"room": agent.room,
+		# The current room's affordance TAGS (P2, data: city_layout.json room_affordances) — what
+		# the sidecar curates the verb MENU from. Curation shrinks phrasings only; the ActionCommit
+		# gates stay the sole authority over acts.
+		"room_affordances": CityLayout.room_affordances(agent.room),
 		# The agent's OWN health — exact, because your own body is the one thing you know exactly
 		# (combat plan §M1). Peers get a coarse hp_band in `nearby` instead, never these numbers.
 		"hp": agent.hp,
@@ -115,8 +119,13 @@ static func decide_request(snap: Dictionary, session_id: String) -> Dictionary:
 	var base_seq: int = mem_total - mem.size()   # absolute seq of mem[0]
 	var events: Array = []
 	for i in mem.size():
-		var text := String(mem[i])
-		events.append({"text": text, "importance": _event_importance(text), "seq": base_seq + i})
+		# A row scored AT WRITE TIME (Agent.remember_scored — the P1 importance ladder) forwards
+		# its stored value; unscored/legacy string rows fall back to the keyword scorer below.
+		var text := Agent.mem_text(mem[i])
+		var imp := Agent.mem_importance(mem[i])
+		if imp <= 0.0:
+			imp = _event_importance(text)
+		events.append({"text": text, "importance": imp, "seq": base_seq + i})
 	var posarr: Array = snap.get("position", [0.0, 0.0])
 	var pos := Vector2(float(posarr[0]), float(posarr[1])) if posarr.size() >= 2 else Vector2.ZERO
 	var room := String(snap.get("room", RoomGraph.DEFAULT_ROOM))
@@ -143,6 +152,9 @@ static func decide_request(snap: Dictionary, session_id: String) -> Dictionary:
 		"in_combat": bool(snap.get("in_combat", false)),
 		"locations": ActionCommit.location_names(),
 		"pressures": snap.get("pressures", {}),
+		# The room's affordance tags (P2) — the sidecar offers only universal verbs + verbs whose
+		# required_affordances these tags satisfy. Forwarded verbatim; the menu is built there.
+		"room_affordances": snap.get("room_affordances", []),
 		# What the agent is carrying + can still pick up, and what's lying within reach — this is what
 		# lets the brain choose gather_item with a real target and stop once its hands are full.
 		"inventory": snap.get("inventory", {}),
@@ -150,6 +162,12 @@ static func decide_request(snap: Dictionary, session_id: String) -> Dictionary:
 		"can_carry_more": snap.get("can_carry_more", true),
 		"ground_items": snap.get("ground_items", []),
 	}
+	# One-shot `just_*` transition markers (P1): the runtime consumed them off the agent into this
+	# snapshot exactly once; forward them as plain perception facts so the brain sees the flip
+	# ("you just entered combat") for this one beat.
+	var just: Array = snap.get("just_happened", []) if snap.get("just_happened") is Array else []
+	if not just.is_empty():
+		perception["just_happened"] = just.duplicate()
 	# Combat detail (combat plan §M4) rides only while in combat: the OWN standing intent (plus
 	# how many beats it has stood — the brain renders "set N beats ago" from it), who last struck
 	# this body (the executor ledger fact; the same event also reached short_memory as Stimulus
@@ -232,7 +250,9 @@ static func converse_request(snap: Dictionary, session_id: String, utterance: St
 	(rc["world_state"] as Dictionary)["player_triggered"] = true
 	return rc
 
-## Coarse importance for a freeform memory line: occult/rite-charged observations are worth recalling.
+## FALLBACK scorer only (P1 demotion): coarse keyword importance for UNSCORED/legacy string rows.
+## Rows written through Agent.remember_scored carry their author's ladder value (1.0 ambient /
+## 2.0 action-outcome / 8.0 pinned — Stimulus.IMP_*) and never reach this guess.
 static func _event_importance(text: String) -> float:
 	var t := text.to_lower()
 	for kw in ["rite", "summon", "cathedral", "crypt", "warehouse", "nighthawk", "god", "altar", "blood", "vessel", "ritual"]:

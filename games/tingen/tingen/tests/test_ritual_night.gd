@@ -14,8 +14,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	_test_trigger_doom_or_assault()
 	_test_early_assault_while_tipped_relocates_once()
@@ -102,6 +103,26 @@ func _test_two_door_defender_counts() -> void:
 	var side := int(rn.defender_count())
 	_ok(front > side, "the guarded front door fields more defenders than the quiet side (%d > %d)" % [front, side])
 	_ok(side >= 1, "the quiet side still has at least one defender")
+	# N6 (B2+B3): the crypt's defenders are CULTISTS the player can SEE and NAME — engine-neutral
+	# through data alone: scenario.json names their form (defender_form), the form's
+	# combat_forms.json row aliases a real shipped painting (`sprite` -> cult_thrall.png, the
+	# thrall they shed into at backlash) and carries a diegetic display_name. No raw ids, no
+	# placeholder icons in the crypt.
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenario.json"))
+	var rn_cfg: Dictionary = (parsed as Dictionary).get("ritual_night", {}) \
+		if parsed is Dictionary and (parsed as Dictionary).get("ritual_night") is Dictionary else {}
+	var want_form := String(rn_cfg.get("defender_form", ""))
+	_ok(want_form != "" and want_form != "butcher_human",
+		"scenario.json names a DEDICATED defender_form (got '%s')" % want_form)
+	var AGX: Object = root.get_node("/root/Agents")
+	var d0: Agent = AGX.get_agent("ritual_defender_0")
+	_ok(d0 != null and String(d0.combat_form) == want_form,
+		"a staged defender wears the scenario's defender_form (got '%s')" % (String(d0.combat_form) if d0 != null else ""))
+	var art := CombatExecutor.resolve_form_sprite_path(want_form)
+	_ok(art == "res://assets/enemies/cult_thrall.png",
+		"the defender form ALIASES the shipped cult_thrall painting (N4 sprite rung; got '%s')" % art)
+	_ok(d0 != null and String(d0.display_name) != "" and String(d0.display_name) != d0.id,
+		"a defender is NAMED diegetically, never its raw id (got '%s')" % (String(d0.display_name) if d0 != null else ""))
 
 # (b-fuse) the fuse counts down; reaching 0 un-interrupted -> end_run('lose') + a lose result.
 func _test_fuse_runs_out_loses() -> void:

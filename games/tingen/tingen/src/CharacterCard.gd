@@ -10,11 +10,26 @@ extends Panel
 @onready var _actions: VBoxContainer = $Margin/Body/Actions
 
 var _agent_id: String = ""
+## Agents whose /decide is currently in flight (P3): tracked off the typed `deciding` lifecycle
+## fact, so the card can show a live THINKING tell instead of a stale thought while the LLM call
+## runs, and restore the real thought the moment the decide lands.
+var _thinking: Dictionary = {}
 
 func _ready() -> void:
 	visible = false
 	WorldState.inspect_requested.connect(_open)
-	EventBus.event_logged.connect(func(_e): if visible: _refresh())
+	EventBus.event_logged.connect(_on_event_logged)
+
+func _on_event_logged(e: Dictionary) -> void:
+	if String(e.get("type", "")) == "deciding":
+		var d: Dictionary = e.get("data", {})
+		var aid := String(d.get("agent", ""))
+		if String(d.get("phase", "")) == "begin":
+			_thinking[aid] = true
+		else:
+			_thinking.erase(aid)
+	if visible:
+		_refresh()
 
 func shows_agent(id: String) -> bool:
 	return visible and _agent_id == id
@@ -34,7 +49,9 @@ func _refresh() -> void:
 		return
 	_name.text = a.display_name
 	_sub.text = String(a.role).capitalize()
-	_thought.text = "\"%s\"" % a.describe_thought()
+	# P3 thinking tell: an in-flight decide (the `deciding begin` fact) shows as visible
+	# deliberation; the end fact restores the live thought.
+	_thought.text = "( thinking… )" if _thinking.has(_agent_id) else "\"%s\"" % a.describe_thought()
 	_goal.text = a.intent
 	# Free synchronously, not queue_free: several agents can act on one beat, so
 	# event_logged may fire _refresh() twice in a single frame. queue_free defers
@@ -47,7 +64,7 @@ func _refresh() -> void:
 		_add_action("(nothing yet)")
 	else:
 		for entry in recent:
-			_add_action("• " + String(entry))
+			_add_action("• " + Agent.mem_text(entry))   # scored dict rows (P1) render their text
 
 func _add_action(text: String) -> void:
 	var l := Label.new()

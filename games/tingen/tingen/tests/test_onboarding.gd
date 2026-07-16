@@ -28,8 +28,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var r: Dictionary = await run_all()
 	print("\n=== test_onboarding: %d passed, %d failed ===" % [int(r["passed"]), int(r["failed"])])
 	quit(1 if int(r["failed"]) > 0 else 0)
@@ -178,6 +179,9 @@ static func _2b_hint_persists_once_ever(c: Dictionary, root: Node) -> void:
 	_check(c, HDScript != null, "the HintDirector script loads")
 	if HDScript != null:
 		var fresh: Object = HDScript.new()
+		# N1 (sprint safety): a fresh boot reads the SAME persist slot the previous session wrote —
+		# under the harness sandbox that slot is the redirected one, so mirror it before reload().
+		fresh.set("persist_path", HD.get("persist_path"))
 		if fresh.has_method("reload"):
 			fresh.reload()
 		_check(c, bool(fresh.has_fired("m35_persist_key")),

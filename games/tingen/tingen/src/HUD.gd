@@ -18,11 +18,20 @@ extends Control
 
 ## The combat/meter legend (M10) — code-authored so the persistent HUD scene stays a single writer.
 var _legend: Control = null
+## P4: the harvest-fork 3-choice panel (digest / sell / keep) — code-authored, same pattern. It
+## self-wires to GMOpening.harvest_fork_ui_requested and presents ONCE per run at the first
+## Characteristic pickup.
+var _fork: Control = null
 
 func _ready() -> void:
 	WorldState.thought_requested.connect(_on_thought)
 	WorldState.state_changed.connect(_refresh)
 	WorldState.lead_changed.connect(_on_lead_changed)
+	# P5: the top-bar clock FOLLOWS the live Clock. It used to refresh only on world
+	# state_changed, so it froze at the boot string ("Morning - 08:00") for the whole run —
+	# the day/night pass is unreadable without a moving clock. Presentation only.
+	Clock.minute_ticked.connect(_on_clock_minute)
+	Clock.phase_changed.connect(_on_clock_phase)
 	_thought_timer.timeout.connect(_thought_panel.hide)
 	_thought_panel.visible = false
 	_board.visible = false
@@ -30,6 +39,10 @@ func _ready() -> void:
 	_legend = (load("res://src/HudLegend.gd") as GDScript).new()
 	_legend.name = "HudLegend"
 	add_child(_legend)
+	# P4: the harvest-fork choice panel (presented once per run by GMOpening's pickup trigger).
+	_fork = (load("res://src/HarvestForkPanel.gd") as GDScript).new()
+	_fork.name = "HarvestForkPanel"
+	add_child(_fork)
 	_on_lead_changed(WorldState.current_lead)
 	_refresh()
 
@@ -37,7 +50,15 @@ func _refresh() -> void:
 	# B10 (M23): the legacy Stability/Corruption/Panic panel was removed — it mirrored the M4 MeterHUD
 	# (Corruption aliases Doom), stacking a second, redundant meter panel on the right. MeterHUD is now
 	# the sole meter readout (it drives itself off Meters.meter_changed); the HUD only refreshes the top bar.
-	_time.text = WorldState.time_phase
+	# P5: read the LIVE Clock, not WorldState.time_phase — that string only re-renders per phase
+	# change, so the label used to show the phase's START minute for hours of play.
+	_time.text = "%s - %s" % [String(Clock.phase).capitalize(), Clock.hhmm()]
+
+func _on_clock_minute(_minute: int, _day: int) -> void:
+	_refresh()
+
+func _on_clock_phase(_phase: String, _day: int) -> void:
+	_refresh()
 
 func _on_lead_changed(text: String) -> void:
 	_lead.text = "Lead: " + text

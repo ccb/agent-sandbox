@@ -22,6 +22,9 @@ var _failed: int = 0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	_test_c_helper_resolves_with_fallback()
 	await _test_a_dialogue_with_art_shows_portrait()
 	await _test_b_artless_npc_falls_back()

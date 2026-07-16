@@ -10,6 +10,9 @@ var _failed := 0
 
 func _init() -> void:
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var packed: PackedScene = load("res://scenes/NeilHome.tscn")
 	if packed == null:
 		_ok(false, "NeilHome.tscn loads")
@@ -44,6 +47,11 @@ func _init() -> void:
 	var neil: Node = room.get_node_or_null("OldNeil")
 	_ok(neil != null and neil.get("dialogue_id") == "old_neil",
 		"OldNeil.dialogue_id == old_neil")
+	# N6 (audit): Old Neil wears HIS OWN painting (old_neil.png) — the scene shipped pointing
+	# at the archive clerk's art (a copy-paste ref; the wrong man at the piano).
+	var neil_icon: Texture2D = neil.get("icon") if neil != null else null
+	_ok(neil_icon != null and neil_icon.resource_path.ends_with("old_neil.png"),
+		"OldNeil icon -> old_neil.png (his own portrait)")
 
 	_check_hotspot(room, "PianoPortrait", "celeste_grief")
 	_check_hotspot(room, "VialCabinet", "stored_blood")

@@ -57,6 +57,30 @@ func note_llm_spend(cost: float) -> void:
 			eb.emit_event("llm_budget_exceeded", {"cost": _spend_cost, "calls": _spend_calls})
 		print("[sidecar] LLM budget reached ($%.4f over %d calls) — degrading to the ambient brain" % [_spend_cost, _spend_calls])
 
+## --- P3 (lab pull-in): per-NPC LLM cost attribution -------------------------------------------
+## Every /decide launched for an agent lands HERE when its reply (or its timeout) comes back, so
+## LLM spend is attributable to the CAUSING NPC — including calls that timed out (the money was
+## spent whether or not the decision arrived in time). Fed by HttpSidecar.apply_reply; read by
+## tooling/tests. Complements (never replaces) the session-total note_llm_spend guard above.
+var _agent_llm: Dictionary = {}   # agent_id -> {"cost": float, "calls": int, "timeouts": int}
+
+func note_agent_llm(agent_id: String, cost: float, timed_out: bool) -> void:
+	if agent_id == "":
+		return
+	var e: Dictionary = _agent_llm.get(agent_id, {"cost": 0.0, "calls": 0, "timeouts": 0})
+	e["cost"] = float(e["cost"]) + maxf(0.0, cost)
+	e["calls"] = int(e["calls"]) + 1
+	if timed_out:
+		e["timeouts"] = int(e["timeouts"]) + 1
+	_agent_llm[agent_id] = e
+
+## One agent's attributed ledger ({} when it never caused a call).
+func agent_llm(agent_id: String) -> Dictionary:
+	return (_agent_llm.get(agent_id, {}) as Dictionary).duplicate(true)
+
+func reset_agent_llm() -> void:
+	_agent_llm.clear()
+
 ## True once cumulative spend has passed either configured ceiling (a 0 ceiling disables that check).
 func budget_exceeded() -> bool:
 	if budget_cost_ceiling > 0.0 and _spend_cost >= budget_cost_ceiling:

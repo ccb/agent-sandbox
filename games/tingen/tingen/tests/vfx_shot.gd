@@ -26,6 +26,9 @@ const ORIGIN := Vector2(120, 210)
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	var AG: Object = root.get_node("/root/Agents")
 	var EB: Object = root.get_node("/root/EventBus")

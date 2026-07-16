@@ -1,0 +1,62 @@
+{
+	"version": 1,
+	"_note": "P2 experiential wave — event->sound routing as DATA (assets/audio/README.md is the provenance manifest). The AudioManager autoload reads this map live-only; headless it subscribes to nothing. Rules: 'event' is the EventBus type (or a cue name for non-EventBus presentation beats: room_changed / toast_shown / ui_click / madness_threshold / threat_threshold), 'when' exact-matches event data fields, 'min'/'max' band numeric fields (min inclusive, max exclusive), 'sounds' is a round-robin pool (N>1 alternates to avoid machine-gun repetition), 'then' plays a delayed follow-up (the door shuts behind you), 'volume_db' trims that rule.",
+
+	"streams": {
+		"shot_revolver": "res://assets/audio/shot_revolver.wav",
+		"shot_dry": "res://assets/audio/shot_dry.wav",
+		"hit_flesh_1": "res://assets/audio/hit_flesh_1.wav",
+		"hit_flesh_2": "res://assets/audio/hit_flesh_2.wav",
+		"hit_hard": "res://assets/audio/hit_hard.wav",
+		"body_fall": "res://assets/audio/body_fall.wav",
+		"slam_mask_drop": "res://assets/audio/slam_mask_drop.wav",
+		"sting_mask_drop": "res://assets/audio/sting_mask_drop.wav",
+		"sting_threshold": "res://assets/audio/sting_threshold.wav",
+		"dash_whoosh": "res://assets/audio/dash_whoosh.wav",
+		"pickup_item": "res://assets/audio/pickup_item.wav",
+		"pickup_metal": "res://assets/audio/pickup_metal.wav",
+		"door_open": "res://assets/audio/door_open.wav",
+		"door_close": "res://assets/audio/door_close.wav",
+		"step_1": "res://assets/audio/step_1.wav",
+		"step_2": "res://assets/audio/step_2.wav",
+		"step_3": "res://assets/audio/step_3.wav",
+		"ui_click": "res://assets/audio/ui_click.wav",
+		"ui_toast": "res://assets/audio/ui_toast.wav",
+		"hint_chime": "res://assets/audio/hint_chime.wav",
+		"ui_error": "res://assets/audio/ui_error.wav",
+		"ambience_night": "res://assets/audio/ambience_night.wav"
+	},
+
+	"rules": [
+		{"event": "ability_cast_finished", "when": {"caster": "player", "ability": "revolver_shot"}, "sounds": ["shot_revolver"], "volume_db": -2.0},
+		{"event": "ability_cast_finished", "when": {"caster": "player", "ability": "incendiary_round"}, "sounds": ["shot_revolver"], "volume_db": 0.0},
+		{"event": "ability_cast_finished", "when": {"caster": "player", "ability": "dash"}, "sounds": ["dash_whoosh"], "volume_db": -6.0},
+		{"event": "weapon_empty", "when": {"caster": "player"}, "sounds": ["shot_dry"], "volume_db": -4.0},
+		{"event": "spirit_empty", "when": {"caster": "player"}, "sounds": ["ui_error"], "volume_db": -6.0},
+		{"event": "agent_attacked", "min": {"damage": 0.01}, "max": {"damage": 30.0}, "sounds": ["hit_flesh_1", "hit_flesh_2"], "volume_db": -5.0},
+		{"event": "agent_attacked", "min": {"damage": 30.0}, "sounds": ["hit_hard"], "volume_db": -3.0},
+		{"event": "agent_downed", "sounds": ["body_fall"], "volume_db": -3.0},
+		{"event": "transformed", "sounds": ["slam_mask_drop"], "volume_db": 0.0},
+		{"event": "transformed", "sounds": ["sting_mask_drop"], "volume_db": -4.0},
+		{"event": "item_picked_up", "sounds": ["pickup_item"], "volume_db": -6.0},
+		{"event": "item_gathered", "sounds": ["pickup_item"], "volume_db": -6.0},
+		{"event": "ingredient_picked_up", "sounds": ["pickup_item"], "volume_db": -6.0},
+		{"event": "body_looted", "sounds": ["pickup_item"], "volume_db": -6.0},
+		{"event": "ammo_picked_up", "sounds": ["pickup_metal"], "volume_db": -6.0},
+		{"event": "ammo_purchased", "sounds": ["pickup_metal"], "volume_db": -6.0},
+		{"event": "ingredient_purchased", "sounds": ["pickup_metal"], "volume_db": -6.0},
+		{"event": "hint_shown", "sounds": ["hint_chime"], "volume_db": -8.0},
+		{"event": "room_changed", "sounds": ["door_open"], "volume_db": -8.0, "then": {"sound": "door_close", "delay": 0.7, "volume_db": -12.0}},
+		{"event": "door_knock", "sounds": ["door_close"], "volume_db": -2.0, "then": {"sound": "door_close", "delay": 0.28, "volume_db": -3.0}},
+		{"event": "toast_shown", "sounds": ["ui_toast"], "volume_db": -12.0},
+		{"event": "ui_click", "sounds": ["ui_click"], "volume_db": -10.0},
+		{"event": "madness_threshold", "sounds": ["sting_threshold"], "volume_db": -6.0},
+		{"event": "threat_threshold", "sounds": ["sting_threshold"], "volume_db": -6.0},
+		{"event": "threat_dispatched", "sounds": ["sting_threshold"], "volume_db": -4.0},
+		{"event": "threat_resolved", "sounds": ["hint_chime"], "volume_db": -6.0}
+	],
+
+	"footsteps": {"sounds": ["step_1", "step_2", "step_3"], "stride_px": 44.0, "volume_db": -16.0},
+
+	"ambience": {"sound": "ambience_night", "volume_db": -18.0, "loop": true}
+}

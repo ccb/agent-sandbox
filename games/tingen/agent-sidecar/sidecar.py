@@ -63,6 +63,48 @@ def load_schema() -> dict:
         return json.load(f).get("verbs", {})
 
 
+def load_affordances() -> dict:
+    """The verb->required_affordances declarations (P2, ports agent-sandbox #446): a verb listed
+    here is OFFERED only where the room's tags satisfy every requirement; unlisted verbs are
+    universal. Menu data only — validation never reads this."""
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        return json.load(f).get("affordances", {})
+
+
+_AFFORDANCES_CACHE: dict | None = None
+
+
+def _affordances() -> dict:
+    """Lazy, cached load of the affordance declarations ({} on any failure — never curate blind)."""
+    global _AFFORDANCES_CACHE
+    if _AFFORDANCES_CACHE is None:
+        try:
+            _AFFORDANCES_CACHE = load_affordances()
+        except Exception:
+            _AFFORDANCES_CACHE = {}
+    return _AFFORDANCES_CACHE
+
+
+def curate_verbs(verbs: dict, affordances: dict, room_tags) -> dict:
+    """Per-decision verb-menu curation (P2). Offers universal verbs (no required_affordances)
+    plus verbs whose every required tag the current room carries. `room_tags=None` (a legacy
+    request that forwarded no tags) disables curation — the full menu rides.
+
+    INVARIANT (verbatim from the lab's #446): curation shrinks invalid PHRASINGS only; the
+    ActionCommit gates stay the sole authority over invalid ACTS — "curation offers a verb <=>
+    its gate's place-check would pass". validate_action never reads affordances: a curated-out
+    verb an LLM emits anyway is still schema-legal and is judged by the engine's gate."""
+    if room_tags is None or not isinstance(room_tags, (list, tuple, set)):
+        return verbs
+    tags = {str(t) for t in room_tags}
+    out = {}
+    for verb, args in verbs.items():
+        required = affordances.get(verb) or []
+        if not required or all(str(r) in tags for r in required):
+            out[verb] = args
+    return out
+
+
 def validate_action(action: dict, verbs: dict) -> tuple[bool, str]:
     if not action.get("actor"):
         return False, "missing actor"
@@ -110,6 +152,9 @@ def build_prompt(snapshot: dict, verbs: dict) -> str:
         "stage": snapshot.get("stage", ""),
         "pressures": snapshot.get("pressures", {}),
     }
+    # P2: the MENU is curated by the room's affordance tags (absent tags -> full legacy menu);
+    # validation stays against the FULL schema — curation is phrasing, never legality.
+    menu_verbs = curate_verbs(verbs, _affordances(), snapshot.get("room_affordances"))
     return (
         "You are a character in a simulated world. Choose THIS character's single next action for "
         "the current beat, in character, using the allowed verbs only.\n\n"
@@ -117,7 +162,7 @@ def build_prompt(snapshot: dict, verbs: dict) -> str:
         f"World: {json.dumps(world, ensure_ascii=False)}\n"
         f"Nearby: {roster}\n\n"
         f"Allowed verbs (use these names EXACTLY and include every required arg):\n"
-        f"{verb_menu(verbs)}\n\n"
+        f"{verb_menu(menu_verbs)}\n\n"
         "A move target may be another agent's id, a known site name, or an 'x,y' coordinate string. "
         "A character whose goal names a site should move_to that site, then act on it once standing "
         "there.\n"
@@ -427,8 +472,13 @@ class Handler(BaseHTTPRequestHandler):
                 print("[converse] LLM error for %s: %r" % (agent_id, e), file=sys.stderr, flush=True)
                 return {"say": "", "action": None, "replies": [], "_error": str(e)}
 
+        # P2: the action MENU offered alongside speech is curated by the room's affordance tags
+        # (forwarded on perception.room_affordances; absent -> the full menu). The post-validate
+        # below stays against the FULL schema — curation is phrasing, never legality.
+        menu_verbs = curate_verbs(self.verbs, _affordances(),
+                                  (req.get("perception") or {}).get("room_affordances"))
         try:
-            out = _BRAIN.converse(req, llm, verbs=self.verbs)
+            out = _BRAIN.converse(req, llm, verbs=menu_verbs)
         except Exception as e:
             self._send(200, {"ok": False, "error": str(e),
                              "say": "", "action": None, "replies": []})
@@ -455,23 +505,31 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 full = call_claude_full(prompt, self.key, model=model)
                 captured["raw"] = full["text"]
-                captured["in"] = full["tokens_in"]
-                captured["out"] = full["tokens_out"]
-                captured["cost"] = full["cost"]
+                # ACCUMULATE (P4): a decide may make up to TWO calls (the bounded repair round);
+                # the usage/cost record must bill both.
+                captured["in"] += full["tokens_in"]
+                captured["out"] += full["tokens_out"]
+                captured["cost"] += full["cost"]
                 captured["model"] = full.get("model", model or MODEL)
                 return extract_action(full["text"])
             except Exception as e:
                 captured["raw"] = "(LLM error: %s)" % e
                 return {"verb": "idle", "args": {}}
 
+        # P2: the verb MENU the brain renders is curated by the current room's affordance tags
+        # (perception.room_affordances; a legacy request without them gets the full menu). The
+        # validate_action below deliberately stays against the FULL schema (self.verbs): curation
+        # shrinks invalid phrasings only — the gates remain the sole authority over invalid acts.
+        menu_verbs = curate_verbs(self.verbs, _affordances(),
+                                  (req.get("perception") or {}).get("room_affordances"))
         try:
-            out = _BRAIN.decide(req, llm, verbs=self.verbs)  # full {verb: [args]} schema
+            out = _BRAIN.decide(req, llm, verbs=menu_verbs)  # curated MENU; validation is full-schema
         except Exception as e:
             # Surface the per-agent failure ON the action (_error) so the Godot client logs a
             # sidecar_error and ambient-fills, rather than silently caching an idle as a success.
             return {"action": {"actor": agent_id, "verb": "idle", "args": {}, "_error": str(e)},
-                    "verdict": "error", "invariant": None, "reflected": False, "stream_size": 0,
-                    "error": str(e)}
+                    "verdict": "error", "invariant": None, "outcome": "failed", "reflected": False,
+                    "stream_size": 0, "error": str(e)}
         ok, reason = validate_action(out["action"], self.verbs)
         if not ok:
             out["action"] = {"actor": agent_id, "verb": "idle", "args": {}, "_invalid": reason}
@@ -486,7 +544,8 @@ class Handler(BaseHTTPRequestHandler):
             at_rite = bool(req.get("world_state", {}).get("actor_at_rite_site"))
             room = req.get("perception", {}).get("room", "")
             print(f"[decide] {agent_id:>18} room={room:<16} -> {a.get('verb',''):<18}"
-                  f" verdict={out.get('verdict','')} at_rite={at_rite} mem={out.get('stream_size')}",
+                  f" verdict={out.get('verdict','')} outcome={out.get('outcome','valid')}"
+                  f" at_rite={at_rite} mem={out.get('stream_size')}",
                   file=sys.stderr, flush=True)
             # Attach the exact prompt + raw LLM reply so the Godot play-log can record them at the
             # bottom of the transcript. Only under verbose logging — never in production.
@@ -496,6 +555,7 @@ class Handler(BaseHTTPRequestHandler):
             out["action"]["_tokens_out"] = captured["out"]
             out["action"]["_cost"] = captured["cost"]
             out["action"]["_model"] = captured["model"]
+            out["action"]["_outcome"] = out.get("outcome", "valid")   # P4 stamp on the usage record
         return out
 
 

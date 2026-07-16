@@ -152,15 +152,21 @@ target_scene = "res://scenes/KleinLivingRoom.tscn"
 
 [node name="DigestSpot" parent="." instance=ExtResource("interactable")]
 position = Vector2(300, 250)
-prompt_text = "Digest a Characteristic (rise a Sequence)"
+prompt_text = "Digest a harvested Characteristic — advance the Sequence"
 tint = Color(0.55, 0.2, 0.5, 0)
 digest_advance = true
 
 [node name="ActingSpot" parent="." instance=ExtResource("interactable")]
 position = Vector2(300, 450)
-prompt_text = "Act your Hunter's role (quiet the Madness)"
+prompt_text = "Act your role — quiet the Madness (once per day)"
 tint = Color(0.3, 0.5, 0.55, 0)
 acting_deed = true
+
+[node name="RestSpot" parent="." instance=ExtResource("interactable")]
+position = Vector2(415, 330)
+prompt_text = "Rest until morning"
+tint = Color(0.5, 0.45, 0.3, 0)
+rest_until_morning = true
 
 [node name="Hint" type="Label" parent="."]
 offset_left = 300.0
@@ -168,7 +174,7 @@ offset_top = 24.0
 offset_right = 600.0
 offset_bottom = 44.0
 horizontal_alignment = 1
-text = "WASD / Arrows to move   .   E to examine   .   Tab for notebook"
+text = "WASD to move   ·   E to interact   ·   Tab for my notebook   ·   H for keys"
 
 [node name="Vignette" type="CanvasLayer" parent="."]
 layer = 1

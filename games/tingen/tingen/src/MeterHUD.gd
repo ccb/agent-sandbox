@@ -38,6 +38,13 @@ func _ready() -> void:
 	var prog := get_node_or_null("/root/Progression")
 	if prog != null and not prog.advanced.is_connected(_on_advanced):
 		prog.advanced.connect(_on_advanced)
+	# Run-start seam (N5 probe shot 25): Meters.reset() fires meter_changed MID-world-reset — BEFORE
+	# RunManager applies the run's chosen pathway — so the rank line rendered the reset default
+	# ("Hunter · Seq 9") on a fresh Hermit/Death run until the next meter tick. run_started emits only
+	# AFTER the reset (pathway included) completes, so one refresh here lands the run's true label.
+	var rm := get_node_or_null("/root/RunManager")
+	if rm != null and not rm.run_started.is_connected(_on_run_started):
+		rm.run_started.connect(_on_run_started)
 	# M10: re-skin the meter bars when the colorblind-safe palette (or any setting) changes.
 	var s := get_node_or_null("/root/Settings")
 	if s != null and not s.changed.is_connected(_on_settings_changed):
@@ -63,6 +70,9 @@ func _apply_meter_color(meter: String, row: Control) -> void:
 	bar.add_theme_stylebox_override("fill", sb)
 
 func _on_advanced(_pathway: String, _sequence_rank: int) -> void:
+	refresh()
+
+func _on_run_started(_day: int) -> void:
 	refresh()
 
 func _process(_delta: float) -> void:

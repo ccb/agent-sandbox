@@ -54,7 +54,13 @@ func run_beat() -> void:
 	if not to_deliberate.is_empty():
 		var snaps: Array = []
 		for a in to_deliberate:
-			snaps.append(Perception.build_snapshot(a, player_position))
+			var snap: Dictionary = Perception.build_snapshot(a, player_position)
+			# One-shot `just_*` transition markers (P1): consumed off the agent HERE, so each
+			# marker reaches exactly one deliberation snapshot and then is gone.
+			var just: Array = a.take_transition_markers()
+			if not just.is_empty():
+				snap["just_happened"] = just
+			snaps.append(snap)
 		var proposals: Array = SidecarBridge.propose(snaps)
 		for i in to_deliberate.size():
 			var proposal: Variant = proposals[i] if i < proposals.size() else null
@@ -162,3 +168,38 @@ func _commit_and_log(agent: Agent, action: Dictionary, event_type: String) -> vo
 		"actor": agent.id, "intent": agent.intent, "room": agent.room,
 		"verb": String(action.get("verb", "")), "args": action.get("args", {}), "outcome": outcome,
 	})
+	_track_failure(agent, action, outcome)
+
+## --- P5 (lab pull-in): the repeat-failure FREEZE GUARD -----------------------------------------
+## Consecutive IDENTICAL gate-failed commits (same ActionCommit.failure_key) are counted per
+## agent; the STUCK_THRESHOLDth one forces idle/replan, writes an informed-failure memory row
+## (generalizing gather_item's contention fact — the next deliberation KNOWS why to change
+## course), and emits `agent_stuck` so the GM sees stuck NPCs. Any success — or a DIFFERENT
+## failure — resets the streak, so normal play never trips it.
+const STUCK_THRESHOLD: int = 3
+var _fail_streaks: Dictionary = {}   # agent_id -> {"key": String, "count": int}
+
+func _track_failure(agent: Agent, action: Dictionary, outcome: Dictionary) -> void:
+	var key := ActionCommit.failure_key(action, outcome)
+	if key == "":
+		_fail_streaks.erase(agent.id)
+		return
+	var s: Dictionary = _fail_streaks.get(agent.id, {"key": "", "count": 0})
+	s["count"] = (int(s["count"]) + 1) if String(s["key"]) == key else 1
+	s["key"] = key
+	if int(s["count"]) < STUCK_THRESHOLD:
+		_fail_streaks[agent.id] = s
+		return
+	_fail_streaks.erase(agent.id)   # reset after firing — a fresh streak must re-earn the guard
+	var verb := String(action.get("verb", ""))
+	var what := verb
+	var args: Dictionary = action.get("args", {}) if action.get("args") is Dictionary else {}
+	for k in ["target", "item_id", "agent", "step", "to"]:
+		if args.has(k):
+			what = "%s %s" % [verb, String(args[k])]
+			break
+	# Force the replan: a stale blocked action must not keep re-committing on off-cohort beats.
+	agent.current_action = {"actor": agent.id, "verb": "idle", "args": {}}
+	# PINNED (8.0): the informed failure must survive to the next deliberation, whatever else lands.
+	agent.remember_scored("tried to %s three times and it did not work — that path is blocked; I must try something else" % what, 8.0)
+	EventBus.emit_event("agent_stuck", {"agent": agent.id, "verb": verb, "key": key, "failures": STUCK_THRESHOLD})

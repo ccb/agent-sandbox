@@ -14,6 +14,9 @@ func _on_transition(_path: String, _lead: String) -> void:
 
 func _init() -> void:
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var WS: Object = root.get_node("/root/WorldState")
 	WS.transition_requested.connect(_on_transition)
 

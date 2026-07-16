@@ -22,6 +22,14 @@ signal changed(key: String)
 const SETTINGS_PATH: String = "user://settings.json"
 const SETTINGS_VERSION: int = 1
 
+## N1 (sprint safety): the ACTIVE settings slot — REDIRECTABLE so test harnesses never overwrite
+## the real player's user://settings.json (every settings-toggle test used to write straight into
+## it via set_value's save_to()). Live play never touches this default; harnesses redirect it into
+## user://test_sandbox/<run>/ via src/TestSandbox.gd `activate()`, whose write guard also REFUSES
+## out-of-sandbox writes while a harness is running.
+var settings_path: String = SETTINGS_PATH
+const _TSandbox := preload("res://src/TestSandbox.gd")
+
 ## Normal (default) palette — mirrors the M4/M5 HUD + telegraph colors the game shipped with.
 const _PALETTE_NORMAL: Dictionary = {
 	"doom": Color(0.85, 0.20, 0.20),      # red — the world clock
@@ -128,7 +136,12 @@ func _apply_master_volume() -> void:
 		AudioServer.set_bus_volume_db(bus, linear_to_db(v))
 
 # --- Persistence ------------------------------------------------------------------------------
-func save_to(path: String = SETTINGS_PATH) -> bool:
+func save_to(path: String = "") -> bool:
+	if path.is_empty():
+		path = settings_path
+	# N1: under an active test sandbox, a settings write outside user://test_sandbox/ is refused.
+	if not _TSandbox.guard_write(path):
+		return false
 	_ensure_loaded()
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
@@ -138,7 +151,9 @@ func save_to(path: String = SETTINGS_PATH) -> bool:
 	f.close()
 	return true
 
-func load_from(path: String = SETTINGS_PATH) -> bool:
+func load_from(path: String = "") -> bool:
+	if path.is_empty():
+		path = settings_path
 	if not FileAccess.file_exists(path):
 		return false
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))

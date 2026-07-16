@@ -24,6 +24,13 @@ extends Node
 const HINTS_PATH: String = "res://data/hints.json"
 const PERSIST_PATH: String = "user://hints_seen.json"
 
+## N1 (sprint safety): the ACTIVE persist slot — REDIRECTABLE so test harnesses never write (or
+## clear_for_test-DELETE) the real player's user://hints_seen.json. Live play never touches this
+## default; harnesses redirect it into user://test_sandbox/<run>/ via src/TestSandbox.gd
+## `activate()`, whose write guard also REFUSES out-of-sandbox writes.
+var persist_path: String = PERSIST_PATH
+const _TSandbox := preload("res://src/TestSandbox.gd")
+
 ## key -> {text, ...} loaded from data/hints.json (the onboarding manifest).
 var _hints: Dictionary = {}
 ## key -> true : every latched key this session (run-scoped + once-ever).
@@ -105,25 +112,29 @@ func reset_run() -> void:
 func clear_for_test() -> void:
 	_fired.clear()
 	_persisted.clear()
-	var dir := DirAccess.open("user://")
-	if dir != null and dir.file_exists("hints_seen.json"):
-		dir.remove("hints_seen.json")
+	# N1: remove the ACTIVE slot only (under a harness that is the sandboxed copy) — this used to
+	# hard-code user://hints_seen.json and DELETE the real player's once-ever hint memory.
+	if FileAccess.file_exists(persist_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(persist_path))
 
 # --- persistence (once-ever keys survive a restart) ---------------------------------------------
 ## Reload the persisted once-ever keys off disk into the live latch. Called on _ready and by tests; also
 ## the seam that lets a fresh HintDirector instance prove a key survived a restart.
 func reload() -> void:
 	_persisted.clear()
-	if not FileAccess.file_exists(PERSIST_PATH):
+	if not FileAccess.file_exists(persist_path):
 		return
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PERSIST_PATH))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(persist_path))
 	if parsed is Dictionary and (parsed as Dictionary).has("seen"):
 		for k in ((parsed as Dictionary)["seen"] as Array):
 			_persisted[String(k)] = true
 			_fired[String(k)] = true
 
 func _save() -> void:
-	var f := FileAccess.open(PERSIST_PATH, FileAccess.WRITE)
+	# N1: under an active test sandbox, a hint-persist write outside user://test_sandbox/ is refused.
+	if not _TSandbox.guard_write(persist_path):
+		return
+	var f := FileAccess.open(persist_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify({"seen": _persisted.keys()}))
 		f.close()

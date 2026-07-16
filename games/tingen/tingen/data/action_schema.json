@@ -1,4 +1,9 @@
 {
+	"_affordances_doc": "P2 (lab pull-in, ports agent-sandbox #446 REQUIRED_AFFORDANCES): a verb listed under `affordances` is OFFERED in a menu only where the room carries every named tag (data/city_layout.json `room_affordances`); verbs not listed are UNIVERSAL and always offered. INVARIANT: curation shrinks invalid PHRASINGS only — ActionCommit gates stay the sole authority over invalid ACTS ('curation offers a verb <=> its gate's place-check would pass'). Tag vocabulary (Thursday alignment, tingen_action_sketch v3 SS5): bar, seat, altar, pew, crypt_stair, counter, shelf, cache, door, bed, desk, hearth, cot, lamp, chest, wardrobe, hooks, board, crate, rite_site.",
+	"affordances": {
+		"perform_ritual_step": ["rite_site"],
+		"pray": ["altar"]
+	},
 	"verbs": {
 		"move_to": ["target"],
 		"talk_to": ["agent", "topic"],

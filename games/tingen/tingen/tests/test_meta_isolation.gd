@@ -13,7 +13,11 @@ extends SceneTree
 ## The machine's true profile is backed up before the sentinel is staged and restored before the
 ## asserts, so this harness itself never harms a real profile either.
 
-const TEST_SLOT := "user://meta_test.json"
+## N1 (sprint safety): the test slot rides the harness sandbox (user://test_sandbox/<run>/) —
+## the write guard REFUSES meta writes outside it, so the old flat user://meta_test.json slot
+## would itself now be a violation.
+static func TEST_SLOT() -> String:
+	return preload("res://src/TestSandbox.gd").path("meta_isolation_slot.json")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -21,6 +25,9 @@ var _failed: int = 0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	var RM: Object = root.get_node("/root/RunManager")
 	var real_path := String(RM.META_PATH)
@@ -39,7 +46,7 @@ func _init() -> void:
 
 	# The redirect EVERY test harness applies before driving RunManager. Object.set() so the RED
 	# state (no meta_path property) no-ops silently instead of crashing — the asserts catch it.
-	RM.set("meta_path", TEST_SLOT)
+	RM.set("meta_path", TEST_SLOT())
 	RM.reload_meta()
 
 	# Drive every meta-WRITING seam the suite uses.
@@ -52,7 +59,7 @@ func _init() -> void:
 	# profile BEFORE asserting — never leave the sentinel (or a wipe) behind on a real machine.
 	var reads_test_slot := int(RM.meta_runs_played()) != 777
 	var real_after := FileAccess.get_file_as_string(real_path) if FileAccess.file_exists(real_path) else ""
-	var test_slot_written := FileAccess.file_exists(TEST_SLOT)
+	var test_slot_written := FileAccess.file_exists(TEST_SLOT())
 	RM.reset_meta()
 	if had_real:
 		var fr := FileAccess.open(real_path, FileAccess.WRITE)
@@ -66,7 +73,7 @@ func _init() -> void:
 	_ok(real_after == sentinel,
 		"the REAL user://meta.json survives the meta seams BYTE-IDENTICAL (was: reset_meta/end_run wiped it)")
 	_ok(test_slot_written,
-		"the meta writes landed in the test-scoped slot (user://meta_test.json) instead")
+		"the meta writes landed in the test-scoped sandbox slot instead")
 
 	print("\n=== meta_isolation: %d passed, %d failed ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)

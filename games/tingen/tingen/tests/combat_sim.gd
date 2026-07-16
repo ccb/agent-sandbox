@@ -52,6 +52,9 @@ var _walks: int = 0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	print("=== combat_sim: deterministic M2/M3 fight harness ===")
 	_scenario_dodger()
 	_scenario_dummy()
@@ -61,6 +64,8 @@ func _init() -> void:
 	_scenario_mack()
 	_scenario_neil()
 	_scenario_finch()
+	_scenario_auber()
+	_scenario_cassian()
 	print("\n=== combat_sim: %d asserts passed, %d failed ===" % [_passes, _fails])
 	_cleanup_registry()
 	quit(1 if _fails > 0 else 0)
@@ -1183,6 +1188,376 @@ func _run_finch_fight(verbose: bool) -> Array:
 				all_telegraphed = false
 		_check(all_telegraphed, "telegraphs preceded ALL damage under the full M3 stack")
 	fx.free()
+	bx.free()
+	_cleanup_registry()
+	CombatExecutor.reset_last_attackers()
+	return transcript
+
+## ---- Scenario I: Sister Auber (N5 — the DEATH pathway's Seq-9 prey, two-phase fight) vs a brawler bot ----
+##
+## The per-adversary determinism gate (mirrors scenario H for Finch — the THIRD playable pathway's
+## first real hunt). Sister Auber — the cathedral lay-sister whose paupers' graves began answering
+## her, a hidden Death-pathway Beyonder losing the leash — opens in her HUMAN form (auber_human)
+## running the REAL M3 stack (tactical brain + her form's data reflex rows), no scripted policy, at
+## her AUTHORED 100 HP (the B4 lesson: the live sister_auber sets no max_hp override, so she carries
+## the Agent default — the pin goes red if anyone re-introduces a fixture-tuned pool or retunes the
+## default). A PURSUING brawler bot — faster than her 140 px/s cautious kite — closes to a shooting
+## standoff and fires a telegraphed revolver_shot every few seconds. MUST show the two-phase descent:
+##   * the dodge reflex eats early telegraphs;
+##   * her authored hp_below(0.5) reflex casts auber_descend (NOT any prior transform) ->
+##     auber_monster, the grave-power MONSTER form (transformed fires exactly once, the reloaded
+##     censer/grave kit fights — wailing_host is auber_monster-ONLY, the ironclad kit-reload proof);
+##   * the fight RESOLVES deterministically in 20-90 simulated seconds and the brawler bot is downed;
+##   * two full runs produce byte-identical transcripts (determinism).
+## Distinct from EVERY prior scenario: a DEATH censer/grave kit — zero Hunter arts (no cleaver_swipe/
+## revolver_shot/incendiary_round) AND zero Hermit arts (no star_brand/collapsing_star/astral_chains/
+## ink_flood/redacted_word/finch_recite) are ever cast. PURELY ADDITIVE on top of A-H (its own
+## arena/agents, cleared at both ends), so A-H's transcripts stay byte-identical.
+
+## Bot-side fixtures (tuning the BOT is fair game — Auber's pool is not): the scenario-H shape.
+const AUBER_SHOT_PERIOD_S: float = 3.0
+const AUBER_BOT_HP: float = 420.0
+## The authored pool pin: the live sister_auber (npcs.json) sets no max_hp override, so she carries
+## the Agent default — 100 HP. The scenario PINS that value (B4 precedent).
+const AUBER_AUTHORED_HP: float = 100.0
+## The pursuer: outpace her 140 px/s cautious kite, hold a close shooting standoff (scenario H).
+const AUBER_BOT_PURSUIT: float = 180.0
+const AUBER_BOT_STANDOFF: float = 60.0
+
+func _scenario_auber() -> void:
+	print("\n--- scenario I: Sister Auber (two-phase Death prey: auber_human -> auber_monster) vs brawler bot (max 90s) ---")
+	var first := _run_auber_fight(true)
+	var second := _run_auber_fight(false)
+	_check(first == second, "determinism: two full runs produce identical transcripts (%d lines)" % first.size())
+
+## One full deterministic two-phase fight. Asserts run on the first (verbose) pass only; both passes
+## return a transcript (per-5s log + the entire event signature + end state) for byte comparison.
+func _run_auber_fight(verbose: bool) -> Array:
+	var EB: Object = root.get_node("/root/EventBus")
+	EB.clear()
+	CombatExecutor.reset_last_attackers()
+	var transcript: Array = []
+	var auber := _stage("sim_auber", Vector2(700, 300), "sim_arena_i")
+	if verbose:
+		# Follow-up review pin: the fixture literal below is only honest while the LIVE
+		# sister_auber row authors NO max_hp override (she carries the Agent default).
+		var live_np: Dictionary = root.get_node("/root/NpcDB").get_def("sister_auber")
+		_check(not live_np.has("max_hp"),
+			"the LIVE sister_auber npcs.json row authors no max_hp override (fixture 100 = the Agent default she really carries)")
+	auber.combat_form = "auber_human"   # the human lay-sister; auber_descend is IN her kit
+	auber.vision_r = 600.0              # the caster's eyes: she must SEE a telegraph to dodge it
+	auber.max_hp = AUBER_AUTHORED_HP    # B4: her AUTHORED pool (= the Agent default the live NPC carries)
+	auber.hp = AUBER_AUTHORED_HP
+	var bot := _stage("sim_bot_i", Vector2(220, 300), "sim_arena_i")
+	bot.max_hp = AUBER_BOT_HP
+	bot.hp = AUBER_BOT_HP
+	var ax := CombatExecutor.new()
+	ax.bind(auber)
+	ax.enable_tactics()   # the REAL M3 stack: no scripted policy on Auber's side
+	var bx := CombatExecutor.new()
+	bx.bind(bot)
+	var tf := {"count": 0, "hp_at": -1.0}
+	var on_tf := func(ev: Dictionary) -> void:
+		if String(ev.get("type", "")) == "transformed" \
+				and String((ev.get("data", {}) as Dictionary).get("agent", "")) == "sim_auber":
+			tf["count"] = int(tf["count"]) + 1
+			tf["hp_at"] = auber.hp
+	EB.event_logged.connect(on_tf)
+	var next_shot_s := 0.0
+	var end_frame := -1
+	for frame in range(90 * 60):
+		var t := frame * DT
+		if not bot.downed and not auber.downed:
+			if bx.phase == "idle" and t >= next_shot_s:
+				if bool(bx.try_cast("revolver_shot", "sim_auber").get("ok", false)):
+					next_shot_s = t + AUBER_SHOT_PERIOD_S
+			# PURSUE — outpace her cautious kite but hold a shooting standoff, so shots stay real
+			# dodgeable projectiles yet genuinely LAND once her dodge reflex is spent (scenario H).
+			var gap: Vector2 = auber.position - bot.position
+			if gap.length() > AUBER_BOT_STANDOFF:
+				bot.position += gap.normalized() * minf(AUBER_BOT_PURSUIT * DT, gap.length() - AUBER_BOT_STANDOFF)
+		ax.step_combat(DT)
+		bx.step_combat(DT)
+		CombatExecutor.step_orphans(DT)
+		if (frame + 1) % 300 == 0:
+			var line := "t=%2ds  auber hp=%5.1f (%3.0f,%3.0f) form=%s  |  bot hp=%5.1f (%3.0f,%3.0f)" \
+				% [(frame + 1) / 60, auber.hp, auber.position.x, auber.position.y, auber.combat_form,
+					bot.hp, bot.position.x, bot.position.y]
+			transcript.append(line)
+			if verbose:
+				print("  " + line)
+		if bot.downed or auber.downed:
+			end_frame = frame
+			break
+	EB.event_logged.disconnect(on_tf)
+	var end_s := end_frame * DT
+	transcript.append("END t=%.2f auber_hp=%.1f form=%s downed=%s | bot_hp=%.1f downed=%s"
+		% [end_s, auber.hp, auber.combat_form, auber.downed, bot.hp, bot.downed])
+	for ev_v in EB.events(""):
+		var ev: Dictionary = ev_v
+		transcript.append("%d %s %s" % [int(ev.get("seq", 0)), String(ev.get("type", "")),
+			JSON.stringify(ev.get("data", {}))])
+	if verbose:
+		var shots: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("caster", "")) == "sim_bot_i").size()
+		var hits_on_auber: int = EB.events("agent_attacked").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("target", "")) == "sim_auber").size()
+		_check(end_frame >= 0, "the fight ENDED (someone was downed, nobody deleted)")
+		_check(end_s >= 20.0 and end_s <= 90.0,
+			"fight length %.1fs sits in the GDD's short-lethal 20-90s window" % end_s)
+		_check(bot.downed and not auber.downed, "Auber put the brawler down and still stands")
+		_check(shots >= 5, "the bot kept shooting on its pacing (%d telegraphs)" % shots)
+		_check(hits_on_auber <= shots - 3,
+			"the dodge reflex ate telegraphs: %d shots, only %d ever landed" % [shots, hits_on_auber])
+		# The two-phase descent (the N5 deliverable): human -> auber_descend -> auber_monster, once.
+		var tf_events: Array = EB.events("transformed").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("agent", "")) == "sim_auber")
+		var tf_seq: int = int((tf_events[0] as Dictionary).get("seq", -1)) if tf_events.size() >= 1 else -1
+		# B4: the pool itself is pinned — the descent is proven at AUTHORED HP, and this assert goes
+		# red if anyone re-introduces a fixture-tuned pool (or retunes the Agent default).
+		_check(is_equal_approx(auber.max_hp, 100.0),
+			"Auber fought at her AUTHORED 100 HP (the Agent default the live sister_auber carries), not a fixture-tuned pool")
+		_check(int(tf["count"]) == 1, "auber_descend resolved exactly once (transformed event)")
+		_check(float(tf["hp_at"]) > 0.0 and float(tf["hp_at"]) < auber.max_hp * 0.5,
+			"…cast by the data reflex hp_below(0.5) at authored HP (hp %.0f of %.0f at the transform)"
+				% [float(tf["hp_at"]), auber.max_hp])
+		_check(auber.combat_form == "auber_monster", "Auber's combat_form swapped to auber_monster (the monster)")
+		# The RELOADED grave/spirit kit fights AFTER the transform (seq > the transform seq).
+		var post_kit: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_auber" \
+					and int(e.get("seq", 0)) > tf_seq \
+					and ["wailing_host", "censer_ember", "grave_hands"].has(String(d.get("ability", "")))).size()
+		_check(post_kit >= 1, "the reloaded grave/spirit kit is fighting after the descent (an auber_monster art was cast, x%d)" % post_kit)
+		# wailing_host is auber_monster-ONLY (not in auber_human's kit) — its cast is ironclad proof
+		# the monster kit reloaded (not a human-phase art bleeding through).
+		var wail_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_auber" and String(d.get("ability", "")) == "wailing_host").size()
+		_check(wail_casts >= 1, "the auber_monster-only art wailing_host was cast (x%d) — the reloaded kit is truly her monster set" % wail_casts)
+		# ZERO Hunter arts: she never swings a Hunter art.
+		var hunter_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_auber" \
+					and ["cleaver_swipe", "revolver_shot", "incendiary_round"].has(String(d.get("ability", "")))).size()
+		_check(hunter_casts == 0, "Auber NEVER swings a Hunter art (her kit is a distinct Death censer/grave set)")
+		# ZERO Hermit arts: the Death prey is not a Hermit re-skin — no art shared with neil/finch.
+		var hermit_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_auber" \
+					and ["star_brand", "collapsing_star", "astral_chains", "ward_circle",
+						"ink_flood", "redacted_word", "finch_recite"].has(String(d.get("ability", "")))).size()
+		_check(hermit_casts == 0, "Auber NEVER casts a Hermit art (no star/ritual or ink/word set — a real THIRD identity)")
+		# The §0 acceptance beat holds under the full M3 stack too: telegraphs preceded ALL damage.
+		var attacks: Array = EB.events("agent_attacked")
+		var telegraphs: Array = EB.events("ability_cast_started")
+		var all_telegraphed := attacks.size() > 0
+		for atk_v in attacks:
+			var atk: Dictionary = atk_v
+			var actor := String((atk.get("data", {}) as Dictionary).get("actor", ""))
+			var preceded := false
+			for tel_v in telegraphs:
+				var tel: Dictionary = tel_v
+				if String((tel.get("data", {}) as Dictionary).get("caster", "")) == actor \
+						and int(tel.get("seq", 0)) < int(atk.get("seq", 0)):
+					preceded = true
+					break
+			if not preceded:
+				all_telegraphed = false
+		_check(all_telegraphed, "telegraphs preceded ALL damage under the full M3 stack")
+	ax.free()
+	bx.free()
+	_cleanup_registry()
+	CombatExecutor.reset_last_attackers()
+	return transcript
+
+## ---- Scenario J: Brother Cassian (N5 — the DEATH pathway's Seq-8 prey, two-phase fight) vs a brawler bot ----
+##
+## The per-adversary determinism gate for the SECOND Death hunt (the Seq-8 meal, mirroring scenario I
+## for Auber the way F mirrors E for the Hunter meals). Brother Cassian — the young curate whose
+## staged miracles stopped being staged, a hidden Death-pathway Beyonder losing the leash — opens in
+## his HUMAN form (cassian_human) running the REAL M3 stack, no scripted policy, at his AUTHORED
+## 130 HP (a STRONGER authored-HP proof than scenario I's default pin: the sim stages max_hp to
+## exactly what the live npcs.json def authors, the assert names 130, AND the def row itself is
+## pinned — a drift in either goes red HERE). His descent band is TIGHTER than Auber's:
+## hp_below(0.45) (the mack_harbor 0.45-vs-wren 0.5 precedent — the Seq-8 meal fights meaner).
+## MUST show:
+##   * the dodge reflex eats early telegraphs (210ms — meaner reactions, the mack_beast precedent);
+##   * his authored hp_below(0.45) reflex casts cassian_descend -> cassian_monster (transformed
+##     fires exactly once; choir_of_the_dead is cassian_monster-ONLY, the ironclad kit-reload proof);
+##   * the fight RESOLVES deterministically in 20-90 simulated seconds and the brawler bot is downed;
+##   * two full runs produce byte-identical transcripts (determinism).
+## Distinct from scenario I: cassian's kit is his OWN requiem/shroud set (choir_of_the_dead/
+## shroud_binding/requiem_bolt) — NO art shared with auber_monster AND zero Hunter/Hermit arts.
+## PURELY ADDITIVE on top of A-I (its own arena/agents, cleared at both ends).
+
+## Bot-side fixtures (tuning the BOT is fair game — Cassian's pool is not): 460 HP survives one more
+## shot cycle than scenario H's 420 (three post-dodge hits must land to cross 45% of 130).
+const CASSIAN_SHOT_PERIOD_S: float = 3.0
+const CASSIAN_BOT_HP: float = 460.0
+## The authored pool pin — npcs.json authors brother_cassian max_hp: 130 (the leland_mack precedent:
+## the Seq-8 meal is HARDER — more pool AND a tighter descent band).
+const CASSIAN_AUTHORED_HP: float = 130.0
+const CASSIAN_BOT_PURSUIT: float = 180.0
+const CASSIAN_BOT_STANDOFF: float = 60.0
+
+func _scenario_cassian() -> void:
+	print("\n--- scenario J: Brother Cassian (two-phase Death prey: cassian_human -> cassian_monster) vs brawler bot (max 90s) ---")
+	var first := _run_cassian_fight(true)
+	var second := _run_cassian_fight(false)
+	_check(first == second, "determinism: two full runs produce identical transcripts (%d lines)" % first.size())
+
+## One full deterministic two-phase fight. Asserts run on the first (verbose) pass only; both passes
+## return a transcript (per-5s log + the entire event signature + end state) for byte comparison.
+func _run_cassian_fight(verbose: bool) -> Array:
+	var EB: Object = root.get_node("/root/EventBus")
+	EB.clear()
+	CombatExecutor.reset_last_attackers()
+	var transcript: Array = []
+	var cassian := _stage("sim_cassian", Vector2(700, 300), "sim_arena_j")
+	cassian.combat_form = "cassian_human"   # the human curate; cassian_descend is IN his kit
+	cassian.vision_r = 600.0                # the caster's eyes: he must SEE a telegraph to dodge it
+	cassian.max_hp = CASSIAN_AUTHORED_HP    # his AUTHORED pool (= the npcs.json max_hp override)
+	cassian.hp = CASSIAN_AUTHORED_HP
+	var bot := _stage("sim_bot_j", Vector2(220, 300), "sim_arena_j")
+	bot.max_hp = CASSIAN_BOT_HP
+	bot.hp = CASSIAN_BOT_HP
+	var cx := CombatExecutor.new()
+	cx.bind(cassian)
+	cx.enable_tactics()   # the REAL M3 stack: no scripted policy on Cassian's side
+	var bx := CombatExecutor.new()
+	bx.bind(bot)
+	var tf := {"count": 0, "hp_at": -1.0}
+	var on_tf := func(ev: Dictionary) -> void:
+		if String(ev.get("type", "")) == "transformed" \
+				and String((ev.get("data", {}) as Dictionary).get("agent", "")) == "sim_cassian":
+			tf["count"] = int(tf["count"]) + 1
+			tf["hp_at"] = cassian.hp
+	EB.event_logged.connect(on_tf)
+	var next_shot_s := 0.0
+	var end_frame := -1
+	for frame in range(90 * 60):
+		var t := frame * DT
+		if not bot.downed and not cassian.downed:
+			if bx.phase == "idle" and t >= next_shot_s:
+				if bool(bx.try_cast("revolver_shot", "sim_cassian").get("ok", false)):
+					next_shot_s = t + CASSIAN_SHOT_PERIOD_S
+			# PURSUE — outpace his cautious kite but hold a shooting standoff (the scenario H/I shape).
+			var gap: Vector2 = cassian.position - bot.position
+			if gap.length() > CASSIAN_BOT_STANDOFF:
+				bot.position += gap.normalized() * minf(CASSIAN_BOT_PURSUIT * DT, gap.length() - CASSIAN_BOT_STANDOFF)
+		cx.step_combat(DT)
+		bx.step_combat(DT)
+		CombatExecutor.step_orphans(DT)
+		if (frame + 1) % 300 == 0:
+			var line := "t=%2ds  cassian hp=%5.1f (%3.0f,%3.0f) form=%s  |  bot hp=%5.1f (%3.0f,%3.0f)" \
+				% [(frame + 1) / 60, cassian.hp, cassian.position.x, cassian.position.y, cassian.combat_form,
+					bot.hp, bot.position.x, bot.position.y]
+			transcript.append(line)
+			if verbose:
+				print("  " + line)
+		if bot.downed or cassian.downed:
+			end_frame = frame
+			break
+	EB.event_logged.disconnect(on_tf)
+	var end_s := end_frame * DT
+	transcript.append("END t=%.2f cassian_hp=%.1f form=%s downed=%s | bot_hp=%.1f downed=%s"
+		% [end_s, cassian.hp, cassian.combat_form, cassian.downed, bot.hp, bot.downed])
+	for ev_v in EB.events(""):
+		var ev: Dictionary = ev_v
+		transcript.append("%d %s %s" % [int(ev.get("seq", 0)), String(ev.get("type", "")),
+			JSON.stringify(ev.get("data", {}))])
+	if verbose:
+		var shots: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("caster", "")) == "sim_bot_j").size()
+		var hits_on_cassian: int = EB.events("agent_attacked").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("target", "")) == "sim_cassian").size()
+		_check(end_frame >= 0, "the fight ENDED (someone was downed, nobody deleted)")
+		_check(end_s >= 20.0 and end_s <= 90.0,
+			"fight length %.1fs sits in the GDD's short-lethal 20-90s window" % end_s)
+		_check(bot.downed and not cassian.downed, "Cassian put the brawler down and still stands")
+		_check(shots >= 5, "the bot kept shooting on its pacing (%d telegraphs)" % shots)
+		_check(hits_on_cassian <= shots - 3,
+			"the dodge reflex ate telegraphs: %d shots, only %d ever landed" % [shots, hits_on_cassian])
+		# The AUTHORED-HP pin, both sides of the seam: the staged pool IS 130 AND the live npcs.json
+		# def authors exactly that override (a retune of either goes red here, by name).
+		_check(is_equal_approx(cassian.max_hp, 130.0),
+			"Cassian fought at his AUTHORED 130 HP (the npcs.json max_hp override), not a fixture-tuned pool")
+		var live_def: Dictionary = root.get_node("/root/NpcDB").get_def("brother_cassian")
+		_check(is_equal_approx(float(live_def.get("max_hp", 0.0)), 130.0),
+			"…and the live brother_cassian def authors max_hp 130 (the sim stages what the data ships)")
+		# The two-phase descent: human -> cassian_descend -> cassian_monster, exactly once, in the
+		# TIGHTER 0.45 band (the Seq-8 meal fights meaner — the mack precedent).
+		var tf_events: Array = EB.events("transformed").filter(
+			func(e: Dictionary) -> bool:
+				return String((e.get("data", {}) as Dictionary).get("agent", "")) == "sim_cassian")
+		var tf_seq: int = int((tf_events[0] as Dictionary).get("seq", -1)) if tf_events.size() >= 1 else -1
+		_check(int(tf["count"]) == 1, "cassian_descend resolved exactly once (transformed event)")
+		_check(float(tf["hp_at"]) > 0.0 and float(tf["hp_at"]) < cassian.max_hp * 0.45,
+			"…cast by the data reflex hp_below(0.45) at authored HP (hp %.0f of %.0f at the transform — tighter than Auber's 0.5)"
+				% [float(tf["hp_at"]), cassian.max_hp])
+		_check(cassian.combat_form == "cassian_monster", "Cassian's combat_form swapped to cassian_monster (the monster)")
+		# The RELOADED requiem/shroud kit fights AFTER the transform (seq > the transform seq).
+		var post_kit: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_cassian" \
+					and int(e.get("seq", 0)) > tf_seq \
+					and ["choir_of_the_dead", "shroud_binding", "requiem_bolt"].has(String(d.get("ability", "")))).size()
+		_check(post_kit >= 1, "the reloaded requiem/shroud kit is fighting after the descent (a cassian_monster art was cast, x%d)" % post_kit)
+		# choir_of_the_dead is cassian_monster-ONLY (not in cassian_human's kit) — ironclad kit-reload proof.
+		var choir_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_cassian" and String(d.get("ability", "")) == "choir_of_the_dead").size()
+		_check(choir_casts >= 1, "the cassian_monster-only art choir_of_the_dead was cast (x%d) — the reloaded kit is truly his monster set" % choir_casts)
+		# ZERO Hunter arts, ZERO Hermit arts, and NO art shared with auber_monster.
+		var hunter_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_cassian" \
+					and ["cleaver_swipe", "revolver_shot", "incendiary_round"].has(String(d.get("ability", "")))).size()
+		_check(hunter_casts == 0, "Cassian NEVER swings a Hunter art (his kit is a distinct Death requiem/shroud set)")
+		var hermit_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_cassian" \
+					and ["star_brand", "collapsing_star", "astral_chains", "ward_circle",
+						"ink_flood", "redacted_word", "finch_recite"].has(String(d.get("ability", "")))).size()
+		_check(hermit_casts == 0, "Cassian NEVER casts a Hermit art (no star/ritual or ink/word set)")
+		var auber_casts: int = EB.events("ability_cast_started").filter(
+			func(e: Dictionary) -> bool:
+				var d: Dictionary = e.get("data", {})
+				return String(d.get("caster", "")) == "sim_cassian" \
+					and ["wailing_host", "censer_ember", "grave_hands", "grave_ring", "grave_stillness"].has(String(d.get("ability", "")))).size()
+		_check(auber_casts == 0, "Cassian shares NO art with auber_monster (the two Death prey fight differently)")
+		# The §0 acceptance beat holds under the full M3 stack too: telegraphs preceded ALL damage.
+		var attacks: Array = EB.events("agent_attacked")
+		var telegraphs: Array = EB.events("ability_cast_started")
+		var all_telegraphed := attacks.size() > 0
+		for atk_v in attacks:
+			var atk: Dictionary = atk_v
+			var actor := String((atk.get("data", {}) as Dictionary).get("actor", ""))
+			var preceded := false
+			for tel_v in telegraphs:
+				var tel: Dictionary = tel_v
+				if String((tel.get("data", {}) as Dictionary).get("caster", "")) == actor \
+						and int(tel.get("seq", 0)) < int(atk.get("seq", 0)):
+					preceded = true
+					break
+			if not preceded:
+				all_telegraphed = false
+		_check(all_telegraphed, "telegraphs preceded ALL damage under the full M3 stack")
+	cx.free()
 	bx.free()
 	_cleanup_registry()
 	CombatExecutor.reset_last_attackers()

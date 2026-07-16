@@ -46,6 +46,10 @@ var _item_nodes: Array[Node2D] = []       # ground-item sprites currently shown
 var _room: String = ""                    # the room currently rendered
 var _parent_id: int = 0                   # instance id of the scene we last parented bodies under
 
+## N4 — the world facts that respawn the room the moment they land (the beat cadence alone left a
+## dispatched hunter INVISIBLE for up to a whole 15-game-minute beat). Data table, no id branches.
+const RECONCILE_EVENTS: Dictionary = {"threat_dispatched": true, "threat_resolved": true}
+
 func _ready() -> void:
 	# Agents move on beats, so reconcile bodies each beat; redraw ground items whenever they change.
 	var clock := _al("Clock")
@@ -54,6 +58,45 @@ func _ready() -> void:
 	var items := _al("RoomItems")
 	if items != null:
 		items.changed.connect(_render_items)
+	# N4 (A6): EVENT-DRIVEN respawn passes on top of the beat cadence — a threat dispatched into
+	# the player's room is ON SCREEN within a frame or two, the crypt roster stands the moment the
+	# player enters, the backlash wave / half-landed avatar appear as they spawn. All of these are
+	# idempotent reconcile() calls (headless harnesses stay inert: no game_controller -> early
+	# return), so the pinned sims never change.
+	var ws := _al("WorldState")
+	if ws != null and ws.has_signal("room_changed"):
+		# The scene swap frees the OLD world subtree at frame end — repopulate on the NEXT frame so
+		# bodies parent under the NEW scene, never the dying one.
+		ws.room_changed.connect(func(_room, _path): _reconcile_next_frame())
+	var eb := _al("EventBus")
+	if eb != null and not eb.event_logged.is_connected(_on_world_event):
+		eb.event_logged.connect(_on_world_event)
+	var rn := _al("RitualNight")
+	if rn != null:
+		if rn.has_signal("ritual_night_started"):
+			rn.ritual_night_started.connect(func(_site, _early): reconcile())
+		if rn.has_signal("avatar_half_landed"):
+			rn.avatar_half_landed.connect(func(_id): reconcile())
+		if rn.has_signal("backlash_spawned"):
+			rn.backlash_spawned.connect(func(_ids): reconcile())
+
+## The EventBus ear: any RECONCILE_EVENTS world fact respawns the room at once (the dispatched
+## hunter is seen the frame it spawns). Cheap + idempotent; inert when no scene is loaded.
+func _on_world_event(ev: Dictionary) -> void:
+	if RECONCILE_EVENTS.has(String(ev.get("type", ""))):
+		reconcile()
+
+## Reconcile on the FIRST frame after the current one — the scene-swap window (room_changed fires
+## while the old scene is still queue_free-pending as _world child 0, so an immediate pass would
+## parent bodies under the dying subtree). Coalesces re-entrant requests.
+var _swap_reconcile_pending: bool = false
+func _reconcile_next_frame() -> void:
+	if _swap_reconcile_pending:
+		return
+	_swap_reconcile_pending = true
+	await get_tree().process_frame
+	_swap_reconcile_pending = false
+	reconcile()
 
 ## Restrict rendering to a subset of agents, or pass [] to return to the track-all default
 ## (every registered non-player agent). Reconciles immediately either way.

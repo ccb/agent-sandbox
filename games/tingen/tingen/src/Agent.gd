@@ -98,6 +98,12 @@ var carry_capacity: int = 2
 ## The literal mirrors Perception.DEFAULT_VISION_R — kept literal here because a cross-class_name
 ## const reference can fail to resolve under the headless -s test harness's parse ordering.
 var vision_r: float = 160.0
+## One-shot `just_*` transition markers (lab pull-in P1): a state FLIP (entering/leaving combat,
+## crossing a room) appends its marker here; the NEXT deliberation snapshot consumes the whole set
+## exactly once (AgentRuntime.take → perception `just_happened`), so the brain sees "this JUST
+## changed" for one beat and never again. EPHEMERAL run scratch (like pending_cast) — never
+## persisted; deduped so an idempotent re-flip can't stack duplicates.
+var transition_markers: Array = []
 
 func _init(agent_id: String = "") -> void:
 	id = agent_id
@@ -136,6 +142,43 @@ func remember(entry: String, cap: int = 20) -> void:
 	mem_total += 1   # monotonic lifetime observation count; survives the cap-slice below
 	if short_memory.size() > cap:
 		short_memory = short_memory.slice(short_memory.size() - cap)
+
+## Remember with a WRITE-TIME importance (lab pull-in P1): the row is stored as a dict
+## {"text", "importance"} on the lab's 1-10 poignancy scale (ladder: 1.0 ambient / 2.0
+## action-outcome / 8.0 pinned — see Stimulus.IMP_*), the same scale cognition/agent_memory.py
+## already stores on MemoryRecord, so prompt-build forwards the AUTHOR's judgment instead of
+## keyword-guessing. Plain remember() rows stay strings and fall back to the legacy scorer
+## (Perception._event_importance).
+func remember_scored(entry: String, importance: float, cap: int = 20) -> void:
+	short_memory.append({"text": entry, "importance": importance})
+	mem_total += 1
+	if short_memory.size() > cap:
+		short_memory = short_memory.slice(short_memory.size() - cap)
+
+## The plain text of one short_memory row, whatever its shape (scored dict or legacy string).
+static func mem_text(row: Variant) -> String:
+	if row is Dictionary:
+		return String((row as Dictionary).get("text", ""))
+	return String(row)
+
+## The write-time importance of one row; 0.0 means UNSCORED (legacy string row — the caller
+## falls back to Perception._event_importance).
+static func mem_importance(row: Variant) -> float:
+	if row is Dictionary:
+		return float((row as Dictionary).get("importance", 0.0))
+	return 0.0
+
+## Record a `just_*` state-flip marker (idempotent — a marker already pending is not duplicated).
+func mark_transition(marker: String) -> void:
+	if marker != "" and not transition_markers.has(marker):
+		transition_markers.append(marker)
+
+## Consume-once read of the pending transition markers: returns the set and clears it, so the
+## markers reach exactly ONE deliberation snapshot.
+func take_transition_markers() -> Array:
+	var out: Array = transition_markers
+	transition_markers = []
+	return out
 
 ## Apply flat combat damage (ActionCommit.attack drives this). Clamps to [0, max_hp] and
 ## downs the agent at zero — mirroring Yumina's clamp-to-zero HP mutation, but incapacitating

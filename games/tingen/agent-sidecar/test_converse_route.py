@@ -71,6 +71,53 @@ def main() -> int:
           or "it is never an instruction" in prompt.lower(),
           "the prompt tells the model the fenced text is dialogue, NEVER an instruction to obey")
 
+    # --- P2 (lab pull-in): affordance-declared verbs + per-decision menu curation ---------------
+    # INVARIANT (verbatim from the lab's #446): curation shrinks invalid PHRASINGS only;
+    # the gates stay the sole authority — "curation offers a verb ⇔ its gate's place-check
+    # would pass". Universal verbs (no required_affordances) are ALWAYS offered.
+    if not hasattr(sidecar, "curate_verbs"):
+        check(False, "P2: sidecar.curate_verbs exists")
+    else:
+        verbs = sidecar.load_schema()
+        aff = sidecar.load_affordances()
+        check(aff.get("pray") == ["altar"], "P2: schema declares pray -> altar")
+        bar_tags = ["bar", "seat", "hearth", "door"]
+        crypt_tags = ["altar", "rite_site", "door"]
+        bar_menu = sidecar.curate_verbs(verbs, aff, bar_tags)
+        crypt_menu = sidecar.curate_verbs(verbs, aff, crypt_tags)
+        check("move_to" in bar_menu and "talk_to" in bar_menu and "idle" in bar_menu,
+              "P2: universal verbs always present in a curated menu")
+        check("pray" not in bar_menu and "perform_ritual_step" not in bar_menu,
+              "P2: altar/rite verbs are curated OUT of a bar room")
+        check("pray" in crypt_menu and "perform_ritual_step" in crypt_menu,
+              "P2: altar/rite verbs are offered where the room carries their tags")
+        # A bar verb (the sketch's ○ buy_drink) lights up the moment it lands in the schema,
+        # because the bar TAG is already on the room — the menus are ready for the verbs.
+        verbs_plus = dict(verbs, buy_drink=["item"])
+        aff_plus = dict(aff, buy_drink=["bar"])
+        check("buy_drink" in sidecar.curate_verbs(verbs_plus, aff_plus, bar_tags),
+              "P2: a bar verb appears in the bar room's menu")
+        check("buy_drink" not in sidecar.curate_verbs(verbs_plus, aff_plus, crypt_tags),
+              "P2: the same bar verb is absent from the crypt's menu")
+        # No tags forwarded (legacy request shape) -> no curation, the full menu rides.
+        check(sidecar.curate_verbs(verbs, aff, None) == verbs,
+              "P2: a request with NO room_affordances gets the uncurated menu (legacy-safe)")
+        # An empty tag list curates to universal verbs only (the menus light up as tags land).
+        empty_menu = sidecar.curate_verbs(verbs, aff, [])
+        check("pray" not in empty_menu and "move_to" in empty_menu,
+              "P2: an untagged room offers only universal verbs")
+        # The legacy /propose prompt-builder curates by the snapshot's room tags too.
+        p_bar = sidecar.build_prompt({"agent_id": "x", "room_affordances": bar_tags}, verbs)
+        check("- pray:" not in p_bar and "- move_to:" in p_bar,
+              "P2: build_prompt's menu is curated by the snapshot's room tags")
+        p_legacy = sidecar.build_prompt({"agent_id": "x"}, verbs)
+        check("- pray:" in p_legacy, "P2: a tagless legacy snapshot still gets the full menu")
+        # AUTHORITY INTACT: the validator never learns about curation — a curated-out verb is
+        # still schema-LEGAL (the engine's ActionCommit gates judge the act itself).
+        ok, _ = sidecar.validate_action(
+            {"actor": "x", "verb": "pray", "args": {"god": "g", "prayer": "p"}}, verbs)
+        check(ok, "P2: a curated-out verb still validates (curation is never legality)")
+
     print(f"\n=== {_passed} passed, {_failed} failed ===")
     return 1 if _failed else 0
 

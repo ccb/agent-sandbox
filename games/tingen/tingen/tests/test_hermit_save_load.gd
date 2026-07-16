@@ -18,15 +18,18 @@ extends SceneTree
 ##       spirituality" change is a deliberate decision, not an accident, and the roundtrip never fails
 ##       for the "missing" pool.
 
-const TMP_SAVE := "user://test_hermit_save_load.json"
+## N1 (sprint safety): the temp save slot rides the harness sandbox (never the real user dir).
+static func TMP_SAVE() -> String:
+	return preload("res://src/TestSandbox.gd").path("test_hermit_save_load.json")
 
 func _init() -> void:
 	await process_frame
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var r: Dictionary = run_all()
 	print("\n=== test_hermit_save_load: %d passed, %d failed ===" % [int(r["passed"]), int(r["failed"])])
 	quit(1 if int(r["failed"]) > 0 else 0)
@@ -78,7 +81,7 @@ static func _r1_hermit_run_roundtrips(c: Dictionary) -> void:
 	var want_shop: Dictionary = S.to_dict() if S != null else {}
 
 	# Persist to a temp slot, then SCRUB the live world (simulating a fresh process at the title).
-	_check(c, bool(SM.save_game(TMP_SAVE)), "save_game writes the temp slot")
+	_check(c, bool(SM.save_game(TMP_SAVE())), "save_game writes the temp slot")
 	M.reset(); P.reset(); LS.reset()
 	if S != null:
 		S.reset()
@@ -89,7 +92,7 @@ static func _r1_hermit_run_roundtrips(c: Dictionary) -> void:
 	_check(c, not _dict_eq(M.to_dict(), want_meters), "reset scrubbed the meters")
 
 	# Load the slot back and prove EVERY subsystem returned.
-	_check(c, bool(SM.load_game(TMP_SAVE)), "load_game reads the temp slot")
+	_check(c, bool(SM.load_game(TMP_SAVE())), "load_game reads the temp slot")
 	_check(c, P.pathway() == "hermit", "R1: the run's PATHWAY restored to 'hermit' from disk")
 	_check(c, P.sequence() == 7, "R1: the Sequence rung (Seq 7) restored from disk")
 	_check(c, P.granted_arts().has("astral_chains") and P.granted_arts().has("collapsing_star"),

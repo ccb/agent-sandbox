@@ -17,19 +17,87 @@ var _skipped: int = 0
 var _real_meta_existed: bool = false
 var _real_meta_before: String = ""
 
+# N1 (sprint safety): the whole REAL user dir's pre-suite state (path -> md5, engine caches and the
+# sandbox excluded), captured before any test runs so the final _test_user_dir_isolated() can prove
+# the whole suite left the developer's ACTUAL profile (save.json / settings.json / hints_seen.json /
+# meta.json / everything) byte-identical. See src/TestSandbox.gd + tests/isolation_proof.sh.
+const TSandbox := preload("res://src/TestSandbox.gd")
+var _user_dir_before: Dictionary = {}
+
+# N1 (sprint safety): STANDALONE-HARNESS REGISTRATION. Every tests/*.gd runner that is NOT
+# load()-folded in-process by a _test_* below is registered HERE and executed as a child Godot
+# process by _test_standalone_fleet() (they extend SceneTree, so they cannot be load()-folded like
+# the run_all() runners). Their exit codes + pass/fail counts fold into this suite's totals — a
+# rotting standalone harness now turns the SUITE red instead of rotting silently outside the five
+# maintained gates (the fate of test_polish / test_hud_persistence / test_run_shell before N1).
+const STANDALONE_HARNESSES: Array = [
+	"boot_smoke.gd",             # M2 boot controller / title smoke
+	"combat_sim.gd",             # deterministic fight harness (ALSO a maintained standalone gate)
+	"full_run.gd",               # Hunter full-run integration (ALSO a maintained standalone gate)
+	"test_adversary2.gd",        # 2nd adversary harness
+	"test_adversary3.gd",        # M14 3rd adversary harness
+	"test_hud_persistence.gd",   # persistent HUD across world swaps (N1-repaired)
+	"test_interiors.gd",         # interior rooms wiring
+	"test_intro_room.gd",        # intro room scene
+	"test_leads.gd",             # leads system
+	"test_live_bugs.gd",         # live-bug regressions
+	"test_meta_isolation.gd",    # B3 meta-profile isolation sentinel (standalone twin)
+	"test_meta_payoff.gd",       # M27 meta payoff
+	"test_meter_teeth.gd",       # meter threat lifecycle
+	"test_meters.gd",            # M4 four-meter push-your-luck
+	"test_neil_home.gd",         # Neil home scene
+	"test_nighthawks_hq.gd",     # Nighthawks HQ scene
+	"test_npc_cost_loot.gd",     # NPC cost/loot
+	"test_opening.gd",           # opening staging
+	"test_polish.gd",            # M10 pause/settings/legend/VFX polish (N1-repaired)
+	"test_portrait_ui.gd",       # portrait UI
+	"test_progression.gd",       # progression/rank
+	"test_reload.gd",            # M13 reload/ammo pickups
+	"test_ritual_night.gd",      # ritual-night climax outcomes
+	"test_run_shell.gd",         # M2 run shell + GAP-2.9 leak test (N1-repaired)
+	"test_scene_fade.gd",        # scene fade autoload
+	"test_shop.gd",              # M15 Franky's shop
+	"test_transition_anywhere.gd", # transition routing
+	"test_university_archive.gd",  # university archive scene
+	"test_visual_foundation.gd",   # M16 visual foundation
+	# Lab pull-ins wave (P1–P5) — dual-mode harnesses (also load()-folded in-suite above); listed
+	# here so their STANDALONE _init entry path (TestSandbox self-activation included) is
+	# gate-exercised too, not just run by hand (review fix; the N1 rot mode).
+	"test_affordances.gd",       # P2 declarative affordances + curation invariant
+	"test_deciding_fact.gd",     # P3 deciding lifecycle fact + timeout fallback
+	"test_mem_importance.gd",    # P1 memory-importance ladder + just_* markers
+	"test_stuck_guard.gd",       # P5 repeat-failure freeze guard
+]
+# Pure TOOLS (probes / generators / live-LLM runs — no headless pass/fail contract, some need a
+# window, some cost real API money): documented in tests/TOOLS.md, intentionally NOT auto-run.
+const TOOL_SCRIPTS: Array = [
+	"audio_probe.gd",            # windowed audio-bus smoke probe (audible)
+	"continue_probe_s1.gd",      # N3 two-process Continue proof, session 1 (see continue_probe.sh)
+	"continue_probe_s2.gd",      # N3 two-process Continue proof, session 2 (fresh-process resume)
+	"dump_combat_vectors.gd",    # expected-value generator for the combat vectors (governance tool)
+	"live_butcher.gd",           # live-LLM Butcher acceptance (costs API money)
+	"live_combat.gd",            # live-LLM combat validation (costs API money)
+	"live_sim.gd",               # live-LLM summoning sim (costs API money)
+	"probe_thinking_tell.gd",    # P3 thinking-tell capture (windowed, hung-responder staging)
+	"screenshot_probe.gd",       # windowed rendered-frame capture for human eyeballing
+	"vfx_shot.gd",               # combat-FX visual proof screenshot
+]
+
 func _init() -> void:
 	# Let autoloads finish their _ready before asserting against them.
 	await process_frame
 	await process_frame
 
-	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect the
-	# meta slot to a test-scoped file before ANY test drives RunManager, and record the real profile's
-	# bytes so the suite proves at the very end it never touched them (tests/test_meta_isolation.gd).
+	# B3 (retro) + N1 (sprint safety): NEVER touch the player's REAL persistent profile — hash the
+	# WHOLE real user dir first, then activate the TestSandbox, which redirects EVERY persistent
+	# seam (meta / save / settings / hints / playlog) into user://test_sandbox/<run>/ and arms the
+	# write guard before ANY test drives them. The final _test_user_dir_isolated() proves the suite
+	# left every real profile file byte-identical (see also tests/isolation_proof.sh).
 	var _rm_b3: Object = root.get_node("/root/RunManager")
-	_rm_b3.set("meta_path", "user://meta_test.json")
-	_rm_b3.reload_meta()
 	_real_meta_existed = FileAccess.file_exists(String(_rm_b3.META_PATH))
 	_real_meta_before = FileAccess.get_file_as_string(String(_rm_b3.META_PATH)) if _real_meta_existed else ""
+	_user_dir_before = TSandbox.snapshot_user_dir()
+	TSandbox.activate(root)
 
 	_test_clock_phases()
 	_test_pressure_clamp_and_stability()
@@ -288,11 +356,203 @@ func _init() -> void:
 	_test_meta_surface_builder()
 	await _test_meta_surface_title_wire()
 	_test_meta_surface_endgame_payoff()
-	# B3: MUST stay the LAST test — proves no test above touched the real user profile.
+	_test_run_pace()
+	_test_rest_verb()
+	_test_audio_map()
+	await _test_combat_readability()
+	_test_opener_staging()
+	_test_city_place()
+	await _test_death_checkpoint()
+	_test_death_pathway()
+	await _test_death_live()
+	_test_death_primary()
+	_test_death_save_load()
+	await _test_death_full_run()
+	await _test_cast_roulette()
+	await _test_continue_resume()
+	await _test_n4_form_art_at_body_bind()
+	await _test_n4_event_reconcile()
+	await _test_n4_threat_announced()
+	_test_mem_importance()
+	_test_affordances()
+	await _test_deciding_fact()
+	_test_stuck_guard()
+	# N1: no tests/*.gd may be silently unregistered; then RUN the registered standalone fleet.
+	_test_harness_registry()
+	_test_standalone_fleet()
+	# B3: proves no test above touched the real user meta profile.
 	_test_real_meta_untouched()
+	# N1: MUST stay the LAST test — proves the ENTIRE suite ran inside the user-dir sandbox and
+	# left every REAL profile file (save/settings/hints/meta/...) byte-identical.
+	_test_user_dir_isolated()
 
 	print("\n=== %d passed, %d failed, %d skipped ===" % [_passed, _failed, _skipped])
 	quit(1 if _failed > 0 else 0)
+
+## LAB PULL-IN P1 — the memory-importance LADDER (1.0 ambient / 2.0 action-outcome / 8.0 pinned)
+## written ON the row at write time (Stimulus fan blocks + Agent.remember_scored), with
+## Perception._event_importance demoted to the fallback scorer for unscored/legacy rows; plus
+## one-shot `just_*` transition markers on state flips, consumed by exactly ONE deliberation
+## snapshot. The full harness lives in tests/test_mem_importance.gd; its run_all() shares totals.
+func _test_mem_importance() -> void:
+	print("[lab P1 memory importance: write-time ladder + fallback scorer + just_* one-shot markers]")
+	var runner := load("res://tests/test_mem_importance.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"lab P1 memory importance green (%d checks)" % int(r.get("passed", 0)))
+
+## LAB PULL-IN P2 — affordances as declarative DATA + per-decision verb curation: verbs declare
+## `required_affordances` (action_schema.json), rooms carry the sketch-vocabulary tags
+## (city_layout.json `room_affordances`), the snapshot/decide request forwards the current room's
+## tags, and the sidecar curates the LLM menu from them. INVARIANT: curation shrinks invalid
+## PHRASINGS only — the ActionCommit gates stay the sole authority over invalid ACTS. The full
+## harness lives in tests/test_affordances.gd; its run_all() shares totals. (The python-side menu
+## checks live in agent-sidecar/test_converse_route.py.)
+func _test_affordances() -> void:
+	print("[lab P2 affordances: declarative verb requirements + room tags + gates stay authority]")
+	var runner := load("res://tests/test_affordances.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"lab P2 affordances green (%d checks)" % int(r.get("passed", 0)))
+
+## LAB PULL-IN P3 — bounded /decide + the `deciding` lifecycle fact: a slow/hung sidecar call is
+## bounded by the client timeout and NEVER hangs an NPC (the beat completes on the offline brain —
+## the fallback IS AmbientSidecar); each launched decide emits ONE typed `deciding {agent, phase:
+## begin|end, beat}` EventBus fact, paired exactly once, consumed by PlayLog + the thought panel's
+## thinking tell; the in-flight call still lands in SidecarBridge's per-NPC cost ledger — timeouts
+## included. The full harness lives in tests/test_deciding_fact.gd (a coroutine — it mounts the
+## real CharacterCard scene); its run_all() shares totals.
+func _test_deciding_fact() -> void:
+	print("[lab P3 deciding fact: timeout->offline fallback, begin/end pairing, cost attribution]")
+	var runner := load("res://tests/test_deciding_fact.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"lab P3 deciding fact green (%d checks)" % int(r.get("passed", 0)))
+
+## LAB PULL-IN P5 — the repeat-failure FREEZE GUARD: consecutive IDENTICAL gate-failed commits
+## (ActionCommit.failure_key) are counted per agent; the 3rd forces idle/replan, writes a PINNED
+## informed-failure memory row (generalizing gather_item's contention fact), and emits ONE
+## `agent_stuck` EventBus fact for the GM. Different failures and successes reset the streak —
+## normal play never trips it (full_run/hermit/death stay byte-identical). The full harness lives
+## in tests/test_stuck_guard.gd; its run_all() shares totals.
+func _test_stuck_guard() -> void:
+	print("[lab P5 stuck guard: 3 identical gate failures -> forced replan + row + agent_stuck]")
+	var runner := load("res://tests/test_stuck_guard.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"lab P5 stuck guard green (%d checks)" % int(r.get("passed", 0)))
+
+## P1 (experiential wave) — the RUN PACE budget: RunManager.RUN_SECONDS_PER_GAME_MINUTE is the ONE
+## explicit pace constant (applied at run start / wipe / restore / disk load, never a scene
+## side-effect), tuned so the idle Doom-100 run lands inside the ~60-minute design target. The full
+## harness lives in tests/test_run_pace.gd; its run_all() shares this suite's pass/fail totals.
+func _test_run_pace() -> void:
+	print("[P1 run pace: the explicit ~60-minute budget constant, applied at run start]")
+	var runner := load("res://tests/test_run_pace.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P1 run pace green (%d checks)" % int(r.get("passed", 0)))
+
+## P1 (experiential wave) — REST UNTIL MORNING: the lodging bed's dead-time skip (clock jump to the
+## next 08:00 through the normal minute pipeline, exactly ONE nightly checkpoint per rest, the
+## existing rest Madness relief, clean typed refusals during Ritual Night / combat, and the RestSpot
+## wired live in the lodging scene). The full harness lives in tests/test_rest_verb.gd; its
+## run_all() shares this suite's pass/fail totals.
+func _test_rest_verb() -> void:
+	print("[P1 rest verb: the lodging bed's rest-until-morning dead-time skip]")
+	var runner := load("res://tests/test_rest_verb.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P1 rest verb green (%d checks)" % int(r.get("passed", 0)))
+
+## P2 (experiential wave) — AUDIO: data/audio_map.json (event->sound routing as DATA) + the
+## AudioManager autoload (live-only playback behind the _is_live() headless gate — the pinned sims
+## run headless and therefore stay byte-identical by construction). The full harness lives in
+## tests/test_audio_map.gd; its run_all() shares this suite's pass/fail totals.
+func _test_audio_map() -> void:
+	print("[P2 audio map: data-driven event->sound routing + the inert-headless AudioManager]")
+	var runner := load("res://tests/test_audio_map.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P2 audio map green (%d checks)" % int(r.get("passed", 0)))
+
+## P3 (experiential wave) — COMBAT READABILITY: alpha-keyed bieber anim strips + the figure-height
+## strip scaling fix (no more grey sliver), on-enemy telegraph tells riding the SAME cast events
+## the HUD text uses, banded enemy hp pips (mirrors Perception.hp_band — never exact numbers),
+## the muzzle flash on ammo-costing arts, and the combat mouse reticle. All VISUAL nodes are
+## live-only (_is_live gate); these asserts pin the state/asset wiring headless, and the rendered
+## pixels are proven by tests/screenshot_probe.gd. The full harness lives in
+## tests/test_combat_readability.gd; its run_all() (a coroutine — the pips step stages an NPC
+## body) shares this suite's pass/fail totals.
+func _test_combat_readability() -> void:
+	print("[P3 combat readability: keyed strips, figure scaling, enemy tells, hp pips, muzzle flash, reticle]")
+	var runner := load("res://tests/test_combat_readability.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P3 combat readability green (%d checks)" % int(r.get("passed", 0)))
+
+## P4 (experiential wave) — the STAGED OPENER + the HARVEST-FORK CHOICE UI: GMOpening's generic
+## door-beat staging verbs (the constable at the lodging door — data-driven, live-only scheduled so
+## headless sims never move him), the fork's 3-choice panel trigger (first characteristic pickup,
+## once per run), the plan-mark guidance on the HUD lead line, the no-auto-execution contract, and
+## the headless-inert NPC bark bubble. The full harness lives in tests/test_opener_staging.gd; its
+## run_all() shares this suite's pass/fail totals.
+func _test_opener_staging() -> void:
+	print("[P4 opener staging: door-knock beat verbs, fork choice panel, plan guidance, bark seam]")
+	var runner := load("res://tests/test_opener_staging.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P4 opener staging green (%d checks)" % int(r.get("passed", 0)))
+
+## P5 (experiential wave) — the CITY AS A PLACE: the DayNightTint CanvasModulate wired into the
+## LIVE City.tscn (occult-noir phase palette, headless-instant state mapping), the data-driven
+## StreetLamps glows (lit dusk->late-night, headless-inert), LeadSystem.current_lead() + the
+## leads.json map_pos pins behind the district map's lead marker, the CrowdDressing ambient
+## standee clusters (legal, non-interactive, headless-inert), and the HUD top-bar clock following
+## the live Clock. The full harness lives in tests/test_city_place.gd; its run_all() shares this
+## suite's pass/fail totals; the rendered pixels are proven by tests/screenshot_probe.gd.
+func _test_city_place() -> void:
+	print("[P5 city place: day/night tint, lamp glows, map lead pin, crowd dressing, live clock]")
+	var runner := load("res://tests/test_city_place.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"P5 city place green (%d checks)" % int(r.get("passed", 0)))
+
+## N2 — DEATH COSTS A DAY, NOT THE RUN (checkpoint integrity): the live EndGame->end_run("death")
+## wire (a checkpointed death wakes at the lodging; a day-1 death is a normal run loss with the
+## meta flush), the player-proxy inventory riding BOTH persistence paths, the Ritual-Night
+## checkpoint gate + fuse relight after a death-restore, the site-room reset, and the ending
+## screen's Return-to-Title (no start_run, no double-counted runs, no Hermit->Hunter reroute).
+## The full harness lives in tests/test_death_checkpoint.gd; its run_all() (a coroutine — it
+## mounts the REAL Main.tscn boot controller) shares this suite's pass/fail totals.
+func _test_death_checkpoint() -> void:
+	print("[N2 death checkpoint: one death path — checkpointed wake, day-1 loss, inventory, fuse, title]")
+	var runner := load("res://tests/test_death_checkpoint.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N2 death checkpoint green (%d checks)" % int(r.get("passed", 0)))
 
 # --- M16 Visual Foundation ---------------------------------------------------------------------
 ## (a) a mapped NPC shows real art (path != icon.svg, tint dropped); (b) an unmapped NPC keeps the
@@ -755,6 +1015,84 @@ func _test_hermit_full_run() -> void:
 	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
 		"M33 hermit full-run green (%d checks)" % int(r.get("passed", 0)))
 
+## N5 — the DEATH package: the THIRD playable pathway + the sister_auber/brother_cassian adversaries.
+## The full harness lives in tests/test_death_pathway.gd; its run_all() shares this suite's pass/fail
+## totals (selecting Death gives a DISTINCT censer/grave base kit via the SAME kit seam; the advance
+## loop closes through sister_auber -> death_characteristic -> the corpse-collector's office -> the
+## Death ladder via TWO real kills; both prey are real two-phase adversaries with leads + deeds; the
+## WIN_UNLOCK_CHAIN dripping one unlock per win — win 1 hermit, win 2 death).
+func _test_death_pathway() -> void:
+	print("[N5 death pathway: 3rd playable build (censer/grave kit) + auber/cassian adversaries + advance loop + win chain]")
+	var runner := load("res://tests/test_death_pathway.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N5 death pathway green (%d checks)" % int(r.get("passed", 0)))
+
+## N5 — DEATH LIVE REACHABILITY (the M30 lesson applied to the third pathway from day one). The full
+## harness lives in tests/test_death_live.gd; its run_all() is a COROUTINE (mounts the real
+## BootController to drive the New-Run pathway pick), so this wrapper AWAITS it and shares the
+## suite's totals. Proves G1 (start_run threads the chosen pathway; the picker offers death ONLY
+## after the second win — the drip, visible live), bug#3 (slot_run pathway-gates the death prey
+## leads out of Hunter/Hermit runs and vice-versa), and G2 (the 9->8->7 ladder fed by TWO real kills
+## — sister_auber then brother_cassian — harvested via the LIVE walk-over gather and digested
+## through the SAME live Interactable verb every pathway uses).
+func _test_death_live() -> void:
+	print("[N5 death live reachability: New-Run pathway pick (2nd-win gate) + 2 real prey + pathway-gated leads]")
+	var runner := load("res://tests/test_death_live.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N5 death live reachability green (%d checks)" % int(r.get("passed", 0)))
+
+## N5 — the DEATH build's LIVE COMBAT IDENTITY (the M34 wire for the third pathway, zero new code).
+## The full harness lives in tests/test_death_primary.gd; its run_all() shares this suite's totals:
+## driving the REAL primary-attack input, a Death-kitted player CASTS censer_ember (spirit debited,
+## no revolver round spent) and a Hunter still FIRES revolver_shot (ammo, no spirit); the melee
+## floor is kit-aware (Death inert "", Hunter pistol_whip); a DRAINED pool refuses no_spirit + emits
+## the M34 spirit_empty cue.
+func _test_death_primary() -> void:
+	print("[N5 death primary: the attack button is kit-aware — a live Death build casts censer_ember; drained pool cues spirit_empty]")
+	var runner := load("res://tests/test_death_primary.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N5 death primary green (%d checks)" % int(r.get("passed", 0)))
+
+## N5 — the DEATH SAVE->LOAD ROUNDTRIP (the Death counterpart to test_hermit_save_load). The full
+## harness lives in tests/test_death_save_load.gd; its run_all() shares this suite's pass/fail
+## totals: a Death run advanced to Seq 7 (both ladder arts) + dirtied meters/leads/shop round-trips
+## through the disk save (pathway=="death" + rung + granted arts + the death leads' states survive),
+## and the player's spirituality pool stays INTENTIONALLY transient.
+func _test_death_save_load() -> void:
+	print("[N5 death save/load: a Death run (Seq 7 + arts + meters + leads + shop) round-trips the disk save; spirituality transient]")
+	var runner := load("res://tests/test_death_save_load.gd")
+	var r: Dictionary = runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N5 death save/load green (%d checks)" % int(r.get("passed", 0)))
+
+## N5 — the DEATH FULL-RUN INTEGRATION HARNESS (the Death counterpart to hermit_full_run.gd — a
+## maintained baseline gate). The full harness lives in tests/death_full_run.gd; its run_all() is a
+## COROUTINE (mounts the real BootController to drive the New-Run pathway pick), so this wrapper
+## AWAITS it and shares the suite's totals. Proves the WHOLE Death loop closes in ONE continuous
+## run: two wins -> pick Death at the New-Run picker -> hunt sister_auber AND brother_cassian DOWN
+## through real combat (two-phase descent live) -> harvest each drop via the LIVE walk-over gather
+## -> digest via the LIVE advance verb -> climb Seq 9->8->7 (grave_hands, wailing_host) -> reach a
+## Ritual Night WIN (end_run once, no softlock).
+func _test_death_full_run() -> void:
+	print("[N5 death full-run: two wins -> pick Death -> hunt auber+cassian (real combat) -> harvest+digest -> Seq 9->8->7 -> Ritual Night win]")
+	var runner := load("res://tests/death_full_run.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N5 death full-run green (%d checks)" % int(r.get("passed", 0)))
+
 ## B1 (retro patch wave) — the LIVE GROUND-GATHER seam. The full harness lives in
 ## tests/test_ground_gather.gd; its run_all() is a COROUTINE (mounts a real Player body and lets the
 ## physics-frame walk-over pickup do the gathering), so this wrapper AWAITS it and shares the suite's
@@ -863,7 +1201,7 @@ func _test_save_load_roundtrip() -> void:
 	WS.set_pressure(&"panic", 42.0)
 	CD.from_dict({})
 	CD.collect("spent_revolver")
-	var tmp := "user://test_save.json"
+	var tmp := TSandbox.path("test_save.json")
 	_ok(SM.save_game(tmp), "save_game writes file")
 	WS.set_pressure(&"panic", 7.0)
 	CD.from_dict({})
@@ -1041,7 +1379,7 @@ func _test_substrate_save_load() -> void:
 	EB.clear()
 	EB.emit_event("seed_event", {"x": 1})
 	AG.get_agent("clerk_voss").position = Vector2(123, 456)
-	var tmp := "user://test_substrate.json"
+	var tmp := TSandbox.path("test_substrate.json")
 	_ok(SM.save_game(tmp), "save_game writes file")
 	EB.clear()
 	AG.get_agent("clerk_voss").position = Vector2.ZERO
@@ -1132,7 +1470,7 @@ func _test_inventory_save_load() -> void:
 	INV.clear()
 	INV.add("candle", 4)
 	INV.add("spirit_pendulum")
-	var tmp := "user://test_inventory.json"
+	var tmp := TSandbox.path("test_inventory.json")
 	_ok(SM.save_game(tmp), "save_game writes file")
 	INV.clear()
 	_ok(INV.count_of("candle") == 0, "inventory cleared before load")
@@ -1464,13 +1802,13 @@ func _point_in_any_collider(p: Vector2, colliders: Array) -> String:
 ## Per-texture opaque bounding box, as FRACTIONS of the texture rect (x, y, w, h), precomputed
 ## with PIL (alpha > 16) because headless GDScript cannot decode the imported .ctex pixel data.
 ## Two special entries:
-##   • chapel_test.png — the bbox of the CHURCH BUILDING itself (nave + tower, hand-measured px
+##   • chapel.png — the bbox of the CHURCH BUILDING itself (nave + tower, hand-measured px
 ##     330,55..870,765 of 1186x980): the canvas is a whole walled churchyard whose grounds are
 ##     deliberately walkable, so the footprint contract is against the building, not the yard.
 ##   • klein_house.png — the only sprite with transparent padding (px 42,46..932,981 of 1024²).
 ## Every other building sprite is tight-cropped: opaque bbox == full canvas.
 const CITY_SPRITE_OPAQUE := {
-	"chapel_test.png": Rect2(0.278246, 0.056122, 0.455312, 0.724490),
+	"chapel.png": Rect2(0.278246, 0.056122, 0.455312, 0.724490),
 	"klein_house.png": Rect2(0.041016, 0.044922, 0.869141, 0.913086),
 	"blackthorn.png": Rect2(0, 0, 1, 1),
 	"university.png": Rect2(0, 0, 1, 1),
@@ -1910,7 +2248,8 @@ func _test_dialogue_panel_hybrid() -> void:
 
 func _short_mem_has(agent: Agent, substr: String) -> bool:
 	for m in agent.short_memory:
-		if String(m).to_lower().contains(substr.to_lower()):
+		# mem_text, not String(): scored rows (lab P1) are {"text","importance"} dicts.
+		if Agent.mem_text(m).to_lower().contains(substr.to_lower()):
 			return true
 	return false
 
@@ -5507,7 +5846,8 @@ func _test_coordinator_focus() -> void:
 ## True when any line of the agent's short_memory contains `needle` (case-insensitive).
 func _memory_mentions(agent: Agent, needle: String) -> bool:
 	for line in agent.short_memory:
-		if String(line).to_lower().contains(needle.to_lower()):
+		# mem_text, not String(): scored rows (lab P1) are {"text","importance"} dicts.
+		if Agent.mem_text(line).to_lower().contains(needle.to_lower()):
 			return true
 	return false
 
@@ -5651,6 +5991,265 @@ func _test_roomview_tracks_all() -> void:
 	root.remove_child(gc)
 	gc.free()
 	AG.rebuild()
+
+## N4 (A6/D-A1) — MONSTER ART AT BODY-BIND. An agent ALREADY wearing a monster form when its body
+## binds (a dispatched hunter, the backlash wave, the half-landed avatar) must render its real
+## assets/enemies painting from FRAME ONE, through the SAME resolution seam the mid-fight mask-drop
+## swap uses (CombatExecutor.resolve_form_sprite_path — ONE form->art code path, filename
+## convention). The alias case is DATA, never an engine id branch: a combat_forms.json row's
+## `sprite` path (nighthawk_pursuer -> the nighthawk captain's standee until its own painting
+## ships). No art resolved = the existing character-art/placeholder ladder, untouched.
+func _test_n4_form_art_at_body_bind() -> void:
+	print("[N4: monster art at body-bind]")
+	var AG: Object = root.get_node("/root/Agents")
+	var ADB: Object = root.get_node("/root/AbilityDB")
+	AG.rebuild()
+	# (1) the resolver exists and is the ONE form->art path: convention + the DATA alias.
+	var probe_ex := CombatExecutor.new()
+	var has_resolver: bool = probe_ex.has_method("resolve_form_sprite_path")
+	_ok(has_resolver, "N4: CombatExecutor.resolve_form_sprite_path exists (one form->art path)")
+	if has_resolver:
+		_ok(String(probe_ex.call("resolve_form_sprite_path", "beyond_hunter")) ==
+			"res://assets/enemies/beyond_hunter.png",
+			"N4: resolver — a painted monster form resolves by the enemies/<form>.png convention")
+		_ok(String(probe_ex.call("resolve_form_sprite_path", "nighthawk_pursuer")) ==
+			"res://assets/characters/nighthawk_captain.png",
+			"N4: resolver — an unpainted form rides its DATA alias (nighthawk captain standee)")
+		_ok(String(probe_ex.call("resolve_form_sprite_path", "descended_avatar_true")) ==
+			"res://assets/enemies/descended_avatar_true.png",
+			"N4: resolver — the fully-descended avatar resolves its own placed painting")
+		_ok(String(probe_ex.call("resolve_form_sprite_path", "civilian")) == "",
+			"N4: resolver — an artless form resolves NO art (ladder falls through)")
+		_ok(String(probe_ex.call("resolve_form_sprite_path", "")) == "",
+			"N4: resolver — the empty form resolves NO art")
+	probe_ex.free()
+	# (2) the alias is DATA (combat_forms.json row field), no engine id branch anywhere.
+	_ok(String((ADB.form_def("nighthawk_pursuer") as Dictionary).get("sprite", "")) ==
+		"res://assets/characters/nighthawk_captain.png",
+		"N4: nighthawk_pursuer aliases its art in DATA (combat_forms.json `sprite`)")
+	# (3) D4: the true-avatar painting is PLACED (asset ships in-repo, importable).
+	_ok(ResourceLoader.exists("res://assets/enemies/descended_avatar_true.png"),
+		"N4: descended_avatar_true.png ships in assets/enemies/ (the fully-descended swap target)")
+	# (4) body-bind: every pre-formed threat renders its real art from frame one (white modulate —
+	# real art brings its own palette), sized to the mask-drop standee height.
+	var cases: Dictionary = {
+		"n4_beyond_probe": ["beyond_hunter", "res://assets/enemies/beyond_hunter.png"],
+		"n4_thrall_probe": ["cult_thrall", "res://assets/enemies/cult_thrall.png"],
+		"n4_avatar_probe": ["descended_avatar", "res://assets/enemies/descended_avatar.png"],
+		"n4_true_avatar_probe": ["descended_avatar_true", "res://assets/enemies/descended_avatar_true.png"],
+		"n4_nighthawk_probe": ["nighthawk_pursuer", "res://assets/characters/nighthawk_captain.png"],
+	}
+	for id in cases:
+		var a := Agent.new(String(id))
+		a.combat_form = String(cases[id][0])
+		AG.register_agent(a)
+		var npc = load("res://scenes/NPC.tscn").instantiate()
+		npc.npc_id = String(id)
+		root.add_child(npc)
+		await process_frame
+		var spr: Sprite2D = npc.get_node("Sprite2D")
+		var path: String = spr.texture.resource_path if spr.texture != null else ""
+		_ok(path == String(cases[id][1]),
+			"N4: %s binds wearing its %s art from frame one (got '%s')" % [id, cases[id][0], path])
+		_ok(spr.modulate.r == 1.0 and spr.modulate.g == 1.0 and spr.modulate.b == 1.0,
+			"N4: %s form art drops the flat identity tint" % id)
+		npc.queue_free()
+		await process_frame
+	# (5) an artless-form agent keeps the placeholder ladder (icon + tint) — no regression.
+	var civ := Agent.new("n4_civ_probe")
+	civ.combat_form = "civilian"
+	AG.register_agent(civ)
+	var cnpc = load("res://scenes/NPC.tscn").instantiate()
+	cnpc.npc_id = "n4_civ_probe"
+	root.add_child(cnpc)
+	await process_frame
+	var cspr: Sprite2D = cnpc.get_node("Sprite2D")
+	_ok(cspr.texture != null and cspr.texture.resource_path == "res://icon.svg",
+		"N4: an artless form keeps the character/placeholder ladder")
+	cnpc.queue_free()
+	await process_frame
+	# (6) the BACKLASH seam: an EXISTING body whose agent sheds into a monster form mid-scene
+	# (RitualNight flips combat_form directly) swaps to the painting the moment its executor
+	# binds on the in_combat flip — the wave is SEEN without waiting for a respawn.
+	var bl := Agent.new("n4_backlash_probe")
+	bl.combat_form = "butcher_human"   # artless human phase -> placeholder at bind
+	AG.register_agent(bl)
+	var bnpc = load("res://scenes/NPC.tscn").instantiate()
+	bnpc.npc_id = "n4_backlash_probe"
+	root.add_child(bnpc)
+	await process_frame
+	var bspr: Sprite2D = bnpc.get_node("Sprite2D")
+	_ok(bspr.texture != null and bspr.texture.resource_path == "res://icon.svg",
+		"N4: (pre) the human phase binds as the placeholder (no butcher_human painting)")
+	bl.combat_form = "cult_thrall"
+	bl.in_combat = true
+	bnpc._physics_process(1.0 / 60.0)   # the in_combat flip binds the executor
+	_ok(bspr.texture != null and bspr.texture.resource_path == "res://assets/enemies/cult_thrall.png",
+		"N4: the backlash form's painting lands the moment the executor binds")
+	bl.in_combat = false
+	bnpc._physics_process(1.0 / 60.0)   # frees the executor
+	bnpc.queue_free()
+	await process_frame
+	AG.rebuild()
+
+## N4 (A6) — RECONCILE ON EVENTS. RoomView must respawn bodies the moment the world changes out
+## from under the beat cadence: a threat_dispatched into the player's room is ON SCREEN within a
+## frame or two (not up to a whole 15-game-minute beat later), the RitualNight staging signals
+## (crypt roster / backlash wave / half-landed avatar) repopulate at once, and a scene swap
+## (room_changed) shows the new room's roster the moment the player enters.
+func _test_n4_event_reconcile() -> void:
+	print("[N4: RoomView reconciles on world events]")
+	var AG: Object = root.get_node("/root/Agents")
+	var RV: Object = root.get_node("/root/RoomView")
+	var EB: Object = root.get_node("/root/EventBus")
+	var RN: Object = root.get_node("/root/RitualNight")
+	AG.rebuild()
+	AG.ensure_player_proxy(Vector2(100, 100), "city")
+	var gc := _StubGameController.new()
+	var world := Node2D.new()
+	gc.scene = world
+	gc.add_child(world)
+	gc.add_to_group("game_controller")
+	root.add_child(gc)
+	RV.set_tracked([])   # track-all default (reconciles now — the roster is currently empty)
+	# (1) a dispatched threat's body appears on the threat_dispatched world fact, not next beat.
+	var hunter := Agent.new("n4_ev_hunter__1")
+	hunter.combat_form = "beyond_hunter"
+	hunter.room = "city"
+	AG.register_agent(hunter)
+	_ok(not (RV._bodies as Dictionary).has("n4_ev_hunter__1"),
+		"N4: (pre) no body before the event (the beat cadence alone is idle)")
+	EB.emit_event("threat_dispatched", {"meter": "notice", "form": "beyond_hunter", "agent": "n4_ev_hunter__1"})
+	await process_frame
+	_ok((RV._bodies as Dictionary).has("n4_ev_hunter__1"),
+		"N4: threat_dispatched respawns the player's room within a frame")
+	# (2) the RitualNight staging signals drive the same respawn pass.
+	var thrall := Agent.new("n4_ev_thrall_0")
+	thrall.combat_form = "cult_thrall"
+	thrall.room = "city"
+	AG.register_agent(thrall)
+	RN.emit_signal("backlash_spawned", ["n4_ev_thrall_0"])
+	await process_frame
+	_ok((RV._bodies as Dictionary).has("n4_ev_thrall_0"),
+		"N4: backlash_spawned respawns the room within a frame")
+	var av := Agent.new("n4_ev_avatar")
+	av.combat_form = "descended_avatar"
+	av.room = "city"
+	AG.register_agent(av)
+	RN.emit_signal("avatar_half_landed", "n4_ev_avatar")
+	await process_frame
+	_ok((RV._bodies as Dictionary).has("n4_ev_avatar"),
+		"N4: avatar_half_landed respawns the room within a frame")
+	var cele := Agent.new("n4_ev_celebrant")
+	cele.combat_form = "butcher_human"
+	cele.room = "city"
+	AG.register_agent(cele)
+	RN.emit_signal("ritual_night_started", "city", false)
+	await process_frame
+	_ok((RV._bodies as Dictionary).has("n4_ev_celebrant"),
+		"N4: ritual_night_started respawns the room within a frame")
+	# (3) scene swap: entering the crypt shows its standing roster within two frames — the
+	# room_changed pass must land on the NEW scene (the old subtree dies at frame end).
+	var defender := Agent.new("n4_ev_defender")
+	defender.combat_form = "butcher_human"
+	defender.room = "cathedral_crypt"
+	AG.register_agent(defender)
+	var world2 := Node2D.new()
+	gc.scene = world2
+	gc.add_child(world2)
+	gc.room = "cathedral_crypt"
+	AG.ensure_player_proxy(Vector2.ZERO, "cathedral_crypt")
+	root.get_node("/root/WorldState").room_changed.emit("cathedral_crypt", "res://scenes/CathedralCrypt.tscn")
+	await process_frame
+	await process_frame
+	_ok((RV._bodies as Dictionary).has("n4_ev_defender"),
+		"N4: room_changed repopulates the entered room within two frames (crypt roster on entry)")
+	# teardown (clear_tracked BEFORE the stub world frees the bodies — the tracks-all test's rule)
+	RV.clear_tracked()
+	gc.remove_from_group("game_controller")
+	root.remove_child(gc)
+	gc.free()
+	AG.rebuild()
+
+## The newest toast card's visible text (title + body labels), for the N4 announcement asserts.
+func _n4_toast_text(toasts: Control) -> String:
+	var stack: Node = toasts.get_node("Stack")
+	if stack.get_child_count() == 0:
+		return ""
+	var card: Node = stack.get_child(stack.get_child_count() - 1)
+	var txt := ""
+	for lbl in card.find_children("*", "Label", true, false):
+		txt += (lbl as Label).text + "\n"
+	return txt
+
+## N4 (A6) — THREATS ANNOUNCED. The hunt arrives and resolves with a diegetic toast card in the
+## established alert channel; the COPY lives in DATA (combat_forms.json `announce` rows — the
+## engine holds no threat literal; a form authoring no lines stays silent). MeterThreats'
+## threat_resolved world fact carries the FORM so the consumer can resolve the copy, and the
+## audio map routes both facts to staged stings (data-only rows).
+func _test_n4_threat_announced() -> void:
+	print("[N4: threat lifecycle announced (toasts + data copy + audio rows)]")
+	var EB: Object = root.get_node("/root/EventBus")
+	var ADB: Object = root.get_node("/root/AbilityDB")
+	var toasts: Control = (load("res://ui/Toasts.tscn") as PackedScene).instantiate()
+	root.add_child(toasts)
+	await process_frame
+	var base: int = int(toasts.card_count())
+	EB.emit_event("threat_dispatched", {"meter": "heat", "form": "nighthawk_pursuer", "agent": "zz_n4"})
+	await process_frame
+	_ok(int(toasts.card_count()) == base + 1, "N4: threat_dispatched surfaces ONE toast card")
+	_ok(_n4_toast_text(toasts).find("scent") != -1,
+		"N4: the dispatch copy is the authored data line (…have your scent…)")
+	EB.emit_event("threat_resolved", {"meter": "heat", "form": "nighthawk_pursuer", "agent": "zz_n4"})
+	await process_frame
+	_ok(int(toasts.card_count()) == base + 2, "N4: threat_resolved surfaces ONE toast card")
+	_ok(_n4_toast_text(toasts).find("lost you") != -1,
+		"N4: the resolve copy is the authored data line (The hunt has lost you.)")
+	# both dispatched threat forms author their lines in DATA.
+	for f in ["nighthawk_pursuer", "beyond_hunter"]:
+		var ann: Dictionary = (ADB.form_def(String(f)) as Dictionary).get("announce", {})
+		_ok(ann.get("dispatched") is Dictionary and ann.get("resolved") is Dictionary,
+			"N4: %s authors dispatch+resolve copy in DATA" % f)
+	# a form with no authored copy stays SILENT (the engine holds no fallback literal).
+	EB.emit_event("threat_dispatched", {"meter": "heat", "form": "zz_no_such_form", "agent": "zz_n4"})
+	await process_frame
+	_ok(int(toasts.card_count()) == base + 2, "N4: a form with no authored copy stays silent")
+	toasts.queue_free()
+	await process_frame
+	# the resolved WORLD FACT carries the form (the copy key), from the real MeterThreats seam.
+	var MT: Object = root.get_node("/root/MeterThreats")
+	var AG: Object = root.get_node("/root/Agents")
+	AG.rebuild()
+	AG.ensure_player_proxy(Vector2.ZERO, "city")
+	MT.reset()
+	MT.spawn_room = "city"
+	MT.spawn_pos = Vector2(50, 50)
+	MT._spawn_threat("heat")
+	var tid := String(MT.active_threat_id("heat"))
+	_ok(tid != "", "N4: (setup) a heat threat staged through the real spawn seam")
+	EB.emit_event("agent_downed", {"target": tid})
+	var evs: Array = EB.events("threat_resolved")
+	var last: Dictionary = evs[evs.size() - 1] if evs.size() > 0 else {}
+	_ok(String(((last.get("data", {}) as Dictionary)).get("form", "")) == "nighthawk_pursuer",
+		"N4: threat_resolved carries the form (the announcement copy key)")
+	MT.reset()
+	MT.spawn_room = ""
+	MT.spawn_pos = Vector2.ZERO
+	AG.rebuild()
+	# the audio map rows: dispatch/resolve route to DECLARED streams (data-only wiring).
+	var AM = load("res://src/AudioManager.gd")
+	var map: Dictionary = AM.load_map()
+	var have: Dictionary = {"threat_dispatched": false, "threat_resolved": false}
+	for r in (map.get("rules", []) as Array):
+		var evn := String((r as Dictionary).get("event", ""))
+		if have.has(evn):
+			var streams_ok := true
+			for s in ((r as Dictionary).get("sounds", []) as Array):
+				if not (map.get("streams", {}) as Dictionary).has(String(s)):
+					streams_ok = false
+			have[evn] = streams_ok
+	_ok(bool(have["threat_dispatched"]), "N4: audio row — threat_dispatched cues a declared stream")
+	_ok(bool(have["threat_resolved"]), "N4: audio row — threat_resolved cues a declared stream")
 
 func _test_inspect_signal() -> void:
 	print("[inspect signal]")
@@ -6191,7 +6790,7 @@ func _test_player_state_save_load() -> void:
 	SP.add_impede(33.0, "test")
 	SP.remove_ingredient("candle", 1)
 	OV.player_involved = true
-	var tmp := "user://test_player_state.json"
+	var tmp := TSandbox.path("test_player_state.json")
 	_ok(SM.save_game(tmp), "save_game writes file")
 	SP.reset(); OV.reset()
 	_ok(SP.impede_score == 0.0, "impede cleared before load")
@@ -6305,7 +6904,7 @@ func _test_prayer_service() -> void:
 	PS.pray("the_fool", "please guide me")   # cryptic -> +1 standing
 	var fool_standing: float = PS.get_standing("the_fool")
 	_ok(fool_standing > 0.0, "the Fool's cryptic answer still nudges standing")
-	var tmp := "user://test_prayer.json"
+	var tmp := TSandbox.path("test_prayer.json")
 	_ok(SM.save_game(tmp), "save writes prayer standing")
 	PS.reset()
 	_ok(PS.get_standing("the_fool") == 0.0, "standing cleared before load")
@@ -6352,7 +6951,7 @@ func _test_schema_parity_with_sidecar() -> void:
 	# Write fixtures to a temp file and pass its PATH (not inline JSON — a quote-laden
 	# JSON string does not survive an argv intact), then run
 	# `/usr/bin/env python3 <helper> <fixtures-file>`.
-	var fixtures_path := "user://_parity_fixtures.json"
+	var fixtures_path := TSandbox.path("_parity_fixtures.json")
 	var ff := FileAccess.open(fixtures_path, FileAccess.WRITE)
 	ff.store_string(JSON.stringify(fixtures))
 	ff.close()
@@ -6434,7 +7033,7 @@ func _test_prayer_parity_with_sidecar() -> void:
 		{"god": "the_fool", "prayer": "demand fortune now", "standing": 0.0},
 		{"god": "outer_god", "prayer": "nothing in particular", "standing": -5.0},
 	]
-	var fixtures_path := "user://_prayer_fixtures.json"
+	var fixtures_path := TSandbox.path("_prayer_fixtures.json")
 	var ff := FileAccess.open(fixtures_path, FileAccess.WRITE)
 	ff.store_string(JSON.stringify(fixtures))
 	ff.close()
@@ -6945,7 +7544,7 @@ func _test_map_projection_world_to_map() -> void:
 	print("[map projection global transform]")
 	# Constants match the canonical map-image space (map_v3.png is 1254x1254).
 	_ok(MapProjection.MAP_SIZE == Vector2(1254.0, 1254.0), "MAP_SIZE is the map_v3.png pixel size")
-	# UNIFIED (coordinate-unification pass): City.tscn's ground is ground_test.png (2508px, a 2x
+	# UNIFIED (coordinate-unification pass): City.tscn's ground is city_ground.png (2508px, a 2x
 	# render of the 1254 map) at scale 2.5 -> a 6270x6270 world, i.e. exactly 5.0 world units per
 	# map pixel. One uniform transform now covers the live scene, the rite anchor, and the tracker.
 	_ok(MapProjection.CITY_SCALE == 5.0, "CITY_SCALE is 5.0 (live City.tscn world / map_v3 px)")
@@ -7587,6 +8186,11 @@ func _test_combat_anim_wiring() -> void:
 	monster.combat_form = "bieber_monster"
 	var mx := CombatExecutor.new()
 	mx.bind(monster, body)
+	# N4: binding a body to an agent ALREADY wearing an art-backed form applies its painting AND
+	# rebases the resting look onto it — every later strip-restore lands on the monster, never the
+	# pre-bind placeholder (the pre-N4 pin restored to the raw icon base).
+	_ok(String(sprite.texture.resource_path).ends_with("enemies/bieber_monster.png"),
+		"N4: the bind applies the already-worn form's painting (pre-formed monster)")
 	_ok(bool(mx.try_cast("cleaver_swipe", "").get("ok", false)), "the monster swings")
 	_ok(sprite.texture != base_tex
 		and String(sprite.texture.resource_path).ends_with("bieber_monster_attack_side.png"),
@@ -7595,14 +8199,16 @@ func _test_combat_anim_wiring() -> void:
 	_step_m2([mx], 0.4)
 	_ok(sprite.frame > 0, "the strip's frames advance on the executor clock")
 	_step_m2([mx], 1.0)
-	_ok(sprite.texture == base_tex and sprite.hframes == 1, "a finished strip restores the resting look")
+	_ok(String(sprite.texture.resource_path).ends_with("enemies/bieber_monster.png") and sprite.hframes == 1,
+		"a finished strip restores the resting look (the worn form's art — N4 rebases at bind)")
 	# hurt on a landed hit; death held on the felling blow.
 	var shot: Dictionary = root.get_node("/root/AbilityDB").ability_for("revolver_shot")
 	mx.receive_hit(ghost, shot, Vector2.RIGHT)
 	_ok(String(sprite.texture.resource_path).ends_with("bieber_monster_hurt_down.png"),
 		"a landed hit plays the hurt strip")
 	_step_m2([mx], 1.0)
-	_ok(sprite.texture == base_tex, "…and the flinch restores")
+	_ok(String(sprite.texture.resource_path).ends_with("enemies/bieber_monster.png"),
+		"…and the flinch restores (to the worn form's art)")
 	monster.hp = 10.0
 	mx.receive_hit(ghost, shot, Vector2.RIGHT)
 	_ok(monster.downed, "the felling blow downs the body")
@@ -8492,6 +9098,127 @@ func _test_real_meta_untouched() -> void:
 	_ok(exists == _real_meta_existed, "the suite neither created nor deleted the real user://meta.json")
 	_ok(bytes_now == _real_meta_before, "the real user://meta.json is byte-identical to its pre-suite bytes")
 
+## M_cast (user request) — THE CAST roulette: the title-screen NPC dossier panel. The full harness
+## lives in tests/test_cast_roulette.gd (pure CastCodex view-model builder, codex-gated redaction/
+## reveal mapping, the CastPanel deck driver, and the title-button live reachability); its run_all()
+## shares this suite's pass/fail totals.
+func _test_cast_roulette() -> void:
+	print("[cast roulette: the title-screen NPC dossier panel (M_cast)]")
+	var runner := load("res://tests/test_cast_roulette.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"cast roulette green (%d checks)" % int(r.get("passed", 0)))
+
+## N3 — CONTINUE IS A FIRST-CLASS RESUME (B-F1/B-F2/B-F5). The full harness lives in
+## tests/test_continue_resume.gd (the save payload's run_manager session block; a cold-boot ->
+## REAL BootController.continue_run() resume with run_active/day/checkpoint/pause/codex/Ritual-
+## Night all live; save invalidation on run end; the payoff idempotence latch; the picker-cancel
+## + codex-copy riders). run_all() is a COROUTINE (mounts the real boot controller), so AWAIT it.
+## The true two-process case (fresh autoloads across a real process boundary) is the registered
+## tool tests/continue_probe.sh.
+func _test_continue_resume() -> void:
+	print("[N3 continue resume: save session block, first-class Continue, staleness, payoff latch]")
+	var runner := load("res://tests/test_continue_resume.gd")
+	var r: Dictionary = await runner.run_all()
+	_passed += int(r.get("passed", 0))
+	_failed += int(r.get("failed", 0))
+	_ok(int(r.get("failed", 1)) == 0 and int(r.get("passed", 0)) > 0,
+		"N3 continue resume green (%d checks)" % int(r.get("passed", 0)))
+
+# --- N1 (sprint safety): harness registration + the standalone fleet ----------------------------
+## Every tests/*.gd must be REGISTERED: load()-folded in-process by a _test_* above, listed in
+## STANDALONE_HARNESSES (run by _test_standalone_fleet), or a documented TOOL in TOOL_SCRIPTS +
+## tests/TOOLS.md. A new tests/*.gd that is none of these turns the suite RED — no harness can be
+## silently unregistered again (N1; the audit found ~30 runners registered nowhere, three rotted).
+## Watched RED with the registration lists empty: one FAIL per then-unregistered file.
+func _test_harness_registry() -> void:
+	print("[harness registry: every tests/*.gd is registered — in-suite, standalone fleet, or a documented tool (N1)]")
+	var own_src := FileAccess.get_file_as_string("res://tests/run_tests.gd")
+	var tools_md := FileAccess.get_file_as_string("res://tests/TOOLS.md")
+	var d := DirAccess.open("res://tests")
+	_ok(d != null, "tests/ dir opens")
+	if d == null:
+		return
+	d.list_dir_begin()
+	var name := d.get_next()
+	while name != "":
+		if name.ends_with(".gd") and name != "run_tests.gd":
+			var in_suite := own_src.contains("load(\"res://tests/%s\")" % name)
+			var in_fleet: bool = STANDALONE_HARNESSES.has(name)
+			var is_tool: bool = TOOL_SCRIPTS.has(name)
+			_ok(in_suite or in_fleet or is_tool,
+				"tests/%s is registered (in-suite load / standalone fleet / documented tool)" % name)
+			if is_tool:
+				_ok(tools_md.contains(name), "tests/TOOLS.md documents the tool %s" % name)
+		name = d.get_next()
+	d.list_dir_end()
+	# No stale registrations either: every listed name must still exist on disk.
+	for n in STANDALONE_HARNESSES + TOOL_SCRIPTS:
+		_ok(FileAccess.file_exists("res://tests/" + String(n)),
+			"registered tests/%s exists on disk" % String(n))
+	# Review fix (lab pull-ins wave): the shell-level isolation proof must run EVERY fleet
+	# harness's standalone entry path too — a fleet entry absent from tests/isolation_proof.sh
+	# would leave its standalone _init path (TestSandbox self-activation) exercised by no gate
+	# (exactly how test_polish/test_hud_persistence/test_run_shell rotted before N1).
+	var proof_sh := FileAccess.get_file_as_string("res://tests/isolation_proof.sh")
+	_ok(not proof_sh.is_empty(), "tests/isolation_proof.sh is readable from the suite")
+	for n in STANDALONE_HARNESSES:
+		_ok(proof_sh.contains("tests/" + String(n)),
+			"isolation_proof.sh runs fleet harness %s standalone" % String(n))
+
+## N1 — RUN every registered standalone harness as a child Godot process (same binary, same
+## project) and fold its own pass/fail counts + exit code into this suite's totals. Each child
+## activates its own TestSandbox in _init, so the fleet inherits the user-dir isolation.
+func _test_standalone_fleet() -> void:
+	var exe := OS.get_executable_path()
+	var proj := ProjectSettings.globalize_path("res://")
+	for f in STANDALONE_HARNESSES:
+		print("[standalone fleet: %s]" % f)
+		var out: Array = []
+		var code := OS.execute(exe, ["--headless", "--path", proj, "-s", "res://tests/" + String(f)], out, true)
+		var text := String(out[0]) if out.size() > 0 else ""
+		var c := _fleet_counts(text)
+		_passed += int(c["passed"])
+		_failed += int(c["failed"])
+		_ok(code == 0 and int(c["passed"]) > 0 and int(c["failed"]) == 0,
+			"standalone %s green (exit %d, %d passed / %d failed)" % [f, code, int(c["passed"]), int(c["failed"])])
+		if code != 0 or int(c["failed"]) > 0 or int(c["passed"]) == 0:
+			print(text.right(1500))
+
+## Parse the LAST "=== N passed, M failed ===" style line a harness printed ("asserts passed" too).
+static func _fleet_counts(text: String) -> Dictionary:
+	var re := RegEx.new()
+	re.compile("(\\d+)\\s+(?:asserts\\s+)?passed,\\s+(\\d+)\\s+failed")
+	var last: RegExMatch = null
+	for m in re.search_all(text):
+		last = m
+	if last == null:
+		return {"passed": 0, "failed": 0}
+	return {"passed": int(last.get_string(1)), "failed": int(last.get_string(2))}
+
+## N1 (sprint safety) — the end-of-suite USER-DIR ISOLATION guard (registered LAST). Three teeth:
+##   (a) the suite ran with the TestSandbox ACTIVE (every persistent seam redirected into
+##       user://test_sandbox/<run>/ — see src/TestSandbox.gd);
+##   (b) the write guard recorded ZERO violations (no registered test asked a persistence seam to
+##       write outside the sandbox — such writes are REFUSED and land here);
+##   (c) the WHOLE real user dir (save.json, settings.json, hints_seen.json, meta.json, everything
+##       except engine caches + the sandbox itself) is byte-identical to its pre-suite snapshot.
+## Watched RED before TestSandbox.activate() was wired into _init: (a) failed outright and (c)
+## caught the suite's own writes landing in the real user dir. The standalone/full-fleet twin of
+## this proof is tests/isolation_proof.sh.
+func _test_user_dir_isolated() -> void:
+	print("[user-dir isolation: end-of-suite — the sandbox held and the REAL profile is untouched (N1)]")
+	_ok(TSandbox.active, "the TestSandbox was ACTIVE for the whole suite (activate() ran in _init)")
+	_ok(TSandbox.violations.is_empty(),
+		"ZERO sandbox write violations (guarded seams never targeted the real user dir): %s"
+		% ("-" if TSandbox.violations.is_empty() else ", ".join(TSandbox.violations)))
+	var after: Dictionary = TSandbox.snapshot_user_dir()
+	var same := after == _user_dir_before
+	_ok(same, "the REAL user dir is byte-identical to its pre-suite snapshot%s"
+		% ("" if same else (" — " + TSandbox.snapshot_diff(_user_dir_before, after))))
+
 ## B3: the meta-surface VIEW-MODEL builder (src/MetaSurface.gd) is pure + headless-testable — staged
 ## meta state in, display lines out. No autoload reads, no scene work. RED before the builder existed.
 func _test_meta_surface_builder() -> void:
@@ -8650,7 +9377,7 @@ func _test_polish_settings() -> void:
 	S.set_value("screen_shake", false)
 	S.set_value("colorblind", true)
 	S.set_value("text_scale", 1.25)
-	var tmp := "user://test_polish_settings.json"
+	var tmp := TSandbox.path("test_polish_settings.json")
 	_ok(S.save_to(tmp), "settings save writes a file")
 	S.reset_defaults()
 	_ok(S.get_bool("screen_shake"), "reset restored the default before reload")
@@ -9441,6 +10168,7 @@ func _test_shop_reset_and_snapshot() -> void:
 	_ok(S.restocks_left() == 3, "a fresh run opens with the full shelf (3 restocks)")
 	_ok(p.item_count("shilling") == 5, "a fresh run opens with the loadout coin (5)")
 	S.buy_ammo()
+	var coin_at_cp: int = p.item_count("shilling")   # the purse the nightly snapshot records
 	RM.checkpoint_night()
 	p.inventory["shilling"] = 100
 	S.buy_ammo()
@@ -9448,9 +10176,12 @@ func _test_shop_reset_and_snapshot() -> void:
 	RM.end_run("death")
 	_ok(S.restocks_left() == 2,
 		"a death restore returns the shelf to its CHECKPOINT state (2 left, not fresh/spent)")
+	# N2 (A2): the proxy inventory rides the checkpoint now — the restore wakes with the
+	# CHECKPOINTED purse (the old "died-with-proxy" fresh-loadout re-grant was the audited
+	# data-loss bug: every restore silently reset the player's coin/rounds/tools to day-1).
 	var p2: Agent = AG.ensure_player_proxy(Vector2.ZERO, "mr_frankys_inner")
-	_ok(p2.item_count("shilling") == 5,
-		"the restored proxy re-arms with the loadout coin (died-with-proxy semantics, as the 12 rounds)")
+	_ok(p2.item_count("shilling") == coin_at_cp,
+		"the restored proxy carries the CHECKPOINTED purse (%d, not the day-1 loadout)" % coin_at_cp)
 	RM.start_run()
 	_ok(S.restocks_left() == 3, "start_run() restores the FULL shelf — no carry across runs")
 	_end_shop_m15()

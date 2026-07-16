@@ -60,6 +60,11 @@ const LADDER_UNLOCKS: Dictionary = {
 		8: "astral_chains",     # Seq 8: the binding-stun control art (mirrors the Hunter's mark_prey)
 		7: "collapsing_star",   # Seq 7: the star/ritual AoE payoff (mirrors incendiary_round)
 	},
+	# M_death — the DEATH ladder (canon: Seq 8 Gravedigger 掘墓人 -> grave_hands; Seq 7 Spirit Medium 通灵者 -> wailing_host).
+	"death": {
+		8: "grave_hands",       # Seq 8: the binding-stun control art (mirrors astral_chains/mark_prey)
+		7: "wailing_host",      # Seq 7: the grave/spirit AoE payoff (mirrors collapsing_star/incendiary_round)
+	},
 }
 
 ## M28 — the acting-ritual deed id PER PATHWAY (direction v2 §6): each pathway digests its Characteristic
@@ -69,6 +74,7 @@ const LADDER_UNLOCKS: Dictionary = {
 const ACTING_DEEDS: Dictionary = {
 	"hunter": "hunter_act_predator",
 	"hermit": "hermit_act_rite",
+	"death": "death_act_rite",   # M_death — the corpse-collector's office
 }
 
 ## M26 BALANCE RETUNE #1 — the sell-fork PITY MARGIN, authored in data/scenario.json's `progression`
