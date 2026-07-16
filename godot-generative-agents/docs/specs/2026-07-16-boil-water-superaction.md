@@ -4,6 +4,24 @@
 live in `godot-generative-agents/backend/actions.py`, not the shared engine).
 **Date:** 2026-07-16
 
+> **Update (2026-07-16) — full watchable arc.** The delivered build extends the
+> minimal scaffold below into a complete, verifiable arc so the behavior reads on
+> the Godot timeline. Changes vs. the original spec:
+> - **Reusable pot, not cups.** Houston holds one `pot of murky water` with
+>   `portions` (drinking keeps the vessel), replacing the two `cup`s + empty `pot`.
+> - **Boil renames in place.** `boil` re-keys the vessel `pot of murky water` →
+>   `pot of boiled water` (updating its owner/location dict) so the state change is
+>   legible, alongside `is_boiled=True` + the `boiled` event.
+> - **Cure added** (reverses the original "no cure" non-goal, intentionally):
+>   `DrinkPenn` now clears `is_sick` and logs a `recovery` event when a sick agent
+>   drinks *safe* water — so the arc is drink → **sickness** → boil → **boiled** →
+>   drink → **recovery**, three timeline events.
+> - **Sofia's schedule** runs the 4-command arc; a 1100-step bake fires all three
+>   events at steps 945/946/947.
+> These are backend-local (still #464 for the engine lift). The rename re-keys a
+> dict by hand — fine for a scaffold, but a recurring object-transform would want a
+> proper engine primitive. The sections below describe the original minimal design.
+
 ## Problem
 
 The boil-water world exists (#300 / #465): Houston Hall holds two `cup of murky water`

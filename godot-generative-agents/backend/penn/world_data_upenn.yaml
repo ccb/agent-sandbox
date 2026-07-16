@@ -244,16 +244,16 @@ personas:
     emoji: 🎤
     steps: 60
   - place: Houston Hall
-    activity: meeting friends for dinner
+    activity: sorting out the water at dinner
+    # The full boil-water arc (#300), watchable end-to-end: she drinks the raw
+    # water and gets sick, boils it (the pot becomes "pot of boiled water"),
+    # then drinks the boiled water and recovers -- three timeline events
+    # (sickness -> boiled -> recovery).
     commands:
-    - get cup of murky water
-    - drink cup of murky water
-    # Boil-first variant (#300 boil superaction test scaffold): swap the two
-    # `commands` above for the three below to demo the healthy path in a mock
-    # run -- the agent boils the water first, so `drink` never sickens.
-    #   - boil water
-    #   - get cup of murky water
-    #   - drink cup of murky water
+    - get pot of murky water
+    - drink pot of murky water
+    - boil water
+    - drink pot of boiled water
 
 locations:
 - name: Penn campus

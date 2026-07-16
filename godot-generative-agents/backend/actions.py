@@ -143,8 +143,10 @@ class DrinkPenn(consume.Drink):
     would sicken every future drinkable; ``requires_boiling`` scopes the rule
     to raw water, and a (self-coded, #301) boil action clears it by setting
     ``is_boiled``. Registered with the same "drink" action name, so it
-    overrides the built-in for this game only. No cure exists in this world:
-    that gap is deliberate (see the spec; upstreaming tracked in #464)."""
+    overrides the built-in for this game only. Drinking *safe* water -- boiled,
+    or anything not flagged ``requires_boiling`` -- while ``is_sick`` clears the
+    sickness and logs a ``recovery`` event, so a full drink -> sicken -> boil ->
+    drink -> recover arc is watchable (upstreaming the generic slice is #464)."""
 
     def apply_effects(self):
         super().apply_effects()
@@ -165,6 +167,26 @@ class DrinkPenn(consume.Drink):
                 self.character.name,
                 "sickness",
                 summary=(f"{self.character.name} got sick drinking {self.item.name}"),
+                payload={
+                    "item": self.item.name,
+                    "location": getattr(self.character.location, "name", None),
+                },
+            )
+        elif self.character.get_property("is_sick"):
+            # The recovery half of the arc: safe water (boiled, or never
+            # contaminated) rehydrates and cures a sick drinker. Only fires on
+            # the sick->well transition, so a healthy drinker logs nothing.
+            self.character.set_property("is_sick", False)
+            self.parser.ok(
+                f"{self.character.name.capitalize()} drinks deep -- the clean "
+                "water settles their stomach, and the sickness passes."
+            )
+            self.game.log_event(
+                self.character.name,
+                "recovery",
+                summary=(
+                    f"{self.character.name} recovered after drinking {self.item.name}"
+                ),
                 payload={
                     "item": self.item.name,
                     "location": getattr(self.character.location, "name", None),
@@ -241,17 +263,18 @@ class Deactivate(base.Action):
 
 
 class BoilWater(base.Action):
-    """Boil the raw water in the room so it's safe to drink (#300 test scaffold).
+    """Boil the raw water so it's safe to drink (#300 test scaffold).
 
-    A deliberately self-contained "superaction": it gates on the real props
-    being present (a pot, a stove, and water that needs boiling) and, in one
-    step, marks every unboiled water item at the location ``is_boiled`` and
-    switches the stove on. It does NOT model the multi-step recipe -- filling
-    from the sink, putting the pot on the stove, heating over time -- because
-    that emergent assembly is the self-coding experiment (#299/#301). This is
-    the hand-authored "correct answer" so we can test, today, whether an agent
-    chooses to boil raw water before drinking it. Registered under a new "boil"
-    verb; the engine has no such action, so nothing is overridden."""
+    A deliberately self-contained "superaction": it gates on a stove in scope
+    and an unboiled water vessel (in the room or carried), and in one step marks
+    every such vessel ``is_boiled``, renames it "pot of murky water" -> "pot of
+    boiled water" so the state change is legible, and switches the stove on. It
+    does NOT model the multi-step recipe -- fill from the sink, put the pot on
+    the stove, heat over time -- because that emergent assembly is the
+    self-coding experiment (#299/#301). This is the hand-authored "correct
+    answer" so we can test whether an agent chooses to boil raw water before
+    drinking it. Registered under a new "boil" verb; the engine has no such
+    action, so nothing is overridden."""
 
     ACTION_NAME = "boil"
     ACTION_DESCRIPTION = "Boil water on a stove to make it safe to drink"
@@ -275,9 +298,6 @@ class BoilWater(base.Action):
     def _scope(self):
         return self.parser.get_items_in_scope(self.character)
 
-    def _has_named_item(self, name: str) -> bool:
-        return name in self._scope()
-
     def _stove(self):
         for item in self._scope().values():
             if item.name == "stove" and item.get_property("is_device"):
@@ -285,12 +305,11 @@ class BoilWater(base.Action):
         return None
 
     def _unboiled_water(self):
-        loc = self.character.location
-        if loc is None:
-            return []
+        # In scope = the room's items plus anything the character carries, so a
+        # pot the agent picked up boils just as a pot left on the counter would.
         return [
             item
-            for item in loc.items.values()
+            for item in self._scope().values()
             if item.get_property("requires_boiling")
             and not item.get_property("is_boiled")
         ]
@@ -300,9 +319,6 @@ class BoilWater(base.Action):
             return False
         if self.character.location is None:
             self.parser.fail("There is nowhere to boil water.")
-            return False
-        if not self._has_named_item("pot"):
-            self.parser.fail("There's no pot here to boil water in.")
             return False
         if self._stove() is None:
             self.parser.fail("There's no stove here to heat it on.")
@@ -318,6 +334,7 @@ class BoilWater(base.Action):
         boiled = self._unboiled_water()
         for water in boiled:
             water.set_property("is_boiled", True)
+            self._rename_to_boiled(water)
         self.game.log_event(
             self.character.name,
             "boiled",
@@ -328,6 +345,31 @@ class BoilWater(base.Action):
             },
         )
         return self.parser.ok(
-            f"{self.character.name.capitalize()} fills the pot at the {stove.name} "
-            "and boils the water until it's safe to drink."
+            f"{self.character.name.capitalize()} sets the pot on the {stove.name} "
+            "and boils it until the water runs clear and safe."
         )
+
+    def _rename_to_boiled(self, water):
+        # Make the state change legible: "pot of murky water" -> "pot of boiled
+        # water", re-keyed wherever it lives (a carried item is keyed by name in
+        # the owner's inventory; a room item in the location's items dict), so
+        # the renamed vessel is still matchable by "drink pot of boiled water".
+        new_name = water.name.replace("murky", "boiled")
+        if new_name == water.name:
+            return
+        owner = getattr(water, "owner", None)
+        loc = getattr(water, "location", None)
+        if (
+            owner is not None
+            and getattr(owner, "inventory", {}).get(water.name) is water
+        ):
+            owner.inventory.pop(water.name)
+            water.name = new_name
+            owner.inventory[water.name] = water
+        elif loc is not None and getattr(loc, "items", {}).get(water.name) is water:
+            loc.items.pop(water.name)
+            water.name = new_name
+            loc.items[water.name] = water
+        else:
+            water.name = new_name
+        water.description = "A steel pot of clean, boiled water -- safe to drink."
