@@ -4,6 +4,117 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-16
+
+**Focus:** close out the live-quality track — restart resilience, concurrent decides, run resume (#549, #366, #543)
+
+**Done today:**
+- **PR #565** (#549): re-anchor live followers after a backend **restart**. A restart rewinds the in-memory cursor, which wedged the web follower; the handshake now re-anchors when `!handshook && hs.cursor < cursor`, the poll loop detects `latest_cursor < cursor`, and `viewer.gd` reconnects + tears down/rejoins on a rewind. Guard: the background gap-refresh must never rewind. Deferred the two-sided (boot-nonce) detection to `main` and filed **#578**.
+- **PR #566** (#366): **concurrent per-agent LLM decisions** in the live loop — a pre-pass + fan-out with a per-decide timeout that falls back to idle. Late answers are *applied*, not discarded, so stateful brains don't desync or double-bill. Daemon-thread-per-decide (a shared pool starved on reset). 15 review findings fixed; the timing test asserts the serial-minus-parallel *difference* so it stays stable on 2-core CI.
+- **PR #567** (#543): **resume a persisted run** — `--resume [id|last]` at boot and `POST /runs/{id}/resume` live. Memory-first adoption (`_adopt_run`: step from frame count, last-frame tiles, dwell fast-forward, wholesale memory replace) plus a cost-base fix for the cost-clobber bug. This was #306's second half; **#306** closed (the `POST /runs` world-factory seam remains, tracked in **#568**).
+- Filed the **Smallville-parity cognition** epic **#579** and its five gaps: decide-prompt context block (#580), brain-authoritative pacing (#581), conversation consequences (#582), LLM-scored memory importance (#583), and a believability audit (#584).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Start the parity track: the decide-prompt context block (#580), then brain-authoritative pacing (#581).
+
+## 2026-07-15
+
+**Focus:** cross-agent conversation feed on the live dashboard (#534)
+
+**Done today:**
+- **PR #562** (#534): a companion-level **ConversationFeed** on the `#llm` dashboard that aggregates every agent's chat at the current step — newest-first, deduped by `(speaker, line)`. Pure render gap (no backend/type/dependency changes). Gotcha: `useReplayStep` was a single global owner, so I lifted the step up to `App` and passed it down as a prop, or the modal clobbered the dashboard.
+- Filed follow-ups: a full-feature **mock backend** to exercise the whole backend offline (#563), a `serve_penn --config` source to tune retrieval/temperature/cognition (#564, generalizing #514), and **POST /runs** as #306's last deliverable (#568).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Re-anchor the live follower on restart (#549); concurrent decides + adaptive pacing (#366).
+
+## 2026-07-14
+
+**Focus:** follow the live backend over WebSocket (#524)
+
+**Done today:**
+- **PR #547** (#524): the companion now follows the live backend **WS-first** (`/ws`) with the HTTP poll as a fallback, via a shared `applyFeedRecords` reducer and a React-free `followLive`. The e2e test bundles the driver with esbuild and runs it under native Node WS against a real `serve_penn` mock.
+- Filed **#549** (live follower wedges after a backend restart — cursor rewind) and **#545** (nondeterministic serialization: `Thing.to_primitive()` dumps the `commands` set as `list(self.commands)`).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Re-anchor the follower after a restart (#549).
+
+## 2026-07-13
+
+**Focus:** bring the web companion current — one live page, LLM dashboard, persona meta, dev tooling
+
+**Done today:**
+- **PR #520**: staleness audit + the agents view now follows a live backend (CCB's notes folded in: a web CI job, eviction-gap re-handshake, incremental memories).
+- **PR #521** (#519): the **LLM dashboard** — a per-agent grid over the live request stream (`#llm` view).
+- **PR #522**: centralized all query-param writes in a single `setUrlParam`.
+- **PR #530** (#528): unified the agents view + LLM dashboard into **one live page**, agent card as a modal, with an `?agent=` deep-link.
+- **PR #531**: web **dev tooling** — Biome (format + lint), CSS tokens + Modules, Vitest (pinned v3 — v4 needs Vite 6), and lucide-react nav icons.
+- **PR #532** (#523): render the enriched **persona meta** on the agent card (blurb/home/schedule + a "Knows" line from `meta.relationships`), each only when present.
+- **PR #541**: pruned bucket-A dead code (closed-issue leftovers) from a repo audit.
+- Umbrella issues **#163** (web companion) and **#179** (unified backend) closed as complete; **#356** closed with the tool-schema work landed on `main`.
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Follow the live backend over WS (#524); a cross-agent conversation feed (#534).
+
+## 2026-07-12
+
+**Focus:** land the tool-calling track on `main`; harden the per-action tools
+
+**Done today:**
+- Landed the **tool-calling track on `main`**: **PR #451** (#354, #355) — plural `call_tools` + a native tool_use conversation loop; **PR #453** (#356) — per-action tool schemas auto-derived from the action registry (typed arguments, in-scope entity enums); **PR #511** (#358) — cognition tools (`recall` / `query_knowledge` / `read_plan`) at decide time. Closed **#354 / #355 / #358**.
+- **PR #518** (#453 review): a double-act guard + a parallel-tool-use belt on `godot-ga-main`, mirroring the review fixes on the `main` PR.
+- Filed **#519** (a live LLM dashboard for the companion).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Bring the web companion current (the #519 dashboard, persona meta, dev tooling).
+
+## 2026-07-11
+
+**Focus:** route live decides through per-action tools; add cognition tools at decide time
+
+**Done today:**
+- **PR #486** (#485): the Penn live brain now decides via **per-action typed tool schemas** (one tool per verb) instead of the single free-text `choose_action` — verb-agnostic, so it's ready for the #446 Penn verbs. Byte-identical mock verified. Closed **#485**.
+- **PR #510** (#358): **cognition tools** — agentic `recall` / `query_knowledge` / `read_plan` at decide time — pre-landed on `godot-ga-main` (the `main` review path is the stacked PR #511).
+- **PR #513** (#512): wired the #358 cognition tools into the **Penn live decide seam** behind a `CognitionConfig` flag (default-off, byte-identical). Closed **#512**.
+- Filed **#512** and **#514** (a `serve_penn --cognition-tools` flag so live mode can flip the wiring).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Land the tool-calling track (#354–#356, #358) on `main`.
+
+## 2026-07-10
+
+**Focus:** de-Smallville the backend, tidy the geo tooling, ship the snapshot gallery
+
+**Done today:**
+- **PR #481**: made the backend **world-agnostic and Penn-primary** — dropped the Smallville path (`smallville_agents.py` → `cognition.py`), made `build_world` require an explicit world, and deleted the `run_simulation` main().
+- **PR #482 / #483**: moved `tools/` under `godot-generative-agents/` and stopped tracking the generated `upenn_core_ville_addresses.json`.
+- **PR #487** (#253): an in-viewer **snapshot button** (camera / `C` key) that captures a clean-campus frame into a grid + enlarge gallery pop-up, captioned with world time. In-memory only; disk/clip export deferred to **#488**. Closed **#253**.
+- Filed **#485** (per-action live decide) and **#488** (snapshot disk + clip export).
+
+**Blockers / questions:**
+- none
+
+**Next:**
+- Route the live brain through the per-action tools (#485); cognition tools at decide time (#358).
+
 ## 2026-07-09
 
 **Focus:** issue hygiene — reconcile open issues against what's actually merged
@@ -12,6 +123,7 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md). [Readi
 - Audited every open GitHub issue against the real codebase (on both `main` and `origin/godot-ga-main`) to find work that shipped but was never closed. Root cause: GitHub only auto-closes `Closes #N` on merges to the **default branch** (`main`), so everything that lands on the long-lived **`godot-ga-main`** branch stays open by default.
 - Closed **9** merged-but-open issues, each with a closing comment linking its PR + merge commit: **#346 / #347 / #369** (backend retrieval-probe / plan / intervention endpoints, PRs #403 / #404 / #405), **#395** (Cohen/Alumni geo arenas, #401), **#407** (post-#399 seeding-path regression, #414), **#187** (converse-once-per-step, #419), **#390** (CI geo drift gate, #421), **#391** (`validate_tmj` wall-collision check, #416), **#394** (viewer surfaces dropped `kind:"engine"` records, #418).
 - Left **#113** open (excluded by request) and left genuinely-unfinished issues open.
+- Also landed two features on `godot-ga-main`: **PR #450** (#252) — the Godot **social-graph pop-up** (`G` key: conversation edges weighted by recency + a t=0 seed graph, from a `relationships:` YAML seam); and **PR #452** (#356) — **per-action tool schemas** from the action registry, on `godot-ga-main` ahead of the `main` review path (#453).
 
 **Blockers / questions:**
 - none
