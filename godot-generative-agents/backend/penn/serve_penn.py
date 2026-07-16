@@ -256,6 +256,24 @@ class LiveMeetingInjector:
             m["state"], m["start"] = self.ARMED, -1
 
 
+def _fast_forward_schedule(schedule, step_idx: int) -> None:
+    """Point *schedule* (a ``ScheduleMockClient``) at the stop a resumed day
+    should be working on at *step_idx* (#543).
+
+    Only authored dwell times are budgeted -- the steps an agent spent walking
+    between stops aren't stored anywhere -- so this is a deliberate
+    approximation that can land a stop early relative to the original day. A
+    ``steps: None`` stop ("stay here for the rest of the day") always holds,
+    and a schedule that runs out settles on its last stop, exactly like the
+    live loop's own ``advance()`` handling.
+    """
+    elapsed = 0
+    while schedule.steps is not None and elapsed + schedule.steps <= step_idx:
+        elapsed += schedule.steps
+        if not schedule.advance():
+            break
+
+
 class _DecideThreads:
     """A ``submit()``-compatible executor that runs each decision on its own
     daemon thread instead of a shared pool (#366 review fixes).
@@ -325,6 +343,7 @@ class PennStepper:
         decide_timeout=30.0,
         mock_latency=0.0,
         stall_seconds=0.0,
+        resume_run_id=None,
     ):
         self.num_steps = num_steps
         self.endless = endless
@@ -354,10 +373,16 @@ class PennStepper:
         # default -- nothing is written, byte-identical to before). Set before
         # the _build() below so every build, first boot and each POST /reset,
         # opens its own run in the store.
+        if resume_run_id is not None and run_store is None:
+            raise ValueError("resuming a run needs a run store (--persist)")
         self.run_store = run_store
         self._run_id = None
         self._run_finished = False
         self._mem_synced = {}
+        # Dollars the resumed run had already spent before this process (#543):
+        # the ledger restarts at $0 with the process, so the stored cost column
+        # is topped up from this base, never overwritten backwards.
+        self._cost_base = 0.0
         # The #514 switch for the #512 wiring: agentic recall/query_knowledge/
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
@@ -391,7 +416,7 @@ class PennStepper:
         # owns a real connection pool, so rebuilding N of them per POST /reset
         # would orphan the old pools.
         self._agent_clients = {}
-        self._build(world)
+        self._build(world, resume_run_id=resume_run_id)
 
     def _decide_client(self):
         """One decide/converse client recording into the shared ledger.
@@ -417,7 +442,13 @@ class PennStepper:
             return self.ledger
         return RoleTaggedLedger(self.ledger, self.monitor, role=role)
 
-    def _build(self, world: PennWorld | None = None):
+    def _build(
+        self,
+        world: PennWorld | None = None,
+        resume_run_id=None,
+        resume_row=None,
+        resume_frames=None,
+    ):
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
@@ -511,11 +542,108 @@ class PennStepper:
         self._run_ledger_calls_base = len(self.ledger.records)
         self._run_ledger_cost_base = self.ledger.total_cost_usd()
         # Open this day's run in the store (#304). The manifest is the same
-        # meta() blob the live handshake serves; each _build() gets its own id.
+        # meta() blob the live handshake serves; each _build() gets its own id
+        # -- unless we are resuming a persisted run (#543), which adopts the
+        # existing id and picks the day up where the store left off.
         if self.run_store is not None:
-            self._run_id = self.run_store.create_run(self.meta())
             self._run_finished = False
             self._mem_synced = {name: -1 for name in self.order}
+            self._cost_base = 0.0
+            if resume_run_id is not None:
+                self._adopt_run(resume_run_id, row=resume_row, frames=resume_frames)
+            else:
+                self._run_id = self.run_store.create_run(self.meta())
+
+    def _resumable_row(self, run_id: str) -> dict:
+        # The one guard home for both resume entry paths (boot --resume and
+        # POST /runs/{id}/resume): the run must exist, and its recorded cast
+        # must be the cast this world builds -- resuming a run whose personas
+        # the current YAML no longer produces would seed tiles and memories
+        # for the wrong people.
+        row = self.run_store.get_run(run_id)
+        if row is None:
+            raise KeyError(f"unknown run id: {run_id}")
+        stored = [p.get("name") for p in row["manifest"].get("personas", [])]
+        if stored != self.order:
+            raise ValueError(
+                f"run {run_id} was recorded with cast {stored}, but this world "
+                f"builds {self.order} -- resume needs the same world YAML"
+            )
+        # ...and on this campus map: regenerating the tmj is routine
+        # (tools/geo), and tiles seeded from the last frame of a
+        # differently-sized map would land agents out of bounds or in walls.
+        current = self.meta()
+        for key in ("schema_version", "width", "height"):
+            if row["manifest"].get(key) != current[key]:
+                raise ValueError(
+                    f"run {run_id} was recorded on a different map "
+                    f"({key} {row['manifest'].get(key)}, now {current[key]}) -- "
+                    "resume needs the map it was recorded on"
+                )
+        return row
+
+    def _adopt_run(self, run_id: str, row=None, frames=None) -> None:
+        """Pick a persisted run back up where the store left off (#543).
+
+        ``resume_run`` passes through the *row*/*frames* its pre-teardown
+        guards already fetched, so a long run's frames file isn't parsed
+        twice under the app lock; the boot path (``--resume``) leaves them
+        ``None`` and they are fetched here, once.
+
+        Memory-first resume: the freshly built world stays fresh, and only
+        what the store holds durably is restored --
+
+        * the step counter (``len(frames)``: the frames file is the authority,
+          the row's ``steps`` column can lag one behind after a crash; it also
+          keeps ``append_frame``'s step == line-count invariant by
+          construction),
+        * each agent's rendered position (the last frame's x/y),
+        * each schedule's cursor (fast-forwarded by authored dwell times),
+        * each agent's memory stream (lossless, the ``query_memories``
+          pattern), and
+        * the run's spend so far (``_cost_base``).
+
+        Everything else is deliberately this-morning fresh: item properties,
+        conversation cooldowns, meeting-injector arming, perform timers, and
+        the ``_events_seen``/``_persist_events_seen`` cursors (correct -- the
+        new ``game.events`` starts empty; the stored ``events.jsonl`` is
+        append-only history).
+        """
+        if row is None:
+            row = self._resumable_row(run_id)
+        if frames is None:
+            frames = self.run_store.read_frames(run_id)
+        self._run_id = run_id
+        self._step_idx = len(frames)
+        if frames:
+            last = frames[-1]
+            for name in self.order:
+                self.state[name]["tile"] = (
+                    int(last[name]["x"]),
+                    int(last[name]["y"]),
+                )
+                # desc/pron/reasoning stay at their waking-up defaults: the
+                # first resumed tick is a decision point (no path, not
+                # performing) and overwrites them all.
+        for name in self.order:
+            agent = self.chars[name].agent
+            _fast_forward_schedule(agent.schedule, self._step_idx)
+            records = self.run_store.hydrated_records(run_id, name)
+            if records:
+                # Replace the fresh seeds wholesale: the stored stream already
+                # holds the original t=0 plan (and relationship) memories, so
+                # keeping both would duplicate them. _next_id is private, but
+                # the engine is deliberately untouched this cycle -- rows come
+                # back ordered by record id, so max is last.
+                agent.memory.records = records
+                agent.memory._next_id = records[-1].id + 1
+            self._mem_synced[name] = self.run_store.last_memory_id(run_id, name)
+        # Top up, never rewind: the stored dollars predate this process's
+        # ledger, and _persist_tick adds them to the run's ledger slice
+        # (#526's baseline, snapshotted by _build just before this, makes
+        # that slice start at $0 as of the adoption).
+        self._cost_base = float(row["cost"])
+        self.run_store.update_run(run_id, status="running")
 
     @property
     def step(self) -> int:
@@ -526,18 +654,30 @@ class PennStepper:
         """The store id of the current day's run, or None when not persisting."""
         return self._run_id
 
+    def _run_cost_usd(self) -> float:
+        # THE run-cost sum, defined once: this run's slice of the lifetime
+        # ledger (#526's baseline) plus whatever the run spent before this
+        # process (#543's _cost_base, 0 otherwise). _persist_tick writes it
+        # to the run's row and run_usage() serves it to GET /usage, so the
+        # two agree to the cent structurally, not by convention.
+        return round(
+            self._cost_base + self.ledger.total_cost_usd() - self._run_ledger_cost_base,
+            6,
+        )
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
         ``GET /usage`` probes for this optional method and merges the dict
         beside the (unchanged) lifetime totals, so the dashboard's run strip
         can agree with its per-run call log. The budget gate stays lifetime.
+        ``run_cost_usd`` is ``_run_cost_usd()`` -- the sum the run's row gets
+        too. ``run_calls`` stays this-process (the store keeps no cheap call
+        count to re-anchor on).
         """
         return {
             "run_calls": len(self.ledger.records) - self._run_ledger_calls_base,
-            "run_cost_usd": round(
-                self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6
-            ),
+            "run_cost_usd": self._run_cost_usd(),
         }
 
     def meta(self) -> dict:
@@ -658,11 +798,9 @@ class PennStepper:
         self._persist_pending_events()
         self.run_store.update_run(
             self._run_id,
-            # The RUN's spend, not the server's lifetime total (#526) -- a
-            # post-reset run's row no longer includes earlier runs' cost.
-            # Rounded to match run_usage()'s run_cost_usd so GET /usage and
-            # store.get_run(id)["cost"] agree to the cent (review nit).
-            cost=round(self.ledger.total_cost_usd() - self._run_ledger_cost_base, 6),
+            # The RUN's spend, not the server's lifetime total: the one
+            # _run_cost_usd() sum GET /usage serves too (#526/#543).
+            cost=self._run_cost_usd(),
             steps=self._step_idx + 1,
         )
 
@@ -736,6 +874,30 @@ class PennStepper:
             self.run_store.update_run(self._run_id, status="reset")
         self._build()
 
+    def resume_run(self, run_id: str) -> None:
+        """Swap the live day for a persisted run (#543); caller holds the app
+        lock, like ``reset()``.
+
+        Every guard runs BEFORE any teardown: a failure after the rebuild
+        would leave ``_step_idx = 0`` against a non-empty frames file, and the
+        next ``append_frame`` would raise and kill the run loop.
+        """
+        if self.run_store is None:
+            raise ValueError("this server has no run store (--persist)")
+        if run_id == self._run_id:
+            raise ValueError(f"run {run_id} is already the live run")
+        row = self._resumable_row(run_id)
+        frames = self.run_store.read_frames(run_id)  # present + parseable, too
+        # Close the current day exactly the way reset() does (a finished day
+        # keeps "finished"), then rebuild adopting the persisted run. The
+        # guards' row/frames ride along so the frames file -- thousands of
+        # lines on a long day, all of this under the app lock -- is parsed
+        # once, not twice.
+        self._persist_pending_events()
+        if self._run_id is not None and not self._run_finished:
+            self.run_store.update_run(self._run_id, status="reset")
+        self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
+
 
 class _GameProxy:
     """A stable façade over ``stepper.game`` for the API routes to close over.
@@ -751,6 +913,24 @@ class _GameProxy:
 
     def __getattr__(self, name):
         return getattr(self._stepper.game, name)
+
+
+def resolve_resume(run_store, resume):
+    """Turn the ``--resume`` argument into a concrete run id (#543).
+
+    ``--resume`` bare means "the newest run in the store"; with an id it
+    passes through (existence is checked by the stepper's own guards, which
+    produce the same error either way). Friendly ``SystemExit``s here -- these
+    are CLI mistakes, not server faults.
+    """
+    if run_store is None:
+        raise SystemExit("--resume requires --persist (there is no run store)")
+    if resume == "last":
+        runs = run_store.list_runs()  # newest first
+        if not runs:
+            raise SystemExit("nothing to resume: the store has no runs yet")
+        return runs[0]["id"]
+    return resume
 
 
 def _decide_workers_arg(value):
@@ -835,6 +1015,17 @@ def main() -> int:
         " godot-generative-agents/runs/. POST /reset starts a new run id",
     )
     ap.add_argument(
+        "--resume",
+        nargs="?",
+        const="last",
+        default=None,
+        metavar="RUN_ID",
+        help="boot by picking a persisted run back up instead of opening a new "
+        "one (#543): positions, schedules and agent memories come back from "
+        "the store; transient world state starts fresh. Bare --resume means "
+        "the newest run. Requires --persist",
+    )
+    ap.add_argument(
         "--cognition-tools",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -912,6 +1103,8 @@ def main() -> int:
     start_paused = (
         args.start_paused if args.start_paused is not None else llm is not None
     )
+    store = RunStore(DEFAULT_RUNS_DIR) if args.persist else None
+    resume_id = resolve_resume(store, args.resume) if args.resume else None
     # 'auto' concurrency (#366): a real brain decides in parallel (LLM latency
     # is the whole point), the mock stays serial so the default offline run
     # remains deterministic. An explicit integer wins.
@@ -933,15 +1126,24 @@ def main() -> int:
             world=world,
             monitor=LlmCallMonitor() if args.monitor else None,
             llm=llm,
-            run_store=RunStore(DEFAULT_RUNS_DIR) if args.persist else None,
+            run_store=store,
             cognition_tools=args.cognition_tools,
             decide_workers=decide_workers,
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
             stall_seconds=args.stall_seconds,
+            resume_run_id=resume_id,
         )
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
+    except (KeyError, ValueError) as e:
+        # A bad --resume: unknown id, a different cast's or map's run, or a
+        # corrupt frames file (JSONDecodeError is a ValueError). Only claim
+        # "cannot resume" when a resume was actually asked for -- any other
+        # KeyError/ValueError is a real fault and should traceback.
+        if resume_id is None:
+            raise
+        raise SystemExit(f"cannot resume: {e}")
     wm = stepper.world.world_map
     print(
         f"Loaded the_upenn ({wm.width}x{wm.height}); "
@@ -968,10 +1170,21 @@ def main() -> int:
             "For the real thing: --brain llm."
         )
     if args.persist:
-        print(
-            f"Persistence: ON -- run {stepper.run_id} recording to "
-            f"{stepper.run_store.root} (frames.jsonl + sim.db)."
-        )
+        if resume_id is not None:
+            print(
+                f"Persistence: ON -- RESUMED run {stepper.run_id} at step "
+                f"{stepper.step}, recording to {stepper.run_store.root}."
+            )
+            if not args.endless and stepper.step >= args.steps:
+                print(
+                    f"  (already past --steps {args.steps} -- the day will "
+                    "finish immediately; pass --endless or a larger --steps)"
+                )
+        else:
+            print(
+                f"Persistence: ON -- run {stepper.run_id} recording to "
+                f"{stepper.run_store.root} (frames.jsonl + sim.db)."
+            )
     if args.cognition_tools:
         print(
             "Cognition tools: ON -- a decide tick may spend up to 3 model "

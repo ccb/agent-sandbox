@@ -212,7 +212,7 @@ def test_persisted_bake_round_trips_the_store(tmp_path, monkeypatch):
     name = next(iter(replay["memory_streams"]))
     engine = AgentMemory(owner=name)
     engine.records = [
-        MemoryRecord.from_primitive(r) for r in store._full_records(run["id"], name)
+        MemoryRecord.from_primitive(r) for r in store.full_records(run["id"], name)
     ]
     expected = [r.text for r in engine.retrieve("campus day plan", 8, touch=False)]
     got = [
