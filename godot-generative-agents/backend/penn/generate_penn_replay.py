@@ -40,6 +40,8 @@ from penn_world import (
     PENN_ACTION_VERBS,
     SEC_PER_STEP,
     SIM_START,
+    WORLD_DATA,
+    WORLD_DATA_BOIL,
     build_penn_world,
     persona_meta_entry,
     replay_frame_entry,
@@ -52,7 +54,8 @@ _GG_DIR = os.path.dirname(os.path.dirname(_SIM_DIR))  # .../godot-generative-age
 _GODOT_DIR = os.path.join(_GG_DIR, "godot")  # the Godot project (its res:// root)
 _REPO = os.path.dirname(_GG_DIR)
 
-OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
+# Output paths live in the SCENARIOS table below (each scenario names its own file
+# under maps/), resolved against _GODOT_DIR in main().
 
 # A full campus day: every persona crosses the (large) map several times AND now
 # walks a multi-room circuit inside Van Pelt. At one tile per step a single
@@ -61,6 +64,29 @@ OUT_PATH = os.path.join(_GODOT_DIR, "maps", "penn_replay.json")
 # in-library room-to-room movement (Maya's two Van Pelt visits, Ellis's stacks run,
 # Diego's gallery circuit). The viewer's playback speed is independent of this.
 DEFAULT_STEPS = 1200
+
+# The boil-water demo (#592) is a short, single-persona bake -- long enough for the
+# whole arc plus a recovered-agent tail, no more. The arc's three events land at
+# ~step 11/40/69 (a lead-in, then drink/boil/drink ~29 steps apart), leaving a short
+# recovered tail; see world_data_boil.yaml for the stop-by-stop budget.
+DEFAULT_BOIL_STEPS = 90
+
+# Named scenarios select {world YAML, default step budget, default output file}.
+# `--scenario boil` bakes the de-clumped demo alongside (not over) the bundled
+# replay, so the viewer can offer it as its own menu entry (#592). `--steps`/`--out`
+# still override the per-scenario defaults.
+SCENARIOS = {
+    "penn": {
+        "world_data": WORLD_DATA,
+        "steps": DEFAULT_STEPS,
+        "out": "penn_replay.json",
+    },
+    "boil": {
+        "world_data": WORLD_DATA_BOIL,
+        "steps": DEFAULT_BOIL_STEPS,
+        "out": "penn_replay_boil.json",
+    },
+}
 
 
 def _inject_scripted_conversations(replay, meetings, vision_r):
@@ -156,8 +182,25 @@ def _inject_scripted_conversations(replay, meetings, vision_r):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Generate the Penn replay for Godot.")
-    ap.add_argument("--steps", type=int, default=DEFAULT_STEPS)
-    ap.add_argument("--out", default=OUT_PATH)
+    ap.add_argument(
+        "--scenario",
+        choices=sorted(SCENARIOS),
+        default="penn",
+        help="which world to bake: 'penn' (the full campus cast, the bundled "
+        "replay) or 'boil' (the one-persona boil-water demo, #592). Sets the "
+        "default world YAML, step budget, and output file.",
+    )
+    ap.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="override the scenario's default step budget",
+    )
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="override the scenario's default output path (under maps/)",
+    )
     ap.add_argument(
         "--persist",
         action=argparse.BooleanOptionalAction,
@@ -179,14 +222,22 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    # Resolve the scenario's world/steps/out, letting explicit flags win.
+    scenario = SCENARIOS[args.scenario]
+    steps = args.steps if args.steps is not None else scenario["steps"]
+    out_path = args.out or os.path.join(_GODOT_DIR, "maps", scenario["out"])
+
     # The configured Penn: personas + locations + meetings, the routing-patched
     # world_map, and the perception-gated build_world_fn (#297). Shared verbatim
-    # with the live server, so this bake and a live run walk the same campus.
-    pw = build_penn_world()
+    # with the live server, so this bake and a live run walk the same campus. The
+    # boil scenario swaps only the world YAML (one persona, the arc); the map,
+    # factory, and boil props (_furnish_boil_water) are identical.
+    pw = build_penn_world(world_data=scenario["world_data"])
 
     print(
         f"Loaded the_upenn ({pw.world_map.width}x{pw.world_map.height}); "
-        f"{len(pw.personas)} personas. Simulating {args.steps} steps..."
+        f"{len(pw.personas)} personas. Simulating {steps} steps "
+        f"(scenario '{args.scenario}')..."
     )
 
     # `simulate` fills this with each persona's *full* memory stream (the same
@@ -222,7 +273,7 @@ def main() -> int:
 
     frames = simulate(
         pw.world_map,
-        args.steps,
+        steps,
         ledger=ledger,
         personas=pw.personas,
         build_world_fn=pw.build_world_fn,
@@ -282,11 +333,11 @@ def main() -> int:
     # has no `meetings` block.
     _inject_scripted_conversations(replay, pw.meetings, DEFAULT_VISION_R)
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w") as fh:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
         json.dump(replay, fh, ensure_ascii=False)
     print(
-        f"Wrote {os.path.relpath(args.out, _REPO)} "
+        f"Wrote {os.path.relpath(out_path, _REPO)} "
         f"({len(frames)} steps, {len(order)} personas)."
     )
 
