@@ -1189,7 +1189,7 @@ def main() -> int:
         f"meetings. Stepping every {args.tick_seconds}s "
         f"({'endless' if args.endless else f'{args.steps}-step day'})."
     )
-    if llm is not None:
+    if _is_paid(llm):
         ceiling = llm.get("max_cost_usd")
         print(
             f"Brain: LIVE LLM -- anthropic/{llm['model']} makes every "
@@ -1202,6 +1202,12 @@ def main() -> int:
             )
         )
         print("Authored meeting dialogue: OFF -- the cast speaks through the model.")
+    elif llm == SCRIPTED:
+        print(
+            "Brain: scripted (deterministic, free) -- drives the full backend "
+            "offline: tool loop, cognition tools, conversation, reflection (#563). "
+            "For the real thing: --brain llm."
+        )
     else:
         print(
             "Brain: mock (deterministic, free; authored meeting dialogue ON). "
