@@ -345,6 +345,7 @@ class PennStepper:
         decide_timeout=30.0,
         mock_latency=0.0,
         stall_seconds=0.0,
+        plan_mode="schedule",
         resume_run_id=None,
     ):
         self.num_steps = num_steps
@@ -389,6 +390,16 @@ class PennStepper:
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
         self.cognition_tools = cognition_tools
+        # Daily planning source (#397): "schedule" (default) keeps the authored
+        # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
+        # model author each day (LLMPlanner); free-play, so the hand-tuned
+        # rendezvous windows are no longer guaranteed. The planner shares the
+        # run's Anthropic client, so llm planning needs a real brain.
+        self.plan_mode = plan_mode
+        if plan_mode == "llm" and llm is None:
+            raise SystemExit(
+                "--plan llm needs --brain llm (the planner shares its client)."
+            )
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
         # reports the budget and tick() can end the day at it.
@@ -407,12 +418,20 @@ class PennStepper:
         # fresh agents by every _build().
         self.llm_client = None
         self.reflector_client = None
+        # The planner client (#397): a separate instance so the request monitor
+        # tags `plan` calls exactly; built only in --plan llm mode (else None ->
+        # attach_agents uses MockPlanner, byte-identical).
+        self.planner_client = None
         if llm is not None:
             self._llm_config = LlmConfig(provider="anthropic", model=llm.get("model"))
             self.llm_client = self._decide_client()
             self.reflector_client = create_llm_client(
                 self._llm_config, ledger=self._recording_ledger("reflect")
             )
+            if self.plan_mode == "llm":
+                self.planner_client = create_llm_client(
+                    self._llm_config, ledger=self._recording_ledger("plan")
+                )
         # Per-agent decide clients (#366): created once per persona on first
         # _build and RE-WIRED (not rebuilt) by later resets -- each SDK client
         # owns a real connection pool, so rebuilding N of them per POST /reset
@@ -477,6 +496,8 @@ class PennStepper:
         # base ledger stays the single source GET /usage sums). Under the mock
         # brain the schedule clients this ledger feeds ARE the brains; under a
         # real brain they only pace the day and never call a model.
+        # Where each agent's day came from, for a one-line boot summary below.
+        planner_sources: dict = {}
         attach_agents(
             self.chars,
             self.world.personas,
@@ -487,12 +508,25 @@ class PennStepper:
             # The #261 swap: with a real client every agent's decide (and its
             # conversation lines) go through the model, and reflection passes
             # run when enough importance accrues. With None (mock mode) both
-            # fall back exactly as before. No planner_client on purpose: the
-            # authored schedules own the itinerary (see resolve_llm).
+            # fall back exactly as before.
             llm_client=self.llm_client,
             reflector_client=self.reflector_client,
+            # Daily planning (#397): a real client only under --plan llm (else
+            # None -> MockPlanner, byte-identical). The planner validates its
+            # stops against the world's full location set and bounds the day to
+            # the run's clock window; both are inert for the mock planner.
+            planner_client=self.planner_client,
+            location_names=frozenset(loc["name"] for loc in self.world.locations),
+            clock=self.clock,
+            out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
+        if self.planner_client is not None:
+            authored = sum(1 for s in planner_sources.values() if s == "llm")
+            print(
+                f"  - PLAN: {authored}/{len(planner_sources)} agents on a "
+                "model-authored day (#397); the rest fell back to the schedule"
+            )
         # In-flight decisions from earlier ticks ({name: Future}, #366). Fresh
         # per build: a straggler still running across a reset references the
         # OLD world -- harmless, because parked results are always discarded.
