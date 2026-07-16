@@ -21,6 +21,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 """
 
 import json
+import time
 from dataclasses import replace
 
 from text_adventure_games import conversation as convo
@@ -78,6 +79,12 @@ class ScheduleMockClient(MockReActClient):
     each agent keep acting -- and keep accumulating memories -- all run long,
     instead of freezing in a single activity.
     """
+
+    # Artificial per-decision latency in seconds (#366): lets an offline run
+    # feel like a real provider -- serve_penn's --mock-latency stamps it, the
+    # parallel-decide tests assert wall-clock against it, and it drives the
+    # #372 "thinking" stall demo. 0.0 = today's instant mock, byte-identical.
+    latency_s = 0.0
 
     def __init__(self, schedule: list[dict], config=None, ledger=None):
         super().__init__(config, ledger=ledger)
@@ -181,6 +188,8 @@ class ScheduleMockClient(MockReActClient):
         return ""
 
     def _choose(self, observation: str) -> str:
+        if self.latency_s:
+            time.sleep(self.latency_s)  # the single funnel both routes share
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
         queued = self._stop.get("commands") or []
@@ -877,14 +886,22 @@ def maybe_converse(
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls to the initiator/step (best effort:
-        # the shared client alternates speakers within one converse()). The
+        # Attribute the meeting's LLM calls per speaker: converse() alternates
+        # speakers through each speaker's OWN client, so when the two clients
+        # are separate instances (#366 per-agent brains) each gets its owner's
+        # name and GET /usage's by_actor splits the dialogue correctly. Under
+        # the classic SHARED client both `ctx` are the same dict, so only the
+        # initiator is stamped -- the pre-#366 behavior, byte-identical. The
         # "role" key labels the terminal request monitor's line (llm_monitor).
-        ctx = getattr(a.agent.llm_client, "context", None)
-        if ctx is not None:
-            ctx.update(
-                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
-            )
+        ctx_a = getattr(a.agent.llm_client, "context", None)
+        ctx_b = getattr(b.agent.llm_client, "context", None)
+        if ctx_b is ctx_a:
+            ctx_b = None  # classic shared client: stamp once, initiator wins
+        for char, ctx in ((a, ctx_a), (b, ctx_b)):
+            if ctx is not None:
+                ctx.update(
+                    {"actor": char.name, "turn": step, "attempt": 0, "role": "converse"}
+                )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )
