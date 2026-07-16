@@ -1,0 +1,39 @@
+---
+name: decide_context
+description: >
+  The always-on context block appended to a live decide observation (issue
+  #580): the sim clock time, the plan's current stop, and how long the agent
+  has been on that stop. Rendered by cognition.decide_context_block() only
+  when the step loop threads a SimClock (the bake and the offline tests pass
+  none). The deterministic mock brain reads only the observation's first
+  line, so this block can never change a mock decision. The numbers are
+  computed in Python (they are data, not text); only the wording lives here.
+inputs:
+  time:
+    type: string
+    description: In-game wall-clock time, e.g. "Monday 12:05 PM".
+  place:
+    type: string
+    description: The current stop's place, e.g. "Houston Hall".
+  activity:
+    type: string
+    description: The current stop's activity, e.g. "eating lunch".
+  minutes:
+    type: integer
+    description: >
+      The stop's intended duration in minutes. Optional; the planned clause
+      is dropped when unset (the schedule says stay indefinitely) or 0.
+  elapsed:
+    type: integer
+    description: >
+      Minutes the agent has been on this stop so far (walking toward it
+      counts). The sentence is dropped at 0 -- the stop just began.
+sample:
+  time: Monday 12:05 PM
+  place: Houston Hall
+  activity: eating lunch
+  minutes: 40
+  elapsed: 15
+---
+Right now it is {{ time }}.
+Your plan's current stop: {{ activity }} at {{ place }}{% if minutes %} (planned ~{{ minutes }} min){% endif %}.{% if elapsed %} You have been on this stop for {{ elapsed }} min.{% endif %}
