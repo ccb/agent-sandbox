@@ -128,6 +128,7 @@ const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
+const LivePacer := preload("res://scripts/live_pacer.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -228,6 +229,11 @@ var _is_live := false
 # Live "thinking" cue (issue #372): wall-clock ms when the live head last grew,
 # and whether the cue is currently showing (so the sidebar text flips on edges).
 const THINKING_STALL_MS := 1500
+# Live interpolation buffer (issue #372): hold ~LEAD_TARGET ticks of lead so
+# motion stays smooth across irregular arrivals; drain a post-stall backlog at
+# up to CATCHUP_MAX x the normal rate rather than teleporting. See LivePacer.
+const LEAD_TARGET := 2.0
+const CATCHUP_MAX := 3.0
 var _last_frame_ms := 0
 var _thinking := false
 var _thinking_badge: Control
@@ -663,6 +669,17 @@ func _on_live_handshake_completed(
 		_schedule_retry(_request_handshake)
 		return
 
+	# A handshake cursor below the newest we've applied can only mean the
+	# backend *restarted* — the feed cursor is in-memory and only climbs
+	# within one server lifetime, even across resets (#549). Rejoin from
+	# scratch: drop the dead run's cast and refetch the new run's history,
+	# exactly like a fresh join (the emptied _names respawns below). Default the
+	# cursor to _last_cursor so a backend that omits the field (an older server
+	# during mixed-version dev) reads as "no rewind", not a rewind to 0.
+	if _last_cursor > int((data as Dictionary).get("cursor", _last_cursor)):
+		_teardown_cast()
+		_last_cursor = -1
+
 	# Spawn the cast once (a handshake retry after a hiccup must not re-spawn).
 	if _names.is_empty():
 		_spawn_from_meta(meta)
@@ -676,7 +693,13 @@ func _on_live_handshake_completed(
 		)
 	else:
 		_set_backend_run_state("running")
-	_request_backfill()
+	# The HTTP backfill only earns its double-fetch (the socket's ?since= replay
+	# covers the same window) when it still has to place the playhead: the first
+	# join and a re-anchor, both of which have _live_started false (a re-anchor's
+	# _teardown_cast clears it). A plain reconnect keeps its playhead and lets the
+	# socket alone catch up, halving the transfer (#549).
+	if not _live_started:
+		_request_backfill()
 	_connect_ws()
 
 
@@ -842,6 +865,13 @@ func _on_reset_meta_completed(
 	# as the initial join does (?since=_last_cursor is overlap-safe).
 	_request_backfill()
 	_panel.set_live_status("following the new run")
+	# Normally the socket rides through a reset untouched. But if it dropped while
+	# this reset retry was pending, _schedule_retry's single-flight swallowed the
+	# socket's own reconnect (#549) — leaving no socket and no rewind detection.
+	# The handshake is the one path that both reconnects and re-anchors a stale
+	# cursor (a restart coincident with the reset), so re-run it when none is open.
+	if _ws == null:
+		_request_handshake()
 
 
 func _teardown_cast() -> void:
@@ -986,7 +1016,10 @@ func _poll_ws() -> void:
 				_note_socket(false)
 			_ws_open = false
 			_panel.set_live_status("reconnecting…")
-			_schedule_retry(_connect_ws)
+			# Reconnect through the handshake, not straight to the socket: its
+			# callback re-runs the backfill and — if the cursor came back below
+			# ours — re-anchors after a backend restart (#549).
+			_schedule_retry(_request_handshake)
 		_:
 			pass  # CONNECTING / CLOSING: keep polling
 
@@ -1705,8 +1738,16 @@ func _process(delta: float) -> void:
 	# the day-night tint) still updates the view while paused.
 	var last := _frames.size() - 1
 	if not _paused:
-		_t += delta * _speed
-		_anim_t += delta * _speed
+		# Live mode paces the clock by how many ticks are buffered ahead (issue
+		# #372): hold a small lead, decelerate to a stop into a stall, and drain a
+		# backlog at a bounded catch-up. Baked replay keeps pace == 1.0, so the
+		# advance below is arithmetically identical to before -- byte-identical playback.
+		var pace := 1.0
+		if _is_live:
+			var lead := float(last) - _t / step_seconds
+			pace = LivePacer.factor(lead, LEAD_TARGET, CATCHUP_MAX)
+		_t += delta * _speed * pace
+		_anim_t += delta * _speed * pace
 		# Hold the playhead at the final step: the replay has no more frames, so the
 		# clock must stop here rather than tick on past the end of the simulation.
 		_t = min(_t, float(last) * step_seconds)

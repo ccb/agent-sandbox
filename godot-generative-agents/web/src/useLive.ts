@@ -138,8 +138,10 @@ export function applyFeedRecords(
  * arrives exactly once; the first attach (`since=0`) backfills whatever the
  * capped log retains. A cursor gap at the head of a batch is the eviction
  * signal (backend/README.md): the skipped rows are gone for good — re-run the
- * handshake so at least meta/step/usage resync (also how a server restart
- * re-anchors).
+ * handshake so at least meta/step/usage resync. A backend *restart* is the
+ * opposite signal — the feed cursor is in-memory and starts over with the new
+ * process — so a handshake reporting a cursor *below* ours re-anchors there
+ * and drops the dead run's call log, like a reset (#549).
  *
  * Exported (and React-free) so the test can drive it with fake fetch/WS/timers;
  * components use the `useLive` hook below. Returns a stop function.
@@ -156,6 +158,11 @@ export function followLive(
   let wsUsable = true; // cleared when a socket dies before opening
 
   const handshake = async () => {
+    // Capture at fire time, not after the awaits below: the background
+    // eviction-gap refresh runs with a socket up (`handshook` true), but a drop
+    // during these fetches flips it false via `onclose` — reading it late would
+    // mistake that refresh for a fresh reconnect and rewind a healthy follower.
+    const wasHandshook = handshook;
     const res = await fetch(`${base}/live`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const hs = (await res.json()) as LiveStatusResponse;
@@ -166,6 +173,14 @@ export function followLive(
       .then((r) => (r.ok ? (r.json() as Promise<UsageSummary>) : null))
       .catch(() => null);
     if (cancelled) return;
+    // A handshake cursor below ours can only mean the backend restarted —
+    // within one server lifetime the cursor only climbs, even across resets
+    // (#549). Re-anchor at the new head and clear the call log like a reset:
+    // the retained rows describe a dead run. Fresh connects/reconnects only —
+    // the background eviction-gap refresh races records still arriving on the
+    // open socket, and must never rewind a healthy follower.
+    const rewound = !wasHandshook && hs.cursor < cursor;
+    if (rewound) cursor = hs.cursor;
     handshook = true;
     setState((s) => ({
       ...s,
@@ -177,6 +192,11 @@ export function followLive(
       running: hs.running,
       paused: hs.paused,
       step: hs.step ?? 0,
+      // The same "dead run's rows are gone" clearing as applyFeedRecords' reset
+      // path — kept here (not routed through the reducer) because this applies a
+      // /live *snapshot*, not a feed record: the reducer folds records, and a
+      // synthetic one would have to carry the whole meta/usage/step snapshot too.
+      calls: rewound ? [] : s.calls,
     }));
   };
 
@@ -190,6 +210,9 @@ export function followLive(
       if (cancelled) return;
       if (cursor > 0 && data.events.length && data.events[0].cursor > cursor + 1) {
         handshook = false; // eviction gap — re-handshake next poll
+      }
+      if (data.latest_cursor < cursor) {
+        handshook = false; // cursor rewind: a restart — the re-handshake re-anchors (#549)
       }
       cursor = Math.max(cursor, data.latest_cursor);
       setState((s) => applyFeedRecords(s, data.events, Date.now()));

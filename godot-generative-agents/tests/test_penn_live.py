@@ -37,7 +37,14 @@ from penn_world import (  # noqa: E402
     relationships_meta,
     replay_frame_entry,
 )
-from serve_penn import LiveMeetingInjector, PennStepper, _GameProxy  # noqa: E402
+from backend.cognition import ScheduleMockClient  # noqa: E402
+from serve_penn import (  # noqa: E402
+    LiveMeetingInjector,
+    PennStepper,
+    _GameProxy,
+    _fast_forward_schedule,
+    resolve_resume,
+)
 
 VISION_R = 8  # cognition.DEFAULT_VISION_R; the fog radius the viewer draws
 
@@ -350,6 +357,179 @@ def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     # The default stays storeless (and byte-identical -- the simulate-mirror
     # test above pins it): a bare stepper has no run id.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
+
+
+# ------------------------------------------------------------ resume (#543)
+
+
+def _authored(*steps):
+    """A minimal schedule of stops whose only meaningful field is ``steps``."""
+    return [
+        {"place": f"stop-{i}", "activity": "busy", "emoji": "x", "steps": s}
+        for i, s in enumerate(steps)
+    ]
+
+
+def test_fast_forward_schedule_cursor():
+    # Dwell-only budgeting: stop 0 holds for its first 10 steps, stop 1 for
+    # the next 20, and a steps:None stop holds forever.
+    for step_idx, expected in [(0, 0), (9, 0), (10, 1), (30, 2), (10_000, 2)]:
+        sched = ScheduleMockClient(_authored(10, 20, None))
+        _fast_forward_schedule(sched, step_idx)
+        assert sched.stop_index == expected, f"step {step_idx}"
+    # An all-int schedule that runs out settles on its last stop.
+    sched = ScheduleMockClient(_authored(5, 5))
+    _fast_forward_schedule(sched, 100)
+    assert sched.stop_index == 1
+
+
+def test_stepper_resumes_a_persisted_run(tmp_path):
+    # The #543 story: a run's process dies (the row is orphaned at "running"),
+    # a new process adopts it and the day carries on where the store left off.
+    store = RunStore(tmp_path / "runs")
+    first = PennStepper(num_steps=6, world=build_penn_world(), run_store=store)
+    run_id = first.run_id
+    first3 = [first.tick() for _ in range(3)]
+    del first  # no clean shutdown: the crash case
+    assert store.get_run(run_id)["status"] == "running"
+    # Pretend the dead process had spent real dollars (the mock's own ticks
+    # record $0): resume must top this up, never rewind it to the new
+    # process's fresh ledger (#543, composing with #526's per-run baseline).
+    store.update_run(run_id, cost=1.23)
+
+    resumed = PennStepper(
+        num_steps=6,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id=run_id,
+    )
+    assert resumed.run_id == run_id
+    assert resumed.step == 3
+    # Positions come back from the last stored frame...
+    last = first3[-1]
+    for name in resumed.order:
+        assert resumed.state[name]["tile"] == (last[name]["x"], last[name]["y"])
+    # ...and each memory stream comes back losslessly -- REPLACED, not merged:
+    # equality with the stored rows also proves the fresh t=0 seeds are gone.
+    for name in resumed.order:
+        memory = resumed.chars[name].agent.memory
+        assert [r.to_primitive() for r in memory.records] == store.full_records(
+            run_id, name
+        )
+        assert memory._next_id == store.last_memory_id(run_id, name) + 1
+    # The day continues: frames append contiguously (append_frame's
+    # step == line-count invariant holds across the restart)...
+    next3 = [resumed.tick() for _ in range(3)]
+    assert store.read_frames(run_id) == first3 + next3
+    assert store.get_run(run_id)["steps"] == 6
+    # The pre-restart spend survived the resumed ticks' cost updates, and
+    # GET /usage's per-run view (#526) agrees with the row.
+    assert store.get_run(run_id)["cost"] == 1.23
+    assert resumed.run_usage()["run_cost_usd"] == 1.23
+    # ...and it still knows how to end.
+    assert resumed.tick() is None
+    assert store.get_run(run_id)["status"] == "finished"
+
+
+def test_stepper_resume_guards(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    # Resuming needs a store...
+    with pytest.raises(ValueError):
+        PennStepper(num_steps=2, world=build_penn_world(), resume_run_id="run-x")
+    # ...an id the store knows...
+    with pytest.raises(KeyError):
+        PennStepper(
+            num_steps=2,
+            world=build_penn_world(),
+            run_store=store,
+            resume_run_id="run-x",
+        )
+    # ...and the same cast this world builds.
+    store.create_run(
+        {"personas": [{"name": "Nobody"}], "llm": None}, run_id="run-strangers"
+    )
+    with pytest.raises(ValueError):
+        PennStepper(
+            num_steps=2,
+            world=build_penn_world(),
+            run_store=store,
+            resume_run_id="run-strangers",
+        )
+    # A finished run reopens -- and under the same --steps it immediately
+    # finishes again (pass --endless or a larger --steps to actually continue).
+    done = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    done_id = done.run_id
+    # Same cast but a different campus map (regenerating the tmj is routine):
+    # tiles from the old map's last frame could be out of bounds here.
+    store.create_run(dict(done.meta(), width=999), run_id="run-oldmap")
+    with pytest.raises(ValueError, match="different map"):
+        PennStepper(
+            num_steps=2,
+            world=build_penn_world(),
+            run_store=store,
+            resume_run_id="run-oldmap",
+        )
+    for _ in range(2):
+        done.tick()
+    assert done.tick() is None
+    resumed = PennStepper(
+        num_steps=2, world=build_penn_world(), run_store=store, resume_run_id=done_id
+    )
+    assert store.get_run(done_id)["status"] == "running"  # reopened
+    assert resumed.tick() is None
+    assert store.get_run(done_id)["status"] == "finished"
+    endless = PennStepper(
+        num_steps=2,
+        endless=True,
+        world=build_penn_world(),
+        run_store=store,
+        resume_run_id=done_id,
+    )
+    assert endless.tick() is not None  # the day actually continues
+
+
+def test_stepper_resume_run_mid_process(tmp_path):
+    # POST /runs/{id}/resume's stepper half: swap the live day for a stored
+    # run, closing the abandoned day the way reset() does.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=6, world=build_penn_world(), run_store=store)
+    a = stepper.run_id
+    a_frames = [stepper.tick() for _ in range(2)]
+    stepper.reset()
+    b = stepper.run_id
+    stepper.tick()
+    # The pre-teardown guard's parse is THE parse: _adopt_run reuses it
+    # instead of re-reading the whole frames file under the app lock.
+    reads = []
+    real_read_frames = store.read_frames
+    store.read_frames = lambda rid: (reads.append(rid), real_read_frames(rid))[1]
+    stepper.resume_run(a)
+    store.read_frames = real_read_frames
+    assert reads == [a]
+    assert stepper.run_id == a
+    assert stepper.step == 2
+    assert store.get_run(b)["status"] == "reset"  # the abandoned day closed
+    assert store.get_run(a)["status"] == "running"
+    frame2 = stepper.tick()
+    assert store.read_frames(a) == a_frames + [frame2]
+    with pytest.raises(ValueError):
+        stepper.resume_run(a)  # already the live run
+
+
+def test_resolve_resume(tmp_path):
+    # The --resume CLI resolution: friendly SystemExits for CLI mistakes.
+    with pytest.raises(SystemExit):
+        resolve_resume(None, "last")  # --resume without --persist
+    store = RunStore(tmp_path / "runs")
+    with pytest.raises(SystemExit):
+        resolve_resume(store, "last")  # nothing recorded yet
+    manifest = {"personas": [], "llm": None}
+    store.create_run(manifest, run_id="run-1-old")
+    store.create_run(manifest, run_id="run-2-new")
+    # Bare --resume means the newest run (same-second ties break by id DESC).
+    assert resolve_resume(store, "last") == "run-2-new"
+    # An explicit id passes through; existence is the stepper's guard.
+    assert resolve_resume(store, "run-1-old") == "run-1-old"
 
 
 def test_stepper_threads_cognition_tools():

@@ -107,7 +107,7 @@ with a lock, since FastAPI runs the sync handlers in a thread pool and
 
 ## Endpoint reference
 
-Seventeen endpoints. `GET`s are read-only; `POST /command` advances the game by
+Twenty-two endpoints. `GET`s are read-only; `POST /command` advances the game by
 exactly one command (one turn); the live routes observe and steer the
 self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed-run-control-349262)).
 
@@ -128,6 +128,11 @@ self-stepping loop when one is enabled ([live mode](#live-mode-the-loop-the-feed
 | `WS`   | `/ws`                      | Change-feed push: every record as it lands (#262)  |
 | `POST` | `/pause` `/resume` `/reset`| Run control over the loop (#349/#262)              |
 | `GET`  | `/usage`                   | `UsageLedger` summary (tokens/cost) for the HUD (#264) |
+| `GET`  | `/runs`                    | Run history, newest first + the live id (#306)     |
+| `GET`  | `/runs/{run_id}`           | One run's row, parsed manifest included (#306)     |
+| `GET`  | `/runs/{run_id}/replay`    | The run as a viewer-loadable replay (#307)         |
+| `DELETE`| `/runs/{run_id}`          | Remove a persisted run (409 on the live one) (#306)|
+| `POST` | `/runs/{run_id}/resume`    | Adopt a persisted run as the live one (#543)       |
 
 ### `GET /health`
 
@@ -684,7 +689,7 @@ advancing **on its own** while frontends follow along:
   Record shapes (passed through as plain JSON; `kind` is the discriminator):
 
   ```json
-  { "cursor": 12, "kind": "frame",  "step": 11, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
+  { "cursor": 12, "kind": "frame",  "step": 11, "tick_ms": 3.1, "agents": { "Maya Chen": { "x": 41, "y": 27, "act": "walking ...", "e": "🚶", "chat": null } } }
   { "cursor": 13, "kind": "status", "reason": "paused", "running": true, "paused": true, "step": 12 }
   { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
   { "cursor": 16, "kind": "intervention", "intervention": "say", "name": "Maya Chen", "speaker": "Alistair", "text": "The market closes at noon.", "turn": 12 }
@@ -791,6 +796,29 @@ While the loop is enabled, running, and not paused, `POST /command` is refused
 with `409` — a manual command would interleave with ticks mid-run. Pause first,
 command, then resume (the #349 "decide and document" rule: pause-to-command
 rather than silent interleaving).
+
+### The run registry & resume (`/runs`, #306/#543)
+
+When the stepper carries a `RunStore` (`serve_penn.py --persist`), five more
+routes browse and steer the durable run history: `GET /runs` (newest first,
+plus which id is live), `GET /runs/{run_id}` (the full row, manifest
+included), `GET /runs/{run_id}/replay` (the run as a viewer-loadable replay,
+#307), `DELETE /runs/{run_id}` (409 on the live run), and
+`POST /runs/{run_id}/resume` (#543): adopt a persisted run as the live one.
+Without a store, `GET /runs` answers `available: false` and every id route
+404s.
+
+**Resume is not the play button.** `POST /resume` un-pauses ticking;
+`POST /runs/{run_id}/resume` swaps *which run* is ticking — the stepper
+rebuilds its world picking the run up where the store left off (positions,
+schedule cursors, agent memories, spend; transient world state starts fresh),
+and the loop's paused state is untouched. Because every read goes through the
+stepper, `/world_state`, `/events`, and the `/agents/{name}/*` family serve
+the resumed run from then on — **run-scoping by adoption**. Followers see a
+`status` record with `reason: "reset"` (the documented rebuild signal, so
+existing clients need no changes) carrying an additive `run_id` field. A
+server restart composes with it: boot `serve_penn --persist --resume` and the
+old day carries on under the same run id.
 
 ### `GET /usage`
 
@@ -954,10 +982,11 @@ real LLM — reflections (5.0) and conversation lines (`chat`, 4.0). A brand-new
 agent legitimately returns `"memories": []` until the loop writes something.
 
 **Forward pointers.** #305 pins this shape as the versioned wire contract; #304
-backs the read with a store instead of live objects; #306 scopes it under a run
-id (`/runs/{run_id}/agents/{name}/memory`). Today it reads the in-process
-`AgentMemory` under the same lock `POST /command` mutates under, so `turn` and
-`memories` are one atomic snapshot.
+backs the read with a store instead of live objects. *Which* run it serves is
+selectable since #543 (`POST /runs/{run_id}/resume` adopts a persisted run); a
+per-run read (`/runs/{run_id}/agents/{name}/memory`) is still open. Today it
+reads the in-process `AgentMemory` under the same lock `POST /command` mutates
+under, so `turn` and `memories` are one atomic snapshot.
 
 ## The belief set
 
@@ -997,10 +1026,11 @@ viewer can now answer "does this agent even know that place exists?". On a fresh
 checkout the ~38 MB upstream assets are absent and seeding no-ops, so the set is
 legitimately empty (`"beliefs": []`), not an error.
 
-**Forward pointers.** Same trajectory as the memory read: a persistent store
-(#304) and run-scoping (`/runs/{run_id}/agents/{name}/knowledge`, #306) come
-later. Today it reads the in-process `Knowledge` under the same lock
-`POST /command` mutates under, so `turn` and `beliefs` are one atomic snapshot.
+**Forward pointers.** Same trajectory as the memory read: a store-backed,
+per-run read (`/runs/{run_id}/agents/{name}/knowledge`) is still open, though
+#543's resume selects which run the live read serves. Today it reads the
+in-process `Knowledge` under the same lock `POST /command` mutates under, so
+`turn` and `beliefs` are one atomic snapshot.
 
 ## The daily plan
 
@@ -1038,10 +1068,11 @@ private cognition, one `/agents/{name}/...` read each: memory is what it
 (#347). An agent whose brain never planned has no plan yet, so the read is a `200`
 with `"plan": null` (like an empty memory stream is `200 []`), never a `404`.
 
-**Forward pointers.** Same trajectory as the sibling reads: a persistent store
-(#304) and run-scoping (`/runs/{run_id}/agents/{name}/plan`, #306) come later.
-Today it reads the in-process `DailyPlan` under the same lock `POST /command`
-mutates under, so `turn`, `revision`, and `plan` are one atomic snapshot.
+**Forward pointers.** Same trajectory as the sibling reads: a store-backed,
+per-run read (`/runs/{run_id}/agents/{name}/plan`) is still open, though
+#543's resume selects which run the live read serves. Today it reads the
+in-process `DailyPlan` under the same lock `POST /command` mutates under, so
+`turn`, `revision`, and `plan` are one atomic snapshot.
 
 ## Authentication & security
 
@@ -1164,10 +1195,12 @@ Deferred (don't expect these yet):
 
 - a **real-LLM brain** inside the live loop — #261; today's steppers are
   scripted/mock (that's the point: the whole live surface works offline);
-- a persistent store behind the private-cognition reads, and run-scoping
-  (`/runs/{run_id}/agents/{name}/{memory,knowledge,plan}`) — #304/#306; today
+- store-backed, per-run private-cognition reads
+  (`/runs/{run_id}/agents/{name}/{memory,knowledge,plan}`) — today
   `/agents/{name}/memory`, `/agents/{name}/knowledge`, and `/agents/{name}/plan`
-  read the live in-process `AgentMemory` / `Knowledge` / `DailyPlan`;
+  read the live in-process `AgentMemory` / `Knowledge` / `DailyPlan` (since
+  #543, *which run* those live objects continue is selectable via
+  `POST /runs/{run_id}/resume`);
 - migrating the Flask webapp and the web companion from file-based replay to
   thin clients of this API (the Godot viewer's live client is #263, built on
   this feed).
@@ -1225,9 +1258,23 @@ fact — round-trip tests pin that a persisted bake equals its replay file.
 A live run row's `cost` is that run's own spend (per-run ledger baseline,
 #526); the budget gate (`max_cost_usd`) stays lifetime.
 Reads: `read_frames`, `read_events`, `memories_for` (the lean wire
-projection), and `query_memories`, which rehydrates rows into engine
-`MemoryRecord`s and delegates to `AgentMemory.retrieve` — store queries score
-exactly like the sim. The #307 live→replay bridge reads all of it back out:
+projection), `full_records` (the lossless per-record dicts), `hydrated_records`
+(those rows back as live engine `MemoryRecord`s — what a resumed run restores
+from, #543), and `query_memories`, which scores the hydrated records via
+`AgentMemory.retrieve` — store queries score exactly like the sim.
+
+A persisted run can also be **picked back up** (#543): boot with
+`serve_penn.py --persist --resume [RUN_ID]` (bare `--resume` means the newest
+run) or hit `POST /runs/{run_id}/resume` on a live server. What comes back
+from the store: the step counter, each agent's position (the last frame),
+schedule cursors (fast-forwarded by authored dwell times), the full memory
+streams, and the run's spend so far. What starts this-morning fresh, by
+design: item properties, conversation cooldowns, meeting-injector arming, and
+perform timers — memory-first resume; the memories are the identity. A run is
+only resumable into the world it was recorded in: the stored manifest's cast
+and map geometry (`schema_version`/`width`/`height`) must match the current
+build, checked before any teardown. The #307
+live→replay bridge reads all of it back out:
 
     uv run python -m backend.penn.export_replay              # newest run
     uv run python -m backend.penn.export_replay <run_id> --out my_run.json
@@ -1236,8 +1283,8 @@ writes a `penn_replay.json` (default: beside the run, in
 `<runs-dir>/<run_id>/`) that the viewer opens via the landing menu's "Open a
 local replay file" — a recorded real-LLM day replays offline with bubbles,
 memory streams, and timeline markers intact. A round-trip test pins that a
-persisted bake's export equals its replay file exactly. Consumers on deck:
-the #306 run-lifecycle endpoints.
+persisted bake's export equals its replay file exactly. The #306 run-lifecycle
+endpoints (`/runs`, above) serve the same history over HTTP.
 
 ## Penn world matrix artifacts
 

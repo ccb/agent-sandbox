@@ -401,6 +401,63 @@ def test_run_registry_without_a_store_is_available_false():
         assert client.get("/runs/any").status_code == 404
         assert client.get("/runs/any/replay").status_code == 404
         assert client.delete("/runs/any").status_code == 404
+        assert client.post("/runs/any/resume").status_code == 404
+
+
+def _resumable_stepper(tmp_path):
+    """_stepper_with_store plus the #543 capability: a resume_run spy that
+    adopts the id the way PennStepper's does (attribute assignment is the
+    blessed way to give a fake stepper optional capabilities)."""
+    stepper, store = _stepper_with_store(tmp_path)
+    calls = []
+
+    def resume_run(run_id):
+        calls.append(run_id)
+        if run_id == "run-hand-deleted":
+            raise KeyError(f"unknown run id: {run_id}")
+        if run_id == "run-strangers":
+            raise ValueError("resume needs the same world YAML")
+        stepper.run_id = run_id
+
+    stepper.resume_run = resume_run
+    return stepper, store, calls
+
+
+def test_resume_endpoint_adopts_a_run(tmp_path):
+    stepper, store, calls = _resumable_stepper(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        body = client.post("/runs/run-1-old/resume").json()
+        assert body["run_id"] == "run-1-old"
+        assert body["paused"] is True  # adoption never touches the play button
+        assert body["cursor"] >= 1
+        assert calls == ["run-1-old"]
+        # Run-scoping by adoption: the registry's "current" marker moved.
+        assert client.get("/runs").json()["current"] == "run-1-old"
+        # Followers got the documented rebuild signal, stamped with the run.
+        events = client.get("/events?since=0").json()["events"]
+        newest = [e for e in events if e["kind"] == "status"][-1]
+        assert newest["reason"] == "reset"
+        assert newest["run_id"] == "run-1-old"
+
+
+def test_resume_endpoint_conflicts_and_errors(tmp_path):
+    stepper, store, calls = _resumable_stepper(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        # The live run 409s -- and never reaches the stepper.
+        assert client.post("/runs/run-2-live/resume").status_code == 409
+        assert calls == []
+        # The stepper's own guards map onto the registry's statuses:
+        # unknown id (KeyError) -> 404, refused resume (ValueError) -> 409.
+        assert client.post("/runs/run-hand-deleted/resume").status_code == 404
+        assert client.post("/runs/run-strangers/resume").status_code == 409
+
+
+def test_resume_endpoint_without_capability_is_501(tmp_path):
+    # A store alone is not enough: a stepper that cannot rebuild-from-a-run
+    # (only PennStepper can today) answers 501, not a half-adopted 200.
+    stepper, _store = _stepper_with_store(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        assert client.post("/runs/run-1-old/resume").status_code == 501
 
 
 # --- GET /usage per-run view (#526) -----------------------------------------
