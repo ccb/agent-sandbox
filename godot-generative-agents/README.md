@@ -323,7 +323,10 @@ is the outage signal). Every `frame` feed record carries `tick_ms` (+
 `deciders`), so a client can tell "thinking" from "stuck" (the viewer-side
 indicator is #372). To *feel* the
 stalls without spending anything: `--mock-latency 5 --decide-workers 3` under
-the mock brain.
+the mock brain. `deciding` — a per-agent decision lifecycle record
+(`{agent, state: "begin"|"end", step, elapsed_ms?}`, #551), emitted under a
+real/scripted brain; the viewer shows a per-agent "thinking" bubble from it
+(and the global badge prefers it over stall-inference).
 
 ### The run monitor (top-right)
 
