@@ -306,6 +306,21 @@ def test_sick_drink_is_remembered_at_high_importance():
     assert char.get_property("just_sickened") is False
 
 
+def test_recovered_drink_is_remembered_at_mid_importance():
+    # The recovery half (#300 arc): DrinkPenn sets just_recovered on the
+    # sick->well transition, so the card shows a "feel much better" memory at
+    # mid importance (5.0), and the one-shot marker is consumed.
+    char = _attached_char()
+    char.set_property("just_recovered", True)
+    remember_outcome(char, "drink pot of boiled water", 9)
+    entries = memory_stream_for_persona(char.agent)
+    rec = [e for e in entries if "feel much better" in e["text"]]
+    assert rec, f"no recovery memory in {[e['text'] for e in entries]}"
+    assert rec[-1]["importance"] == 5.0
+    assert "I drank the pot of boiled water" in rec[-1]["text"]
+    assert char.get_property("just_recovered") is False
+
+
 def test_clean_drink_while_still_sick_stays_normal_importance():
     """Fix #2 (final review): a still-sick agent drinking a CLEAN liquid must
     not misattribute "terribly sick" to this drink -- remember_outcome keys off
