@@ -30,7 +30,10 @@ static func collect(frames: Array, names: Array, memory_streams: Dictionary,
 		if step < 0 or step > last:
 			continue
 		var actor := String((rec as Dictionary).get("actor", ""))
+		# Carry the event `action` (sickness/boiled/recovery/...) so the strip can
+		# style each type distinctly (#593); the label stays "actor: summary".
 		markers.append({"step": step, "kind": "event", "agent": actor,
+			"action": String((rec as Dictionary).get("action", "")),
 			"label": "%s: %s" % [actor, String((rec as Dictionary).get("summary", ""))]})
 
 	# Reflections: from each persona's full memory stream, at the step it formed.
