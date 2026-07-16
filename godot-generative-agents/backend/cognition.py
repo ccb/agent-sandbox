@@ -516,6 +516,24 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     return tools
 
 
+def _take_pacing_args(agent, args: dict) -> None:
+    """Pop the #581 pacing meta-args off a per-action tool call and stash them
+    on the agent, so they drive pacing but never reach ``command_from_tool_call``
+    (``npc.command_from_args`` skips absent slots, so a popped key is dropped
+    from the routed command). Light validation: a non-positive/garbage duration
+    or a blank emoji is ignored (left as the None the caller reset)."""
+    minutes = args.pop("duration_minutes", None)
+    if (
+        isinstance(minutes, (int, float))
+        and not isinstance(minutes, bool)
+        and minutes > 0
+    ):
+        agent.last_duration_minutes = minutes
+    emoji = args.pop("emoji", None)
+    if isinstance(emoji, str) and emoji.strip():
+        agent.last_emoji = emoji.strip()
+
+
 def decide_with_action_tools(game, char, observation: str) -> str | None:
     """One per-action tool-calling round: the #485 decide path for a real brain.
 
@@ -583,10 +601,11 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
                 if state["command"] is None:
                     # The first action pick is the decision (providers list
                     # calls in the order the model made them).
-                    picked = args or {}
+                    picked = dict(args or {})
                     agent.last_reasoning = (
                         picked.get("reasoning") or ""
                     ).strip() or None
+                    _take_pacing_args(agent, picked)  # #581: pop before routing
                     state["command"] = command_from_tool_call(name, picked, game.parser)
                 # Terminal: the step loop owns routing + failure handling,
                 # exactly as on the single-round path below.
@@ -615,8 +634,9 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     # One action per tick: if the model called several tools, the first is its
     # primary pick (providers list calls in the order the model made them).
     call = result.tool_calls[0]
-    args = call.get("arguments") or {}
+    args = dict(call.get("arguments") or {})
     agent.last_reasoning = (args.get("reasoning") or "").strip() or None
+    _take_pacing_args(agent, args)  # #581: pop pacing meta-args before routing
     command = command_from_tool_call(call["name"], args, game.parser)
     return command or None
 
@@ -683,6 +703,13 @@ def observe_and_decide(
     ``agent.decide()`` seam. Returns the chosen command string, or ``None``.
     """
     agent = char.agent
+    # Brain-authoritative pacing (#581): reset the per-decision pacing hints
+    # here -- the single entry both the action-tools path and the classic
+    # decide() fallback pass through -- so a value from an earlier tick can
+    # never leak into this one. decide_with_action_tools sets them below when
+    # the model fills the optional slots; the mock leaves them None.
+    agent.last_duration_minutes = None
+    agent.last_emoji = None
     if not agent.memory.owner:
         agent.memory.owner = char.name
     agent.memory.perceive(game, char)
