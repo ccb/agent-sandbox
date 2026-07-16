@@ -60,6 +60,9 @@ const SPRITE_SCALE := 2.0
 # The character art is centred in its frame, so the sprite's head sits this far
 # above the node origin; the nameplate is parked just above that.
 const SPRITE_HALF_PX := 16.0 * SPRITE_SCALE
+# How fast a co-located agent eases into/out of its fan-out offset (per second),
+# so joining/leaving a shared tile glides instead of teleporting (#560).
+const FAN_EASE_RATE := 12.0
 # Breadcrumb trail: how many past tile steps trail behind each agent, and how
 # opaque its freshest (head) end is — the tail fades to fully transparent with age.
 const TRAIL_LEN := 8
@@ -124,6 +127,7 @@ const ReplayMarkers := preload("res://scripts/replay_markers.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
+const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 
 var _tile_px := 16
@@ -1184,7 +1188,9 @@ func _spawn_agent(name: String, index: int) -> void:
 	trail.visible = show_trail
 	_trails.add_child(trail)
 
-	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble, "trail": trail}
+	# "fan" is the agent's current (eased) fan-out offset (#560); it glides toward
+	# the target ring offset each frame so co-located sprites don't teleport.
+	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble, "trail": trail, "fan": Vector2.ZERO}
 
 
 func _make_bubble_style(bg: Color, border_col: Color, border_w: int, tail: bool) -> StyleBoxFlat:
@@ -1798,6 +1804,16 @@ func _process(delta: float) -> void:
 		_last_plan_step = i
 		_day_plans.show_up_to(i)
 
+	# Fan out co-located agents so stacked sprites stay visible (#560). Group by
+	# each agent's tile THIS step; the per-agent offset below is VIEW-ONLY -- it
+	# nudges where the sprite is drawn, not the agent's logical tile, so nothing
+	# that reasons about tiles (heatmap dwell, picking, conversations) is affected.
+	var fanout_tiles := {}
+	for name in _names:
+		var fa: Dictionary = _frames[i][name]
+		fanout_tiles[name] = Vector2i(int(fa["x"]), int(fa["y"]))
+	var fanout_groups: Dictionary = AgentFanout.groups(fanout_tiles)
+
 	for name in _names:
 		var a: Dictionary = _frames[i][name]
 		var b: Dictionary = _frames[j][name]
@@ -1805,6 +1821,17 @@ func _process(delta: float) -> void:
 		var pb := _tile_to_world(int(b["x"]), int(b["y"]))
 		var agent: Dictionary = _agents[name]
 		agent["node"].position = pa.lerp(pb, frac)
+		# Ease the fan-out offset toward its target so agents glide into/out of
+		# formation when they join/leave a shared tile, instead of teleporting.
+		# Space by the sprite's on-screen size (SPRITE_HALF_PX), not the tile, so
+		# the ~2x-scaled sprites visibly clear each other (#560).
+		var grp: Array = fanout_groups[Vector2i(int(a["x"]), int(a["y"]))]
+		var fan_target := Vector2.ZERO
+		if grp.size() > 1:
+			fan_target = AgentFanout.offset(grp.find(name), grp.size(), SPRITE_HALF_PX)
+		var fan: Vector2 = agent["fan"].lerp(fan_target, 1.0 - exp(-delta * FAN_EASE_RATE))
+		agent["fan"] = fan
+		agent["node"].position += fan
 		if show_trail:
 			_update_trail(agent["trail"], name, i, agent["node"].position)
 
