@@ -105,7 +105,7 @@ memories have accrued since the last one.
 
 | piece | what runs instead | why |
 |---|---|---|
-| **Daily planning** | `MockPlanner` replaying the authored YAML schedules | `LLMPlanner` currently validates stops against the *Smallville* location names (it would drop every Penn stop after 3 paid calls/agent), and a generated schedule would undo the hand-tuned stop windows that make the meeting participants overlap. A Penn-aware planner is follow-up work. |
+| **Daily planning** (default) | `MockPlanner` replaying the authored YAML schedules | `--brain llm` alone keeps the authored day so the hand-tuned stop windows that make meeting participants overlap still hold. Opt into a model-authored day with `--plan llm` (#397): `LLMPlanner` validates stops against the world's full location set (+3 calls/agent at attach). It is **free-play** — a generated day is not guaranteed to reproduce the scripted rendezvous, so it is off by default. |
 | **Parsing / narration** | the deterministic `parsing.Parser` | the Penn game never installs `LlmParser`, so the `match_*` / `narrate_*` templates are not in play. |
 | **Perception & retrieval** | keyword scoring over the memory stream | no embedding client is wired in the MVP (opt-in via issue #76's `EmbeddingClient` later). |
 
@@ -119,7 +119,7 @@ schedule stops**), 1200 steps ≈ a 08:00–11:20 campus morning:
 | decide (`choose_action`) | `npc_decision` | 2 per stop (one *travel*, one *perform* on arrival) x 10 stops | **20** |
 | decide free-text fallback (`chat`) | `npc_decision` | only when the structured call returns nothing (~10%) | **~2** |
 | converse (`speak`, one call per line) | `npc_decision` (+ `npc_dialogue` fallback) | 2 authored rendezvous x ~7 calls (≤6 lines + a closing/declining call) | **~14** |
-| plan | — | static schedules, no model | **0** |
+| plan (`day_outline` + `hourly_plan` + `minute_plan`) | `plan_system` | `--plan schedule` (default): static, no model. `--plan llm`: 3 calls/agent at attach + 1 per revision trigger | **0** default / **~9+** under `--plan llm` |
 | reflect (`salient_questions` + ≤3 `record_insight`) | `reflect_system` | ~2 passes/agent x ~3.5 calls | **~21** |
 | **total** | | | **≈ 55–60** (worst case ≲ 120) |
 
