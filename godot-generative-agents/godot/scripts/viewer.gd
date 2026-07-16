@@ -652,8 +652,10 @@ func _on_live_handshake_completed(
 	# backend *restarted* — the feed cursor is in-memory and only climbs
 	# within one server lifetime, even across resets (#549). Rejoin from
 	# scratch: drop the dead run's cast and refetch the new run's history,
-	# exactly like a fresh join (the emptied _names respawns below).
-	if _last_cursor > int((data as Dictionary).get("cursor", 0)):
+	# exactly like a fresh join (the emptied _names respawns below). Default the
+	# cursor to _last_cursor so a backend that omits the field (an older server
+	# during mixed-version dev) reads as "no rewind", not a rewind to 0.
+	if _last_cursor > int((data as Dictionary).get("cursor", _last_cursor)):
 		_teardown_cast()
 		_last_cursor = -1
 
@@ -670,7 +672,13 @@ func _on_live_handshake_completed(
 		)
 	else:
 		_set_backend_run_state("running")
-	_request_backfill()
+	# The HTTP backfill only earns its double-fetch (the socket's ?since= replay
+	# covers the same window) when it still has to place the playhead: the first
+	# join and a re-anchor, both of which have _live_started false (a re-anchor's
+	# _teardown_cast clears it). A plain reconnect keeps its playhead and lets the
+	# socket alone catch up, halving the transfer (#549).
+	if not _live_started:
+		_request_backfill()
 	_connect_ws()
 
 
@@ -831,6 +839,13 @@ func _on_reset_meta_completed(
 	# as the initial join does (?since=_last_cursor is overlap-safe).
 	_request_backfill()
 	_panel.set_live_status("following the new run")
+	# Normally the socket rides through a reset untouched. But if it dropped while
+	# this reset retry was pending, _schedule_retry's single-flight swallowed the
+	# socket's own reconnect (#549) — leaving no socket and no rewind detection.
+	# The handshake is the one path that both reconnects and re-anchors a stale
+	# cursor (a restart coincident with the reset), so re-run it when none is open.
+	if _ws == null:
+		_request_handshake()
 
 
 func _teardown_cast() -> void:
