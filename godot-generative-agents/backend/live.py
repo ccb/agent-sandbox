@@ -43,8 +43,9 @@ class SimStepper(Protocol):
     served ``Game`` -- but ``reset()`` must restore that *same* object in place,
     because every route closes over it.
 
-    Two optional attributes are probed with ``getattr`` (they are not part of
-    the protocol, so a minimal stepper can skip them):
+    Some attributes are OPTIONAL, probed with ``getattr`` per request (they
+    are not part of the protocol, so a minimal stepper can skip any of them).
+    This list is the registry -- a new probed attribute belongs here:
 
     * ``ledger`` -- a :class:`~text_adventure_games.usage.UsageLedger`; when
       present, ``GET /usage`` reports it (tokens/cost -- ~0 under the mock
@@ -57,6 +58,14 @@ class SimStepper(Protocol):
     * ``run_usage() -> dict`` -- additive per-run usage fields
       (``run_calls``/``run_cost_usd``) merged into ``GET /usage`` beside the
       lifetime summary (#526); the ledger itself stays lifetime.
+    * ``run_store`` / ``run_id`` -- the #304 persistence seam: the
+      :class:`backend.run_store.RunStore` this stepper records into, and the
+      id of the run it is currently appending to. When present, the ``/runs``
+      registry family (#306) serves that history; without them ``GET /runs``
+      answers ``available: false`` and the per-id routes 404.
+    * ``resume_run(run_id)`` -- adopt a persisted run as the live one
+      (#543); without it ``POST /runs/{run_id}/resume`` answers 501 even
+      when a ``run_store`` is present.
     """
 
     @property

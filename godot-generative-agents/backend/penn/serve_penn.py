@@ -63,7 +63,6 @@ from penn_world import (
     replay_frame_entry,
 )
 from text_adventure_games.llm_client import LlmConfig, create_llm_client
-from text_adventure_games.memory import MemoryRecord
 from text_adventure_games.usage import UsageLedger
 
 # The bake's full campus day (generate_penn_replay.DEFAULT_STEPS): long enough
@@ -367,7 +366,13 @@ class PennStepper:
             return self.ledger
         return RoleTaggedLedger(self.ledger, self.monitor, role=role)
 
-    def _build(self, world: PennWorld | None = None, resume_run_id=None):
+    def _build(
+        self,
+        world: PennWorld | None = None,
+        resume_run_id=None,
+        resume_row=None,
+        resume_frames=None,
+    ):
         # Mirror simulate()'s pre-loop setup exactly (run_simulation.py; the
         # same reconstruction tests/test_penn_live.py::
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
@@ -450,7 +455,7 @@ class PennStepper:
             self._mem_synced = {name: -1 for name in self.order}
             self._cost_base = 0.0
             if resume_run_id is not None:
-                self._adopt_run(resume_run_id)
+                self._adopt_run(resume_run_id, row=resume_row, frames=resume_frames)
             else:
                 self._run_id = self.run_store.create_run(self.meta())
 
@@ -469,10 +474,26 @@ class PennStepper:
                 f"run {run_id} was recorded with cast {stored}, but this world "
                 f"builds {self.order} -- resume needs the same world YAML"
             )
+        # ...and on this campus map: regenerating the tmj is routine
+        # (tools/geo), and tiles seeded from the last frame of a
+        # differently-sized map would land agents out of bounds or in walls.
+        current = self.meta()
+        for key in ("schema_version", "width", "height"):
+            if row["manifest"].get(key) != current[key]:
+                raise ValueError(
+                    f"run {run_id} was recorded on a different map "
+                    f"({key} {row['manifest'].get(key)}, now {current[key]}) -- "
+                    "resume needs the map it was recorded on"
+                )
         return row
 
-    def _adopt_run(self, run_id: str) -> None:
+    def _adopt_run(self, run_id: str, row=None, frames=None) -> None:
         """Pick a persisted run back up where the store left off (#543).
+
+        ``resume_run`` passes through the *row*/*frames* its pre-teardown
+        guards already fetched, so a long run's frames file isn't parsed
+        twice under the app lock; the boot path (``--resume``) leaves them
+        ``None`` and they are fetched here, once.
 
         Memory-first resume: the freshly built world stays fresh, and only
         what the store holds durably is restored --
@@ -493,8 +514,10 @@ class PennStepper:
         new ``game.events`` starts empty; the stored ``events.jsonl`` is
         append-only history).
         """
-        row = self._resumable_row(run_id)
-        frames = self.run_store.read_frames(run_id)
+        if row is None:
+            row = self._resumable_row(run_id)
+        if frames is None:
+            frames = self.run_store.read_frames(run_id)
         self._run_id = run_id
         self._step_idx = len(frames)
         if frames:
@@ -510,10 +533,7 @@ class PennStepper:
         for name in self.order:
             agent = self.chars[name].agent
             _fast_forward_schedule(agent.schedule, self._step_idx)
-            records = [
-                MemoryRecord.from_primitive(rec)
-                for rec in self.run_store.full_records(run_id, name)
-            ]
+            records = self.run_store.hydrated_records(run_id, name)
             if records:
                 # Replace the fresh seeds wholesale: the stored stream already
                 # holds the original t=0 plan (and relationship) memories, so
@@ -539,25 +559,30 @@ class PennStepper:
         """The store id of the current day's run, or None when not persisting."""
         return self._run_id
 
+    def _run_cost_usd(self) -> float:
+        # THE run-cost sum, defined once: this run's slice of the lifetime
+        # ledger (#526's baseline) plus whatever the run spent before this
+        # process (#543's _cost_base, 0 otherwise). _persist_tick writes it
+        # to the run's row and run_usage() serves it to GET /usage, so the
+        # two agree to the cent structurally, not by convention.
+        return round(
+            self._cost_base + self.ledger.total_cost_usd() - self._run_ledger_cost_base,
+            6,
+        )
+
     def run_usage(self) -> dict:
         """This run's slice of the lifetime ledger (#526).
 
         ``GET /usage`` probes for this optional method and merges the dict
         beside the (unchanged) lifetime totals, so the dashboard's run strip
         can agree with its per-run call log. The budget gate stays lifetime.
-        ``run_cost_usd`` includes a resumed run's pre-restart spend
-        (``_cost_base``, #543) -- the same sum ``_persist_tick`` writes to the
-        run's row, so the two stay in agreement. ``run_calls`` stays
-        this-process (the store keeps no cheap call count to re-anchor on).
+        ``run_cost_usd`` is ``_run_cost_usd()`` -- the sum the run's row gets
+        too. ``run_calls`` stays this-process (the store keeps no cheap call
+        count to re-anchor on).
         """
         return {
             "run_calls": len(self.ledger.records) - self._run_ledger_calls_base,
-            "run_cost_usd": round(
-                self._cost_base
-                + self.ledger.total_cost_usd()
-                - self._run_ledger_cost_base,
-                6,
-            ),
+            "run_cost_usd": self._run_cost_usd(),
         }
 
     def meta(self) -> dict:
@@ -663,18 +688,9 @@ class PennStepper:
         self._persist_pending_events()
         self.run_store.update_run(
             self._run_id,
-            # The RUN's spend, not the server's lifetime total (#526): the
-            # ledger slice since this run opened, plus -- after a resume
-            # (#543) -- whatever the run had already spent before this
-            # process (_cost_base, 0 otherwise). Rounded to match
-            # run_usage()'s run_cost_usd so GET /usage and
-            # store.get_run(id)["cost"] agree to the cent (review nit).
-            cost=round(
-                self._cost_base
-                + self.ledger.total_cost_usd()
-                - self._run_ledger_cost_base,
-                6,
-            ),
+            # The RUN's spend, not the server's lifetime total: the one
+            # _run_cost_usd() sum GET /usage serves too (#526/#543).
+            cost=self._run_cost_usd(),
             steps=self._step_idx + 1,
         )
 
@@ -760,14 +776,17 @@ class PennStepper:
             raise ValueError("this server has no run store (--persist)")
         if run_id == self._run_id:
             raise ValueError(f"run {run_id} is already the live run")
-        self._resumable_row(run_id)
-        self.run_store.read_frames(run_id)  # file present + parseable, too
+        row = self._resumable_row(run_id)
+        frames = self.run_store.read_frames(run_id)  # present + parseable, too
         # Close the current day exactly the way reset() does (a finished day
-        # keeps "finished"), then rebuild adopting the persisted run.
+        # keeps "finished"), then rebuild adopting the persisted run. The
+        # guards' row/frames ride along so the frames file -- thousands of
+        # lines on a long day, all of this under the app lock -- is parsed
+        # once, not twice.
         self._persist_pending_events()
         if self._run_id is not None and not self._run_finished:
             self.run_store.update_run(self._run_id, status="reset")
-        self._build(resume_run_id=run_id)
+        self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
 
 
 class _GameProxy:
@@ -946,8 +965,12 @@ def main() -> int:
     except ImportError as e:
         raise SystemExit(f"{e}\n(--brain llm needs the LLM extra: uv sync --extra llm)")
     except (KeyError, ValueError) as e:
-        # A bad --resume: unknown id, a different cast's run, or a corrupt
-        # frames file (JSONDecodeError is a ValueError). Exit cleanly.
+        # A bad --resume: unknown id, a different cast's or map's run, or a
+        # corrupt frames file (JSONDecodeError is a ValueError). Only claim
+        # "cannot resume" when a resume was actually asked for -- any other
+        # KeyError/ValueError is a real fault and should traceback.
+        if resume_id is None:
+            raise
         raise SystemExit(f"cannot resume: {e}")
     wm = stepper.world.world_map
     print(
