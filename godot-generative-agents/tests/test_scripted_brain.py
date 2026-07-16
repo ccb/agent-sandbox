@@ -256,3 +256,27 @@ def test_attach_agents_is_a_noop_for_a_client_without_register_schedule():
     personas = _personas()
     chars = build_world(None, personas, _LOCATIONS)[1]
     attach_agents(chars, personas, llm_client=plain)  # no error
+
+
+from serve_penn import PennStepper  # noqa: E402
+
+
+def test_stepper_under_scripted_wires_the_scripted_brains():
+    stepper = PennStepper(num_steps=5, llm=serve_penn.SCRIPTED)
+    assert isinstance(stepper.llm_client, ScriptedPennBrain)
+    assert stepper.reflector_client is not None
+    assert stepper.cognition_tools is True
+    # The brain got its schedules from _build -> attach_agents.
+    assert stepper.llm_client._schedules
+    # Both clients record into the run ledger.
+    assert stepper.llm_client.ledger is stepper.ledger
+    # self.llm is the "scripted" sentinel (a truthy string, not a dict) --
+    # meta()'s "llm" field must treat it as free (_is_paid), not index into
+    # it like a real llm: dict, or this raises TypeError (#563 review nit).
+    assert stepper.meta()["llm"] is None
+
+
+def test_stepper_default_mock_is_still_brainless():
+    stepper = PennStepper(num_steps=5)  # --brain mock
+    assert stepper.llm_client is None
+    assert stepper.reflector_client is None
