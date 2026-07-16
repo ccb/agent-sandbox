@@ -277,3 +277,28 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
     user = brain.tool_calls_log[1]["messages"][-1]["content"]
     assert "people-watching at The Green" in user
     assert "You have been on this stop" not in user  # elapsed 0: just advanced
+
+
+def test_live_mock_decide_request_carries_the_block():
+    # The issue's acceptance, offline: a live decide request body shows time +
+    # current stop (+ elapsed once nonzero). Under the mock brain the pacing
+    # ScheduleMockClient IS the brain, and its structured route logs every
+    # request it was sent -- the exact live decide request body.
+    from penn_world import build_penn_world  # noqa: E402  (sys.path shim above)
+    from serve_penn import PennStepper  # noqa: E402
+
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    assert stepper.clock.time_at(0) == START  # anchored at SIM_START
+
+    assert stepper.tick() is not None
+
+    logged = [
+        call
+        for char in stepper.chars.values()
+        for call in char.agent.llm_client.tool_calls
+    ]
+    assert logged, "expected at least one decide request on the first tick"
+    assert any(
+        "Right now it is Monday 08:00 AM" in call["messages"][-1]["content"]
+        for call in logged
+    )
