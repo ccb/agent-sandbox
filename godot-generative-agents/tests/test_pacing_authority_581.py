@@ -258,3 +258,105 @@ def test_model_emoji_wins_and_deviation_falls_to_persona_default():
     )
     assert state["Ada"]["on_plan"] is False
     assert state["Ada"]["pron"] == "\U0001f9d1"  # persona default, not the book
+
+
+from text_adventure_games.planning import RevisionTrigger  # noqa: E402
+
+
+class SequenceBrain:
+    """Answers call_tools from a scripted queue of (name, arguments), so a test
+    can drive travel-then-perform (on-plan) or a run of off-plan performs."""
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.context: dict = {}
+
+    def call_tools(
+        self, messages, tools, tool_choice="auto", max_tokens=256, temperature=0.0
+    ):
+        name, arguments = (
+            self._script.pop(0)
+            if self._script
+            else ("perform", {"activity": "waiting"})
+        )
+        return ToolCallResult(
+            text=None,
+            tool_calls=[{"id": "c", "name": name, "arguments": dict(arguments)}],
+        )
+
+
+class RecordingPlanner:
+    """Records the triggers maybe_revise_plan hands it; never changes the plan
+    (so the schedule is untouched -- we assert on the recorded reasons)."""
+
+    def __init__(self):
+        self.reasons = []
+
+    def generate(self, persona=None, memory=None, clock=None):
+        raise AssertionError("generate is not called in-loop")
+
+    def revise(self, plan, trigger=None, memory=None, clock=None):
+        self.reasons.append(getattr(trigger, "reason", None))
+        return plan
+
+
+def test_deviation_keeps_the_pointer_and_fires_one_revision():
+    # Ada scheduled Cafe (steps=2), but the brain performs at The Green (start)
+    # every tick => place deviation. The stop pointer must NOT advance, and
+    # exactly one DEVIATED revision fires within the cooldown window.
+    from backend.run_simulation import DEVIATED
+
+    persona = _persona(place="Cafe", activity="reading", steps=2)
+    game, chars = build_world(None, [persona], LOCATIONS)
+    brain = SequenceBrain([("perform", {"activity": "wandering"})] * 6)
+    attach_agents(chars, [persona], llm_client=brain)
+    ada = chars["Ada"]
+    ada.agent.planner = RecordingPlanner()  # swap in a recorder
+    state = _state()
+    clock = _clock()
+    for idx in range(5):  # perform(0), settle, complete@2, re-decide, ...
+        step(
+            game,
+            chars,
+            state,
+            idx,
+            order=["Ada"],
+            world_map=_StubMap(),
+            emoji={"Ada": "\U0001f4d6"},
+            clock=clock,
+            cog=CognitionConfig(),
+        )
+    # Pointer never advanced past the un-executed scheduled stop.
+    assert ada.agent.schedule.stop_index == 0
+    # Exactly one revision, tagged DEVIATED (cooldown suppressed the rest).
+    assert ada.agent.planner.reasons == [DEVIATED]
+    assert RevisionTrigger(DEVIATED, 0).reason == "deviated"
+
+
+def test_on_plan_perform_still_advances_the_pointer():
+    # A two-stop schedule driven by the default mock: travel->perform stop 0,
+    # then the pointer advances to stop 1. This is the byte-identical baseline
+    # advance-by-match must preserve.
+    persona = _persona(place="Cafe", activity="reading", steps=1)
+    persona["schedule"].append(
+        {"place": "Library", "activity": "studying", "emoji": "\U0001f4d6", "steps": 1}
+    )
+    game, chars = build_world(None, [persona], LOCATIONS)
+    attach_agents(chars, [persona], llm_client=None)  # mock brain
+    ada = chars["Ada"]
+    state = _state()
+    clock = _clock()
+    for idx in range(6):
+        step(
+            game,
+            chars,
+            state,
+            idx,
+            order=["Ada"],
+            world_map=_StubMap(),
+            emoji={"Ada": "\U0001f4d6"},
+            clock=clock,
+            cog=CognitionConfig(),
+        )
+    # The mock reached + performed stop 0 (on-plan) so the pointer advanced.
+    assert ada.agent.schedule.stop_index >= 1
