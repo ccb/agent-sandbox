@@ -260,6 +260,23 @@ def test_model_emoji_wins_and_deviation_falls_to_persona_default():
     assert state["Ada"]["pron"] == "\U0001f9d1"  # persona default, not the book
 
 
+def test_model_supplied_emoji_overrides_stop_and_persona():
+    # On-plan perform at the scheduled place ("The Green" == home, so Ada
+    # starts there) would otherwise wear the stop's own book emoji (the
+    # `if matched: st["pron"] = schedule.emoji` branch) -- but a model-supplied
+    # emoji must win regardless of plan status. This is the branch the
+    # "model_emoji_wins"-named test above never actually exercises (it
+    # supplies none); this one does, with an emoji distinct from both the
+    # stop's book emoji and the persona-default book emoji `_run_step` hands
+    # in as the fallback.
+    brain = PerActionBrain("perform", {"activity": "reading", "emoji": "\U0001f9ea"})
+    game, ada = _world(llm_client=brain, place="The Green")
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert state["Ada"]["on_plan"] is True
+    assert state["Ada"]["pron"] == "\U0001f9ea"
+
+
 from text_adventure_games.planning import RevisionTrigger  # noqa: E402
 
 
