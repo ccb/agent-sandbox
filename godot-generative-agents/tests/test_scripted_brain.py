@@ -280,3 +280,36 @@ def test_stepper_default_mock_is_still_brainless():
     stepper = PennStepper(num_steps=5)  # --brain mock
     assert stepper.llm_client is None
     assert stepper.reflector_client is None
+
+
+def test_bake_simulate_under_scripted_populates_chat_and_reflection():
+    from backend.run_simulation import simulate
+    from backend.sim_config import CognitionConfig
+    from text_adventure_games.usage import UsageLedger
+    from penn_world import build_penn_world, PENN_ACTION_VERBS
+
+    pw = build_penn_world()
+    brain, reflector = build_scripted_brains()
+    ledger = UsageLedger()
+    mems: dict = {}
+    frames = simulate(
+        pw.world_map,
+        120,
+        ledger=ledger,
+        personas=pw.personas,
+        build_world_fn=pw.build_world_fn,
+        out_memories=mems,
+        cognition=CognitionConfig(cognition_tools=True),
+        reflector_client=reflector,
+        llm_client=brain,
+        extra_action_names=PENN_ACTION_VERBS,
+    )
+    assert frames  # ran to completion offline, no keys
+    # The brain reached the tool loop (decide went through call_tools).
+    assert brain.tool_calls_log
+    # A cognition tool was offered and used at least once.
+    assert any(
+        "recall" in {t.get("name") for t in c["tools"]} for c in brain.tool_calls_log
+    )
+    # The ledger recorded calls (non-empty GET /usage surface).
+    assert ledger.summary()
