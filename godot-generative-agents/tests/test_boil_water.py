@@ -386,6 +386,33 @@ def test_houston_hall_is_stocked_and_the_scenario_plays():
     assert not second.get_property("is_boiled")
 
 
+def test_boil_makes_houston_water_safe_in_the_real_world():
+    """In the furnished Houston Hall, boiling makes the raw cups safe: a drink
+    afterward does not sicken. (Contrast test_houston_hall_is_stocked...: with
+    no boil verb, activating the stove heats nothing.)"""
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    sofia = chars["Sofia Ramirez"]
+    assert game.parser.parse_command("travel to Houston Hall", actor=sofia)
+    assert game.parser.parse_command("boil water", actor=sofia)
+    hall = game.locations["Houston Hall"]
+    assert hall.items["cup of murky water"].get_property("is_boiled") is True
+    assert hall.items["second cup of murky water"].get_property("is_boiled") is True
+    assert game.parser.parse_command("get cup of murky water", actor=sofia)
+    assert game.parser.parse_command("drink cup of murky water", actor=sofia)
+    assert not sofia.get_property("is_sick")
+
+
+def test_penn_action_verbs_include_boil():
+    from backend.penn.penn_world import PENN_ACTION_VERBS
+    from backend.cognition import attach_agents
+
+    personas = _normalize_personas([_commands_persona()])
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, extra_action_names=PENN_ACTION_VERBS)
+    assert "boil" in chars["Testa"].agent.action_names
+
+
 def test_sofias_houston_hall_stop_carries_the_commands():
     pw = build_penn_world()
     sofia = next(p for p in pw.personas if p["name"] == "Sofia Ramirez")
