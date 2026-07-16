@@ -194,7 +194,15 @@ class LiveRunController:
     def tick_once(self) -> dict:
         """One tick under the app lock. Runs in a worker thread (or directly in
         unit tests). Returns what the loop should publish -- ``agents`` is the
-        frame for index ``step`` (``None`` when the stepper says finished)."""
+        frame for index ``step`` (``None`` when the stepper says finished).
+
+        The lock is held for the whole tick, so on a decision tick every
+        locked read route (``/world_state``, the ``/agents/{name}`` panels)
+        stalls behind it -- bounded by ``decide_timeout`` under #366's
+        concurrent decides (it was the unbounded *sum* of latencies before).
+        Freeing the readers entirely would mean deciding outside the lock and
+        applying effects under it; the decide phase is already read-only on
+        the game, so that's the natural follow-up if the stall bites."""
         with self._lock:
             generation = self.generation
             step = self._stepper.step  # the index of the frame this tick makes

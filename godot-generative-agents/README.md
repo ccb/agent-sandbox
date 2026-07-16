@@ -282,8 +282,9 @@ along with the exact tool schemas and prompts the model gets). The config's
 reaches it the day ends — the live loop pauses and the run monitor's budget
 row shows **TRIPPED**. Two operational notes on latency (#366): under
 `--brain llm` the agents at a decision point decide **concurrently** (one
-worker per persona by default; `--decide-workers 0` restores the strictly
-serial path), so a decision tick costs roughly the *slowest* decision rather
+worker per persona by default; `--decide-workers N` caps how many model calls
+run at once — tune it under your provider's rate limit — and `0` restores the
+strictly serial path), so a decision tick costs roughly the *slowest* decision rather
 than the sum — and the loop's sleep subtracts each tick's wall time, so
 walk-only ticks keep the `--tick-seconds` cadence while decision ticks start
 the next tick immediately. A decision that outlives `--decide-timeout`

@@ -883,14 +883,13 @@ def maybe_converse(
         # "role" key labels the terminal request monitor's line (llm_monitor).
         ctx_a = getattr(a.agent.llm_client, "context", None)
         ctx_b = getattr(b.agent.llm_client, "context", None)
-        if ctx_a is not None:
-            ctx_a.update(
-                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
-            )
-        if ctx_b is not None and ctx_b is not ctx_a:
-            ctx_b.update(
-                {"actor": b.name, "turn": step, "attempt": 0, "role": "converse"}
-            )
+        if ctx_b is ctx_a:
+            ctx_b = None  # classic shared client: stamp once, initiator wins
+        for char, ctx in ((a, ctx_a), (b, ctx_b)):
+            if ctx is not None:
+                ctx.update(
+                    {"actor": char.name, "turn": step, "attempt": 0, "role": "converse"}
+                )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )

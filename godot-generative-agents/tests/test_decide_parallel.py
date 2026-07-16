@@ -4,8 +4,8 @@ Pins the live loop's latency contract, fully offline:
 
 * a decision tick with N agents due costs ~the slowest decision, not the sum
   (a daemon thread per decision fans ``observe_and_decide`` out against the
-  turn-start snapshot; ``--mock-latency`` injects provider-shaped latency
-  into the mock);
+  turn-start snapshot, at most ``--decide-workers`` running at once;
+  ``--mock-latency`` injects provider-shaped latency into the mock);
 * a decision that outlives its wall-clock budget degrades to idle (the pinned
   brain-outage behavior), is never double-submitted while still in flight, and
   its late answer is applied -- not discarded -- once the straggler resolves
@@ -210,6 +210,28 @@ def test_timeout_degrades_to_idle_never_double_asks_then_applies_the_late_answer
     assert brains[hung].tool_calls.count("choose_action") == 1
     assert hung not in stepper._decide_pending
     assert stepper.state[hung]["performing"]  # the late answer landed
+
+
+def test_decide_threads_cap_bounds_concurrent_decides():
+    # --decide-workers N promises a provider rate-limit bound: with 2 slots
+    # and 3 submissions, the third must queue until a slot frees.
+    executor = serve_penn._DecideThreads(2)
+    gate = threading.Event()
+    started = []
+
+    def task(i):
+        started.append(i)
+        gate.wait(timeout=5)
+        return i
+
+    futs = [executor.submit(task, i) for i in range(3)]
+    deadline = time.monotonic() + 5
+    while len(started) < 2 and time.monotonic() < deadline:
+        time.sleep(0.005)
+    time.sleep(0.05)  # ample time for an un-capped third thread to slip in
+    assert len(started) == 2  # any two may win the slots; never all three
+    gate.set()  # frees the running two; the queued third then runs too
+    assert sorted(f.result(timeout=5) for f in futs) == [0, 1, 2]
 
 
 def test_step_fails_loud_when_executor_lacks_timeout_or_registry():
