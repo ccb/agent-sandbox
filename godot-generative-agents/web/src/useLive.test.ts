@@ -250,6 +250,24 @@ describe("followLive", () => {
     expect(state.calls.map((c) => c.call_no)).toEqual([1, 2]); // the socket stays good
   });
 
+  it("keeps the log when a drop races a background refresh (the guard is read at fire time)", async () => {
+    const sock = await start();
+    sock.open();
+    sock.push(call(1, 5));
+    await vi.advanceTimersByTimeAsync(0);
+    live.cursor = 5; // the backend head is genuinely at 5 (below our cursor after the gap)
+    sock.drop();
+    await vi.advanceTimersByTimeAsync(1000); // reconnect handshake → socket at since=5
+    const resumed = FakeWS.last;
+    resumed.open();
+    resumed.push(call(2, 9)); // gap (9 > 5+1) fires the background eviction refresh...
+    resumed.drop(); // ...then the socket drops *during* it, flipping `handshook` false
+    await vi.advanceTimersByTimeAsync(0); // the refresh resolves and reads the flag
+    // Captured at fire time it's still "background", so no rewind: a late read of
+    // the flipped flag would have wrongly cleared a healthy follower's log (#549).
+    expect(state.calls.map((c) => c.call_no)).toEqual([1, 2]);
+  });
+
   it("re-anchors at the handshake's cursor when a reconnect finds it rewound (restart)", async () => {
     const sock = await start();
     sock.open();
