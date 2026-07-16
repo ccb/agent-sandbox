@@ -199,3 +199,81 @@ def test_render_drops_the_optional_clauses():
         "Right now it is Monday 08:00 AM.\n"
         "Your plan's current stop: stretching at The Quad."
     )
+
+
+# ------------------------------------------------------- step-loop plumbing
+
+from backend.run_simulation import step  # noqa: E402
+
+
+def _perform_call(activity):
+    return ToolCallResult(
+        text=None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "name": "perform",
+                "arguments": {"reasoning": "on it", "activity": activity},
+            }
+        ],
+    )
+
+
+def test_step_restamps_stop_since_when_the_schedule_advances():
+    # Two stops at Ada's start location (no travel, so no WorldMap needed):
+    # a 1-step stretch, then settle. Step 0 decides stop 1; the pre-pass of
+    # step 1 expires it, advances the schedule, and restamps stop_since --
+    # so the second decide's prompt shows the NEW stop with no elapsed clause.
+    personas = _personas()
+    personas[0]["destination"] = "The Green"
+    personas[0]["activity"] = "stretching"
+    personas[0]["schedule"] = [
+        {
+            "place": "The Green",
+            "activity": "stretching",
+            "emoji": "\U0001f4d6",
+            "steps": 1,
+        },
+        {
+            "place": "The Green",
+            "activity": "people-watching",
+            "emoji": "\U0001f4d6",
+            "steps": None,
+        },
+    ]
+    brain = MockLlmClient(
+        tool_calls_responses=[
+            _perform_call("stretching"),
+            _perform_call("people-watching"),
+        ]
+    )
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    clock = SimClock(START)
+    common = dict(
+        order=["Ada"], world_map=None, emoji={"Ada": "\U0001f4d6"}, clock=clock
+    )
+
+    step(game, chars, state, 0, **common)
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["stop_since"] == 0
+
+    step(game, chars, state, 1, **common)
+    assert state["Ada"]["stop_since"] == 1
+    user = brain.tool_calls_log[1]["messages"][-1]["content"]
+    assert "people-watching at The Green" in user
+    assert "You have been on this stop" not in user  # elapsed 0: just advanced
