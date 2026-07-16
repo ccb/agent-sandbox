@@ -265,21 +265,30 @@ class _DecideThreads:
     socket blocked ``POST /shutdown``/Ctrl-C for the client's whole retry
     budget; and its fixed worker set let stragglers abandoned by ``POST
     /reset`` starve the new world's decisions. Daemon threads cost ~nothing
-    next to an LLM round-trip, die silently with the process, and can't queue
-    behind each other -- concurrency stays bounded regardless, because step()
-    keeps at most one in-flight decision per agent.
+    next to an LLM round-trip and die silently with the process.
+
+    ``max_workers`` is honored via a semaphore: at most that many decisions
+    run at once (the rate-limit knob ``--decide-workers`` promises), the rest
+    queue behind it. A queued decide that misses its tick's timeout window
+    parks like any straggler and its perceive runs late -- against a world the
+    serial phase may be mutating -- which at worst raises and degrades to the
+    pinned outage-idle path, exactly like a failed provider call.
     """
+
+    def __init__(self, max_workers):
+        self._slots = threading.Semaphore(max_workers)
 
     def submit(self, fn, /, *args, **kwargs):
         future = concurrent.futures.Future()
 
         def _run():
-            if not future.set_running_or_notify_cancel():
-                return
-            try:
-                future.set_result(fn(*args, **kwargs))
-            except BaseException as exc:
-                future.set_exception(exc)
+            with self._slots:
+                if not future.set_running_or_notify_cancel():
+                    return
+                try:
+                    future.set_result(fn(*args, **kwargs))
+                except BaseException as exc:
+                    future.set_exception(exc)
 
         threading.Thread(target=_run, daemon=True, name="decide").start()
         return future
@@ -323,14 +332,16 @@ class PennStepper:
         # a decision point decides in parallel inside step(), each bounded by
         # decide_timeout seconds of wall clock. 0 = today's serial path,
         # byte-identical (and what the simulate-equivalence test pins).
-        # Actual concurrency is bounded by the cast, not the flag value:
-        # step() keeps at most one in-flight decision per agent, and
-        # _DecideThreads gives each decision its own daemon thread.
+        # Concurrency is min(decide_workers, cast): _DecideThreads caps live
+        # decides at decide_workers (the provider rate-limit knob), and
+        # step() keeps at most one in-flight decision per agent.
         # mock_latency > 0 makes each ScheduleMockClient decide sleep that
         # long -- an offline stand-in for real provider latency.
         self.decide_timeout = decide_timeout
         self.mock_latency = mock_latency
-        self._decide_executor = _DecideThreads() if decide_workers > 0 else None
+        self._decide_executor = (
+            _DecideThreads(decide_workers) if decide_workers > 0 else None
+        )
         # How many agents were at a decision point in the last tick() -- the
         # live loop stamps it onto each frame record (live.py) so a viewer can
         # tell "thinking" from "frozen" (#372).
@@ -837,10 +848,11 @@ def main() -> int:
         "--decide-workers",
         type=_decide_workers_arg,
         default="auto",
-        help="concurrent agent decisions (#366): 0 = strictly serial "
-        "(deterministic); any positive value turns parallel decides on "
-        "(concurrency is naturally capped at one in-flight decision per "
-        "persona). 'auto' (default) = on under --brain llm, 0 under mock",
+        help="max concurrent agent decisions (#366): 0 = strictly serial "
+        "(deterministic); N caps how many decides run at once (tune it "
+        "under your provider's rate limit -- also at most one in-flight "
+        "decision per persona). 'auto' (default) = one per persona under "
+        "--brain llm, 0 under mock",
     )
     ap.add_argument(
         "--decide-timeout",
@@ -970,9 +982,10 @@ def main() -> int:
         )
     if decide_workers > 0:
         print(
-            f"Concurrent decides: ON (one in-flight decision per agent), "
-            f"{args.decide_timeout:g}s budget each -- a decision tick costs "
-            "the slowest decision, not the sum (#366)."
+            f"Concurrent decides: ON (up to {decide_workers} at once, one "
+            f"in-flight decision per agent), {args.decide_timeout:g}s budget "
+            "each -- a decision tick costs the slowest decision, not the "
+            "sum (#366)."
         )
     print(
         f"LLM request monitor: {'on' if args.monitor else 'off (--monitor to enable)'}"

@@ -70,6 +70,16 @@ def _decide_for(game, char, step_idx, retrieval):
     return observe_and_decide(game, char, step_idx, retrieval=retrieval)
 
 
+def _result_or_none(fut):
+    """A finished decide future's answer, or ``None`` if the call raised --
+    the same degrade as a brain outage: the agent idles this tick and is
+    re-asked at its next decision point."""
+    try:
+        return fut.result()
+    except Exception:
+        return None
+
+
 def step(
     game,
     chars: dict,
@@ -195,21 +205,17 @@ def step(
         pending = decide_pending
         futs = {}
         for name in due:
-            stale = pending.pop(name, None)
+            stale = pending.get(name)
             if stale is not None:
                 if stale.done():
                     # The parked call from an earlier timeout has resolved:
-                    # apply its answer now (a failed call degrades to None,
-                    # same as an outage). No new decide is submitted.
-                    try:
-                        decided[name] = stale.result()
-                    except Exception:
-                        decided[name] = None
-                    continue
-                # Still thinking since an earlier tick: keep idling, never
-                # double-submit -- one in-flight decision per agent.
-                pending[name] = stale
-                decided[name] = None
+                    # apply its answer now. No new decide is submitted.
+                    del pending[name]
+                    decided[name] = _result_or_none(stale)
+                else:
+                    # Still thinking since an earlier tick: keep idling, never
+                    # double-submit -- one in-flight decision per agent.
+                    decided[name] = None
                 continue
             futs[name] = decide_executor.submit(
                 _decide_for, game, chars[name], step_idx, retrieval
@@ -222,12 +228,7 @@ def step(
             concurrent.futures.wait(futs.values(), timeout=decide_timeout)
             for name, fut in futs.items():
                 if fut.done():
-                    try:
-                        decided[name] = fut.result()
-                    except Exception:
-                        # Same degrade as a brain outage: None idles the agent
-                        # this tick; it is re-asked at its next decision point.
-                        decided[name] = None
+                    decided[name] = _result_or_none(fut)
                 else:
                     # Timed out. A sync call can't be cancelled, so park the
                     # future and idle the agent for this tick. When the hung
@@ -237,12 +238,11 @@ def step(
                     # check at the top of the next tick may miss a cost that
                     # hasn't landed yet (the kill-switch can fire one tick
                     # late; the lag is bounded by the client's own #260
-                    # timeout budget).
-                    # ponytail: the straggler may read `game` while the serial
-                    # phase below mutates it -- torn perception is possible
-                    # but contained: its observations were already recorded
-                    # before the blocking call, and its answer is applied only
-                    # at a decision point.
+                    # timeout budget). The straggler may read `game` while the
+                    # serial phase below mutates it -- torn perception is
+                    # possible but contained: its observations were already
+                    # recorded before the blocking call, and its answer is
+                    # applied only at a decision point.
                     pending[name] = fut
                     decided[name] = None
                     timeouts.append(name)
@@ -254,8 +254,12 @@ def step(
         char = chars[name]
         st = state[name]
 
-        # Decision point: idle and not yet settled into an activity.
-        if not st["path"] and not st["performing"]:
+        # Decision point: idle and not yet settled into an activity. The
+        # pre-pass above already evaluated exactly that predicate into `due`
+        # (nothing between the two passes touches another agent's state), so
+        # membership keeps the fan-out and this resolve loop agreeing on the
+        # same set by construction.
+        if name in due:
             command = (
                 decided[name]
                 if name in decided
