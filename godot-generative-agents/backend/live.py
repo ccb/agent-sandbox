@@ -331,6 +331,11 @@ async def run_loop(
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
                 log.append("status", reason="finished", **controller.status())
+                # A terminal tick publishes no frame; its engine/deciding buffers
+                # are empty by construction (the stepper returns None before it
+                # decides), so nothing below is skipped in practice. A future
+                # stepper that buffers records while deciding "finished" must move
+                # those appends above this early return.
                 continue
             extra = (
                 {} if result["deciders"] is None else {"deciders": result["deciders"]}
