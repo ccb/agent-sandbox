@@ -67,6 +67,17 @@ class SimClock:
             raise ValueError(f"seconds must be >= 0, got {seconds}")
         return seconds // self.sec_per_step
 
+    def minutes_for_steps(self, steps: int) -> int:
+        """How many whole minutes ``steps`` spans -- the reverse conversion.
+
+        The decide-context block (#580) phrases stop durations in minutes;
+        keeping the arithmetic here (not inlined at call sites) preserves this
+        class as the single steps<->time conversion point.
+        """
+        if steps < 0:
+            raise ValueError(f"steps must be >= 0, got {steps}")
+        return steps * self.sec_per_step // 60
+
     @property
     def steps_per_hour(self) -> int:
         """Steps in one in-game hour (360 at the 10s/step default).

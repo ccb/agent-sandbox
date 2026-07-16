@@ -195,7 +195,8 @@ def step(
             if char.agent.schedule.advance():
                 st["performing"] = False
                 # A new stop begins now: the decide-context block (#580)
-                # measures "how long on this stop" from here.
+                # measures "how long on this stop" from here (re-anchored
+                # again on arrival if the stop needs a walk).
                 st["stop_since"] = step_idx
             st["perform_until"] = None
 
@@ -230,8 +231,8 @@ def step(
                 chars[name],
                 step_idx,
                 retrieval,
-                clock,
-                state[name].get("stop_since", 0),
+                clock=clock,
+                stop_since=state[name].get("stop_since", 0),
             )
         if futs:
             # One shared wall-clock window: the futures started together, so
@@ -277,7 +278,12 @@ def step(
                 decided[name]
                 if name in decided
                 else _decide_for(
-                    game, char, step_idx, retrieval, clock, st.get("stop_since", 0)
+                    game,
+                    char,
+                    step_idx,
+                    retrieval,
+                    clock=clock,
+                    stop_since=st.get("stop_since", 0),
                 )
             )
             # Capture the thinking behind this decision for the replay card: the
@@ -342,6 +348,12 @@ def step(
         # Advance one tile along any active walk.
         if st["path"]:
             st["tile"] = st["path"].pop(0)
+            if not st["path"]:
+                # Arrived: re-anchor the decide-context clock (#580) so
+                # "how long on this stop" counts time AT the stop --
+                # commensurate with the planned minutes, which budget the
+                # activity itself, not the walk there.
+                st["stop_since"] = step_idx
 
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],

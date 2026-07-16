@@ -279,6 +279,56 @@ def test_step_restamps_stop_since_when_the_schedule_advances():
     assert "You have been on this stop" not in user  # elapsed 0: just advanced
 
 
+def test_arrival_restamps_stop_since_so_elapsed_excludes_the_walk():
+    # A stop that needs a walk: stop_since re-anchors when the last path tile
+    # is consumed, so elapsed counts time AT the stop -- commensurate with the
+    # planned minutes, which budget the activity, not the walk there.
+    class _TwoTileWalk:
+        """WorldMap stand-in: every walk is the same two-tile path."""
+
+        def walk_path(self, start, address, furniture=None):
+            return [(0, 1), (0, 2)]
+
+    brain = MockLlmClient(
+        tool_calls_responses=[TRAVEL, _perform_call("reading a novel")]
+    )
+    personas = _personas()  # default: one Cafe stop, reached by travel
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    common = dict(
+        order=["Ada"],
+        world_map=_TwoTileWalk(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=SimClock(START),
+    )
+
+    step(game, chars, state, 0, **common)  # decides travel, walks 1st tile
+    assert state["Ada"]["path"] == [(0, 2)]
+    assert state["Ada"]["stop_since"] == 0  # mid-walk: no re-anchor yet
+
+    step(game, chars, state, 1, **common)  # last tile popped: arrival
+    assert state["Ada"]["stop_since"] == 1
+
+    step(game, chars, state, 2, **common)  # arrival decide: perform
+    user = brain.tool_calls_log[1]["messages"][-1]["content"]
+    assert "reading a novel at Cafe" in user
+    assert "You have been on this stop" not in user  # walk time excluded
+
+
 def test_live_mock_decide_request_carries_the_block():
     # The issue's acceptance, offline: a live decide request body shows time +
     # current stop (+ elapsed once nonzero). Under the mock brain the pacing
