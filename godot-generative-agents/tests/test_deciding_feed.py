@@ -4,6 +4,7 @@ Fully offline. Run from the repo root:
 """
 
 import sys
+import threading
 from pathlib import Path
 
 _SIM_DIR = (
@@ -109,3 +110,48 @@ def test_mock_stepper_emits_no_deciding_records():
     for _ in range(5):
         stepper.tick()
     assert stepper.drain_deciding() == []  # byte-identical mock feed
+
+
+def test_live_feed_publishes_deciding_records():
+    # End-to-end through the real run_loop (not a monkeypatched tick), mirroring
+    # the drive pattern in test_live_seam.py: poll the log with a timeout instead
+    # of a fixed sleep, so the assertion isn't racing the event loop's schedule.
+    import asyncio
+    import contextlib
+
+    from backend.live import EventLog, LiveRunController, ScriptedStepper, run_loop
+
+    class _Stepper(ScriptedStepper):
+        def __init__(self):
+            super().__init__(
+                frames=[{"Maya": {"x": 0, "y": 0}}]
+            )  # one frame then finished
+            self._drained = False
+
+        def drain_deciding(self):
+            if self._drained:
+                return []
+            self._drained = True
+            return [
+                {"agent": "Maya", "state": "begin", "step": 0},
+                {"agent": "Maya", "state": "end", "step": 0, "elapsed_ms": 12},
+            ]
+
+    async def scenario():
+        log = EventLog()
+        controller = LiveRunController(_Stepper(), threading.Lock())
+        task = asyncio.create_task(run_loop(controller, log, tick_seconds=0.0))
+        async with asyncio.timeout(5):
+            while not any(r["kind"] == "deciding" for r in log.since(0)):
+                await asyncio.sleep(0.001)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        return log.since(0)
+
+    records = asyncio.run(scenario())
+    deciding = [r for r in records if r.get("kind") == "deciding"]
+    assert {"agent": "Maya", "state": "begin", "step": 0} in [
+        {k: r[k] for k in ("agent", "state", "step")} for r in deciding
+    ]
+    assert any(r["state"] == "end" and r.get("elapsed_ms") == 12 for r in deciding)
