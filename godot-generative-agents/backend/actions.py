@@ -92,6 +92,23 @@ class Act(base.Action):
             "phrase, e.g. 'reading in the stacks'",
             "required": True,
         },
+        # Brain-authoritative pacing (#581). Optional meta-slots: how long to
+        # stay, and the emoji to show while doing it. They are NOT part of the
+        # routed command -- cognition.decide_with_action_tools pops them off the
+        # tool call before reassembly, so they never reach the parser. The mock
+        # never fills them, so the offline replay is byte-identical.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend on this activity "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while doing this "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
     }
 
     def __init__(self, game, command: str, actor=None):

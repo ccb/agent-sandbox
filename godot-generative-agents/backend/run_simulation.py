@@ -45,6 +45,12 @@ from .world_map import WorldMap
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
 
+# A backend-local revision reason (#581): the brain performed somewhere other
+# than the scheduled stop. RevisionTrigger.reason is a plain string
+# (planning.py), so this needs no engine change -- it rides godot-ga-main with
+# the rest of the pacing work.
+DEVIATED = "deviated"
+
 
 def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     """Stamp the agent's LLM-usage context, then observe + decide (one call).
@@ -82,6 +88,27 @@ def _result_or_none(fut):
         return fut.result()
     except Exception:
         return None
+
+
+def _minutes_to_steps(minutes, clock) -> int:
+    """Whole steps spanning ``minutes`` of in-game time (at least 1) via the run's
+    SimClock -- the single minutes->steps conversion the pacing code uses (#581)."""
+    return max(1, clock.steps_for_seconds(int(minutes * 60)))
+
+
+def _model_duration_steps(agent, clock, cog) -> int | None:
+    """The model's chosen activity duration in *steps*, clamped, or None (#581).
+
+    The tool arg is in minutes (the unit the #580 decide-context block shows the
+    brain); converting to steps needs the run's SimClock, so with no clock (the
+    offline tests/bake) a model duration is ignored and the caller uses the
+    authored schedule instead. Only a model estimate is clamped -- an authored
+    ``schedule.steps`` is trusted as-is."""
+    minutes = getattr(agent, "last_duration_minutes", None)
+    if minutes is None or clock is None:
+        return None
+    minutes = max(cog.duration_min_minutes, min(cog.duration_max_minutes, minutes))
+    return _minutes_to_steps(minutes, clock)
 
 
 def step(
@@ -183,22 +210,30 @@ def step(
         ):
             maybe_revise_plan(char, RevisionTrigger(BEHIND_SCHEDULE, step_idx), clock)
 
-        # Has the current activity run its course? Un-latch and point the brain
-        # at the next scheduled stop, so the agent becomes idle below and walks
-        # on. When the schedule is exhausted, just stop the timer and let it
-        # settle into this last activity for the rest of the run.
+        # Has the current activity run its course? (#581) Advance the stop
+        # pointer ONLY if the completed activity happened at the scheduled place
+        # (on-plan). A deviation keeps the pointer -- the scheduled stop never
+        # ran, so advancing would silently skip it -- and just un-latches so the
+        # agent re-decides. The mock is always on-plan, so this is byte-identical.
         if (
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
         ):
-            if char.agent.schedule.advance():
+            if st.get("on_plan", True):
+                if char.agent.schedule.advance():
+                    st["performing"] = False
+                    # A new stop begins now: the decide-context block (#580)
+                    # measures "how long on this stop" from here (re-anchored
+                    # again on arrival if the stop needs a walk).
+                    st["stop_since"] = step_idx
+                st["perform_until"] = None
+            else:
+                # Deviation completed: keep the pointer, un-latch, re-anchor the
+                # elapsed clock so the next decision starts fresh.
                 st["performing"] = False
-                # A new stop begins now: the decide-context block (#580)
-                # measures "how long on this stop" from here (re-anchored
-                # again on arrival if the stop needs a walk).
+                st["perform_until"] = None
                 st["stop_since"] = step_idx
-            st["perform_until"] = None
 
         if not st["path"] and not st["performing"]:
             due.append(name)
@@ -307,33 +342,103 @@ def step(
                 # A no-op unless a reflector was wired on (real provider only), so
                 # the mock replay stays byte-identical.
                 maybe_reflect(char.agent, game)
+                # #581: the model duration this decision carried (clamped, in
+                # steps) or None -- computed once here, driving both the settle
+                # trigger and perform_until below.
+                model_duration_steps = _model_duration_steps(char.agent, clock, cog)
                 if command.startswith("travel"):
                     dest = char.location
                     address = getattr(dest, "tile_address", None)
+                    # Furniture is a per-stop bias; on a deviation the scheduled
+                    # stop's furniture is for the wrong place, so drop it. The
+                    # mock only ever travels to its scheduled stop, so it keeps
+                    # the hint -> byte-identical.
+                    stop_place = getattr(char.agent.schedule, "destination", None)
+                    furniture = (
+                        getattr(char.agent.schedule, "furniture", None)
+                        if dest is not None and dest.name == stop_place
+                        else None
+                    )
                     st["path"] = (
-                        world_map.walk_path(
-                            st["tile"],
-                            address,
-                            furniture=getattr(char.agent.schedule, "furniture", None),
-                        )
+                        world_map.walk_path(st["tile"], address, furniture=furniture)
                         if address
                         else []
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif command.startswith("perform"):
+                elif command.startswith("perform") or model_duration_steps is not None:
+                    # Settle into an in-place activity. The trigger is "perform,
+                    # OR any action that carried a model duration" -- so a future
+                    # duration-bearing verb (#446 study/eat) settles here too,
+                    # while the #300 instantaneous verbs (get/drink/activate),
+                    # which carry no duration and aren't "perform", keep falling
+                    # through as one-tick actions (byte-identical).
                     st["performing"] = True
-                    # Per-stop emoji (the schedule may vary it from the persona's
-                    # default), falling back to the persona's.
-                    st["pron"] = char.agent.schedule.emoji or emoji[name]
-                    activity = char.get_property("activity") or "spending time"
-                    st["desc"] = f"{activity} @ {char.location.tile_address}"
-                    # Schedule the move on to the next stop. None steps means
-                    # "stay" -- the agent settles here for the rest of the run.
-                    duration = char.agent.schedule.steps
-                    st["perform_until"] = (
-                        step_idx + duration if duration is not None else None
+                    schedule = char.agent.schedule
+                    # Place-match is the pacing-relevant signal: standing at the
+                    # scheduled stop means this completed that stop (a different
+                    # activity at the right place is a believability matter for
+                    # the #584 eval, not a pacing desync). A place mismatch is a
+                    # deviation (handled by Task 4's advance gating + revision).
+                    stop_place = getattr(schedule, "destination", None)
+                    matched = (
+                        char.location is not None and char.location.name == stop_place
                     )
+                    st["on_plan"] = matched
+                    activity = char.get_property("activity") or "spending time"
+                    if not matched:
+                        # Off-plan: let the planner rewrite the stale tail so the
+                        # written plan (and #580's context block / read_plan)
+                        # catch up with reality. Cooldown-guarded because each
+                        # revise is a real LLM call under a live planner; the
+                        # mock's revise is a no-op regardless, so the bake is
+                        # untouched. Stamp on every attempt (not just successes)
+                        # to bound planner-call frequency.
+                        last_dev = st.get("last_deviation_revision")
+                        cooldown = cog.deviation_cooldown_steps
+                        if last_dev is None or step_idx - last_dev >= cooldown:
+                            st["last_deviation_revision"] = step_idx
+                            maybe_revise_plan(
+                                char,
+                                RevisionTrigger(DEVIATED, step_idx, activity),
+                                clock,
+                            )
+                    # Emoji: the model's pick wins; else the stop's emoji only
+                    # when on-plan (a deviation must not wear the wrong stop's
+                    # emoji); else the persona default.
+                    model_emoji = getattr(char.agent, "last_emoji", None)
+                    if model_emoji:
+                        st["pron"] = model_emoji
+                    elif matched:
+                        st["pron"] = schedule.emoji or emoji[name]
+                    else:
+                        st["pron"] = emoji[name]
+                    # char.location can be None (the `matched` guard above assumes
+                    # so); don't crash the desc line if it is.
+                    where = char.location.tile_address if char.location else "?"
+                    st["desc"] = f"{activity} @ {where}"
+                    # Duration: the model's clamped estimate (in steps) if it gave
+                    # one, else the authored schedule.steps (trusted as-is, so the
+                    # mock bake is untouched). A None schedule step means "stay put"
+                    # -- correct for an on-plan end-of-day stop, but a deviation
+                    # must never freeze there with no way to re-decide, so an
+                    # off-plan perform with no bound gets the max-duration ceiling.
+                    if model_duration_steps is not None:
+                        st["perform_until"] = step_idx + model_duration_steps
+                    else:
+                        schedule_steps = schedule.steps
+                        if schedule_steps is not None:
+                            st["perform_until"] = step_idx + schedule_steps
+                        elif matched or clock is None:
+                            # On-plan stay-put (or offline, no clock to bound with):
+                            # settle here for the rest of the run, as before.
+                            st["perform_until"] = None
+                        else:
+                            # Off-plan with no bound anywhere: cap it so the brain
+                            # re-decides instead of freezing on the deviation.
+                            st["perform_until"] = step_idx + _minutes_to_steps(
+                                cog.duration_max_minutes, clock
+                            )
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 # Offer its planner a chance to re-plan around the blocked action
@@ -561,6 +666,11 @@ def simulate(
             # The step the agent's current schedule stop began (walking there
             # counts) -- feeds the decide-context block (#580).
             "stop_since": 0,
+            # Did the last settle happen at the scheduled place? (#581) The
+            # pre-pass only advances the stop pointer when this is True; a
+            # deviation keeps the pointer. Defaults True so a never-performed
+            # agent's first advance is safe.
+            "on_plan": True,
         }
 
     # Conversation is gated on a real brain (issue #86): the deterministic mock
