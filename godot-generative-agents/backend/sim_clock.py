@@ -12,9 +12,9 @@ port needs *seconds per step* and the same ``start_dt + step * sec_per_step``
 instant the exporter already stamps onto every frame. :class:`SimClock` is that
 formula, named and reusable, kept as pure data with no engine imports.
 
-Scaffolding note: like ``planner.MockPlanner``, this is **not wired into the step
-loop yet**. The planner and the revision triggers (build-order steps 5-6) will
-share one :class:`SimClock`; today it only needs to exist and be correct.
+One shared :class:`SimClock` now drives the loop's clock-gated behavior: the
+plan revision triggers in ``run_simulation.step()`` and the decide-context
+block (#580) -- ``serve_penn`` threads it through every live tick too.
 """
 
 from __future__ import annotations
@@ -66,6 +66,17 @@ class SimClock:
         if seconds < 0:
             raise ValueError(f"seconds must be >= 0, got {seconds}")
         return seconds // self.sec_per_step
+
+    def minutes_for_steps(self, steps: int) -> int:
+        """How many whole minutes ``steps`` spans -- the reverse conversion.
+
+        The decide-context block (#580) phrases stop durations in minutes;
+        keeping the arithmetic here (not inlined at call sites) preserves this
+        class as the single steps<->time conversion point.
+        """
+        if steps < 0:
+            raise ValueError(f"steps must be >= 0, got {steps}")
+        return steps * self.sec_per_step // 60
 
     @property
     def steps_per_hour(self) -> int:
