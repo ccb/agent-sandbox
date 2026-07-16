@@ -136,7 +136,6 @@ def test_decide_recalls_first_then_acts_when_cognition_offered():
     first = brain.call_tools(msgs, tools, tool_choice="any")
     assert first.tool_calls[0]["name"] == "recall"
     # Round 2: a tool_result is present -> the action.
-    first_round_call = first.tool_calls[0]
     msgs2 = msgs + [
         {"role": "assistant", "content": [{"type": "tool_use", "name": "recall"}]},
         _tool_result_msg(),
@@ -256,6 +255,7 @@ def test_attach_agents_is_a_noop_for_a_client_without_register_schedule():
     personas = _personas()
     chars = build_world(None, personas, _LOCATIONS)[1]
     attach_agents(chars, personas, llm_client=plain)  # no error
+    assert not hasattr(plain, "_schedules")
 
 
 from serve_penn import PennStepper  # noqa: E402
