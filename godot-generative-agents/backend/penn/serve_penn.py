@@ -99,12 +99,12 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
     (wrong provider, missing key) exit with a one-line fix rather than serving
     an all-day sim whose every model call silently returns ``None``.
 
-    Note what is intentionally NOT configurable here: the daily planner. The
-    authored YAML schedules (and the rendezvous routing built on them) stay in
-    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` validates
-    stops against the world's location names, and a generated
-    schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
-    is follow-up work; decide/converse/reflect are the model's here.
+    The daily planner is a *separate* switch (``--plan``, #397), not part of
+    this resolution: ``--plan schedule`` (the default) keeps the authored YAML
+    day and its hand-tuned meeting overlaps; ``--plan llm`` lets the model
+    author the day, which is free-play (the scripted rendezvous may not
+    converge). ``--brain llm`` here only decides whether decide/converse/reflect
+    are the model's.
     """
     if brain != "llm":
         return None
@@ -1044,6 +1044,15 @@ def main() -> int:
         "reflect call; needs ANTHROPIC_API_KEY and `uv sync --extra llm`",
     )
     ap.add_argument(
+        "--plan",
+        choices=("schedule", "llm"),
+        default="schedule",
+        help="schedule (default): agents follow the authored YAML day, so the "
+        "hand-tuned meeting overlaps hold. llm: the model authors each agent's "
+        "day (LLMPlanner, #397) -- free-play, so scripted rendezvous meetings "
+        "may not converge. Requires --brain llm",
+    )
+    ap.add_argument(
         "--model",
         default=None,
         help="override the llm: block's model for this run (--brain llm only)",
@@ -1181,6 +1190,7 @@ def main() -> int:
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
             stall_seconds=args.stall_seconds,
+            plan_mode=args.plan,
             resume_run_id=resume_id,
         )
     except ImportError as e:
