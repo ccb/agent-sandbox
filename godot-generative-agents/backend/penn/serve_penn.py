@@ -446,6 +446,14 @@ class PennStepper:
         # live loop stamps it onto each frame record (live.py) so a viewer can
         # tell "thinking" from "frozen" (#372).
         self.last_deciders = None
+        # Per-agent decision lifecycle records for the live feed (#551), buffered
+        # here and drained each tick by backend.live. Only populated under a
+        # real/scripted brain (see the tick() gate); the pure mock never fills it,
+        # so its feed stays byte-identical. _deciding_started holds per-agent
+        # begin timestamps to compute elapsed_ms on end (distinct keys per agent
+        # -> safe to write from concurrent #366 decide workers).
+        self._deciding_buf: list = []
+        self._deciding_started: dict = {}
         # DEBUG (#372): hold every STALL_EVERY_STEPS-th step this long to fake a
         # real brain's decision latency so the viewer's "thinking…" cue can be
         # exercised under the free mock brain. 0.0 = off (byte-identical timing).
@@ -670,6 +678,8 @@ class PennStepper:
         # per build: a straggler still running across a reset references the
         # OLD world -- harmless, because parked results are always discarded.
         self._decide_pending = {}
+        self._deciding_buf = []
+        self._deciding_started = {}
         if self.mock_latency > 0:
             for char in self.chars.values():
                 char.agent.schedule.latency_s = self.mock_latency
@@ -1007,6 +1017,11 @@ class PennStepper:
             decide_timeout=self.decide_timeout,
             decide_pending=self._decide_pending,
             decide_info=decide_info,
+            # #551: emit the deciding lifecycle only under a real/scripted brain
+            # (self.llm_client set) -- the pure mock feed stays byte-identical.
+            deciding_sink=(
+                self._deciding_sink if self.llm_client is not None else None
+            ),
         )
         self.last_deciders = decide_info.get("deciders", 0)
         for name in decide_info.get("timeouts", ()):
@@ -1103,6 +1118,31 @@ class PennStepper:
         ):
             self.run_store.update_run(self._run_id, status="finished")
             self._run_finished = True
+
+    def _deciding_sink(self, name: str, state: str, step: int) -> None:
+        """Called by run_simulation._decide_for at a decision's start/finish
+        (issue #551). Buffers a feed record; backend.live drains it per tick and
+        appends it as a `kind: "deciding"` change-feed record. A plain list
+        append + distinct-key dict writes are GIL-atomic, so this is safe to call
+        from a #366 decide worker thread."""
+        if state == "begin":
+            self._deciding_started[name] = time.monotonic()
+            self._deciding_buf.append({"agent": name, "state": "begin", "step": step})
+        else:  # "end"
+            started = self._deciding_started.pop(name, None)
+            rec = {"agent": name, "state": "end", "step": step}
+            if started is not None:
+                rec["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+            self._deciding_buf.append(rec)
+
+    def drain_deciding(self) -> list:
+        """New `deciding` records formed since the last drain (#551). backend.live
+        probes this optional method after each tick and appends each as a
+        `kind: "deciding"` feed record (beside the `engine` rows). Empty under the
+        pure mock brain."""
+        rows = self._deciding_buf
+        self._deciding_buf = []
+        return rows
 
     def drain_events(self) -> list:
         """New change-feed rows formed during the last ``tick()`` (#398, #467).
