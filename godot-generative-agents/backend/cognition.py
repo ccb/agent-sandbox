@@ -67,6 +67,19 @@ DEFAULT_VISION_R = 8
 DECIDE_MAX_ENUM = 20
 
 
+def first_line_location(observation: str) -> str:
+    """The current location as the mock/scripted brains read it: ``describe_for``
+    puts the location name (UPPERCASE) on the first non-empty line; return it
+    lowercased for comparison. Shared by
+    :meth:`ScheduleMockClient._current_location` and the Penn scripted brain
+    (issue #563) so the first-line convention lives in one place and can't drift
+    if ``describe_for``'s format changes."""
+    for line in (observation or "").splitlines():
+        if line.strip():
+            return line.strip().lower()
+    return ""
+
+
 class ScheduleMockClient(MockReActClient):
     """Deterministic mock LLM that walks a persona through a *schedule* of stops.
 
@@ -181,11 +194,7 @@ class ScheduleMockClient(MockReActClient):
         self.schedule = patched
 
     def _current_location(self, observation: str) -> str:
-        """describe_for() puts the location name (UPPERCASE) on the first line."""
-        for line in (observation or "").splitlines():
-            if line.strip():
-                return line.strip().lower()
-        return ""
+        return first_line_location(observation)
 
     def _choose(self, observation: str) -> str:
         if self.latency_s:
@@ -387,6 +396,12 @@ def attach_agents(
         # The step loop reads pacing (advance/steps/emoji/stop_index) from
         # agent.schedule, whether or not the brain is a real model.
         agent.schedule = schedule
+        # Scripted brain (#563): a distinct client that follows the authored
+        # schedule reads it from here. Guarded so real clients / None / the
+        # default mock path are untouched (byte-identical).
+        register = getattr(llm_client, "register_schedule", None)
+        if callable(register):
+            register(char.name, schedule)
         # How far this resident perceives, in tiles (issue #82). The TiledGame's
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
