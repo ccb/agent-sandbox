@@ -548,3 +548,51 @@ def test_boil_fails_with_nothing_to_boil():
     union.add_item(_stove())
     union.add_item(_cup(unboiled=False))
     assert not game.parser.parse_command("boil water", actor=char)
+
+
+def test_end_to_end_mock_run_boil_then_drink_stays_healthy():
+    """The scaffold's payoff: a mock-brain run where the agent boils before
+    drinking never gets sick, and no sickness memory lands. Mirrors
+    test_end_to_end_mock_run_agent_drinks_and_gets_sick, boil-first."""
+    pw = build_penn_world()
+    persona = {
+        "name": "Testa Boil",
+        "home": "Houston Hall",
+        "persona": "I am Testa Boil, a careful test persona.",
+        "emoji": "🍵",
+        "start_tile": [25, 109],
+        "schedule": [
+            {
+                "place": "Houston Hall",
+                "activity": "boiling water before dinner",
+                "emoji": "🍵",
+                "steps": 3,
+                "commands": [
+                    "boil water",
+                    "get cup of murky water",
+                    "drink cup of murky water",
+                ],
+            }
+        ],
+    }
+    personas = _normalize_personas([persona])
+
+    def build_fn(wm):
+        game, characters = build_world(
+            wm, personas, pw.locations, extra_actions=PENN_EXTRA_ACTIONS
+        )
+        _furnish_boil_water(game)
+        return game, characters
+
+    memories = {}
+    simulate(
+        pw.world_map,
+        10,
+        personas=personas,
+        build_world_fn=build_fn,
+        out_memories=memories,
+    )
+    stream = memories["Testa Boil"]
+    assert not any("terribly sick" in m["text"] for m in stream), [
+        m["text"] for m in stream
+    ]
