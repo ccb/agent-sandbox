@@ -4,6 +4,18 @@ Daily log, newest entry on top. Format: [`journal/README.md`](README.md).
 
 <!-- Copy the template from README.md to the top each working day. -->
 
+## 2026-07-16
+
+**Focus:** Week's consolidation sync — the post-sprint build wave.
+
+**Done this week:**
+- N1–N6 landed: test/save isolation with a sentinel-hash proof, death→checkpoint wake, cross-session Continue (two-process-proven), threats visible+announced with real monster art, asset polish incl. four generated attack anim strips.
+- Ported five patterns from Alistair & Frankie's Penn work (memory-importance ladder, declarative affordances + verb curation with the gates-stay-authority invariant, decide-timeout→offline fallback, bounded LLM repair round, repeat-failure freeze guard) — adoption report + Thursday alignment list in hand.
+- Action-layer sketch v3 (location-first atomic verb menus) ready for today's sync; the affordance code already implements its gating model.
+- Cast dossier panel (full design-reference roulette) on the title screen.
+
+**Next:** city map placement surgery (in flight), opening/ending cinematics wiring, N7/N8, then the shared-vocabulary verb wave after today's sync.
+
 ## 2026-07-12
 
 **Focus:** Overnight autonomous sprint (M16–M35) + a hard retrospective + patch waves. Backfilling this journal (sorry for the gap — entries below reconstruct 6/17→7/11 from commit history).
