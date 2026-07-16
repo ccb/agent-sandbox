@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player"]
 [ext_resource type="Texture2D" path="res://assets/backgrounds/university_archive.png" id="arc_bg"]
 [ext_resource type="PackedScene" path="res://scenes/Interactable.tscn" id="interactable"]
-[ext_resource type="Texture2D" path="res://assets/characters/archive_clerk_finch.png" id="finch_art"]
+[ext_resource type="Texture2D" uid="uid://ictepxsywyes" path="res://assets/characters/ledger_finch.png" id="finch_art"]
 
 [sub_resource type="RectangleShape2D" id="wall_h"]
 size = Vector2(896, 48)

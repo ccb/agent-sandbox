@@ -162,8 +162,14 @@ func reset() -> void:
 ## leads regardless; hidden state is the enforcement mechanism).
 func _instantiate(tmpl: Dictionary, day: int) -> Dictionary:
 	var where := String(tmpl.get("where_hint", ""))
+	# P5 — the authored MAP PIN: map-image-space [x, y] the district map marks for this lead. A
+	# candidate-pool lead carries the PICKED candidate's own pin so hint and pin can never drift
+	# apart. [] = no pin (occult readings, cold respawns — the trail is a name, not a spot).
+	var map_pos: Array = (tmpl.get("map_pos", []) as Array).duplicate()
 	if where == "" and tmpl.get("where_candidates") is Array:
-		where = _weighted_pick(tmpl["where_candidates"])
+		var cand: Dictionary = _weighted_pick(tmpl["where_candidates"])
+		where = String(cand.get("value", ""))
+		map_pos = (cand.get("map_pos", []) as Array).duplicate()
 	var after_adv := bool(tmpl.get("after_advance", false))
 	return {
 		"id": String(tmpl.get("id", "")),
@@ -186,6 +192,9 @@ func _instantiate(tmpl: Dictionary, day: int) -> Dictionary:
 		# "followed"/"resolved" = normal lifecycle states.
 		"state": "hidden" if after_adv else "open",
 		"spawned_day": day,
+		# P5: the district-map pin spot (map-image px), resolved above. Pure DATA — the map draws
+		# a marker at the CURRENT lead's map_pos; no NPC-id lookup anywhere.
+		"map_pos": map_pos,
 		# M26 RETUNE #2 fix: the hidden-Beyonder combat_form this lead points at ("" for non-prey leads
 		# like the courier/rite). The Doom "monsters left alive" driver counts a live hidden Beyonder
 		# wearing this form ONLY once `known` flips true (the city surfaced the lead), so an idle player is
@@ -198,7 +207,10 @@ func _instantiate(tmpl: Dictionary, day: int) -> Dictionary:
 		"respawn_where": (tmpl.get("respawn_where", []) as Array).duplicate(),
 	}
 
-func _weighted_pick(candidates: Array) -> String:
+## Pick a whole candidate row (P5: the caller needs the candidate's `value` AND its `map_pos`,
+## so hint and pin always come from the SAME row). RNG consumption unchanged — one randf per
+## pick, so per-seed slotting stays byte-identical to the pre-P5 behavior.
+func _weighted_pick(candidates: Array) -> Dictionary:
 	var total: float = 0.0
 	for c in candidates:
 		total += float(c["weight"])
@@ -206,8 +218,8 @@ func _weighted_pick(candidates: Array) -> String:
 	for c in candidates:
 		roll -= float(c["weight"])
 		if roll <= 0.0:
-			return String(c["value"])
-	return String(candidates[-1]["value"]) if not candidates.is_empty() else ""
+			return c
+	return candidates[-1] if not candidates.is_empty() else {}
 
 # --- reads ------------------------------------------------------------------------------------
 ## Every lead currently on the board (open / followed) — what the board renders. Excludes leads in
@@ -220,6 +232,27 @@ func active_leads() -> Array:
 		if String(lead.get("state", "")) != "hidden":
 			out.append(lead.duplicate(true))
 	return out
+
+## P5 — the CURRENT lead (the one the district map pins): the first FOLLOWED lead (the player's
+## commitment wins), else the first HOT open lead (the opener), else the first open lead, else {}.
+## Backing-dict insertion order is stable, so the pick is deterministic. Hidden leads (the
+## after_advance gate still shut) are never current — the player cannot chase what the city has
+## not named. Returns a defensive copy.
+func current_lead() -> Dictionary:
+	var first_open: Dictionary = {}
+	var first_hot: Dictionary = {}
+	for id in _leads.keys():
+		var lead: Dictionary = _leads[id]
+		match String(lead.get("state", "")):
+			"followed":
+				return lead.duplicate(true)
+			"open":
+				if first_open.is_empty():
+					first_open = lead
+				if first_hot.is_empty() and bool(lead.get("hot", false)):
+					first_hot = lead
+	var pick: Dictionary = first_hot if not first_hot.is_empty() else first_open
+	return pick.duplicate(true) if not pick.is_empty() else {}
 
 ## A single lead by id (a defensive copy), or {} when it is not active (never slotted, resolved, or
 ## gone cold).
@@ -334,6 +367,7 @@ func surface_occult(text: String, source: String, mislead: bool = false) -> Stri
 		"known": true,             # a used occult reading IS surfaced (the player just read it)
 		"state": "open",
 		"spawned_day": _current_day(),
+		"map_pos": [],             # a direction, never a map pin (P5)
 		"respawn_where": [],
 	}
 	_leads[id] = lead
@@ -409,6 +443,9 @@ func _go_cold(cold_id: String, current_day: int) -> void:
 		"known": bool(cold.get("known", false)),
 		"state": "open",
 		"spawned_day": current_day,
+		# P5: the subject MOVED — the fresh trail is a NAME, not a spot; the map pin is dropped
+		# until the city can place it again (respawn_where hints have no authored coordinates).
+		"map_pos": [],
 		"respawn_where": (cold.get("respawn_where", []) as Array).duplicate(),
 	}
 	_leads[fresh_id] = fresh

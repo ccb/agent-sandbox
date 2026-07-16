@@ -20,6 +20,9 @@ const DT: float = 1.0 / 60.0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var r: Dictionary = await run_all()
 	print("\n=== combat_juice: %d passed, %d failed ===" % [int(r["passed"]), int(r["failed"])])
 	quit(1 if int(r["failed"]) > 0 else 0)

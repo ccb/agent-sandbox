@@ -42,6 +42,23 @@ func water() -> Array: return _water
 func blocks() -> Array: return _blocks
 func landmarks() -> Array: return _landmarks
 
+## --- Room affordance TAGS (lab pull-in P2) --------------------------------------------------
+## The room half of the declarative-affordance contract (verb half: action_schema.json
+## `affordances`). Pure data from this file's `room_affordances` section; cached once. An unknown
+## or untagged room yields [] — its menu curates down to the universal verbs.
+static var _room_tags: Dictionary = {}
+static var _room_tags_loaded: bool = false
+
+static func room_affordances(room: String) -> Array:
+	if not _room_tags_loaded:
+		_room_tags_loaded = true
+		if FileAccess.file_exists(LAYOUT_PATH):
+			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LAYOUT_PATH))
+			if parsed is Dictionary and (parsed as Dictionary).get("room_affordances") is Dictionary:
+				_room_tags = (parsed as Dictionary)["room_affordances"]
+	var tags: Variant = _room_tags.get(room, [])
+	return (tags as Array).duplicate() if tags is Array else []
+
 ## Flat [x,y,x,y,...] map-pixel array -> world-space PackedVector2Array.
 static func _to_world_poly(raw: Array) -> PackedVector2Array:
 	var pts := PackedVector2Array()

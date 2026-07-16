@@ -397,6 +397,73 @@ def main() -> int:
     check("commit to fighting" not in p_nocombat_menu,
           "combat M4: a menu without combat verbs renders no combat guidance")
 
+    # --- P1 (lab pull-in): one-shot just_* transition markers render for exactly this beat ------
+    bJ = BrainSession()
+
+    def decide_prompt_just(perc):
+        req = {"session_id": "just", "agent_id": "j", "turn": 1, "events": [], "perception": perc,
+               "goals": [], "world_state": {}}
+        bJ.decide(req, mock_llm({"verb": "idle", "args": {}}))
+        return _last_prompt["text"]
+
+    p_just = decide_prompt_just({"role": "clerk", "display_name": "J", "nearby": [],
+                                 "just_happened": ["just_entered_combat", "just_changed_room"]})
+    check("Just now: just entered combat; just changed room." in p_just,
+          "P1: just_* markers render as one plain 'Just now' fact line")
+    p_nojust = decide_prompt_just({"role": "clerk", "display_name": "J", "nearby": []})
+    check("Just now:" not in p_nojust, "P1: no markers -> no 'Just now' line (one-shot semantics)")
+
+    # --- P4 (lab pull-in): ONE bounded repair round on invalid LLM output, outcome-stamped -----
+    # Ports the lab's is_error tool_result pattern: an invalid reply's validation error is fed
+    # back to the model exactly ONCE; still invalid -> the existing idle fallback. The result is
+    # stamped valid | repaired | failed for the usage/cost record.
+    bR = BrainSession()
+    verbs_schema = {"move_to": ["target"], "idle": []}
+
+    def scripted_llm(replies: list, calls: list):
+        """Scripted mock client: returns replies in order (repeats the last); records prompts."""
+        def f(prompt: str) -> dict:
+            calls.append(prompt)
+            return dict(replies[min(len(calls) - 1, len(replies) - 1)])
+        return f
+
+    def decide_r(turn: int, llm) -> dict:
+        return bR.decide({"session_id": "rep", "agent_id": "r", "turn": turn, "events": [],
+                          "perception": {"role": "x"}, "goals": [], "world_state": {}},
+                         llm, verbs_schema)
+
+    calls1: list = []
+    rv1 = decide_r(1, scripted_llm([{"verb": "move_to", "args": {"target": "site"}}], calls1))
+    check(rv1.get("outcome") == "valid" and len(calls1) == 1,
+          "P4: a well-formed reply passes with outcome=valid and exactly ONE call")
+
+    calls2: list = []
+    rv2 = decide_r(2, scripted_llm([{"verb": "move_to", "args": {}},              # missing arg
+                                    {"verb": "move_to", "args": {"target": "site"}}], calls2))
+    check(rv2.get("outcome") == "repaired" and rv2["action"]["verb"] == "move_to"
+          and rv2["action"]["args"].get("target") == "site",
+          "P4: malformed-then-valid recovers with outcome=repaired")
+    check(len(calls2) == 2 and "INVALID" in calls2[1] and "missing arg" in calls2[1],
+          "P4: the repair prompt feeds the exact validation error back to the model")
+
+    calls3: list = []
+    rv3 = decide_r(3, scripted_llm([{"verb": "fly", "args": {}},
+                                    {"verb": "teleport", "args": {}}], calls3))
+    check(rv3.get("outcome") == "failed" and rv3["action"]["verb"] == "idle",
+          "P4: malformed-twice falls back to idle with outcome=failed")
+    check(len(calls3) == 2, "P4: exactly one repair round EVER (2 calls total, never a third)")
+
+    # A non-dict reply (parse garbage) enters the same single repair round.
+    calls4: list = []
+
+    def garbage_then_valid(prompt: str) -> dict:
+        calls4.append(prompt)
+        return {} if len(calls4) == 1 else {"verb": "idle", "args": {}}
+
+    rv4 = decide_r(4, garbage_then_valid)
+    check(rv4.get("outcome") == "repaired" and rv4["action"]["verb"] == "idle" and len(calls4) == 2,
+          "P4: an unparseable reply gets the same single repair round")
+
     print(f"\n=== {_passed} passed, {_failed} failed ===")
     return 1 if _failed else 0
 

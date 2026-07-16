@@ -36,8 +36,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	WorldState = root.get_node("/root/WorldState")
 	Clock = root.get_node("/root/Clock")
@@ -120,6 +121,16 @@ func _test_checkpoint_night(RM: Object) -> void:
 # (e) THE LEAK TEST — GAP-2.9. Dirty everything, end_run + restart, assert run-start clean.
 func _test_leak_on_restart(RM: Object) -> void:
 	RM.start_run()
+	# N1 repair (stale expectations): a FRESH run is no longer empty-world — start_run itself seeds
+	# the city's ground ammo pickups (M13 AmmoSpawn) and emits run-start events, so "0 items /
+	# 0 events after restart" is stale. The leak contract is RESTART == FRESH RUN: capture the
+	# fresh-run baseline here and assert the restart lands EXACTLY back on it (the test-placed
+	# candle/noise below would show up as baseline+1, so the guard keeps its teeth).
+	var baseline_city_items: int = RoomItems.count("city")
+	# The fresh-run seeding legitimately includes a candle (the B1 cult supply cache), so the
+	# test-placed candle is asserted RELATIVE to this baseline, not against zero.
+	var baseline_candles: int = RoomItems.count("city", "candle")
+	var baseline_events: int = EventBus.events().size()
 	# Dirty a broad cross-section of the run world.
 	Agents.rebuild()
 	var before_agents: int = Agents.all().size()
@@ -137,6 +148,7 @@ func _test_leak_on_restart(RM: Object) -> void:
 	PrayerService.standing["ossric"] = 44.0
 	DeedRunner._fired["some_deed"] = 3
 	RoomItems.place("city", "candle", Vector2(10, 10), 1)
+	assert(RoomItems.count("city", "candle") == baseline_candles + 1)   # the leak guard has teeth
 	EventManager._cooldowns["some_event"] = 999
 	CombatExecutor._last_attacker["victim_x"] = "attacker_y"
 
@@ -152,8 +164,12 @@ func _test_leak_on_restart(RM: Object) -> void:
 		"LEAK: prayer standing reset after restart (got %.1f)" % PrayerService.get_standing("ossric"))
 	_ok(int(DeedRunner._fired.get("some_deed", -1)) == -1,
 		"LEAK: deed latches cleared after restart")
-	_ok(RoomItems.count("city") == 0,
-		"LEAK: ground items cleared after restart (got %d)" % RoomItems.count("city"))
+	_ok(RoomItems.count("city", "candle") == baseline_candles,
+		"LEAK: the test-placed ground candle is gone after restart (back to the seeded %d, got %d)"
+		% [baseline_candles, RoomItems.count("city", "candle")])
+	_ok(RoomItems.count("city") == baseline_city_items,
+		"LEAK: ground items back to the fresh-run seeded baseline %d after restart (got %d)"
+		% [baseline_city_items, RoomItems.count("city")])
 	_ok(int(EventManager._cooldowns.get("some_event", -1)) == -1,
 		"LEAK: event cooldowns cleared after restart")
 	_ok(CombatExecutor.last_attacker_of("victim_x") == "",
@@ -172,7 +188,11 @@ func _test_leak_on_restart(RM: Object) -> void:
 	_ok(not SummoningPlan.climax_fired, "LEAK: climax_fired cleared after restart")
 	_ok(RM.current_day() == 1, "LEAK: day reset to 1 after restart")
 	_ok(Agents.all().size() == before_agents, "LEAK: agent roster rebuilt to the same size")
-	_ok(EventBus.events().size() == 0, "LEAK: event bus cleared after restart")
+	_ok(EventBus.events("player_test_noise").size() == 0,
+		"LEAK: the test-emitted event is gone from the bus after restart")
+	_ok(EventBus.events().size() == baseline_events,
+		"LEAK: event bus back to the fresh-run baseline %d after restart (got %d)"
+		% [baseline_events, EventBus.events().size()])
 
 # (f) MetaState survives a restart while run state resets.
 func _test_meta_survives_restart(RM: Object) -> void:

@@ -111,6 +111,19 @@
   ],
   "butcher_open_form": "butcher_human",
   "source_line": "The butcher's on Iron Cross. Blood under the door.",
+  "_door_beat_doc": "P4 staged opener: the constable's door-hammering beat happens IN THE WORLD, not just as a top-bar string. Live-only direction (GMOpening gates it behind the headless check so every pinned sim stays byte-identical): door_beat_delay seconds after run start he is STAGED at the lodging door (source_stage_room/pos — the player's cold-open room), the door_knock audio event fires, and source_line is spoken as a bark bubble at his body; door_dwell seconds later he is RELEASED back to his beat (source_release_room/pos, his morning patrol corner). All of it is this data driving generic staging verbs — no NPC-id branch in engine code.",
+  "source_stage_room": "klein_room",
+  "source_stage_pos": [
+   788,
+   415
+  ],
+  "source_release_room": "city",
+  "source_release_pos": [
+   3100,
+   1600
+  ],
+  "door_beat_delay": 6.0,
+  "door_dwell": 14.0,
   "where_site_name": "iron_cross_shop",
   "harvest_fork": [
    "digest",
@@ -119,7 +132,29 @@
   ],
   "harvest_hint": "He wasn't the only one — the same blood walks the beat wearing another face.",
   "hunter_follow_up_lead": "hunter_prey_kell_kin",
-  "sell_hint": "Franky pays for curiosities — his counter is off the entry hall of the lodging house."
+  "sell_hint": "Franky pays for curiosities — his counter is off the entry hall of the lodging house.",
+  "_fork_ui_doc": "P4: the harvest fork as a real 3-choice panel (HarvestForkPanel), presented ONCE per run on the FIRST characteristic pickup (GMOpening latches it; reset re-arms). Option ids MUST mirror harvest_fork. The choice sets GUIDANCE only — it marks the plan on the HUD lead line and never executes the verbs (the lodging digest spot / Franky's counter remain the real seams).",
+  "fork_ui": {
+   "title": "The Harvest",
+   "prompt": "A Characteristic, harvested and mine to spend. What do I mean to do with it?",
+   "options": [
+    {
+     "id": "digest",
+     "label": "Digest tonight",
+     "line": "Back at the lodging I take it into myself — the Sequence rises, and the Madness with it."
+    },
+    {
+     "id": "sell",
+     "label": "Sell to Franky",
+     "line": "Franky pays coin for curiosities — his counter sits off the lodging's entry hall."
+    },
+    {
+     "id": "keep",
+     "label": "Keep it",
+     "line": "I carry it a while longer. A thing like this holds its worth."
+    }
+   ]
+  }
  },
  "summoning": {
   "cult": [
@@ -176,6 +211,7 @@
    "selena_almshouse_inner"
   ],
   "avatar_form": "descended_avatar",
+  "defender_form": "cult_guard",
   "backlash_form": "cult_thrall",
   "backlash_extra": 2,
   "backlash_beats": 10
@@ -241,8 +277,11 @@
   "ending:avatar_slain": "You struck a descending god (外神) from the sky while it was still half-made — one foot in the world, one beyond — and it fell. Few Beyonders ever witness a half-landed avatar; fewer still its unmaking.",
   "ending:descent_stopped": "You broke a summoning rite at the altar and cut down the faithful as they lost their shape (§⑦). The descent (降临) was denied; the city woke to an ordinary dawn, never knowing how close the dark came.",
   "ending:descent_complete": "You watched a descent (降临) reach its final beat and complete. The city was unmade — but you carry the memory of how the rite closes, and where the fuse burned too fast.",
+  "ending:player_downed": "You were cut down in the dark before you ever reached a safe bed. Tingen buried another nameless hunter — but what you learned of its night is written here, and the next of you will read it.",
   "pathway:hunter": "The Hunter pathway: predators who harvest the Characteristics of their prey to climb the Sequence. You have walked its low rungs — mark, run down, and digest.",
   "pathway:fool": "The Fool pathway: trickster-spirits, puppeteers, and marionettes who work from the margins and pull strings no one sees. You have glimpsed its shape.",
+  "pathway:hermit": "The Hermit pathway: star-readers and keepers of forbidden volumes who ward themselves in ritual and read deeper than is safe by candlelight. You have walked its low rungs — read, ward, and reveal.",
+  "pathway:death": "The Death pathway: corpse collectors, gravediggers, and spirit mediums who keep the offices of the dead and command what answers. You have walked its low rungs.",
   "_templates": {
    "adversary": "You faced and put down a Beyonder in the %s shape; its gait, its tells, and its dying are known to you now.",
    "pathway": "You have glimpsed the %s pathway and something of how its Beyonders climb.",

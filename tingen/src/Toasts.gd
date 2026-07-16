@@ -24,6 +24,35 @@ func _ready() -> void:
 	EventManager.event_fired.connect(_on_event)
 	WorldManager.pressure_threshold_crossed.connect(_on_threshold)
 	WorldManager.stage_advanced.connect(_on_stage)
+	# N4 (A6): hunts arrive and resolve ANNOUNCED — the threat-lifecycle world facts surface as
+	# alert cards. The copy lives in DATA (the dispatched form's combat_forms.json `announce` row,
+	# resolved off the event's form field); a form authoring no lines stays silent — the engine
+	# holds no threat literal, and no NPC identity is ever consulted.
+	var eb := get_node_or_null("/root/EventBus")
+	if eb != null and not eb.event_logged.is_connected(_on_world_event):
+		eb.event_logged.connect(_on_world_event)
+
+## The threat-lifecycle ear: threat_dispatched / threat_resolved -> the form's authored copy.
+func _on_world_event(ev: Dictionary) -> void:
+	var t := String(ev.get("type", ""))
+	if t != "threat_dispatched" and t != "threat_resolved":
+		return
+	var d: Dictionary = ev.get("data", {}) if ev.get("data") is Dictionary else {}
+	var adb := get_node_or_null("/root/AbilityDB")
+	if adb == null:
+		return
+	var def: Dictionary = adb.form_def(String(d.get("form", "")))
+	var ann_v: Variant = def.get("announce", {})
+	if not (ann_v is Dictionary):
+		return
+	var row_v: Variant = (ann_v as Dictionary).get("dispatched" if t == "threat_dispatched" else "resolved", {})
+	if not (row_v is Dictionary):
+		return
+	var row: Dictionary = row_v
+	var title := String(row.get("title", ""))
+	if title == "":
+		return
+	push(title, String(row.get("body", "")), String(row.get("channel", "alert")))
 
 func _on_event(ev: Dictionary) -> void:
 	var channel := "ambient"
@@ -41,6 +70,11 @@ func _on_stage(_from_stage: String, to_stage: String) -> void:
 
 ## Public entry point (also used by the dev console).
 func push(title: String, body: String = "", channel: String = "system") -> void:
+	# P2 audio: every surfaced card chimes (cue name -> sound lives in data/audio_map.json;
+	# the AudioManager cue is a live-only no-op headless).
+	var am := get_node_or_null("/root/AudioManager")
+	if am != null and am.has_method("cue"):
+		am.cue("toast_shown", {"channel": channel})
 	while _stack.get_child_count() >= MAX_VISIBLE:
 		var oldest := _stack.get_child(0)
 		_stack.remove_child(oldest)

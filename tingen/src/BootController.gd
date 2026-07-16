@@ -97,6 +97,15 @@ func _show_title() -> void:
 	settings_btn.pressed.connect(open_settings)
 	box.add_child(settings_btn)
 
+	# M_cast (user request): THE CAST — the NPC dossier roulette, reachable from the TITLE only
+	# (outside any run). Opens src/CastPanel.gd over this layer; secrets stay codex-gated inside.
+	var cast_btn := Button.new()
+	cast_btn.name = "CastButton"
+	cast_btn.text = "The Cast"
+	cast_btn.custom_minimum_size = Vector2(240, 48)
+	cast_btn.pressed.connect(open_cast)
+	box.add_child(cast_btn)
+
 	var quit_btn := Button.new()
 	quit_btn.name = "QuitButton"
 	quit_btn.text = "Quit"
@@ -212,10 +221,35 @@ func open_settings() -> void:
 	if _title_settings.has_method("open"):
 		_title_settings.open()
 
+## M_cast — open THE CAST dossier panel over the title (the SettingsPanel mounting pattern: the
+## caller owns the node; parking it under the Title layer means quitting to a run tears it down
+## with the title). open() re-reads the persistent codex, so a fresh unlock shows immediately.
+var _title_cast: Node = null
+func open_cast() -> void:
+	if _title_cast != null and is_instance_valid(_title_cast):
+		if _title_cast.has_method("open"):
+			_title_cast.open()
+		return
+	var script := load("res://src/CastPanel.gd") as GDScript
+	if script == null:
+		return
+	_title_cast = script.new()
+	if is_instance_valid(_title):
+		_title.add_child(_title_cast)
+	else:
+		add_child(_title_cast)
+	if _title_cast.has_method("open"):
+		_title_cast.open()
+
+## The mounted Cast panel (the reachability-test/probe seam), or null when never opened.
+func cast_panel() -> Node:
+	return _title_cast if (_title_cast != null and is_instance_valid(_title_cast)) else null
+
 func _hide_title() -> void:
 	if is_instance_valid(_title):
 		_title.queue_free()
 	_title = null
+	_title_cast = null
 
 # --- Pathway picker (M30 G1) ------------------------------------------------------------------
 ## The pathway-choice overlay, raised by start_new_run() only when >1 pathway is unlocked. A minimal
@@ -261,6 +295,15 @@ func _show_pathway_picker(opts: Array) -> void:
 		b.pressed.connect(choose_pathway.bind(pid))
 		box.add_child(b)
 
+	# N3 (rider): a way BACK — the picker was a dead end (no cancel; the only exits started a run).
+	# Cancel tears the picker down and lands on the title still underneath (the picker never hid it).
+	var cancel_btn := Button.new()
+	cancel_btn.name = "CancelButton"
+	cancel_btn.text = "Back"
+	cancel_btn.custom_minimum_size = Vector2(240, 48)
+	cancel_btn.pressed.connect(cancel_pathway_picker)
+	box.add_child(cancel_btn)
+
 	add_child(layer)
 	_pathway_picker = layer
 
@@ -272,6 +315,11 @@ func choose_pathway(pathway_id: String) -> void:
 	if not _picker_options.has(pathway_id):
 		return
 	_begin_run_with_pathway(pathway_id)
+
+## N3 (rider): back out of the New-Run pathway choice without starting a run. The title layer was
+## never hidden beneath the picker, so tearing the picker down IS the return to the title.
+func cancel_pathway_picker() -> void:
+	_hide_pathway_picker()
 
 ## True while the pathway picker is up (the New-Run flow offered a choice).
 func pathway_picker_active() -> bool:
@@ -290,6 +338,16 @@ func _hide_pathway_picker() -> void:
 ## A "Continue" is offered only when a nightly safe-house save exists to resume from.
 func has_continue() -> bool:
 	return SaveManager.has_save()
+
+## N2 (B-F3/B-F4): the ending screen's action button hands control BACK to the title through the
+## boot flow (EndGame.restart routes here). Idempotent — on a win/lose the run_ended handler below
+## already tore the world down and raised the title; this re-affirms it and refreshes the Continue
+## gating. It never starts a run: the next run begins only via New Run / the pathway picker.
+func return_to_title() -> void:
+	_teardown_world()
+	_show_title()
+	if _continue_btn != null and is_instance_valid(_continue_btn):
+		_continue_btn.disabled = not has_continue()
 
 # --- Entry points -----------------------------------------------------------------------------
 ## New Run: fresh run (resets the world — the GAP-2.9 fix lives in RunManager.start_run), then wake
@@ -318,12 +376,20 @@ func _begin_run_with_pathway(pathway_id: String) -> void:
 	_swap_world(LODGING_SCENE)
 
 ## Continue: resume the last nightly safe-house checkpoint from disk, dropping back into its scene.
+## N3 (B-F1): loading the world is only HALF a resume — RunManager.resume_from_save() re-arms the
+## run SESSION (the live flag, the rebuilt checkpoint, the pace, the payoff latch) so the resumed
+## run is indistinguishable from a never-quit one: the day counter is right, Ritual Night can arm,
+## pause works, the codex records, nightly checkpoints continue, and the ending pays exactly once.
+## The title is torn down only AFTER the load succeeds — a corrupt/missing save leaves the player
+## at the title instead of on a black screen.
 func continue_run() -> void:
 	if not has_continue():
 		return
-	_hide_title()
 	_ensure_hud()
-	SaveManager.load_game()
+	if not SaveManager.load_game():
+		return
+	_hide_title()
+	RunManager.resume_from_save()
 
 func _on_run_ended(reason: String) -> void:
 	# death / lost_control restore to the checkpoint inside RunManager (the run continues); only a
@@ -349,6 +415,18 @@ func _on_run_ended(reason: String) -> void:
 			load_world_at(wake_scene, wake_pos)
 		else:
 			_swap_world(wake_scene)
+		# N2: a WAKE is not a run opening — strip the lodging's IntroCard establishing cinematic.
+		# EndGame pauses the tree right after this handler, freezing the card at its BLACK first
+		# frame (layer 200, over the death/lost-control screen at 12): the player stared at a
+		# black screen with an invisible Continue (probe shot 21). skip() also releases the
+		# player body the card froze. Strip EVERY card under the World subtree: during the swap
+		# frame the queue_freed OLD scene is still child 0, and dying IN the lodging means the
+		# dying scene carries its OWN card — skipping only the first found would leave the
+		# freshly mounted one alive (probe shot 21 stayed black until this covered both).
+		if _world != null:
+			for card in _world.find_children("IntroCard", "", true, false):
+				if card.has_method("skip"):
+					card.skip()
 
 # --- World subtree (GameController role) -------------------------------------------------------
 func _ensure_hud() -> void:

@@ -798,7 +798,7 @@ def generate(
         "quality": quality,
         "background": background,
         "output_format": "png",
-        "n": "1",
+        "n": 1,
     }
     for attempt in range(4):
         try:

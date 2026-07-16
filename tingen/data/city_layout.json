@@ -39,5 +39,50 @@
 		{ "pos": [835, 150], "label": "Backlund Bridge" },
 		{ "pos": [470, 531], "label": "Night Market" },
 		{ "pos": [755, 545], "label": "The Harbor" }
+	],
+
+	"_lamps_doc": "P5 street lamps — gaslight glow spots for StreetLamps.gd, in the canonical MAP-IMAGE space (map_v3.png px; world = px * MapProjection.CITY_SCALE). Authored at the doors/waypoints players actually pass: chapel steps, tavern front, the butcher's market door, the police station, the docks street, the Blackthorn corner, the university gate, Klein's lane. Legality (in-world, never buried in a building collider) is pinned by tests/test_city_place.gd.",
+	"lamps": [
+		[442, 1074],
+		[416, 844],
+		[730, 748],
+		[790, 956],
+		[330, 1156],
+		[308, 462],
+		[586, 336],
+		[626, 548]
+	],
+
+	"_room_affordances_doc": "P2 (lab pull-in) — per-room affordance TAGS, the room half of the declarative-affordance contract (verb half: action_schema.json `affordances`). Vocabulary = tingen_action_sketch v3 SS5's Thursday-alignment list (bar, seat, altar, pew, crypt_stair, counter, shelf, cache, door, bed, desk, hearth, cot, lamp, chest, wardrobe, hooks, board, crate) + `rite_site` (the place-tag of perform_ritual_step's _near_any_rite_site gate: the warehouse wall in the city, the dark altar in the crypt). Tags mark where the authored OBJECTS exist (sketch SS2 menus + Appendix C audit), including objects whose verbs are still proposed (o rows) — so each menu lights up the moment its verb lands in the schema. Loaded by CityLayout.room_affordances(); rides every perception snapshot as `room_affordances`; the sidecar curates the LLM verb menu from it. Curation shapes the MENU; the precondition gate stays the authority.",
+	"room_affordances": {
+		"city": ["door", "lamp", "rite_site", "cache"],
+		"laughing_eel_tavern": ["bar", "seat", "hearth", "door"],
+		"cathedral_nave": ["altar", "pew", "crypt_stair", "door"],
+		"cathedral_crypt": ["altar", "rite_site", "door"],
+		"selena_almshouse_inner": ["altar", "cot", "door"],
+		"klein_living_room": ["hearth", "desk", "shelf", "door"],
+		"klein_room": ["bed", "desk", "chest", "shelf", "wardrobe", "door"],
+		"butcher_shop_inner": ["counter", "hooks", "door"],
+		"mr_frankys_inner": ["counter", "shelf", "door"],
+		"police_station_inner": ["desk", "board", "door"],
+		"warehouse_inner": ["cache", "crate", "door"]
+	},
+
+	"_crowds_doc": "P5 ambient crowd clusters for CrowdDressing.gd — NON-INTERACTIVE standee dressing (no agents, no schedules, no collision). Cluster `pos` in map-image px; per-figure dx/dy in WORLD px around it; `art` names assets/characters/<art>.png (the NPC body convention, drawn at background scale). Placement legality (clear of colliders, >=40 from every scheduled waypoint, >=60 from every door) is pinned by tests/test_city_place.gd.",
+	"crowds": [
+		{ "id": "market", "pos": [610, 804], "figures": [
+			{ "art": "hawker_neille", "dx": -46, "dy": 0, "flip": true },
+			{ "art": "goodwife_perrin", "dx": 12, "dy": -12 },
+			{ "art": "clerk_voss", "dx": 46, "dy": 26, "flip": true }
+		] },
+		{ "id": "docks", "pos": [350, 1190], "figures": [
+			{ "art": "dockhand_pell", "dx": -30, "dy": 0, "flip": true },
+			{ "art": "fishwife_dalia", "dx": 34, "dy": 6 }
+		] },
+		{ "id": "tavern", "pos": [458, 848], "figures": [
+			{ "art": "hollis_vane", "dx": -38, "dy": 4, "flip": true },
+			{ "art": "eulalia_vire", "dx": 20, "dy": -10 },
+			{ "art": "dr_aldous_crane", "dx": 66, "dy": 14, "flip": true }
+		] }
 	]
 }

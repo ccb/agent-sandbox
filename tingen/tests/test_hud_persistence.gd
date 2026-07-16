@@ -10,6 +10,9 @@ var _failed: int = 0
 func _init() -> void:
 	await process_frame
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	var WS: Object = root.get_node("/root/WorldState")
 	var main: Node = load("res://scenes/Main.tscn").instantiate()
@@ -17,10 +20,20 @@ func _init() -> void:
 	await process_frame
 	await process_frame
 
+	# N1 repair (stale boot expectation): since the M2 boot controller the game boots to a TITLE
+	# screen — no HUD, no world until New Run (boot_smoke.gd pins that title). The persistent-HUD
+	# contract this harness guards only STARTS once a run begins, so drive the REAL New Run entry
+	# first (fresh sandbox meta = single pathway = starts directly, no M30 G1 picker), then assert
+	# the HUD exists and the run wakes in the lodging (RunManager.LODGING_SCENE = IntroRoom reused).
+	_ok(main.has_method("start_new_run"), "the boot controller exposes start_new_run()")
+	main.start_new_run()
+	await process_frame
+	await process_frame
+
 	var hud: Node = main.get_node_or_null("UI/HUD")
-	_ok(hud != null, "HUD present at boot")
+	_ok(hud != null, "HUD present once a run starts")
 	_ok(main.get("current_scene_path") == "res://scenes/IntroRoom.tscn",
-		"boot world is IntroRoom")
+		"a new run wakes in the lodging (IntroRoom)")
 
 	# Interactable door (IntroRoom -> City) already used this path.
 	WS.transition_requested.emit("res://scenes/City.tscn", "")

@@ -1,5 +1,5 @@
 {
-	"_doc": "The GM's per-run lead seed (direction v2 §5 — Rumors -> Leads). LeadSystem slots these at run start, deterministically per run-seed (a seeded RNG, never RNG-in-combat). A lead = {id, subject, where_hint, source, state, spawned_day}. 'source' is which NPC KNOWS the lead (source-gated reveal — an NPC only surfaces a lead whose source is them, OR whose subject matches a phrase in that NPC's knowledge[] in npcs.json; this keeps the who-knows-what in DATA, no NPC-id branch in engine logic). 'guaranteed' leads are always slotted (the §3 opener). 'where_candidates' is a weighted pool the GM picks a where_hint from per run (the reshuffle). 'respawn_where' seeds the fresh where_hint a COLD lead re-emerges at (perish -> the subject moved). 'prey_form' (M26 RETUNE #2 fix) names the hidden-Beyonder combat_form this lead points at (butcher_human/wren_human/mack_harbor); the Doom 'monsters left alive' driver counts a live hidden Beyonder ONLY once its lead has been SURFACED to the player (known) — an idle player is never taxed for prey they have not yet been told exists, but ignoring KNOWN prey costs Doom. Pure data linkage form<->lead, no NPC-id branch.",
+	"_doc": "The GM's per-run lead seed (direction v2 §5 — Rumors -> Leads). LeadSystem slots these at run start, deterministically per run-seed (a seeded RNG, never RNG-in-combat). A lead = {id, subject, where_hint, source, state, spawned_day}. 'map_pos' (P5) is the district map's PIN for this lead, in the canonical MAP-IMAGE space (map_v3.png px, world = px * MapProjection.CITY_SCALE) — authored at the lead's real site/door so the pin lands where following the hint takes you; a where_candidates lead carries map_pos PER CANDIDATE (the picked row supplies both hint and pin); omitted = no pin (the trail is a name, not a spot). 'source' is which NPC KNOWS the lead (source-gated reveal — an NPC only surfaces a lead whose source is them, OR whose subject matches a phrase in that NPC's knowledge[] in npcs.json; this keeps the who-knows-what in DATA, no NPC-id branch in engine logic). 'guaranteed' leads are always slotted (the §3 opener). 'where_candidates' is a weighted pool the GM picks a where_hint from per run (the reshuffle). 'respawn_where' seeds the fresh where_hint a COLD lead re-emerges at (perish -> the subject moved). 'prey_form' (M26 RETUNE #2 fix) names the hidden-Beyonder combat_form this lead points at (butcher_human/wren_human/mack_harbor); the Doom 'monsters left alive' driver counts a live hidden Beyonder ONLY once its lead has been SURFACED to the player (known) — an idle player is never taxed for prey they have not yet been told exists, but ignoring KNOWN prey costs Doom. Pure data linkage form<->lead, no NPC-id branch.",
 
 	"leads": [
 		{
@@ -10,6 +10,7 @@
 			"guaranteed": true,
 			"hot": true,
 			"where_hint": "Iron Cross Street",
+			"map_pos": [718, 730],
 			"prey_form": "butcher_human",
 			"respawn_where": ["the Iron Cross shambles", "the canal steps off Iron Cross"]
 		},
@@ -24,6 +25,7 @@
 			"guaranteed": true,
 			"hot": false,
 			"where_hint": "the Blackthorn corner",
+			"map_pos": [317, 445],
 			"prey_form": "wren_human",
 			"respawn_where": ["the abattoir row", "the constables' yard", "the market street after dark"]
 		},
@@ -38,6 +40,7 @@
 			"guaranteed": true,
 			"hot": false,
 			"where_hint": "the harbor breakwater",
+			"map_pos": [340, 1196],
 			"prey_form": "mack_harbor",
 			"respawn_where": ["the south wharf", "the sea-wall steps", "the night fish market"]
 		},
@@ -51,6 +54,7 @@
 			"guaranteed": false,
 			"hot": false,
 			"where_hint": "Old Neil's rooms off the apothecary lane",
+			"map_pos": [540, 720],
 			"respawn_where": ["the shuttered apothecary", "the chalk-marked cellar", "the star-charts room after dark"]
 		},
 		{
@@ -64,7 +68,33 @@
 			"guaranteed": false,
 			"hot": false,
 			"where_hint": "the university archive's restricted stacks",
+			"map_pos": [596, 316],
 			"respawn_where": ["the archive reading room after dark", "the catalogue cellar", "the locked map room"]
+		},
+		{
+			"id": "death_prey_auber",
+			"_note": "M_death — the DEATH pathway's Seq-9 prey lead, mirroring hermit_prey_neil. Points at sister_auber; where_hint = her authored schedule/deed site (following it ROUTES the player to the fight). pathway:death -> same-pathway advance via the PATHWAY-driven drop, and slot_run's pathway gate keeps it out of Hunter/Hermit runs. source naya_brookes (the true Seer/medium senses the grave-cold on her). prey_form DELIBERATELY omitted (the hermit precedent — the human phase never taxes Doom; auber_monster counts once she transforms).",
+			"subject": "the lay-sister at Saint Selena's — Sister Auber — the plaza's dead answer her prayers, and the same grave-cold clings to her as to any Corpse Collector that lost the leash",
+			"subject_key": "death",
+			"pathway": "death",
+			"source": "naya_brookes",
+			"guaranteed": false,
+			"hot": false,
+			"where_hint": "the almshouse door at Saint Selena's",
+			"respawn_where": ["the paupers' rows behind the cathedral", "the plaza soup-line at dusk", "the crypt stair after vespers"]
+		},
+		{
+			"id": "death_prey_cassian",
+			"_note": "M_death — the DEATH pathway's SECOND prey lead (the Seq-8 meal), mirroring hermit_prey_finch/hunter_prey_mack_docks. after_advance:true — LeadSystem surfaces it ONLY AFTER Progression emits advanced (auber is the Seq-9 meal; the city names cassian once the first hunt is proven). pathway:death; source naya_brookes; prey_form DELIBERATELY omitted (same Doom-pacing reason).",
+			"subject": "there is a second one — Brother Cassian, the young curate — his miracles smell of the crypt, the same grave-cold in his blood, and the dead down there keep his hours",
+			"subject_key": "death",
+			"pathway": "death",
+			"after_advance": true,
+			"source": "naya_brookes",
+			"guaranteed": false,
+			"hot": false,
+			"where_hint": "Saint Selena's crypt stair after dark",
+			"respawn_where": ["the cathedral nave after the last office", "the vestry passage", "the paupers' rows at midnight"]
 		},
 		{
 			"id": "cult_courier",
@@ -74,9 +104,9 @@
 			"guaranteed": false,
 			"hot": false,
 			"where_candidates": [
-				{"value": "the harbor wharves", "weight": 3.0},
-				{"value": "the customs house", "weight": 2.0},
-				{"value": "the fish market lane", "weight": 1.0}
+				{"value": "the harbor wharves", "weight": 3.0, "map_pos": [1127, 1158]},
+				{"value": "the customs house", "weight": 2.0, "map_pos": [980, 1120]},
+				{"value": "the fish market lane", "weight": 1.0, "map_pos": [660, 780]}
 			],
 			"respawn_where": ["the night docks", "the coal wharf"]
 		},
@@ -88,9 +118,9 @@
 			"guaranteed": false,
 			"hot": false,
 			"where_candidates": [
-				{"value": "the Iron Cross warehouse", "weight": 3.0},
-				{"value": "the crypt beneath Saint Selena's", "weight": 2.0},
-				{"value": "the old customs cellar", "weight": 1.0}
+				{"value": "the Iron Cross warehouse", "weight": 3.0, "map_pos": [1073, 476]},
+				{"value": "the crypt beneath Saint Selena's", "weight": 2.0, "map_pos": [424, 1003]},
+				{"value": "the old customs cellar", "weight": 1.0, "map_pos": [980, 1120]}
 			],
 			"respawn_where": ["a boarded chapel", "the tannery yard"]
 		}

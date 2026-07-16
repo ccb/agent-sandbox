@@ -78,6 +78,40 @@
 			"radius": 80,
 			"fact_line": "Deep in the stacks after closing, Ledger Finch reads aloud from a volume that should not exist, and the ink runs off the page toward her like it is listening.",
 			"clue": "ledger_finch_suspicious"
+		},
+		{
+			"id": "death_act_rite",
+			"_note": "M_death: the DEATH player's 'acting' ritual — keep the corpse-collector's office (canon: wash the dead, speak the words, listen for what answers). Mirrors hunter_act_predator/hermit_act_rite: fires on demand via DeedRunner.perform_deed, which Progression requires before a Death advance (ACTING_DEEDS['death']). agent='player'; no waypoint/phase gate.",
+			"agent": "player",
+			"phases": [],
+			"room": "city",
+			"waypoint": [0, 0],
+			"radius": 0,
+			"player_performed": true,
+			"fact_line": "The investigator keeps the corpse-collector's office — washes the dead, speaks the burial words, and holds still for what answers.",
+			"clue": ""
+		},
+		{
+			"id": "auber_grave_office",
+			"_note": "M_death — sister_auber's signature deed (her 'wrongness', mirroring neil_star_rite). Her schedule holds her near Saint Selena's at night; the deed FIRES once per day there through the vision-gated Stimulus channel. The PLAYER PROXY seeing it grants sister_auber_suspicious — the suspicion clue that feeds the death_prey_auber lead. Waypoint = her night schedule slot [1700,5150]; radius 40 (NOT the neil/finch 80): her MORNING slot sits only 50px away, and combat_sim scenario D stages the roster at morning positions before running its pinned night fight — an 80px radius fires this deed into scenario D's byte-pinned event transcript. 40 keeps the live night behavior (she parks exactly on the slot) and keeps A-H byte-identical.",
+			"agent": "sister_auber",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [1700, 5150],
+			"radius": 40,
+			"fact_line": "Behind the almshouse, Sister Auber speaks the burial office over ground with no grave in it — and the ground answers her, politely, like a congregation.",
+			"clue": "sister_auber_suspicious"
+		},
+		{
+			"id": "cassian_crypt_requiem",
+			"_note": "M_death — brother_cassian's signature deed (mirroring finch_archive_rite). His schedule brings him to the cathedral at night; waypoint = his night slot. The proxy seeing it grants brother_cassian_suspicious — feeds the death_prey_cassian lead.",
+			"agent": "brother_cassian",
+			"phases": ["night", "late-night"],
+			"room": "city",
+			"waypoint": [2600, 5180],
+			"radius": 80,
+			"fact_line": "Down the crypt stair past midnight, Brother Cassian sings a requiem to the standing dead — and the dead keep time.",
+			"clue": "brother_cassian_suspicious"
 		}
 	],
 	"consequences": [
@@ -158,6 +192,38 @@
 			"on": "downed",
 			"form": "finch_monster",
 			"clue": "ledger_finch_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "sister_auber",
+			"on": "transformed",
+			"form": "auber_monster",
+			"clue": "sister_auber_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "sister_auber",
+			"on": "downed",
+			"form": "auber_monster",
+			"clue": "sister_auber_revealed",
+			"clue_needs_sight": false,
+			"adjust": {"attention": 4}
+		},
+		{
+			"agent": "brother_cassian",
+			"on": "transformed",
+			"form": "cassian_monster",
+			"clue": "brother_cassian_revealed",
+			"clue_needs_sight": true,
+			"adjust": {"attention": 8, "panic": 5}
+		},
+		{
+			"agent": "brother_cassian",
+			"on": "downed",
+			"form": "cassian_monster",
+			"clue": "brother_cassian_revealed",
 			"clue_needs_sight": false,
 			"adjust": {"attention": 4}
 		}

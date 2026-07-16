@@ -25,8 +25,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var r: Dictionary = run_all()
 	print("\n=== test_spirituality_pool: %d passed, %d failed ===" % [int(r["passed"]), int(r["failed"])])
 	quit(1 if int(r["failed"]) > 0 else 0)
@@ -243,9 +244,15 @@ static func _t_drift_alarm(c: Dictionary, root: Node) -> void:
 		var cost: Variant = (DB.ability_for(String(aid)) as Dictionary).get("cost", {})
 		if cost is Dictionary and float((cost as Dictionary).get("spirituality", 0.0)) > 0.0:
 			spirit_set[String(aid)] = true
+	# N5 (M_death): the alarm fired on the Death package landing — the five spirit-costed Death arts
+	# (censer_ember/grave_ring/wailing_host player-side + requiem_bolt/choir_of_the_dead on cassian's
+	# NPC kits) join the pin DELIBERATELY. Determinism re-checked: none is in the Hunter kit or any
+	# pinned A-H sim; NPC casters stay un-gated (4.4); combat_sim A-H stdout re-verified byte-identical.
 	var expected := {
 		"star_brand": true, "ward_circle": true, "collapsing_star": true,
 		"paper_charm": true, "finch_recite": true, "ink_flood": true,
+		"censer_ember": true, "grave_ring": true, "wailing_host": true,
+		"requiem_bolt": true, "choir_of_the_dead": true,
 	}
 	_check(c, spirit_set == expected,
 		"the spirituality-costed set is exactly %s (drift alarm) — got %s" % [str(expected.keys()), str(spirit_set.keys())])

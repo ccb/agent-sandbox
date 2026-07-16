@@ -63,6 +63,13 @@ extends Area2D
 ## REST-of-the-cycle deed sink (§4, -5, capped 3/day via Meters.try_relieve_madness_deed). Playing
 ## your Sequence's role in the world quiets the whispers. Generic flag; no NPC-id branch.
 @export var acting_deed: bool = false
+## P1 (experiential): when true, interacting RESTS UNTIL MORNING — the lodging bed's dead-time
+## skip. Routes through RunManager.rest_until_morning(): the Clock fast-forwards to the next 08:00
+## through the normal minute pipeline (the world keeps moving — Doom included), the ONE nightly
+## safe-house checkpoint is taken at the morning landing (with its existing rest Madness relief),
+## and the verb refuses cleanly during Ritual Night or combat. Generic flag, same pattern as
+## digest_advance/acting_deed — no NPC-id branch.
+@export var rest_until_morning: bool = false
 
 @onready var _prompt: Label = $Prompt
 @onready var _sprite: Sprite2D = $Sprite2D
@@ -181,6 +188,9 @@ func _use() -> void:
 		return
 	if acting_deed:
 		_perform_acting_deed()
+		return
+	if rest_until_morning:
+		_rest_until_morning()
 		return
 	if dialogue_id != "":
 		DialogueManager.start(dialogue_id)
@@ -315,6 +325,28 @@ func _perform_acting_deed() -> void:
 			"I play my part on the beat — a Hunter's role, acted true. The whispers ebb. (%d more today)" % left)
 	else:
 		WorldState.thought_requested.emit("I've acted my part enough today; the whispers won't quiet further.")
+
+## P1 (experiential): the lodging bed's REST UNTIL MORNING — sleep the dead hours away. Routes
+## through RunManager.rest_until_morning() (the clock jump + single nightly checkpoint + rest
+## Madness relief live there); this only narrates the outcome on the built thought channel, exactly
+## like the digest/acting verbs. Refusals get their own diegetic lines per typed reason.
+func _rest_until_morning() -> void:
+	var rm: Node = get_tree().root.get_node_or_null("RunManager")
+	if rm == null or not rm.has_method("rest_until_morning"):
+		WorldState.thought_requested.emit("No rest to be had here.")
+		return
+	var res: Dictionary = rm.rest_until_morning()
+	if bool(res.get("ok", false)):
+		WorldState.thought_requested.emit(
+			"I sleep — no dreams I care to keep. Morning of day %d; the city kept moving while I lay still." % int(res.get("day", 0)))
+		return
+	match String(res.get("reason", "")):
+		"ritual_night":
+			WorldState.thought_requested.emit("Sleep? Tonight the sky itself is wrong. There will be no morning unless I make one.")
+		"in_combat":
+			WorldState.thought_requested.emit("Not while something out there wants me dead.")
+		_:
+			WorldState.thought_requested.emit("No rest to be had here.")
 
 ## Strip one gathered ingredient from the cult's rite cache (PlayerActions.sabotage_any) and
 ## narrate the result, so the player feels the rite set back. When the cache is already bare the

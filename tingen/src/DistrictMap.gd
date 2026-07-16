@@ -1,5 +1,5 @@
 extends Control
-## Modal city map (toggle: M). Renders the real tingen_map.png city map, overlaid with live
+## Modal city map (toggle: M). Renders the real map_v3.png city map, overlaid with live
 ## risk-tinted district regions, point markers for the key sites, and a live player-position
 ## tracker — all on a map-image-anchored coordinate layer (see MapProjection). The old abstract
 ## `polygon` field still drives the streetscape elsewhere; here we read each district's
@@ -106,6 +106,22 @@ func _draw_map() -> void:
 	_canvas.draw_circle(rite, 4.0, Color(0.95, 0.55, 0.2))
 	_canvas.draw_string(ThemeDB.fallback_font, rite + Vector2(7, 4),
 		"Rite Site", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.97, 0.7, 0.4))
+	# 3c) The CURRENT LEAD's pin (P5): a pulsing amber ring at the lead's own authored map_pos —
+	# pure DATA via LeadSystem.current_lead() (leads.json), never an NPC-id lookup. Leads without
+	# a pin (occult readings, moved subjects) simply draw nothing — the trail is a name, not a spot.
+	var lead: Dictionary = LeadSystem.current_lead()
+	var pin: Vector2 = lead_pin_pos(lead)
+	if pin != Vector2.INF:
+		var pc: Vector2 = MapProjection.image_to_canvas(size, pin)
+		var pt: float = 0.5 + 0.5 * sin(_pulse * 3.0)
+		_canvas.draw_arc(pc, 8.0 + 2.5 * pt, 0.0, TAU, 24, Color(0.98, 0.66, 0.22, 0.9), 2.0)
+		_canvas.draw_circle(pc, 3.5, Color(1.0, 0.78, 0.35))
+		var hint := String(lead.get("where_hint", ""))
+		if hint.length() > 26:
+			hint = hint.substr(0, 24) + "…"
+		_canvas.draw_string(ThemeDB.fallback_font, pc + Vector2(9, 4),
+			("Lead — %s" % hint) if hint != "" else "Lead",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.8, 0.45))
 	# 4) Player tracker — a bright pulsing dot, drawn last (on top of everything).
 	var player_pos: Vector2 = MapProjection.image_to_canvas(size, MapProjection.world_to_map(AgentRuntime.player_position))
 	var t: float = 0.5 + 0.5 * sin(_pulse * 4.0)
@@ -146,3 +162,12 @@ func _update_readout() -> void:
 # --- Test/debug seam ---------------------------------------------------------------------
 func has_map_texture() -> bool:
 	return _map_tex != null
+
+## P5 — the pure lead->pin seam: a lead's authored map-image pin, or Vector2.INF when the lead
+## is empty / carries no usable map_pos. Data-driven (the lead's own `map_pos`, leads.json);
+## static so the headless harness pins it without a canvas.
+static func lead_pin_pos(lead: Dictionary) -> Vector2:
+	var mp: Variant = lead.get("map_pos")
+	if mp is Array and (mp as Array).size() >= 2:
+		return Vector2(float((mp as Array)[0]), float((mp as Array)[1]))
+	return Vector2.INF

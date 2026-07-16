@@ -38,6 +38,14 @@ func _finish() -> void:
 		_player.process_mode = Node.PROCESS_MODE_INHERIT  # 4) hand control to the player
 	queue_free()
 
+## N2: skip the cinematic outright. A death/lost_control WAKE re-enters the lodging, and the
+## establishing shot is the run-OPENING beat, not a wake beat — mounted under the death screen's
+## pause it froze at its black first frame (layer 200 over EndGame's 12) and painted the whole
+## screen black. Releases the frozen player exactly like _finish (BootController strips via this,
+## never a bare free — a freed card would leave the player PROCESS_MODE_DISABLED forever).
+func skip() -> void:
+	_finish()
+
 # --- test seam: the cinematic's TextureRect alpha (0=black, 1=fully lit) ---
 func cinematic_alpha() -> float:
 	return $TextureRect.modulate.a

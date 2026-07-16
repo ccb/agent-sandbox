@@ -228,5 +228,45 @@
 		"location": "city",
 		"topics": ["ledger_finch", "the_restricted_volume"],
 		"linked_entities": ["ledger_finch"]
+	},
+	{
+		"id": "sister_auber_suspicious",
+		"name": "The Lay-Sister's Graveside Office",
+		"description": "Long past compline, Sister Auber reads the burial office over unmarked ground behind the almshouse — and pauses, courteously, as if being answered. No grief prays like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["sister_auber", "the_quiet_graves"],
+		"linked_entities": ["sister_auber"]
+	},
+	{
+		"id": "sister_auber_revealed",
+		"name": "The Grave Wearing Sister Auber",
+		"description": "Sister Auber's gentleness came apart and the grave-power stood up in her habit — a Corpse Collector that lost the leash, censer-smoke and grave-dust where the lay-sister used to be.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["sister_auber", "the_quiet_graves"],
+		"linked_entities": ["sister_auber"]
+	},
+	{
+		"id": "brother_cassian_suspicious",
+		"name": "The Curate's Midnight Requiem",
+		"description": "Past midnight on the crypt stair, Brother Cassian sings the requiem to an empty dark that is not empty — something below keeps time with him. No staged miracle rehearses like that.",
+		"type": "behavioral",
+		"importance": "supporting",
+		"location": "city",
+		"topics": ["brother_cassian", "the_crypt_congregation"],
+		"linked_entities": ["brother_cassian"]
+	},
+	{
+		"id": "brother_cassian_revealed",
+		"name": "The Congregation Beneath Brother Cassian",
+		"description": "Brother Cassian's cassock came apart on the crypt stair and the congregation he sang to stood up inside him — a Death-pathway thing of shrouds and patient hands, and it holds services for the living now.",
+		"type": "occult",
+		"importance": "pivotal",
+		"location": "city",
+		"topics": ["brother_cassian", "the_crypt_congregation"],
+		"linked_entities": ["brother_cassian"]
 	}
 ]

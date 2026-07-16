@@ -67,10 +67,7 @@ CombatFeedback="*res://src/CombatFeedback.gd"
 PauseMenu="*res://src/PauseMenu.gd"
 AmmoSpawn="*res://src/AmmoSpawn.gd"
 Shop="*res://src/Shop.gd"
-
-[gui]
-
-theme/custom="res://assets/ui/tingen_theme.tres"
+AudioManager="*res://src/AudioManager.gd"
 
 [display]
 
@@ -78,6 +75,10 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/mode=2
 window/stretch/mode="canvas_items"
+
+[gui]
+
+theme/custom="res://assets/ui/tingen_theme.tres"
 
 [input]
 

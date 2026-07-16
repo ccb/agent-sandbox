@@ -145,9 +145,8 @@ const ANIM_DIR: String = "res://assets/anim/"
 const FORM_SPRITE_DIR: String = "res://assets/enemies/"
 const STRIP_FRAMES: int = 8
 const STRIP_FPS: float = 12.0
-## On-screen frame heights (px) the giant gen strips/sprites are scaled down to — a body-sized
-## flourish for a strip, a head-taller silhouette for a revealed form.
-const STRIP_TARGET_H: float = 42.0
+## On-screen height (px) a revealed form's standee sprite is scaled down to — and the height
+## the strip FIGURE must match (P3 readability: the anim must not shrink the monster).
 const FORM_SPRITE_TARGET_H: float = 64.0
 
 var _strip: Dictionary = {}        # {sprite, start_ms, hold_last} — a strip in flight
@@ -181,6 +180,13 @@ func bind(agent_in: Agent, body_in: Node2D = null) -> void:
 		_by_agent[agent.id] = self
 	if body != null:
 		_attach_hurtbox()
+		# N4: an agent ALREADY wearing a form with authored art fights in it from the first frame
+		# this executor pilots the body — the RitualNight backlash flips combat_form + in_combat
+		# directly (no assume_form deltas ever execute), so the VISIBLE half of that shed lands
+		# here, through the same one resolution path the transform swap uses. Display-only
+		# (a sprite write); a form resolving no art is a silent no-op, so harness stub bodies and
+		# human-phase fighters are untouched and the pinned sims stay byte-identical.
+		_apply_form_sprite(String(agent.combat_form))
 	_load_reflexes()
 	# The reflex channel: EventBus, FILTERED per event through the shared perceiver gate —
 	# this executor only ever reacts to what its agent could see (plan §M3).
@@ -862,10 +868,62 @@ func _play_anim(anim: String) -> void:
 	s.hframes = STRIP_FRAMES
 	s.vframes = 1
 	s.frame = 0
-	var frame_h := float(tex.get_height())
-	if frame_h > 0.0:
-		s.scale = Vector2.ONE * (STRIP_TARGET_H / frame_h)
+	s.scale = Vector2.ONE * strip_scale_for(tex)
+	s.offset = strip_offset_for(tex)
 	_strip = {"sprite": s, "start_ms": now_ms(), "hold_last": anim == "death"}
+
+## P3 combat readability: the strip's on-screen scale. The gen sheets are 1536x1024 with the
+## FIGURE occupying only a ~400px band of each otherwise-transparent 192x1024 cell — the old
+## rule (scale the CELL height to 42px) rendered the monster as a ~8px-wide sliver on every
+## anim cue. Scale by the sheet's USED (non-transparent) rect instead, so the FIGURE lands at
+## the same on-screen height as the revealed-form standee it animates (FORM_SPRITE_TARGET_H).
+## Measured once per strip texture (an Image decode) and cached statically; an unreadable or
+## fully-opaque sheet degrades to the full cell height — never a divide-by-zero. Cosmetic only:
+## headless sims bind no bodies, so _play_anim (the one caller) never reaches here.
+static var _strip_scale_cache: Dictionary = {}
+
+static func strip_scale_for(tex: Texture2D) -> float:
+	var key := tex.resource_path if tex.resource_path != "" else str(tex.get_instance_id())
+	if _strip_scale_cache.has(key):
+		return float(_strip_scale_cache[key])
+	var fig_h := maxf(1.0, float(tex.get_height()))
+	var img := tex.get_image()
+	if img != null:
+		if img.is_compressed():
+			img.decompress()
+		var used := img.get_used_rect()
+		if used.size.y > 0:
+			fig_h = float(used.size.y)
+	var s := FORM_SPRITE_TARGET_H / fig_h
+	_strip_scale_cache[key] = s
+	return s
+
+## N6 (the offset half of the same readability rule): where the FIGURE sits inside the cell.
+## bieber's sheet authors the figure band roughly centered, but the N6 drops (wren_predator /
+## mack_beast / neil_monster / beyond_hunter) author it at the BOTTOM of the 1024px cell — a
+## center-mounted Sprite2D would teleport the monster ~160px below its standee on every swing.
+## Offset the sprite so the used-rect band's vertical CENTER lands on the body position (which
+## is also where the standee's figure center sits — both render 64px tall). Vertical only: the
+## per-frame horizontal drift IS the authored motion. Texture-local px (Sprite2D.offset scales
+## with the node), cached per strip; a centered sheet (bieber) yields a ~0 offset, so nothing
+## already-placed moves. Cosmetic only — headless sims bind no bodies.
+static var _strip_offset_cache: Dictionary = {}
+
+static func strip_offset_for(tex: Texture2D) -> Vector2:
+	var key := tex.resource_path if tex.resource_path != "" else str(tex.get_instance_id())
+	if _strip_offset_cache.has(key):
+		return _strip_offset_cache[key]
+	var off := Vector2.ZERO
+	var img := tex.get_image()
+	if img != null:
+		if img.is_compressed():
+			img.decompress()
+		var used := img.get_used_rect()
+		if used.size.y > 0:
+			var fig_center_y := float(used.position.y) + float(used.size.y) * 0.5
+			off = Vector2(0.0, float(tex.get_height()) * 0.5 - fig_center_y)
+	_strip_offset_cache[key] = off
+	return off
 
 ## Advance the strip in flight on the executor clock; restore the resting look when it ends
 ## (death holds its last frame instead).
@@ -901,7 +959,7 @@ func _capture_sprite_base(s: Sprite2D) -> void:
 	if not _sprite_base.is_empty():
 		return
 	_sprite_base = {"texture": s.texture, "hframes": s.hframes, "vframes": s.vframes,
-		"frame": s.frame, "scale": s.scale}
+		"frame": s.frame, "scale": s.scale, "offset": s.offset}
 
 func _restore_sprite_base(s: Sprite2D) -> void:
 	if _sprite_base.is_empty():
@@ -911,16 +969,49 @@ func _restore_sprite_base(s: Sprite2D) -> void:
 	s.vframes = int(_sprite_base.get("vframes", 1))
 	s.frame = int(_sprite_base.get("frame", 0))
 	s.scale = _sprite_base.get("scale", Vector2.ONE)
+	s.offset = _sprite_base.get("offset", Vector2.ZERO)
 
-## The transform's visible half (M6): the new form's static body sprite
-## (assets/enemies/<form>.png) replaces the body's look AND its captured base, so every later
-## strip-restore lands on the revealed shape. Sprite2D bodies only; no authored art = no-op.
+## N4 — the ONE form->art resolution path, shared by the mid-fight mask-drop swap
+## (_apply_form_sprite) AND the body-bind skin (NPC._apply_sprite), so a pre-formed monster and a
+## mid-fight reveal wear the SAME painting through the SAME rules:
+##   1. the DATA alias: an explicit `sprite` path on the form's combat_forms.json row wins, if the
+##      file exists (the seam for forms whose own painting isn't done — nighthawk_pursuer wears the
+##      nighthawk captain's standee until painted; data, never an engine id branch);
+##   2. else the filename CONVENTION assets/enemies/<form>.png, if it exists;
+##   3. else "" — the caller keeps its current look (the character-art/placeholder ladder).
+## Static + defensive (only ever returns a path ResourceLoader can open); the AbilityDB autoload is
+## reached via the /root lookup so the resolver also works under the -s harnesses.
+## N6 (B1): pure builders that already HOLD the form's def (CastCodex walks a caller-supplied
+## forms dict) pass it as `def_override` — the same ladder runs on their data, no autoload
+## round-trip, no second resolution path. Empty (the default) keeps the AbilityDB lookup.
+static func resolve_form_sprite_path(form: String, def_override: Dictionary = {}) -> String:
+	if form == "":
+		return ""
+	var def := def_override
+	if def.is_empty():
+		var ml := Engine.get_main_loop()
+		var adb: Node = null
+		if ml is SceneTree:
+			adb = (ml as SceneTree).root.get_node_or_null("AbilityDB")
+		def = adb.form_def(form) if adb != null else {}
+	var explicit := String(def.get("sprite", ""))
+	if explicit != "" and ResourceLoader.exists(explicit):
+		return explicit
+	var conv := "%s%s.png" % [FORM_SPRITE_DIR, form]
+	if ResourceLoader.exists(conv):
+		return conv
+	return ""
+
+## The transform's visible half (M6): the new form's static body sprite (the shared
+## resolve_form_sprite_path — the enemies/<form>.png convention or its DATA alias) replaces the
+## body's look AND its captured base, so every later strip-restore lands on the revealed shape.
+## Sprite2D bodies only; no authored art = no-op.
 func _apply_form_sprite(form: String) -> void:
 	var sp := _body_sprite()
 	if not (sp is Sprite2D) or form == "":
 		return
-	var path := "%s%s.png" % [FORM_SPRITE_DIR, form]
-	if not ResourceLoader.exists(path):
+	var path := resolve_form_sprite_path(form)
+	if path == "":
 		return
 	var tex: Texture2D = load(path)
 	if tex == null:
@@ -933,7 +1024,9 @@ func _apply_form_sprite(form: String) -> void:
 	s.vframes = 1
 	s.frame = 0
 	s.scale = new_scale
-	_sprite_base = {"texture": tex, "hframes": 1, "vframes": 1, "frame": 0, "scale": new_scale}
+	s.offset = Vector2.ZERO
+	_sprite_base = {"texture": tex, "hframes": 1, "vframes": 1, "frame": 0, "scale": new_scale,
+		"offset": Vector2.ZERO}
 
 ## In combat the DATA stays authoritative: motions write agent.position; the body follows.
 func _sync_body() -> void:
@@ -1068,6 +1161,16 @@ static func _al_static(autoload_name: String) -> Node:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
+		# N6 (asset polish, probe-caught): a downing blow drops in_combat and the body FREES its
+		# executor (NPC._physics_process) — an executor dying with a NON-hold strip still in
+		# flight must not freeze the corpse on a mid-swing frame; the captured resting look
+		# (the standee) is restored. A HOLD strip (death, hold_last) stays exactly as it is:
+		# the held death frame IS the felled body's resting look (bieber's corpse).
+		if not _strip.is_empty() and not bool(_strip.get("hold_last", false)):
+			var strip_sprite: Variant = _strip.get("sprite")
+			if strip_sprite is Sprite2D and is_instance_valid(strip_sprite):
+				_restore_sprite_base(strip_sprite as Sprite2D)
+			_strip = {}
 		_orphan_survivors()
 		# A hurtbox that never landed on the body (deferred attach still pending when this
 		# executor dies — the M5 bind-during-scene-setup path) must not leak its Area2D RID;

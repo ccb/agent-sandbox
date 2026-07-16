@@ -28,6 +28,11 @@ var _use_brain: bool = true
 var _session_id: String = "tingen"
 
 var _cache: Dictionary = {}      # agent_id -> most-recent LLM action
+## P3 (lab pull-in): agents whose /decide is currently IN FLIGHT (agent_id -> begin beat). Each
+## launch emits ONE typed `deciding {agent, phase: begin, beat}` EventBus fact; the reply (or its
+## timeout) emits the matching `end` exactly once and attributes the call's cost to the causing
+## NPC (SidecarBridge.note_agent_llm). Main-thread only (launch + drain both run in propose()).
+var _inflight: Dictionary = {}
 var _mutex: Mutex = Mutex.new()
 var _thread: Thread = null
 var _busy: bool = false
@@ -87,13 +92,33 @@ func pick(snapshots: Array) -> Array:
 ## EventBus so the debug overlay shows the LLM's proposals and errors. Invalid actions are dropped
 ## (AgentRuntime would reject them anyway) and surfaced as sidecar_error.
 func apply_reply(actions: Array, error: String) -> void:
+	var eb := _al("EventBus")
+	var beat := int(_al("Clock").beat_index)
+	var sb := _al("SidecarBridge")
 	if error != "":
-		_al("EventBus").emit_event("sidecar_error", {"reason": error})
+		# P3: the bounded decide DIED (timeout / transport failure). The beat already completed on
+		# the offline brain (pick's ambient fallback) — here we close each in-flight agent's
+		# lifecycle fact exactly once and still attribute the spent call to the causing NPC.
+		var outcome := "timeout" if error.contains("timeout") else "error"
+		for aid in _inflight.keys():
+			eb.emit_event("deciding", {"agent": aid, "phase": "end", "beat": beat, "outcome": outcome})
+			if sb != null and sb.has_method("note_agent_llm"):
+				sb.note_agent_llm(String(aid), 0.0, true)
+		_inflight.clear()
+		eb.emit_event("sidecar_error", {"reason": error})
 		return
 	for a in actions:
 		if typeof(a) != TYPE_DICTIONARY:
 			continue
 		var act: Dictionary = a
+		# P3: this agent's decide has LANDED — close its lifecycle fact (exactly once; a late
+		# duplicate reply finds _inflight already empty) and attribute the realized cost.
+		var landed_aid := String(act.get("actor", ""))
+		if _inflight.has(landed_aid):
+			_inflight.erase(landed_aid)
+			eb.emit_event("deciding", {"agent": landed_aid, "phase": "end", "beat": beat, "outcome": "ok"})
+			if sb != null and sb.has_method("note_agent_llm"):
+				sb.note_agent_llm(landed_aid, float(act.get("_cost", 0.0)), false)
 		# Hand the exact prompt + raw LLM reply + token usage (verbose dev logging only) to the
 		# play-log, then strip them so they never reach the cache or the schema validator.
 		if act.has("_prompt") or act.has("_tokens_in"):
@@ -105,10 +130,9 @@ func apply_reply(actions: Array, error: String) -> void:
 					float(act.get("_cost", 0.0)), String(act.get("_model", "")))
 			# B4 (M21): feed the realized cost to the session budget guard so it can degrade to the
 			# ambient brain once the ceiling is reached (the ONE place cumulative LLM spend is capped).
-			var sb := _al("SidecarBridge")
 			if sb != null and sb.has_method("note_llm_spend"):
 				sb.note_llm_spend(float(act.get("_cost", 0.0)))
-			for k in ["_prompt", "_llm_response", "_tokens_in", "_tokens_out", "_cost", "_model"]:
+			for k in ["_prompt", "_llm_response", "_tokens_in", "_tokens_out", "_cost", "_model", "_outcome"]:
 				act.erase(k)
 		# A per-agent brain failure (_error) or schema rejection (_invalid) the sidecar tagged: surface
 		# it and DON'T cache, so the agent ambient-fills instead of silently replaying a masked idle.
@@ -127,6 +151,13 @@ func apply_reply(actions: Array, error: String) -> void:
 			_al("EventBus").emit_event("sidecar_error", {
 				"actor": act.get("actor", ""), "reason": verdict["reason"],
 			})
+	# P3: an in-flight agent whose action never came back (a malformed reply) still gets its
+	# lifecycle fact closed — begin/end pair EXACTLY once per decide, whatever happened.
+	for aid in _inflight.keys():
+		eb.emit_event("deciding", {"agent": aid, "phase": "end", "beat": beat, "outcome": "dropped"})
+		if sb != null and sb.has_method("note_agent_llm"):
+			sb.note_agent_llm(String(aid), 0.0, false)
+	_inflight.clear()
 
 ## The PlayLog autoload if present (it is absent in some unit tests), else null.
 func _playlog() -> Node:
@@ -180,6 +211,17 @@ func _launch_brain_refresh(snapshots: Array) -> void:
 		requests.append(req)
 	if not _claim_worker():
 		return
+	# P3: announce each launched decide as ONE typed lifecycle fact — `deciding {agent, phase:
+	# begin, beat}` — consumed by PlayLog and the thought panel's thinking tell, and closed
+	# exactly once by apply_reply when the reply (or its timeout) lands. Emitted only after the
+	# worker slot is claimed, so a skipped (busy) beat announces nothing.
+	var eb := _al("EventBus")
+	var beat := int(_al("Clock").beat_index)
+	for req in requests:
+		var aid := String((req as Dictionary).get("agent_id", ""))
+		if aid != "":
+			_inflight[aid] = beat
+			eb.emit_event("deciding", {"agent": aid, "phase": "begin", "beat": beat})
 	_thread = Thread.new()
 	_thread.start(_brain_worker.bind(requests))
 

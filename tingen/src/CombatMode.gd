@@ -15,6 +15,8 @@ func enter_combat(agent: Agent) -> void:
 	if agent == null or agent.in_combat:
 		return
 	agent.in_combat = true
+	# One-shot transition marker (P1): the next deliberation snapshot learns the flip just happened.
+	agent.mark_transition("just_entered_combat")
 	EventBus.emit_event("combat_started", {"agent": agent.id})
 
 func exit_combat(agent: Agent) -> void:
@@ -25,4 +27,5 @@ func exit_combat(agent: Agent) -> void:
 	# combat scratch must never survive the mask it belongs to, or a later, unrelated fight
 	# would open with a stale GM-ordered art.
 	agent.pending_cast = ""
+	agent.mark_transition("just_left_combat")   # one-shot transition marker (P1)
 	EventBus.emit_event("combat_ended", {"agent": agent.id})

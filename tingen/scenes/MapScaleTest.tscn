@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Texture2D" path="res://assets/ui/ground_test.png" id="1"]
-[ext_resource type="Texture2D" path="res://assets/characters/klein_down.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/ui/city_ground.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://d4hl3l0xrwih0" path="res://assets/characters/klein_s.png" id="2"]
 [ext_resource type="Script" path="res://scenes/_map_capture.gd" id="3"]
 
 [node name="MapScaleTest" type="Node2D"]

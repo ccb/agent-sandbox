@@ -11,6 +11,9 @@ var _failed := 0
 
 func _init() -> void:
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var packed: PackedScene = load("res://scenes/UniversityArchive.tscn")
 	if packed == null:
 		_ok(false, "UniversityArchive.tscn loads")
@@ -50,9 +53,11 @@ func _init() -> void:
 	_ok(finch != null and finch.get("dialogue_id") == "finch",
 		"Finch.dialogue_id == finch")
 	var finch_spr: Sprite2D = room.get_node_or_null("Finch/Sprite2D")
+	# N6 (audit): the archive clerk IS ledger_finch (npcs.json) — his interactable must wear HIS
+	# painting, not the retired archive_clerk_finch placeholder id's.
 	_ok(finch_spr != null and finch_spr.texture != null
-		and finch_spr.texture.resource_path.ends_with("archive_clerk_finch.png"),
-		"Finch sprite -> archive_clerk_finch.png")
+		and finch_spr.texture.resource_path.ends_with("ledger_finch.png"),
+		"Finch sprite -> ledger_finch.png (the real npcs.json clerk)")
 
 	# Three examine hotspots, each carrying its clue_id.
 	_check_examine(room, "CardCatalog", "archive_antigonus")

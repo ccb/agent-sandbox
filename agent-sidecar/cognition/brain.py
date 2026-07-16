@@ -37,6 +37,28 @@ COMBAT_VERB_GUIDANCE = {
 }
 
 
+def _schema_error(action, verbs):
+    """The validation error for a proposed action against the verb schema, or None when fine.
+    Mirrors sidecar.validate_action minus the actor check (the brain stamps the actor itself).
+    Used by the P4 repair round: the error TEXT is what gets fed back to the model."""
+    if not isinstance(action, dict) or not str(action.get("verb", "")):
+        return 'reply was not a JSON object with a "verb"'
+    verb = str(action.get("verb", ""))
+    if isinstance(verbs, dict):
+        if verb not in verbs:
+            return f"unknown verb '{verb}'"
+        args = action.get("args", {})
+        if not isinstance(args, dict):
+            return "args must be an object"
+        for req in verbs[verb]:
+            if req not in args:
+                return f"verb '{verb}' missing arg '{req}'"
+    elif verbs:
+        if verb not in list(verbs):
+            return f"unknown verb '{verb}'"
+    return None
+
+
 def _goal_objs(raw: list) -> list:
     out = []
     for g in raw or []:
@@ -291,6 +313,12 @@ def build_decide_prompt(perception: dict, goal_list: list, retrieved: list, reve
     condition = _condition_line(perception)
     if condition:
         sections.append(condition)
+    # One-shot `just_*` transition markers (lab pull-in P1): the engine consumed these off the
+    # agent into exactly ONE snapshot, so this line renders for one beat and never again. Plain
+    # facts about what JUST flipped ("just entered combat") — no command, no reading.
+    just = perception.get("just_happened") or []
+    if just:
+        sections.append("Just now: " + "; ".join(str(j).replace("_", " ") for j in just) + ".")
     # COMBAT SITUATION (combat plan §M4): rendered only while the engine says the mask is flipped.
     # Facts only — the fight, the last striker, the OWN published intent, visible co-combatants,
     # and the worn form's arts. Never a command (see _combat_situation).
@@ -480,6 +508,21 @@ class BrainSession:
         # agents/sessions decide concurrently instead of serializing behind it.
         prompt = build_decide_prompt(perception, goal_list, retrieved, revealed, verbs, world_state)
         proposed = llm_fn(prompt) or {}
+        # P4 (lab pull-in, ports their is_error tool_result pattern): an INVALID reply gets its
+        # validation error fed back to the model exactly ONCE; still invalid -> the existing idle
+        # fallback. `outcome` stamps the usage/cost record: valid | repaired | failed. Bounded by
+        # construction — one repair round ever, never a third call.
+        outcome = "valid"
+        err = _schema_error(proposed, verbs)
+        if err is not None:
+            repair_prompt = (prompt + "\n\nYour previous reply was INVALID: " + err +
+                             ". Answer again — ONLY a corrected JSON object, same rules as above.")
+            proposed = llm_fn(repair_prompt) or {}
+            if _schema_error(proposed, verbs) is None:
+                outcome = "repaired"
+            else:
+                proposed = dict(IDLE)
+                outcome = "failed"
         if not isinstance(proposed, dict) or "verb" not in proposed:
             proposed = dict(IDLE)
         proposed.setdefault("args", {})
@@ -512,6 +555,7 @@ class BrainSession:
             "action": final,
             "verdict": verdict["decision"],
             "invariant": verdict.get("invariant"),
+            "outcome": outcome,   # P4: valid | repaired | failed — stamps the usage/cost record
             "reflected": reflected,
             "retrieved": [r.text for r in retrieved],
             "stream_size": size,

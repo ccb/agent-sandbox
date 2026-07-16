@@ -617,7 +617,11 @@
 		"name": "Sister Auber",
 		"dialogue_id": "",
 		"role": "lay_sister",
-		"intent": "Shelter the destitute at Saint Selena's, and quietly reckon with her doubts about the recent miracles.",
+		"_pathway_note": "M_death: the DEATH pathway's Seq-9 prey — the third playable build's first real hunt (canon: Corpse Collector 收尸人 line; grave-power, funerary rites). Public face: the lay-sister who feeds the plaza's poor. Secret: the paupers' graves she tends began answering her — a hidden Death-pathway Beyonder losing the leash. Tagged pathway:death so a SAME-pathway kill drops a player-usable death_characteristic through the PATHWAY-driven drop (Progression), never her id. Two-phase combat_form (auber_human -> auber_monster via auber_descend) mirrors the neil/wren descent seam with a DISTINCT censer/grave kit. Pure DATA.",
+		"pathway": "death",
+		"combat_form": "auber_human",
+		"vision_r": 600,
+		"intent": "Shelter the destitute at Saint Selena's — and keep the dead she tends from following her home, for since the almshouse burials began they answer when she prays.",
 		"description": "A cathedral lay-sister who feeds the plaza's poor at dawn and dusk; her faith is steady, her doubts about the recent miracles are not.",
 		"voice": "Gentle and unhurried; chooses words like alms, but goes quiet when the miracles come up.",
 		"knowledge": [
@@ -625,8 +629,12 @@
 			"the destitute of the plaza by name",
 			"that the recent miracles sit wrong with her"
 		],
-		"secrets": [],
-		"tier": "light",
+		"secrets": [
+			"tends the paupers' rows with rites no church taught her",
+			"a hidden Death-pathway Beyonder — the grave-power took her when the almshouse dead began to speak",
+			"the plaza's dead keep her hours after dark"
+		],
+		"tier": "full",
 		"tint": [
 			0.92,
 			0.9,
@@ -906,6 +914,11 @@
 		"name": "Brother Cassian",
 		"dialogue_id": "",
 		"role": "curate",
+		"_pathway_note": "M_death: the DEATH pathway's Seq-8 prey — the SECOND real Death hunt (the Seq-8 meal, mirroring ledger_finch/leland_mack). Public face: the earnest young curate whose miracles renew the parish. Secret: the miracles stopped being staged — the crypt's dead answer his requiem now, and he is a hidden Death-pathway Beyonder losing the leash. Tagged pathway:death (PATHWAY-driven drop -> death_characteristic; the ladder is feedable by TWO real kills: sister_auber then brother_cassian). Two-phase combat_form (cassian_human -> cassian_monster via cassian_descend). AUTHORED max_hp 130 (the mack precedent: the Seq-8 meal is HARDER — more pool AND a tighter hp_below 0.45 descent band). Pure DATA.",
+		"pathway": "death",
+		"combat_form": "cassian_human",
+		"max_hp": 130,
+		"vision_r": 600,
 		"intent": "Restore faith in a doubting parish — with staged miracles that soften the city for what is to descend, reporting all the while to Eulalia's cell.",
 		"description": "The earnest young curate at Saint Selena's; services and confession by day, the very picture of a parish renewed.",
 		"voice": "Warm pulpit cadence even at a whisper; answers doubt with scripture and a smile that arrives half a second late.",
@@ -917,7 +930,8 @@
 		"secrets": [
 			"stages the recent miracles himself",
 			"is softening the parish for the ritual night",
-			"reports to Eulalia Vire's cell"
+			"reports to Eulalia Vire's cell",
+			"the miracles stopped being staged — the crypt's dead answer his requiem, and some nights he cannot say who was leading whom"
 		],
 		"goals": [
 			{

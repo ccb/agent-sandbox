@@ -14,15 +14,18 @@ extends SceneTree
 ##   B5  two fresh start_run()s reseed WorldManager.seed_value to a DIFFERENT value; a within-run
 ##       checkpoint restore keeps the seed STABLE.
 
-const TMP_SAVE := "user://test_save_spend_seed.json"
+## N1 (sprint safety): the temp save slot rides the harness sandbox (never the real user dir).
+static func TMP_SAVE() -> String:
+	return preload("res://src/TestSandbox.gd").path("test_save_spend_seed.json")
 
 func _init() -> void:
 	await process_frame
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var r: Dictionary = run_all()
 	print("\n=== %d passed, %d failed ===" % [int(r["passed"]), int(r["failed"])])
 	quit(1 if int(r["failed"]) > 0 else 0)
@@ -66,7 +69,7 @@ static func _b3_disk_roundtrips_every_subsystem(c: Dictionary) -> void:
 	var want_shop: Dictionary = S.to_dict() if S != null else {}
 
 	# Persist to a temp slot, then SCRUB the live world (simulating a fresh process at title).
-	_check(c, bool(SM.save_game(TMP_SAVE)), "save_game writes the temp slot")
+	_check(c, bool(SM.save_game(TMP_SAVE())), "save_game writes the temp slot")
 	M.reset(); P.reset(); LS.reset()
 	if S != null:
 		S.reset()
@@ -75,7 +78,7 @@ static func _b3_disk_roundtrips_every_subsystem(c: Dictionary) -> void:
 	_check(c, not _dict_eq(M.to_dict(), want_meters), "reset scrubbed the meters (state was live)")
 	_check(c, P.sequence() != int(want_prog.get("sequence", 8)), "reset scrubbed progression")
 
-	_check(c, bool(SM.load_game(TMP_SAVE)), "load_game reads the temp slot")
+	_check(c, bool(SM.load_game(TMP_SAVE())), "load_game reads the temp slot")
 
 	_check(c, _dict_eq(M.to_dict(), want_meters), "B3: meters (Doom/Madness/…) restored from disk")
 	_check(c, _dict_eq(P.to_dict(), want_prog), "B3: progression (rank + granted art) restored from disk")
@@ -93,8 +96,8 @@ static func _b3_disk_and_snapshot_same_key_set(c: Dictionary) -> void:
 	var RM: Object = root.get_node("/root/RunManager")
 	RM.start_run()
 	# The disk keys minus the file-envelope + scene-placement meta (version/scene_path/player_pos).
-	_check(c, bool(SM.save_game(TMP_SAVE)), "save_game writes the temp slot (key-set probe)")
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TMP_SAVE))
+	_check(c, bool(SM.save_game(TMP_SAVE())), "save_game writes the temp slot (key-set probe)")
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TMP_SAVE()))
 	var disk: Dictionary = parsed if parsed is Dictionary else {}
 	var disk_keys: Array = []
 	for k in disk.keys():

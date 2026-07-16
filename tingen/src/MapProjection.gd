@@ -2,7 +2,7 @@ class_name MapProjection
 extends RefCounted
 ## Pure, static, node-free coordinate math. Three spaces:
 ##   • World space     — the streetscape coords the player/agents live in.
-##   • Map-image space — tingen_map.png pixels (MAP_SIZE). The single canonical authoring space:
+##   • Map-image space — map_v3.png pixels (MAP_SIZE). The single canonical authoring space:
 ##     city_layout.json, district map_polygons, and the player tracker are all expressed here.
 ##   • Canvas space    — the map panel's Map control pixels (runtime-sized).
 ## ONE global uniform transform links world and map space (CITY_SCALE), so the map tracker is
@@ -11,7 +11,7 @@ extends RefCounted
 
 const MAP_SIZE := Vector2(1254.0, 1254.0)
 ## World units per map pixel — UNIFIED with the live scene (coordinate-unification pass):
-## City.tscn's ground is ground_test.png (2508px, a 2x render of the 1254 map) at node scale 2.5,
+## City.tscn's ground is city_ground.png (2508px, a 2x render of the 1254 map) at node scale 2.5,
 ## i.e. a (0,0)..(6270,6270) world = exactly 5.0 world units per map pixel. Under the old 3.5 the
 ## southern city (Chapel, player start) projected off the map image and the rite anchor landed
 ## inside the wrong building. A full-city walk is ~52 s at the player's 120 u/s.

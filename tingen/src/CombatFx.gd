@@ -26,8 +26,21 @@ const TRANSFORM_TARGET_H: float = 72.0
 
 const FX_LAYER_NAME: String = "CombatFxLayer"
 
+## P3: the muzzle flash — brief, small, just ahead of the barrel along the cached aim.
+const MUZZLE_LIFETIME: float = 0.12
+const MUZZLE_TARGET_H: float = 26.0
+const MUZZLE_OFFSET: float = 26.0
+## The three authored flash stills, cycled DETERMINISTICALLY (a counter — no RNG anywhere near combat).
+const MUZZLE_FRAMES: Array = ["muzzle_flash_1", "muzzle_flash_2", "muzzle_flash_3"]
+
 ## Cosmetic master switch (the determinism test flips it; live play leaves it on).
 var enabled: bool = true
+
+## caster id -> {ability, dir} — the aim each telegraph carried, consumed at the strike moment.
+var _cast_aims: Dictionary = {}
+## Probe: what the LAST muzzle flash recorded {caster, ability, at, fx} — headless-assertable.
+var _last_muzzle: Dictionary = {}
+var _muzzle_seq: int = 0
 
 ## Live transients: [{node, age, lifetime}] — stepped by _process (live) or step_fx (headless).
 var _transients: Array = []
@@ -59,11 +72,19 @@ func _on_event(ev: Dictionary) -> void:
 			if float(d.get("damage", 0.0)) > 0.0:
 				_spawn(CombatFxLib.DEFAULT_SPLATTER, at, SPLATTER_LIFETIME, SPLATTER_TARGET_H)
 		"ability_cast_started":
+			# P3: remember the telegraph's aim so the strike moment knows where the barrel points.
+			_cast_aims[String(d.get("caster", ""))] = {
+				"ability": String(d.get("ability", "")), "dir": _dir_of(d)}
 			# A dash (movement) leaving the caster: an afterimage wisp at the caster.
 			if _is_movement(String(d.get("ability", ""))):
 				var at2 := _agent_pos(String(d.get("caster", "")))
 				var fx := _fx_of(String(d.get("ability", "")), CombatFxLib.DEFAULT_DASH)
 				_spawn(fx, at2, DASH_LIFETIME, DASH_TARGET_H)
+		"ability_cast_finished":
+			# P3: the strike moment of an AMMO-COSTING art = the round leaving the barrel — flash it.
+			_muzzle_for(d)
+		"ability_cast_interrupted":
+			_cast_aims.erase(String(d.get("caster", "")))
 		"transformed":
 			# The monstrous reveal: a burst at the transforming body. M10 fix: the spark_burst source is
 			# a 1024^2 flipbook SHEET that, drawn whole, reads as an opaque boxy black panel. Spawn it as
@@ -74,6 +95,54 @@ func _on_event(ev: Dictionary) -> void:
 				_spawn_spark_burst(at3, TRANSFORM_LIFETIME, TRANSFORM_TARGET_H)
 			else:
 				_spawn(fx2, at3, TRANSFORM_LIFETIME, TRANSFORM_TARGET_H)
+
+## P3: the muzzle flash. Data-driven off the art's authored cost (cost.ammo > 0 — ANY gun user,
+## the player or an NPC gunman, no identity branch): its cast_finished spawns ONE brief flash
+## transient just ahead of the caster along the aim the telegraph cached, rotated to it. A free
+## art finishing spawns nothing. Cosmetic like every spawn here — reads positions, writes only
+## the FX layer.
+func _muzzle_for(d: Dictionary) -> void:
+	var caster := String(d.get("caster", ""))
+	var ability := String(d.get("ability", ""))
+	var cached_v: Variant = _cast_aims.get(caster, {})
+	var cached: Dictionary = cached_v if cached_v is Dictionary else {}
+	_cast_aims.erase(caster)
+	if not _costs_ammo(ability):
+		return
+	var dir_v: Variant = cached.get("dir", Vector2.RIGHT)
+	var dir: Vector2 = dir_v if dir_v is Vector2 else Vector2.RIGHT
+	if dir.length() <= 0.001:
+		dir = Vector2.RIGHT
+	dir = dir.normalized()
+	var at := _agent_pos(caster) + dir * MUZZLE_OFFSET
+	var fx_id := String(MUZZLE_FRAMES[_muzzle_seq % MUZZLE_FRAMES.size()])
+	_muzzle_seq += 1
+	var before := _transients.size()
+	_spawn(fx_id, at, MUZZLE_LIFETIME, MUZZLE_TARGET_H)
+	if _transients.size() > before:
+		var node: Node = (_transients[_transients.size() - 1] as Dictionary).get("node")
+		if node is Node2D:
+			(node as Node2D).rotation = dir.angle()
+	_last_muzzle = {"caster": caster, "ability": ability, "at": at, "fx": fx_id}
+
+## Probe: the last muzzle flash's record (headless tests assert the wiring on it).
+func last_muzzle() -> Dictionary:
+	return _last_muzzle
+
+## Does this art's authored cost pay ammo? Pure DATA — the one rule that makes something a gun.
+func _costs_ammo(ability_id: String) -> bool:
+	var db := _al("AbilityDB")
+	if db == null or ability_id == "":
+		return false
+	var cost: Variant = (db.ability_for(ability_id) as Dictionary).get("cost", {})
+	return cost is Dictionary and int((cost as Dictionary).get("ammo", 0)) > 0
+
+## The telegraph's JSON-safe [x, y] aim as a Vector2 (RIGHT when absent/degenerate).
+func _dir_of(d: Dictionary) -> Vector2:
+	var v: Variant = d.get("dir", null)
+	if v is Array and (v as Array).size() >= 2:
+		return Vector2(float((v as Array)[0]), float((v as Array)[1]))
+	return Vector2.RIGHT
 
 ## Spawn one transient sprite at a world position, scaled to a target height, on the FX layer.
 func _spawn(fx_id: String, at: Vector2, lifetime: float, target_h: float) -> void:

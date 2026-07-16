@@ -102,11 +102,31 @@ func _on_event(event: Dictionary) -> void:
 	if String((event.get("data", {}) as Dictionary).get("target", "")) == "player":
 		player_downed()
 
-## The player was struck down in combat — a dedicated, TERMINAL bad ending (the cult cuts the
-## investigator down and the rite goes on). Latched: combat already downs a target once, and once this
-## ending shows, a later climax must not replace it.
+## The player was struck down in combat. N2 (A1): ONE death path — RunManager owns the run OUTCOME
+## (restore-to-checkpoint or full loss); EndGame owns only the SCREEN. The playtest blocker this
+## fixes: this used to latch a dead-end overlay whose Restart wiped the whole run, while
+## RunManager's "death" branch (the nightly-checkpoint restore) sat dead with no live caller.
+##   * checkpoint exists -> a within-run SETBACK: end_run("death") restores the last nightly
+##     checkpoint (the boot controller wakes the player at the safe house on run_ended), then a
+##     Continue-style "death_wake" screen mirrors the lost_control flow. Not terminal, no latch.
+##   * no checkpoint (day-1 pre-checkpoint) -> TERMINAL: the run is LOST. The screen shows first
+##     (so the run_ended("lose") payoff section mounts onto it), then end_run("death") flushes the
+##     meta and hands the boot controller back to the title. Latched: once this ending shows, a
+##     later climax must not replace it.
 func player_downed() -> void:
 	if _player_downed_shown:
+		return
+	var rm := get_node_or_null("/root/RunManager")
+	var in_run: bool = rm != null and rm.has_method("run_active") and bool(rm.run_active())
+	if in_run and rm.has_method("has_checkpoint") and bool(rm.has_checkpoint()):
+		# Restore FIRST (unpaused — the boot controller swaps the wake scene on run_ended), then
+		# raise the Continue-style wake screen, exactly like Meters._end_rampage -> lost_control().
+		rm.end_run("death", {"outcome": "player_downed"})
+		_last_result = {"outcome": "death_wake"}
+		ending_reached.emit("death_wake", _last_result)
+		EventBus.emit_event("endgame", _last_result)
+		get_tree().paused = true
+		_show_overlay(_last_result)
 		return
 	_player_downed_shown = true
 	_last_result = {"outcome": "player_downed"}
@@ -114,6 +134,8 @@ func player_downed() -> void:
 	EventBus.emit_event("endgame", _last_result)
 	get_tree().paused = true
 	_show_overlay(_last_result)
+	if in_run and rm.has_method("end_run"):
+		rm.end_run("death", {"outcome": "player_downed"})
 
 ## The single climax handler. Resolve the ending, announce it, log it, freeze the world, show it.
 func _on_climax(strength: float) -> void:
@@ -190,11 +212,22 @@ func dismiss() -> void:
 	_hide_overlay()
 	get_tree().paused = false
 
-## Restart: drop the overlay, lift the freeze, reset state, reload the world. The reload is
-## guarded so restart() is safe to call from the headless harness (which has no current scene).
+## The ending screen's action button. N2 (B-F3/B-F4): it RETURNS TO THE TITLE through the boot
+## flow — it must NOT start_run() here. The old direct start_run double-counted runs_played (the
+## title's New Run counts the real one), scrubbed the run codex ledger, and silently rerouted an
+## unlocked-pathway (Hermit) player onto the Hunter default. The boot controller already raised
+## the title under this overlay on the win/lose run_ended; return_to_title() is idempotent and
+## re-affirms it. The next run starts ONLY through the real New Run flow / pathway picker.
 func restart() -> void:
 	_hide_overlay()
 	get_tree().paused = false
+	var gcs := get_tree().get_nodes_in_group("game_controller")
+	var gc: Node = gcs[0] if gcs.size() > 0 else null
+	if gc != null and gc.has_method("return_to_title"):
+		gc.return_to_title()
+		return
+	# Fallback (no boot controller mounted — a lone-scene F6 run of the climax): the legacy
+	# in-place world reset + reload, guarded for the headless harness (no current scene).
 	_reset_world_state()
 	if get_tree().current_scene != null:
 		get_tree().reload_current_scene()
@@ -253,9 +286,11 @@ func _show_overlay(result: Dictionary) -> void:
 	buttons.add_theme_constant_override("separation", 24)
 	box.add_child(buttons)
 
-	# M9 Gap 4: lost_control is a within-run setback (the run continues) — offer CONTINUE, which just
-	# lifts the freeze. Every other outcome is a full run-end — offer Restart / Quit.
-	if String(result.get("outcome", "")) == "lost_control":
+	# M9 Gap 4 + N2: lost_control AND death_wake are within-run setbacks (the run continues, the
+	# checkpoint restore already happened) — offer CONTINUE, which just lifts the freeze. Every
+	# other outcome is a full run-end — offer Return to Title / Quit (N2 B-F3: the button hands
+	# back to the boot title; it never starts a run itself).
+	if String(result.get("outcome", "")) in ["lost_control", "death_wake"]:
 		var cont_btn := Button.new()
 		cont_btn.text = "Continue"
 		cont_btn.custom_minimum_size = Vector2(200, 44)
@@ -263,8 +298,8 @@ func _show_overlay(result: Dictionary) -> void:
 		buttons.add_child(cont_btn)
 	else:
 		var restart_btn := Button.new()
-		restart_btn.text = "Restart"
-		restart_btn.custom_minimum_size = Vector2(160, 44)
+		restart_btn.text = "Return to Title"
+		restart_btn.custom_minimum_size = Vector2(200, 44)
 		restart_btn.pressed.connect(restart)
 		buttons.add_child(restart_btn)
 
@@ -290,6 +325,11 @@ func _ending_copy(result: Dictionary) -> Dictionary:
 			return {
 				"title": "You Lost Control",
 				"body": "The Madness took the reins. For a while there was only the beast — and when you come back to yourself the day is gone, the trail cold. You wake in your lodging, hands shaking, the night wasted. (The day is lost; your progress holds.)",
+			}
+		"death_wake":
+			return {
+				"title": "Cut Down in the Dark",
+				"body": "The blows drive you into the black, and the cobbles come up to meet you... but Tingen is not done with you. Someone hauls you off the street before the cell can finish its work. You wake at your lodging, wounds bound, the lost day gone cold. (The day is lost; your progress holds.)",
 			}
 		"city_dies":
 			return {

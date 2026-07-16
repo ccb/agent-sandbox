@@ -13,6 +13,11 @@ extends Node
 
 const KEEP_PLAYS: int = 5
 const REL_DIR := "res://playlogs/"
+
+## N1 (sprint safety): the ACTIVE flush dir — REDIRECTABLE (absolute path) so a test harness that
+## mounts a real scene can never flush transcripts into (or rotate away) the repo's playlogs/.
+## Live play never touches this default; src/TestSandbox.gd `activate()` points it at the sandbox.
+var dir_override: String = ""
 const SEP := "--------------------------------------------------------------------------------"
 
 # Actions committed by the agent runtime — rendered as 3-line chunks.
@@ -182,6 +187,17 @@ func _world_line(t: String, data: Dictionary) -> String:
 			return "%s downed" % _name(String(data.get("target", "")))
 		"world_var_changed":
 			return "%s %s -> %s" % [_words(String(data.get("var", ""))), str(data.get("from", "")), str(data.get("to", ""))]
+		"deciding":
+			# P3: the decide lifecycle fact, rendered diegetically. begin = the LLM call is in
+			# flight; end carries how it landed (ok / timeout / error / dropped) — a cut-short
+			# deliberation means the offline brain carried that beat.
+			var who := _name(String(data.get("agent", "")))
+			if String(data.get("phase", "")) == "begin":
+				return "%s pauses, weighing the next move (deciding)" % who
+			var oc := String(data.get("outcome", "ok"))
+			if oc == "ok":
+				return "%s settles on a course (deciding done)" % who
+			return "%s's deliberation is cut short (%s) — instinct carries the beat" % [who, oc]
 		_:
 			return "* %s: %s" % [t, _args_str(data)]
 
@@ -282,7 +298,7 @@ func _write_details() -> void:
 
 # --- file lifecycle ------------------------------------------------------------------------------
 func _start() -> void:
-	_dir = ProjectSettings.globalize_path(REL_DIR)
+	_dir = dir_override if dir_override != "" else ProjectSettings.globalize_path(REL_DIR)
 	DirAccess.make_dir_recursive_absolute(_dir)
 	_rotate()
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")

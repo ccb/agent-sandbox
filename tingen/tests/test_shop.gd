@@ -10,8 +10,9 @@ extends SceneTree
 ##       coin; selling the LAST hunter_characteristic genuinely forfeits the advance fuel
 ##       (Progression.can_advance flips false — the push-your-luck choice is real).
 ##   (c) Per-run reset + within-run snapshot/restore: the stock latch rides the nightly
-##       checkpoint; coin follows the player proxy's died-with-proxy loadout semantics (same as
-##       the 12 starting rounds — an intentional match to the M13 decision).
+##       checkpoint; coin rides the checkpoint TOO (N2 A2 — the player-proxy inventory is part of
+##       the snapshot manifest now, so a death-restore wakes with the checkpointed purse, not the
+##       day-1 loadout; the old "died-with-proxy" re-grant was the audited data-loss bug).
 ##   (d) The opening fork's SELL word leads somewhere real: GMOpening.choose_harvest("sell")
 ##       stores the choice + surfaces the authored shop hint (scenario `opening.sell_hint`).
 ##   (e) The counter is WIRED: MrFrankysInner.tscn carries the shop Interactables with the generic
@@ -42,8 +43,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	_test_a_buy_costed_and_latched()
 	_test_b_sell_real_coin_and_fuel_forfeit()
@@ -189,6 +191,7 @@ func _test_c_per_run_reset_and_snapshot() -> void:
 	# Buy once, checkpoint, buy again + spend everything.
 	S.buy_ammo()
 	_ok(S.restocks_left() == RESTOCKS_PER_RUN - 1, "one restock used before the checkpoint")
+	var coin_at_cp: int = p.item_count(COIN_ITEM)   # the purse the nightly snapshot records
 	RM.checkpoint_night()
 	p.inventory[COIN_ITEM] = 100
 	S.buy_ammo()
@@ -199,11 +202,12 @@ func _test_c_per_run_reset_and_snapshot() -> void:
 	RM.end_run("death")
 	_ok(S.restocks_left() == RESTOCKS_PER_RUN - 1,
 		"after the death restore the stock latch is back at the CHECKPOINT value (%d left)" % (RESTOCKS_PER_RUN - 1))
-	# Coin follows the proxy's died-with-proxy loadout semantics (same as the 12 rounds — M13 decision):
-	# the restore rebuilt the roster, so the re-ensured proxy re-arms with the loadout.
+	# N2 (A2): coin rides the checkpoint like the rest of the proxy inventory — the restore wakes
+	# with the CHECKPOINTED purse (the old "died-with-proxy" fresh-loadout re-grant was the audited
+	# data-loss bug: every restore silently reset the player's shillings to day-1).
 	var p2 := _ensure_proxy()
-	_ok(p2.item_count(COIN_ITEM) == START_COIN,
-		"after the restore the re-ensured proxy carries the loadout coin again (died-with-proxy semantics)")
+	_ok(p2.item_count(COIN_ITEM) == coin_at_cp,
+		"after the restore the proxy carries the CHECKPOINTED purse (%d, not the day-1 loadout)" % coin_at_cp)
 
 	# A brand-new run resets the latch fully.
 	RM.start_run()

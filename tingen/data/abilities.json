@@ -599,6 +599,252 @@
 				}
 			],
 			"anim": "transform"
+		},
+		{
+			"id": "censer_ember",
+			"name": "censer ember",
+			"description": "a flung coal of funerary incense that sears its mark with grave-cold — the Corpse Collector's aimed rite",
+			"_note": "M_death — the Death BASE-KIT primary + auber_human's opener (mirrors star_brand M28). Projectile-class so the tactical brain fires it like a gun (the proven ranged/telegraph/dodge path). Pure instant damage, deliberately NO dot (§0 telegraphs-precede-all-damage — same reason as star_brand). cost:spirituality (M31 pool player-side; free for NPC casters via the AgentCostProvider guard). TUNING placeholders — dmg 29 sits between star_brand 30 and finch_recite 28.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.3,
+			"cooldown": 1.0,
+			"cost": {
+				"spirituality": 10
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 680
+			},
+			"poise_damage": 16,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 29
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "grave_ring",
+			"name": "grave ring",
+			"description": "a ring of grave-dust and bone-salt that holds whoever steps inside to a mourner's pace",
+			"_note": "M_death Death BASE-KIT utility zone (mirrors ward_circle/paper_charm). Zone status 'slow' has an authored resolver default, validate_refs clean. TUNING = ward_circle numbers.",
+			"class": "spell",
+			"cast_time": 0.6,
+			"cooldown": 6.0,
+			"cost": {
+				"spirituality": 15
+			},
+			"range": 260,
+			"target_type": "point",
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "zone",
+					"radius": 90,
+					"duration": 4.0,
+					"tick": 0.5,
+					"statuses": [
+						"slow"
+					]
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "grave_stillness",
+			"name": "stillness of the grave",
+			"description": "borrow the composure of the dead — the hands stop shaking and every rite comes quicker",
+			"_note": "M_death Death BASE-KIT self-buff (mirrors astral_sight M28): class:effect, self, free, attack_speed 1.3 x 6s. TUNING = astral_sight numbers.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.5,
+			"cooldown": 14.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "buff",
+					"stat": "attack_speed",
+					"mult": 1.3,
+					"duration": 6.0
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "grave_hands",
+			"name": "grave hands",
+			"description": "the ground remembers its office — skeletal hands close on a quarry and hold it still a breath",
+			"_note": "M_death Death Seq-8 ladder unlock (LADDER_UNLOCKS['death'][8], Gravedigger 掘墓人) — mirrors astral_chains/mark_prey: a ranged effect-class control art, heavy poise opener + short STUN ('stun' is a real resolver STATUS_KIND). TUNING = astral_chains numbers.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.35,
+			"cooldown": 8.0,
+			"cost": {},
+			"range": 480,
+			"target_type": "enemy",
+			"poise_damage": 28,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "status",
+					"status": "stun",
+					"duration": 0.6
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "wailing_host",
+			"name": "wailing host",
+			"description": "call the mourning dead up in a single grieving crowd — they burst over a wide reach and take their grief out on the living",
+			"_note": "M_death Death Seq-7 ladder unlock (LADDER_UNLOCKS['death'][7], Spirit Medium 通灵者) — mirrors collapsing_star/incendiary_round as the stronger payoff art. Projectile with burst radius, pure damage, NO dot (§0). TUNING = collapsing_star numbers.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.4,
+			"cooldown": 3.0,
+			"cost": {
+				"spirituality": 20
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 620
+			},
+			"aoe_radius": 70,
+			"poise_damage": 22,
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 46
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "auber_descend",
+			"name": "let the grave answer",
+			"description": "stop refusing the congregation under the ground — let the grave-power finish its lay-sister and stand up in her place",
+			"_note": "M_death — sister_auber's transform (a Death-pathway Beyonder who lost the leash). Distinct destination from every prior descend: lands on auber_monster. Fired by auber_human's hp_below reflex — the same descent seam bram_kell/sable_wren/old_neil/ledger_finch use. class:transform, self, free, cast 1.2 mirrors assume_form.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "auber_monster"
+				}
+			],
+			"anim": "transform"
+		},
+		{
+			"id": "requiem_bolt",
+			"name": "requiem verse",
+			"description": "a sung line of the burial office, pitched to cut — the verse crosses the air toward a mark like a thrown stone",
+			"_note": "M_death — brother_cassian's Death primary, distinct in id from censer_ember so cassian's kit is his own (the finch_recite-vs-star_brand precedent: the two Death prey must not be re-skins). Pure damage, NO dot (§0). TUNING = finch_recite numbers.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.3,
+			"cooldown": 1.0,
+			"cost": {
+				"spirituality": 10
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 680
+			},
+			"poise_damage": 16,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 28
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "shroud_binding",
+			"name": "shroud binding",
+			"description": "a winding-sheet of grave-linen snaps around a quarry and knots itself — the dead are patient, and so is the cloth",
+			"_note": "M_death — cassian's control art, distinct in id from grave_hands (so cassian_monster's kit differs from auber_monster's — the redacted_word-vs-astral_chains precedent). TUNING = redacted_word numbers.",
+			"class": "effect",
+			"occult": true,
+			"cast_time": 0.35,
+			"cooldown": 8.0,
+			"cost": {},
+			"range": 460,
+			"target_type": "enemy",
+			"poise_damage": 26,
+			"fx": "charm_glyph",
+			"effects": [
+				{
+					"kind": "status",
+					"status": "stun",
+					"duration": 0.6
+				}
+			],
+			"anim": "cast"
+		},
+		{
+			"id": "choir_of_the_dead",
+			"name": "choir of the dead",
+			"description": "the crypt's congregation answers his requiem all at once — a wide bursting chorus that drowns the living where they stand",
+			"_note": "M_death — cassian's AoE payoff, mirroring the shape of wailing_host/ink_flood but a DISTINCT id (no art shared with auber_monster). Pure damage, NO dot (§0). TUNING = ink_flood numbers.",
+			"class": "projectile",
+			"occult": true,
+			"cast_time": 0.4,
+			"cooldown": 3.0,
+			"cost": {
+				"spirituality": 20
+			},
+			"range": 500,
+			"target_type": "enemy",
+			"projectile": {
+				"speed": 620
+			},
+			"aoe_radius": 70,
+			"poise_damage": 22,
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "damage",
+					"amount": 44
+				}
+			],
+			"anim": "attack"
+		},
+		{
+			"id": "cassian_descend",
+			"name": "let the congregation rise",
+			"description": "stops pretending the miracles are staged — lets the crypt's dead have the curate they have been listening to",
+			"_note": "M_death — cassian's transform, distinct destination cassian_monster. Fired by cassian_human's hp_below(0.45) reflex — tighter than auber's 0.5 (the Seq-8 meal fights meaner; the mack_harbor 0.45-vs-wren 0.5 precedent). class:transform, self, free, cast 1.2.",
+			"class": "transform",
+			"cast_time": 1.2,
+			"cooldown": 0.0,
+			"cost": {},
+			"range": 0,
+			"target_type": "self",
+			"fx": "spark_burst",
+			"effects": [
+				{
+					"kind": "transform",
+					"form": "cassian_monster"
+				}
+			],
+			"anim": "transform"
 		}
 	]
 }

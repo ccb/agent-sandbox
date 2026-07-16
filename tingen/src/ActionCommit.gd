@@ -140,6 +140,32 @@ static func _formation_offset(id: String) -> Vector2:
 	var jitter_angle := float(("0x" + digest.substr(8, 8)).hex_to_int()) / 4294967296.0 * TAU
 	return point + Vector2(cos(jitter_angle), sin(jitter_angle)) * 0.5
 
+## P5 (lab pull-in) — classify one committed action's outcome as a GATE FAILURE or not.
+## Returns "" for successes and for informed PROGRESS states (a phase-1 deposit, a landed step);
+## otherwise a stable key of verb + args + refusal reason, so the runtime can count consecutive
+## IDENTICAL failures (same key) per agent and force a replan at three. Pure — reads only the
+## outcome dicts this file itself returns; adding a new verb whose failure shape carries one of
+## these markers is covered automatically.
+static func failure_key(action: Dictionary, outcome: Dictionary) -> String:
+	var verb := String(action.get("verb", ""))
+	var reason := ""
+	if outcome.has("noop"):
+		reason = String(outcome["noop"])
+	elif outcome.has("reason") and (bool(outcome.get("added", true)) == false
+			or bool(outcome.get("ok", true)) == false
+			or String(outcome.get("engaged", "x")) == ""):
+		reason = String(outcome["reason"])   # gather full/none_here, cast refusals, junk engage
+	elif outcome.has("hit") and not bool(outcome["hit"]):
+		reason = "no_hit"                    # out-of-reach / cross-room / downed-target swing
+	elif outcome.has("shared") and not bool(outcome["shared"]):
+		reason = "not_shared"                # out-of-reach / cross-room / empty-speaker talk
+	elif verb == "perform_ritual_step" and not bool(outcome.get("advanced", true)) \
+			and not outcome.has("deposited"):
+		reason = "not_advanced"              # off-site or starved rite (a deposit is progress)
+	if reason == "":
+		return ""
+	return "%s|%s|%s" % [verb, JSON.stringify(action.get("args", {}) if action.get("args") is Dictionary else {}), reason]
+
 static func commit(action: Dictionary, agent: Agent) -> Dictionary:
 	agent.current_action = action.duplicate(true)
 	agent.thought = String(action.get("thought", ""))
@@ -277,6 +303,7 @@ static func _move_to(agent: Agent, target: String) -> Dictionary:
 				# keeps coincident agents coincident forever — the "cult stack" bug.
 				agent.position = (p["to_pos"] as Vector2) + _formation_offset(agent.id)
 				agent.remember("crossed into %s" % hop)
+				agent.mark_transition("just_changed_room")   # one-shot transition marker (P1)
 				# The single public, human-readable "an NPC walked into a new scene" signal — the debug
 				# overlay renders "Dalia moved from the harbor to the cathedral crypt." (the raw
 				# agent_action move is hidden); PlayLog records it too.
@@ -509,7 +536,8 @@ static func _gather_item(agent: Agent, item_id: String) -> Dictionary:
 ## exchange itself never becomes the rumor. A downed, unknown, or out-of-reach listener, or an empty
 ## speaker, is a memory-only no-op. Emits `rumor_spread` so the spread is observable in the log.
 static func _talk_to(agent: Agent, target_id: String, topic: String) -> Dictionary:
-	var observation: String = String(agent.short_memory[-1]) if not agent.short_memory.is_empty() else ""
+	# mem_text, not String(): a scored dict row (P1) must share its TEXT, never a "{...}" wrapper.
+	var observation: String = Agent.mem_text(agent.short_memory[-1]) if not agent.short_memory.is_empty() else ""
 	agent.remember("talked to %s about %s" % [target_id, topic])
 	var listener: Agent = _al("Agents").get_agent(target_id)
 	if listener == null or listener.downed:

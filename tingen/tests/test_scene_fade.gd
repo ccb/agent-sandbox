@@ -9,6 +9,9 @@ var _failed: int = 0
 
 func _init() -> void:
 	await process_frame
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 	var SF: Object = root.get_node_or_null("/root/SceneFade")
 	_ok(SF != null, "SceneFade autoload present")
 	if SF == null:

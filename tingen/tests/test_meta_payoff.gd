@@ -19,8 +19,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	_test_codex_grows_and_dedupes()          # (a)
 	_test_first_win_unlocks_hermit()          # (b)
@@ -29,6 +30,7 @@ func _init() -> void:
 	_test_no_stat_inheritance()               # (e)
 	_test_meta_roundtrips_separate_slot()     # (f)
 	_test_win_reward_tables_stay_in_sync()    # (g) N1 guard: no WIN unlocks Fool yet pays 0
+	_test_second_win_chain_unlocks_death()    # (h) N5: the WIN_UNLOCK_CHAIN's second entry
 
 	print("\n=== meta_payoff: %d passed, %d failed ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -176,6 +178,55 @@ func _test_first_win_unlocks_hermit() -> void:
 	# It PERSISTS to the meta slot — readable after a fresh re-read (i.e. next boot / next run).
 	RM.reload_meta()
 	_ok(RM.meta_unlocked_pathways().has("hermit"), "the Hermit unlock PERSISTS to the meta slot (survives reload)")
+
+# --- (h) N5: the WIN-UNLOCK CHAIN's second entry — win #2 pays AND unlocks death ----------------
+## The M_death unlock design: RunManager.WIN_UNLOCK_CHAIN replaces the single FIRST_WIN_PATHWAY
+## const — each WIN unlocks the FIRST chain entry not yet owned (at most one per win, the roguelite
+## drip). Win #1 stays byte-identical (hermit, pinned by (b)); win #2 unlocks death AND still pays
+## currency; meta_last_payoff.new_unlocks NAMES the unlock so the EndGame payoff screen renders it
+## (MetaSurface renders new_unlocks generically); a third win walks off the chain end and grants
+## nothing more. Codex copy: a Death run's flush records pathway:death with a real learned line.
+func _test_second_win_chain_unlocks_death() -> void:
+	print("[chain (N5): win #2 pays currency AND unlocks death; new_unlocks names it; a 3rd win grants nothing]")
+	var RM := _rm()
+	var P := _prog()
+	RM.reset_meta()
+	# Win #1 -> hermit only (the drip: death stays locked).
+	_win_descent_stopped(4242)
+	_ok(RM.meta_unlocked_pathways().has("hermit") and not RM.meta_unlocked_pathways().has("death"),
+		"win #1 unlocks hermit ONLY — death stays locked (one unlock per win)")
+	var cur_after_1 := int(RM.meta_currency())
+	# Win #2 -> death, AND the payout still lands (an unlock never eats the currency).
+	_win_descent_stopped(4242)
+	_ok(RM.meta_unlocked_pathways().has("death"), "win #2 unlocks the Death pathway (the chain's second entry)")
+	_ok(int(RM.meta_currency()) > cur_after_1, "win #2 STILL pays meta-currency (%d > %d)" % [int(RM.meta_currency()), cur_after_1])
+	var payoff: Dictionary = RM.meta_last_payoff()
+	_ok((payoff.get("new_unlocks", []) as Array).has("death"),
+		"meta_last_payoff.new_unlocks NAMES death (the EndGame payoff screen renders it)")
+	RM.reload_meta()
+	_ok(RM.meta_unlocked_pathways().has("death"), "the Death unlock PERSISTS to the meta slot (survives reload)")
+	# A third win walks off the chain end: currency still pays, but nothing new unlocks.
+	var owned: int = RM.meta_unlocked_pathways().size()
+	_win_descent_stopped(4242)
+	_ok(RM.meta_unlocked_pathways().size() == owned,
+		"a THIRD win walks off the chain end and unlocks nothing more")
+	_ok((RM.meta_last_payoff().get("new_unlocks", []) as Array).is_empty(),
+		"…and its payoff reports no new unlock (new_unlocks empty)")
+	# Codex copy: a run WALKED as Death records the pathway:death fact with a real learned line.
+	var rn := _fresh_for_win()
+	P.select_pathway("death")   # the unlock honors the pick — this run is a Death run
+	rn.force_assault(false, 4242)
+	rn.use_interrupt_interactable()
+	rn.clear_backlash_wave()
+	var entry := {}
+	for e in RM.meta_codex():
+		if e is Dictionary and String((e as Dictionary).get("id", "")) == "pathway:death":
+			entry = e
+	_ok(not entry.is_empty() and String(entry.get("learned", "")) != "",
+		"the codex records pathway:death with a non-empty learned line")
+	_ok(String(entry.get("learned", "")).findn("death") >= 0,
+		"…and the learned line actually speaks of the Death pathway (authored copy, not a blank template)")
+	P.select_pathway("hunter")   # hygiene
 
 # --- (c) the run-start pathway pick READS _meta.unlocked_pathways ------------------------------
 func _test_pathway_pick_reads_unlocks() -> void:

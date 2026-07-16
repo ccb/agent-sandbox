@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bx4bm262xeqyl"]
 
-[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/ground_test.png" id="1"]
-[ext_resource type="Texture2D" uid="uid://chuyurc8bux5x" path="res://assets/props/chapel_test.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/city_ground.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://chuyurc8bux5x" path="res://assets/props/chapel.png" id="2"]
 [ext_resource type="PackedScene" uid="uid://cujesusiidnnk" path="res://scenes/Player.tscn" id="3"]
 [ext_resource type="Script" uid="uid://db0lqqotc32a" path="res://src/Portal.gd" id="4"]
 [ext_resource type="Texture2D" uid="uid://cjbkp1ekxaifu" path="res://assets/props/blackthorn.png" id="5"]
@@ -34,6 +34,9 @@
 [ext_resource type="Texture2D" uid="uid://m1jsmv0yjkx0" path="res://assets/props/fill_11.png" id="34"]
 [ext_resource type="Texture2D" uid="uid://cy678th0lm010" path="res://assets/props/fill_12.png" id="35"]
 [ext_resource type="Texture2D" uid="uid://hul5ak2fxlds" path="res://assets/props/fill_13.png" id="36"]
+[ext_resource type="Script" path="res://src/DayNightTint.gd" id="37"]
+[ext_resource type="Script" path="res://src/StreetLamps.gd" id="38"]
+[ext_resource type="Script" path="res://src/CrowdDressing.gd" id="39"]
 [sub_resource type="RectangleShape2D" id="h_edge"]
 size = Vector2(6270, 60)
 
@@ -660,3 +663,13 @@ texture = ExtResource("36")
 [node name="FillBlock13Body" type="CollisionShape2D" parent="FillBlock13"]
 position = Vector2(0, 157.13)
 shape = SubResource("fill_block13_body")
+
+[node name="DayNightTint" type="CanvasModulate" parent="."]
+script = ExtResource("37")
+
+[node name="StreetLamps" type="Node2D" parent="."]
+script = ExtResource("38")
+
+[node name="CrowdDressing" type="Node2D" parent="."]
+y_sort_enabled = true
+script = ExtResource("39")

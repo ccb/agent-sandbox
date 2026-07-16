@@ -133,7 +133,10 @@ func _on_event(ev: Dictionary) -> void:
 		var eb := _al("EventBus")
 		if eb != null:
 			# A world fact (not a command) — the HUD/telemetry can announce "the hunt is thrown off".
-			eb.emit_event("threat_resolved", {"meter": meter, "agent": target_id})
+			# N4: carries the FORM (this meter's DATA row) so the announcement layer can resolve the
+			# authored copy off the form def — symmetrical with threat_dispatched, never an NPC id.
+			eb.emit_event("threat_resolved", {"meter": meter, "agent": target_id,
+				"form": String((THREATS[meter] as Dictionary).get("form", ""))})
 
 ## Ensure the meter's threat is staged (up to the cap) when the meter is at/above the rung. Idempotent:
 ## a live, standing threat is left as-is (no stacking); a missing or downed one is (re)spawned.
@@ -164,7 +167,11 @@ func _spawn_threat(meter: String) -> void:
 	var row: Dictionary = THREATS[meter]
 	var id := "%s__%s" % [String(row["prefix"]), str(_spawn_serial())]
 	var a := Agent.new(id)
-	a.display_name = String(row["prefix"])
+	# N6 (B2): the hunt reads diegetic — the form's DATA display_name when authored (combat_
+	# forms.json), the prefix only as the fallback. No raw ids on labels/announcements.
+	var adb := _al("AbilityDB")
+	var dn: String = String(adb.form_display_name(String(row["form"]))) if adb != null else ""
+	a.display_name = dn if dn != "" else String(row["prefix"])
 	a.combat_form = String(row["form"])
 	a.room = _target_room()
 	a.position = _spawn_position(meter)

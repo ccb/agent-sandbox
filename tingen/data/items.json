@@ -152,6 +152,16 @@
 		"on_use": null
 	},
 	{
+		"id": "death_characteristic",
+		"name": "Death Characteristic",
+		"category": "characteristic",
+		"stackable": true,
+		"max_stack": 9,
+		"tags": ["characteristic", "pathway_death", "gatherable"],
+		"description": "The crystallised essence that precipitates from a slain Death-pathway Beyonder — grave-cold caught in bone-ash. Digest it via the corpse-collector's office to climb the Sequence: knowledge bought at the price of your mind.",
+		"on_use": null
+	},
+	{
 		"id": "shilling",
 		"name": "Shilling",
 		"category": "medium",

@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://doqs3xx3e4vms"]
 
-[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/ground_test.png" id="1"]
-[ext_resource type="Texture2D" uid="uid://chuyurc8bux5x" path="res://assets/props/chapel_test.png" id="2"]
-[ext_resource type="Texture2D" uid="uid://bmj1c5ncnobx8" path="res://assets/characters/klein_down.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://vle5fyem3tgf" path="res://assets/ui/city_ground.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://chuyurc8bux5x" path="res://assets/props/chapel.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://d4hl3l0xrwih0" path="res://assets/characters/klein_s.png" id="3"]
 [ext_resource type="Script" uid="uid://1kkeqbcocw01" path="res://scenes/_map_capture.gd" id="4"]
 
 [node name="ChapelComposeTest" type="Node2D" unique_id=1848017059]

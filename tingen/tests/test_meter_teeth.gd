@@ -25,8 +25,9 @@ func _init() -> void:
 	await process_frame
 	# B3 (retro): NEVER touch the player's REAL persistent profile (user://meta.json) — redirect
 	# the meta slot to a test-scoped file before anything drives RunManager (tests/test_meta_isolation.gd).
-	root.get_node("/root/RunManager").set("meta_path", "user://meta_test.json")
-	root.get_node("/root/RunManager").reload_meta()
+	# N1 (sprint safety): sandbox EVERY persistent path (meta/save/settings/hints/playlog) into
+	# user://test_sandbox/<run>/ and arm the write guard — see src/TestSandbox.gd.
+	preload("res://src/TestSandbox.gd").activate(root)
 
 	_test_new_forms_load()
 	await _test_notice_spawns_beyond_hunter_engaging_player()
@@ -115,6 +116,10 @@ func _test_notice_spawns_beyond_hunter_engaging_player() -> void:
 		"the hunter's intent engages the player")
 	_ok(hunter != null and hunter.room == "teeth_arena",
 		"the hunter is spawned into the player's room")
+	# N6 (B2): the hunt reads DIEGETIC — the spawned threat wears its form's DATA display_name
+	# (combat_forms.json), never the raw prefix id ("beyond_hunter"/"beyond_hunter__1").
+	_ok(hunter != null and String(hunter.display_name) == "Beyond-touched hunter",
+		"the hunter is NAMED from its form's data row (got '%s')" % (String(hunter.display_name) if hunter != null else ""))
 	# Drive the live combat seam: bind the hunter's executor + the proxy's, step, and confirm the
 	# hunter actually ATTACKS the player (an agent_attacked with target=player). This is the built
 	# tactical/intent layer — a spawned hunter is just an agent in combat with the player.
@@ -190,6 +195,9 @@ func _test_heat_spawns_nighthawk_engaging_player() -> void:
 	_ok(hawk != null and hawk.in_combat
 		and String(hawk.combat_intent.get("target", "")) == "player",
 		"the nighthawk is in combat engaging the player")
+	# N6 (B2): the official pursuer reads diegetic too (form data display_name, no raw id).
+	_ok(hawk != null and String(hawk.display_name) == "Nighthawk pursuer",
+		"the nighthawk is NAMED from its form's data row (got '%s')" % (String(hawk.display_name) if hawk != null else ""))
 	if hawk != null:
 		var EB: Object = root.get_node("/root/EventBus")
 		EB.clear()

@@ -6,6 +6,12 @@
 			"ward_circle",
 			"dash",
 			"astral_sight"
+		],
+		"death": [
+			"censer_ember",
+			"grave_ring",
+			"dash",
+			"grave_stillness"
 		]
 	},
 	"bieber_monster": {
@@ -93,7 +99,31 @@
 			"pistol_whip"
 		]
 	},
+	"cult_guard": {
+		"display_name": "Cult defender",
+		"_note": "N6 (asset polish B3) \u2014 the Ritual Night crypt door DEFENDERS' own human-phase form (scenario.json ritual_night.defender_form points here; RitualNight stages the roster from that data, no engine id branch). Previously they wore butcher_human \u2014 bram_kell's hidden-Beyonder phase \u2014 which (a) rendered ARTLESS placeholder icons in the crypt (no enemies/butcher_human.png) and (b) carried his assume_form -> bieber_monster reflex, so a pressed door guard could shed into THE butcher's unique beast. This row keeps the same cleaver_swipe pressure and dodge reflex, drops the transform, and wears the shipped cult_thrall painting via the N4 `sprite` alias (they ARE the cultists the backlash tears into thralls \u2014 same robes, same face). NOT monster (Doom counts only real monsters), NOT hidden_beyonder (no prey lead points at a door guard).",
+		"sprite": "res://assets/enemies/cult_thrall.png",
+		"kit": [
+			"cleaver_swipe"
+		],
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			}
+		]
+	},
 	"cult_thrall": {
+		"display_name": "Cult thrall",
 		"_note": "M7 Ritual Night backlash — an interrupted celebrant LOSES CONTROL (canon summoning §⑦) and assume_forms into this thrall. A monster form (so the Doom driver counts it) with the butcher's cleaver kit; no assume_form of its own (a thrall is the terminal shape, not a two-stage descent).",
 		"kit": [
 			"cleaver_swipe"
@@ -116,6 +146,7 @@
 		]
 	},
 	"descended_avatar": {
+		"display_name": "Half-descended avatar",
 		"_note": "M7 Ritual Night boss — the avatar HALF-LANDS when the fuse crosses the low threshold (§9 'kill the avatar before full descent'). Two-stage descent: at low HP its hp_below reflex casts avatar_ascend -> descended_avatar_true, exactly like bram_kell/butcher_human's assume_form seam. A monster form.",
 		"kit": [
 			"avatar_rend",
@@ -152,6 +183,7 @@
 		]
 	},
 	"beyond_hunter": {
+		"display_name": "Beyond-touched hunter",
 		"_note": "M11 Notice teeth — the Attention of the Beyond made flesh. When Notice crosses its high threshold (Meters.threat_threshold 'notice'), MeterThreats spawns ONE agent wearing this form, in_combat with combat_intent engage->player, so the tactical layer pursues + attacks the investigator. A MONSTER form (Beyond-touched / unknown-corrupted, canon: a corrupted unknown thing — NOT a Nighthawk), so the Doom 'monsters left alive' driver ALSO counts it while it stalks. Aggressive melee-charge kit reused from the built monster arts; an hp_below frenzy so it presses the kill. No assume_form of its own (it is the terminal hunter shape). Numbers are TUNING placeholders.",
 		"kit": [
 			"cleaver_swipe",
@@ -161,6 +193,17 @@
 		],
 		"monster": true,
 		"default_style": "aggressive",
+		"announce": {
+			"_note": "N4 — the diegetic threat-lifecycle toast copy (Toasts consumes threat_dispatched/threat_resolved and reads THIS row via the event's form; the engine holds no threat literal).",
+			"dispatched": {
+				"title": "Something has your scent",
+				"body": "The Attention of the Beyond takes shape in the fog — and it is hunting you."
+			},
+			"resolved": {
+				"title": "The hunt has lost you",
+				"body": "The hunter is destroyed. The Beyond loses your thread — for now."
+			}
+		},
 		"reflexes": [
 			{
 				"when": {
@@ -189,6 +232,19 @@
 		]
 	},
 	"nighthawk_pursuer": {
+		"display_name": "Nighthawk pursuer",
+		"sprite": "res://assets/characters/nighthawk_captain.png",
+		"_sprite_note": "N4 — the DATA art alias (no engine id branch): no nighthawk_pursuer painting ships yet, so the pursuer wears the nighthawk captain's standee until its own is painted. Drop this field the day assets/enemies/nighthawk_pursuer.png lands and the filename convention takes over.",
+		"announce": {
+			"dispatched": {
+				"title": "The Nighthawks have your scent",
+				"body": "A pursuer has been dispatched and is closing on you. Go dark, or put them down."
+			},
+			"resolved": {
+				"title": "The hunt has lost you",
+				"body": "The pursuer is down. The Nighthawks fall back to their watch."
+			}
+		},
 		"_note": "M11 Heat teeth — an official Evernight Beyonder (a Nighthawk) dispatched when Heat crosses its high threshold (Meters.threat_threshold 'heat'). Spawned by MeterThreats as ONE agent, in_combat with combat_intent engage->player, so the tactical layer hunts the investigator. NOT a monster form — the Nighthawks are HUMAN officials (the player's nominal allies' faction; being hunted by them is the cost of public power), so this is deliberately absent 'monster' and does NOT feed the Doom monster driver. A disciplined ranged-first kit (revolver + a movement dash) with a cautious style so it keeps distance and paces its shots — engine-neutral, no morality branch. Numbers are TUNING placeholders.",
 		"kit": [
 			"revolver_shot",
@@ -505,7 +561,154 @@
 			}
 		]
 	},
+	"auber_human": {
+		"hidden_beyonder": true,
+		"_note": "M_death — sister_auber's HUMAN phase-1 form (the Death pathway's Seq-9 prey; canon: Corpse Collector line, grave-power). Mirrors neil_human's two-phase shape (hidden_beyonder + hp_below transform) with the Death censer/grave kit — she opens at range with censer_ember and wards ground with grave_ring, NOT a star-brand or a revolver. hp_below(0.5) -> auber_descend -> auber_monster (the same descent seam, a different destination). Cautious (a caster keeps her distance); telegraph->dodge for readable counterplay. TUNING placeholders.",
+		"kit": [
+			"censer_ember",
+			"grave_ring",
+			"dash",
+			"auber_descend"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.5
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "auber_descend"
+				},
+				"delay_ms": 250,
+				"max_fires": 1
+			}
+		]
+	},
+	"auber_monster": {
+		"_note": "M_death — sister_auber's MONSTER phase-2 form (the grave-power wearing what is left of the lay-sister), reached only via auber_human's hp_below -> auber_descend. monster:true so the Doom driver counts it once transformed. DISTINCT kit from every Hunter monster (no cleaver/revolver/incendiary) AND from both Hermit monsters (no star_brand/collapsing_star/astral_chains, no ink_flood/redacted_word/finch_recite): the Death grave/spirit endgame — wailing_host (wide AoE burst), censer_ember, grave_hands (binding stun). These ARE the arts the Death player later earns (the neil_monster pattern). Aggressive; hp_below(0.3) presses with wailing_host. Terminal shape (executor self-loop guard). Body sprite assets/enemies/auber_monster.png (staged art); works with placeholder if absent (CombatExecutor._apply_form_sprite no-ops). TUNING placeholders.",
+		"kit": [
+			"wailing_host",
+			"censer_ember",
+			"grave_hands"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 220,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "wailing_host"
+				},
+				"delay_ms": 300,
+				"max_fires": 1
+			}
+		]
+	},
+	"cassian_human": {
+		"hidden_beyonder": true,
+		"_note": "M_death — brother_cassian's HUMAN phase-1 form (the SECOND Death prey, the Seq-8 meal). His OWN requiem/shroud kit distinct from auber (the finch-vs-neil precedent): requiem_bolt opener + shroud_binding binder. hp_below(0.45) -> cassian_descend -> cassian_monster — TIGHTER than auber's 0.5 and on an AUTHORED 130-HP pool (npcs.json max_hp), so the Seq-8 meal is harder both ways (the mack precedent: survivability + a narrower readable human phase). Cautious; telegraph->dodge. TUNING placeholders.",
+		"kit": [
+			"requiem_bolt",
+			"shroud_binding",
+			"dash",
+			"cassian_descend"
+		],
+		"default_style": "cautious",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.45
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "cassian_descend"
+				},
+				"delay_ms": 240,
+				"max_fires": 1
+			}
+		]
+	},
+	"cassian_monster": {
+		"_note": "M_death — brother_cassian's MONSTER phase-2 form (the crypt congregation wearing the curate), reached only via cassian_human's hp_below -> cassian_descend. monster:true. DISTINCT kit from auber_monster (no wailing_host/censer_ember/grave_hands) and every prior monster: choir_of_the_dead (AoE burst), shroud_binding (stun), requiem_bolt (aimed bolt). Aggressive; faster dodge (210ms — meaner reactions, mack_beast precedent); hp_below(0.3) presses with choir_of_the_dead. Terminal shape. Body sprite assets/enemies/cassian_monster.png; placeholder-safe. TUNING placeholders — the combat_sim Scenario J proves the two-phase fight resolves deterministically.",
+		"kit": [
+			"choir_of_the_dead",
+			"shroud_binding",
+			"requiem_bolt"
+		],
+		"monster": true,
+		"default_style": "aggressive",
+		"reflexes": [
+			{
+				"when": {
+					"kind": "telegraph",
+					"of": "projectile",
+					"at_me": true
+				},
+				"do": {
+					"kind": "dodge"
+				},
+				"delay_ms": 210,
+				"max_fires": 3
+			},
+			{
+				"when": {
+					"kind": "hp_below",
+					"value": 0.3
+				},
+				"do": {
+					"kind": "cast",
+					"ability": "choir_of_the_dead"
+				},
+				"delay_ms": 280,
+				"max_fires": 1
+			}
+		]
+	},
 	"descended_avatar_true": {
+		"display_name": "Descended avatar",
 		"_note": "M7 Ritual Night — the avatar's TRUER shape (the second stage of the descent). Reached only via descended_avatar's hp_below -> avatar_ascend. Deadlier arc + a charge; no further assume_form (this is the terminal form — the self-loop guard in the executor keeps any future hp_below row from re-casting into itself).",
 		"kit": [
 			"avatar_rend",

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://jvfwgxje07d"]
 
 [ext_resource type="PackedScene" uid="uid://b68b38m8u16ym" path="res://scenes/Interactable.tscn" id="interactable"]
-[ext_resource type="Texture2D" uid="uid://d26kxjt8gqcfa" path="res://assets/characters/archive_clerk_finch.png" id="neil_art"]
+[ext_resource type="Texture2D" uid="uid://b5vdfh0c653dg" path="res://assets/characters/old_neil.png" id="neil_art"]
 [ext_resource type="Texture2D" uid="uid://c2uw2lmj61t08" path="res://assets/backgrounds/neil_home_normal.png" id="neil_bg"]
 [ext_resource type="PackedScene" uid="uid://cujesusiidnnk" path="res://scenes/Player.tscn" id="player"]
 [ext_resource type="Script" path="res://src/RoomState.gd" id="roomstate"]
