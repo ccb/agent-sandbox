@@ -440,3 +440,84 @@ def test_end_to_end_mock_run_agent_drinks_and_gets_sick():
     sick = [m for m in stream if "terribly sick" in m["text"]]
     assert sick, f"no sickness memory in {[m['text'] for m in stream]}"
     assert sick[0]["importance"] == 8.0
+
+
+# -- BoilWater: the self-contained boil superaction (#300 test scaffold) -----
+
+from backend.actions import BoilWater
+
+
+def _pot():
+    pot = Item("pot", "a cooking pot", "An empty steel pot. It could hold water.")
+    pot.set_property(Property.GETTABLE, False)
+    return pot
+
+
+def _boil_world():
+    """Tiny world with the boil verb + drink override, and Union stocked with a
+    pot, a stove, and one unboiled cup."""
+    game, char = _tiny_world(extra_actions=[BoilWater, DrinkPenn, Activate])
+    union = game.locations["Union"]
+    union.add_item(_pot())
+    union.add_item(_stove())
+    union.add_item(_cup())
+    return game, char, union
+
+
+def test_boil_is_registered():
+    game, _ = _tiny_world(extra_actions=[BoilWater])
+    assert game.parser.actions["boil"] is BoilWater
+
+
+def test_boil_marks_water_safe_and_turns_stove_on():
+    game, char, union = _boil_world()
+    assert game.parser.parse_command("boil water", actor=char)
+    assert union.items["cup of murky water"].get_property("is_boiled") is True
+    assert union.items["stove"].get_property("is_on") is True
+
+
+def test_boiled_event_is_logged():
+    game, char, union = _boil_world()
+    assert game.parser.parse_command("boil water", actor=char)
+    boiled = [e for e in game.events if e.action == "boiled"]
+    assert len(boiled) == 1
+    assert boiled[0].payload["location"] == "Union"
+    assert boiled[0].payload["items"] == ["cup of murky water"]
+
+
+def test_boil_then_drink_does_not_sicken():
+    # The core end-to-end signal: once boiled, drinking the same water is safe.
+    game, char, union = _boil_world()
+    assert game.parser.parse_command("boil water", actor=char)
+    assert game.parser.parse_command("get cup of murky water", actor=char)
+    assert game.parser.parse_command("drink cup of murky water", actor=char)
+    assert not char.get_property("is_sick")
+    assert not [e for e in game.events if e.action == "sickness"]
+
+
+def test_boil_fails_without_a_pot():
+    game, char = _tiny_world(extra_actions=[BoilWater])
+    union = game.locations["Union"]
+    union.add_item(_stove())
+    union.add_item(_cup())
+    assert not game.parser.parse_command("boil water", actor=char)
+    assert union.items["cup of murky water"].get_property("is_boiled") is False
+
+
+def test_boil_fails_without_a_stove():
+    game, char = _tiny_world(extra_actions=[BoilWater])
+    union = game.locations["Union"]
+    union.add_item(_pot())
+    union.add_item(_cup())
+    assert not game.parser.parse_command("boil water", actor=char)
+    assert union.items["cup of murky water"].get_property("is_boiled") is False
+
+
+def test_boil_fails_with_nothing_to_boil():
+    # Pot + stove present, but no unboiled water -> clean precondition failure.
+    game, char = _tiny_world(extra_actions=[BoilWater])
+    union = game.locations["Union"]
+    union.add_item(_pot())
+    union.add_item(_stove())
+    union.add_item(_cup(unboiled=False))
+    assert not game.parser.parse_command("boil water", actor=char)
