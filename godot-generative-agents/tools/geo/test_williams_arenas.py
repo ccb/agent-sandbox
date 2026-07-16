@@ -117,3 +117,29 @@ def test_no_windows_left_on_furniture(tmp_path):
     tmj = json.load(open(tmap))
     furn = next(L for L in tmj["layers"] if L.get("name") == "williams_furniture")
     assert not any((g & 0x1FFFFFFF) == fb.WINDOW for g in furn["data"])
+
+
+def test_williams_no_double_walls():
+    # Williams walls are single-thickness (the #572 de-thin): no 2x2 window is
+    # entirely filled on williams_walls. Checks ANY non-zero cell (not just
+    # wall_brick), so a parallel line drawn with a different tile -- e.g. the
+    # decor tile the de-thin edit first used -- is caught too. A single-thickness
+    # wall never fills a full 2x2, even with windows in it or at an L-corner.
+    # Mirrors test_furnish_houston.test_no_2x2_has_four_walls, on the committed map.
+    import json
+
+    tmj = json.load(open(SRC_MAP))
+    Wd, Hd = tmj["width"], tmj["height"]
+    wl = next(L for L in tmj["layers"] if L.get("name") == "williams_walls")["data"]
+    bad = 0
+    for r in range(Hd - 1):
+        for c in range(Wd - 1):
+            quad = (
+                wl[r * Wd + c],
+                wl[r * Wd + c + 1],
+                wl[(r + 1) * Wd + c],
+                wl[(r + 1) * Wd + c + 1],
+            )
+            if all(g for g in quad):
+                bad += 1
+    assert bad == 0, f"{bad} 2x2 windows fully filled on williams_walls (double walls)"

@@ -360,8 +360,9 @@ def main() -> int:
         x, y = spot
         sector = _majority_label(piece["cells"], sector_m, sector_t, W)
         arena = _majority_label(piece["cells"], arena_m, arena_t, W)
+        name = piece_name(piece, names)
         spot_cells.append((x, y))
-        spot_rows.append(f"{world}, {sector}, {arena}, {x}, {y}")
+        spot_rows.append(f"{world}, {sector}, {arena}, {x}, {y}, {name}")
     with open(os.path.join(blocks_dir, "furniture_spots.csv"), "w") as fh:
         fh.write("".join(r + "\n" for r in spot_rows))
     print(f"{len(spot_rows)} interaction spots (one per piece) -> furniture_spots.csv")
