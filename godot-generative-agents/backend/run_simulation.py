@@ -84,6 +84,21 @@ def _result_or_none(fut):
         return None
 
 
+def _model_duration_steps(agent, clock, cog) -> int | None:
+    """The model's chosen activity duration in *steps*, clamped, or None (#581).
+
+    The tool arg is in minutes (the unit the #580 decide-context block shows the
+    brain); converting to steps needs the run's SimClock, so with no clock (the
+    offline tests/bake) a model duration is ignored and the caller uses the
+    authored schedule instead. Only a model estimate is clamped -- an authored
+    ``schedule.steps`` is trusted as-is."""
+    minutes = getattr(agent, "last_duration_minutes", None)
+    if minutes is None or clock is None:
+        return None
+    minutes = max(cog.duration_min_minutes, min(cog.duration_max_minutes, minutes))
+    return max(1, clock.steps_for_seconds(int(minutes * 60)))
+
+
 def step(
     game,
     chars: dict,
@@ -321,19 +336,53 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif command.startswith("perform"):
+                elif (
+                    command.startswith("perform")
+                    or _model_duration_steps(char.agent, clock, cog) is not None
+                ):
+                    # Settle into an in-place activity. The trigger is "perform,
+                    # OR any action that carried a model duration" -- so a future
+                    # duration-bearing verb (#446 study/eat) settles here too,
+                    # while the #300 instantaneous verbs (get/drink/activate),
+                    # which carry no duration and aren't "perform", keep falling
+                    # through as one-tick actions (byte-identical).
                     st["performing"] = True
-                    # Per-stop emoji (the schedule may vary it from the persona's
-                    # default), falling back to the persona's.
-                    st["pron"] = char.agent.schedule.emoji or emoji[name]
-                    activity = char.get_property("activity") or "spending time"
-                    st["desc"] = f"{activity} @ {char.location.tile_address}"
-                    # Schedule the move on to the next stop. None steps means
-                    # "stay" -- the agent settles here for the rest of the run.
-                    duration = char.agent.schedule.steps
-                    st["perform_until"] = (
-                        step_idx + duration if duration is not None else None
+                    schedule = char.agent.schedule
+                    # Place-match is the pacing-relevant signal: standing at the
+                    # scheduled stop means this completed that stop (a different
+                    # activity at the right place is a believability matter for
+                    # the #584 eval, not a pacing desync). A place mismatch is a
+                    # deviation (handled by Task 4's advance gating + revision).
+                    stop_place = getattr(schedule, "destination", None)
+                    matched = (
+                        char.location is not None and char.location.name == stop_place
                     )
+                    st["on_plan"] = matched
+                    activity = char.get_property("activity") or "spending time"
+                    # Emoji: the model's pick wins; else the stop's emoji only
+                    # when on-plan (a deviation must not wear the wrong stop's
+                    # emoji); else the persona default.
+                    model_emoji = getattr(char.agent, "last_emoji", None)
+                    if model_emoji:
+                        st["pron"] = model_emoji
+                    elif matched:
+                        st["pron"] = schedule.emoji or emoji[name]
+                    else:
+                        st["pron"] = emoji[name]
+                    st["desc"] = f"{activity} @ {char.location.tile_address}"
+                    # Duration: the model's clamped estimate (in steps) if it
+                    # gave one, else the authored schedule.steps (trusted as-is,
+                    # so the mock bake is untouched); None => stay put.
+                    duration_steps = _model_duration_steps(char.agent, clock, cog)
+                    if duration_steps is not None:
+                        st["perform_until"] = step_idx + duration_steps
+                    else:
+                        schedule_steps = schedule.steps
+                        st["perform_until"] = (
+                            step_idx + schedule_steps
+                            if schedule_steps is not None
+                            else None
+                        )
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 # Offer its planner a chance to re-plan around the blocked action
@@ -561,6 +610,11 @@ def simulate(
             # The step the agent's current schedule stop began (walking there
             # counts) -- feeds the decide-context block (#580).
             "stop_since": 0,
+            # Did the last settle happen at the scheduled place? (#581) The
+            # pre-pass only advances the stop pointer when this is True; a
+            # deviation keeps the pointer. Defaults True so a never-performed
+            # agent's first advance is safe.
+            "on_plan": True,
         }
 
     # Conversation is gated on a real brain (issue #86): the deterministic mock
