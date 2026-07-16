@@ -54,6 +54,8 @@ def _decide_for(game, char, step_idx, retrieval, clock=None, stop_since=0):
     decide executor, issue #366). The context stamp targets *this agent's own*
     client -- under a real brain the live server gives every agent its own
     instance precisely so concurrent stamps can't clobber each other.
+    ``clock`` and ``stop_since`` (the step the agent's current schedule stop
+    began) feed the decide-context block (#580) in the prompt.
     """
     # Attribute this LLM call to the persona and step (usage.py). The
     # "role" key is read by the terminal request monitor (llm_monitor)
