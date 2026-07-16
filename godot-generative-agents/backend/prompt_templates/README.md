@@ -50,6 +50,7 @@ rename, remove, or re-wire a template.**
 | `reflection.prompty` | `cognition.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I drank the <item>.` (with a sick variant when drinking contaminated water, #300) / `I did "<command>".` |
 | `spatial_knowledge.prompty` | `seed.py` — `seed_spatial_knowledge()` | One place a persona knows up front (a Belief): `You know <place> — its <areas>.` / `You know <place>.` |
 | `plan_system.prompty` | `planner.py` — `LLMPlanner._call()` (day / hourly / minute / revise) | **Real model prompt.** System message for the optional LLM daily planner (#83): plan one day in character. The per-level user message is assembled in code. |
+| `decide_context.prompty` | `cognition.py` — `decide_context_block()`, folded into `observe_and_decide`'s observation when the step loop threads a `SimClock` (#580) | **Real model prompt context.** The always-on decide slice: `Right now it is <time>.` + the plan's current stop (with planned minutes) + minutes elapsed on it. Appended after the environment text, so the deterministic mock never reads it. |
 
 ## A note on escaping
 
@@ -61,3 +62,4 @@ and double quotes in this text (`Isabella Rodriguez's apartment`, `— its`,
 Smallville/Penn templates is pinned by the memory tests in
 `godot-generative-agents/tests/test_boil_water.py` (`remember_outcome`'s
 `reflection` renders), which guard this escaping behavior for this package.
+`decide_context`'s exact output is pinned by `godot-generative-agents/tests/test_decide_context.py`.

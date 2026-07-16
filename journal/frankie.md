@@ -1,3 +1,40 @@
+## 2026-07-15
+**Focus:** a Williams-Hall + viewer cleanup pass on `godot-ga-main`, all driven by the user's local visual testing — merged two Wil
+liams PRs (reproducibility, then de-thin + solidify walls) and opened the co-located-agent fan-out, each via brainstorm→spec→plan→(
+SDD or inline).
+
+**Done today:**
+- Merged **#571** (closed #552): made the Williams map derivation byte-reproducible — `williams_arenas` is authored input (read fro
+m the tmj, not the constant), the south door is single-sourced at cols 43–44, `furnish_building`'s legacy Williams repaint hard-ref
+uses, run-order/authored-vs-derived docs, and a round-trip regression test. Then **#573** (closed #572): de-thinned the double wall
+s to single-thickness and **solidified all 46 exterior windows into wall** (owner's Tiled edits, normalized through `furnish_willia
+ms` + re-derived `collision`/`arena` matrices) with a no-double-wall regression test. Deleted both branches; closed the issues with
+pointer comments.
+- Two gotchas surfaced landing #573: Tiled saves `williams_arenas` in a different whitespace style than `furnish_williams._object_l
+ayer_block`, so a raw Tiled save isn't byte-identical to the canonical splice → resolved by treating `furnish_williams` as the cano
+nical writer (normalize the edit through it, commit that; verified formatting-only + self-reproducing). And the owner's "de-thin" h
+ad painted the inner wall line with a `decor_plants` tile *on the collision-feeding walls layer* (still sealed as wall) → erased th
+ose 81 cells so the walls are genuinely 1-thick.
+- Opened **#576** (#560, viewer fan-out): scoped it as cosmetic (interactions key on engine `Location`, never tile proximity — no v
+iew radius anywhere), so fixed viewer-only — new pure `agent_fanout.gd` (headless-tested, mirrors #372) + `viewer.gd` wiring; two v
+isual-review rounds retuned the ring to sprite-scale spacing and eased the offset so co-located agents glide into formation instead
+of teleporting.
+
+**Blockers / questions:**
+- **#576** needs the merge (manual visual confirmed by the user); the Godot viewer still isn't CI-covered, so the local smoke suite
++ eyeball remain the only gate on viewer changes.
+- Backend occupancy-aware routing (agents genuinely on distinct tiles, not just drawn apart) is deliberately deferred — it perturbs
+the byte-pinned deterministic replay for only partial coverage; worth it only if a range-based perception model (the `audience_for
+` radius override) is ever built.
+- Geo scripts default `--tmj`/`--matrix` to the *committed* files, so a stray default-path run minifies the committed tmj (an SDD s
+ubagent hit this once) — a real footgun that still isn't guarded.
+
+**Next:**
+- Eyeball CI + merge **#576**, close #560 with a pointer.
+- Pick up the remaining environment follow-ups: **#559** (teacher-at-blackboard / role-aware furniture) and **#561** (walk-on-walls
+— likely the #538 collision-seal class map-wide; wants a `validate_tmj` "wall-category tile on a walkable cell" check).
+- The live-LLM cognition cluster (**#371/#370/#368/#366**) + **#543** stay on Alistair's track, unassigned pending #542.
+
 ## 2026-07-14
 **Focus:** a full clip-export + geo push on `godot-ga-main` — merged three features (via brainstorm→spec→plan→SDD each), then chased a black-GIF bug, GIF quality, and a geo regression through several rounds of the user testing locally.
 

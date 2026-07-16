@@ -21,6 +21,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 """
 
 import json
+import time
 from dataclasses import replace
 
 from text_adventure_games import conversation as convo
@@ -79,6 +80,12 @@ class ScheduleMockClient(MockReActClient):
     instead of freezing in a single activity.
     """
 
+    # Artificial per-decision latency in seconds (#366): lets an offline run
+    # feel like a real provider -- serve_penn's --mock-latency stamps it, the
+    # parallel-decide tests assert wall-clock against it, and it drives the
+    # #372 "thinking" stall demo. 0.0 = today's instant mock, byte-identical.
+    latency_s = 0.0
+
     def __init__(self, schedule: list[dict], config=None, ledger=None):
         super().__init__(config, ledger=ledger)
         self.schedule = schedule
@@ -110,6 +117,12 @@ class ScheduleMockClient(MockReActClient):
         """Steps to perform the current activity, or ``None`` to stay put."""
         return self._stop["steps"]
 
+    @property
+    def furniture(self):
+        """Furniture the agent should occupy at the current stop, or ``None``
+        (#559). Read at travel time by run_simulation to bias walk_path."""
+        return self._stop.get("furniture")
+
     def advance(self) -> bool:
         """Move to the next scheduled stop. Returns ``False`` if none remain."""
         if self.stop_index + 1 < len(self.schedule):
@@ -127,37 +140,43 @@ class ScheduleMockClient(MockReActClient):
         differs. The mock never calls this (its day is static); it exists for the
         revision seam a real planner drives (``cognition.maybe_revise_plan``).
 
-        Carrying over authored ``commands`` (#300): the engine's
-        ``planning.Stop`` has no ``commands`` field, so any schedule that has been
-        through a ``Stop`` round-trip (``to_schedule_entry`` / ``from_schedule_entry``,
-        e.g. every ``MockPlanner``/``LLMPlanner`` plan) silently drops the
-        per-stop commands an author put in ``world_data.yaml`` / persona schedule.
-        Rather than teach the engine's ``Stop`` about a backend-only field
+        Carrying over authored ``commands`` (#300) and ``furniture`` (#559): the
+        engine's ``planning.Stop`` has neither field, so any schedule that has
+        been through a ``Stop`` round-trip (``to_schedule_entry`` /
+        ``from_schedule_entry``, e.g. every ``MockPlanner``/``LLMPlanner`` plan --
+        which ``attach_agents`` commits for every agent, mock included) silently
+        drops both the per-stop commands and the per-stop furniture hint an author
+        put in ``world_data.yaml`` / persona schedule.
+        Rather than teach the engine's ``Stop`` about these backend-only fields
         (upstreaming tracked in #464), we patch the loss back in here: for each
         incoming entry that lines up positionally with the *current* schedule's
         entry at the same index (same ``place`` and ``activity``) and itself
-        carries no ``commands`` (missing key or empty list), we carry over the
-        current stop's ``commands``. An entry that differs in ``place`` or
-        ``activity`` is a genuinely revised/new stop (e.g. a future LLM planner's
-        tail-replace) and gets no carry-over -- it has no authored commands to
-        inherit. This does not touch ``_commands_used``: the current stop (index
+        carries no ``commands``/``furniture``, we carry over the current stop's
+        value. An entry that differs in ``place`` or ``activity`` is a genuinely
+        revised/new stop (e.g. a future LLM planner's tail-replace) and gets no
+        carry-over -- it has no authored value to inherit. This does not touch
+        ``_commands_used``: the current stop (index
         ``stop_index``), if it matched, is the *same* authored stop the agent may
         already be partway through, so its progress must survive the swap.
         """
         current = self.schedule
         patched = []
         for i, entry in enumerate(schedule):
-            if entry.get("commands"):
-                patched.append(entry)
-                continue
+            # Carry backend-only per-stop fields the engine's Stop round-trip
+            # drops (#300 `commands`, #559 `furniture`) back onto a positionally
+            # matching entry -- same `place` and `activity`, i.e. the same
+            # authored stop, just stripped by the round-trip -- that lost them.
+            # An entry that still carries the field keeps its own; a genuinely
+            # revised/new stop (different place/activity) inherits nothing.
             if i < len(current):
                 prior = current[i]
-                if (
-                    prior.get("place") == entry.get("place")
-                    and prior.get("activity") == entry.get("activity")
-                    and prior.get("commands")
-                ):
+                matches = prior.get("place") == entry.get("place") and prior.get(
+                    "activity"
+                ) == entry.get("activity")
+                if matches and not entry.get("commands") and prior.get("commands"):
                     entry = {**entry, "commands": list(prior["commands"])}
+                if matches and not entry.get("furniture") and prior.get("furniture"):
+                    entry = {**entry, "furniture": prior["furniture"]}
             patched.append(entry)
         self.schedule = patched
 
@@ -169,6 +188,8 @@ class ScheduleMockClient(MockReActClient):
         return ""
 
     def _choose(self, observation: str) -> str:
+        if self.latency_s:
+            time.sleep(self.latency_s)  # the single funnel both routes share
         if self._current_location(observation) != self.destination.lower():
             return f"travel to {self.destination}"
         queued = self._stop.get("commands") or []
@@ -495,6 +516,34 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     return tools
 
 
+def _take_pacing_args(agent, args: dict, *, stash: bool = True) -> None:
+    """Pop the #581 pacing meta-args off a per-action tool call and (when
+    ``stash``) stash them on the agent, so they drive pacing but never reach
+    ``command_from_tool_call`` (``npc.command_from_args`` skips absent slots, so
+    a popped key is dropped from the routed command). Light validation: a
+    non-positive/garbage duration or a blank emoji is ignored (left as the None
+    the caller reset).
+
+    ``stash=False`` still pops both keys (never leak them into the command) but
+    ignores them -- for a verb that did *not* advertise the slots. Only ``perform``
+    (and any future duration-bearing #446 verb whose ``ARGUMENTS_SCHEMA`` opts in)
+    advertises them; a model that hallucinates ``duration_minutes`` onto a #300
+    one-tick verb (get/drink/activate) must not make that verb settle, so the
+    caller passes ``stash`` = "this tool advertised the pacing slots"."""
+    minutes = args.pop("duration_minutes", None)
+    emoji = args.pop("emoji", None)
+    if not stash:
+        return
+    if (
+        isinstance(minutes, (int, float))
+        and not isinstance(minutes, bool)
+        and minutes > 0
+    ):
+        agent.last_duration_minutes = minutes
+    if isinstance(emoji, str) and emoji.strip():
+        agent.last_emoji = emoji.strip()
+
+
 def decide_with_action_tools(game, char, observation: str) -> str | None:
     """One per-action tool-calling round: the #485 decide path for a real brain.
 
@@ -525,8 +574,10 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     -- the caller then falls back to ``agent.decide()``.
     """
     agent = char.agent
-    # Same reset contract as LLMAgent.decide(): reasoning is per-call, and the
-    # per-action tools carry no duration estimate.
+    # Same reset contract as LLMAgent.decide(): reasoning is per-call. This
+    # resets the engine's own turns-based `last_duration`, distinct from the
+    # port's `last_duration_minutes`, which `_take_pacing_args` now populates
+    # from the `perform` tool's optional `duration_minutes` slot (#581).
     agent.last_reasoning = None
     agent.last_duration = None
     messages = [
@@ -537,6 +588,17 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
         {"role": "user", "content": observation},
     ]
     tools = action_tools_for(game, char)
+    # Which verbs opted into brain-authoritative pacing (#581): only these get
+    # a model duration/emoji stashed. Any other tool's stray pacing args are
+    # popped (never leak into the command) but ignored -- verb-agnostic, so a
+    # future #446 verb that adds the slots to its ARGUMENTS_SCHEMA is included
+    # automatically, while a #300 one-tick verb stays one-tick.
+    pacing_tools = {
+        t["name"]
+        for t in tools
+        if "duration_minutes" in t["parameters"]["properties"]
+        or "emoji" in t["parameters"]["properties"]
+    }
     if getattr(agent, "cognition_tools", False):
         cog_tools, cognition_execute = cognition_toolset(
             agent,
@@ -562,10 +624,12 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
                 if state["command"] is None:
                     # The first action pick is the decision (providers list
                     # calls in the order the model made them).
-                    picked = args or {}
+                    picked = dict(args or {})
                     agent.last_reasoning = (
                         picked.get("reasoning") or ""
                     ).strip() or None
+                    # #581: pop before routing; stash only if this verb opted in.
+                    _take_pacing_args(agent, picked, stash=name in pacing_tools)
                     state["command"] = command_from_tool_call(name, picked, game.parser)
                 # Terminal: the step loop owns routing + failure handling,
                 # exactly as on the single-round path below.
@@ -594,13 +658,44 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     # One action per tick: if the model called several tools, the first is its
     # primary pick (providers list calls in the order the model made them).
     call = result.tool_calls[0]
-    args = call.get("arguments") or {}
+    args = dict(call.get("arguments") or {})
     agent.last_reasoning = (args.get("reasoning") or "").strip() or None
+    # #581: pop pacing meta-args before routing; stash only if this verb opted in.
+    _take_pacing_args(agent, args, stash=call["name"] in pacing_tools)
     command = command_from_tool_call(call["name"], args, game.parser)
     return command or None
 
 
-def observe_and_decide(game, char, step: int, retrieval=None):
+def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
+    """Render the always-on decide context (issue #580), or ``""``.
+
+    Sim time of day, the plan's current stop, and how long the agent has been
+    on it (``stop_since`` is the step the stop began -- stamped when the
+    schedule advances and re-anchored on arrival, so once the agent is at the
+    place ``elapsed`` counts time *at* the stop, commensurate with the planned
+    minutes) -- the always-relevant slice a live brain needs on every decision
+    without spending a ``read_plan`` tool round. Needs a clock (the bake and
+    the offline tests thread none, so their prompts are unchanged) and a
+    schedule (every attach_agents persona has one; a bare engine agent
+    yields "").
+    """
+    schedule = getattr(agent, "schedule", None)
+    if clock is None or schedule is None:
+        return ""
+    steps = schedule.steps
+    return render(
+        "decide_context",
+        time=clock.time_at(step).strftime("%A %I:%M %p"),
+        place=schedule.destination,
+        activity=schedule.activity,
+        minutes=clock.minutes_for_steps(steps) if steps is not None else None,
+        elapsed=clock.minutes_for_steps(max(0, step - stop_since)),
+    )
+
+
+def observe_and_decide(
+    game, char, step: int, retrieval=None, *, clock=None, stop_since=0
+):
     """Build ``char``'s observation, fold in memory, and ask its agent to decide.
 
     The step loop (``run_simulation.simulate``) calls the engine's
@@ -619,6 +714,9 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     3. **Augment** the observation with that retrieved block (appended *after*
        the environment text, so it never changes what the mock brain reads off
        the first line -- the decision stays deterministic).
+    4. **Contextualize** (#580): when the loop threads a ``clock``, append the
+       decide-context block -- sim time, current plan stop, elapsed -- after
+       the environment text (never read by the deterministic mock).
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
     retrieval scoring (weights / decay / how many memories surface); ``None``
@@ -630,6 +728,13 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     ``agent.decide()`` seam. Returns the chosen command string, or ``None``.
     """
     agent = char.agent
+    # Brain-authoritative pacing (#581): reset the per-decision pacing hints
+    # here -- the single entry both the action-tools path and the classic
+    # decide() fallback pass through -- so a value from an earlier tick can
+    # never leak into this one. decide_with_action_tools sets them below when
+    # the model fills the optional slots; the mock leaves them None.
+    agent.last_duration_minutes = None
+    agent.last_emoji = None
     if not agent.memory.owner:
         agent.memory.owner = char.name
     agent.memory.perceive(game, char)
@@ -651,6 +756,13 @@ def observe_and_decide(game, char, step: int, retrieval=None):
     # the replay's per-agent card (run_simulation -> exporter). This is a plain
     # attribute on our own LLMAgent instance -- the engine class is untouched.
     agent.last_retrieved = relevant
+    # Decide-context block (#580): sim time + current stop + elapsed. Appended
+    # AFTER the environment text (the mock brain reads only the first line)
+    # and AFTER the retrieve above ran on the plain `base` -- the block must
+    # never shift which memories surface, because frames embed that list.
+    context = decide_context_block(agent, step, clock, stop_since)
+    if context:
+        base = f"{base}\n\n{context}"
     observation = format_observation_with_memories(base, relevant)
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
@@ -865,14 +977,22 @@ def maybe_converse(
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls to the initiator/step (best effort:
-        # the shared client alternates speakers within one converse()). The
+        # Attribute the meeting's LLM calls per speaker: converse() alternates
+        # speakers through each speaker's OWN client, so when the two clients
+        # are separate instances (#366 per-agent brains) each gets its owner's
+        # name and GET /usage's by_actor splits the dialogue correctly. Under
+        # the classic SHARED client both `ctx` are the same dict, so only the
+        # initiator is stamped -- the pre-#366 behavior, byte-identical. The
         # "role" key labels the terminal request monitor's line (llm_monitor).
-        ctx = getattr(a.agent.llm_client, "context", None)
-        if ctx is not None:
-            ctx.update(
-                {"actor": a.name, "turn": step, "attempt": 0, "role": "converse"}
-            )
+        ctx_a = getattr(a.agent.llm_client, "context", None)
+        ctx_b = getattr(b.agent.llm_client, "context", None)
+        if ctx_b is ctx_a:
+            ctx_b = None  # classic shared client: stamp once, initiator wins
+        for char, ctx in ((a, ctx_a), (b, ctx_b)):
+            if ctx is not None:
+                ctx.update(
+                    {"actor": char.name, "turn": step, "attempt": 0, "role": "converse"}
+                )
         conversation = convo.converse(
             game, a, b, turn=step, max_exchanges=max_exchanges
         )
