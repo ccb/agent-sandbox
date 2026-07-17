@@ -5,6 +5,8 @@ extends Control
 ## Three ways in, all handed to the viewer via the LaunchConfig autoload and then
 ## `scenes/viewer.tscn`:
 ##   • Play the bundled replay        — res://maps/penn_replay.json
+##   • Play the boil-water demo        — res://maps/penn_replay_boil.json (#592; only
+##                                       shown once baked with --scenario boil)
 ##   • Open a local replay file…      — any replay .json on disk (desktop only)
 ##   • Run a live simulation          — connect to a running backend/penn/serve_penn.py
 ##
@@ -20,6 +22,11 @@ extends Control
 
 const VIEWER_SCENE := "res://scenes/viewer.tscn"
 const BUNDLED_REPLAY := "res://maps/penn_replay.json"
+# The de-clumped boil-water demo (#592): a short, single-persona replay of the
+# drink -> sicken -> boil -> recover arc, baked by
+# `generate_penn_replay.py --scenario boil`. Like the bundled replay it's a
+# git-ignored artifact, so its button self-hides until it's been baked.
+const BOIL_REPLAY := "res://maps/penn_replay_boil.json"
 const BACKDROP_MAP := "res://maps/upenn_core_urban.tmj"
 const DEFAULT_LIVE_URL := "http://127.0.0.1:8080"  # serve_penn.py's default
 
@@ -168,6 +175,17 @@ func _build_panel() -> void:
 	bundled_btn.pressed.connect(_on_bundled_pressed)
 	col.add_child(bundled_btn)
 
+	# The boil-water demo (#592) is an optional extra bake, so its button only
+	# appears once that replay has been generated — otherwise it'd be a button that
+	# can only error. (The bundled replay above always shows and explains how to
+	# bake it, because it's the primary entry point.)
+	if FileAccess.file_exists(BOIL_REPLAY):
+		var boil_btn := Button.new()
+		boil_btn.text = "▶  Play the boil-water demo"
+		boil_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boil_btn.pressed.connect(_on_boil_pressed)
+		col.add_child(boil_btn)
+
 	# The file picker is a native desktop dialog; there's no filesystem to browse
 	# in the browser, so the button only exists on desktop.
 	if not OS.has_feature("web"):
@@ -274,6 +292,21 @@ func _on_bundled_pressed() -> void:
 			+ "or use “Open a local replay file…”.", true)
 		return
 	LaunchConfig.set_replay(BUNDLED_REPLAY)
+	_go_to_viewer()
+
+
+func _on_boil_pressed() -> void:
+	if _switching:
+		return
+	# The button only exists when the file is present (see _build_panel), but guard
+	# anyway so a race (deleted between build and click) fails with a clear hint
+	# rather than a blank viewer.
+	if not FileAccess.file_exists(BOIL_REPLAY):
+		_show_replay_hint(
+			"No boil-water demo yet. Bake it with "
+			+ "backend/penn/generate_penn_replay.py --scenario boil.", true)
+		return
+	LaunchConfig.set_replay(BOIL_REPLAY)
 	_go_to_viewer()
 
 
