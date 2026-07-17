@@ -184,3 +184,61 @@ def test_importance_score_prompt_renders_the_batch():
         "\n"
         "Then call score_memories with a 1-10 score for every id above."
     )
+
+
+def test_remember_outcome_locks_the_sickness_signal():
+    # The #300 drink outcome is ground truth the model can't see from text, so
+    # remember_outcome must flag it locked -> the scorer skips it. The sick branch
+    # renders from the drunk item (not the location), so a bare char + the
+    # just_sickened property is enough -- no world build needed.
+    char = _char_with(_ScoreBrain({"scores": []}))
+    char.set_property("just_sickened", True)  # just_recovered defaults False
+
+    cognition.remember_outcome(char, "drink water", step=1)
+
+    rec = char.agent.memory.records[-1]
+    assert rec.importance == 8.0
+    assert rec.metadata.get(cognition._IMPORTANCE_LOCKED) is True
+
+
+def test_relationship_note_is_locked():
+    # The #582 relationship note (8.0) is a deliberate signal; lock it so the
+    # scorer can't re-guess it down.
+    from text_adventure_games.memory import MemoryKind
+    from text_adventure_games.planning import DailyPlan, Stop
+
+    class _NoteBrain:
+        context: dict = {}
+
+        def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+            return {"plans_changed": False, "relationship_note": "A dear friend."}
+
+    class _Planner:
+        def generate(self, persona=None, memory=None, clock=None):
+            return DailyPlan(stops=[Stop(place="Cafe", activity="reading", steps=5)])
+
+        def revise(self, plan, trigger=None, memory=None, clock=None):
+            return plan
+
+    char = _char_with(_NoteBrain())
+    char.agent.planner = _Planner()
+    char.agent.plan = char.agent.planner.generate()
+
+    cognition.apply_conversation_outcome(char, "Ayesha Khan", "t", step=2)
+
+    notes = [r for r in char.agent.memory.records if r.kind == MemoryKind.CHAT]
+    assert len(notes) == 1
+    assert notes[0].metadata.get(cognition._IMPORTANCE_LOCKED) is True
+
+
+def test_step_loop_scores_between_outcome_and_reflect():
+    # The step loop imports score_new_memories and calls it in the resolve block,
+    # ordered remember_outcome ... score_new_memories ... maybe_reflect.
+    import backend.run_simulation as rs
+
+    assert hasattr(rs, "score_new_memories")
+    src = Path(rs.__file__).read_text()
+    i_outcome = src.index("remember_outcome(char, command, step_idx)")
+    i_score = src.index("score_new_memories(char, step_idx)")
+    i_reflect = src.index("maybe_reflect(char.agent, game)")
+    assert i_outcome < i_score < i_reflect
