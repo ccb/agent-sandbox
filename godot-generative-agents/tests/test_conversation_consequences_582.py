@@ -49,3 +49,153 @@ def test_outcome_prompt_renders_partner_and_transcript():
     assert "Ayesha Khan" in text
     assert "Library at 2?" in text
     assert "See you there." in text
+
+
+from text_adventure_games.planning import DailyPlan, Stop  # noqa: E402
+
+
+class _OutcomeBrain:
+    """A real-shaped brain: answers exactly one conversation_outcome call with a
+    scripted dict, and records what tools/messages it was asked."""
+
+    def __init__(self, result):
+        self._result = result
+        self.context: dict = {}
+        self.calls: list[dict] = []
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        self.calls.append({"tool": tool["name"], "messages": messages})
+        return self._result
+
+
+class _RecordingPlanner:
+    """Records the triggers maybe_revise_plan hands it; appends a Library stop on
+    revise so the schedule genuinely changes (maybe_revise_plan commits only a
+    changed tail)."""
+
+    def __init__(self):
+        self.triggers = []
+
+    def generate(self, persona=None, memory=None, clock=None):
+        return DailyPlan(stops=[Stop(place="Cafe", activity="reading", steps=5)])
+
+    def revise(self, plan, trigger=None, memory=None, clock=None):
+        self.triggers.append(trigger)
+        stops = list(plan.stops) + [
+            Stop(place="Library", activity="meeting up", steps=10)
+        ]
+        return DailyPlan(stops=stops, revision=plan.revision + 1)
+
+
+class _FakeSchedule:
+    """Minimal stand-in for the pacing client maybe_revise_plan reads (#581):
+    only stop_index + replace_schedule are used on the revision path."""
+
+    def __init__(self):
+        self.stop_index = 0
+        self.replaced = None
+
+    def replace_schedule(self, entries):
+        self.replaced = entries
+
+
+def _agent_with(brain, planner):
+    """A bare LLMAgent-shaped stub carrying just what the outcome path reads."""
+    from text_adventure_games.memory import AgentMemory
+    from text_adventure_games.things import Character
+
+    char = Character("Maria Lopez", "Maria", "")
+    agent = type("A", (), {})()
+    agent.llm_client = brain
+    agent.max_tokens = 256
+    agent.memory = AgentMemory()
+    agent.memory.owner = char.name
+    agent.planner = planner
+    agent.plan = planner.generate()
+    agent.schedule = _FakeSchedule()
+    # apply_conversation_outcome uses the persona system message for the call.
+    agent._structured_system_message = lambda: "You are Maria Lopez."
+    char.set_agent(agent)
+    return char
+
+
+def test_agreement_revises_plan_and_writes_relationship_note():
+    from text_adventure_games.memory import MemoryKind
+
+    brain = _OutcomeBrain(
+        {
+            "plans_changed": True,
+            "commitment": "meet Ayesha at the Library at 2pm",
+            "relationship_note": "Ayesha is a kindred spirit about robotics.",
+        }
+    )
+    planner = _RecordingPlanner()
+    maria = _agent_with(brain, planner)
+
+    changed = cognition.apply_conversation_outcome(
+        maria, "Ayesha Khan", "Maria Lopez: Library at 2?\nAyesha Khan: Yes.", step=7
+    )
+
+    assert changed is True
+    # One outcome call, forced onto the outcome tool.
+    assert [c["tool"] for c in brain.calls] == ["conversation_outcome"]
+    # The revision fired with the CONVERSATION reason and the commitment as detail.
+    assert planner.triggers[0].reason == cognition.CONVERSATION
+    assert planner.triggers[0].detail == "meet Ayesha at the Library at 2pm"
+    assert planner.triggers[0].step == 7
+    # The schedule was re-committed with the appended Library stop.
+    assert maria.agent.schedule.replaced[-1]["place"] == "Library"
+    # The relationship note is a high-importance CHAT memory attributed to Ayesha.
+    notes = [
+        r
+        for r in maria.agent.memory.records
+        if r.kind == MemoryKind.CHAT and "robotics" in r.text
+    ]
+    assert len(notes) == 1
+    assert notes[0].importance == cognition.RELATIONSHIP_NOTE_IMPORTANCE
+    assert notes[0].actor == "Ayesha Khan"  # add_chat stores partner as actor
+
+
+def test_small_talk_changes_nothing():
+    brain = _OutcomeBrain({"plans_changed": False})
+    planner = _RecordingPlanner()
+    maria = _agent_with(brain, planner)
+
+    changed = cognition.apply_conversation_outcome(
+        maria,
+        "Ayesha Khan",
+        "Maria Lopez: Nice weather.\nAyesha Khan: Sure is.",
+        step=3,
+    )
+
+    assert changed is False
+    assert planner.triggers == []  # no revision offered
+    assert maria.agent.memory.records == []  # no note written
+
+
+def test_missing_commitment_falls_back_to_the_transcript_as_detail():
+    brain = _OutcomeBrain({"plans_changed": True})  # no commitment string
+    planner = _RecordingPlanner()
+    maria = _agent_with(brain, planner)
+    transcript = "Maria Lopez: See you at the game.\nAyesha Khan: I'll be there."
+
+    cognition.apply_conversation_outcome(maria, "Ayesha Khan", transcript, step=1)
+
+    assert planner.triggers[0].detail == transcript
+
+
+def test_none_and_non_dict_results_are_safe_no_ops():
+    for result in (None, "oops", 42):
+        planner = _RecordingPlanner()
+        maria = _agent_with(_OutcomeBrain(result), planner)
+        assert cognition.apply_conversation_outcome(maria, "X", "t", step=0) is False
+        assert planner.triggers == []
+        assert maria.agent.memory.records == []
+
+
+def test_client_without_call_tool_is_a_no_op():
+    planner = _RecordingPlanner()
+    maria = _agent_with(brain=object(), planner=planner)  # no call_tool attr
+    assert cognition.apply_conversation_outcome(maria, "X", "t", step=0) is False
+    assert planner.triggers == []
+    assert maria.agent.memory.records == []
