@@ -6,14 +6,17 @@ Spec: godot-generative-agents/docs/specs/2026-07-09-boil-water-action-layer.md
 import pytest
 
 from backend.build_world import _normalize_personas, build_world
-from backend.actions import DrinkPenn, Activate, Deactivate, BoilWater
+from backend.actions import DrinkPenn, Activate, Deactivate
 from backend.penn.penn_world import (
     PENN_EXTRA_ACTIONS,
+    _boil_recipe,
     _furnish_boil_water,
     build_penn_world,
     make_boil_stove,
+    make_boiled_pot,
     make_murky_pot,
 )
+from text_adventure_games.actions.things import Craft
 from backend.run_simulation import SICK_EMOJI, _resting_pron, simulate
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
@@ -404,7 +407,7 @@ def test_boil_is_remembered_as_the_arc_hinge():
     the passive recovery drink (5.0) -- not fall to the 1.0 catch-all where the
     #299/#301 importance-weighted retrieval would treat it as noise."""
     char = _attached_char()
-    remember_outcome(char, "boil water", 5)
+    remember_outcome(char, "make boiled water", 5)
     entries = memory_stream_for_persona(char.agent)
     boiled = [e for e in entries if "boiled the water" in e["text"]]
     assert boiled, f"no boil memory in {[e['text'] for e in entries]}"
@@ -494,39 +497,41 @@ def test_houston_hall_is_stocked_and_the_scenario_plays():
     assert game.parser.parse_command("drink pot of murky water", actor=sofia)
     assert sofia.get_property("is_sick") is True
     assert any(e.action == "sickness" for e in game.events)
-    # 2) boil it -> the pot is marked safe (name kept: still "pot of murky water")
-    assert game.parser.parse_command("boil water", actor=sofia)
-    pot = sofia.inventory["pot of murky water"]
+    # 2) boil it -> the murky pot is consumed and a boiled pot is produced
+    assert game.parser.parse_command("make boiled water", actor=sofia)
+    assert "pot of murky water" not in sofia.inventory
+    pot = sofia.inventory["pot of boiled water"]
     assert pot.get_property("is_boiled") is True
-    # 3) drink the same (now boiled) pot -> recover
-    assert game.parser.parse_command("drink pot of murky water", actor=sofia)
+    # 3) drink the produced boiled pot -> recover
+    assert game.parser.parse_command("drink pot of boiled water", actor=sofia)
     assert sofia.get_property("is_sick") is False
     assert any(e.action == "recovery" for e in game.events)
 
 
-def test_boil_marks_the_real_houston_pot_safe_and_keeps_its_name():
-    """In the furnished Houston Hall, boiling the carried pot marks it safe
-    without renaming it, and the boiled water no longer sickens."""
+def test_boil_produces_boiled_water_in_the_real_houston_hall():
+    """In the furnished Houston Hall, `make boiled water` consumes the carried
+    murky pot and produces a `pot of boiled water` that no longer sickens."""
     pw = build_penn_world()
     game, chars = pw.build_world_fn(pw.world_map)
     sofia = chars["Sofia Ramirez"]
     assert game.parser.parse_command("travel to Houston Hall", actor=sofia)
     assert game.parser.parse_command("get pot of murky water", actor=sofia)
-    assert game.parser.parse_command("boil water", actor=sofia)
-    pot = sofia.inventory["pot of murky water"]  # name unchanged
+    assert game.parser.parse_command("make boiled water", actor=sofia)
+    assert "pot of murky water" not in sofia.inventory  # consumed
+    pot = sofia.inventory["pot of boiled water"]  # produced
     assert pot.get_property("is_boiled") is True
-    assert game.parser.parse_command("drink pot of murky water", actor=sofia)
+    assert game.parser.parse_command("drink pot of boiled water", actor=sofia)
     assert not sofia.get_property("is_sick")
 
 
-def test_penn_action_verbs_include_boil():
+def test_penn_action_verbs_include_the_craft_verb():
     from backend.penn.penn_world import PENN_ACTION_VERBS
     from backend.cognition import attach_agents
 
     personas = _normalize_personas([_commands_persona()])
     game, chars = build_world(None, personas, LOCATIONS)
     attach_agents(chars, personas, extra_action_names=PENN_ACTION_VERBS)
-    assert "boil" in chars["Testa"].agent.action_names
+    assert "make" in chars["Testa"].agent.action_names
 
 
 def test_sofias_houston_hall_stop_carries_the_arc_commands():
@@ -544,68 +549,72 @@ def test_sofias_houston_hall_stop_carries_the_arc_commands():
     assert cmds == [
         "get pot of murky water",
         "drink pot of murky water",
-        "boil water",
-        "drink pot of murky water",
+        "make boiled water",
+        "drink pot of boiled water",
     ]
     # No wait spacers survived the de-clumping (finding 7).
     assert "wait" not in cmds
 
 
-# -- BoilWater: the self-contained boil superaction (#300 test scaffold) -----
+# -- boiling as a crafting Recipe (#300, supersedes BoilWater) ---------------
 
 
 def _boil_world():
-    """Tiny world with the boil verb + drink override; Union holds a stove and
-    a reusable pot of murky water (the SAME factories the real Houston Hall
-    uses, so the tiny-world props can't drift -- finding 12)."""
-    game, char = _tiny_world(extra_actions=[BoilWater, DrinkPenn, Activate])
+    """Tiny world with the engine Craft action + drink override, and the boil
+    Recipe registered; Union holds a stove and a reusable pot of murky water
+    (the SAME factories the real Houston Hall uses, so the tiny-world props
+    can't drift -- finding 12). Crafting consumes INPUTS from the crafter's
+    held items, so callers `get pot of murky water` before `make boiled water`."""
+    game, char = _tiny_world(extra_actions=[Craft, DrinkPenn, Activate])
+    game.add_recipe(_boil_recipe())
     union = game.locations["Union"]
     union.add_item(make_boil_stove())
     union.add_item(make_murky_pot())
     return game, char, union
 
 
-def test_boil_is_registered():
-    game, _ = _tiny_world(extra_actions=[BoilWater])
-    assert game.parser.actions["boil"] is BoilWater
-
-
-def test_boil_marks_water_safe_and_turns_stove_on():
-    # The visible state change: the vessel is marked is_boiled IN PLACE (name
-    # kept), its description updated, and the stove switched on.
+def test_boil_recipe_is_registered():
     game, char, union = _boil_world()
-    assert game.parser.parse_command("boil water", actor=char)
-    pot = union.items["pot of murky water"]  # name unchanged
+    assert any(r.name == "boiled water" for r in game.recipes)
+
+
+def test_make_boiled_water_consumes_murky_and_produces_boiled():
+    # The visible transform: the held murky pot is consumed and a real
+    # `pot of boiled water` (drinkable, is_boiled) is produced in its place.
+    game, char, union = _boil_world()
+    assert game.parser.parse_command("get pot of murky water", actor=char)
+    assert game.parser.parse_command("make boiled water", actor=char)
+    assert "pot of murky water" not in char.inventory  # consumed
+    pot = char.inventory["pot of boiled water"]  # produced
     assert pot.get_property("is_boiled") is True
-    assert "boiled" in pot.description.lower()
-    assert union.items["stove"].get_property("is_on") is True
+    assert pot.get_property(Property.DRINKABLE) is True
 
 
 def test_boiled_event_is_logged_with_a_scalar_item():
     game, char, union = _boil_world()
-    assert game.parser.parse_command("boil water", actor=char)
+    assert game.parser.parse_command("get pot of murky water", actor=char)
+    assert game.parser.parse_command("make boiled water", actor=char)
     boiled = [e for e in game.events if e.action == "boiled"]
     assert len(boiled) == 1
-    assert boiled[0].payload["location"] == "Union"
     # Scalar "item" matching the sibling sickness/recovery events (finding 10).
-    assert boiled[0].payload["item"] == "pot of murky water"
+    assert boiled[0].payload["item"] == "pot of boiled water"
 
 
 def test_full_arc_sicken_then_boil_then_recover():
     # The whole watchable arc against the tiny world: drink raw -> sick; boil
-    # (marks the carried pot safe in place); drink the SAME pot -> well.
+    # (consumes the murky pot, produces a boiled pot); drink the boiled pot -> well.
     game, char, union = _boil_world()
     assert game.parser.parse_command("get pot of murky water", actor=char)
     assert game.parser.parse_command("drink pot of murky water", actor=char)
     assert char.get_property("is_sick") is True
     assert [e for e in game.events if e.action == "sickness"]
 
-    assert game.parser.parse_command("boil water", actor=char)
+    assert game.parser.parse_command("make boiled water", actor=char)
     assert [e for e in game.events if e.action == "boiled"]
-    pot = char.inventory["pot of murky water"]  # name unchanged
+    pot = char.inventory["pot of boiled water"]  # produced
     assert pot.get_property("is_boiled") is True
 
-    assert game.parser.parse_command("drink pot of murky water", actor=char)
+    assert game.parser.parse_command("drink pot of boiled water", actor=char)
     assert char.get_property("is_sick") is False
     assert [e for e in game.events if e.action == "recovery"]
 
@@ -630,22 +639,22 @@ def test_recovery_requires_boiled_water_not_just_any_safe_drink():
 
 
 def test_boil_fails_without_a_stove():
-    game, char = _tiny_world(extra_actions=[BoilWater])
-    union = game.locations["Union"]
-    union.add_item(make_murky_pot())
-    assert not game.parser.parse_command("boil water", actor=char)
-    assert union.items["pot of murky water"].get_property("is_boiled") is False
+    # The stove is a required tool; without it the recipe is unsatisfiable, so
+    # `make boiled water` fails and the held murky pot is NOT consumed.
+    game, char = _tiny_world(extra_actions=[Craft, DrinkPenn])
+    game.add_recipe(_boil_recipe())
+    game.locations["Union"].add_item(make_murky_pot())
+    assert game.parser.parse_command("get pot of murky water", actor=char)
+    assert not game.parser.parse_command("make boiled water", actor=char)
+    assert "pot of murky water" in char.inventory  # not consumed
 
 
 def test_boil_fails_with_nothing_to_boil():
-    # Stove present but the only water is already boiled -> clean failure.
-    game, char = _tiny_world(extra_actions=[BoilWater])
-    union = game.locations["Union"]
-    union.add_item(make_boil_stove())
-    pot = make_murky_pot()
-    pot.set_property("is_boiled", True)
-    union.add_item(pot)
-    assert not game.parser.parse_command("boil water", actor=char)
+    # Stove present, but no murky-water input held -> clean failure.
+    game, char = _tiny_world(extra_actions=[Craft, DrinkPenn])
+    game.add_recipe(_boil_recipe())
+    game.locations["Union"].add_item(make_boil_stove())
+    assert not game.parser.parse_command("make boiled water", actor=char)
 
 
 # -- end-to-end acceptance: mock-brain runs of the arc (#300) ----------------
@@ -671,6 +680,7 @@ def _mock_penn_run(schedule, steps, name="Testa Boil", emoji="🍵"):
             wm, personas, pw.locations, extra_actions=PENN_EXTRA_ACTIONS
         )
         _furnish_boil_water(game)
+        game.add_recipe(_boil_recipe())
         return game, characters
 
     memories, events = {}, []
@@ -708,8 +718,8 @@ def test_end_to_end_mock_run_full_arc_sick_boil_recover():
     """The scaffold's payoff in a mock run: the authored arc fires end to end --
     a high-importance sickness memory lands, and the sickness -> boiled ->
     recovery events all appear (the exact sequence the viewer's timeline shows).
-    The recovery drink names the same pot ("pot of murky water"): boiling only
-    flipped its is_boiled flag."""
+    The recovery drink names the produced pot ("pot of boiled water"): boiling is
+    the crafting recipe that consumes the murky pot and produces it."""
     schedule = [
         {
             "place": "Houston Hall",
@@ -719,8 +729,8 @@ def test_end_to_end_mock_run_full_arc_sick_boil_recover():
             "commands": [
                 "get pot of murky water",
                 "drink pot of murky water",
-                "boil water",
-                "drink pot of murky water",
+                "make boiled water",
+                "drink pot of boiled water",
             ],
         }
     ]

@@ -950,13 +950,15 @@ def remember_outcome(char, command: str, step: int) -> None:
         activity = char.get_property("activity") or rest.strip()
         text = render("reflection", verb=verb, activity=activity)
         importance = 2.0
-    elif verb == "boil":
+    elif verb == "boil" or (verb == "make" and "boil" in rest):
         # The corrective hinge of the #300 arc: the agent made the water safe.
+        # Boiling is now the crafting recipe `make boiled water` (verb "make"),
+        # so match that too; render as the canonical "boil" reflection either way.
         # Ranked above the passive recovery drink (5.0) and well above a plain
         # get (2.0) so importance-weighted retrieval surfaces this causal
         # "I fixed it" step -- the exact signal the #299/#301 choose-to-boil
         # experiment reads -- instead of losing it to the 1.0 filler bucket.
-        text = render("reflection", verb=verb, command=command)
+        text = render("reflection", verb="boil", command=command)
         importance = 6.0
     elif verb == "drink":
         # A drink with no transition marker: safe water while healthy (or a

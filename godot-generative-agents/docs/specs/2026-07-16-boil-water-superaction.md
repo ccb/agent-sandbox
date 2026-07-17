@@ -4,6 +4,12 @@
 live in `godot-generative-agents/backend/actions.py`, not the shared engine).
 **Date:** 2026-07-16
 
+> **Superseded (2026-07-17).** The bespoke `BoilWater` action described below was
+> replaced by modelling boiling as an engine crafting `Recipe` (the `make boiled
+> water` craft verb), which produces a real `pot of boiled water` item instead of
+> flipping `is_boiled` in place — a declarative, discoverable, learnable transform an
+> LLM interacts with. See [`2026-07-17-boil-water-crafting.md`](2026-07-17-boil-water-crafting.md).
+
 > **Update (2026-07-16) — full watchable arc.** The delivered build extends the
 > minimal scaffold below into a complete, verifiable arc so the behavior reads on
 > the Godot timeline. Changes vs. the original spec:
