@@ -30,9 +30,11 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
-from backend.actions import Activate, Deactivate, DrinkPenn, BoilWater
+from backend.actions import Activate, Deactivate, DrinkPenn
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
+from text_adventure_games.actions.things import Craft
+from text_adventure_games.crafting import Recipe
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -42,14 +44,17 @@ WORLD_DATA = os.path.join(_SIM_DIR, "world_data_upenn.yaml")
 UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 
 # The Penn-local verb set (#300): registered on top of Travel/Act via
-# build_world(extra_actions=...). DrinkPenn overrides the engine's "drink".
-# Upstreaming these into the engine library is #464.
-PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, BoilWater]
+# build_world(extra_actions=...). DrinkPenn overrides the engine's "drink"; Craft is
+# the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
+# boiling is now a declarative transform, not a bespoke action. Upstreaming these
+# into the engine library is #464.
+PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
-# boil-water scenario wires in, on top of the base travel/perform. Handed to
+# boil-water scenario wires in, on top of the base travel/perform. `make` is the
+# crafting verb the brain uses to boil ("make boiled water"); handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
-PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate", "boil"]
+PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate", "make"]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
@@ -318,7 +323,8 @@ def make_boil_sink() -> Item:
 
 
 def make_boil_stove() -> Item:
-    """The boil-water stove prop (#300). The heat source BoilWater gates on."""
+    """The boil-water stove prop (#300). The heat source the boil Recipe requires
+    as a tool (present, not consumed)."""
     stove = Item(
         "stove", "a small electric stove", "A single coil burner, dusty but working."
     )
@@ -328,11 +334,11 @@ def make_boil_stove() -> Item:
 
 
 def make_murky_pot() -> Item:
-    """The reusable pot of unboiled water (#300).
+    """The pot of unboiled water (#300) -- the boil Recipe's consumed input.
 
-    ``requires_boiling`` + ``is_boiled: False`` so DrinkPenn sickens on it and
-    BoilWater can mark it safe; ``portions`` so drinking keeps the vessel. The
-    single source of this item so the tiny-world tests can't drift from the
+    ``requires_boiling`` + ``is_boiled: False`` so DrinkPenn sickens on it;
+    ``portions`` so drinking it raw keeps the vessel (until boiling consumes it).
+    The single source of this item so the tiny-world tests can't drift from the
     furnished Houston Hall (finding 12)."""
     pot = Item(
         "pot of murky water",
@@ -346,16 +352,61 @@ def make_murky_pot() -> Item:
     return pot
 
 
+def make_boiled_pot() -> Item:
+    """What the boil Recipe PRODUCES (#300): a real, distinctly-named vessel of safe
+    water. ``is_boiled`` is what DrinkPenn's recovery gate keys on, and the name is
+    what its narration reads -- so drinking this correctly says "boiled water", and
+    the transform is a visible object swap, not a hidden flag on the murky pot."""
+    pot = Item(
+        "pot of boiled water",
+        "a pot of boiled water",
+        "A steel pot of water, boiled clear and now safe to drink.",
+    )
+    pot.set_property(Property.DRINKABLE, True)
+    pot.set_property("is_boiled", True)
+    pot.set_property("portions", 3)
+    return pot
+
+
+def _boil_recipe() -> Recipe:
+    """Boiling as an engine crafting Recipe (#300, superseding the bespoke
+    BoilWater): consume the held ``pot of murky water``, require a ``stove`` present
+    (a tool, not consumed), and PRODUCE a ``pot of boiled water``. Driven by the
+    engine ``Craft`` action via ``make boiled water`` -- a declarative, discoverable,
+    learnable transform an LLM can reason over (the #595/#301 payoff), not a one-off
+    action. The output factory logs the ``boiled`` event the viewer's timeline marks,
+    so the on-screen arc reads unchanged."""
+
+    def _produce(game) -> Item:
+        pot = make_boiled_pot()
+        game.log_event(
+            None,
+            "boiled",
+            summary="the pot is boiled clear on the stove",
+            payload={"item": pot.name},
+        )
+        return pot
+
+    return Recipe(
+        inputs=["pot of murky water"],
+        tools=["stove"],
+        output=_produce,
+        name="boiled water",
+        result_text=(
+            "You set the pot on the stove and boil it until the water runs clear."
+        ),
+    )
+
+
 def _furnish_boil_water(game) -> None:
     """Stock Houston Hall with the boil-water props (#300).
 
-    A single reusable pot of unboiled water (``requires_boiling`` +
-    ``is_boiled: False``, with ``portions`` so drinking keeps the vessel), plus
-    a sink and a stove device. The full arc: drink the murky water and DrinkPenn
-    makes you sick; the ``boil`` action marks the pot ``is_boiled`` (keeping its
-    name) and clears the hazard; drinking that same pot, now boiled, cures the
-    sickness. (Whether an agent *chooses* to boil before drinking is the
-    experiment; the self-coded variant is #301.)"""
+    A pot of unboiled water (``requires_boiling`` + ``is_boiled: False``, with
+    ``portions``), plus a sink and a stove device. The full arc: drink the murky
+    water and DrinkPenn makes you sick; ``make boiled water`` (the boil Recipe)
+    consumes the murky pot and produces a ``pot of boiled water``; drinking that
+    boiled pot cures the sickness. (Whether an agent *chooses* to boil before
+    drinking is the experiment; the self-coded variant is #301.)"""
     hall = game.locations.get("Houston Hall")
     if hall is None:
         return
@@ -392,6 +443,7 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
             wm, personas, locations, extra_actions=PENN_EXTRA_ACTIONS
         )
         _furnish_boil_water(game)
+        game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))
 
     return PennWorld(

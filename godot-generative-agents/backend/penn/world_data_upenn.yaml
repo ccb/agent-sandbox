@@ -252,10 +252,11 @@ personas:
   # stops advance fine: the planner's positional carry-over handles distinct
   # activities at one place -- there is no same-place merge to work around.
   # Activities stay free of action verbs so the terminal `perform` can't re-parse
-  # one as a command (#535). The pot keeps its name; boiling only flips its
-  # is_boiled flag, so the SAME `drink pot of murky water` sickens while raw and
-  # cures once boiled. (The arc still sits late in Sofia's long day; a fully
-  # de-clumped short demo is the dedicated boil replay, #592.)
+  # one as a command (#535). Boiling is the engine crafting Recipe (#300): `make
+  # boiled water` consumes the murky pot and PRODUCES a `pot of boiled water`, so
+  # she drinks the murky pot raw (sickness) and the boiled pot after (recovery).
+  # (The arc still sits late in Sofia's long day; a fully de-clumped short demo is
+  # the dedicated boil replay, #592.)
   - place: Houston Hall
     activity: settling in for dinner at the union
     steps: 20
@@ -266,11 +267,11 @@ personas:
     activity: feeling queasy at the table
     steps: 20
     commands:
-    - boil water                 # -> boiled (pot marked safe; name unchanged)
+    - make boiled water          # -> boiled (consumes murky pot, produces boiled pot)
   - place: Houston Hall
     activity: feeling much better at last
     commands:
-    - drink pot of murky water   # -> recovery (same pot, now boiled)
+    - drink pot of boiled water  # -> recovery (the produced boiled pot)
 
 locations:
 - name: Penn campus
