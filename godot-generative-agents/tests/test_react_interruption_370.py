@@ -409,7 +409,7 @@ def test_step_pauses_pinned_walker_and_resumes_after():
     emoji = {n: "\U0001f9d1" for n in order}
     state = {
         "Maria Lopez": _full_state((0, 0), [(1, 0), (2, 0)], conversing=True),
-        "Ayesha Khan": _full_state((9, 9), [(8, 9)]),
+        "Ayesha Khan": _full_state((9, 9), [(8, 9), (7, 9)]),
     }
     frame, _ = step(game, chars, state, 0, order=order, world_map=None, emoji=emoji)
     # Pinned mid-walk: tile and path untouched.
