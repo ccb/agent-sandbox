@@ -242,3 +242,34 @@ def test_step_loop_scores_between_outcome_and_reflect():
     i_score = src.index("score_new_memories(char, step_idx)")
     i_reflect = src.index("maybe_reflect(char.agent, game)")
     assert i_outcome < i_score < i_reflect
+
+
+def test_reflection_and_plan_records_are_not_rescored():
+    # Regression (final review): the scorer targets OBSERVATION/CHAT only.
+    # reflect() zeroes importance_since_reflection after appending REFLECTION
+    # records, so re-scoring a reflection (or a PLAN) on a later tick would leak
+    # its delta into the fresh window and skew reflection cadence.
+    brain = _ScoreBrain(
+        {
+            "scores": [
+                {"id": 0, "score": 10},
+                {"id": 1, "score": 10},
+                {"id": 2, "score": 10},
+            ]
+        }
+    )
+    char = _char_with(brain)
+    mem = char.agent.memory
+    obs = mem.add_observation("I traveled.", turn=1, importance=2.0)  # id 0
+    refl = mem.add_reflection("Life is good.", turn=1, importance=6.0)  # id 1
+    plan = mem.add_plan("Go to the cafe.", turn=1, importance=5.0)  # id 2
+    mem.importance_since_reflection = 0.0  # simulate a reflect() reset
+
+    cognition.score_new_memories(char, step=1)
+
+    assert obs.importance == 10.0  # observation re-scored
+    assert refl.importance == 6.0  # reflection untouched
+    assert plan.importance == 5.0  # plan untouched
+    # Accumulator moved only by the observation delta (10 - 2 = 8), not by the
+    # reflection/plan (which would have leaked 10-6 and 10-5 into a reset window).
+    assert mem.importance_since_reflection == 8.0
