@@ -62,9 +62,10 @@ def test_dailyplan_primitive_round_trip_preserves_commands():
         stops=[Stop("Houston Hall", "dinner", "🍽️", 20, commands=("boil water",))]
     )
     prim = plan.to_primitive()
-    # from_primitive's ``Stop(**s)`` sees a list when the payload has crossed
-    # JSON; simulate that to prove __post_init__ normalizes it back.
-    prim["stops"][0]["commands"] = list(prim["stops"][0]["commands"])
+    # to_primitive emits commands as a plain JSON list (via to_schedule_entry),
+    # so from_primitive's ``Stop(**s)`` receives a list -- proving __post_init__
+    # normalizes it back to the tuple a frozen stop needs.
+    assert prim["stops"][0]["commands"] == ["boil water"]
     restored = DailyPlan.from_primitive(prim)
     assert restored == plan
     assert restored.stops[0].commands == ("boil water",)

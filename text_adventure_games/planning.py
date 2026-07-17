@@ -136,11 +136,19 @@ class DailyPlan:
     revision: int = 0
 
     def to_primitive(self) -> dict:
-        """Serialize to JSON-safe primitives (mirrors ``MemoryRecord``)."""
+        """Serialize to JSON-safe primitives (mirrors ``MemoryRecord``).
+
+        Stops serialize through :meth:`Stop.to_schedule_entry` rather than
+        ``asdict`` so ``commands`` is a JSON list (not a tuple) and is emitted
+        only when non-empty -- a command-less stop's persisted dict stays
+        byte-identical to before the field existed (``asdict`` would instead
+        stamp ``"commands": ()`` on every stop). ``day``/``hours`` have no such
+        fields, so plain ``asdict`` is right for them.
+        """
         return {
             "day": [asdict(b) for b in self.day],
             "hours": [asdict(h) for h in self.hours],
-            "stops": [asdict(s) for s in self.stops],
+            "stops": [s.to_schedule_entry() for s in self.stops],
             "revision": self.revision,
         }
 
