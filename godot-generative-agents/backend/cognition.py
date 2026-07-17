@@ -1137,8 +1137,14 @@ def score_new_memories(char, step: int) -> None:
 
     by_id: dict[int, object] = {}
     for entry in scores:
-        if isinstance(entry, dict) and isinstance(entry.get("id"), int):
-            by_id[entry["id"]] = entry.get("score")
+        if not isinstance(entry, dict):
+            continue
+        eid = entry.get("id")
+        # bool is an int subclass, so a boolean id would pass an isinstance int
+        # check and then collide with real id 0/1 (hash(True) == hash(1)),
+        # mis-scoring that record. Reject it (mirrors the score-side guard below).
+        if isinstance(eid, int) and not isinstance(eid, bool):
+            by_id[eid] = entry.get("score")
     for record in candidates:
         record.metadata[_IMPORTANCE_SCORED] = True  # asked; never re-ask
         raw = by_id.get(record.id)
