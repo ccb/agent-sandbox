@@ -468,12 +468,17 @@ def test_usage_merges_the_stepper_run_view():
     # the lifetime summary; the lifetime fields themselves are untouched.
     stepper = _walker()
     stepper.ledger = UsageLedger()
-    stepper.run_usage = lambda: {"run_calls": 3, "run_cost_usd": 0.02}
+    stepper.run_usage = lambda: {
+        "run_calls": 3,
+        "run_cost_usd": 0.02,
+        "run_by_actor": {"a": 0.02},
+    }
     with _live_client(stepper, start_paused=True) as client:
         body = client.get("/usage").json()
     assert body["available"] is True
     assert body["calls"] == 0  # lifetime summary unchanged
     assert (body["run_calls"], body["run_cost_usd"]) == (3, 0.02)
+    assert body["run_by_actor"] == {"a": 0.02}  # run-scoped per-agent (#569.2)
 
 
 def test_usage_without_run_view_keeps_todays_shape():
