@@ -1,0 +1,28 @@
+---
+name: conversation_outcome
+description: >
+  Real model prompt (issue #582): after two agents finish a conversation, each
+  participant is asked -- via the conversation_outcome tool -- whether the
+  meeting changed their plans and whether it is worth remembering about the
+  other person. Rendered by cognition.apply_conversation_outcome() once per
+  participant, only when a real brain drove an actual conversation (the mock
+  never converses, so the bake never reaches this). The transcript is assembled
+  in code; only the wording lives here.
+inputs:
+  partner:
+    type: string
+    description: The name of the other person in the conversation.
+  transcript:
+    type: string
+    description: 'The full conversation, one "Name: line" per row.'
+sample:
+  partner: Ayesha Khan
+  transcript: |
+    Maria Lopez: Want to study together at the library at 2?
+    Ayesha Khan: Yes, see you there.
+---
+You just finished talking with {{ partner }}. Here is what was said:
+
+{{ transcript }}
+
+Reflect on the conversation and record its outcome. Did it change what you plan to do for the rest of the day -- for example, an agreement to be somewhere at a certain time? And is there anything about {{ partner }} worth remembering afterward?

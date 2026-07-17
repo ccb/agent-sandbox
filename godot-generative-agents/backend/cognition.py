@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
+from text_adventure_games.planning import RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
     LLMAgent,
@@ -43,6 +44,57 @@ from text_adventure_games.usage import UsageLedger, record_call
 # a single meeting is capped at this many lines.
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
+
+# Conversation consequences (issue #582). A backend-local revision reason -- the
+# engine's RevisionTrigger.reason is a plain string (planning.py), so an
+# agreement reached in dialogue needs no engine change to reach a planner.
+CONVERSATION = "conversation"
+
+# The relationship note a notable meeting leaves behind is momentous on the 1-10
+# poignancy scale (same weight as the #300 "I got sick" signal), so it survives
+# retrieval ranking and pushes the agent toward reflection.
+RELATIONSHIP_NOTE_IMPORTANCE = 8.0
+
+# The post-conversation outcome tool (#582): one structured call per participant
+# after a meeting. plans_changed gates a plan revision; the two strings are
+# optional (small talk fills neither). Normalized {name, description, parameters}
+# -- the shape llm_client.call_tool translates per provider, like the planner's
+# tools.
+CONVERSATION_OUTCOME_TOOL = {
+    "name": "conversation_outcome",
+    "description": (
+        "Record the outcome of the conversation you just had: whether it "
+        "changed your plans for the rest of the day, and anything about the "
+        "other person worth remembering."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "plans_changed": {
+                "type": "boolean",
+                "description": (
+                    "True if this conversation changed what you will do for the "
+                    "rest of the day (e.g. an agreement to meet somewhere)."
+                ),
+            },
+            "commitment": {
+                "type": "string",
+                "description": (
+                    "If plans changed, the concrete thing you agreed to -- where "
+                    "and when. Omit if nothing changed."
+                ),
+            },
+            "relationship_note": {
+                "type": "string",
+                "description": (
+                    "A durable note about the other person worth remembering, or "
+                    "omit if the exchange was just small talk."
+                ),
+            },
+        },
+        "required": ["plans_changed"],
+    },
+}
 
 from . import seed
 from .actions import Travel
