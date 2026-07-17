@@ -292,6 +292,16 @@ def test_llm_plan_mode_requires_a_real_brain():
         PennStepper(num_steps=2, world=build_penn_world(), plan_mode="llm")
 
 
+def test_llm_plan_mode_rejects_the_scripted_brain():
+    # --brain scripted's sentinel is truthy, so the guard must reject it too
+    # (else the planner would try to build from an unset _llm_config -> crash).
+    scripted = resolve_llm(None, "scripted")
+    with pytest.raises(SystemExit, match="--plan llm needs --brain llm"):
+        PennStepper(
+            num_steps=2, world=build_penn_world(), llm=scripted, plan_mode="llm"
+        )
+
+
 def test_real_conversation_fires_once_and_cools_down(monkeypatch):
     stepper = _llm_stepper(monkeypatch)
     a, b = _settle_pair_at_an_arena(stepper)

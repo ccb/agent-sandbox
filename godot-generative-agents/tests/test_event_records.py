@@ -47,7 +47,7 @@ def _testa_sip_world():
                 "activity": "getting a drink of water",
                 "emoji": "🥤",
                 "steps": 3,
-                "commands": ["get cup of murky water", "drink cup of murky water"],
+                "commands": ["get pot of murky water", "drink pot of murky water"],
             }
         ],
     }
@@ -79,7 +79,7 @@ def test_simulate_out_events_carries_sickness_record():
     assert sickness, f"no sickness event in {events}"
     record = sickness[0]
     assert record["payload"] == {
-        "item": "cup of murky water",
+        "item": "pot of murky water",
         "location": "Houston Hall",
     }
     assert record["actor"] == "Testa Sip"

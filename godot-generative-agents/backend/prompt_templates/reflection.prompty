@@ -10,7 +10,7 @@ description: >
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", or anything else.
   location:
     type: string
     description: The place arrived at (used when verb == "travel").
@@ -23,6 +23,9 @@ inputs:
   sick:
     type: boolean
     description: Whether this drink just sickened the persona (verb == "drink").
+  recovered:
+    type: boolean
+    description: Whether this drink just cured the persona's sickness (verb == "drink", #300).
   command:
     type: string
     description: The raw command, quoted verbatim in the fallback (any other verb).
@@ -32,6 +35,7 @@ sample:
   activity: ""
   item: cup of murky water
   sick: true
+  recovered: false
   command: ""
 ---
 {%- if verb == "travel" -%}
@@ -40,8 +44,12 @@ I traveled to {{ location }}.
 I am {{ activity }}.
 {%- elif verb == "drink" and sick -%}
 I drank the {{ item }} and now I feel terribly sick.
+{%- elif verb == "drink" and recovered -%}
+I drank the {{ item }}, and the sickness has finally passed -- I feel much better.
 {%- elif verb == "drink" -%}
 I drank the {{ item }}.
+{%- elif verb == "boil" -%}
+I boiled the water to make it safe to drink.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}

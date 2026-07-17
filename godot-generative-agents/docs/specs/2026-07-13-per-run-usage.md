@@ -128,3 +128,26 @@ All offline, in `godot-generative-agents/tests/`:
   a fake stepper without `run_usage` → today's response shape exactly.
 - `uv run pytest godot-generative-agents/tests/ -q` green; root
   `tests/test_api.py` untouched and green in CI; `uv run black .` clean.
+
+## Follow-ups (#569, from @aking526's #540 review)
+
+Three low-severity refinements, all in `serve_penn.PennStepper.run_usage()`
+and its tests (still no engine change):
+
+1. **`run_calls` counts real model calls only.** The mock schedule brain
+   appends a `provider="mock"`, $0 `CallRecord` every tick to pace the day;
+   counting them made `run_calls` climb over an empty run-monitor log — the
+   run-scoped echo of the "27 calls / 3-row log" shape this spec set out to
+   kill. `run_calls` now counts only records with `usage.provider != "mock"`
+   (`run_cost_usd` needed no filter: mock records cost $0). Side effect:
+   `run_calls` is now stable across mock ticks, so the test pins it there too.
+2. **`run_by_actor`** — the run-scoped counterpart of the lifetime `by_actor`,
+   so a dashboard can headline `run_cost_usd` beside per-agent spend that
+   reconciles with it (`sum(run_by_actor.values()) == run_cost_usd` for a
+   fresh, non-resumed run) instead of mixing run-scoped and lifetime scopes.
+   Real calls only, same as `run_calls`; this-process scope, same as
+   `run_calls` (a #543 resume's pre-process spend stays in `run_cost_usd`).
+3. **Real-stepper `/usage` coverage** — `test_get_usage_merges_a_real_stepper_run_view`
+   drives a real `PennStepper` (synthetic spend + a $0 mock record injected)
+   through `GET /usage` the way `serve_penn.main` wires it, closing the
+   producer↔consumer seam the unit test and the lambda-stub seam test left open.

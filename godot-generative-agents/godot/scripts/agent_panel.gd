@@ -239,6 +239,15 @@ var _clip_gif_btn: Button           # export the marked span as a GIF (#488)
 var _clip_frames_btn: Button        # export PNG frames for ffmpeg (desktop only)
 var _clip_status: Label             # where the last export went
 var _clip_reveal_btn: Button        # Reveal in Finder for the last export
+
+# Live-mode "export last N" row (#548): shown only in live mode, mutually
+# exclusive with the baked marker buttons above. Reuses _clip_status +
+# _clip_reveal_btn for the result line.
+var _clip_row: HBoxContainer        # the baked marker row (Reveal reparents in/out)
+var _live_clip_row: HBoxContainer   # the whole live clip row (toggled by set_live)
+var _clip_n_spin: SpinBox           # how many recent steps to grab (default 60)
+var _live_clip_gif_btn: Button      # export the last N steps as a GIF
+var _live_clip_frames_btn: Button   # export the last N steps as MP4+GIF (desktop)
 var _list: VBoxContainer            # holds one row per character
 var _rows := {}                     # name -> {row, button, status: Label}
 var _active := ""                   # name of the tracked character, or "" when free
@@ -377,6 +386,7 @@ func _ready() -> void:
 	var clip_row := HBoxContainer.new()
 	clip_row.add_theme_constant_override("separation", 6)
 	col.add_child(clip_row)
+	_clip_row = clip_row
 
 	_clip_gif_btn = Button.new()
 	_clip_gif_btn.text = "Export GIF"
@@ -400,6 +410,39 @@ func _ready() -> void:
 	_clip_reveal_btn.focus_mode = Control.FOCUS_NONE
 	_clip_reveal_btn.visible = false
 	clip_row.add_child(_clip_reveal_btn)
+
+	# Live-mode clip export (issue #548): no scrubber to mark a span, so grab the
+	# last N elapsed steps instead. Built here (below the baked marker row), hidden
+	# until set_live(true). Reuses _clip_reveal_btn + _clip_status below for results.
+	_live_clip_row = HBoxContainer.new()
+	_live_clip_row.add_theme_constant_override("separation", 6)
+	_live_clip_row.visible = false
+	col.add_child(_live_clip_row)
+
+	_clip_n_spin = SpinBox.new()
+	_clip_n_spin.min_value = 2
+	_clip_n_spin.max_value = 2000
+	_clip_n_spin.value = 60
+	_clip_n_spin.step = 1
+	_clip_n_spin.tooltip_text = "How many recent steps to export"
+	_live_clip_row.add_child(_clip_n_spin)
+
+	_live_clip_gif_btn = Button.new()
+	_live_clip_gif_btn.text = "Export last N GIF"
+	_live_clip_gif_btn.tooltip_text = "Export the last N elapsed steps as an animated GIF"
+	_live_clip_gif_btn.focus_mode = Control.FOCUS_NONE
+	_live_clip_gif_btn.disabled = true
+	_live_clip_gif_btn.pressed.connect(func() -> void: clip_export_requested.emit("gif"))
+	_live_clip_row.add_child(_live_clip_gif_btn)
+
+	_live_clip_frames_btn = Button.new()
+	_live_clip_frames_btn.text = "Export last N MP4 + GIF"
+	_live_clip_frames_btn.tooltip_text = "Render the last N steps to clip.mp4 + a high-quality clip.gif via ffmpeg (falls back to PNG frames + a printed command if ffmpeg is missing)"
+	_live_clip_frames_btn.focus_mode = Control.FOCUS_NONE
+	_live_clip_frames_btn.disabled = true
+	_live_clip_frames_btn.visible = not OS.has_feature("web")
+	_live_clip_frames_btn.pressed.connect(func() -> void: clip_export_requested.emit("frames"))
+	_live_clip_row.add_child(_live_clip_frames_btn)
 
 	_clip_status = Label.new()
 	_clip_status.add_theme_font_size_override("font_size", 12)
@@ -624,8 +667,16 @@ func set_live(live: bool) -> void:
 	_clip_gif_btn.visible = not live
 	_clip_frames_btn.visible = not live and not OS.has_feature("web")
 	_clip_reveal_btn.visible = false
-	_clip_status.visible = not live
+	_clip_status.visible = true  # shared by both modes now (#548)
 	_speed_row.visible = not live
+	_live_clip_row.visible = live  # live "export last N" row (#548)
+	# Keep Reveal at the end of whichever clip row is showing (#548): the baked row
+	# stays in the tree in live mode with its buttons hidden, so a reused Reveal
+	# would otherwise render on an orphan line above the live controls. Reparent it
+	# into the live row (last child, after the buttons) in live mode, back otherwise.
+	var reveal_home := _live_clip_row if live else _clip_row
+	if _clip_reveal_btn.get_parent() != reveal_home:
+		_clip_reveal_btn.reparent(reveal_home)
 	if live and _live_badge == null:
 		_live_badge = Label.new()
 		_live_badge.text = "● LIVE"
@@ -710,6 +761,18 @@ func set_clip_status(text: String, reveal_path: String) -> void:
 	if reveal_path != "":
 		_clip_reveal_btn.pressed.connect(func() -> void:
 			OS.shell_show_in_file_manager(reveal_path))
+
+
+func live_clip_count() -> int:
+	# The live "export last N" count from the SpinBox (issue #548).
+	return int(_clip_n_spin.value)
+
+
+func set_live_clip_ready(ready: bool) -> void:
+	# Enable the live clip buttons once enough history exists to make a clip (#548);
+	# the viewer calls this per step with _frames.size() >= LIVE_CLIP_MIN_N.
+	_live_clip_gif_btn.disabled = not ready
+	_live_clip_frames_btn.disabled = not ready
 
 
 func set_timeline_markers(markers: Array, total: int) -> void:

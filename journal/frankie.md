@@ -1,3 +1,21 @@
+## 2026-07-16
+**Focus:** productionize the boil-water arc as engine *crafting*, review + merge the whole walking-on-walls / boil PR stack on `godot-ga-main`, and reconcile the issue tracker.
+
+**Done today:**
+- Reworked **#590** from a bespoke `BoilWater` action into an engine crafting **Recipe** (`make boiled water` consumes the murky pot and *produces* a real `pot of boiled water`; `DrinkPenn` sicken/cure unchanged). Chose crafting over a one-off action after a throwaway prototype — a declarative, discoverable, *learnable* recipe is the LLM-facing transform primitive #595/#301 actually need, and it fixed the confusing "recovered after drinking pot of **murky** water" wording. Kept it on `godot-ga-main` (no `text_adventure_games/` change) by driving it through the existing `make` craft verb.
+- Merged the whole arc: **#600** feet-anchor sprites (the real on-screen #561 fix — sprites were `centered` so feet dangled ~2 tiles below their cell; tuned the lift by eye, one round), **#591** `validate_tmj` wall-on-walkable guard, **#590** crafting boil, **#599** de-clumped demo replay (rebased onto #590), **#601** per-run usage. `/review`'d #599 and fixed a real gap first: its verb-free-activity guard was a stale hand-maintained substring list → replaced with a parser-driven check (route each `perform <activity>` through the real parser, require it resolves to `perform`).
+- Filed + fixed **#604** (a craft logged *two* duplicate `craft` events) with a general `Action.event_payload()` hook so an action enriches its single per-command event instead of self-logging → **PR #606** to `main`. Closed stale merged-but-not-auto-closed issues #561, #592, #569 with linking comments.
+
+**Blockers / questions:**
+- **#606** rides the `main` track (full review by the main reviewers, not the Godot owners), so it's the one piece of today's work I can't land myself — gated on their review.
+- Godot viewer still isn't CI-covered, so the feet-anchor fix (#600) and any viewer change rest on the local headless smoke suite + the user's eyeball (the lift needed a visual round: full-height read one tile too high → half-height-minus-a-tile).
+- #597 (flaky `test_reset_while_a_tick_is_in_flight` on py3.11) still unfixed — low priority, clears on re-run.
+
+**Next:**
+- Get #606 reviewed/merged on `main`, then let the periodic `main`→`godot-ga-main` sync carry it (plus the #603 Stop-round-trip / #464 engine-slice cleanups) forward.
+- Pick up **#595** (does a live LLM *choose* to boil from an aversive memory?) using the crafting recipe + the #599 demo world as the deterministic fixture — the connect-the-dots precursor to #301.
+- Or build the substrate for it first: **#594** (thirst as an accumulating drive + consequential sickness) so water consumption is actually motivated.
+
 ## 2026-07-15
 **Focus:** a Williams-Hall + viewer cleanup pass on `godot-ga-main`, all driven by the user's local visual testing — merged two Wil
 liams PRs (reproducibility, then de-thin + solidify walls) and opened the co-located-agent fan-out, each via brainstorm→spec→plan→(

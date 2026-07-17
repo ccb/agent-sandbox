@@ -19,6 +19,41 @@ const KIND_COLORS := {
 	"reflection": Color("7b4fbe"),
 	"arrival": Color("3e8948"),
 }
+# Per-event-type signature (issue #593): a game event's `action` picks a color +
+# a hover emoji so the boil-water arc reads at a glance. The colors are chosen to
+# stay clear of the other tick kinds already on the strip: sickness is a deep
+# crimson (NOT the default event red the lifecycle go/perform/travel ticks use),
+# boiled is amber, recovery is a teal (NOT the arrival green). Unknown action
+# types still fall back to the default event red so new events render. #302 will
+# add `code_rewrite` here.
+const EVENT_STYLE := {
+	"sickness": {"color": Color("b3122b"), "emoji": "🤢"},   # crimson
+	"boiled": {"color": Color(0.95, 0.65, 0.15), "emoji": "🍵"},  # amber
+	"recovery": {"color": Color("1fa8a0"), "emoji": "💚"},   # teal
+}
+
+
+## The tick color for a marker of the given kind/action. Events resolve by
+## action via EVENT_STYLE (default event red for unknown types); every other
+## kind resolves by KIND_COLORS (white for an unknown kind). Static + pure so
+## the mapping is unit-testable without a scene (tests/test_replay_markers.gd).
+static func color_for(kind: String, action: String) -> Color:
+	if kind == "event":
+		return EVENT_STYLE.get(action, {}).get("color", KIND_COLORS["event"])
+	return KIND_COLORS.get(kind, Color.WHITE)
+
+
+## The hover tooltip line for one marker. A known event type is prefixed with
+## its emoji + type name ("step 945 — 🤢 sickness — Sofia: got sick"); every
+## other marker keeps the plain "step N — <label>". Static + pure (testable).
+static func tooltip_line(marker: Dictionary) -> String:
+	var step := int(marker.get("step", 0))
+	var label := String(marker.get("label", ""))
+	if String(marker.get("kind", "")) == "event":
+		var action := String(marker.get("action", ""))
+		if EVENT_STYLE.has(action):
+			return "step %d — %s %s — %s" % [step, EVENT_STYLE[action]["emoji"], action, label]
+	return "step %d — %s" % [step, label]
 const STRIP_HEIGHT := 10       # px; thin, sits directly above the HSlider
 const TICK_HALF_WIDTH := 1     # ticks are 2px wide
 const SNAP_PX := 4.0           # click/hover snap radius to the nearest marker
@@ -75,7 +110,7 @@ func _draw() -> void:
 	for m in _visible_markers:
 		var x := _step_to_x(int(m["step"]))
 		draw_rect(Rect2(x - TICK_HALF_WIDTH, 0, TICK_HALF_WIDTH * 2, size.y),
-			KIND_COLORS.get(String(m["kind"]), Color.WHITE))
+			color_for(String(m["kind"]), String(m.get("action", ""))))
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -96,7 +131,7 @@ func _get_tooltip(at_position: Vector2) -> String:
 	# Dynamic tooltip: the labels of up to 3 markers within snap range.
 	var lines := PackedStringArray()
 	for m in _nearest_markers(at_position.x, 3):
-		lines.append("step %d — %s" % [int(m["step"]), String(m["label"])])
+		lines.append(tooltip_line(m))
 	return "\n".join(lines)
 
 
