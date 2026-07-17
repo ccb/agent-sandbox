@@ -731,12 +731,35 @@ class PennStepper:
         beside the (unchanged) lifetime totals, so the dashboard's run strip
         can agree with its per-run call log. The budget gate stays lifetime.
         ``run_cost_usd`` is ``_run_cost_usd()`` -- the sum the run's row gets
-        too. ``run_calls`` stays this-process (the store keeps no cheap call
-        count to re-anchor on).
+        too. ``run_calls``/``run_by_actor`` stay this-process (the store keeps
+        no cheap call count to re-anchor on).
+
+        ``run_calls`` and ``run_by_actor`` count only REAL model requests --
+        records whose ``usage.provider`` is not ``"mock"``. The free mock
+        schedule brain appends a ``provider="mock"``, $0 ``CallRecord`` every
+        tick to pace the day; those are not LLM calls and never appear as
+        run-monitor log rows, so counting them would show ``run_calls`` climbing
+        over an empty log (#569.1) -- the run-scoped echo of the "27 calls over a
+        3-row log" mismatch #526 set out to kill. ``run_cost_usd`` needs no such
+        filter (mock records cost $0). ``run_by_actor`` is the run-scoped
+        counterpart of the lifetime ``by_actor`` (#569.2): a dashboard can
+        headline ``run_cost_usd`` beside per-agent spend that reconciles with it
+        (``sum(run_by_actor.values()) == run_cost_usd`` for a fresh, non-resumed
+        run), instead of mixing a run-scoped total with lifetime per-agent rows.
         """
+        run_records = self.ledger.records[self._run_ledger_calls_base :]
+        run_calls = 0
+        run_by_actor: dict[str, float] = {}
+        for rec in run_records:
+            if rec.usage.provider == "mock":
+                continue
+            run_calls += 1
+            key = rec.actor or "(unattributed)"
+            run_by_actor[key] = run_by_actor.get(key, 0.0) + rec.cost_usd
         return {
-            "run_calls": len(self.ledger.records) - self._run_ledger_calls_base,
+            "run_calls": run_calls,
             "run_cost_usd": self._run_cost_usd(),
+            "run_by_actor": {a: round(c, 6) for a, c in run_by_actor.items()},
         }
 
     def meta(self) -> dict:
