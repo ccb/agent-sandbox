@@ -329,3 +329,87 @@ def test_step_pins_conversing_agents_from_deciding_and_moving():
     )
     assert state["Maria Lopez"]["tile"] == tile_before  # stayed put
     assert len(frame["Maria Lopez"]["chat"]) == 2  # a second line was said
+
+
+def test_step_perform_until_gate_holds_conversing_agent_pinned():
+    """#371 Task 3: the OTHER conversing-pin guard -- on the perform_until-advance
+    block (run_simulation.step, ~line 237) -- actually matters.
+
+    The test above never reaches this block: it leaves ``perform_until`` at
+    ``None`` forever, so the block's own ``perform_until is not None`` guard
+    already skips it, and the ``and not st.get("conversing")`` conjunct is
+    never exercised. Here the scheduled activity's timer ELAPSES *during* the
+    conversation (the realistic #371 scenario: an agent settles into an
+    activity, then starts chatting, and the activity's clock runs out mid-chat).
+    Without the guard, the block would fire, call ``char.agent.schedule.advance()``,
+    and flip ``performing`` to ``False`` mid-conversation -- un-pinning the agent.
+    """
+    brain = _ScriptedConvoBrain(["Hi!", "Hello!", "Bye!"])
+    game, chars, state, frame_seed, order = _colocated_pair(brain)
+    # The shared persona's schedule has a single stop, so schedule.advance() is
+    # always a no-op (nothing to advance to) regardless of the guard -- not
+    # useful for telling "gate held" apart from "gate missing". Append a second
+    # stop so advance() can actually succeed, exactly like a real multi-stop day.
+    for name in order:
+        chars[name].agent.schedule.schedule.append(
+            {"place": "Cafe", "activity": "eating", "emoji": None, "steps": 5}
+        )
+    for name in order:
+        st = state[name]
+        st.update(
+            {
+                "tile": (0, 0),
+                "path": [],
+                "pron": "\U0001f9d1",
+                "desc": "reading",
+                "perform_until": 100,  # far off; the conversation starts first
+                "reasoning": "",
+                "memories": [],
+                "stop_since": 0,
+                "on_plan": True,
+            }
+        )
+    active: dict = {}
+    wm = WorldMap.__new__(WorldMap)  # unused: conversing agents never path this test
+    emoji = {n: "\U0001f9d1" for n in order}
+
+    # Tick 0: settled + co-located -> a conversation starts.
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        0,
+        order=order,
+        world_map=wm,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+    )
+    assert active  # conversation is live
+    assert state["Maria Lopez"]["conversing"] is True
+    assert state["Ayesha Khan"]["conversing"] is True
+    tile_before = state["Maria Lopez"]["tile"]
+    chat_before = len(frame["Maria Lopez"]["chat"])
+
+    # The activity's timer elapses mid-conversation: an already-elapsed
+    # perform_until satisfies the block's ``step_idx >= perform_until`` this tick.
+    state["Maria Lopez"]["perform_until"] = 1
+    state["Ayesha Khan"]["perform_until"] = 1
+
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        1,
+        order=order,
+        world_map=wm,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+    )
+
+    # The gate held: the schedule was NOT advanced (performing stays True), the
+    # agent didn't move, and the conversation carried on regardless.
+    assert state["Maria Lopez"]["performing"] is True
+    assert state["Maria Lopez"]["tile"] == tile_before
+    assert len(frame["Maria Lopez"]["chat"]) == chat_before + 1
