@@ -130,6 +130,7 @@ const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
 const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
+const RestartDetect := preload("res://scripts/restart_detect.gd")
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -249,6 +250,7 @@ var _live_token := ""
 var _ws: WebSocketPeer = null
 var _ws_open := false
 var _last_cursor := -1
+var _boot_id := ""  # last-seen GET /live boot nonce (#578); "" until first handshake
 var _live_started := false          # first backfill applied -> jump to the live head
 var _reconnect_delay := 1.0         # doubles per failure, capped; reset on connect
 var _retry_pending := false
@@ -676,16 +678,15 @@ func _on_live_handshake_completed(
 		_schedule_retry(_request_handshake)
 		return
 
-	# A handshake cursor below the newest we've applied can only mean the
-	# backend *restarted* — the feed cursor is in-memory and only climbs
-	# within one server lifetime, even across resets (#549). Rejoin from
-	# scratch: drop the dead run's cast and refetch the new run's history,
-	# exactly like a fresh join (the emptied _names respawns below). Default the
-	# cursor to _last_cursor so a backend that omits the field (an older server
-	# during mixed-version dev) reads as "no rewind", not a rewind to 0.
-	if _last_cursor > int((data as Dictionary).get("cursor", _last_cursor)):
+	# Default hs_cursor to _last_cursor so a server omitting `cursor` reads as
+	# "no rewind" (not a rewind to 0); the boot nonce is the primary signal (#578).
+	var hs_boot := str((data as Dictionary).get("boot_id", ""))
+	var hs_cursor := int((data as Dictionary).get("cursor", _last_cursor))
+	if RestartDetect.should_rejoin(_boot_id, hs_boot, _last_cursor, hs_cursor):
 		_teardown_cast()
 		_last_cursor = -1
+	if hs_boot != "":
+		_boot_id = hs_boot
 
 	# Spawn the cast once (a handshake retry after a hiccup must not re-spawn).
 	if _names.is_empty():
