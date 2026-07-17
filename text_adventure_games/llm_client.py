@@ -180,6 +180,18 @@ def _resilient_create(client, create_fn, *, provider: str, messages: list[dict])
     return response, timing["latency_ms"]
 
 
+def _tiered_model(client) -> str:
+    """The model for THIS call: the role stamped into ``client.context``
+    picks from the tiering map (issue #368), else the client default.
+    getattr-guarded so test doubles built via ``__new__`` need not set the
+    attribute."""
+    by_role = getattr(client, "_models_by_role", None)
+    if not by_role:
+        return client._model
+    role = (getattr(client, "context", None) or {}).get("role")
+    return by_role.get(role, client._model)
+
+
 def _preflight_key(client, provider: str, key_env: str, live_probe) -> None:
     """Shared key preflight: fail fast up front rather than deep in the loop.
 
@@ -568,6 +580,11 @@ class LlmConfig:
     provider: Union[LlmProvider, str]
     api_key: str | None = None  # falls back to env vars
     model: str | None = None  # defaults per provider
+    # Per-call-site model tiering (issue #368): maps the "role" the caller
+    # stamps into ``client.context`` before each call (e.g. "plan", "score")
+    # to a model id. Roles not listed -- and calls with no role stamped --
+    # use ``model``. None/empty disables tiering.
+    models_by_role: dict[str, str] | None = None
     max_output_tokens: int = 256
     max_context_tokens: int = 8000
     base_url: str | None = None  # e.g. Helicone proxy
@@ -609,6 +626,9 @@ class OpenAIClient:
             kwargs["base_url"] = config.base_url
         self._client = openai.OpenAI(**kwargs)
         self._model = config.model or _DEFAULT_OPENAI_MODEL
+        self._models_by_role = (
+            dict(config.models_by_role) if config.models_by_role else None
+        )
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
@@ -639,12 +659,13 @@ class OpenAIClient:
         temperature: float = 0.0,
     ) -> str | None:
         try:
+            model = _tiered_model(self)
             if self._verbose:
                 print(json.dumps(messages, indent=2))
             response, latency_ms = _resilient_create(
                 self,
                 lambda: self._client.chat.completions.create(
-                    model=self._model,
+                    model=model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -660,7 +681,7 @@ class OpenAIClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "openai",
-                self._model,
+                model,
                 getattr(response, "usage", None),
                 messages,
                 text,
@@ -681,13 +702,14 @@ class OpenAIClient:
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
         try:
+            model = _tiered_model(self)
             wire_messages = _to_openai_messages(messages)
             if self._verbose:
                 print(json.dumps(wire_messages, indent=2))
             response, latency_ms = _resilient_create(
                 self,
                 lambda: self._client.chat.completions.create(
-                    model=self._model,
+                    model=model,
                     messages=wire_messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -715,7 +737,7 @@ class OpenAIClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "openai",
-                self._model,
+                model,
                 getattr(response, "usage", None),
                 messages,
                 (
@@ -799,6 +821,9 @@ class AnthropicClient:
             max_retries=0,
         )
         self._model = config.model or _DEFAULT_ANTHROPIC_MODEL
+        self._models_by_role = (
+            dict(config.models_by_role) if config.models_by_role else None
+        )
         self._verbose = config.verbose
         self._max_retries = config.max_retries
         self._timeout = config.timeout_sec
@@ -814,13 +839,14 @@ class AnthropicClient:
         temperature: float = 0.0,
     ) -> str | None:
         try:
+            model = _tiered_model(self)
             system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
                 print(json.dumps(messages, indent=2))
 
             kwargs = {
-                "model": self._model,
+                "model": model,
                 "messages": chat_messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -839,7 +865,7 @@ class AnthropicClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "anthropic",
-                self._model,
+                model,
                 getattr(response, "usage", None),
                 messages,
                 text,
@@ -860,13 +886,14 @@ class AnthropicClient:
         temperature: float = 0.0,
     ) -> "ToolCallResult | None":
         try:
+            model = _tiered_model(self)
             system_text, chat_messages = _split_anthropic_messages(messages)
 
             if self._verbose:
                 print(json.dumps(messages, indent=2))
 
             kwargs = {
-                "model": self._model,
+                "model": model,
                 "messages": chat_messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -901,7 +928,7 @@ class AnthropicClient:
                 getattr(self, "ledger", None),
                 getattr(self, "context", {}),
                 "anthropic",
-                self._model,
+                model,
                 getattr(response, "usage", None),
                 messages,
                 (
