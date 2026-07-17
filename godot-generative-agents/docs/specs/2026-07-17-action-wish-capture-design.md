@@ -16,7 +16,8 @@ Before an agent can *write* the action it's missing (#301), we need evidence of
 *which* actions agents actually miss, and why. Today that demand signal is
 invisible — a missing verb hides in three places:
 
-- **The parser's no-verb path** (`parsing.py:487`) emits the same generic
+- **The parser's no-verb path** (`parsing.py:487` on this tree; `:535` on
+  `main`, where the fix lands) emits the same generic
   `"I'm not sure what you want to do."` as any blocked command; nothing records
   what was attempted. A failed parse never becomes a `GameEvent`, so it never
   reaches the backend feed either.
@@ -108,8 +109,9 @@ are visible in narrated output the way agent reasoning already is.
 
 ## Capture path B — parse-gap capture (engine → `main`)
 
-- At the no-verb fail (`parsing.py:487`): `log_wish(trigger="parse_gap",
-  desired=<raw command>)` immediately before the generic fail. Unconditional
+- At the no-verb fail (`parsing.py:487` here; `:535` on `main`):
+  `log_wish(trigger="parse_gap", desired=<raw command>)` immediately before the
+  generic fail. Unconditional
   (all actors — player typos are cheap noise the report filters); keeps the
   parser seam branch-free.
 - **The one behavior change in the slate:** the LLM fallback gains an explicit
