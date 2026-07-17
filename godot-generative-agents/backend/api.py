@@ -75,6 +75,7 @@ import asyncio
 import contextlib
 import json
 import os
+import secrets
 import signal
 import threading
 
@@ -431,6 +432,11 @@ class LiveStatusResponse(BaseModel):
     cursor: int = Field(..., description="the newest change-feed cursor (0 = none yet)")
     tick_seconds: float | None
     meta: dict | None
+    boot_id: str | None = Field(
+        None,
+        description="per-process boot nonce; changes on a backend restart, "
+        "null when no live loop is injected (#578)",
+    )
 
 
 class EventsResponse(BaseModel):
@@ -449,6 +455,13 @@ class EventsResponse(BaseModel):
         None, description="cursor of the oldest retained record (null = empty log)"
     )
     events: list[dict]
+    boot_id: str | None = Field(
+        None,
+        description="per-process boot nonce (the same one GET /live carries); "
+        "lets the HTTP poll fallback detect a restart whose new feed already "
+        "climbed past the follower's cursor. Null when no live loop is injected "
+        "(#578)",
+    )
 
 
 class RunControlResponse(BaseModel):
@@ -554,6 +567,12 @@ def create_app(
     inject a spy; the default SIGINTs this very process."""
     lock = threading.Lock()
     log = EventLog(max_log_records)
+    # A per-process boot nonce (#578): minted once here, so it is stable across
+    # every GET /live in this process and unchanged by reset()/POST /runs
+    # (those swap the run, not the process), but fresh on each restart. Clients
+    # compare it to detect a restarted backend even when the new feed's cursor
+    # has already climbed past the one they kept.
+    boot_id = secrets.token_hex(8)
     controller = (
         LiveRunController(stepper, lock, start_paused=start_paused)
         if stepper is not None
@@ -914,6 +933,7 @@ def create_app(
                 "cursor": log.latest_cursor(),
                 "tick_seconds": None,
                 "meta": None,
+                "boot_id": None,
             }
         with lock:
             return {
@@ -924,6 +944,7 @@ def create_app(
                 "cursor": log.latest_cursor(),
                 "tick_seconds": tick_seconds,
                 "meta": stepper.meta(),
+                "boot_id": boot_id,
             }
 
     @app.get("/events", response_model=EventsResponse)
@@ -946,10 +967,15 @@ def create_app(
         blocks; the socket is the door that waits). Reads only the log, not the
         game, so it doesn't contend with a tick in progress."""
         records = log.since(since)
+        # Same per-process nonce GET /live reports, and null under the same
+        # condition (no live loop injected) so the two doors stay consistent.
         return {
             "latest_cursor": records[-1]["cursor"] if records else log.latest_cursor(),
             "oldest_cursor": log.oldest_cursor(),
             "events": records,
+            "boot_id": (
+                boot_id if (controller is not None and stepper is not None) else None
+            ),
         }
 
     async def _drain_inbound(websocket: WebSocket) -> None:
