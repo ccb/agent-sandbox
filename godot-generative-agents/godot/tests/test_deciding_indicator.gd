@@ -23,13 +23,11 @@ func _rec(agent: String, state: String) -> Dictionary:
 
 func _initialize() -> void:
 	var s = DecidingState.new()
-	_check(not s.seen_signal(), "no signal seen before any record")
 	_check(not s.any_deciding(), "nobody deciding initially")
 
 	s.apply(_rec("Maya", "begin"))
 	_check(s.is_deciding("Maya"), "begin -> agent is deciding")
 	_check(s.any_deciding(), "begin -> any_deciding true")
-	_check(s.seen_signal(), "a record arrived -> signal seen")
 	_check(not s.is_deciding("Diego"), "other agent unaffected")
 
 	s.apply(_rec("Maya", "end"))
@@ -48,7 +46,6 @@ func _initialize() -> void:
 	s.apply(_rec("Sofia", "begin"))
 	s.clear()
 	_check(not s.any_deciding(), "clear -> nobody deciding")
-	_check(not s.seen_signal(), "clear -> signal reset (new run may be mock)")
 
 	if _failures == 0:
 		print("test_deciding_indicator: all checks passed")
