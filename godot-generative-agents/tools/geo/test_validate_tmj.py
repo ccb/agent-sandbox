@@ -304,6 +304,67 @@ def test_collision_reads_walls_layers_on_real_data():
     )
 
 
+def _wall_leak_edit(walkable):
+    """Paint gid 7 as wall art (on a *_walls layer, at solid footprint cell
+    (1,1)) and reuse the same gid on a non-walls `test_floor` layer. If
+    `walkable`, put the floor copy on the walkable cell (0,0); else on the
+    solid footprint cell (2,2)."""
+
+    def edit(tmj, mf):
+        W, H, N = 5, 4, 20
+        walls = [0] * N
+        walls[1 * W + 1] = 7  # (1,1): a footprint cell, collision "1"
+        floor = [0] * N
+        floor[0 if walkable else (2 * W + 2)] = 7  # (0,0) walkable | (2,2) solid
+        tmj["layers"] += [
+            {
+                "type": "tilelayer",
+                "name": "test_walls",
+                "width": W,
+                "height": H,
+                "data": walls,
+            },
+            {
+                "type": "tilelayer",
+                "name": "test_floor",
+                "width": W,
+                "height": H,
+                "data": floor,
+            },
+        ]
+
+    return edit
+
+
+def test_wall_gid_on_non_walls_layer_walkable_errors(tmp_path):
+    # #561/#538: a wall-art gid (one painted on a *_walls layer) reused on a
+    # NON-walls layer over a walkable cell means A* routes agents across a
+    # drawn wall -- the Williams-on-williams_floor bug. Flag it as an error.
+    w = make_world(tmp_path, _wall_leak_edit(walkable=True))
+    findings = v.Checker(w).run().findings
+    leak = [f for f in findings if f.code == "wall_on_walkable"]
+    assert leak and leak[0].severity == "error", findings
+    assert "test_floor" in leak[0].message and "(0,0)" in leak[0].message
+
+
+def test_wall_gid_on_non_walls_layer_solid_is_ok(tmp_path):
+    # Same wall-art gid on a non-walls layer but over a SOLID cell is fine
+    # (that's exactly the entrance_floor perimeter ring): no error.
+    w = make_world(tmp_path, _wall_leak_edit(walkable=False))
+    findings = v.Checker(w).run().findings
+    assert not [f for f in findings if f.code == "wall_on_walkable"], findings
+    assert [f for f in findings if f.code == "wall_tiles_solid_ok"]
+
+
+def test_wall_tiles_solid_on_real_data():
+    # The real map: every wall-art tile outside a *_walls layer (the ~1800
+    # entrance_floor perimeter cells) is solid -- no walkable wall, and the
+    # regression guard reports ok.
+    c = v.Checker(real_world()).run()
+    assert not [f for f in c.errors() if f.code == "wall_on_walkable"]
+    assert [f for f in c.findings if f.code == "wall_tiles_solid_ok"]
+
+
 def test_format_report_groups_and_counts():
     fs = [
         v.Finding("error", "MATRIX_TMJ", "Cohen", "c1", "drawn not present"),
