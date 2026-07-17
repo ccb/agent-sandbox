@@ -431,6 +431,40 @@ def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
 
 
+# ------------------------------------------------ create (#568, world factory)
+
+
+def test_stepper_create_run_builds_and_adopts_a_named_world(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    first = stepper.run_id
+    new_id = stepper.create_run("penn", steps=7)
+    assert new_id != first  # a fresh run id
+    assert stepper.run_id == new_id  # adopted as the live run
+    assert stepper.num_steps == 7  # the step-budget override took
+    assert store.get_run(first)["status"] == "reset"  # old run closed
+    assert store.get_run(new_id)["status"] == "running"  # new run open
+    assert {r["id"] for r in store.list_runs()} == {first, new_id}
+
+
+def test_stepper_create_run_unknown_world_keeps_the_live_run(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    first = stepper.run_id
+    with pytest.raises(KeyError):
+        stepper.create_run("atlantis")
+    # Guard-before-teardown: the live run is untouched, still running.
+    assert stepper.run_id == first
+    assert store.get_run(first)["status"] == "running"
+    assert {r["id"] for r in store.list_runs()} == {first}
+
+
+def test_stepper_create_run_needs_a_store(tmp_path):
+    stepper = PennStepper(num_steps=1, world=build_penn_world())  # storeless
+    with pytest.raises(ValueError):
+        stepper.create_run("penn")
+
+
 # ------------------------------------------------------------ resume (#543)
 
 

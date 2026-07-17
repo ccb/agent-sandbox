@@ -90,6 +90,12 @@ DEFAULT_LLM_MODEL = "claude-haiku-4-5"
 # reflection) offline. resolve_llm returns this sentinel; it is not a paid run.
 SCRIPTED = "scripted"
 
+# The world-factory registry (#568): a world name -> a zero-arg builder that
+# returns a FRESH PennWorld. build_penn_world already hands back a fresh world
+# (fresh WorldMap + patch state) on every call, which is what a per-run build
+# needs. Penn is the first (and today only) entry; a second world is one line.
+WORLD_BUILDERS = {"penn": build_penn_world}
+
 
 def _is_paid(llm) -> bool:
     """True only for a real, paying LLM config (a dict). None (mock) and the
@@ -956,6 +962,35 @@ class PennStepper:
         ):
             self.run_store.update_run(self._run_id, status="reset")
         self._build()
+
+    def create_run(self, world: str, *, steps: int | None = None) -> str:
+        """Build a NAMED world from the factory registry, open a fresh run in
+        the store, and adopt it as the live one (#568); caller holds the app
+        lock, like reset()/resume_run().
+
+        The world is built BEFORE any teardown (guard-before-teardown, like
+        resume_run): an unknown world name or a failed build leaves the live
+        run intact. v1 chooses only the world and an optional step budget --
+        the launch-configured brain is reused, so the LLM clients (built once
+        in __init__, surviving _build on purpose) are untouched and meta()
+        stamps the new run's manifest correctly.
+        """
+        if self.run_store is None:
+            raise ValueError("this server has no run store (--persist)")
+        builder = WORLD_BUILDERS.get(world)
+        if builder is None:
+            raise KeyError(f"unknown world: {world}")
+        world_obj = builder()  # build first -- no teardown yet
+        # Close the current day the way reset() does (a finished day keeps
+        # "finished"), then rebuild on the new world -- _build's non-resume
+        # path opens the next run row via create_run(self.meta()).
+        self._persist_pending_events()
+        if self._run_id is not None and not self._run_finished:
+            self.run_store.update_run(self._run_id, status="reset")
+        if steps is not None:
+            self.num_steps = steps  # attach_agents reads num_steps inside _build
+        self._build(world=world_obj)
+        return self._run_id
 
     def resume_run(self, run_id: str) -> None:
         """Swap the live day for a persisted run (#543); caller holds the app
