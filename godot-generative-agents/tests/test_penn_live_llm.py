@@ -257,6 +257,39 @@ def _llm_stepper(monkeypatch, max_cost=5.0, fail=False, monitor=None, plan="sche
     )
 
 
+def test_tiering_map_reaches_every_client_and_stamps_fixed_roles(monkeypatch):
+    created = []
+
+    def fake_create(config, ledger=None):
+        created.append(config)
+        return _ScriptedBrain(ledger=ledger)
+
+    monkeypatch.setattr(serve_penn, "create_llm_client", fake_create)
+    llm = {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "models": {"plan": "claude-sonnet-4-6", "reflect": "claude-sonnet-4-6"},
+        "max_cost_usd": 5.0,
+    }
+    stepper = PennStepper(
+        num_steps=5, world=build_penn_world(), llm=llm, plan_mode="llm"
+    )
+    # Every client (decide-family, per-agent brains, reflect, plan) carries the
+    # map -- the adapters route per stamped role, so one config fits all.
+    assert created and all(
+        c.models_by_role
+        == {"plan": "claude-sonnet-4-6", "reflect": "claude-sonnet-4-6"}
+        for c in created
+    )
+    # The two fixed-role clients never stamp context themselves: the stepper
+    # pre-stamps them once, which both labels their ledger records (Task 1)
+    # and routes them to the tier model (Task 2).
+    assert stepper.reflector_client.context["role"] == "reflect"
+    assert stepper.planner_client.context["role"] == "plan"
+    # The decide-family client is stamped per call by its call sites, not here.
+    assert "role" not in stepper.llm_client.context
+
+
 def _move(char, location):
     if char.location is not None:
         char.location.remove_character(char)

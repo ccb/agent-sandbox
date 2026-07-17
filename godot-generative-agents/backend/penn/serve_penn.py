@@ -519,15 +519,15 @@ class PennStepper:
             if isinstance(decide_view, RoleTaggedLedger) and ctx is not None:
                 decide_view.bind_context(ctx)
         elif llm is not None:
-            self._llm_config = LlmConfig(provider="anthropic", model=llm.get("model"))
-            self.llm_client = self._decide_client()
-            self.reflector_client = create_llm_client(
-                self._llm_config, ledger=self._recording_ledger("reflect")
+            self._llm_config = LlmConfig(
+                provider="anthropic",
+                model=llm.get("model"),
+                models_by_role=llm.get("models"),
             )
+            self.llm_client = self._decide_client()
+            self.reflector_client = self._role_client("reflect")
             if self.plan_mode == "llm":
-                self.planner_client = create_llm_client(
-                    self._llm_config, ledger=self._recording_ledger("plan")
-                )
+                self.planner_client = self._role_client("plan")
         # Per-agent decide clients (#366): created once per persona on first
         # _build and RE-WIRED (not rebuilt) by later resets -- each SDK client
         # owns a real connection pool, so rebuilding N of them per POST /reset
@@ -549,6 +549,20 @@ class PennStepper:
         ctx = getattr(client, "context", None)
         if isinstance(view, RoleTaggedLedger) and ctx is not None:
             view.bind_context(ctx)
+        return client
+
+    def _role_client(self, role):
+        """A dedicated client for one fixed call site (reflect/plan). Unlike
+        the decide-family sites, these call sites never stamp context
+        themselves, so stamp the role once here: the one key both labels the
+        ledger records (by_role, #368) and routes the call to the tiering
+        map's model for that role."""
+        client = create_llm_client(
+            self._llm_config, ledger=self._recording_ledger(role)
+        )
+        ctx = getattr(client, "context", None)
+        if ctx is not None:
+            ctx["role"] = role
         return client
 
     def _recording_ledger(self, role):
