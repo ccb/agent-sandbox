@@ -7,9 +7,9 @@ decomposed top-down across three levels (see ``docs/design/daily-planning.md``):
   cafe"), no exact times;
 * **hourly plan** -- one :class:`HourBlock` per in-sim hour;
 * **minute plan** -- concrete :class:`Stop`s
-  ``{place, activity, emoji, steps, commands}``, the *only* level the step loop
-  consumes (it is exactly the schedule shape the Smallville port already drives
-  via ``advance()``).
+  ``{place, activity, emoji, steps, commands, furniture}``, the *only* level the
+  step loop consumes (it is exactly the schedule shape the Smallville port
+  already drives via ``advance()``).
 
 Following the same restraint as ``memory.py`` and ``knowledge.py``, this module
 is **pure data with no engine imports**: the dataclasses and the helper
@@ -69,6 +69,12 @@ class Stop:
     this field, ``to_schedule_entry`` / ``from_schedule_entry`` whitelisted only
     place/activity/emoji/steps, so a stop's authored commands were silently
     dropped whenever a plan was committed through ``replace_schedule`` (#464).
+
+    ``furniture`` is an optional hint naming the fixture the agent should occupy
+    at this stop (e.g. ``"blackboard"``) -- a frontend reads it to bias the
+    walk target to that furniture's tile instead of the room centroid. Like
+    ``commands`` it was dropped by the whitelist round-trip before this field
+    (#603); ``None`` for a stop with no such hint.
     """
 
     place: str  # must resolve to a known Location name when executed
@@ -76,6 +82,7 @@ class Stop:
     emoji: str | None = None
     steps: int | None = None  # None => stay put indefinitely
     commands: tuple[str, ...] = ()  # authored commands to fire at this stop
+    furniture: str | None = None  # fixture to occupy at this stop (#603)
 
     def __post_init__(self):
         # Normalize commands to a tuple no matter how it arrived -- a YAML/JSON
@@ -90,10 +97,11 @@ class Stop:
     def to_schedule_entry(self) -> dict:
         """The plain dict the Smallville client/loop already understands.
 
-        ``commands`` is emitted only when non-empty, so a command-less stop
-        serializes byte-identically to its authored ``world_data.yaml`` entry --
-        the round-trip fidelity the Smallville suite pins (a committed schedule
-        must equal the authored spec, which carries no empty ``commands`` key).
+        ``commands`` and ``furniture`` are emitted only when set, so a stop
+        without them serializes byte-identically to its authored
+        ``world_data.yaml`` entry -- the round-trip fidelity the Smallville suite
+        pins (a committed schedule must equal the authored spec, which carries no
+        empty ``commands``/``furniture`` key).
         """
         entry = {
             "place": self.place,
@@ -103,6 +111,8 @@ class Stop:
         }
         if self.commands:
             entry["commands"] = list(self.commands)
+        if self.furniture:
+            entry["furniture"] = self.furniture
         return entry
 
     @classmethod
@@ -114,6 +124,7 @@ class Stop:
             emoji=entry.get("emoji"),
             steps=entry.get("steps"),
             commands=entry.get("commands") or (),
+            furniture=entry.get("furniture"),
         )
 
 
