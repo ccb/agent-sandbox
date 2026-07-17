@@ -680,7 +680,10 @@ func _on_live_handshake_completed(
 
 	# Default hs_cursor to _last_cursor so a server omitting `cursor` reads as
 	# "no rewind" (not a rewind to 0); the boot nonce is the primary signal (#578).
-	var hs_boot := str((data as Dictionary).get("boot_id", ""))
+	# Read boot_id as "" unless it's a real string -- str(null) is "<null>", which
+	# would defeat the helper's empty-string (absent-field) fallback.
+	var raw_boot: Variant = (data as Dictionary).get("boot_id")
+	var hs_boot := str(raw_boot) if raw_boot is String else ""
 	var hs_cursor := int((data as Dictionary).get("cursor", _last_cursor))
 	if RestartDetect.should_rejoin(_boot_id, hs_boot, _last_cursor, hs_cursor):
 		_teardown_cast()
