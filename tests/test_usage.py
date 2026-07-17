@@ -205,3 +205,54 @@ def test_prompt_sha256_is_stable_and_key_order_independent():
     assert prompt_sha256(a) == prompt_sha256(b)
     c = [{"role": "user", "content": "bye"}]
     assert prompt_sha256(a) != prompt_sha256(c)
+
+
+# ---------------------------------------------------------------- role (#368)
+
+
+def _role_record(role, cost=0.1):
+    return CallRecord(
+        usage=Usage.zero("anthropic", "claude-haiku-4-5"),
+        cost_usd=cost,
+        actor="troll",
+        role=role,
+    )
+
+
+def test_call_record_role_lands_in_primitive():
+    line = _role_record("plan").to_primitive()
+    assert line["role"] == "plan"
+    # Absent role serializes as None, like actor does for unattributed calls.
+    assert _role_record(None).to_primitive()["role"] is None
+
+
+def test_record_call_reads_role_from_context():
+    led = UsageLedger()
+    rec = record_call(
+        led,
+        {"actor": "troll", "turn": 3, "role": "score"},
+        "anthropic",
+        "claude-haiku-4-5",
+        None,
+        [{"role": "user", "content": "hi"}],
+        "ok",
+    )
+    assert rec.role == "score"
+    # No role in context -> None, not a crash.
+    rec = record_call(
+        led, {"actor": "troll"}, "anthropic", "claude-haiku-4-5", None, None, None
+    )
+    assert rec.role is None
+
+
+def test_ledger_totals_by_role_and_summary():
+    led = UsageLedger()
+    led.record(_role_record("plan", 0.30))
+    led.record(_role_record("decide", 0.01))
+    led.record(_role_record("decide", 0.02))
+    led.record(_role_record(None, 0.05))
+    assert led.totals_by_role() == pytest.approx(
+        {"plan": 0.30, "decide": 0.03, "(unattributed)": 0.05}
+    )
+    s = led.summary()
+    assert s["by_role"] == {"plan": 0.30, "decide": 0.03, "(unattributed)": 0.05}

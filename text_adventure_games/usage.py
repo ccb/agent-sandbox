@@ -141,6 +141,7 @@ class CallRecord:
     cost_usd: float
     turn: int | None = None
     actor: str | None = None  # which NPC, when known
+    role: str | None = None  # call-site kind: decide/plan/reflect/... (#368)
     attempt: int | None = None  # retry index (replay seam)
     prompt_sha256: str | None = None  # hash of the messages (replay seam)
     latency_ms: float | None = None
@@ -152,6 +153,7 @@ class CallRecord:
             "kind": "call",
             "turn": self.turn,
             "actor": self.actor,
+            "role": self.role,
             "attempt": self.attempt,
             "prompt_sha256": self.prompt_sha256,
             "provider": u.provider,
@@ -236,6 +238,15 @@ class UsageLedger:
             totals[key] = totals.get(key, 0.0) + r.cost_usd
         return totals
 
+    def totals_by_role(self) -> dict[str, float]:
+        """Total cost per call site (decide/plan/reflect/...; issue #368).
+        Calls recorded without a role land under ``"(unattributed)"``."""
+        totals: dict[str, float] = {}
+        for r in self.records:
+            key = r.role or "(unattributed)"
+            totals[key] = totals.get(key, 0.0) + r.cost_usd
+        return totals
+
     def token_totals(self) -> dict[str, int]:
         """Summed input/output/cache token counts across the whole run."""
         return {
@@ -257,6 +268,9 @@ class UsageLedger:
             "total_cost_usd": round(self.total_cost_usd(), 6),
             "by_actor": {
                 actor: round(cost, 6) for actor, cost in self.totals_by_actor().items()
+            },
+            "by_role": {
+                role: round(cost, 6) for role, cost in self.totals_by_role().items()
             },
             **self.token_totals(),
         }
@@ -366,6 +380,7 @@ def record_call(
             cost_usd=price(model, usage),
             turn=context.get("turn"),
             actor=context.get("actor"),
+            role=context.get("role"),
             attempt=context.get("attempt"),
             prompt_sha256=(prompt_sha256(messages) if messages is not None else None),
             latency_ms=latency_ms,
