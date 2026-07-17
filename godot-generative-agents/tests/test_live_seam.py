@@ -223,10 +223,16 @@ def test_reset_while_a_tick_is_in_flight_stays_coherent():
         release.set()  # tick #3 finishes; the lock frees; the reset runs
         resetter.join(timeout=5)
 
-        assert holder["step"] == 0  # the reset rebuilt to t0
+        # NOT `holder["step"] == 0`: /reset's response `step` is a lock-free sample
+        # of the stepper taken *after* reset() released the app lock (api.py), and
+        # reset doesn't pause the loop -- so the next tick can advance 0 -> 1 before
+        # that sample lands. It reads 0 on a fast runner but a legitimate 1 on a slow
+        # one (#597); both are coherent. Assert the rebuild *invariant* instead,
+        # deterministically: it ran exactly once, and a fresh step-0 frame lands below.
         assert reset_calls == [1]  # the stepper was rebuilt exactly once
         reset_cursor = holder["cursor"]
-        # The loop keeps running (reset doesn't pause): a fresh step-0 frame lands.
+        # The loop keeps running (reset doesn't pause): a fresh step-0 frame lands --
+        # this, not the racy response above, is the deterministic proof of "rebuilt to t0".
         _wait_for_events(
             c,
             lambda evs: any(
