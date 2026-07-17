@@ -112,12 +112,12 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
     (wrong provider, missing key) exit with a one-line fix rather than serving
     an all-day sim whose every model call silently returns ``None``.
 
-    Note what is intentionally NOT configurable here: the daily planner. The
-    authored YAML schedules (and the rendezvous routing built on them) stay in
-    charge of the day's itinerary -- ``backend.planner.LLMPlanner`` validates
-    stops against the world's location names, and a generated
-    schedule would undo the hand-tuned meeting overlaps. A Penn-aware planner
-    is follow-up work; decide/converse/reflect are the model's here.
+    The daily planner is a *separate* switch (``--plan``, #397), not part of
+    this resolution: ``--plan schedule`` (the default) keeps the authored YAML
+    day and its hand-tuned meeting overlaps; ``--plan llm`` lets the model
+    author the day, which is free-play (the scripted rendezvous may not
+    converge). ``--brain llm`` here only decides whether decide/converse/reflect
+    are the model's.
     """
     if brain == "scripted":
         return SCRIPTED
@@ -360,6 +360,7 @@ class PennStepper:
         decide_timeout=30.0,
         mock_latency=0.0,
         stall_seconds=0.0,
+        plan_mode="schedule",
         resume_run_id=None,
     ):
         self.num_steps = num_steps
@@ -418,6 +419,20 @@ class PennStepper:
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
         self.cognition_tools = cognition_tools or (llm == SCRIPTED)
+        # Daily planning source (#397): "schedule" (default) keeps the authored
+        # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
+        # model author each day (LLMPlanner); free-play, so the hand-tuned
+        # rendezvous windows are no longer guaranteed. The planner shares the
+        # run's paid Anthropic client, so llm planning needs --brain llm -- the
+        # free mock (None) and scripted (SCRIPTED) brains have no such client,
+        # so _is_paid gates both out (the scripted sentinel is truthy, so a
+        # plain `llm is None` check would let --brain scripted through and then
+        # crash on the unset _llm_config below).
+        self.plan_mode = plan_mode
+        if plan_mode == "llm" and not _is_paid(llm):
+            raise SystemExit(
+                "--plan llm needs --brain llm (the planner shares its client)."
+            )
         # Resolved LLM settings (resolve_llm), or None for the mock brain. The
         # ledger's cost ceiling comes from the same block, so GET /usage
         # reports the budget and tick() can end the day at it.
@@ -436,6 +451,11 @@ class PennStepper:
         # fresh agents by every _build().
         self.llm_client = None
         self.reflector_client = None
+        # The planner client (#397): a separate instance so the request monitor
+        # tags `plan` calls exactly; built only in --plan llm mode (which the
+        # guard above restricts to the paid --brain llm branch, else None ->
+        # attach_agents uses MockPlanner, byte-identical).
+        self.planner_client = None
         if llm == SCRIPTED:
             # Free, key-free full-feature brain (#563): distinct client objects,
             # so the llm_client-gated paths open. Record each role through the
@@ -458,6 +478,10 @@ class PennStepper:
             self.reflector_client = create_llm_client(
                 self._llm_config, ledger=self._recording_ledger("reflect")
             )
+            if self.plan_mode == "llm":
+                self.planner_client = create_llm_client(
+                    self._llm_config, ledger=self._recording_ledger("plan")
+                )
         # Per-agent decide clients (#366): created once per persona on first
         # _build and RE-WIRED (not rebuilt) by later resets -- each SDK client
         # owns a real connection pool, so rebuilding N of them per POST /reset
@@ -522,6 +546,8 @@ class PennStepper:
         # base ledger stays the single source GET /usage sums). Under the mock
         # brain the schedule clients this ledger feeds ARE the brains; under a
         # real brain they only pace the day and never call a model.
+        # Where each agent's day came from, for a one-line boot summary below.
+        planner_sources: dict = {}
         attach_agents(
             self.chars,
             self.world.personas,
@@ -532,12 +558,29 @@ class PennStepper:
             # The #261 swap: with a real client every agent's decide (and its
             # conversation lines) go through the model, and reflection passes
             # run when enough importance accrues. With None (mock mode) both
-            # fall back exactly as before. No planner_client on purpose: the
-            # authored schedules own the itinerary (see resolve_llm).
+            # fall back exactly as before.
             llm_client=self.llm_client,
             reflector_client=self.reflector_client,
+            # Daily planning (#397): a real client only under --plan llm (else
+            # None -> MockPlanner, byte-identical). The planner validates its
+            # stops against the world's full location set and bounds the day to
+            # the run's clock window; both are inert for the mock planner.
+            # Note: these ~3 planning calls/agent fire here at attach time,
+            # before the first tick()'s over_budget() gate -- a one-time 3N
+            # spend that can precede (not skip) the budget ceiling; the next
+            # tick catches it.
+            planner_client=self.planner_client,
+            location_names=frozenset(loc["name"] for loc in self.world.locations),
+            clock=self.clock,
+            out_planner_sources=planner_sources,
             extra_action_names=PENN_ACTION_VERBS,
         )
+        if self.planner_client is not None:
+            authored = sum(1 for s in planner_sources.values() if s == "llm")
+            print(
+                f"  - PLAN: {authored}/{len(planner_sources)} agents on a "
+                "model-authored day (#397); the rest fell back to the schedule"
+            )
         # In-flight decisions from earlier ticks ({name: Future}, #366). Fresh
         # per build: a straggler still running across a reset references the
         # OLD world -- harmless, because parked results are always discarded.
@@ -1080,6 +1123,15 @@ def main() -> int:
         "reflect call; needs ANTHROPIC_API_KEY and `uv sync --extra llm`",
     )
     ap.add_argument(
+        "--plan",
+        choices=("schedule", "llm"),
+        default="schedule",
+        help="schedule (default): agents follow the authored YAML day, so the "
+        "hand-tuned meeting overlaps hold. llm: the model authors each agent's "
+        "day (LLMPlanner, #397) -- free-play, so scripted rendezvous meetings "
+        "may not converge. Requires --brain llm",
+    )
+    ap.add_argument(
         "--model",
         default=None,
         help="override the llm: block's model for this run (--brain llm only)",
@@ -1217,6 +1269,7 @@ def main() -> int:
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
             stall_seconds=args.stall_seconds,
+            plan_mode=args.plan,
             resume_run_id=resume_id,
         )
     except ImportError as e:
