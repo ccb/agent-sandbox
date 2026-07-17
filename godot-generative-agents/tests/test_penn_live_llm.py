@@ -385,7 +385,12 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
         assert ev["model"] == "claude-haiku-4-5"
         # "outcome" (issue #582): maybe_converse now runs the post-conversation
         # consequence pass for each participant right after a real "speak" call.
-        assert ev["role"] in {"decide", "converse", "reflect", "outcome"}
+        # "score" (issue #583): score_new_memories now runs on the real-brain
+        # path right after remember_outcome, one score_memories call per acting
+        # agent per tick -- the scripted brain answers it via the same
+        # catch-all as every other unrecognized tool, so a "score" row is
+        # expected here too.
+        assert ev["role"] in {"decide", "converse", "reflect", "outcome", "score"}
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
     all_drained = stepper.drain_events()
     assert all_drained == []  # drained means drained

@@ -38,6 +38,7 @@ from .cognition import (
     memory_stream_for_persona,
     observe_and_decide,
     remember_outcome,
+    score_new_memories,
 )
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig
@@ -354,6 +355,12 @@ def step(
                 )
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
+                # LLM-scored poignancy (issue #583): override this tick's new
+                # memories' importance with the model's 1-10 scores BEFORE the
+                # reflection check, so reflection timing tracks scored salience.
+                # A no-op for the mock brain (gated on brain-identity), so the
+                # bake stays byte-identical.
+                score_new_memories(char, step_idx)
                 # Periodic memory synthesis (issue #84): now that this step's
                 # outcome is in memory, reflect if enough importance has accrued.
                 # A no-op unless a reflector was wired on (real provider only), so
