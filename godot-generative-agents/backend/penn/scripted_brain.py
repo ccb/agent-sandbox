@@ -8,10 +8,22 @@ conversation (#86), and reflection (#84).
 
 It follows each persona's authored schedule by reading a ``{name:
 ScheduleMockClient}`` map that :func:`backend.cognition.attach_agents` registers
-on it, so agents still reach their rendezvous and conversations fire. Every
-response is a pure function of the prompt plus that (deterministic) schedule
-state -- never a call counter, because the client is shared across personas and
-decisions may run in parallel (#366).
+on it, so agents still reach their rendezvous and conversations fire. The
+decision routes on ``self.context["actor"]`` -- the deciding persona that
+:func:`~text_adventure_games.npc._set_attribution` stamps on this client before
+each decide -- to pick that persona's schedule.
+
+**This client is NOT concurrency-safe, by design.** ``context["actor"]`` is a
+single shared field on one shared object; a parallel decide fan-out (#366) would
+let one thread read another persona's actor and consult the wrong schedule (and
+mis-attribute the ledger). So scripted runs decide *serially*: ``serve_penn``
+rejects ``--brain scripted`` with ``--decide-workers > 0`` and auto-maps scripted
+to 0 workers. There is nothing to parallelize anyway -- each decide is an
+in-process function call, not a network round-trip; hiding latency with threads
+is ``--brain llm``'s job, where every agent owns its own client. Run serially,
+each decision is a deterministic function of the prompt plus the schedule state.
+Do not lift the serial restriction without first making ``actor`` a per-call
+value (e.g. read from the prompt), or the race returns.
 """
 
 from backend.cognition import first_line_location
@@ -96,6 +108,10 @@ class ScriptedPennBrain(MockLlmClient):
     # -- decide -------------------------------------------------------------
 
     def _decide(self, messages, tools):
+        # Routes on the shared, per-decide context["actor"] (see the module
+        # docstring): correct ONLY because scripted decides serially. Do not
+        # enable concurrent scripted decides without first making actor a
+        # per-call value -- else threads race this field onto the wrong schedule.
         actor = (self.context or {}).get("actor")
         schedule = self._schedules.get(actor)
         observation = _last_user_content(messages)
