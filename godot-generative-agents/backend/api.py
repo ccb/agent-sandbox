@@ -172,7 +172,10 @@ class CreateRunRequest(BaseModel):
         ..., min_length=1, description="a name in the world registry, e.g. 'penn'"
     )
     steps: int | None = Field(
-        default=None, gt=0, description="step budget; omit to keep the server default"
+        default=None,
+        gt=0,
+        description="step budget; omit to keep the server default "
+        "(ignored on an --endless server, like the launch --steps flag)",
     )
 
 
