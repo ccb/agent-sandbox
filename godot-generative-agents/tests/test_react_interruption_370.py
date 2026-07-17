@@ -379,3 +379,140 @@ def test_mock_brain_never_consults_but_still_remembers():
     assert react_state.get("last_react", {}) == {}
     texts = [r.text for r in chars["Maria Lopez"].agent.memory.records]
     assert any("I noticed Ayesha Khan nearby" in t for t in texts)
+
+
+from backend.run_simulation import step  # noqa: E402
+
+
+def _full_state(tile, path, conversing=False):
+    """A state entry with every key step() reads."""
+    return {
+        "tile": tuple(tile),
+        "path": list(path),
+        "pron": "\U0001f9d1",
+        "desc": "walking",
+        "performing": False,
+        "perform_until": None,
+        "reasoning": "(r)",
+        "memories": [],
+        "chat": None,
+        "stop_since": 0,
+        "on_plan": True,
+        "conversing": conversing,
+    }
+
+
+def test_step_pauses_pinned_walker_and_resumes_after():
+    # Both agents mid-walk (non-empty path -> never at a decision point, so
+    # world_map=None is safe: step() only touches it on a travel decide).
+    game, chars, _, _, order = _pair(None)
+    emoji = {n: "\U0001f9d1" for n in order}
+    state = {
+        "Maria Lopez": _full_state((0, 0), [(1, 0), (2, 0)], conversing=True),
+        "Ayesha Khan": _full_state((9, 9), [(8, 9)]),
+    }
+    frame, _ = step(game, chars, state, 0, order=order, world_map=None, emoji=emoji)
+    # Pinned mid-walk: tile and path untouched.
+    assert state["Maria Lopez"]["tile"] == (0, 0)
+    assert state["Maria Lopez"]["path"] == [(1, 0), (2, 0)]
+    # Unpinned walker advanced normally.
+    assert state["Ayesha Khan"]["tile"] == (8, 9)
+    # Conversation over: the preserved walk resumes.
+    state["Maria Lopez"]["conversing"] = False
+    step(game, chars, state, 1, order=order, world_map=None, emoji=emoji)
+    assert state["Maria Lopez"]["tile"] == (1, 0)
+    assert state["Maria Lopez"]["path"] == [(2, 0)]
+
+
+def test_step_rejects_react_enabled_without_persistent_react_state():
+    from backend.sim_config import CognitionConfig
+
+    game, chars, _, _, order = _pair(None)
+    emoji = {n: "\U0001f9d1" for n in order}
+    state = {
+        "Maria Lopez": _full_state((0, 0), [(1, 0)]),
+        "Ayesha Khan": _full_state((9, 9), [(8, 9)]),
+    }
+    with pytest.raises(ValueError, match="react_state"):
+        step(
+            game,
+            chars,
+            state,
+            0,
+            order=order,
+            world_map=None,
+            emoji=emoji,
+            conversation_enabled=True,
+            active_conversations={},
+            cog=CognitionConfig(react_enabled=True),
+            react_state=None,
+        )
+
+
+def test_step_runs_react_before_converse_so_greeting_lands_same_tick():
+    from backend.sim_config import CognitionConfig
+
+    brain = _ReactBrain(choice="greet", lines=["Oh hey!", "Hi!"])
+    game, chars, _, _, order = _pair(brain)
+    emoji = {n: "\U0001f9d1" for n in order}
+    # Walking toward each other, already within mutual sight (vision_r=3).
+    state = {
+        "Maria Lopez": _full_state((0, 0), [(1, 0), (2, 0)]),
+        "Ayesha Khan": _full_state((2, 0), [(1, 0)]),
+    }
+    react_state: dict = {}
+    active: dict = {}
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        0,
+        order=order,
+        world_map=None,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+        cog=CognitionConfig(react_enabled=True),
+        react_state=react_state,
+    )
+    # The crossing fired within vision: pinned + first line this same tick.
+    assert state["Maria Lopez"]["conversing"] is True
+    assert state["Ayesha Khan"]["conversing"] is True
+    assert frame["Maria Lopez"]["chat"] == [["Maria Lopez", "Oh hey!"]]
+    assert len(active) == 1
+    # Walks preserved for the resume (movement ran before the react pass this
+    # tick, so each already advanced one tile).
+    assert state["Maria Lopez"]["path"] == [(2, 0)]
+
+
+def test_step_react_off_is_byte_identical():
+    import copy
+
+    game, chars, _, _, order = _pair(None)
+    emoji = {n: "\U0001f9d1" for n in order}
+
+    def _states():
+        return {
+            "Maria Lopez": _full_state((0, 0), [(1, 0), (2, 0)]),
+            "Ayesha Khan": _full_state((2, 0), [(1, 0)]),
+        }
+
+    # Default cog (react off) vs. explicit CognitionConfig(): same frames.
+    s1, s2 = _states(), _states()
+    f1, _ = step(game, chars, s1, 0, order=order, world_map=None, emoji=emoji)
+    from backend.sim_config import CognitionConfig
+
+    f2, _ = step(
+        game,
+        chars,
+        s2,
+        1,
+        order=order,
+        world_map=None,
+        emoji=emoji,
+        cog=CognitionConfig(),
+    )
+    assert f1 == f2
+    assert {k: {x: v[x] for x in ("tile", "path")} for k, v in s1.items()} == {
+        k: {x: v[x] for x in ("tile", "path")} for k, v in s2.items()
+    }
