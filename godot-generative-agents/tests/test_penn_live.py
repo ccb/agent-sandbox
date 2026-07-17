@@ -465,6 +465,23 @@ def test_stepper_create_run_needs_a_store(tmp_path):
         stepper.create_run("penn")
 
 
+def test_stepper_create_run_steps_does_not_leak_into_later_rebuilds(tmp_path):
+    # A per-request steps is a one-shot override, not a permanent mutation:
+    # a later reset() restores the launch budget, and a create_run with
+    # steps=None falls back to the launch default even after a prior reduced
+    # create_run (num_steps used to leak forward through every rebuild).
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    stepper.create_run("penn", steps=7)
+    assert stepper.num_steps == 7  # the override took for this run
+    stepper.reset()
+    assert stepper.num_steps == 3  # reset restores the launch budget
+    stepper.create_run("penn", steps=2)
+    assert stepper.num_steps == 2
+    stepper.create_run("penn")  # steps=None
+    assert stepper.num_steps == 3  # launch default, not the leaked 2
+
+
 # ------------------------------------------------------------ resume (#543)
 
 

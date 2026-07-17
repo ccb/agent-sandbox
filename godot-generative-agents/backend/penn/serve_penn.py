@@ -369,6 +369,10 @@ class PennStepper:
         resume_run_id=None,
     ):
         self.num_steps = num_steps
+        # The launch-configured budget, kept so a per-request create_run(steps=)
+        # override stays one-shot: reset()/resume_run() restore this instead of
+        # inheriting a prior create_run's reduced num_steps (which used to leak).
+        self._launch_num_steps = num_steps
         self.endless = endless
         # Concurrent decisions (#366): with decide_workers > 0, every agent at
         # a decision point decides in parallel inside step(), each bounded by
@@ -961,6 +965,7 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="reset")
+        self.num_steps = self._launch_num_steps
         self._build()
 
     def create_run(self, world: str, *, steps: int | None = None) -> str:
@@ -987,8 +992,10 @@ class PennStepper:
         self._persist_pending_events()
         if self._run_id is not None and not self._run_finished:
             self.run_store.update_run(self._run_id, status="reset")
-        if steps is not None:
-            self.num_steps = steps  # attach_agents reads num_steps inside _build
+        # attach_agents reads num_steps inside _build. A per-request steps is a
+        # one-shot override; without one, fall back to the launch budget so a
+        # prior reduced create_run does not leak forward.
+        self.num_steps = steps if steps is not None else self._launch_num_steps
         self._build(world=world_obj)
         return self._run_id
 
@@ -1014,6 +1021,9 @@ class PennStepper:
         self._persist_pending_events()
         if self._run_id is not None and not self._run_finished:
             self.run_store.update_run(self._run_id, status="reset")
+        # A resumed run must not inherit a prior create_run's reduced budget;
+        # the launch default is the safe non-leaking value.
+        self.num_steps = self._launch_num_steps
         self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
 
 
