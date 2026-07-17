@@ -134,6 +134,17 @@ uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --ste
 /Applications/Godot.app/Contents/MacOS/Godot --path . res://scenes/viewer.tscn
 ```
 
+**Boil-water demo (#592).** For a short, self-contained view of the
+drink → sicken → boil → recover arc (#300) — instead of scrubbing to the tail of a
+long full-cast bake — pass `--scenario boil`. It bakes a one-persona replay
+(`maps/penn_replay_boil.json`) where the three events land early and spread across
+the timeline; the landing menu then shows a **"Play the boil-water demo"** button
+(it self-hides until this file exists). The full cast / bundled replay is untouched.
+
+```bash
+LLM_PROVIDER=mock uv run python godot-generative-agents/backend/penn/generate_penn_replay.py --scenario boil
+```
+
 The Penn world lives in [`backend/penn/`](backend/penn/): `world_data_upenn.yaml`
 (the cast — 3 active personas while the live-LLM MVP keeps runs cheap; 4 more are
 parked in comments, ready to uncomment) and `the_upenn/` (the OSM-derived navigation
