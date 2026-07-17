@@ -142,6 +142,7 @@ def step(
     clock: SimClock | None = None,
     conversation_enabled: bool = False,
     conversation_cooldowns: dict | None = None,
+    active_conversations: dict | None = None,
     cog: CognitionConfig | None = None,
     decide_executor: concurrent.futures.Executor | None = None,
     decide_timeout: float | None = None,
@@ -237,6 +238,7 @@ def step(
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
+            and not st.get("conversing")
         ):
             if st.get("on_plan", True):
                 if char.agent.schedule.advance():
@@ -253,7 +255,7 @@ def step(
                 st["perform_until"] = None
                 st["stop_since"] = step_idx
 
-        if not st["path"] and not st["performing"]:
+        if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
 
     # Concurrent decisions (#366): everyone due this tick decides in parallel
@@ -530,6 +532,7 @@ def step(
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
             clock=clock,
+            active=active_conversations,
         )
     return frame, chats_this_step
 
@@ -711,6 +714,10 @@ def simulate(
             # deviation keeps the pointer. Defaults True so a never-performed
             # agent's first advance is safe.
             "on_plan": True,
+            # Pinned while a multi-tick conversation runs (issue #371): step()'s
+            # pre-pass skips schedule-advance/decision/movement for a conversing
+            # agent, so the meeting isn't interrupted. Cleared when it ends.
+            "conversing": False,
         }
 
     # Conversation is gated on a real brain (issue #86): the deterministic mock
@@ -719,6 +726,10 @@ def simulate(
     # often the same pair re-converses across the run.
     conversation_enabled = llm_client is not None
     conversation_cooldowns: dict = {}
+    # In-progress conversations, carried across ticks (issue #371). Bakes run the
+    # SAME multi-tick form as live -- there is no separate in-tick path -- but the
+    # mock never speaks, so a bake holds zero conversations and stays byte-identical.
+    active_conversations: dict = {}
 
     # Heartbeat plumbing (real-brain runs only). A live run makes many blocking
     # API calls per turn with no other output during quiet stretches, which reads
@@ -761,6 +772,7 @@ def simulate(
             clock=clock,
             conversation_enabled=conversation_enabled,
             conversation_cooldowns=conversation_cooldowns,
+            active_conversations=active_conversations,
             cog=cog,
         )
         frames.append(frame)

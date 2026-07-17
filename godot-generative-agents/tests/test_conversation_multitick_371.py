@@ -266,3 +266,66 @@ def test_mock_brain_never_converses_and_stays_inert():
     assert state["Maria Lopez"]["chat"] is None
     assert "chat" not in frame["Maria Lopez"]
     assert state["Maria Lopez"].get("conversing") in (None, False)
+
+
+from backend.run_simulation import step  # noqa: E402
+from backend.world_map import WorldMap  # noqa: E402
+
+
+def test_step_pins_conversing_agents_from_deciding_and_moving():
+    """A conversing agent stays put and is not asked to decide: step() must
+    read state["conversing"] and skip its schedule-advance/decision/movement."""
+    brain = _ScriptedConvoBrain(["Hi!", "Hello!", "Bye!"])
+    game, chars, state, frame_seed, order = _colocated_pair(brain)
+    # Flesh out state to what step() reads (mirror simulate()'s per-agent dict).
+    for name in order:
+        st = state[name]
+        st.update(
+            {
+                "tile": (0, 0),
+                "path": [],
+                "pron": "\U0001f9d1",
+                "desc": "reading",
+                "perform_until": None,  # stay put; not the thing under test
+                "reasoning": "",
+                "memories": [],
+                "stop_since": 0,
+                "on_plan": True,
+            }
+        )
+    active: dict = {}
+    wm = WorldMap.__new__(WorldMap)  # unused: conversing agents never path this test
+    emoji = {n: "\U0001f9d1" for n in order}
+
+    # Tick 0 starts the conversation (agents are settled+co-located).
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        0,
+        order=order,
+        world_map=wm,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+    )
+    assert active  # conversation is live
+    assert state["Maria Lopez"]["conversing"] is True
+    tile_before = state["Maria Lopez"]["tile"]
+
+    # Tick 1: conversing agents must NOT move and must NOT be re-decided. If the
+    # gate is missing, step() would treat them as "due" and call decide (the
+    # scripted brain has no decide command -> it would error or move).
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        1,
+        order=order,
+        world_map=wm,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+    )
+    assert state["Maria Lopez"]["tile"] == tile_before  # stayed put
+    assert len(frame["Maria Lopez"]["chat"]) == 2  # a second line was said
