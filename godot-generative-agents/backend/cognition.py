@@ -896,6 +896,74 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     return True
 
 
+def apply_conversation_outcome(
+    char, partner_name: str, transcript: str, step: int, clock=None
+) -> bool:
+    """One post-conversation outcome pass for a single participant (issue #582).
+
+    After a meeting actually happened, ask *char*'s brain -- via the
+    :data:`CONVERSATION_OUTCOME_TOOL` -- what the conversation changed:
+
+    * ``plans_changed`` -> a plan revision (:func:`maybe_revise_plan`) tagged with
+      the backend-local :data:`CONVERSATION` reason, the ``commitment`` (falling
+      back to the transcript) carried as the trigger detail. The existing
+      re-anchor guard protects executed/current stops; ``LLMPlanner.revise``
+      already reads trigger detail, and ``MockPlanner.revise`` is a no-op.
+    * ``relationship_note`` -> a high-importance, partner-attributed CHAT memory
+      in *char*'s own stream, so retrieval, reflection, and the #450 social
+      graph's partner channel inherit it.
+
+    Exactly one structured call, billed to *char* under ``role: "outcome"`` (the
+    <=2-per-conversation cost bound, already throttled by the pair cooldown). Safe
+    and inert when the brain can't tool-call, or returns nothing usable -- the
+    same graceful contract the planner and decide paths follow -- which is also
+    why the mock bake (no conversation, so this is never reached) is unchanged.
+    Returns whether the plan changed.
+    """
+    agent = char.agent
+    client = getattr(agent, "llm_client", None)
+    call = getattr(client, "call_tool", None)
+    if not callable(call):
+        return False
+    # Attribute the call to this speaker (usage.py); "role" labels the monitor
+    # line. Stamped right before the (sequential) call, so a shared client is
+    # attributed correctly per participant.
+    ctx = getattr(client, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "outcome"})
+    messages = [
+        # In character (same persona system message the decide path sends), so the
+        # reflection is grounded in who this agent is.
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "conversation_outcome", partner=partner_name, transcript=transcript
+            ),
+        },
+    ]
+    result = call(messages, CONVERSATION_OUTCOME_TOOL, max_tokens=agent.max_tokens)
+    if not isinstance(result, dict):
+        return False
+    note = result.get("relationship_note")
+    if isinstance(note, str) and note.strip():
+        agent.memory.add_chat(
+            note.strip(),
+            turn=step,
+            partner=partner_name,
+            importance=RELATIONSHIP_NOTE_IMPORTANCE,
+        )
+    if not result.get("plans_changed"):
+        return False
+    commitment = result.get("commitment")
+    detail = (
+        commitment.strip()
+        if isinstance(commitment, str) and commitment.strip()
+        else transcript
+    )
+    return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+
+
 def memories_for_frame(records) -> list[dict]:
     """Format retrieved memory records as UI-ready dicts for a replay frame.
 
