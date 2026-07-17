@@ -92,6 +92,43 @@ def test_llm_brain_requires_the_anthropic_key(monkeypatch):
         resolve_llm({"provider": "anthropic"}, "llm")
 
 
+def test_llm_brain_threads_and_validates_the_tiering_map(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    world_llm = {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "models": {"plan": "claude-sonnet-4-6"},
+    }
+    # YAML map flows through; --model-for entries override/extend it.
+    llm = resolve_llm(world_llm, "llm", model_for={"reflect": "claude-sonnet-4-6"})
+    assert llm["models"] == {
+        "plan": "claude-sonnet-4-6",
+        "reflect": "claude-sonnet-4-6",
+    }
+    assert world_llm["models"] == {"plan": "claude-sonnet-4-6"}  # never mutated
+    # Unknown roles are a config typo: die with the valid role list.
+    with pytest.raises(SystemExit, match="planz"):
+        resolve_llm(world_llm, "llm", model_for={"planz": "claude-sonnet-4-6"})
+    # No map anywhere -> no "models" key (exact-dict pins elsewhere rely on it).
+    assert "models" not in resolve_llm(
+        {"provider": "anthropic", "model": "claude-haiku-4-5"}, "llm"
+    )
+    assert "models" not in resolve_llm({"models": {}}, "llm")
+
+
+def test_parse_model_for_pairs():
+    parse = serve_penn._parse_model_for
+    assert parse(["plan=claude-sonnet-4-6", "score=claude-haiku-4-5"]) == {
+        "plan": "claude-sonnet-4-6",
+        "score": "claude-haiku-4-5",
+    }
+    assert parse(None) == {}
+    with pytest.raises(SystemExit, match="ROLE=MODEL"):
+        parse(["plan"])
+    with pytest.raises(SystemExit, match="ROLE=MODEL"):
+        parse(["=claude-sonnet-4-6"])
+
+
 # ------------------------------------------------- the world's llm: block
 
 

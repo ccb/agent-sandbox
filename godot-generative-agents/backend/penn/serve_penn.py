@@ -84,6 +84,26 @@ STALL_EVERY_STEPS = 10
 # cheapest current Anthropic model is the right default (issue #261).
 DEFAULT_LLM_MODEL = "claude-haiku-4-5"
 
+# Call-site roles the tiering map may key (issue #368) -- exactly the roles
+# the call sites stamp into client.context (backend/cognition.py,
+# run_simulation.py) plus the two fixed-role clients built in _build.
+TIER_ROLES = frozenset(
+    {"decide", "plan", "reflect", "converse", "outcome", "score", "react"}
+)
+
+
+def _parse_model_for(pairs):
+    """``["plan=claude-sonnet-4-6", ...]`` -> ``{"plan": "claude-sonnet-4-6"}``.
+    Role validity is checked in resolve_llm (one place for YAML + CLI)."""
+    out = {}
+    for pair in pairs or []:
+        role, sep, model = pair.partition("=")
+        if not sep or not role.strip() or not model.strip():
+            raise SystemExit(f"--model-for expects ROLE=MODEL, got {pair!r}")
+        out[role.strip()] = model.strip()
+    return out
+
+
 # The scripted full-feature mock brain (#563): a deterministic, key-free brain
 # that -- unlike the schedule mock -- is a DISTINCT client object, so it opens
 # the llm_client-gated paths (tool loop, cognition tools, conversation,
@@ -103,7 +123,7 @@ def _is_paid(llm) -> bool:
     return isinstance(llm, dict)
 
 
-def resolve_llm(world_llm, brain, model=None, max_cost=None):
+def resolve_llm(world_llm, brain, model=None, max_cost=None, model_for=None):
     """Resolve one run's LLM settings: ``None`` for the mock brain, else a dict.
 
     ``--brain mock`` (the default) returns ``None`` -- no client is ever built,
@@ -134,6 +154,22 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
         llm["model"] = model
     if max_cost is not None:
         llm["max_cost_usd"] = max_cost
+    # Per-role model tiering (#368): the YAML llm.models map, with --model-for
+    # entries layered on top. Validated here so a typo'd role dies at startup
+    # (for both config surfaces), not silently pays the default model.
+    models = dict(llm.get("models") or {})
+    if model_for:
+        models.update(model_for)
+    unknown = sorted(set(models) - TIER_ROLES)
+    if unknown:
+        raise SystemExit(
+            f"unknown tiering role(s) {', '.join(unknown)}: valid roles are "
+            f"{', '.join(sorted(TIER_ROLES))}"
+        )
+    if models:
+        llm["models"] = models
+    else:
+        llm.pop("models", None)
     provider = str(llm.get("provider", "anthropic")).lower()
     if provider != "anthropic":
         raise SystemExit(
@@ -1207,6 +1243,18 @@ def main() -> int:
         "(--brain llm only); the day ends when cumulative spend reaches it",
     )
     ap.add_argument(
+        "--model-for",
+        action="append",
+        default=None,
+        metavar="ROLE=MODEL",
+        help=(
+            "Route one call-site role to a different model (repeatable), e.g. "
+            "--model-for plan=claude-sonnet-4-6. Valid roles: decide, plan, "
+            "reflect, converse, outcome, score, react. Layers on top of the "
+            "world YAML's llm.models map; only meaningful with --brain llm."
+        ),
+    )
+    ap.add_argument(
         "--persist",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1295,7 +1343,13 @@ def main() -> int:
     # Build the world once: resolve_llm reads its llm: block, the stepper
     # steps it (a second build would waste the map load and fork patch state).
     world = build_penn_world()
-    llm = resolve_llm(world.llm, args.brain, model=args.model, max_cost=args.max_cost)
+    llm = resolve_llm(
+        world.llm,
+        args.brain,
+        model=args.model,
+        max_cost=args.max_cost,
+        model_for=_parse_model_for(args.model_for),
+    )
     # A paying brain shouldn't spend before anyone is watching: under --brain
     # llm the loop boots paused and the viewer's Start button (POST /resume)
     # opens the day. The free mock keeps auto-starting. --[no-]start-paused
