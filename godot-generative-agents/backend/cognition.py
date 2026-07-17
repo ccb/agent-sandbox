@@ -1556,15 +1556,21 @@ def _doing(char, st) -> str:
 
 
 def _consult_react(char, other_name: str, st, step: int, clock=None):
-    """One ``react`` tool call for *char*: ``(choice, detail)`` or ``(None, None)``.
+    """One ``react`` tool call for *char*: ``(attempted, choice, detail)``.
 
     Real, tool-calling brain only -- the same brain-identity gate as
     #485/#582/#583 (``attach_agents`` wires the mock brain AS ``agent.schedule``,
     so identity is exactly "no real client supplied"). Billed to *char* under
     ``role: "react"``. What the agent remembers about the other resident is
     retrieved locally (free) and folded into the prompt, so familiarity informs
-    the choice without a recall round. A malformed reply degrades to
-    ``(None, None)`` -- the rule tier alone, no behavior change."""
+    the choice without a recall round.
+
+    ``attempted`` is False only when the gate itself failed (no real brain) --
+    no call was made. It's True whenever a call was actually placed, whether
+    or not the reply came back usable, so the caller can bill every real
+    request against the cooldown/cap -- a persistently malformed brain must
+    not become an uncapped call storm. A malformed reply degrades to
+    ``(True, None, None)`` -- the rule tier alone, no behavior change."""
     agent = char.agent
     brain = getattr(agent, "llm_client", None)
     if (
@@ -1572,7 +1578,7 @@ def _consult_react(char, other_name: str, st, step: int, clock=None):
         or brain is getattr(agent, "schedule", None)
         or not callable(getattr(brain, "call_tool", None))
     ):
-        return None, None
+        return False, None, None
     ctx = getattr(brain, "context", None)
     if ctx is not None:
         ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "react"})
@@ -1598,14 +1604,14 @@ def _consult_react(char, other_name: str, st, step: int, clock=None):
     # classification, like the outcome/score passes (don't "fix" this).
     result = brain.call_tool(messages, REACT_TOOL, max_tokens=agent.max_tokens)
     if not isinstance(result, dict):
-        return None, None
+        return True, None, None
     choice = result.get("choice")
     if choice not in ("continue", "greet", "replan"):
-        return None, None
+        return True, None, None
     detail = result.get("detail")
     if isinstance(detail, str) and detail.strip():
-        return choice, detail.strip()
-    return choice, None
+        return True, choice, detail.strip()
+    return True, choice, None
 
 
 def maybe_react(
@@ -1725,15 +1731,19 @@ def maybe_react(
         if len(recent) >= react_hour_cap:
             consult_log[reactor] = recent  # prune while we're here
             continue
-        # (3) The LLM gate.
-        choice, detail = _consult_react(
+        # (3) The LLM gate. Cap/cooldown bookkeeping keys on the ATTEMPT --
+        # every real request counts, usable reply or not, so a brain that
+        # answers the react tool badly can't become an uncapped call storm.
+        attempted, choice, detail = _consult_react(
             chars[reactor], other, state[reactor], step, clock=clock
         )
-        if choice is None:
-            continue  # no real tool-calling brain / unusable reply
+        if not attempted:
+            continue  # no real tool-calling brain: rule tier only
         last_react[reactor] = step
         consult_log[reactor] = recent + [step]
         consults += 1
+        if choice is None:
+            continue  # reply unusable: billed + capped, but no behavior change
         # (4) Hand back to the existing seams.
         if choice == "greet":
             ac = ActiveConversation(
