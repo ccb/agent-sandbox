@@ -90,6 +90,12 @@ DEFAULT_LLM_MODEL = "claude-haiku-4-5"
 # reflection) offline. resolve_llm returns this sentinel; it is not a paid run.
 SCRIPTED = "scripted"
 
+# The world-factory registry (#568): a world name -> a zero-arg builder that
+# returns a FRESH PennWorld. build_penn_world already hands back a fresh world
+# (fresh WorldMap + patch state) on every call, which is what a per-run build
+# needs. Penn is the first (and today only) entry; a second world is one line.
+WORLD_BUILDERS = {"penn": build_penn_world}
+
 
 def _is_paid(llm) -> bool:
     """True only for a real, paying LLM config (a dict). None (mock) and the
@@ -364,6 +370,10 @@ class PennStepper:
         resume_run_id=None,
     ):
         self.num_steps = num_steps
+        # The launch-configured budget, kept so a per-request create_run(steps=)
+        # override stays one-shot: reset()/resume_run() restore this instead of
+        # inheriting a prior create_run's reduced num_steps (which used to leak).
+        self._launch_num_steps = num_steps
         self.endless = endless
         # Concurrent decisions (#366): with decide_workers > 0, every agent at
         # a decision point decides in parallel inside step(), each bounded by
@@ -987,10 +997,9 @@ class PennStepper:
         )
         return rows
 
-    def reset(self) -> None:
-        # A reset is a new day AND a new run: close the old run's row first
-        # (status "reset" -- its frames stay readable), then _build() opens
-        # the next one. A day that already finished keeps "finished".
+    def _close_current_run(self) -> None:
+        """Persist pending events and mark the live run 'reset' before a rebuild
+        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run."""
         self._persist_pending_events()
         if (
             self.run_store is not None
@@ -998,7 +1007,52 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="reset")
+
+    def reset(self) -> None:
+        # A reset is a new day AND a new run: close the old run's row first
+        # (status "reset" -- its frames stay readable), then _build() opens
+        # the next one. A day that already finished keeps "finished".
+        self._close_current_run()
+        self.num_steps = self._launch_num_steps
         self._build()
+
+    def create_run(self, world: str, *, steps: int | None = None) -> str:
+        """Build a NAMED world from the factory registry, open a fresh run in
+        the store, and adopt it as the live one (#568); caller holds the app
+        lock, like reset()/resume_run().
+
+        The world is built BEFORE any teardown (guard-before-teardown, like
+        resume_run): an unknown world name or a failed build leaves the live
+        run intact. v1 chooses only the world and an optional step budget --
+        the launch-configured brain is reused, so the LLM clients (built once
+        in __init__, surviving _build on purpose) are untouched and meta()
+        stamps the new run's manifest correctly.
+
+        The unknown-world ``KeyError`` is the ONLY KeyError this raises (the
+        route maps it to 404). A KeyError raised while BUILDING is re-raised as
+        a RuntimeError so a build fault can't masquerade as "unknown world".
+        """
+        if self.run_store is None:
+            raise ValueError("this server has no run store (--persist)")
+        builder = WORLD_BUILDERS.get(world)
+        if builder is None:
+            raise KeyError(f"unknown world: {world}")
+        try:
+            world_obj = builder()  # build first -- no teardown yet
+            # Close the current day the way reset() does (a finished day keeps
+            # "finished"), then rebuild on the new world -- _build's non-resume
+            # path opens the next run row via create_run(self.meta()).
+            self._close_current_run()
+            # attach_agents reads num_steps inside _build. A per-request steps is
+            # a one-shot override; without one, fall back to the launch budget so
+            # a prior reduced create_run does not leak forward.
+            self.num_steps = steps if steps is not None else self._launch_num_steps
+            self._build(world=world_obj)
+        except KeyError as exc:
+            # A build-path KeyError is NOT the unknown-world signal; don't let
+            # it reach the route's KeyError -> 404 handler.
+            raise RuntimeError(f"world {world!r} failed to build") from exc
+        return self._run_id
 
     def resume_run(self, run_id: str) -> None:
         """Swap the live day for a persisted run (#543); caller holds the app
@@ -1019,9 +1073,10 @@ class PennStepper:
         # guards' row/frames ride along so the frames file -- thousands of
         # lines on a long day, all of this under the app lock -- is parsed
         # once, not twice.
-        self._persist_pending_events()
-        if self._run_id is not None and not self._run_finished:
-            self.run_store.update_run(self._run_id, status="reset")
+        self._close_current_run()
+        # A resumed run must not inherit a prior create_run's reduced budget;
+        # the launch default is the safe non-leaking value.
+        self.num_steps = self._launch_num_steps
         self._build(resume_run_id=run_id, resume_row=row, resume_frames=frames)
 
 
