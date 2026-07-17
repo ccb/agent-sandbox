@@ -65,7 +65,10 @@ def test_agent_converses_at_most_once_per_step():
     # Pairs (a,b),(a,c),(b,c) are all eligible; a first-come matching lets exactly
     # one fire and leaves the odd resident out. Without the guard every pair would
     # fire and a/b would each converse twice, clobbering their own chat frame.
-    assert happened == 1
+    # Conversations are now multi-tick (#371): a<->b's opening line is said this
+    # step but "b" hasn't replied with its done-flagged line yet, so nothing has
+    # *completed* this step -- the return value counts completions, not starts.
+    assert happened == 0
     assert [nm for nm in order if state[nm]["chat"]] == ["a", "b"]
     assert state["c"]["chat"] is None
     # The one meeting that fired is a single a<->b transcript on both cards.

@@ -22,7 +22,7 @@ mock is both brain and schedule driver and the replay is byte-identical.
 
 import json
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
@@ -1298,6 +1298,86 @@ def remember_outcome(char, command: str, step: int) -> None:
         record.metadata[_IMPORTANCE_LOCKED] = True
 
 
+@dataclass
+class ActiveConversation:
+    """A conversation in progress across ticks (issue #371).
+
+    Carried in the caller-owned ``active`` dict, keyed by the pair frozenset, so
+    the sim loop can advance one line per tick. ``next_speaker`` alternates each
+    line; ``convo`` accumulates the transcript-so-far. This record is also the
+    seam a future third-party join/interruption (#370) hangs off.
+    """
+
+    a: str  # initiator name (stable pair ordering)
+    b: str  # partner name
+    convo: convo.Conversation
+    next_speaker: str  # whose line the next advance generates
+    started: int  # step the conversation began
+
+
+def _stamp_convo_ctx(speaker, step: int) -> None:
+    """Attribute this line's LLM call to *speaker* (usage.py); "role" labels the
+    monitor line. Each multi-tick line is one speaker, so we stamp just that one
+    (unlike the old whole-loop path, which stamped both up front)."""
+    ctx = getattr(getattr(speaker.agent, "llm_client", None), "context", None)
+    if ctx is not None:
+        ctx.update(
+            {"actor": speaker.name, "turn": step, "attempt": 0, "role": "converse"}
+        )
+
+
+def _publish_chat(state, frame, a_name: str, b_name: str, convo_obj) -> None:
+    """Mirror the transcript-so-far onto both participants' cards. No-op when
+    nothing has been said, so the mock (zero lines) never turns ``chat`` from
+    ``None`` into ``[]`` -- the bake stays byte-identical."""
+    if not convo_obj.lines:
+        return
+    lines = [[speaker, text] for speaker, text in convo_obj.lines]
+    for nm in (a_name, b_name):
+        state[nm]["chat"] = lines
+        if nm in frame:
+            frame[nm]["chat"] = lines
+
+
+def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
+    """End-of-conversation bookkeeping: record the pair cooldown and run the
+    #582 outcome pass for each participant. Returns 1 if the conversation
+    produced any lines (a real meeting), else 0 -- so a mock/empty conversation
+    sets no cooldown and counts for nothing."""
+    if not convo_obj.happened:
+        return 0
+    cooldowns[frozenset((a.name, b.name))] = step
+    transcript = convo_obj.transcript()
+    apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
+    apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
+    return 1
+
+
+def _advance_conversation(
+    game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+) -> tuple[bool, int]:
+    """Generate ONE line for active conversation *ac*, publish the transcript,
+    and finish it if an end condition fired. Returns ``(ended, completed_delta)``:
+    ``ended`` tells the caller to drop *ac* from the active set; ``completed_delta``
+    (0/1) feeds the return count. Sets ``conversing`` True while it runs, clears
+    it on end."""
+    speaker = chars[ac.next_speaker]
+    listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
+    _stamp_convo_ctx(speaker, step)
+    cont = convo.exchange(game, ac.convo, speaker, listener, turn=step)
+    _publish_chat(state, frame, ac.a, ac.b, ac.convo)
+    if cont and len(ac.convo.lines) < max_exchanges:
+        ac.next_speaker = ac.b if ac.next_speaker == ac.a else ac.a
+        state[ac.a]["conversing"] = True
+        state[ac.b]["conversing"] = True
+        return False, 0
+    state[ac.a]["conversing"] = False
+    state[ac.b]["conversing"] = False
+    return True, _finish_conversation(
+        chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
+    )
+
+
 def maybe_converse(
     game,
     chars,
@@ -1310,89 +1390,96 @@ def maybe_converse(
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
     clock=None,
+    active: dict | None = None,
 ) -> int:
-    """Run conversations between co-located, settled residents this step (#86).
+    """Advance and start co-located residents' conversations this step (#86, #371).
 
-    Called once per step *after* movement resolves. A pair is eligible when both
-    are *settled into an activity* (standing still, not walking) and co-located --
-    decided by the engine's ``audience_for`` seam via
-    :func:`conversation.find_conversation_pairs`. The same pair is throttled to one
-    conversation per :data:`CONVERSATION_COOLDOWN_STEPS`, so residents sharing a
-    cafe for an hour chat once, not every tick.
+    Called once per step *after* movement resolves. A conversation is now a
+    multi-tick activity (issue #371): ``active`` (a caller-owned dict keyed by the
+    pair frozenset, persisted across ticks) holds each in-progress
+    :class:`ActiveConversation`. Every step this function
 
-    Each conversation runs the engine turn-taking loop
-    (:func:`conversation.converse`), which writes every line into *both* agents'
-    memory streams as ``MemoryKind.CHAT`` and surfaces the last line on both
-    participants' replay cards (``state``/``frame`` ``"chat"``).
+    1. **advances** each in-progress conversation by exactly one
+       :func:`conversation.exchange` line -- publishing the transcript-so-far on
+       both cards -- and, when an end condition fires (empty utterance, wrap-up
+       flag, or ``max_exchanges`` lines), removes it, records the pair cooldown,
+       and runs one :func:`apply_conversation_outcome` pass per participant (#582);
+    2. **starts** a new conversation for each eligible settled, co-located pair
+       (both ``performing`` and not walking, not already conversing, off cooldown),
+       running its first line this same tick.
 
-    **Gated by the caller**: only invoked when a real brain is driving. With the
-    deterministic mock brain, ``Agent.converse`` returns nothing anyway (its tool
-    answer carries no ``utterance``), so even an accidental call is a no-op -- the
-    mock replay stays byte-identical. Returns how many conversations happened.
+    Participants are marked ``state[name]["conversing"]`` while a conversation
+    runs; :func:`run_simulation.step` reads that flag to keep them from walking or
+    re-deciding. Returns how many conversations **completed** this step.
 
-    After a conversation happens, each participant runs one
-    :func:`apply_conversation_outcome` pass (issue #582): an agreement revises
-    the rest of that agent's day, a notable exchange becomes a durable
-    relationship memory. ``clock`` is threaded to the revision plumbing. Both are
-    reached only when a real brain produced actual dialogue, so the mock bake --
-    which never converses -- never runs the outcome pass and stays byte-identical.
+    **Gated by the caller / mock-inert**: only invoked under a real brain. The
+    mock's ``Agent.converse`` returns nothing, so a started conversation dies on
+    its first empty line with zero lines -- no chat write, no cooldown, no outcome
+    -- and the bake stays byte-identical. ``active`` defaults to a throwaway dict
+    for single-shot callers (e.g. tests that drive one tick directly).
     """
+    active = active if active is not None else {}
+    completed = 0
+
+    # (1) Advance every in-progress conversation by one line.
+    # A participant whose conversation COMPLETES this tick is captured into
+    # finished_this_step (issue #187 fix): without it, phase 2's `busy` below --
+    # computed after this loop's deletions -- would not see them as busy, and
+    # they could immediately start (and finish) a second conversation with a
+    # different resident in this same tick. Deferred instead to next tick.
+    finished_this_step: set[str] = set()
+    for key in list(active):
+        ac = active[key]
+        ended, delta = _advance_conversation(
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            finished_this_step.update((ac.a, ac.b))
+
+    # (2) Start new conversations among settled, co-located, non-busy residents.
+    busy = {
+        name for ac in active.values() for name in (ac.a, ac.b)
+    } | finished_this_step
     settled = [
         chars[name]
         for name in order
-        if state[name]["performing"] and not state[name]["path"]
+        if state[name]["performing"] and not state[name]["path"] and name not in busy
     ]
-    happened = 0
-    # An agent can hold only one conversation per step. In a room of 3+ settled
-    # residents find_conversation_pairs reports every eligible pair, so the same
-    # agent shows up in several (A-B and A-C) -- the engine deliberately leaves
-    # the pick to the caller. Take a first-come matching: once someone has
-    # conversed this step, skip any later pair that includes them, so no agent
-    # double-writes its memory / chat frame in one tick (#187).
-    spoken: set[str] = set()
+    # First-come matching: once someone is conversing this step, skip any later
+    # pair that includes them, so no agent double-writes in one tick (#187).
+    spoken: set[str] = set(busy)
     for a, b in convo.find_conversation_pairs(game, settled):
         if a.name in spoken or b.name in spoken:
             continue
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls per speaker: converse() alternates
-        # speakers through each speaker's OWN client, so when the two clients
-        # are separate instances (#366 per-agent brains) each gets its owner's
-        # name and GET /usage's by_actor splits the dialogue correctly. Under
-        # the classic SHARED client both `ctx` are the same dict, so only the
-        # initiator is stamped -- the pre-#366 behavior, byte-identical. The
-        # "role" key labels the terminal request monitor's line (llm_monitor).
-        ctx_a = getattr(a.agent.llm_client, "context", None)
-        ctx_b = getattr(b.agent.llm_client, "context", None)
-        if ctx_b is ctx_a:
-            ctx_b = None  # classic shared client: stamp once, initiator wins
-        for char, ctx in ((a, ctx_a), (b, ctx_b)):
-            if ctx is not None:
-                ctx.update(
-                    {"actor": char.name, "turn": step, "attempt": 0, "role": "converse"}
-                )
-        conversation = convo.converse(
-            game, a, b, turn=step, max_exchanges=max_exchanges
+        ac = ActiveConversation(
+            a=a.name,
+            b=b.name,
+            convo=convo.Conversation(participants=(a.name, b.name)),
+            next_speaker=a.name,
+            started=step,
         )
-        if not conversation.happened:
-            continue
-        cooldowns[key] = step
-        happened += 1
-        spoken.update((a.name, b.name))  # both are now busy for this step (#187)
-        # The frontend renders chat as a list of [speaker, line] pairs (see
-        # main_script.html), so hand it the whole transcript. It persists (like
-        # desc/reasoning) on state until the agent's next conversation.
-        lines = [[speaker, text] for speaker, text in conversation.lines]
-        for nm in (a.name, b.name):
-            state[nm]["chat"] = lines
-            if nm in frame:
-                frame[nm]["chat"] = lines
-        # Conversation consequences (issue #582): each participant reflects on
-        # what the meeting changed. Reached only for a real conversation, so the
-        # mock bake never runs it. Costs at most two calls, throttled by the pair
-        # cooldown recorded above.
-        transcript = conversation.transcript()
-        apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
-        apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
-    return happened
+        active[key] = ac
+        ended, delta = _advance_conversation(
+            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            if not ac.convo.happened:
+                continue  # opened with nothing (mock) -> nothing to reserve
+        spoken.update((a.name, b.name))  # this pair is busy for the rest of the step
+
+    return completed
