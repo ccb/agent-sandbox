@@ -272,6 +272,10 @@ class ScheduleMockClient(MockReActClient):
         # next", so it declines instead of echoing a stale travel/perform
         # command as a line of dialogue (issue #582): the mock never
         # converses, and maybe_converse's outcome pass is never reached.
+        # The substring keys on the engine's dialogue prompt template:
+        # text_adventure_games/prompt_templates/npc_dialogue.prompty has the
+        # line "You are in a conversation. Reply with the single line ..." --
+        # so an edit to that template's wording would silently break this guard.
         if "you are in a conversation" in system.lower():
             return None
         command = self._choose(observation)
@@ -918,8 +922,10 @@ def apply_conversation_outcome(
       re-anchor guard protects executed/current stops; ``LLMPlanner.revise``
       already reads trigger detail, and ``MockPlanner.revise`` is a no-op.
     * ``relationship_note`` -> a high-importance, partner-attributed CHAT memory
-      in *char*'s own stream, so retrieval, reflection, and the #450 social
-      graph's partner channel inherit it.
+      in *char*'s own stream, so retrieval and reflection pick it up, and the
+      record is partner-attributed for future social-graph work. Note this does
+      NOT touch the #450 social graph card itself -- that reads
+      ``meta.relationships``, which this function never mutates.
 
     Exactly one structured call, billed to *char* under ``role: "outcome"`` (the
     <=2-per-conversation cost bound, already throttled by the pair cooldown). Safe
@@ -950,6 +956,10 @@ def apply_conversation_outcome(
             ),
         },
     ]
+    # No temperature passed -> call_tool's default 0.0, deliberately: this is a
+    # structured yes/no + short-note classification, not free-text generation,
+    # so it should stay deterministic -- unlike the decide/converse paths (which
+    # pass agent.temperature). Don't "fix" this to agent.temperature.
     result = call(messages, CONVERSATION_OUTCOME_TOOL, max_tokens=agent.max_tokens)
     if not isinstance(result, dict):
         return False
