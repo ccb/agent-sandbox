@@ -1366,6 +1366,10 @@ func _spawn_agent(name: String, index: int) -> void:
 	var think := Label.new()
 	think.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
 	think.add_theme_color_override("font_color", Color(0.96, 0.95, 0.90))
+	# A dark outline so the near-white status text stays legible over light map
+	# tiles (roads/grass), where bare font_color alone washes out (#598 review).
+	think.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	think.add_theme_constant_override("outline_size", 4)
 	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
 	think.position = Vector2(
@@ -2041,13 +2045,18 @@ func _process(delta: float) -> void:
 	# on _is_live, so baked replay never shows it. Edge-triggered so the sidebar
 	# text is only rewritten on change.
 	if _is_live:
-		var stalled: bool
-		if _deciding_state.seen_signal():
-			stalled = _deciding_state.any_deciding()  # authoritative (#551)
-		else:
-			stalled = ThinkingIndicator.should_show(
-				_is_live, _backend_run_state, i >= last,
-				Time.get_ticks_msec() - _last_frame_ms, THINKING_STALL_MS)
+		# The explicit per-agent signal OR #372's head-hasn't-grown heuristic
+		# (#598 review): the `deciding` feed only publishes at the tick boundary,
+		# so a decide that begins AND ends within one tick leaves any_deciding()
+		# already false by the time we read it. Latching the heuristic off the
+		# moment any record arrived (the old behavior) therefore turned the badge
+		# dark under a real brain -- the opposite of the intended cue. OR-ing keeps
+		# the stall heuristic live to catch within-tick decides, while any_deciding()
+		# adds the cases that DO span ticks (a parked #366 straggler). Mock is
+		# unaffected: no records -> any_deciding() false -> pure stall-inference.
+		var stalled: bool = _deciding_state.any_deciding() or ThinkingIndicator.should_show(
+			_is_live, _backend_run_state, i >= last,
+			Time.get_ticks_msec() - _last_frame_ms, THINKING_STALL_MS)
 		if stalled != _thinking:
 			_thinking = stalled
 			_thinking_badge.set_active(stalled)
@@ -2164,11 +2173,15 @@ func _process(delta: float) -> void:
 
 	# Animate per-agent thinking bubbles (#551): a shared ellipsis clock so every
 	# visible bubble ticks in lockstep, same cadence as the global badge's cue.
-	var _dots := ThinkingIndicator.ellipsis(Time.get_ticks_msec())
-	for _n in _agents:
-		var _t_bubble: Label = _agents[_n]["think"]
-		if _t_bubble.visible:
-			_t_bubble.text = _dots
+	# Skip the recompute + per-agent sweep entirely when nobody is deciding -- a
+	# bubble is visible only while its agent is (is_deciding => any_deciding), so
+	# there is nothing to animate otherwise (#598 review).
+	if _deciding_state.any_deciding():
+		var _dots := ThinkingIndicator.ellipsis(Time.get_ticks_msec())
+		for _n in _agents:
+			var _t_bubble: Label = _agents[_n]["think"]
+			if _t_bubble.visible:
+				_t_bubble.text = _dots
 
 	# Dim everything outside the tracked agent's perception radius (no-op when free).
 	_update_fog()

@@ -330,12 +330,17 @@ async def run_loop(
                 continue  # a reset raced this tick; drop the stale frame
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
+                # A terminal tick publishes no frame, but tick_once still drained
+                # the deciding buffer into result["deciding"] -- and a parked #366
+                # straggler may have appended its `end` there after the last real
+                # tick. Publish those before "finished" (the buffer is already
+                # cleared, so it's here or nowhere), else the agent's thinking
+                # bubble stays stuck on the finished screen (#598 review). Engine
+                # events stay empty by construction (tick() returns None before it
+                # logs any), so only deciding needs republishing here.
+                for rec in result.get("deciding", ()):
+                    log.append("deciding", **rec)
                 log.append("status", reason="finished", **controller.status())
-                # A terminal tick publishes no frame; its engine/deciding buffers
-                # are empty by construction (the stepper returns None before it
-                # decides), so nothing below is skipped in practice. A future
-                # stepper that buffers records while deciding "finished" must move
-                # those appends above this early return.
                 continue
             extra = (
                 {} if result["deciders"] is None else {"deciders": result["deciders"]}

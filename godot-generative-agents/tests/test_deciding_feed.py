@@ -155,3 +155,81 @@ def test_live_feed_publishes_deciding_records():
         {k: r[k] for k in ("agent", "state", "step")} for r in deciding
     ]
     assert any(r["state"] == "end" and r.get("elapsed_ms") == 12 for r in deciding)
+
+
+def test_deciding_sink_drops_an_orphan_end():
+    # #598 review: an `end` with no matching `begin` this run -- a #366 straggler
+    # finishing after a reset cleared _deciding_started -- is dropped, so a stray
+    # elapsed-less record can't leak into the fresh run's feed and clear a real
+    # bubble. A matched begin/end pair still round-trips, the end carrying elapsed.
+    from serve_penn import PennStepper
+    from penn_world import build_penn_world
+
+    stepper = PennStepper(num_steps=5, world=build_penn_world())
+    stepper._deciding_sink("Maya", "end", 0)  # orphan: no prior begin this run
+    assert stepper.drain_deciding() == []
+
+    stepper._deciding_sink("Maya", "begin", 1)
+    stepper._deciding_sink("Maya", "end", 1)
+    rows = stepper.drain_deciding()
+    assert [r["state"] for r in rows] == ["begin", "end"]
+    assert rows[0] == {"agent": "Maya", "state": "begin", "step": 1}
+    assert set(rows[1]) == {"agent", "state", "step", "elapsed_ms"}
+    assert isinstance(rows[1]["elapsed_ms"], int) and rows[1]["elapsed_ms"] >= 0
+
+
+def test_terminal_tick_still_publishes_a_straggler_end():
+    # #598 review: tick_once drains the deciding buffer even on the finishing
+    # tick, and a parked #366 straggler may have appended its `end` there after
+    # the last real tick. run_loop must publish those before the "finished"
+    # status -- else the bubble stays stuck on the finished screen.
+    import asyncio
+    import contextlib
+
+    from backend.live import EventLog, LiveRunController, ScriptedStepper, run_loop
+
+    class _Stepper(ScriptedStepper):
+        def __init__(self):
+            # A CALLABLE (not a list, which cycles forever): one frame at step 0,
+            # then None -> the run finishes and run_loop takes the terminal path.
+            super().__init__(
+                frames=lambda step: {"Maya": {"x": 0, "y": 0}} if step == 0 else None
+            )
+            self._drains = 0
+
+        def drain_deciding(self):
+            # The straggler's end lands on the SECOND drain -- the terminal
+            # (finished) tick, after the one real frame's tick.
+            self._drains += 1
+            if self._drains == 2:
+                return [{"agent": "Maya", "state": "end", "step": 0, "elapsed_ms": 7}]
+            return []
+
+    async def scenario():
+        log = EventLog()
+        controller = LiveRunController(_Stepper(), threading.Lock())
+        task = asyncio.create_task(run_loop(controller, log, tick_seconds=0.0))
+        async with asyncio.timeout(5):
+            while not any(
+                r["kind"] == "status" and r.get("reason") == "finished"
+                for r in log.since(0)
+            ):
+                await asyncio.sleep(0.001)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        return log.since(0)
+
+    records = asyncio.run(scenario())
+    ends = [
+        r for r in records if r.get("kind") == "deciding" and r.get("state") == "end"
+    ]
+    assert (
+        ends and ends[0]["elapsed_ms"] == 7
+    ), "terminal-tick straggler end was dropped"
+    # ...and it was published before the finished status, so the viewer clears
+    # the bubble before the run marks finished.
+    kinds = [(r["kind"], r.get("state"), r.get("reason")) for r in records]
+    assert kinds.index(("deciding", "end", None)) < kinds.index(
+        ("status", None, "finished")
+    )
