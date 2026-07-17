@@ -431,6 +431,76 @@ def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
     assert PennStepper(num_steps=1, world=build_penn_world()).run_id is None
 
 
+# ------------------------------------------------ create (#568, world factory)
+
+
+def test_stepper_create_run_builds_and_adopts_a_named_world(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    first = stepper.run_id
+    new_id = stepper.create_run("penn", steps=7)
+    assert new_id != first  # a fresh run id
+    assert stepper.run_id == new_id  # adopted as the live run
+    assert stepper.num_steps == 7  # the step-budget override took
+    assert store.get_run(first)["status"] == "reset"  # old run closed
+    assert store.get_run(new_id)["status"] == "running"  # new run open
+    assert {r["id"] for r in store.list_runs()} == {first, new_id}
+
+
+def test_stepper_create_run_unknown_world_keeps_the_live_run(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    first = stepper.run_id
+    with pytest.raises(KeyError):
+        stepper.create_run("atlantis")
+    # Guard-before-teardown: the live run is untouched, still running.
+    assert stepper.run_id == first
+    assert store.get_run(first)["status"] == "running"
+    assert {r["id"] for r in store.list_runs()} == {first}
+
+
+def test_stepper_create_run_needs_a_store(tmp_path):
+    stepper = PennStepper(num_steps=1, world=build_penn_world())  # storeless
+    with pytest.raises(ValueError):
+        stepper.create_run("penn")
+
+
+def test_stepper_create_run_steps_does_not_leak_into_later_rebuilds(tmp_path):
+    # A per-request steps is a one-shot override, not a permanent mutation:
+    # a later reset() restores the launch budget, and a create_run with
+    # steps=None falls back to the launch default even after a prior reduced
+    # create_run (num_steps used to leak forward through every rebuild).
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    stepper.create_run("penn", steps=7)
+    assert stepper.num_steps == 7  # the override took for this run
+    stepper.reset()
+    assert stepper.num_steps == 3  # reset restores the launch budget
+    stepper.create_run("penn", steps=2)
+    assert stepper.num_steps == 2
+    stepper.create_run("penn")  # steps=None
+    assert stepper.num_steps == 3  # launch default, not the leaked 2
+
+
+def test_stepper_create_run_build_fault_is_not_the_404_keyerror(tmp_path, monkeypatch):
+    # Only a missing builder raises KeyError (the route maps that to 404
+    # "unknown world"). A KeyError raised while BUILDING must not masquerade
+    # as that -- it surfaces as a non-KeyError (a 500-class fault).
+    import serve_penn
+
+    def _explode():
+        raise KeyError("some internal lookup blew up")
+
+    monkeypatch.setitem(serve_penn.WORLD_BUILDERS, "boom", _explode)
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    with pytest.raises(RuntimeError):
+        stepper.create_run("boom")
+    # An unknown world is still the 404-path KeyError.
+    with pytest.raises(KeyError):
+        stepper.create_run("atlantis")
+
+
 # ------------------------------------------------------------ resume (#543)
 
 
