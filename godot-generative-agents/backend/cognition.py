@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
+from text_adventure_games.memory import MemoryKind
 from text_adventure_games.planning import RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
@@ -1088,6 +1089,15 @@ def score_new_memories(char, step: int) -> None:
     candidates = []
     for record in memory.records:
         if record.metadata.get(_IMPORTANCE_SCORED):
+            continue
+        # Only observations and chat carry the hardcoded importance constants
+        # this pass replaces. Reflections and plans set their own salience, and
+        # reflect() zeroes importance_since_reflection after writing REFLECTION
+        # records -- re-scoring one on a later tick would leak its delta into the
+        # fresh window and skew reflection cadence. Skip them (mark scored so the
+        # scan stays bounded).
+        if record.kind not in (MemoryKind.OBSERVATION, MemoryKind.CHAT):
+            record.metadata[_IMPORTANCE_SCORED] = True
             continue
         if record.metadata.get(_IMPORTANCE_LOCKED):
             record.metadata[_IMPORTANCE_SCORED] = True
