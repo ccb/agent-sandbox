@@ -362,6 +362,7 @@ class PennStepper:
         llm=None,
         run_store=None,
         cognition_tools=False,
+        react=False,
         decide_workers=0,
         decide_timeout=30.0,
         mock_latency=0.0,
@@ -429,6 +430,11 @@ class PennStepper:
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
         self.cognition_tools = cognition_tools or (llm == SCRIPTED)
+        # React-or-continue (#370): perception-driven interruption while
+        # walking. Held on the stepper so _build() re-applies it on every
+        # reset. Mock-inert (the identity gate never consults the mock brain),
+        # so it is safe to leave on under --brain mock for mechanics demos.
+        self.react = react
         # Daily planning source (#397): "schedule" (default) keeps the authored
         # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
         # model author each day (LLMPlanner); free-play, so the hand-tuned
@@ -535,7 +541,9 @@ class PennStepper:
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
-        self.cog = CognitionConfig(cognition_tools=self.cognition_tools)
+        self.cog = CognitionConfig(
+            cognition_tools=self.cognition_tools, react_enabled=self.react
+        )
         # The live analogue of the bake's meta start/sec_per_step (#580): one
         # SimClock so the decide-context block and the hourly BEHIND_SCHEDULE
         # revision seam see the same in-game time the viewer's navbar shows.
@@ -620,6 +628,10 @@ class PennStepper:
         # meeting spans ticks instead of resolving inside one. Fresh per day/reset
         # (lives in _build, which reset() re-runs), like _convo_cooldowns.
         self._active_conversations = {}
+        # Who was already within mutual sight last tick (issue #370): the
+        # react pass's edge detector. Fresh per day/reset, like the two
+        # conversation dicts above.
+        self._react_state = {}
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -900,6 +912,7 @@ class PennStepper:
             conversation_enabled=self.llm_client is not None,
             conversation_cooldowns=self._convo_cooldowns,
             active_conversations=self._active_conversations,
+            react_state=self._react_state,
             # Concurrent decides (#366): None executor = the serial path the
             # simulate-equivalence test pins; workers > 0 fans decisions out.
             decide_executor=self._decide_executor,
@@ -1236,6 +1249,17 @@ def main() -> int:
         "usual. --brain llm only; the mock brain never reaches the tool loop",
     )
     ap.add_argument(
+        "--react",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="perception-driven interruption (#370): a walking agent that "
+        "newly notices another resident may spend one 'react' model call "
+        "(continue/greet/replan), rule-gated and capped per sim hour; a "
+        "greet pauses the walk for a conversation, then the walk resumes. "
+        "Encounters are written to memory either way. Only --brain llm "
+        "actually consults; the mock/scripted brains never do",
+    )
+    ap.add_argument(
         "--decide-workers",
         type=_decide_workers_arg,
         default="auto",
@@ -1328,6 +1352,7 @@ def main() -> int:
             llm=llm,
             run_store=store,
             cognition_tools=args.cognition_tools,
+            react=args.react,
             decide_workers=decide_workers,
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
@@ -1399,6 +1424,11 @@ def main() -> int:
             if llm is not None
             else "Cognition tools: ON, but the mock brain never reaches the "
             "tool loop -- pair it with --brain llm for any effect."
+        )
+    if args.react:
+        print(
+            "React gate: ON -- a mid-walk encounter may consult the brain "
+            "(continue/greet/replan, #370), capped per agent per sim hour."
         )
     if decide_workers > 0:
         print(
