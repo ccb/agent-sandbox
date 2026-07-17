@@ -384,9 +384,14 @@ def attach_agents(
         # while preserving that order.
         authored_verbs = sorted(
             {
-                cmd.split(" ", 1)[0]
+                verb
                 for stop in spec["schedule"]
                 for cmd in stop.get("commands") or []
+                # "wait" is an idle spacer deliberately excluded from
+                # PENN_ACTION_VERBS; never promote it to a real-brain tool -- a
+                # Wait schema on every decide is recurring token spend and
+                # invites the model to sit idle.
+                if (verb := cmd.split(" ", 1)[0]) != "wait"
             }
         )
         ordered = ["travel", "perform", *(extra_action_names or []), *authored_verbs]
@@ -910,32 +915,67 @@ def remember_outcome(char, command: str, step: int) -> None:
     """
     agent = char.agent
     verb, _, rest = command.partition(" ")
-    if verb == "travel":
+
+    # The #300 water arc marks the sicken/recover *transition* with one-shot
+    # properties set inside DrinkPenn.apply_effects. Consume them by their
+    # presence, NOT by the command's first-token verb: a comma ActionSequence
+    # ("get ..., drink ...") parses as verb "get", and free brain text ("have a
+    # drink of ...") as "have", so gating on verb == "drink" would leave the
+    # marker set to leak into a later drink -- and the boiled-water drink would
+    # then record BOTH sickened and recovered, inverting the arc's payoff. A
+    # marker being set means DrinkPenn just ran and this outcome is the drink to
+    # remember (the sick=8.0 signal the #299 experiment retrieves, or its 5.0
+    # feel-better mirror). Consume the marker either way so it can't re-fire.
+    sick = bool(char.get_property("just_sickened"))
+    if sick:
+        char.set_property("just_sickened", False)
+    recovered = bool(char.get_property("just_recovered"))
+    if recovered:
+        char.set_property("just_recovered", False)
+
+    if sick or recovered:
+        # Render as the drink outcome regardless of the literal verb token.
+        text = render(
+            "reflection",
+            verb="drink",
+            item=rest.strip(),
+            sick=sick,
+            recovered=recovered,
+        )
+        importance = 8.0 if sick else 5.0
+    elif verb == "travel":
         text = render("reflection", verb=verb, location=char.location.name)
         importance = 2.0
     elif verb == "perform":
         activity = char.get_property("activity") or rest.strip()
         text = render("reflection", verb=verb, activity=activity)
         importance = 2.0
+    elif verb == "boil" or (verb == "make" and "boil" in rest):
+        # The corrective hinge of the #300 arc: the agent made the water safe.
+        # Boiling is now the crafting recipe `make boiled water` (verb "make"),
+        # so match that too; render as the canonical "boil" reflection either way.
+        # Ranked above the passive recovery drink (5.0) and well above a plain
+        # get (2.0) so importance-weighted retrieval surfaces this causal
+        # "I fixed it" step -- the exact signal the #299/#301 choose-to-boil
+        # experiment reads -- instead of losing it to the 1.0 filler bucket.
+        text = render("reflection", verb="boil", command=command)
+        importance = 6.0
     elif verb == "drink":
-        # The contaminated-water effect (#300): DrinkPenn sets a one-shot
-        # "just_sickened" marker during apply_effects, keyed off the
-        # sick/not-sick *transition* rather than the character's ongoing
-        # is_sick state (spec §4) -- so a still-sick agent drinking a clean
-        # liquid doesn't misattribute "terribly sick" to this drink. Only the
-        # drink that actually caused the sickness lands as the HIGH-importance
-        # first-person memory the self-coding experiment (#299) retrieves;
-        # consume the marker here so it doesn't leak into a later drink.
-        sick = bool(char.get_property("just_sickened"))
-        if sick:
-            char.set_property("just_sickened", False)
-        text = render("reflection", verb=verb, item=rest.strip(), sick=sick)
-        importance = 8.0 if sick else 2.0
+        # A drink with no transition marker: safe water while healthy (or a
+        # still-sick agent whose drink changed nothing). Normal importance.
+        text = render("reflection", verb=verb, item=rest.strip())
+        importance = 2.0
     elif verb in ("get", "activate", "deactivate"):
         # World-mutating one-shot verbs (#300): worth a normal-importance
         # memory, unlike the 1.0 catch-all below.
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
+    elif verb == "wait":
+        # Idle filler (#300 spacers, or a live brain choosing to wait): not
+        # worth a memory at all. Skip it so a run doesn't accrue identical 1.0
+        # "I did wait" entries that crowd the agent's card and feed
+        # maybe_reflect's importance accumulator with noise.
+        return
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
