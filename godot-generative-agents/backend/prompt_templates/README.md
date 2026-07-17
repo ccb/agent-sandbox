@@ -52,6 +52,7 @@ rename, remove, or re-wire a template.**
 | `plan_system.prompty` | `planner.py` — `LLMPlanner._call()` (day / hourly / minute / revise) | **Real model prompt.** System message for the optional LLM daily planner (#83): plan one day in character. The per-level user message is assembled in code. |
 | `decide_context.prompty` | `cognition.py` — `decide_context_block()`, folded into `observe_and_decide`'s observation when the step loop threads a `SimClock` (#580) | **Real model prompt context.** The always-on decide slice: `Right now it is <time>.` + the plan's current stop (with planned minutes) + minutes elapsed on it. Appended after the environment text, so the deterministic mock never reads it. |
 | `conversation_outcome.prompty` | `cognition.py` — `apply_conversation_outcome()` | **Real model prompt.** Presents a finished conversation's transcript and asks the participant, via the `conversation_outcome` tool, whether it changed their plans and whether the other person is worth remembering (#582). Only reached when a real brain drove an actual conversation. |
+| `importance_score.prompty` | `cognition.py` — `score_new_memories()` | **Real model prompt.** Lists a batch of an agent's newly-formed memories and asks, via the `score_memories` tool, for a 1-10 poignancy score each (#583). Only reached when a real brain is driving; the scores override the hardcoded importance constants (the floor on error / mock). |
 
 ## A note on escaping
 

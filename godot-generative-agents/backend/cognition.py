@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
+from text_adventure_games.memory import MemoryKind
 from text_adventure_games.planning import RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
@@ -102,6 +103,50 @@ CONVERSATION_OUTCOME_TOOL = {
             },
         },
         "required": ["plans_changed"],
+    },
+}
+
+# Memory importance scoring (issue #583). MemoryRecord.metadata keys the scorer
+# reads/writes: _LOCKED marks a ground-truth importance the model must never
+# re-guess (the #300 sickness signal, the #582 relationship note); _SCORED marks
+# a record the scorer has already examined, so each is asked about at most once.
+_IMPORTANCE_LOCKED = "importance_locked"
+_IMPORTANCE_SCORED = "importance_scored"
+
+# One structured call per acting agent per tick scores that agent's new memories
+# 1-10 (Generative Agents "poignancy"), replacing the hardcoded importance
+# constants. Batched: every unscored record in one request. Normalized
+# {name, description, parameters}, the shape llm_client.call_tool translates per
+# provider, like the planner's and the conversation-outcome tools.
+IMPORTANCE_SCORE_TOOL = {
+    "name": "score_memories",
+    "description": (
+        "Rate how significant (poignant) each memory is to you, from 1 "
+        "(utterly mundane) to 10 (momentous), one score per memory id."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "scores": {
+                "type": "array",
+                "description": "One entry per memory: its id and a 1-10 importance.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "integer",
+                            "description": "The memory's id, exactly as listed.",
+                        },
+                        "score": {
+                            "type": "integer",
+                            "description": "1 (mundane) to 10 (momentous).",
+                        },
+                    },
+                    "required": ["id", "score"],
+                },
+            },
+        },
+        "required": ["scores"],
     },
 }
 
@@ -972,12 +1017,15 @@ def apply_conversation_outcome(
         return False
     note = result.get("relationship_note")
     if isinstance(note, str) and note.strip():
-        agent.memory.add_chat(
+        note_record = agent.memory.add_chat(
             note.strip(),
             turn=step,
             partner=partner_name,
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
+        # #583: the relationship note is a deliberate high signal (#582), not a
+        # guessable importance -- lock it so score_new_memories leaves it be.
+        note_record.metadata[_IMPORTANCE_LOCKED] = True
     # Require a real boolean True -- not merely a truthy value. A lenient or
     # fake client that returns a stringy "false" or a 1 must not trip a
     # revision; the schema declares plans_changed as a required boolean, so a
@@ -991,6 +1039,120 @@ def apply_conversation_outcome(
         else transcript
     )
     return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+
+
+def score_new_memories(char, step: int) -> None:
+    """Score ``char``'s newly-formed memories 1-10 with the model (issue #583).
+
+    Replaces the hardcoded importance constants (``remember_outcome``'s per-verb
+    numbers, ``add_chat``'s DEFAULT_CHAT_IMPORTANCE, perception's
+    PRESENCE_IMPORTANCE) with the paper's model-scored *poignancy*, so reflection
+    timing and retrieval ranking track what actually mattered rather than a flat
+    schedule. Called once per acting agent per tick, right before ``maybe_reflect``
+    (:mod:`run_simulation`), over every record not yet scored:
+
+    * **One batched call.** All unscored, unlocked records go in a single
+      ``score_memories`` tool request -- never one call per record, which would
+      double live call volume. Each returned ``{id, score}`` overrides that
+      record's importance (clamped to 1-10) and shifts
+      ``importance_since_reflection`` by the delta, so ``should_reflect`` reads
+      the *scored* accumulator.
+    * **Constants are the floor.** A non-dict / malformed reply leaves the
+      constants intact and does NOT mark records scored, so a transient failure
+      simply retries next decide. A record the model omits keeps its constant but
+      is marked scored (we asked; don't re-ask). Over-budget is inherited: this
+      runs only after a successful decide, and decides are gated by the run's
+      cost-ceiling kill-switch.
+    * **Ground-truth stays.** Records flagged ``_IMPORTANCE_LOCKED`` (the #300
+      sickness outcome, the #582 relationship note) are skipped entirely -- event
+      knowledge the model can't see from text, so it must not re-guess it.
+
+    Mock byte-identical: gated on brain-identity. ``attach_agents`` wires the mock
+    brain AS ``agent.schedule`` (same object), so ``brain is agent.schedule`` is
+    exactly "no real client supplied" -- the same gate #485/#582 use. Checking
+    ``callable(call_tool)`` alone would NOT do: ``ScheduleMockClient`` scripts
+    ``call_tool``, so the default offline run would score and the bake would drift.
+    """
+    agent = char.agent
+    brain = getattr(agent, "llm_client", None)
+    # Real, tool-calling brain only -- identity gate first (see docstring).
+    if (
+        brain is None
+        or brain is getattr(agent, "schedule", None)
+        or not callable(getattr(brain, "call_tool", None))
+    ):
+        return
+
+    memory = agent.memory
+    # Mark any locked record examined so it drops out of future candidate scans,
+    # and collect the unscored, unlocked ones to send.
+    candidates = []
+    for record in memory.records:
+        if record.metadata.get(_IMPORTANCE_SCORED):
+            continue
+        # Only observations and chat carry the hardcoded importance constants
+        # this pass replaces. Reflections and plans set their own salience, and
+        # reflect() zeroes importance_since_reflection after writing REFLECTION
+        # records -- re-scoring one on a later tick would leak its delta into the
+        # fresh window and skew reflection cadence. Skip them (mark scored so the
+        # scan stays bounded).
+        if record.kind not in (MemoryKind.OBSERVATION, MemoryKind.CHAT):
+            record.metadata[_IMPORTANCE_SCORED] = True
+            continue
+        if record.metadata.get(_IMPORTANCE_LOCKED):
+            record.metadata[_IMPORTANCE_SCORED] = True
+            continue
+        candidates.append(record)
+    if not candidates:
+        return
+
+    # Attribute the call to this agent (usage.py); "role" labels the monitor line.
+    ctx = getattr(brain, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "score"})
+    messages = [
+        # In character (same persona system message the decide path sends), so
+        # poignancy is judged from who this agent is.
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "importance_score",
+                memories=[{"id": r.id, "text": r.text} for r in candidates],
+            ),
+        },
+    ]
+    # No temperature -> call_tool's default 0.0, deliberately: this is a numeric
+    # classification, not free-text generation, so it stays deterministic (like
+    # apply_conversation_outcome; don't "fix" it to agent.temperature).
+    result = brain.call_tool(
+        messages, IMPORTANCE_SCORE_TOOL, max_tokens=agent.max_tokens
+    )
+    # Malformed / transient failure: leave everything unscored, floor stands, retry.
+    if not isinstance(result, dict):
+        return
+    scores = result.get("scores")
+    if not isinstance(scores, list):
+        return
+
+    by_id: dict[int, object] = {}
+    for entry in scores:
+        if not isinstance(entry, dict):
+            continue
+        eid = entry.get("id")
+        # bool is an int subclass, so a boolean id would pass an isinstance int
+        # check and then collide with real id 0/1 (hash(True) == hash(1)),
+        # mis-scoring that record. Reject it (mirrors the score-side guard below).
+        if isinstance(eid, int) and not isinstance(eid, bool):
+            by_id[eid] = entry.get("score")
+    for record in candidates:
+        record.metadata[_IMPORTANCE_SCORED] = True  # asked; never re-ask
+        raw = by_id.get(record.id)
+        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+            continue  # model omitted / non-numeric: keep the constant floor
+        new = max(1.0, min(float(raw), 10.0))
+        memory.importance_since_reflection += new - record.importance
+        record.importance = new
 
 
 def memories_for_frame(records) -> list[dict]:
@@ -1128,7 +1290,12 @@ def remember_outcome(char, command: str, step: int) -> None:
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
-    agent.memory.add_observation(text, turn=step, importance=importance)
+    record = agent.memory.add_observation(text, turn=step, importance=importance)
+    # #583: the sick/recovered drink outcome is event knowledge the model can't
+    # derive from text (the #300 water arc's ground-truth 8.0/5.0), so lock it --
+    # score_new_memories skips locked records rather than re-guessing them.
+    if sick or recovered:
+        record.metadata[_IMPORTANCE_LOCKED] = True
 
 
 def maybe_converse(
