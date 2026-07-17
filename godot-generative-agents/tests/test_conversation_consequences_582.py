@@ -156,6 +156,34 @@ def test_agreement_revises_plan_and_writes_relationship_note():
     assert notes[0].actor == "Ayesha Khan"  # add_chat stores partner as actor
 
 
+def test_relationship_note_without_plan_change():
+    """A memorable exchange that doesn't change plans: the note is still
+    written, but no revision fires (covers the note+no-revision combo, distinct
+    from small talk which has neither)."""
+    from text_adventure_games.memory import MemoryKind
+
+    brain = _OutcomeBrain(
+        {"plans_changed": False, "relationship_note": "Nice to see them again."}
+    )
+    planner = _RecordingPlanner()
+    maria = _agent_with(brain, planner)
+
+    changed = cognition.apply_conversation_outcome(
+        maria, "Ayesha Khan", "Maria Lopez: Hey!\nAyesha Khan: Been a while!", step=2
+    )
+
+    assert changed is False
+    assert planner.triggers == []  # no revision offered
+    notes = [
+        r
+        for r in maria.agent.memory.records
+        if r.kind == MemoryKind.CHAT
+        and r.importance == cognition.RELATIONSHIP_NOTE_IMPORTANCE
+        and r.actor == "Ayesha Khan"
+    ]
+    assert len(notes) == 1
+
+
 def test_small_talk_changes_nothing():
     brain = _OutcomeBrain({"plans_changed": False})
     planner = _RecordingPlanner()
