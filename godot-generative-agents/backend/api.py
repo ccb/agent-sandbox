@@ -439,6 +439,13 @@ class EventsResponse(BaseModel):
         None, description="cursor of the oldest retained record (null = empty log)"
     )
     events: list[dict]
+    boot_id: str | None = Field(
+        None,
+        description="per-process boot nonce (the same one GET /live carries); "
+        "lets the HTTP poll fallback detect a restart whose new feed already "
+        "climbed past the follower's cursor. Null when no live loop is injected "
+        "(#578)",
+    )
 
 
 class RunControlResponse(BaseModel):
@@ -936,10 +943,15 @@ def create_app(
         blocks; the socket is the door that waits). Reads only the log, not the
         game, so it doesn't contend with a tick in progress."""
         records = log.since(since)
+        # Same per-process nonce GET /live reports, and null under the same
+        # condition (no live loop injected) so the two doors stay consistent.
         return {
             "latest_cursor": records[-1]["cursor"] if records else log.latest_cursor(),
             "oldest_cursor": log.oldest_cursor(),
             "events": records,
+            "boot_id": (
+                boot_id if (controller is not None and stepper is not None) else None
+            ),
         }
 
     async def _drain_inbound(websocket: WebSocket) -> None:

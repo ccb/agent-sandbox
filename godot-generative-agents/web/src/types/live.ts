@@ -51,6 +51,10 @@ export interface EventsResponse {
   latest_cursor: number;
   oldest_cursor: number | null;
   events: FeedRecord[];
+  // Per-process boot nonce (#578), the same one GET /live carries: lets the
+  // poll fallback detect a restart whose new feed already climbed past our
+  // cursor (no eviction gap, no rewind). Absent on a server predating the field.
+  boot_id?: string | null;
 }
 
 // The live meta blob GET /live passes through: the replay-meta shape minus
