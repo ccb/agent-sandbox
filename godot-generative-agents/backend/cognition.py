@@ -266,6 +266,14 @@ class ScheduleMockClient(MockReActClient):
         """Free-text (chat) route -- the fallback path in LLMAgent.decide."""
         observation = messages[-1]["content"] if messages else ""
         system = messages[0]["content"] if messages else ""
+        # Agent.converse's free-text fallback (_converse_freetext) also calls
+        # chat() -- with the dialogue system message, not the decide one. This
+        # brain only knows how to walk a schedule, not answer "what do you say
+        # next", so it declines instead of echoing a stale travel/perform
+        # command as a line of dialogue (issue #582): the mock never
+        # converses, and maybe_converse's outcome pass is never reached.
+        if "you are in a conversation" in system.lower():
+            return None
         command = self._choose(observation)
         self.decisions.append({"command": command, "system": system})
         return command
@@ -1113,6 +1121,7 @@ def maybe_converse(
     *,
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+    clock=None,
 ) -> int:
     """Run conversations between co-located, settled residents this step (#86).
 
@@ -1132,6 +1141,13 @@ def maybe_converse(
     deterministic mock brain, ``Agent.converse`` returns nothing anyway (its tool
     answer carries no ``utterance``), so even an accidental call is a no-op -- the
     mock replay stays byte-identical. Returns how many conversations happened.
+
+    After a conversation happens, each participant runs one
+    :func:`apply_conversation_outcome` pass (issue #582): an agreement revises
+    the rest of that agent's day, a notable exchange becomes a durable
+    relationship memory. ``clock`` is threaded to the revision plumbing. Both are
+    reached only when a real brain produced actual dialogue, so the mock bake --
+    which never converses -- never runs the outcome pass and stays byte-identical.
     """
     settled = [
         chars[name]
@@ -1184,4 +1200,11 @@ def maybe_converse(
             state[nm]["chat"] = lines
             if nm in frame:
                 frame[nm]["chat"] = lines
+        # Conversation consequences (issue #582): each participant reflects on
+        # what the meeting changed. Reached only for a real conversation, so the
+        # mock bake never runs it. Costs at most two calls, throttled by the pair
+        # cooldown recorded above.
+        transcript = conversation.transcript()
+        apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
+        apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
     return happened
