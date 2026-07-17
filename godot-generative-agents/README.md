@@ -250,6 +250,25 @@ Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
 (or with a non-Anthropic `provider:` in the config) rather than serving a day
 of silently failing calls.
 
+#### Model tiering (#368)
+
+Every LLM call is stamped with its call-site role — `decide`, `plan`,
+`reflect`, `converse`, `outcome`, `score`, `react` — and by default one model
+(the `llm:` block's `model`) serves them all. To route a role to a different
+model, add a `models:` map to the world YAML's `llm:` block, or override per
+run:
+
+    uv run python godot-generative-agents/backend/penn/serve_penn.py \
+        --brain llm --plan llm \
+        --model-for plan=claude-sonnet-4-6 --model-for reflect=claude-sonnet-4-6
+
+Recommended tiering: a stronger model for the low-volume reasoning sites
+(`plan`, `reflect`, `outcome`) and the cheap default for the high-volume ones
+(`decide`, `converse`, `score`, `react`). Per-role spend is visible in
+`GET /usage` (`by_role`) and in each run log's summary line; the
+`LLM_MAX_COST`-style budget ceiling (`max_cost_usd`) stays global across
+tiers.
+
 **The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
 server is up and the viewer connects, but not a single model call is made
 until you press **▶ Start simulation** in the left sidebar (it sends
