@@ -15,6 +15,8 @@ Fully offline (fake brains). Run from the repo root::
 import sys
 from pathlib import Path
 
+import pytest
+
 _SIM_DIR = (
     Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
 )
@@ -413,3 +415,27 @@ def test_step_perform_until_gate_holds_conversing_agent_pinned():
     assert state["Maria Lopez"]["performing"] is True
     assert state["Maria Lopez"]["tile"] == tile_before
     assert len(frame["Maria Lopez"]["chat"]) == chat_before + 1
+
+
+def test_step_rejects_conversation_enabled_without_active_dict():
+    """#371 contract: a multi-tick meeting only spans ticks if its state persists
+    across them. Enabling conversation while letting active_conversations default
+    to None would hand maybe_converse a throwaway dict every tick -- the meeting
+    would restart, re-greet, and re-pin the pair, which then never resumes its
+    schedule. step() refuses that combination up front, mirroring the existing
+    decide_executor/decide_timeout contract guard."""
+    brain = _ScriptedConvoBrain(["Hi!"])
+    game, chars, state, _frame, order = _colocated_pair(brain)
+    wm = WorldMap.__new__(WorldMap)  # never reached: the guard raises first
+    emoji = {n: "\U0001f9d1" for n in order}
+    with pytest.raises(ValueError, match="active_conversations"):
+        step(
+            game,
+            chars,
+            state,
+            0,
+            order=order,
+            world_map=wm,
+            emoji=emoji,
+            conversation_enabled=True,  # active_conversations omitted -> None
+        )
