@@ -365,7 +365,9 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
     assert llm_calls  # the t0 decides were monitored
     for ev in llm_calls:
         assert ev["model"] == "claude-haiku-4-5"
-        assert ev["role"] in {"decide", "converse", "reflect"}
+        # "outcome" (issue #582): maybe_converse now runs the post-conversation
+        # consequence pass for each participant right after a real "speak" call.
+        assert ev["role"] in {"decide", "converse", "reflect", "outcome"}
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
     all_drained = stepper.drain_events()
     assert all_drained == []  # drained means drained

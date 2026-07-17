@@ -522,6 +522,7 @@ def step(
             order,
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
+            clock=clock,
         )
     return frame, chats_this_step
 

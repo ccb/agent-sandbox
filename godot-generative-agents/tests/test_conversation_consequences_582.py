@@ -199,3 +199,123 @@ def test_client_without_call_tool_is_a_no_op():
     assert cognition.apply_conversation_outcome(maria, "X", "t", step=0) is False
     assert planner.triggers == []
     assert maria.agent.memory.records == []
+
+
+from backend.build_world import build_world  # noqa: E402
+from backend.cognition import attach_agents, maybe_converse  # noqa: E402
+
+_LOCATIONS = [
+    {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
+    {"name": "Library", "description": "a library", "address": "T:Library:desks"},
+    {"name": "Cafe", "description": "a cafe", "address": "T:Cafe:counter"},
+]
+
+
+def _persona(name):
+    return {
+        "name": name,
+        "home": "Plaza",
+        "persona": f"I am {name}.",
+        "emoji": "\U0001f9d1",
+        "start_tile": [0, 0],
+        "destination": "Cafe",
+        "activity": "reading",
+        "schedule": [
+            {"place": "Cafe", "activity": "reading", "emoji": None, "steps": 5}
+        ],
+    }
+
+
+class _ConvoThenOutcomeBrain:
+    """A real-shaped brain that both talks (converse -> one line, then done) and
+    answers conversation_outcome with an agreement. Shared by both agents, like
+    the classic single-brain live path."""
+
+    def __init__(self):
+        self.context: dict = {}
+        self.outcome_calls = 0
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        if tool["name"] == "conversation_outcome":
+            self.outcome_calls += 1
+            return {
+                "plans_changed": True,
+                "commitment": "meet at the Library",
+                "relationship_note": "A good friend from the cafe.",
+            }
+        # The engine's dialogue seam (Agent.converse) forces the "speak" tool.
+        return {"utterance": "Library later?", "done": True}
+
+
+def _colocated_settled_pair(brain):
+    personas = [_persona("Maria Lopez"), _persona("Ayesha Khan")]
+    game, chars = build_world(None, personas, _LOCATIONS)
+    attach_agents(chars, personas, llm_client=brain)
+    # Give each agent a planner that appends a shared Library stop on revise.
+    for name in ("Maria Lopez", "Ayesha Khan"):
+        agent = chars[name].agent
+        agent.planner = _RecordingPlanner()
+        agent.plan = agent.planner.generate()
+    # Co-locate both in the Plaza and mark them settled (performing, not walking).
+    plaza = game.locations["Plaza"]
+    order = ["Maria Lopez", "Ayesha Khan"]
+    for name in order:
+        ch = chars[name]
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        plaza.add_character(ch)
+    state = {n: {"performing": True, "path": None, "chat": None} for n in order}
+    frame = {n: {} for n in order}
+    return game, chars, state, frame, order
+
+
+def test_conversation_revises_both_plans_and_writes_both_notes():
+    from text_adventure_games.memory import MemoryKind
+
+    brain = _ConvoThenOutcomeBrain()
+    game, chars, state, frame, order = _colocated_settled_pair(brain)
+
+    happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
+
+    assert happened == 1
+    # <= 2 outcome calls per conversation (one per participant).
+    assert brain.outcome_calls == 2
+    for name in order:
+        agent = chars[name].agent
+        # Both plans revised to a shared upcoming Library stop.
+        assert agent.planner.triggers[0].reason == cognition.CONVERSATION
+        assert any(s.place == "Library" for s in agent.plan.stops)
+        # Both streams got the high-importance relationship note.
+        notes = [
+            r
+            for r in agent.memory.records
+            if r.kind == MemoryKind.CHAT
+            and r.importance == cognition.RELATIONSHIP_NOTE_IMPORTANCE
+        ]
+        assert len(notes) == 1
+
+
+def test_mock_brain_runs_no_outcome_calls():
+    # The default mock never converses (no utterance) -> maybe_converse reports 0
+    # and the outcome pass is never reached: the bake stays byte-identical.
+    personas = [_persona("Maria Lopez"), _persona("Ayesha Khan")]
+    game, chars = build_world(None, personas, _LOCATIONS)
+    attach_agents(chars, personas, llm_client=None)  # mock brain
+    plaza = game.locations["Plaza"]
+    order = ["Maria Lopez", "Ayesha Khan"]
+    for name in order:
+        ch = chars[name]
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        plaza.add_character(ch)
+    state = {n: {"performing": True, "path": None, "chat": None} for n in order}
+    frame = {n: {} for n in order}
+
+    happened = maybe_converse(game, chars, state, frame, 4, {}, order, clock=None)
+
+    assert happened == 0
+    for name in order:
+        assert all(
+            r.importance != cognition.RELATIONSHIP_NOTE_IMPORTANCE
+            for r in chars[name].agent.memory.records
+        )
