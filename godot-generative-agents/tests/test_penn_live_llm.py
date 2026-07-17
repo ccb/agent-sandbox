@@ -390,7 +390,14 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
         # agent per tick -- the scripted brain answers it via the same
         # catch-all as every other unrecognized tool, so a "score" row is
         # expected here too.
-        assert ev["role"] in {"decide", "converse", "reflect", "outcome", "score"}
+        assert ev["role"] in {
+            "decide",
+            "converse",
+            "reflect",
+            "outcome",
+            "score",
+            "react",
+        }
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
     all_drained = stepper.drain_events()
     assert all_drained == []  # drained means drained
