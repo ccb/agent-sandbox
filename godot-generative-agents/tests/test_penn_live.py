@@ -482,6 +482,25 @@ def test_stepper_create_run_steps_does_not_leak_into_later_rebuilds(tmp_path):
     assert stepper.num_steps == 3  # launch default, not the leaked 2
 
 
+def test_stepper_create_run_build_fault_is_not_the_404_keyerror(tmp_path, monkeypatch):
+    # Only a missing builder raises KeyError (the route maps that to 404
+    # "unknown world"). A KeyError raised while BUILDING must not masquerade
+    # as that -- it surfaces as a non-KeyError (a 500-class fault).
+    import serve_penn
+
+    def _explode():
+        raise KeyError("some internal lookup blew up")
+
+    monkeypatch.setitem(serve_penn.WORLD_BUILDERS, "boom", _explode)
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
+    with pytest.raises(RuntimeError):
+        stepper.create_run("boom")
+    # An unknown world is still the 404-path KeyError.
+    with pytest.raises(KeyError):
+        stepper.create_run("atlantis")
+
+
 # ------------------------------------------------------------ resume (#543)
 
 
