@@ -41,3 +41,41 @@ def test_react_knobs_load_from_dict():
     assert config.cognition.react_enabled is True
     assert config.cognition.react_hour_cap == 2
     assert config.cognition.react_cooldown_steps == 90
+
+
+def test_encounter_template_pins_exact_output():
+    from backend.prompt_templates import render
+
+    text = render(
+        "encounter", partner="Ayesha Khan", doing="walking to Van Pelt Library"
+    )
+    assert text == "I noticed Ayesha Khan nearby while walking to Van Pelt Library."
+
+
+def test_react_template_renders_all_blocks():
+    from backend.prompt_templates import render
+
+    text = render(
+        "react",
+        partner="Ayesha Khan",
+        doing="walking to Van Pelt Library",
+        time="Monday 09:30 AM",
+        memories=["Ayesha Khan is my study partner."],
+    )
+    # Substring pins (the template has optional blocks, so exact-match would be
+    # brittle across Jinja whitespace): every semantic piece must appear.
+    assert "It is Monday 09:30 AM." in text
+    assert "While walking to Van Pelt Library, you notice Ayesha Khan nearby." in text
+    assert "- Ayesha Khan is my study partner." in text
+    assert '"continue"' in text and '"greet"' in text and '"replan"' in text
+
+
+def test_react_template_without_time_or_memories():
+    from backend.prompt_templates import render
+
+    text = render(
+        "react", partner="Ayesha Khan", doing="reading", time=None, memories=[]
+    )
+    assert "It is" not in text
+    assert "What you remember" not in text
+    assert "While reading, you notice Ayesha Khan nearby." in text
