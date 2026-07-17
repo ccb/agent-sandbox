@@ -160,8 +160,9 @@ def step(
 
     Self-contained by design: no file I/O, no globals, no sleeping. It mutates
     ``state``, ``conversation_cooldowns`` and ``game.turn`` in place and returns
-    the movement frame for this step plus how many conversations fired (the
-    latter only for :func:`simulate`'s stdout heartbeat; the frame is the
+    the movement frame for this step plus how many conversations *completed* this
+    step (issue #371: a meeting spans ticks, so this counts endings, not starts;
+    used only for :func:`simulate`'s stdout heartbeat -- the frame is the
     byte-identical artifact the determinism tests and the Penn bake pin).
 
     ``conversation_cooldowns`` defaults to a throwaway dict and ``cog`` to
