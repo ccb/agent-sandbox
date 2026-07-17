@@ -44,6 +44,23 @@ from .sim_config import CognitionConfig
 from .world_map import WorldMap
 
 WALK_EMOJI = "\U0001f6b6"  # person walking
+SICK_EMOJI = "\U0001f922"  # nauseated face -- the #300 on-screen sickness cue
+
+
+def _resting_pron(char, schedule, matched, name, emoji):
+    """The emoji for a settled or mid-action agent, resolved through one
+    authority chain (#581): the model's explicit pick wins; else the #300
+    health cue (a sick agent wears the queasy face until it recovers); else the
+    scheduled stop's emoji when on-plan, or the persona default. Health is a low
+    priority *overlay* rather than a frame-time override, so a real brain's
+    chosen emoji is never masked and future status effects extend this one place
+    instead of stacking ternaries in the frame assembler."""
+    model_emoji = getattr(char.agent, "last_emoji", None)
+    if model_emoji:
+        return model_emoji
+    base = (schedule.emoji or emoji[name]) if matched else emoji[name]
+    return SICK_EMOJI if char.get_property("is_sick") else base
+
 
 # A backend-local revision reason (#581): the brain performed somewhere other
 # than the scheduled stop. RevisionTrigger.reason is a plain string
@@ -403,16 +420,9 @@ def step(
                                 RevisionTrigger(DEVIATED, step_idx, activity),
                                 clock,
                             )
-                    # Emoji: the model's pick wins; else the stop's emoji only
-                    # when on-plan (a deviation must not wear the wrong stop's
-                    # emoji); else the persona default.
-                    model_emoji = getattr(char.agent, "last_emoji", None)
-                    if model_emoji:
-                        st["pron"] = model_emoji
-                    elif matched:
-                        st["pron"] = schedule.emoji or emoji[name]
-                    else:
-                        st["pron"] = emoji[name]
+                    # Emoji via the shared authority chain (model pick > #300
+                    # health cue > stop-when-on-plan / persona default).
+                    st["pron"] = _resting_pron(char, schedule, matched, name, emoji)
                     # char.location can be None (the `matched` guard above assumes
                     # so); don't crash the desc line if it is.
                     where = char.location.tile_address if char.location else "?"
@@ -439,6 +449,25 @@ def step(
                             st["perform_until"] = step_idx + _minutes_to_steps(
                                 cog.duration_max_minutes, clock
                             )
+                else:
+                    # An instantaneous authored command (#300 get/drink/boil):
+                    # no walk, no settle, so neither branch above fired -- but
+                    # the frame still needs refreshing, or it renders the stale
+                    # "walking to ..." desc and walk emoji for the whole stop
+                    # while the agent stands there acting. Stamp the current
+                    # activity + location and route the emoji through the same
+                    # authority chain, so the sicken/recover transition (which
+                    # happens on exactly these drink commands) flips the health
+                    # cue here rather than via a frame-time override.
+                    schedule = char.agent.schedule
+                    stop_place = getattr(schedule, "destination", None)
+                    matched = (
+                        char.location is not None and char.location.name == stop_place
+                    )
+                    st["pron"] = _resting_pron(char, schedule, matched, name, emoji)
+                    activity = char.get_property("activity") or "spending time"
+                    where = char.location.tile_address if char.location else "?"
+                    st["desc"] = f"{activity} @ {where}"
             elif command:
                 # The agent chose a command but it failed the precondition gate.
                 # Offer its planner a chance to re-plan around the blocked action
@@ -462,6 +491,9 @@ def step(
 
         frame[name] = {
             "movement": [int(st["tile"][0]), int(st["tile"][1])],
+            # Emoji is resolved into st["pron"] at each decision (travel / perform
+            # / instantaneous command) through _resting_pron's authority chain --
+            # including the #300 sickness cue -- so the frame just carries it.
             "pronunciatio": st["pron"],
             "description": st["desc"],
             # The agent's latest dialogue line (issue #86), or None. Updated below

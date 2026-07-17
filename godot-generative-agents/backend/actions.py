@@ -143,11 +143,22 @@ class DrinkPenn(consume.Drink):
     would sicken every future drinkable; ``requires_boiling`` scopes the rule
     to raw water, and a (self-coded, #301) boil action clears it by setting
     ``is_boiled``. Registered with the same "drink" action name, so it
-    overrides the built-in for this game only. No cure exists in this world:
-    that gap is deliberate (see the spec; upstreaming tracked in #464)."""
+    overrides the built-in for this game only. Drinking specifically *boiled*
+    water (``is_boiled``) while ``is_sick`` clears the sickness and logs a
+    ``recovery`` event, so a full drink -> sicken -> boil -> drink -> recover arc
+    is watchable. The cure is gated on ``is_boiled`` (not "any safe drink") on
+    purpose: the #301 comparison asks whether an agent *learned to boil*, which
+    a cure that any beverage could trigger would erase (upstreaming the generic
+    slice is #464)."""
 
     def apply_effects(self):
         super().apply_effects()
+        # If the drink just killed the drinker (the engine's Drink sets is_dead
+        # on a poisonous item), the #300 health twist is moot: don't sicken or
+        # "recover" a corpse -- a recovery on a dead agent would log the event
+        # and a feel-better memory for someone who just died.
+        if self.character.get_property("is_dead"):
+            return
         if self.item.get_property("requires_boiling") and not self.item.get_property(
             "is_boiled"
         ):
@@ -158,13 +169,41 @@ class DrinkPenn(consume.Drink):
             # the high-importance memory attaches to the actual transition.
             self.character.set_property("just_sickened", True)
             self.parser.ok(
-                f"{self.character.name.capitalize()} clutches their stomach -- "
+                f"{self.character.name} clutches their stomach -- "
                 "that water was foul."
             )
             self.game.log_event(
                 self.character.name,
                 "sickness",
                 summary=(f"{self.character.name} got sick drinking {self.item.name}"),
+                payload={
+                    "item": self.item.name,
+                    "location": getattr(self.character.location, "name", None),
+                },
+            )
+        elif self.character.get_property("is_sick") and self.item.get_property(
+            "is_boiled"
+        ):
+            # The recovery half of the arc: drinking the *boiled* water cures a
+            # sick drinker. Gated on is_boiled (not merely "not raw") so an
+            # unrelated safe beverage can't stand in for boiling -- that's the
+            # behavior the #301 "did it learn to boil?" comparison rests on.
+            # Only fires on the sick->well transition, so a healthy drinker
+            # logs nothing.
+            self.character.set_property("is_sick", False)
+            # One-shot marker mirroring just_sickened: cognition.remember_outcome
+            # keys off it to write the "feel better" memory to the agent's card.
+            self.character.set_property("just_recovered", True)
+            self.parser.ok(
+                f"{self.character.name} drinks deep -- the clean "
+                "water settles their stomach, and the sickness passes."
+            )
+            self.game.log_event(
+                self.character.name,
+                "recovery",
+                summary=(
+                    f"{self.character.name} recovered after drinking {self.item.name}"
+                ),
                 payload={
                     "item": self.item.name,
                     "location": getattr(self.character.location, "name", None),
