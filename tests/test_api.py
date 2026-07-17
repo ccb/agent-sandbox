@@ -978,6 +978,7 @@ def test_live_disabled_by_default():
         "cursor": 0,
         "tick_seconds": None,
         "meta": None,
+        "boot_id": None,
     }
     assert c.get("/events").json() == {
         "latest_cursor": 0,
@@ -989,6 +990,24 @@ def test_live_disabled_by_default():
     assert c.get("/usage").json()["available"] is False
     assert c.get("/health").json()["ok"] is True
     assert c.post("/command", json={"command": "go north"}).status_code == 200
+
+
+def test_live_handshake_carries_a_stable_boot_nonce():
+    # #578: a per-process boot id on GET /live lets a follower detect a backend
+    # restart even when the new feed's cursor already climbed past its own.
+    with _live_client() as c:
+        first = c.get("/live").json()["boot_id"]
+        assert isinstance(first, str) and first  # non-empty
+        # Stable within one process: a healthy follower re-handshaking (or the
+        # background refresh) must never see it move.
+        assert c.get("/live").json()["boot_id"] == first
+
+
+def test_boot_nonce_differs_across_processes():
+    # Two independently created apps stand in for two server processes: distinct
+    # nonces, so a reconnecting follower can tell one run's process from the next.
+    with _live_client() as a, _live_client() as b:
+        assert a.get("/live").json()["boot_id"] != b.get("/live").json()["boot_id"]
 
 
 def test_shutdown_hidden_unless_opted_in():
