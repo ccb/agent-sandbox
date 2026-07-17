@@ -190,6 +190,20 @@ def test_events_http_surfaces_eviction_and_the_gap():
         assert gapped["events"][0]["cursor"] > stale + 1
 
 
+def test_events_carries_the_same_stable_boot_nonce_as_live():
+    # #578: the poll fallback detects a restart whose new feed already climbed
+    # past its cursor by watching boot_id on /events (no eviction gap, no rewind
+    # to key on). So /events must carry the same per-process nonce /live reports,
+    # and it must be stable across polls within one process (a healthy poller
+    # re-reading it must never see it move and wrongly re-handshake).
+    with _live_client() as c:
+        live_boot = c.get("/live").json()["boot_id"]
+        assert isinstance(live_boot, str) and live_boot  # a live loop mints one
+        first = c.get("/events?since=0").json()
+        assert first["boot_id"] == live_boot  # same source, both doors agree
+        assert c.get("/events?since=0").json()["boot_id"] == live_boot  # stable
+
+
 # --- POST /reset mid-tick (#262/#349) --------------------------------------
 
 

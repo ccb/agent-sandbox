@@ -51,6 +51,10 @@ export interface EventsResponse {
   latest_cursor: number;
   oldest_cursor: number | null;
   events: FeedRecord[];
+  // Per-process boot nonce (#578), the same one GET /live carries: lets the
+  // poll fallback detect a restart whose new feed already climbed past our
+  // cursor (no eviction gap, no rewind). Absent on a server predating the field.
+  boot_id?: string | null;
 }
 
 // The live meta blob GET /live passes through: the replay-meta shape minus
@@ -67,6 +71,9 @@ export interface LiveStatusResponse {
   cursor: number;
   tick_seconds: number | null;
   meta: LiveMeta | null;
+  // Per-process boot nonce (#578): changes on a backend restart. Absent on an
+  // older server that predates the field.
+  boot_id?: string | null;
 }
 
 // GET /usage — the run ledger's summary (tokens and dollars, #264).

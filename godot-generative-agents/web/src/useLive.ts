@@ -154,6 +154,7 @@ export function followLive(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let ws: WebSocket | null = null;
   let cursor = 0;
+  let bootId: string | null = null; // last-seen GET /live boot nonce (#578)
   let handshook = false; // GET /live done; retried until it succeeds
   let wsUsable = true; // cleared when a socket dies before opening
 
@@ -180,7 +181,20 @@ export function followLive(
     // the background eviction-gap refresh races records still arriving on the
     // open socket, and must never rewind a healthy follower.
     const rewound = !wasHandshook && hs.cursor < cursor;
-    if (rewound) cursor = hs.cursor;
+    // #578: a changed per-process boot nonce is the reliable restart signal —
+    // it catches a new process whose feed has already climbed past our cursor,
+    // which `rewound` misses. A first handshake (bootId null) or a server that
+    // omits boot_id (older/mixed-version) falls back to the cursor rewind. Fresh
+    // connects/reconnects only, like `rewound` — never the background refresh.
+    const rebooted =
+      !wasHandshook && bootId !== null && hs.boot_id != null && hs.boot_id !== bootId;
+    // Record the nonce on a fresh connect/reconnect only, never on the background
+    // eviction-gap refresh: a restart mid-refresh must leave `bootId` at the old
+    // value so the next reconnect's comparison still catches it (#578 review).
+    // The first handshake has `wasHandshook === false`, so it still records.
+    if (!wasHandshook && hs.boot_id != null) bootId = hs.boot_id;
+    const restarted = rewound || rebooted;
+    if (restarted) cursor = hs.cursor;
     handshook = true;
     setState((s) => ({
       ...s,
@@ -196,7 +210,7 @@ export function followLive(
       // path — kept here (not routed through the reducer) because this applies a
       // /live *snapshot*, not a feed record: the reducer folds records, and a
       // synthetic one would have to carry the whole meta/usage/step snapshot too.
-      calls: rewound ? [] : s.calls,
+      calls: restarted ? [] : s.calls,
     }));
   };
 
@@ -213,6 +227,12 @@ export function followLive(
       }
       if (data.latest_cursor < cursor) {
         handshook = false; // cursor rewind: a restart — the re-handshake re-anchors (#549)
+      }
+      if (data.boot_id != null && bootId !== null && data.boot_id !== bootId) {
+        // A changed nonce is the restart signal the gap/rewind checks miss when
+        // the new process's feed has already climbed past our cursor (#578): the
+        // re-handshake next tick re-anchors + clears via the `rebooted` path.
+        handshook = false;
       }
       cursor = Math.max(cursor, data.latest_cursor);
       setState((s) => applyFeedRecords(s, data.events, Date.now()));
