@@ -163,6 +163,19 @@ class CommandResponse(BaseModel):
     game_over: bool
 
 
+class CreateRunRequest(BaseModel):
+    """POST /runs body (#568): pick a world from the factory registry, and
+    optionally cap the run's steps. v1 chooses only the world -- a per-run
+    model/cast override is a documented follow-up."""
+
+    world: str = Field(
+        ..., min_length=1, description="a name in the world registry, e.g. 'penn'"
+    )
+    steps: int | None = Field(
+        default=None, gt=0, description="step budget; omit to keep the server default"
+    )
+
+
 class SayRequest(BaseModel):
     """The body of ``POST /agents/{name}/say`` (#369): a human speaks to an agent."""
 
@@ -1103,7 +1116,8 @@ def create_app(
     # The store is probed off the stepper per request (the ledger/run_usage
     # idiom), so a storeless server -- no --persist, or no stepper at all --
     # answers available:false here and 404 on every id route instead of
-    # erroring. POST /runs (create with a world-factory seam) stays deferred.
+    # erroring. POST /runs (create + adopt via the world-factory seam, #568)
+    # rides the same probe: 501 when the stepper cannot build worlds.
 
     def _run_store():
         return getattr(stepper, "run_store", None)
@@ -1129,6 +1143,55 @@ def create_app(
                 for row in store.list_runs()
             ],
         }
+
+    @app.post("/runs")
+    async def runs_create(
+        req: CreateRunRequest, _: None = Depends(require_auth)
+    ) -> dict:
+        """Create a run over HTTP and adopt it as the live one (#568, #306's
+        last deliverable): build the named world from the backend's
+        world-factory registry, open its run in the store, and swap it in
+        exactly the way POST /runs/{id}/resume adopts a persisted run.
+
+        Followers see the same ``status`` record with ``reason: "reset"`` and
+        an additive ``run_id`` -- the documented "the world was rebuilt,
+        refetch meta and follow from here" signal -- so both frontends handle a
+        create with zero client changes. Plain dict like the rest of the
+        registry: a response model would strip the ``run_id`` key.
+
+        404 when the server has no run store, or the world is unknown; 501 when
+        the stepper cannot build worlds (only PennStepper can today); 422 for a
+        bad body (from the request model). There is no 409: unlike resume there
+        is no "already live" run to clash with, and an in-flight tick is dropped
+        by the generation bump, atomic with the swap under the lock."""
+        store = _run_store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="this server has no run store")
+        create_run = getattr(stepper, "create_run", None)
+        if not callable(create_run):
+            raise HTTPException(
+                status_code=501, detail="this stepper cannot create runs"
+            )
+
+        def _make():
+            # Same pattern as runs_resume: build + adopt under the app lock in a
+            # worker thread, bump the generation so an in-flight tick of the OLD
+            # world is dropped instead of published.
+            with lock:
+                run_id = create_run(req.world, steps=req.steps)
+                controller.generation += 1
+                return run_id
+
+        try:
+            run_id = await asyncio.get_running_loop().run_in_executor(None, _make)
+        except KeyError as exc:
+            # exc.args[0] keeps the message unquoted (str() of a KeyError wraps
+            # it in repr quotes), matching runs_resume.
+            raise HTTPException(status_code=404, detail=str(exc.args[0]))
+        record = log.append(
+            "status", reason="reset", run_id=run_id, **controller.status()
+        )
+        return {**controller.status(), "cursor": record["cursor"], "run_id": run_id}
 
     @app.get("/runs/{run_id}")
     def runs_get(run_id: str, _: None = Depends(require_auth)) -> dict:

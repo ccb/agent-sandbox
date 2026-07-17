@@ -460,6 +460,75 @@ def test_resume_endpoint_without_capability_is_501(tmp_path):
         assert client.post("/runs/run-1-old/resume").status_code == 501
 
 
+# --- POST /runs create + adopt (#568) --------------------------------------
+
+
+def _creatable_stepper(tmp_path):
+    """_stepper_with_store plus the #568 capability: a create_run spy that
+    opens + adopts a NEW run id the way PennStepper.create_run does (attribute
+    assignment is the blessed way to give a fake stepper optional capabilities)."""
+    stepper, store = _stepper_with_store(tmp_path)
+    calls = []
+
+    def create_run(world, *, steps=None):
+        calls.append((world, steps))
+        if world != "penn":
+            raise KeyError(f"unknown world: {world}")
+        manifest = {"schema_version": 1, "personas": [{"name": "a"}], "llm": None}
+        run_id = store.create_run(manifest)  # store picks a fresh id
+        stepper.run_id = run_id
+        return run_id
+
+    stepper.create_run = create_run
+    return stepper, store, calls
+
+
+def test_create_run_builds_and_adopts_a_new_run(tmp_path):
+    stepper, store, calls = _creatable_stepper(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        body = client.post("/runs", json={"world": "penn", "steps": 50}).json()
+        assert calls == [("penn", 50)]
+        new_id = body["run_id"]
+        assert new_id not in ("run-1-old", "run-2-live")  # a fresh id
+        assert body["paused"] is True  # create never touches the play button
+        assert body["cursor"] >= 1
+        # Adoption moved the registry's "current" marker to the new run.
+        assert client.get("/runs").json()["current"] == new_id
+        # Followers got the documented rebuild signal, stamped with the run.
+        events = client.get("/events?since=0").json()["events"]
+        newest = [e for e in events if e["kind"] == "status"][-1]
+        assert newest["reason"] == "reset"
+        assert newest["run_id"] == new_id
+
+
+def test_create_run_unknown_world_is_404(tmp_path):
+    stepper, store, calls = _creatable_stepper(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        assert client.post("/runs", json={"world": "atlantis"}).status_code == 404
+
+
+def test_create_run_invalid_body_is_422(tmp_path):
+    stepper, store, calls = _creatable_stepper(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        assert client.post("/runs", json={}).status_code == 422  # world required
+        assert (
+            client.post("/runs", json={"world": "penn", "steps": 0}).status_code == 422
+        )
+        assert calls == []  # validation fails before the stepper is touched
+
+
+def test_create_run_without_a_store_is_404(tmp_path):
+    with _live_client(_walker(), start_paused=True) as client:
+        assert client.post("/runs", json={"world": "penn"}).status_code == 404
+
+
+def test_create_run_without_capability_is_501(tmp_path):
+    # A store alone isn't enough: only PennStepper can build a world today.
+    stepper, _store = _stepper_with_store(tmp_path)
+    with _live_client(stepper, start_paused=True) as client:
+        assert client.post("/runs", json={"world": "penn"}).status_code == 501
+
+
 # --- GET /usage per-run view (#526) -----------------------------------------
 
 
