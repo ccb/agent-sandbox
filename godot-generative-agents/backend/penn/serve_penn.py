@@ -979,24 +979,33 @@ class PennStepper:
         the launch-configured brain is reused, so the LLM clients (built once
         in __init__, surviving _build on purpose) are untouched and meta()
         stamps the new run's manifest correctly.
+
+        The unknown-world ``KeyError`` is the ONLY KeyError this raises (the
+        route maps it to 404). A KeyError raised while BUILDING is re-raised as
+        a RuntimeError so a build fault can't masquerade as "unknown world".
         """
         if self.run_store is None:
             raise ValueError("this server has no run store (--persist)")
         builder = WORLD_BUILDERS.get(world)
         if builder is None:
             raise KeyError(f"unknown world: {world}")
-        world_obj = builder()  # build first -- no teardown yet
-        # Close the current day the way reset() does (a finished day keeps
-        # "finished"), then rebuild on the new world -- _build's non-resume
-        # path opens the next run row via create_run(self.meta()).
-        self._persist_pending_events()
-        if self._run_id is not None and not self._run_finished:
-            self.run_store.update_run(self._run_id, status="reset")
-        # attach_agents reads num_steps inside _build. A per-request steps is a
-        # one-shot override; without one, fall back to the launch budget so a
-        # prior reduced create_run does not leak forward.
-        self.num_steps = steps if steps is not None else self._launch_num_steps
-        self._build(world=world_obj)
+        try:
+            world_obj = builder()  # build first -- no teardown yet
+            # Close the current day the way reset() does (a finished day keeps
+            # "finished"), then rebuild on the new world -- _build's non-resume
+            # path opens the next run row via create_run(self.meta()).
+            self._persist_pending_events()
+            if self._run_id is not None and not self._run_finished:
+                self.run_store.update_run(self._run_id, status="reset")
+            # attach_agents reads num_steps inside _build. A per-request steps is
+            # a one-shot override; without one, fall back to the launch budget so
+            # a prior reduced create_run does not leak forward.
+            self.num_steps = steps if steps is not None else self._launch_num_steps
+            self._build(world=world_obj)
+        except KeyError as exc:
+            # A build-path KeyError is NOT the unknown-world signal; don't let
+            # it reach the route's KeyError -> 404 handler.
+            raise RuntimeError(f"world {world!r} failed to build") from exc
         return self._run_id
 
     def resume_run(self, run_id: str) -> None:
