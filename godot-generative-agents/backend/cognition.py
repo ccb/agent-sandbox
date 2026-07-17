@@ -46,10 +46,26 @@ from text_adventure_games.usage import UsageLedger, record_call
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
 
+# React-or-continue (issue #370): guards on the perception-driven interruption
+# consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
+# never an LLM storm; the hour window falls back to 360 steps (one hour at the
+# default 10 s/step) when a run threads no clock.
+REACT_COOLDOWN_STEPS = 90
+REACT_HOUR_CAP = 4
+REACT_HOUR_FALLBACK_STEPS = 360
+# The encounter memory the cheap perceive pass writes -- same weight as a
+# travel/perform outcome: notable enough to retrieve, not a reflection driver.
+ENCOUNTER_IMPORTANCE = 2.0
+
 # Conversation consequences (issue #582). A backend-local revision reason -- the
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
+
+# React-or-continue (issue #370). A backend-local revision reason, like
+# CONVERSATION/DEVIATED: an agent chose "replan" when it noticed someone
+# mid-activity. RevisionTrigger.reason is a plain string, so no engine change.
+REACTED = "reacted"
 
 # Distinguishing substring of the engine's free-text dialogue system prompt
 # (text_adventure_games/prompt_templates/npc_dialogue.prompty), used by
@@ -103,6 +119,39 @@ CONVERSATION_OUTCOME_TOOL = {
             },
         },
         "required": ["plans_changed"],
+    },
+}
+
+# The react tool (#370): one structured call when a walking agent newly
+# notices another resident. Normalized {name, description, parameters}, the
+# shape llm_client.call_tool translates per provider, like the outcome tool.
+REACT_TOOL = {
+    "name": "react",
+    "description": (
+        "You noticed someone while in the middle of what you were doing. "
+        "Decide whether to keep going, stop to greet them, or change your "
+        "plans for the rest of the day."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "choice": {
+                "type": "string",
+                "enum": ["continue", "greet", "replan"],
+                "description": (
+                    "continue: carry on as you were. greet: pause and say "
+                    "hello (a short conversation starts). replan: what you "
+                    "noticed changes the rest of your day."
+                ),
+            },
+            "detail": {
+                "type": "string",
+                "description": (
+                    "If replan: what should change and why. Omit otherwise."
+                ),
+            },
+        },
+        "required": ["choice"],
     },
 }
 
@@ -1483,3 +1532,224 @@ def maybe_converse(
         spoken.update((a.name, b.name))  # this pair is busy for the rest of the step
 
     return completed
+
+
+def _tile_gap(a, b) -> int:
+    """Chebyshev distance between two raw ``(x, y)`` tiles.
+
+    Mid-walk proximity works off the live per-step tiles in ``state`` -- the
+    engine's location-footprint distance can't apply here, because ``travel``
+    moves ``char.location`` to the destination the instant the command
+    resolves, while the sprite is still tiles away walking there."""
+    return max(abs(int(a[0]) - int(b[0])), abs(int(a[1]) - int(b[1])))
+
+
+def _doing(char, st) -> str:
+    """What this agent is in the middle of, for the encounter/react prompts.
+
+    Mid-walk the logical location IS the walk's destination (see
+    :func:`_tile_gap`); settled, it's the current activity."""
+    if st["path"]:
+        where = char.location.name if char.location is not None else "somewhere"
+        return f"walking to {where}"
+    return char.get_property("activity") or "spending time"
+
+
+def _consult_react(char, other_name: str, st, step: int, clock=None):
+    """One ``react`` tool call for *char*: ``(choice, detail)`` or ``(None, None)``.
+
+    Real, tool-calling brain only -- the same brain-identity gate as
+    #485/#582/#583 (``attach_agents`` wires the mock brain AS ``agent.schedule``,
+    so identity is exactly "no real client supplied"). Billed to *char* under
+    ``role: "react"``. What the agent remembers about the other resident is
+    retrieved locally (free) and folded into the prompt, so familiarity informs
+    the choice without a recall round. A malformed reply degrades to
+    ``(None, None)`` -- the rule tier alone, no behavior change."""
+    agent = char.agent
+    brain = getattr(agent, "llm_client", None)
+    if (
+        brain is None
+        or brain is getattr(agent, "schedule", None)
+        or not callable(getattr(brain, "call_tool", None))
+    ):
+        return None, None
+    ctx = getattr(brain, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "react"})
+    remembered = agent.memory.retrieve(query=other_name, turn=step, max_records=3)
+    messages = [
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "react",
+                partner=other_name,
+                doing=_doing(char, st),
+                time=(
+                    clock.time_at(step).strftime("%A %I:%M %p")
+                    if clock is not None
+                    else None
+                ),
+                memories=[r.text for r in remembered],
+            ),
+        },
+    ]
+    # No temperature -> call_tool's default 0.0, deliberately: a three-way
+    # classification, like the outcome/score passes (don't "fix" this).
+    result = brain.call_tool(messages, REACT_TOOL, max_tokens=agent.max_tokens)
+    if not isinstance(result, dict):
+        return None, None
+    choice = result.get("choice")
+    if choice not in ("continue", "greet", "replan"):
+        return None, None
+    detail = result.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        return choice, detail.strip()
+    return choice, None
+
+
+def maybe_react(
+    chars,
+    state,
+    step,
+    cooldowns,
+    order,
+    *,
+    react_state: dict,
+    active: dict,
+    cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
+    react_cooldown_steps: int = REACT_COOLDOWN_STEPS,
+    react_hour_cap: int = REACT_HOUR_CAP,
+    clock=None,
+) -> int:
+    """Notice-and-maybe-interrupt, once per tick (issue #370).
+
+    Runs in :func:`run_simulation.step` after movement and BEFORE
+    :func:`maybe_converse`, so a greet's first line is spoken the same tick by
+    the conversation pass's advance phase. Edge-triggered: a pair is handled
+    only on the tick it newly comes within *mutual* sight (the smaller of the
+    two ``vision_r``, Chebyshev tiles over the live ``state`` positions), and
+    ``react_state`` -- caller-owned, persistent across ticks -- remembers who
+    was already in range. Per new pair:
+
+    1. **Cheap perceive:** each mid-activity member (walking or performing)
+       writes one ``encounter`` observation -- the agent remembers who it
+       passed even though no decision point fired. Idle agents are skipped
+       (they perceive at their own decision points).
+    2. **Rule tier (free):** the reactor is the first *walking* member in
+       ``order`` -- a fully settled pair is maybe_converse's job. Skipped when
+       either member is conversing/busy, when the pair talked recently (the
+       same conversation ``cooldowns``), when the reactor reacted recently
+       (``react_cooldown_steps``), or past its hourly cap (``react_hour_cap``
+       consults per sim hour; 360-step window with no clock). The issue's
+       example "known persona" / "schedule has slack" rules are deliberately
+       NOT hard gates: an unseeded run would then never react, so familiarity
+       is instead retrieved into the react prompt (see
+       :func:`_consult_react`) and the model weighs it -- along with the
+       schedule context it carries in persona -- itself.
+    3. **LLM gate:** one :data:`REACT_TOOL` call (:func:`_consult_react`),
+       role ``"react"`` in the ledger. Inert under the mock brain (identity
+       gate), so mechanics are testable offline with a scripted client.
+    4. **Hand back to existing seams:** ``greet`` inserts a #371
+       :class:`ActiveConversation` and pins both ``conversing`` (step()'s
+       movement gate pauses a pinned walk; the untouched ``path`` resumes when
+       the pin clears); ``replan`` fires :func:`maybe_revise_plan` with the
+       backend-local :data:`REACTED` reason. ``continue`` changes nothing --
+       the encounter memory already landed.
+
+    Prior art consciously not reused (issue scope): the engine's
+    ``npc.react_behavior`` is the per-turn ReAct loop for ``take_turn``-driven
+    NPCs -- this loop never calls ``take_turn`` and already reproduces its
+    perceive->retrieve->decide wiring in :func:`observe_and_decide`; and
+    ``reactions.py``'s thing-owned reflexes are *scripted* gate->effect
+    triggers evaluated by the engine's round phase, with no brain consult and
+    no knowledge of this loop's path/performing state machine. What #370 needs
+    is a rate-limited brain consult keyed on tile proximity mid-walk, which
+    neither provides.
+
+    Returns how many LLM react consults were made this tick.
+    """
+    idx = {n: i for i, n in enumerate(order)}
+    # O(n^2) pair scan over live tiles -- fine at this sim's scale (~25 agents,
+    # the same budget as tiled_game's perception scan).
+    in_range: set[frozenset] = set()
+    for i, a_name in enumerate(order):
+        for b_name in order[i + 1 :]:
+            radius = min(
+                getattr(chars[a_name], "vision_r", 0),
+                getattr(chars[b_name], "vision_r", 0),
+            )
+            if radius > 0 and (
+                _tile_gap(state[a_name]["tile"], state[b_name]["tile"]) <= radius
+            ):
+                in_range.add(frozenset((a_name, b_name)))
+    new_pairs = in_range - react_state.get("in_range", set())
+    react_state["in_range"] = in_range
+
+    last_react = react_state.setdefault("last_react", {})
+    consult_log = react_state.setdefault("consults", {})
+    window = (
+        clock.steps_for_seconds(3600)
+        if clock is not None
+        else REACT_HOUR_FALLBACK_STEPS
+    )
+    consults = 0
+    for key in sorted(new_pairs, key=lambda k: sorted(idx[n] for n in k)):
+        a_name, b_name = sorted(key, key=idx.get)
+        # (1) Cheap perceive: mid-activity members remember the encounter.
+        for me, other in ((a_name, b_name), (b_name, a_name)):
+            st = state[me]
+            if not (st["path"] or st["performing"]):
+                continue
+            chars[me].agent.memory.add_observation(
+                render("encounter", partner=other, doing=_doing(chars[me], st)),
+                turn=step,
+                importance=ENCOUNTER_IMPORTANCE,
+            )
+        # (2) Rule tier.
+        reactor = next((n for n in (a_name, b_name) if state[n]["path"]), None)
+        if reactor is None:
+            continue
+        other = b_name if reactor == a_name else a_name
+        if state[reactor].get("conversing") or state[other].get("conversing"):
+            continue
+        busy = {n for ac in active.values() for n in (ac.a, ac.b)}
+        if reactor in busy or other in busy:
+            continue
+        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+            continue  # they talked recently; crossing paths again isn't news
+        last = last_react.get(reactor)
+        if last is not None and step - last < react_cooldown_steps:
+            continue
+        recent = [s for s in consult_log.get(reactor, []) if step - s < window]
+        if len(recent) >= react_hour_cap:
+            consult_log[reactor] = recent  # prune while we're here
+            continue
+        # (3) The LLM gate.
+        choice, detail = _consult_react(
+            chars[reactor], other, state[reactor], step, clock=clock
+        )
+        if choice is None:
+            continue  # no real tool-calling brain / unusable reply
+        last_react[reactor] = step
+        consult_log[reactor] = recent + [step]
+        consults += 1
+        # (4) Hand back to the existing seams.
+        if choice == "greet":
+            ac = ActiveConversation(
+                a=reactor,
+                b=other,
+                convo=convo.Conversation(participants=(reactor, other)),
+                next_speaker=reactor,
+                started=step,
+            )
+            active[key] = ac
+            state[reactor]["conversing"] = True
+            state[other]["conversing"] = True
+        elif choice == "replan":
+            maybe_revise_plan(
+                chars[reactor],
+                RevisionTrigger(REACTED, step, detail or f"I noticed {other} nearby"),
+                clock,
+            )
+    return consults
