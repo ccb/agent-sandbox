@@ -41,14 +41,39 @@ def test_outcome_tool_schema_shape():
 
 
 def test_outcome_prompt_renders_partner_and_transcript():
+    # Pin the exact rendered output (repo convention: prompt renders are pinned
+    # verbatim, e.g. test_decide_context / test_boil_water), so a reworded
+    # template can't drift past a substring check.
     text = render(
         "conversation_outcome",
         partner="Ayesha Khan",
         transcript="Maria Lopez: Library at 2?\nAyesha Khan: See you there.",
     )
-    assert "Ayesha Khan" in text
-    assert "Library at 2?" in text
-    assert "See you there." in text
+    assert text == (
+        "You just finished talking with Ayesha Khan. Here is what was said:\n"
+        "\n"
+        "Maria Lopez: Library at 2?\n"
+        "Ayesha Khan: See you there.\n"
+        "\n"
+        "Reflect on the conversation and record its outcome. Did it change what "
+        "you plan to do for the rest of the day -- for example, an agreement to "
+        "be somewhere at a certain time? And is there anything about Ayesha Khan "
+        "worth remembering afterward?"
+    )
+
+
+def test_decide_guard_marker_matches_engine_dialogue_prompt():
+    # ScheduleMockClient._decide declines the free-text dialogue path by matching
+    # cognition._CONVERSING_MARKER against the engine's npc_dialogue system
+    # prompt. That is a cross-package string coupling; pin it here so a reword of
+    # the engine template fails the backend suite loudly instead of silently
+    # letting the mock converse (which would break the byte-identical bake).
+    from text_adventure_games import prompt_templates
+
+    dialogue_system = prompt_templates.render(
+        "npc_dialogue", persona="A resident.", goals_block=""
+    )
+    assert cognition._CONVERSING_MARKER in dialogue_system.lower()
 
 
 from text_adventure_games.planning import DailyPlan, Stop  # noqa: E402

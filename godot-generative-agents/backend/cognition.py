@@ -50,6 +50,15 @@ CONVERSATION_MAX_EXCHANGES = 6
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
 
+# Distinguishing substring of the engine's free-text dialogue system prompt
+# (text_adventure_games/prompt_templates/npc_dialogue.prompty), used by
+# ScheduleMockClient._decide to recognise -- and decline -- a "what do you say
+# next" request so the mock never converses. This is a cross-package string
+# coupling; test_conversation_consequences_582.py renders that engine template
+# and asserts this marker is still present, so a reword there fails the backend
+# suite loudly instead of silently breaking the guard.
+_CONVERSING_MARKER = "you are in a conversation"
+
 # The relationship note a notable meeting leaves behind is momentous on the 1-10
 # poignancy scale (same weight as the #300 "I got sick" signal), so it survives
 # retrieval ranking and pushes the agent toward reflection.
@@ -272,11 +281,9 @@ class ScheduleMockClient(MockReActClient):
         # next", so it declines instead of echoing a stale travel/perform
         # command as a line of dialogue (issue #582): the mock never
         # converses, and maybe_converse's outcome pass is never reached.
-        # The substring keys on the engine's dialogue prompt template:
-        # text_adventure_games/prompt_templates/npc_dialogue.prompty has the
-        # line "You are in a conversation. Reply with the single line ..." --
-        # so an edit to that template's wording would silently break this guard.
-        if "you are in a conversation" in system.lower():
+        # Keys on _CONVERSING_MARKER, a substring of the engine's npc_dialogue
+        # prompt; a test pins that coupling so a reword can't break it silently.
+        if _CONVERSING_MARKER in system.lower():
             return None
         command = self._choose(observation)
         self.decisions.append({"command": command, "system": system})
@@ -971,7 +978,11 @@ def apply_conversation_outcome(
             partner=partner_name,
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
-    if not result.get("plans_changed"):
+    # Require a real boolean True -- not merely a truthy value. A lenient or
+    # fake client that returns a stringy "false" or a 1 must not trip a
+    # revision; the schema declares plans_changed as a required boolean, so a
+    # strict provider always sends one.
+    if result.get("plans_changed") is not True:
         return False
     commitment = result.get("commitment")
     detail = (
