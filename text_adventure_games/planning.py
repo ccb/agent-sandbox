@@ -6,9 +6,10 @@ decomposed top-down across three levels (see ``docs/design/daily-planning.md``):
 * **day outline** -- a handful of broad :class:`DayBlock`s ("morning: open the
   cafe"), no exact times;
 * **hourly plan** -- one :class:`HourBlock` per in-sim hour;
-* **minute plan** -- concrete :class:`Stop`s ``{place, activity, emoji, steps}``,
-  the *only* level the step loop consumes (it is exactly the schedule shape the
-  Smallville port already drives via ``advance()``).
+* **minute plan** -- concrete :class:`Stop`s
+  ``{place, activity, emoji, steps, commands}``, the *only* level the step loop
+  consumes (it is exactly the schedule shape the Smallville port already drives
+  via ``advance()``).
 
 Following the same restraint as ``memory.py`` and ``knowledge.py``, this module
 is **pure data with no engine imports**: the dataclasses and the helper
@@ -58,21 +59,51 @@ class Stop:
     plan is just handing ``DailyPlan.stops`` to the agent's client. ``steps`` is
     a count of sim steps to perform ``activity`` for; ``None`` means "stay for the
     rest of the day" (the existing last-stop convention).
+
+    ``commands`` are authored engine commands the agent fires on arriving at the
+    stop -- e.g. ``["get pot of murky water", "drink pot of murky water"]`` --
+    distinct from the free-text ``activity`` it merely performs there; empty for
+    an ordinary perform-only stop. Kept as a tuple so a frozen ``Stop`` stays
+    hashable and its equality is order-stable; the round-trip helpers below
+    accept and emit a plain list (the ``world_data.yaml`` / JSON shape). Before
+    this field, ``to_schedule_entry`` / ``from_schedule_entry`` whitelisted only
+    place/activity/emoji/steps, so a stop's authored commands were silently
+    dropped whenever a plan was committed through ``replace_schedule`` (#464).
     """
 
     place: str  # must resolve to a known Location name when executed
     activity: str
     emoji: str | None = None
     steps: int | None = None  # None => stay put indefinitely
+    commands: tuple[str, ...] = ()  # authored commands to fire at this stop
+
+    def __post_init__(self):
+        # Normalize commands to a tuple no matter how it arrived -- a YAML/JSON
+        # list (from from_schedule_entry, or from_primitive's ``Stop(**entry)``),
+        # a tuple, or None -- so the frozen stop is always hashable and compares
+        # by value. frozen=True forbids plain assignment, hence setattr.
+        if not isinstance(self.commands, tuple):
+            object.__setattr__(
+                self, "commands", tuple(self.commands) if self.commands else ()
+            )
 
     def to_schedule_entry(self) -> dict:
-        """The plain dict the Smallville client/loop already understands."""
-        return {
+        """The plain dict the Smallville client/loop already understands.
+
+        ``commands`` is emitted only when non-empty, so a command-less stop
+        serializes byte-identically to its authored ``world_data.yaml`` entry --
+        the round-trip fidelity the Smallville suite pins (a committed schedule
+        must equal the authored spec, which carries no empty ``commands`` key).
+        """
+        entry = {
             "place": self.place,
             "activity": self.activity,
             "emoji": self.emoji,
             "steps": self.steps,
         }
+        if self.commands:
+            entry["commands"] = list(self.commands)
+        return entry
 
     @classmethod
     def from_schedule_entry(cls, entry: dict) -> "Stop":
@@ -82,6 +113,7 @@ class Stop:
             activity=entry["activity"],
             emoji=entry.get("emoji"),
             steps=entry.get("steps"),
+            commands=entry.get("commands") or (),
         )
 
 
