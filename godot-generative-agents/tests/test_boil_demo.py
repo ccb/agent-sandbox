@@ -186,4 +186,4 @@ def test_full_world_still_carries_sofias_arc():
     # #590 splits Sofia's arc across several same-place Houston stops (boil sits
     # in the middle one), so gather the commands across all of them.
     commands = [c for s in houston for c in (s.get("commands") or [])]
-    assert "boil water" in commands
+    assert "make boiled water" in commands  # boiling is the crafting recipe (#300)

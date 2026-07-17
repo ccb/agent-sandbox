@@ -65,13 +65,13 @@ personas:
     emoji: 🤒
     steps: 28
     commands:
-    - boil water                 # -> boiled (pot marked is_boiled in place; name kept)
+    - make boiled water          # -> boiled (consumes murky pot, produces boiled pot)
   - place: Houston Hall
     activity: hoping the queasiness passes
     emoji: 🤒
     steps: 12
     commands:
-    - drink pot of murky water   # -> recovery (same pot, now boiled; 🤢 reverts)
+    - drink pot of boiled water  # -> recovery (the produced boiled pot; 🤢 reverts)
   - place: Houston Hall
     activity: recovered and back at the union
     emoji: 🍽️
