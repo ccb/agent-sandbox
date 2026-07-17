@@ -67,6 +67,9 @@ export interface LiveStatusResponse {
   cursor: number;
   tick_seconds: number | null;
   meta: LiveMeta | null;
+  // Per-process boot nonce (#578): changes on a backend restart. Absent on an
+  // older server that predates the field.
+  boot_id?: string | null;
 }
 
 // GET /usage — the run ledger's summary (tokens and dollars, #264).

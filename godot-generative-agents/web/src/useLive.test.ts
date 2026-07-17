@@ -72,7 +72,14 @@ describe("applyFeedRecords", () => {
       [
         call(1, 1),
         { cursor: 2, kind: "frame", step: 7, agents: {} },
-        { cursor: 3, kind: "status", reason: "paused", running: true, paused: true, step: 7 },
+        {
+          cursor: 3,
+          kind: "status",
+          reason: "paused",
+          running: true,
+          paused: true,
+          step: 7,
+        },
       ],
       123,
     );
@@ -143,7 +150,14 @@ describe("followLive", () => {
     vi.useFakeTimers();
     state = idle();
     fetched = [];
-    live = { enabled: true, running: true, paused: false, step: 3, cursor: 0, meta: null };
+    live = {
+      enabled: true,
+      running: true,
+      paused: false,
+      step: 3,
+      cursor: 0,
+      meta: null,
+    };
     events = { latest_cursor: 9, oldest_cursor: null, events: [call(9, 9)] };
     FakeWS.all = [];
     vi.stubGlobal("WebSocket", FakeWS);
@@ -281,6 +295,26 @@ describe("followLive", () => {
     expect(state.calls).toEqual([]); // the dead run's log is cleared, like a reset
     FakeWS.last.open();
     FakeWS.last.push(call(2, 3));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([2]); // the new run's rows flow
+  });
+
+  it("re-anchors on a changed boot_id even when the new feed's cursor is past ours (#578)", async () => {
+    live.boot_id = "boot-A";
+    const sock = await start();
+    sock.open();
+    sock.push(call(1, 5));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([1]);
+    sock.drop(); // the restarting backend takes every socket down with it
+    // New process: its feed has ALREADY climbed past our cursor (5), so the
+    // cursor-rewind check can't see the restart — only the changed boot_id can.
+    live = { ...live, step: 1, cursor: 20, boot_id: "boot-B" };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeWS.last.url).toBe("ws://b/ws?since=20"); // re-anchored at the new head
+    expect(state.calls).toEqual([]); // the dead run's log is cleared, like a reset
+    FakeWS.last.open();
+    FakeWS.last.push(call(2, 21));
     await vi.advanceTimersByTimeAsync(0);
     expect(state.calls.map((c) => c.call_no)).toEqual([2]); // the new run's rows flow
   });

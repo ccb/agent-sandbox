@@ -154,6 +154,7 @@ export function followLive(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let ws: WebSocket | null = null;
   let cursor = 0;
+  let bootId: string | null = null; // last-seen GET /live boot nonce (#578)
   let handshook = false; // GET /live done; retried until it succeeds
   let wsUsable = true; // cleared when a socket dies before opening
 
@@ -180,7 +181,16 @@ export function followLive(
     // the background eviction-gap refresh races records still arriving on the
     // open socket, and must never rewind a healthy follower.
     const rewound = !wasHandshook && hs.cursor < cursor;
-    if (rewound) cursor = hs.cursor;
+    // #578: a changed per-process boot nonce is the reliable restart signal —
+    // it catches a new process whose feed has already climbed past our cursor,
+    // which `rewound` misses. A first handshake (bootId null) or a server that
+    // omits boot_id (older/mixed-version) falls back to the cursor rewind. Fresh
+    // connects/reconnects only, like `rewound` — never the background refresh.
+    const rebooted =
+      !wasHandshook && bootId !== null && hs.boot_id != null && hs.boot_id !== bootId;
+    if (hs.boot_id != null) bootId = hs.boot_id;
+    const restarted = rewound || rebooted;
+    if (restarted) cursor = hs.cursor;
     handshook = true;
     setState((s) => ({
       ...s,
@@ -196,7 +206,7 @@ export function followLive(
       // path — kept here (not routed through the reducer) because this applies a
       // /live *snapshot*, not a feed record: the reducer folds records, and a
       // synthetic one would have to carry the whole meta/usage/step snapshot too.
-      calls: rewound ? [] : s.calls,
+      calls: restarted ? [] : s.calls,
     }));
   };
 
