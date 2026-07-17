@@ -188,7 +188,11 @@ export function followLive(
     // connects/reconnects only, like `rewound` — never the background refresh.
     const rebooted =
       !wasHandshook && bootId !== null && hs.boot_id != null && hs.boot_id !== bootId;
-    if (hs.boot_id != null) bootId = hs.boot_id;
+    // Record the nonce on a fresh connect/reconnect only, never on the background
+    // eviction-gap refresh: a restart mid-refresh must leave `bootId` at the old
+    // value so the next reconnect's comparison still catches it (#578 review).
+    // The first handshake has `wasHandshook === false`, so it still records.
+    if (!wasHandshook && hs.boot_id != null) bootId = hs.boot_id;
     const restarted = rewound || rebooted;
     if (restarted) cursor = hs.cursor;
     handshook = true;
@@ -223,6 +227,12 @@ export function followLive(
       }
       if (data.latest_cursor < cursor) {
         handshook = false; // cursor rewind: a restart — the re-handshake re-anchors (#549)
+      }
+      if (data.boot_id != null && bootId !== null && data.boot_id !== bootId) {
+        // A changed nonce is the restart signal the gap/rewind checks miss when
+        // the new process's feed has already climbed past our cursor (#578): the
+        // re-handshake next tick re-anchors + clears via the `rebooted` path.
+        handshook = false;
       }
       cursor = Math.max(cursor, data.latest_cursor);
       setState((s) => applyFeedRecords(s, data.events, Date.now()));

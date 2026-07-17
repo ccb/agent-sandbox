@@ -319,6 +319,64 @@ describe("followLive", () => {
     expect(state.calls.map((c) => c.call_no)).toEqual([2]); // the new run's rows flow
   });
 
+  it("keeps the old nonce through a background refresh so the next reconnect still sees the restart (#578)", async () => {
+    live.boot_id = "boot-A";
+    const sock = await start();
+    sock.open();
+    sock.push(call(1, 5));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([1]);
+    live.cursor = 5;
+    sock.drop(); // a plain reconnect — no restart yet, nonce still boot-A
+    await vi.advanceTimersByTimeAsync(1000);
+    const resumed = FakeWS.last;
+    resumed.open();
+    // The backend restarts now; its feed has ALREADY climbed past our cursor, so
+    // only the changed nonce can reveal it. A background eviction-gap refresh
+    // reads the new nonce first — but it must NOT consume it: recording boot-B
+    // here would blind the next reconnect's comparison (it would see no change).
+    live = { ...live, step: 1, cursor: 20, boot_id: "boot-B" };
+    resumed.push(call(2, 9)); // 9 > 5 + 1: fires the background refresh
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([1, 2]); // background: log untouched
+    // Now the socket drops and we reconnect for real: the handshake compares the
+    // still-old nonce (boot-A) to boot-B and detects the restart it would
+    // otherwise have missed — re-anchoring at the new head and clearing the log.
+    resumed.drop();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeWS.last.url).toBe("ws://b/ws?since=20"); // re-anchored, not stitched at 9
+    expect(state.calls).toEqual([]); // the dead run's log is cleared, like a reset
+  });
+
+  it("re-handshakes under the poll fallback when /events reports a changed boot_id (#578)", async () => {
+    live.boot_id = "boot-A";
+    events = { latest_cursor: 10, oldest_cursor: null, boot_id: "boot-A", events: [call(9, 10)] };
+    const sock = await start();
+    sock.drop(); // never opened: this target polls for good
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.calls.map((c) => c.call_no)).toEqual([9]); // old run, cursor at 10
+    // Restart: the new process's feed has ALREADY climbed past our cursor, and it
+    // hands back a contiguous record (cursor+1) — so neither the eviction-gap nor
+    // the rewind check fires. Only the changed nonce on /events reveals the restart.
+    live = { ...live, step: 1, cursor: 150, boot_id: "boot-B" };
+    events = {
+      latest_cursor: 150,
+      oldest_cursor: null,
+      boot_id: "boot-B",
+      events: [call(10, 11)],
+    };
+    await vi.advanceTimersByTimeAsync(1000); // poll sees boot-B != boot-A → re-handshake queued
+    events = {
+      latest_cursor: 151,
+      oldest_cursor: null,
+      boot_id: "boot-B",
+      events: [call(11, 151)],
+    };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(urls("/live")).toHaveLength(2); // re-handshake happened
+    expect(state.calls.map((c) => c.call_no)).toEqual([11]); // old log cleared, new run flows
+  });
+
   it("re-anchors under the poll fallback when /events reports a rewound cursor", async () => {
     const sock = await start();
     sock.drop(); // never opened: this target polls for good

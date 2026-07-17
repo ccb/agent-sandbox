@@ -984,6 +984,7 @@ def test_live_disabled_by_default():
         "latest_cursor": 0,
         "oldest_cursor": None,
         "events": [],
+        "boot_id": None,  # no live loop -> null, matching GET /live (#578)
     }
     for path in ("/pause", "/resume", "/reset"):
         assert c.post(path).status_code == 409  # no loop to control
