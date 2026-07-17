@@ -504,6 +504,17 @@ class Parser:
     def agent_reflection(self, actor: str, text: str):
         self._emit(Channel.AGENT_REFLECTION, text, actor=actor)
 
+    def agent_wish(self, actor: str, text: str, wish: dict | None = None):
+        """An actor's recorded wish for a missing action (#620). *wish* is the
+        structured record (``ActionWish.to_primitive()``), carried in ``meta``
+        for surfaces that want more than the one-line trace."""
+        self._emit(
+            Channel.AGENT_WISH,
+            text,
+            actor=actor,
+            meta={"wish": wish} if wish else None,
+        )
+
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
         typed ``agent_*`` methods above; kept so older callers keep working."""
