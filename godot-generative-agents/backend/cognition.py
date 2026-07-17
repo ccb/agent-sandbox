@@ -1422,10 +1422,17 @@ def maybe_converse(
     completed = 0
 
     # (1) Advance every in-progress conversation by one line.
+    # A participant whose conversation COMPLETES this tick is captured into
+    # finished_this_step (issue #187 fix): without it, phase 2's `busy` below --
+    # computed after this loop's deletions -- would not see them as busy, and
+    # they could immediately start (and finish) a second conversation with a
+    # different resident in this same tick. Deferred instead to next tick.
+    finished_this_step: set[str] = set()
     for key in list(active):
+        ac = active[key]
         ended, delta = _advance_conversation(
             game,
-            active[key],
+            ac,
             chars,
             state,
             frame,
@@ -1437,9 +1444,12 @@ def maybe_converse(
         completed += delta
         if ended:
             del active[key]
+            finished_this_step.update((ac.a, ac.b))
 
     # (2) Start new conversations among settled, co-located, non-busy residents.
-    busy = {name for ac in active.values() for name in (ac.a, ac.b)}
+    busy = {
+        name for ac in active.values() for name in (ac.a, ac.b)
+    } | finished_this_step
     settled = [
         chars[name]
         for name in order
