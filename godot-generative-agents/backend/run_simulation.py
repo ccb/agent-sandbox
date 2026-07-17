@@ -197,6 +197,19 @@ def step(
             raise ValueError("decide_executor requires decide_timeout")
         if decide_pending is None:
             raise ValueError("decide_executor requires decide_pending")
+    # Multi-tick conversations (#371) carry their in-progress state in
+    # active_conversations across ticks. A None default would hand maybe_converse a
+    # throwaway dict every tick, so a meeting could never advance: each tick would
+    # restart it, re-greet, and re-pin the pair -- which would then never resume
+    # their schedule. A caller that enables conversation must therefore own a
+    # persistent dict (simulate() and PennStepper both do); callers that don't
+    # converse leave both flags off.
+    if conversation_enabled and active_conversations is None:
+        raise ValueError(
+            "conversation_enabled requires a persistent active_conversations dict "
+            "(#371): without it a multi-tick meeting restarts every tick and the "
+            "pair never advances or unpins"
+        )
     conversation_cooldowns = (
         conversation_cooldowns if conversation_cooldowns is not None else {}
     )
