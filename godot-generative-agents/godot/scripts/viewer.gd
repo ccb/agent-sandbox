@@ -1127,6 +1127,15 @@ func _spawn_agent(name: String, index: int) -> void:
 	spr.frame = WALK_ROW * SHEET_HFRAMES
 	spr.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
 	spr.modulate = TINTS[index % TINTS.size()]
+	# Feet-anchor the sprite (#561). The node sits at the agent's tile CENTRE (that's
+	# what trails, fog, links and the camera all key off), but a Sprite2D is `centered`,
+	# so the ~64px-tall character was drawn straddling that point -- its feet dangled two
+	# tiles BELOW the cell it occupies, reading as if it stood off the wrong spot. Raise
+	# it so its feet sit ~one tile below the node centre (a half-height lift, minus one
+	# tile: full-height felt one tile too high). Only the sprite (+ its nameplate, bubble
+	# and click box, below) moves; the node stays at the tile centre.
+	var foot_lift := SPRITE_HALF_PX - float(_tile_px)
+	spr.position = Vector2(0, -foot_lift)
 	node.add_child(spr)
 
 	var label := Label.new()
@@ -1139,7 +1148,8 @@ func _spawn_agent(name: String, index: int) -> void:
 	# Park the single-line nameplate just above the sprite's head (the ~50px covers
 	# the one text line), so it tracks the sprite size instead of overlapping it.
 	# The current activity lives in the sidebar, so the label only shows the name.
-	label.position = Vector2(-110, -(SPRITE_HALF_PX + 50.0))
+	# Head = -(foot_lift + SPRITE_HALF_PX) now that the sprite is feet-anchored (above).
+	label.position = Vector2(-110, -(foot_lift + SPRITE_HALF_PX + 50.0))
 	label.custom_minimum_size = Vector2(220, 0)
 	node.add_child(label)
 
@@ -1153,8 +1163,11 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
 	# Centre it over the sprite and park it above the nameplate (which sits at
-	# -(half + 50)); it grows downward from here but the clip keeps it short.
-	bubble.position = Vector2(-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET))
+	# -(foot_lift + half + 50) after the feet-anchor lift); it grows downward but the
+	# clip keeps it short.
+	bubble.position = Vector2(
+		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET)
+	)
 	bubble.visible = false
 	node.add_child(bubble)
 
@@ -1168,6 +1181,9 @@ func _spawn_agent(name: String, index: int) -> void:
 	var box := RectangleShape2D.new()
 	box.size = Vector2(SPRITE_HALF_PX * 1.5, SPRITE_HALF_PX * 2.0)
 	collider.shape = box
+	# Ride up with the feet-anchored sprite (#561) so the click target still covers the
+	# character body: the box centre tracks the sprite centre (now at -foot_lift).
+	collider.position = Vector2(0, -foot_lift)
 	area.add_child(collider)
 	area.input_event.connect(_on_agent_input.bind(name))
 	area.mouse_entered.connect(
