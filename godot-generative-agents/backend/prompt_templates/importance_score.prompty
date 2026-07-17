@@ -1,0 +1,25 @@
+---
+name: importance_score
+description: >
+  Real model prompt (issue #583): a batch of an agent's newly-formed memories,
+  each asked to be rated 1-10 for poignancy (Generative Agents "importance").
+  Rendered by cognition.score_new_memories() once per acting agent per tick,
+  only when a real brain is driving (the mock never scores, so the bake never
+  reaches this). The scores are structured data returned via the score_memories
+  tool; only the wording lives here.
+inputs:
+  memories:
+    type: array
+    description: 'The memories to rate, each {id, text}. id is the memory''s stream id.'
+sample:
+  memories:
+    - id: 0
+      text: I traveled to the Cafe.
+    - id: 1
+      text: I saw Ayesha nearby.
+---
+Rate how significant each of these memories is to you, from 1 (mundane) to 10 (momentous):
+
+{% for m in memories %}[{{ m.id }}] {{ m.text }}
+{% endfor %}
+Then call score_memories with a 1-10 score for every id above.
