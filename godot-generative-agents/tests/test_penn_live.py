@@ -282,14 +282,18 @@ def test_stepper_persists_game_events(tmp_path):
     assert store.read_events(run_id)[-1]["summary"] == "last call"
 
 
-def _spend(ledger, cost):
-    # Synthetic spend: the mock brain bills $0, so tests inject priced
-    # records to make the per-run arithmetic visible.
+def _spend(ledger, cost, actor="Diego Torres"):
+    # Synthetic spend: the mock brain bills $0, so tests inject priced records
+    # to make the per-run arithmetic visible. A REAL provider on purpose -- the
+    # per-run view counts a call only when provider != "mock" (#569.1), so a
+    # faithful stand-in for a paid request must not wear the mock tag.
     ledger.record(
         CallRecord(
-            usage=Usage(provider="mock", model="mock", input_tokens=10),
+            usage=Usage(
+                provider="anthropic", model="claude-haiku-4-5", input_tokens=10
+            ),
             cost_usd=cost,
-            actor="Diego Torres",
+            actor=actor,
         )
     )
 
@@ -299,23 +303,41 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     # reset() re-baselines it, and the lifetime ledger (the budget gate's
     # basis) keeps counting. The RunStore row now records the RUN's spend --
     # pre-#526 it stored the lifetime total, so run #2 included run #1.
-    # NOTE: mock-brain ticks append $0 CallRecords (the schedule clients ARE
-    # the brains), so exact run_calls values are only pinned at tick-free
-    # points; across ticks the test pins COST, which $0 records never move.
+    # NOTE: mock-brain ticks append $0 provider="mock" CallRecords (the schedule
+    # clients ARE the brains). run_calls/run_by_actor now count only REAL calls
+    # (provider != "mock", #569.1), so those mock records DON'T move them -- the
+    # test pins run_calls across ticks, not just at tick-free points.
     store = RunStore(tmp_path / "runs")
     stepper = PennStepper(num_steps=3, world=build_penn_world(), run_store=store)
-    assert stepper.run_usage() == {"run_calls": 0, "run_cost_usd": 0.0}
+    assert stepper.run_usage() == {
+        "run_calls": 0,
+        "run_cost_usd": 0.0,
+        "run_by_actor": {},
+    }
     _spend(stepper.ledger, 0.25)
     _spend(stepper.ledger, 0.05)
-    assert stepper.run_usage() == {"run_calls": 2, "run_cost_usd": 0.3}
+    assert stepper.run_usage() == {
+        "run_calls": 2,
+        "run_cost_usd": 0.3,
+        "run_by_actor": {"Diego Torres": 0.3},
+    }
     stepper.tick()
     first = stepper.run_id
-    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(0.3)
+    # A mock tick appended $0 records, but run_calls/run_by_actor ignore them.
+    assert stepper.run_usage() == {
+        "run_calls": 2,
+        "run_cost_usd": pytest.approx(0.3),
+        "run_by_actor": {"Diego Torres": pytest.approx(0.3)},
+    }
     assert store.get_run(first)["cost"] == pytest.approx(0.3)
     lifetime_calls = stepper.ledger.summary()["calls"]  # spends + mock records
     stepper.reset()
     # The new run starts from zero...
-    assert stepper.run_usage() == {"run_calls": 0, "run_cost_usd": 0.0}
+    assert stepper.run_usage() == {
+        "run_calls": 0,
+        "run_cost_usd": 0.0,
+        "run_by_actor": {},
+    }
     # ...while the lifetime ledger keeps everything, so a tripped cost
     # ceiling stays tripped across the reset.
     assert stepper.ledger.summary()["calls"] == lifetime_calls
@@ -323,17 +345,67 @@ def test_run_usage_rebaselines_on_reset_and_run_rows_carry_run_cost(tmp_path):
     stepper.ledger.max_cost_usd = 0.2
     assert stepper.ledger.over_budget()
     stepper.ledger.max_cost_usd = None  # disarm so ticks keep running below
-    _spend(stepper.ledger, 0.1)
-    assert stepper.run_usage() == {"run_calls": 1, "run_cost_usd": 0.1}
+    # Two actors this run, so run_by_actor splits the per-agent spend while
+    # run_cost_usd stays the run total (they reconcile: 0.1 + 0.05 == 0.15).
+    _spend(stepper.ledger, 0.1, actor="Diego Torres")
+    _spend(stepper.ledger, 0.05, actor="Sofia Ramirez")
+    assert stepper.run_usage() == {
+        "run_calls": 2,
+        "run_cost_usd": 0.15,
+        "run_by_actor": {"Diego Torres": 0.1, "Sofia Ramirez": 0.05},
+    }
     stepper.tick()
     second = stepper.run_id
-    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(0.1)
-    assert store.get_run(second)["cost"] == pytest.approx(0.1)  # not 0.4
+    assert stepper.run_usage()["run_cost_usd"] == pytest.approx(0.15)
+    assert store.get_run(second)["cost"] == pytest.approx(0.15)  # not 0.45
     # No store required: a bare stepper offers the same view.
     assert PennStepper(num_steps=1, world=build_penn_world()).run_usage() == {
         "run_calls": 0,
         "run_cost_usd": 0.0,
+        "run_by_actor": {},
     }
+
+
+def test_get_usage_merges_a_real_stepper_run_view(tmp_path):
+    # Close the producer<->consumer seam (#569.3): the OTHER two run-usage tests
+    # exercise PennStepper.run_usage() as a unit (above) and the /usage MERGE
+    # against a fake stepper whose run_usage is a lambda (test_live_seam.py). This
+    # drives a REAL PennStepper through GET /usage the way serve_penn.main wires
+    # it -- create_app(_GameProxy(stepper), stepper=stepper) -- so the run-scoped
+    # fields the stepper actually computes reach the HTTP response.
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from backend.api import create_app
+
+    stepper = PennStepper(num_steps=3, world=build_penn_world())
+    # Synthetic real spend across two agents, plus a $0 mock record that a mock
+    # tick would leave behind: the real call count must ignore it (#569.1).
+    _spend(stepper.ledger, 0.20, actor="Diego Torres")
+    _spend(stepper.ledger, 0.05, actor="Sofia Ramirez")
+    stepper.ledger.record(
+        CallRecord(usage=Usage(provider="mock", model="mock"), cost_usd=0.0)
+    )
+
+    app = create_app(_GameProxy(stepper), stepper=stepper, start_paused=True)
+    # A bare TestClient (no `with`) never starts the self-stepping loop, so the
+    # ledger holds exactly the records injected above -- no mock ticks race in.
+    body = TestClient(app).get("/usage").json()
+
+    # Lifetime fields are untouched and still count the mock record (3 total).
+    assert body["available"] is True
+    assert body["calls"] == 3
+    assert body["total_cost_usd"] == pytest.approx(0.25)
+    # Run-scoped fields: real calls only, and run_by_actor reconciles with the
+    # run total headlined beside it (the point of #569.2).
+    assert body["run_calls"] == 2
+    assert body["run_cost_usd"] == pytest.approx(0.25)
+    assert body["run_by_actor"] == {
+        "Diego Torres": pytest.approx(0.20),
+        "Sofia Ramirez": pytest.approx(0.05),
+    }
+    assert sum(body["run_by_actor"].values()) == pytest.approx(body["run_cost_usd"])
 
 
 def test_stepper_reset_closes_the_run_and_opens_a_new_one(tmp_path):
