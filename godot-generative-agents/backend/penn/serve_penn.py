@@ -616,6 +616,10 @@ class PennStepper:
         # re-converse every single step). Fresh per day, like the rest of the
         # world state.
         self._convo_cooldowns = {}
+        # In-progress conversations carried across live ticks (issue #371), so a
+        # meeting spans ticks instead of resolving inside one. Fresh per day/reset
+        # (lives in _build, which reset() re-runs), like _convo_cooldowns.
+        self._active_conversations = {}
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -632,6 +636,9 @@ class PennStepper:
                 "memories": [],
                 "chat": None,
                 "stop_since": 0,
+                # Pinned during a multi-tick conversation (issue #371); step()
+                # skips schedule-advance/decision/movement while set.
+                "conversing": False,
             }
         self.injector = LiveMeetingInjector(
             # Under a real brain the authored dialogue stands down entirely:
@@ -892,6 +899,7 @@ class PennStepper:
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
             conversation_cooldowns=self._convo_cooldowns,
+            active_conversations=self._active_conversations,
             # Concurrent decides (#366): None executor = the serial path the
             # simulate-equivalence test pins; workers > 0 fans decisions out.
             decide_executor=self._decide_executor,
