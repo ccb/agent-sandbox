@@ -432,8 +432,9 @@ class PennStepper:
         self.cognition_tools = cognition_tools or (llm == SCRIPTED)
         # React-or-continue (#370): perception-driven interruption while
         # walking. Held on the stepper so _build() re-applies it on every
-        # reset. Mock-inert (the identity gate never consults the mock brain),
-        # so it is safe to leave on under --brain mock for mechanics demos.
+        # reset. Mock-inert: under the mock brain the react pass never runs
+        # at all (step() gates it on conversation_enabled), so it is safe to
+        # leave on for mechanics demos.
         self.react = react
         # Daily planning source (#397): "schedule" (default) keeps the authored
         # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
@@ -1256,8 +1257,9 @@ def main() -> int:
         "newly notices another resident may spend one 'react' model call "
         "(continue/greet/replan), rule-gated and capped per sim hour; a "
         "greet pauses the walk for a conversation, then the walk resumes. "
-        "Encounters are written to memory either way. Only --brain llm "
-        "actually consults; the mock/scripted brains never do",
+        "Needs a real brain: under --brain mock the pass never runs "
+        "(conversation is disabled). Note: 'replan' only changes the day "
+        "under --plan llm",
     )
     ap.add_argument(
         "--decide-workers",

@@ -381,6 +381,52 @@ def test_mock_brain_never_consults_but_still_remembers():
     assert any("I noticed Ayesha Khan nearby" in t for t in texts)
 
 
+def test_malformed_react_reply_still_consumes_cooldown_and_cap():
+    # A real brain that answers the react tool badly must still be billed
+    # against the react cooldown/cap -- otherwise every new edge makes an
+    # uncapped paid call (final-review Important #1).
+    brain = _ReactBrain(choice="shrug")  # not in the enum -> unusable reply
+    game, chars, state, frame, order = _pair(brain)
+    react_state: dict = {}
+    consults = maybe_react(
+        chars,
+        state,
+        0,
+        {},
+        order,
+        react_state=react_state,
+        active={},
+        react_cooldown_steps=100,
+    )
+    assert len(brain.react_calls) == 1
+    assert consults == 1  # a made call is a consult, usable or not
+    assert react_state["last_react"]["Maria Lopez"] == 0  # cooldown engaged
+    # Leave and re-enter range within the cooldown window: no second call.
+    state["Ayesha Khan"]["tile"] = (50, 50)
+    maybe_react(
+        chars,
+        state,
+        1,
+        {},
+        order,
+        react_state=react_state,
+        active={},
+        react_cooldown_steps=100,
+    )
+    state["Ayesha Khan"]["tile"] = (2, 0)
+    maybe_react(
+        chars,
+        state,
+        2,
+        {},
+        order,
+        react_state=react_state,
+        active={},
+        react_cooldown_steps=100,
+    )
+    assert len(brain.react_calls) == 1
+
+
 from backend.run_simulation import step  # noqa: E402
 
 
@@ -485,9 +531,10 @@ def test_step_runs_react_before_converse_so_greeting_lands_same_tick():
     assert state["Maria Lopez"]["path"] == [(2, 0)]
 
 
-def test_step_react_off_is_byte_identical():
-    import copy
-
+def test_default_cog_equals_explicit_default():
+    # An explicit CognitionConfig() behaves identically to the implicit
+    # default (react off). The branch's real byte-identity guarantee against
+    # the baked replay is pinned by the external determinism suites.
     game, chars, _, _, order = _pair(None)
     emoji = {n: "\U0001f9d1" for n in order}
 
