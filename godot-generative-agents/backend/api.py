@@ -601,6 +601,14 @@ def create_app(
         if authorization != expected:
             raise HTTPException(status_code=401, detail="invalid or missing token")
 
+    def _publish_adoption(run_id: str) -> dict:
+        """Emit the follower adoption signal (status record, reason 'reset',
+        additive run_id) and return the route body. Shared by POST /runs and
+        POST /runs/{id}/resume."""
+        status = controller.status()
+        record = log.append("status", reason="reset", run_id=run_id, **status)
+        return {**status, "cursor": record["cursor"], "run_id": run_id}
+
     @app.get("/health")
     def health(_: None = Depends(require_auth)) -> dict:
         """Liveness + the current turn -- a cheap poll that never mutates."""
@@ -1191,10 +1199,7 @@ def create_app(
             # exc.args[0] keeps the message unquoted (str() of a KeyError wraps
             # it in repr quotes), matching runs_resume.
             raise HTTPException(status_code=404, detail=str(exc.args[0]))
-        record = log.append(
-            "status", reason="reset", run_id=run_id, **controller.status()
-        )
-        return {**controller.status(), "cursor": record["cursor"], "run_id": run_id}
+        return _publish_adoption(run_id)
 
     @app.get("/runs/{run_id}")
     def runs_get(run_id: str, _: None = Depends(require_auth)) -> dict:
@@ -1299,10 +1304,7 @@ def create_app(
             raise HTTPException(status_code=404, detail=str(exc.args[0]))
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
-        record = log.append(
-            "status", reason="reset", run_id=run_id, **controller.status()
-        )
-        return {**controller.status(), "cursor": record["cursor"], "run_id": run_id}
+        return _publish_adoption(run_id)
 
     @app.post("/command", response_model=CommandResponse)
     def command(req: CommandRequest, _: None = Depends(require_auth)):
