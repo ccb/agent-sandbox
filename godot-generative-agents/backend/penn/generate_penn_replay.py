@@ -199,7 +199,9 @@ def main() -> int:
     ap.add_argument(
         "--out",
         default=None,
-        help="override the scenario's default output path (under maps/)",
+        help="output file path, used verbatim (relative to the current directory, "
+        "not maps/); the scenario default lives under maps/. For the viewer's menu "
+        "button to find the boil demo it must land at maps/penn_replay_boil.json.",
     )
     ap.add_argument(
         "--persist",

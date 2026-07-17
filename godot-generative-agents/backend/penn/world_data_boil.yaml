@@ -10,7 +10,7 @@
 # short step budget, and writes maps/penn_replay_boil.json). It reuses the same
 # `the_upenn` matrix and the shared `build_penn_world` factory, so the boil props
 # (`_furnish_boil_water`: the murky pot + sink + stove) and the Penn verb set
-# (get/drink/boil/...) are stocked into Houston Hall exactly as in the full world.
+# (get/drink/make/...) are stocked into Houston Hall exactly as in the full world.
 #
 # Sofia's curated day and the bundled replay are untouched -- this is an additive,
 # self-contained fixture (it also doubles as the scenario for the connect-the-dots
@@ -44,10 +44,12 @@ personas:
   # but these differ by `activity` too, so `ScheduleMockClient.replace_schedule`
   # re-attaches each stop's `commands` positionally -- verified by the bake + test.)
   # NOTE: each `activity` must be verb-free prose. Between commands the mock issues
-  # `perform <activity>`, which is re-parsed -- an activity containing an action verb
-  # (drink/get/boil/...) or even the substring "ate" would be mis-read as that
-  # command and spam parser failures (cf. #535, "Diego's 'late' -> EAT"). So the
-  # activities below describe a *state* ("at the union", "feeling ill"), never a verb.
+  # `perform <activity>`, which is re-parsed -- and the parser keyword-matches many
+  # verbs as SUBSTRINGS anywhere in the command ("light" in "delighted", "eat "/"get "
+  # mid-word), so such an activity is mis-read as that command and spams failures (cf.
+  # #535, "Diego's 'late' -> EAT"). So the activities below describe a *state* ("at
+  # the union", "feeling ill"), never a verb -- enforced by test_boil_demo.py, which
+  # routes each `perform <activity>` through the real parser and requires `perform`.
   # A short healthy lead-in so the before-state is visible before the first drink.
   - place: Houston Hall
     activity: settling in at the union before dinner
