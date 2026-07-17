@@ -26,6 +26,7 @@ from dataclasses import replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
+from text_adventure_games.planning import RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
     LLMAgent,
@@ -43,6 +44,66 @@ from text_adventure_games.usage import UsageLedger, record_call
 # a single meeting is capped at this many lines.
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
+
+# Conversation consequences (issue #582). A backend-local revision reason -- the
+# engine's RevisionTrigger.reason is a plain string (planning.py), so an
+# agreement reached in dialogue needs no engine change to reach a planner.
+CONVERSATION = "conversation"
+
+# Distinguishing substring of the engine's free-text dialogue system prompt
+# (text_adventure_games/prompt_templates/npc_dialogue.prompty), used by
+# ScheduleMockClient._decide to recognise -- and decline -- a "what do you say
+# next" request so the mock never converses. This is a cross-package string
+# coupling; test_conversation_consequences_582.py renders that engine template
+# and asserts this marker is still present, so a reword there fails the backend
+# suite loudly instead of silently breaking the guard.
+_CONVERSING_MARKER = "you are in a conversation"
+
+# The relationship note a notable meeting leaves behind is momentous on the 1-10
+# poignancy scale (same weight as the #300 "I got sick" signal), so it survives
+# retrieval ranking and pushes the agent toward reflection.
+RELATIONSHIP_NOTE_IMPORTANCE = 8.0
+
+# The post-conversation outcome tool (#582): one structured call per participant
+# after a meeting. plans_changed gates a plan revision; the two strings are
+# optional (small talk fills neither). Normalized {name, description, parameters}
+# -- the shape llm_client.call_tool translates per provider, like the planner's
+# tools.
+CONVERSATION_OUTCOME_TOOL = {
+    "name": "conversation_outcome",
+    "description": (
+        "Record the outcome of the conversation you just had: whether it "
+        "changed your plans for the rest of the day, and anything about the "
+        "other person worth remembering."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "plans_changed": {
+                "type": "boolean",
+                "description": (
+                    "True if this conversation changed what you will do for the "
+                    "rest of the day (e.g. an agreement to meet somewhere)."
+                ),
+            },
+            "commitment": {
+                "type": "string",
+                "description": (
+                    "If plans changed, the concrete thing you agreed to -- where "
+                    "and when. Omit if nothing changed."
+                ),
+            },
+            "relationship_note": {
+                "type": "string",
+                "description": (
+                    "A durable note about the other person worth remembering, or "
+                    "omit if the exchange was just small talk."
+                ),
+            },
+        },
+        "required": ["plans_changed"],
+    },
+}
 
 from . import seed
 from .actions import Travel
@@ -214,6 +275,16 @@ class ScheduleMockClient(MockReActClient):
         """Free-text (chat) route -- the fallback path in LLMAgent.decide."""
         observation = messages[-1]["content"] if messages else ""
         system = messages[0]["content"] if messages else ""
+        # Agent.converse's free-text fallback (_converse_freetext) also calls
+        # chat() -- with the dialogue system message, not the decide one. This
+        # brain only knows how to walk a schedule, not answer "what do you say
+        # next", so it declines instead of echoing a stale travel/perform
+        # command as a line of dialogue (issue #582): the mock never
+        # converses, and maybe_converse's outcome pass is never reached.
+        # Keys on _CONVERSING_MARKER, a substring of the engine's npc_dialogue
+        # prompt; a test pins that coupling so a reword can't break it silently.
+        if _CONVERSING_MARKER in system.lower():
+            return None
         command = self._choose(observation)
         self.decisions.append({"command": command, "system": system})
         return command
@@ -844,6 +915,84 @@ def maybe_revise_plan(char, trigger, clock=None) -> bool:
     return True
 
 
+def apply_conversation_outcome(
+    char, partner_name: str, transcript: str, step: int, clock=None
+) -> bool:
+    """One post-conversation outcome pass for a single participant (issue #582).
+
+    After a meeting actually happened, ask *char*'s brain -- via the
+    :data:`CONVERSATION_OUTCOME_TOOL` -- what the conversation changed:
+
+    * ``plans_changed`` -> a plan revision (:func:`maybe_revise_plan`) tagged with
+      the backend-local :data:`CONVERSATION` reason, the ``commitment`` (falling
+      back to the transcript) carried as the trigger detail. The existing
+      re-anchor guard protects executed/current stops; ``LLMPlanner.revise``
+      already reads trigger detail, and ``MockPlanner.revise`` is a no-op.
+    * ``relationship_note`` -> a high-importance, partner-attributed CHAT memory
+      in *char*'s own stream, so retrieval and reflection pick it up, and the
+      record is partner-attributed for future social-graph work. Note this does
+      NOT touch the #450 social graph card itself -- that reads
+      ``meta.relationships``, which this function never mutates.
+
+    Exactly one structured call, billed to *char* under ``role: "outcome"`` (the
+    <=2-per-conversation cost bound, already throttled by the pair cooldown). Safe
+    and inert when the brain can't tool-call, or returns nothing usable -- the
+    same graceful contract the planner and decide paths follow -- which is also
+    why the mock bake (no conversation, so this is never reached) is unchanged.
+    Returns whether the plan changed.
+    """
+    agent = char.agent
+    client = getattr(agent, "llm_client", None)
+    call = getattr(client, "call_tool", None)
+    if not callable(call):
+        return False
+    # Attribute the call to this speaker (usage.py); "role" labels the monitor
+    # line. Stamped right before the (sequential) call, so a shared client is
+    # attributed correctly per participant.
+    ctx = getattr(client, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "outcome"})
+    messages = [
+        # In character (same persona system message the decide path sends), so the
+        # reflection is grounded in who this agent is.
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "conversation_outcome", partner=partner_name, transcript=transcript
+            ),
+        },
+    ]
+    # No temperature passed -> call_tool's default 0.0, deliberately: this is a
+    # structured yes/no + short-note classification, not free-text generation,
+    # so it should stay deterministic -- unlike the decide/converse paths (which
+    # pass agent.temperature). Don't "fix" this to agent.temperature.
+    result = call(messages, CONVERSATION_OUTCOME_TOOL, max_tokens=agent.max_tokens)
+    if not isinstance(result, dict):
+        return False
+    note = result.get("relationship_note")
+    if isinstance(note, str) and note.strip():
+        agent.memory.add_chat(
+            note.strip(),
+            turn=step,
+            partner=partner_name,
+            importance=RELATIONSHIP_NOTE_IMPORTANCE,
+        )
+    # Require a real boolean True -- not merely a truthy value. A lenient or
+    # fake client that returns a stringy "false" or a 1 must not trip a
+    # revision; the schema declares plans_changed as a required boolean, so a
+    # strict provider always sends one.
+    if result.get("plans_changed") is not True:
+        return False
+    commitment = result.get("commitment")
+    detail = (
+        commitment.strip()
+        if isinstance(commitment, str) and commitment.strip()
+        else transcript
+    )
+    return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+
+
 def memories_for_frame(records) -> list[dict]:
     """Format retrieved memory records as UI-ready dicts for a replay frame.
 
@@ -993,6 +1142,7 @@ def maybe_converse(
     *,
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+    clock=None,
 ) -> int:
     """Run conversations between co-located, settled residents this step (#86).
 
@@ -1012,6 +1162,13 @@ def maybe_converse(
     deterministic mock brain, ``Agent.converse`` returns nothing anyway (its tool
     answer carries no ``utterance``), so even an accidental call is a no-op -- the
     mock replay stays byte-identical. Returns how many conversations happened.
+
+    After a conversation happens, each participant runs one
+    :func:`apply_conversation_outcome` pass (issue #582): an agreement revises
+    the rest of that agent's day, a notable exchange becomes a durable
+    relationship memory. ``clock`` is threaded to the revision plumbing. Both are
+    reached only when a real brain produced actual dialogue, so the mock bake --
+    which never converses -- never runs the outcome pass and stays byte-identical.
     """
     settled = [
         chars[name]
@@ -1064,4 +1221,11 @@ def maybe_converse(
             state[nm]["chat"] = lines
             if nm in frame:
                 frame[nm]["chat"] = lines
+        # Conversation consequences (issue #582): each participant reflects on
+        # what the meeting changed. Reached only for a real conversation, so the
+        # mock bake never runs it. Costs at most two calls, throttled by the pair
+        # cooldown recorded above.
+        transcript = conversation.transcript()
+        apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
+        apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
     return happened

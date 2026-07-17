@@ -177,6 +177,13 @@ class _ScriptedBrain:
             }
         elif tool["name"] == "speak":
             result = {"utterance": "Want to compare notes on campus?", "done": True}
+        elif tool["name"] == "conversation_outcome":
+            # A live model reflecting on the meeting: an agreement + a note.
+            result = {
+                "plans_changed": True,
+                "commitment": "meet up at the library later",
+                "relationship_note": "Worth studying with again.",
+            }
         else:  # choose_action
             result = {
                 "reasoning": "scripted decision",
@@ -323,6 +330,17 @@ def test_real_conversation_fires_once_and_cools_down(monkeypatch):
     stepper.tick()
     assert stepper.llm_client.tool_calls.count("speak") == speak_calls
 
+    # The consequence pass ran (#582): each participant recorded a high-importance
+    # relationship note, and the outcome tool was called at most twice.
+    from backend.cognition import RELATIONSHIP_NOTE_IMPORTANCE
+
+    for char in (a, b):
+        assert any(
+            r.importance == RELATIONSHIP_NOTE_IMPORTANCE
+            for r in char.agent.memory.records
+        )
+    assert stepper.llm_client.tool_calls.count("conversation_outcome") == 2
+
 
 def test_brain_outage_degrades_to_idle_and_retry(monkeypatch):
     stepper = _llm_stepper(monkeypatch, fail=True)
@@ -365,7 +383,9 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
     assert llm_calls  # the t0 decides were monitored
     for ev in llm_calls:
         assert ev["model"] == "claude-haiku-4-5"
-        assert ev["role"] in {"decide", "converse", "reflect"}
+        # "outcome" (issue #582): maybe_converse now runs the post-conversation
+        # consequence pass for each participant right after a real "speak" call.
+        assert ev["role"] in {"decide", "converse", "reflect", "outcome"}
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
     all_drained = stepper.drain_events()
     assert all_drained == []  # drained means drained
