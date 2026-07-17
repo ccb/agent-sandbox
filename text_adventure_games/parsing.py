@@ -585,6 +585,10 @@ class Parser:
             if radius > 0:
                 # How the sound reads to someone who only hears it (no sight).
                 payload["sound"] = action.sound_description()
+            # Let the action enrich its own event (e.g. Craft's recipe/outputs), so
+            # a rich per-command event replaces a self-logged duplicate (#604).
+            if hasattr(action, "event_payload"):
+                payload.update(action.event_payload() or {})
             self.game.log_event(
                 acting.name if acting is not None else None,
                 action.action_name(),

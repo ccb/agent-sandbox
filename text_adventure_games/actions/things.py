@@ -1119,6 +1119,14 @@ class Craft(base.Action):
         for item in outputs:
             self.character.accept_item(item)
             names.append(item.name)
+        # Stash what was crafted so the parser's per-command `craft` event can carry
+        # the recipe identity + produced items (see event_payload) -- rather than
+        # self-logging a SECOND `craft` event, which duplicated the parser's (#604).
+        self._crafted = {"recipe": recipe.name or names[0], "outputs": list(names)}
         msg = recipe.result_text or "You make {}.".format(", ".join(names))
         self.parser.ok(msg)
-        self.game.log_event(self.character.name, "craft", recipe.name or names[0])
+
+    def event_payload(self) -> dict:
+        # Enrich the single per-command `craft` event (parsing.py) with what was
+        # made, so a craft logs one event that still names the recipe/outputs (#604).
+        return dict(getattr(self, "_crafted", {}))
