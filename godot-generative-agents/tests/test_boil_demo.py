@@ -70,32 +70,26 @@ def test_boil_world_is_a_single_houston_persona_with_the_props():
         assert name in hall.items, f"{name} missing from Houston Hall"
 
 
-def test_boil_activities_are_verb_free():
-    """The multi-stop spacing performs `perform <activity>` between commands, and
-    the parser re-reads that text -- so an activity containing an action verb (or
-    the substring "ate") is mis-parsed as that command and spams failures (the #535
-    "Diego's 'late' -> EAT" hazard). Guard every demo activity against it, since
-    that misparse would NOT fail the arc events and so slips past the bake test."""
+def test_boil_activities_route_to_perform_not_a_misparsed_verb():
+    """The multi-stop spacing runs `perform <activity>` between commands, and the
+    engine parser keyword-matches many verbs as SUBSTRINGS anywhere in a command
+    ("light" inside "delighted", "eat "/"get " mid-word, ...), so an activity that
+    carries one is silently re-parsed as that action and spams failures (the #535
+    "Diego's 'late' -> EAT" hazard) -- a misparse that does NOT fail the arc events,
+    so it slips past the bake test. Rather than duplicate (and drift from) the
+    parser's verb list, drive each activity through the REAL parser and require that
+    `perform <activity>` still routes to `perform` (Act)."""
     pw = build_penn_world(world_data=WORLD_DATA_BOIL)
     (persona,) = pw.personas
-    # Substrings that would trip the keyword parser (verbs + the classic "l-ate").
-    hazards = [
-        "drink",
-        "boil",
-        "activate",
-        "deactivate",
-        "ate",
-        " get ",
-        " go ",
-        " take ",
-        " use ",
-        " look ",
-        " wait ",
-    ]
+    game, _chars = pw.build_world_fn(pw.world_map)
     for stop in persona["schedule"]:
-        activity = f" {stop['activity'].lower()} "
-        bad = [h for h in hazards if h in activity]
-        assert not bad, f"activity {stop['activity']!r} contains parser hazard {bad}"
+        activity = stop["activity"]
+        intent = game.parser.determine_intent(f"perform {activity}")
+        assert intent == "perform", (
+            f"activity {activity!r} misroutes: `perform {activity}` -> {intent!r} "
+            f"(not perform/Act) -- it contains a substring the parser reads as another "
+            f"verb (#535). Reword the activity."
+        )
 
 
 # --- the baked arc on the timeline ------------------------------------------
