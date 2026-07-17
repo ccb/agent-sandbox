@@ -116,6 +116,21 @@ def test_out_of_range_scores_are_clamped_and_omitted_ids_keep_the_floor():
     assert all(r.metadata.get(cognition._IMPORTANCE_SCORED) for r in recs)
 
 
+def test_boolean_id_does_not_collide_with_real_id_1():
+    # bool is an int subclass and True == 1 with the same hash, so a {"id": true}
+    # entry must be rejected -- not silently applied to the record whose real id
+    # is 1. Only a boolean entry is sent, so under the bug by_id[True]=9 would
+    # score record 1 to 9.0; the fix leaves it at its floor.
+    brain = _ScoreBrain({"scores": [{"id": True, "score": 9}]})
+    char = _char_with(brain)
+    char.agent.memory.add_observation("id 0.", turn=1, importance=2.0)  # id 0
+    char.agent.memory.add_observation("id 1.", turn=1, importance=2.0)  # id 1
+
+    cognition.score_new_memories(char, step=1)
+
+    assert char.agent.memory.records[1].importance == 2.0  # floor, not the bogus 9
+
+
 def test_locked_records_are_never_scored():
     # A ground-truth record (e.g. the #300 sickness signal) carries the lock flag;
     # the scorer must skip it entirely and never send it to the model.
