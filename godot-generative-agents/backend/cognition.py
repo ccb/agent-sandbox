@@ -1016,12 +1016,15 @@ def apply_conversation_outcome(
         return False
     note = result.get("relationship_note")
     if isinstance(note, str) and note.strip():
-        agent.memory.add_chat(
+        note_record = agent.memory.add_chat(
             note.strip(),
             turn=step,
             partner=partner_name,
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
+        # #583: the relationship note is a deliberate high signal (#582), not a
+        # guessable importance -- lock it so score_new_memories leaves it be.
+        note_record.metadata[_IMPORTANCE_LOCKED] = True
     # Require a real boolean True -- not merely a truthy value. A lenient or
     # fake client that returns a stringy "false" or a 1 must not trip a
     # revision; the schema declares plans_changed as a required boolean, so a
@@ -1271,7 +1274,12 @@ def remember_outcome(char, command: str, step: int) -> None:
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
-    agent.memory.add_observation(text, turn=step, importance=importance)
+    record = agent.memory.add_observation(text, turn=step, importance=importance)
+    # #583: the sick/recovered drink outcome is event knowledge the model can't
+    # derive from text (the #300 water arc's ground-truth 8.0/5.0), so lock it --
+    # score_new_memories skips locked records rather than re-guessing them.
+    if sick or recovered:
+        record.metadata[_IMPORTANCE_LOCKED] = True
 
 
 def maybe_converse(
