@@ -954,10 +954,9 @@ class PennStepper:
         )
         return rows
 
-    def reset(self) -> None:
-        # A reset is a new day AND a new run: close the old run's row first
-        # (status "reset" -- its frames stay readable), then _build() opens
-        # the next one. A day that already finished keeps "finished".
+    def _close_current_run(self) -> None:
+        """Persist pending events and mark the live run 'reset' before a rebuild
+        (a finished day keeps 'finished'). Shared by reset/create_run/resume_run."""
         self._persist_pending_events()
         if (
             self.run_store is not None
@@ -965,6 +964,12 @@ class PennStepper:
             and not self._run_finished
         ):
             self.run_store.update_run(self._run_id, status="reset")
+
+    def reset(self) -> None:
+        # A reset is a new day AND a new run: close the old run's row first
+        # (status "reset" -- its frames stay readable), then _build() opens
+        # the next one. A day that already finished keeps "finished".
+        self._close_current_run()
         self.num_steps = self._launch_num_steps
         self._build()
 
@@ -994,9 +999,7 @@ class PennStepper:
             # Close the current day the way reset() does (a finished day keeps
             # "finished"), then rebuild on the new world -- _build's non-resume
             # path opens the next run row via create_run(self.meta()).
-            self._persist_pending_events()
-            if self._run_id is not None and not self._run_finished:
-                self.run_store.update_run(self._run_id, status="reset")
+            self._close_current_run()
             # attach_agents reads num_steps inside _build. A per-request steps is
             # a one-shot override; without one, fall back to the launch budget so
             # a prior reduced create_run does not leak forward.
@@ -1027,9 +1030,7 @@ class PennStepper:
         # guards' row/frames ride along so the frames file -- thousands of
         # lines on a long day, all of this under the app lock -- is parsed
         # once, not twice.
-        self._persist_pending_events()
-        if self._run_id is not None and not self._run_finished:
-            self.run_store.update_run(self._run_id, status="reset")
+        self._close_current_run()
         # A resumed run must not inherit a prior create_run's reduced budget;
         # the launch default is the safe non-leaking value.
         self.num_steps = self._launch_num_steps
