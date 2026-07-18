@@ -223,6 +223,22 @@ def test_propose_payload_with_direction_words_is_not_hijacked_to_go():
     assert wish.desired == "climb up and go north over the wall"
 
 
+def test_propose_payload_naming_a_multiword_alias_is_not_hijacked():
+    # Regression guard for the determine_intent ordering (PR #667 review): the
+    # specific-first match (`_match_specific_action`) does a naive substring
+    # test, so a payload naming a multi-word alias like "talk to" used to route
+    # to that action and silently drop the wish. propose must win first.
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert game.parser.parse_command(
+        "propose talk to the mayor about funding because the game has no petition verb",
+        actor=troll,
+    )
+    [wish] = game.wishes  # the wish was recorded, TALK did not fire
+    assert wish.desired == "talk to the mayor about funding"
+    assert wish.reason == "the game has no petition verb"
+
+
 def test_propose_succeeds_for_the_player_too():
     game = tiny_game()
     assert game.parser.parse_command("propose whistle for a dog because i am lonely")

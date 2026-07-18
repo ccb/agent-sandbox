@@ -204,6 +204,16 @@ class Parser:
             # Let the player type in a comma separted sequence of commands
             return ActionName.SEQUENCE
 
+        if command == "propose" or command.startswith("propose "):
+            # The wish channel (#620): propose takes its payload as free text
+            # ("propose talk to the mayor because ...") that may contain any
+            # verb keyword, multi-word alias, or direction. Its exact-prefix
+            # guard can't over-trigger, so it wins first -- before even the
+            # specific-first substring match below, whose naive `alias in
+            # command` test would otherwise let a payload naming "talk to",
+            # "chat with", etc. hijack the whole command and drop the wish.
+            return ActionName.PROPOSE
+
         # Specific-first: if a registered action's MULTI-WORD name or alias
         # appears in the command, it wins over the generic verb keywords below.
         # This lets game-defined verbs ("give axe to smith", "say yes") and
@@ -236,14 +246,6 @@ class Parser:
             # "hint score") that the verb keywords below would otherwise
             # swallow ("light" in command -> LIGHT).
             return "hint"
-
-        if command == "propose" or command.startswith("propose "):
-            # The wish channel (#620): propose takes its payload as free text
-            # ("propose fill the pot ... because ...") which may contain
-            # direction words or verb keywords ("go", "eat", ...). Like say and
-            # hint above, it must win before the direction check and the
-            # keyword branches below can hijack its content.
-            return ActionName.PROPOSE
 
         if (
             command.startswith("say ")
