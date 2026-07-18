@@ -46,7 +46,23 @@
   }
   .chip-btn:hover, .chip-btn:active { background: var(--ph-dim); color: var(--bg); }
   header .rule { color: var(--ph-dim); margin-top: 1rem; overflow: hidden; white-space: nowrap; }
-  section { display: flex; flex-direction: column; gap: .9rem; }
+  section {
+    display: flex; flex-direction: column; gap: .9rem;
+    /* offscreen cards cost nothing: no layout, no paint, no CRT flicker */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+  }
+  .jump { margin-top: 1.2rem; column-width: 17rem; column-gap: 2rem; }
+  .jump a {
+    display: block;
+    color: var(--ph-dim);
+    text-decoration: none;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    padding: .08rem 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .jump a:hover { color: var(--ph-bright); }
   .slate { display: flex; align-items: baseline; gap: .8rem; }
   .slate h2 {
     margin: 0; font-size: 1rem; font-weight: 700;
@@ -89,6 +105,7 @@
        outline-wireframe 3D under the terminal's CRT dressing. All self-contained:
        no libraries, no assets, quantized to hand-made frame steps.</p>
     <div class="rule">================================================================</div>
+    <nav id="jump" class="jump" aria-label="Card index"></nav>
   </header>
 
   <section>
@@ -559,9 +576,51 @@
         FUNGUS = "#ff9a3c", BG = "#010304";
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const FPS = 12; // Rod Lord cadence: nothing tweens, everything steps
-  const timers = [];
-  function clock(fn) { fn(0); if (reduced) return; let t = 0;
-    timers.push(setInterval(() => fn(++t), 1000 / FPS)); }
+  /* --- reel-only plumbing: gen_figures.py replaces this whole block --- */
+  // 40+ cards on one page must not all tick at once: every card joins one
+  // shared 12 fps clock, and an IntersectionObserver wakes only the cards
+  // near the viewport. A paused card resumes where it stopped. Each card
+  // block finds its screen by id, so a wrapped lookup learns which element
+  // the next clock() call belongs to.
+  const cards = [];
+  const lookup = document.getElementById.bind(document);
+  let lastScreen = null;
+  document.getElementById = function (id) {
+    const found = lookup(id);
+    if (found && found.closest(".screen")) lastScreen = found;
+    return found;
+  };
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries)
+      for (const c of cards)
+        if (c.el === en.target) c.live = en.isIntersecting;
+  }, { rootMargin: "200px 0px" });
+  function clock(fn) {
+    fn(0);
+    if (reduced) return;
+    const card = { fn, t: 0, el: lastScreen, live: !lastScreen };
+    cards.push(card);
+    if (card.el) io.observe(card.el);
+  }
+  setInterval(() => {
+    for (const c of cards) if (c.live) c.fn(++c.t);
+  }, 1000 / FPS);
+  // The jump index: one line per card, built from the slates.
+  addEventListener("DOMContentLoaded", () => {
+    const nav = document.querySelector("#jump");
+    if (!nav) return;
+    for (const sec of document.querySelectorAll(".wrap > section")) {
+      const h = sec.querySelector(".slate h2");
+      const screenEl = sec.querySelector(".screen svg, .screen canvas");
+      if (!h || !screenEl) continue;
+      sec.id = "fig-" + screenEl.id;
+      const a = document.createElement("a");
+      a.href = "#" + sec.id;
+      a.textContent = h.textContent;
+      nav.appendChild(a);
+    }
+  });
+  /* --- end reel-only plumbing --- */
 
   /* ---------------- shared wireframe plumbing ---------------- */
   function drawEdges(ctx, pts, edges, color, glow) {

@@ -250,14 +250,16 @@ def generate():
     body_end = html.rindex("})();\n</script>")
     body = html[body_start:body_end]
 
-    # The reel's free-running clock becomes the runtime's registering clock.
-    old_clock = (
-        "  const timers = [];\n"
-        "  function clock(fn) { fn(0); if (reduced) return; let t = 0;\n"
-        "    timers.push(setInterval(() => fn(++t), 1000 / FPS)); }"
+    # The reel's viewport-gated clock (and its jump-index builder) is
+    # page-only plumbing; the runtime's registering clock takes its place.
+    plumb_open = "  /* --- reel-only plumbing:"
+    plumb_close = "/* --- end reel-only plumbing --- */"
+    assert plumb_open in body, "reel plumbing markers changed; update gen_figures.py"
+    start = body.index(plumb_open)
+    end = body.index(plumb_close, start) + len(plumb_close)
+    body = (
+        body[:start] + "  function clock(fn) { FIG._clock(fn); }" + body[end:]
     )
-    assert old_clock in body, "reel clock changed; update gen_figures.py"
-    body = body.replace(old_clock, "  function clock(fn) { FIG._clock(fn); }", 1)
 
     # reduced-motion: route through the runtime's flag.
     old_reduced = (

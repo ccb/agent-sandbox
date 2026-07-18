@@ -148,6 +148,14 @@ Check (a) `page.on("pageerror")` is empty and a sentinel like
 looks black — reshoot mid-cycle). Read the screenshots and actually LOOK at
 them; compare against any reference image CCB provided.
 
+TIMING GOTCHA: the reel page only ticks cards near the viewport (an
+IntersectionObserver gates a single shared clock — the "reel-only plumbing"
+block, which `gen_figures.py` strips when building `figures.js`). An
+offscreen card sits frozen at t=0, so `scroll_into_view_if_needed()` FIRST,
+then start counting frames from the scroll, not from page load. A page
+built without that plumbing (e.g. a scratch candidates page with the old
+free-running `clock`) still counts from load.
+
 ### Step 4 — publish for review, iterate
 Publish the candidates page as its own Artifact (separate URL from the reel)
 and give CCB the link with one-line concept summaries. He picks by slate
