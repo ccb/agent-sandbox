@@ -343,7 +343,9 @@ def test_stepper_scripted_monitor_wires_role_tagged_ledgers():
     assert plain.llm_client.ledger is plain.ledger
 
 
-def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection():
+def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection(
+    monkeypatch,
+):
     """A --brain scripted bake: the brain reaches the tool loop, a cognition
     tool (recall) is offered and used, the shared ledger records calls (a
     non-empty GET /usage surface), and reflection memories get written once
@@ -357,6 +359,19 @@ def test_bake_simulate_under_scripted_drives_tool_loop_cognition_and_reflection(
     from text_adventure_games.usage import UsageLedger
     from text_adventure_games.memory import MemoryKind
     from penn_world import build_penn_world, PENN_ACTION_VERBS
+    from text_adventure_games import npc, reflection
+
+    # Post-#662 recalibration (same story as test_full_feature_mock._run): the
+    # tile-gated day accrues ~29 importance -- the old crossing of the default
+    # threshold (30) rode on a conversation that fired across 19 tiles of
+    # Irvine Auditorium, exactly the bug #662 fixed. simulate() builds its
+    # agents internally, so pin the threshold at the engine's should_reflect
+    # seam instead of per agent.
+    monkeypatch.setattr(
+        npc,
+        "should_reflect",
+        lambda memory, threshold=None: reflection.should_reflect(memory, 25.0),
+    )
 
     pw = build_penn_world()
     ledger = UsageLedger()

@@ -252,9 +252,17 @@ def _gate_conversations_by_perception(built):
     game, characters = built
 
     def audience_for(speaker, message, target=None):
+        # Two gates (issue #662): perceivable_locations picks the *rooms* in
+        # earshot, can_perceive then drops same-room residents who are actually
+        # out of range -- the outdoor hub is one room spanning the whole campus,
+        # so room membership alone would let agents converse across the map.
         audience = []
         for loc in game.perceivable_locations(speaker):
-            audience.extend(c for c in loc.characters.values() if c is not speaker)
+            audience.extend(
+                c
+                for c in loc.characters.values()
+                if c is not speaker and game.can_perceive(speaker, c)
+            )
         return audience
 
     game.audience_for = audience_for

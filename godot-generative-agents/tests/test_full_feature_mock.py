@@ -25,6 +25,15 @@ from text_adventure_games.memory import MemoryKind  # noqa: E402
 
 def _run(steps=400):
     stepper = PennStepper(num_steps=steps, llm=serve_penn.SCRIPTED)
+    # Post-#662 recalibration: with perception tile-gated, this scripted day
+    # accrues slightly less importance than the old room-granular one -- the
+    # second Diego/Sofia conversation used to fire across 19 tiles of Irvine
+    # Auditorium (exactly the #662 bug) and its CHAT importance was what pushed
+    # the day over the engine's default reflection threshold (30). The
+    # legitimate day tops out just under it, so pin the per-agent threshold
+    # (the documented ``maybe_reflect`` seam) at a level this day reaches.
+    for char in stepper.chars.values():
+        char.agent.reflection_threshold = 25.0
     for _ in range(steps):
         stepper.tick()
     return stepper
