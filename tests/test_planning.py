@@ -131,6 +131,43 @@ def test_stop_schedule_entry_carries_commands():
     assert hash(Stop("P", "a", commands=["boil water"]))  # does not raise
 
 
+def test_stop_schedule_entry_carries_furniture():
+    # #603: the per-stop furniture hint (the fixture the agent should occupy)
+    # must survive the same plan-commit round-trip, alongside commands.
+    stop = Stop(
+        "Irvine Auditorium", "the guest lecture", "🎤", 60, furniture="blackboard"
+    )
+    entry = stop.to_schedule_entry()
+    assert entry["furniture"] == "blackboard"
+    assert Stop.from_schedule_entry(entry) == stop  # rebuilt loss-free
+
+    # A furniture-less stop emits NO `furniture` key (byte-identical to its
+    # authored spec) and rebuilds with furniture=None.
+    bare = Stop("Johnson Park", "a walk").to_schedule_entry()
+    assert "furniture" not in bare
+    assert Stop.from_schedule_entry(bare).furniture is None
+
+    # commands and furniture coexist on one stop and both round-trip.
+    both = Stop("Houston Hall", "dinner", commands=("boil water",), furniture="stove")
+    round_tripped = Stop.from_schedule_entry(both.to_schedule_entry())
+    assert round_tripped == both
+    assert (round_tripped.commands, round_tripped.furniture) == (
+        ("boil water",),
+        "stove",
+    )
+
+
+def test_dailyplan_primitive_round_trip_preserves_furniture():
+    # #603: furniture survives DailyPlan serialization too (to_primitive stores
+    # it via asdict; from_primitive's Stop(**s) reads it back).
+    plan = DailyPlan(
+        stops=[Stop("Irvine Auditorium", "lecture", "🎤", 60, furniture="blackboard")]
+    )
+    restored = DailyPlan.from_primitive(plan.to_primitive())
+    assert restored == plan
+    assert restored.stops[0].furniture == "blackboard"
+
+
 # --- B. validate_stops ------------------------------------------------------
 
 
