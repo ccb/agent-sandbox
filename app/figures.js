@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -615,6 +615,98 @@
     cylCard(svg, "o", ["ORANGE"],
       "THE BURIAL CYLINDERS, ORANGE DOWN",
       "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS.");
+  });
+
+  /* ---------------- 39: the respirator ---------------- */
+  FIG._define("resp", "svg", function (svg) {
+    const YEL = "#ffd76a";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "GUARD ISSUE / FACE / SEALED";
+    const RDOTS = stipple(svg, "dots-resp", PH, .85);
+    // the mannequin head that wears it
+    el(svg, "ellipse", { cx: 320, cy: 168, rx: 60, ry: 76, fill: "none",
+      stroke: PH_DIM, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 298, y1: 240, x2: 294, y2: 300, stroke: PH_DIM, "stroke-width": 1.4 });
+    el(svg, "line", { x1: 342, y1: 240, x2: 346, y2: 300, stroke: PH_DIM, "stroke-width": 1.4 });
+    [297, 343].forEach(ex => {                                // brows and eyes, above it
+      el(svg, "path", { d: `M ${ex - 9} 140 Q ${ex} 134 ${ex + 9} 140`,
+        fill: "none", stroke: PH_DIM });
+      el(svg, "ellipse", { cx: ex, cy: 152, rx: 8, ry: 4, fill: "none", stroke: PH_DIM });
+      el(svg, "circle", { cx: ex, cy: 152, r: 1.6, fill: PH_DIM });
+    });
+    // straps, buckled at the temples
+    el(svg, "line", { x1: 296, y1: 184, x2: 266, y2: 152, stroke: PH_DIM, "stroke-width": 2 });
+    el(svg, "line", { x1: 344, y1: 184, x2: 374, y2: 152, stroke: PH_DIM, "stroke-width": 2 });
+    el(svg, "line", { x1: 292, y1: 230, x2: 263, y2: 206, stroke: PH_DIM, "stroke-width": 2 });
+    el(svg, "line", { x1: 348, y1: 230, x2: 377, y2: 206, stroke: PH_DIM, "stroke-width": 2 });
+    el(svg, "rect", { x: 259, y: 144, width: 11, height: 9, fill: BG, stroke: PH_DIM });
+    el(svg, "rect", { x: 370, y: 144, width: 11, height: 9, fill: BG, stroke: PH_DIM });
+    // the half-mask: cup, nose wedge, central grille, chin exhaust
+    el(svg, "path", { d: "M 320 160 L 298 184 Q 280 202 286 226 Q 294 250 320 258 " +
+      "Q 346 250 354 226 Q 360 202 342 184 Z", fill: RDOTS, stroke: PH, "stroke-width": 1.8 });
+    el(svg, "polygon", { points: "313,178 320,166 327,178", fill: BG,
+      stroke: PH, "stroke-width": 1.3 });
+    const grille = (cx, cy, r) => {                           // the fan grille
+      el(svg, "circle", { cx, cy, r, fill: BG, stroke: PH, "stroke-width": 1.8 });
+      el(svg, "circle", { cx, cy, r: r * .76, fill: "none", stroke: PH_DIM });
+      for (let a = 0; a < 10; a++) {
+        const th = a * Math.PI / 5 + .31;
+        el(svg, "line", { x1: cx + Math.cos(th) * r * .2, y1: cy + Math.sin(th) * r * .2,
+          x2: cx + Math.cos(th) * r * .66, y2: cy + Math.sin(th) * r * .66, stroke: PH_DIM });
+      }
+      el(svg, "circle", { cx, cy, r: r * .13, fill: PH_DIM });
+    };
+    grille(320, 224, 19);
+    [311, 317, 323, 329].forEach(x =>                         // the chin exhaust
+      el(svg, "line", { x1: x, y1: 259, x2: x, y2: 267, stroke: PH_DIM }));
+    [[250, 216], [390, 216]].forEach(([cx, cy]) => {          // the twin cartridges
+      el(svg, "rect", { x: cx > 320 ? cx - 32 : cx + 18, y: 208, width: 16, height: 14,
+        fill: BG, stroke: PH, "stroke-width": 1.2 });         // the port stub
+      grille(cx, cy, 30);
+      el(svg, "circle", { cx, cy, r: 26, fill: "none", stroke: YEL,
+        "stroke-dasharray": "6 4", opacity: .8 });            // the banded rim
+    });
+    el(svg, "ellipse", { cx: 320, cy: 190, rx: 126, ry: 108, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "4 4", opacity: .6 });  // the seal
+    const spores = Array.from({ length: 14 }, (_, j) =>
+      ({ j, q: el(svg, "circle", { r: j % 3 ? 1.6 : 2.2, fill: FUNGUS }) }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [390, 216], text: "FILTERS: TWIN, FAN-GRILLED" },
+      { at: [320, 160], text: "SEAL: FOUR THOUSAND YEARS, HOLDING" },
+      { at: [446, 190], text: "AIR INSIDE: CLEAN, IN A PLACE THAT ISN'T" },
+    ];
+    const foot = label(svg, 320, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE RESPIRATOR", T, 4, 1.4);
+      spores.forEach(s => {
+        const j = s.j;
+        const x = ((t * (1.4 + (j % 3) * .7) + j * 61) % 700) - 30;
+        const y0 = 52 + ((j * 37) % 280);
+        let y = y0 + Math.round(Math.sin((t + j * 7) * .18) * 6 / 2) * 2;
+        const dx = (x - 320) / 126;
+        if (Math.abs(dx) < 1) {                               // the spores PART
+          const by = 108 * Math.sqrt(1 - dx * dx);
+          const side = y0 >= 190 ? 1 : -1;
+          if (Math.abs(y - 190) < by + 8) y = 190 + side * (by + 8);
+        }
+        s.q.setAttribute("cx", x); s.q.setAttribute("cy", y);
+        s.q.setAttribute("opacity", .4 + ((t + j) % 3) * .2);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 16) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 440,58 448,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "IT KEPT ITS SEAL. THE GUARD DID NOT.", T, 112, 1.5);
+    });
   });
 
   /* ---------------- 40: the flask of embalming gel ---------------- */

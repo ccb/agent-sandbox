@@ -349,6 +349,19 @@ def test_the_cylinder_card_names_the_first_break():
         assert fig(g) == "cylinders"  # deeper wreckage: the generic plate
 
 
+def test_the_respirator_deals_its_portrait_card():
+    """The respirator (card 39): examining it always re-earns the card."""
+    g, cap = _game()
+    cyl = g.locations["Hall of Warriors"].items["amber cylinder"]
+    mask = cyl.contents["respirator"]
+    cyl.remove_item(mask)
+    g.player.add_to_inventory(mask)
+    g.do_command("examine respirator")
+    assert cap.texts(Channel.FIGURE) == ["resp"]
+    g.do_command("examine respirator")
+    assert cap.texts(Channel.FIGURE) == ["resp", "resp"]
+
+
 def test_the_flask_deals_its_specimen_card():
     """The flask of gel (card 40): examining it always re-earns the card."""
     g, cap = _game()

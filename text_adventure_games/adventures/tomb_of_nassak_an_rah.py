@@ -3121,6 +3121,8 @@ def build_game(seed=None):
     respirator.set_property(Property.WEARABLE, True)
     respirator.set_property("wear_slot", "face")
     respirator.add_alias("mask")
+    respirator.set_property("figure", "resp")  # the portrait card (39): take
+    # once, examine re-earns
 
     # The four cylinders (CCB design): each guard's kit is sealed IN with him,
     # gettable only once the glass is broken -- and breaking glass is LOUD
