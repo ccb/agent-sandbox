@@ -41,6 +41,7 @@ from .cognition import (
     remember_outcome,
     score_new_memories,
 )
+from backend.drives import accrue_thirst
 from .sim_clock import SimClock
 from .sim_config import CognitionConfig
 from .world_map import WorldMap
@@ -350,6 +351,14 @@ def step(
     for name in order:
         char = chars[name]
         st = state[name]
+
+        # Opt-in thirst drive (#594): accrue once per character per step,
+        # before that character's own decision below, so a just-crossed
+        # IS_THIRSTY is visible to the same tick's decide. Unconditional (not
+        # gated on `due`) because a walking/performing agent still gets
+        # thirsty between decisions. A no-op for any persona without
+        # thirst_rate, so the default bake is untouched.
+        accrue_thirst(char)
 
         # Decision point: idle and not yet settled into an activity. The
         # pre-pass above already evaluated exactly that predicate into `due`
