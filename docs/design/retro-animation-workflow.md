@@ -191,6 +191,7 @@ Then wire the trigger in the adventure file. The semantics matter:
 | Room arrival | `room.set_property("figure", KEY)` | once per game; LOOK re-earns (forces) |
 | Examine | `item.set_property("figure", KEY)` | forces every time |
 | Take | same item property | once (examine can re-earn) |
+| Wear | same item property (wearables) | forces every time (CCB: donning is as deliberate as examining) |
 | Story beat | `g.show_figure(KEY)` in a trigger/action | once |
 | Story beat, must always play | `g.show_figure(KEY, force=True)` | never muted |
 
