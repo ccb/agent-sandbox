@@ -272,6 +272,8 @@ watch, not for ending the run. The menu prefills the URL you just left, so
 loses no frames). Use the window close, the run monitor's Emergency stop, or
 `POST /shutdown` when you actually want the sim to stop.
 
+**Boil-from-memory experiment (#595).** `uv run python -m backend.penn.experiments.boil_from_memory --trials 5` (from `godot-generative-agents/`, needs `ANTHROPIC_API_KEY`) runs a live Haiku brain on the single-persona boil world with vs without a seeded "the unboiled water made me sick" memory, and prints the boil-before-drink rate for each arm. Add `--offline` for a key-free plumbing check (scripted brain, not a real measurement).
+
 Every request is printed to the server terminal as it happens (the **LLM
 request monitor**, `backend/llm_monitor.py`; `--no-monitor` silences it):
 
