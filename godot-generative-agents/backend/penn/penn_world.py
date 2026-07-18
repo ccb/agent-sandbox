@@ -256,6 +256,9 @@ def _gate_conversations_by_perception(built):
         # earshot, can_perceive then drops same-room residents who are actually
         # out of range -- the outdoor hub is one room spanning the whole campus,
         # so room membership alone would let agents converse across the map.
+        # Deliberately observer-only: the gate reads the SPEAKER's vision_r, so
+        # if per-agent vision ever diverges, A can address a B who can't
+        # perceive A back (shouting at someone with narrow sight is fine).
         audience = []
         for loc in game.perceivable_locations(speaker):
             audience.extend(
