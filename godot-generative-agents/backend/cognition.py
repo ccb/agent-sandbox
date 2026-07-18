@@ -511,6 +511,12 @@ def attach_agents(
         # (knowledge) when the upstream assets are available (issue #79). Done
         # before planning so a generative planner can reason over them.
         seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
+        # -- "the unboiled water made me sick" memory) so a live brain can retrieve
+        # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
+        # -- ranks highly. Absent key -> nothing added (byte-identical).
+        for text in spec.get("seed_memories") or []:
+            agent.memory.add_observation(text, turn=0, importance=5.0)
         if base_personas_dir:
             tree = seed.load_spatial_memory(base_personas_dir, char.name)
             seed.seed_spatial_knowledge(char, tree)
