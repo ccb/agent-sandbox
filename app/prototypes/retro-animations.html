@@ -255,6 +255,27 @@
   </section>
 
   <section>
+    <div class="slate"><h2>11-C &mdash; THE BURIAL SPHERE, SHATTERED</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="sphere-c" viewBox="0 0 640 420" aria-label="The burial sphere, coffin shattered"></svg>
+    </div>
+    <p class="spec">The chamber after the pry: no orange left in it, only the coffin's oval
+       gone to pieces &mdash; six arcs of glass still keeping their curve, adrift in slow
+       zero-g orbits around the place they used to agree on.
+       <span class="attach">Attaches: the sphere, pried and unmended; EXAMINE COFFIN.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>11-D &mdash; THE BURIAL SPHERE, REFORGED</h2><span class="kind">LITHO / VARIANT</span></div>
+    <div class="screen">
+      <svg id="sphere-d" viewBox="0 0 640 420" aria-label="The burial sphere, coffin reforged"></svg>
+    </div>
+    <p class="spec">The mend: the oval whole again, seam closed, and inside it a slow blue
+       pulse breathing at the pace of a man four thousand years into a good night's sleep.
+       <span class="attach">Attaches: the sphere after the Prayer of Mending; EXAMINE COFFIN.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>12 &mdash; FRIEND'S FUNGUS</h2><span class="kind">LITHO / PHARMACOPOEIA</span></div>
     <div class="screen">
       <svg id="fungus" viewBox="0 0 640 360" aria-label="Friend's fungus, a pink mushroom cluster"></svg>
@@ -3313,6 +3334,163 @@
         call.textContent = c.text;
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "PRY IT, AND IT WILL MIND.", T, 120, 1.6);
+    });
+  }
+
+  /* ---------------- 11-C: the burial sphere, shattered ---------------- */
+  {
+    const svg = document.getElementById("sphere-c");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CHAMBER 6 / ZERO-G / VACANT";
+    el(svg, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(svg, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(svg, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(svg, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(svg, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(svg, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // the ghost of the oval: where the pieces used to agree
+    el(svg, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 5", opacity: .5 });
+    // six arcs of the broken egg, each still keeping its curve
+    const SHARDS = Array.from({ length: 6 }, (_, i) => ({
+      n: el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.8 }),
+      a0: i * Math.PI / 3 + .1, a1: (i + 1) * Math.PI / 3 - .1,
+    }));
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [320, 232], text: "TENANT: NOT AT HOME" },
+      { at: [352, 198], text: "SHARDS: SIX, KEEPING THEIR CURVE" },
+      { at: [320, 180], text: "SEAM: WHERE IT LET GO" },
+      { at: [204, 310], text: "PRAYERS: ONE OF THEM IS A MENDING" },
+    ];
+    label(svg, 24, 396, 10, PH_DIM).textContent = "THE DRIFT";
+    const drift = label(svg, 104, 396, 10, PH_DIM);
+    const foot = label(svg, 380, 396, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      SHARDS.forEach((s, i) => {
+        const mid = (s.a0 + s.a1) / 2;
+        const d = 20 + 7 * Math.sin(t * .05 + i * 1.9);       // out, and back a little
+        const spin = Math.sin(t * .03 + i * 2.4) * .5;        // a lazy tumble
+        const ox = Math.cos(mid) * d * .9, oy = Math.sin(mid) * d;
+        const cx0 = 320 + Math.cos(mid) * 30 * .62, cy0 = 232 + Math.sin(mid) * 52 * .62;
+        const pts = [];
+        for (let k = 0; k <= 6; k++) {
+          const a = s.a0 + (s.a1 - s.a0) * k / 6;
+          let px = 320 + Math.cos(a) * 30, py = 232 + Math.sin(a) * 52;
+          const rx0 = px - cx0, ry0 = py - cy0;               // tumble about its middle
+          px = cx0 + rx0 * Math.cos(spin) - ry0 * Math.sin(spin);
+          py = cy0 + rx0 * Math.sin(spin) + ry0 * Math.cos(spin);
+          pts.push((px + ox).toFixed(1) + "," + (py + oy).toFixed(1));
+        }
+        s.n.setAttribute("points", pts.join(" "));
+      });
+      drift.textContent = "(" + "~".repeat(3 + Math.round(Math.sin(t * .05) + 1)) + ")";
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "THE SHARDS REMEMBER THEIR PLACES.", T, 120, 1.6);
+    });
+  }
+
+  /* ---------------- 11-D: the burial sphere, reforged ---------------- */
+  {
+    const svg = document.getElementById("sphere-d");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CHAMBER 6 / ZERO-G / AT REST";
+    const CDOTS = stipple(svg, "dots-sphered", PH, .9);
+    el(svg, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(svg, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(svg, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(svg, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(svg, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(svg, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // THE COFFIN, reforged: the oval whole, no seam left to point at
+    const ring = el(svg, "ellipse", { cx: 320, cy: 234, fill: "none",
+      stroke: PH, "stroke-width": 1 });                       // each breath leaves it
+    const coffin = el(svg, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52,
+      fill: CDOTS, stroke: PH_BRIGHT, "stroke-width": 1.8 });
+    const pulse = el(svg, "circle", { cx: 320, cy: 234, fill: PH,
+      "fill-opacity": .22, stroke: PH, "stroke-width": 1.2 });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [320, 106], text: "FIELD: ANTI-ENTROPY, HOLDING" },
+      { at: [320, 180], text: "SEAM: CLOSED. THE GLASS FORGAVE IT" },
+      { at: [320, 234], text: "TENANT: ASLEEP, DREAMING SOMETHING KIND" },
+      { at: [204, 310], text: "PRAYERS: ANSWERED" },
+    ];
+    label(svg, 24, 396, 10, PH_DIM).textContent = "THE KEEPING";
+    const breath = label(svg, 122, 396, 10, PH);
+    const foot = label(svg, 336, 396, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      const C = 60;                                 // sleep-slow: five seconds a breath
+      const ph = (t % C) / C;
+      const br = Math.round(Math.sin(ph * Math.PI) * 4);      // 0..4..0, quantized
+      pulse.setAttribute("r", 9 + br);
+      coffin.setAttribute("stroke-width", 1.6 + br * .1);
+      ring.setAttribute("rx", 12 + ph * 14);                  // the exhale walks
+      ring.setAttribute("ry", 12 + ph * 36);                  // out to the glass
+      ring.setAttribute("opacity", Math.max(0, .5 - ph * .5).toFixed(2));
+      breath.textContent = "(" + "~".repeat(2 + br) + ")";
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "FOUR THOUSAND YEARS INTO A GOOD NIGHT'S SLEEP.", T, 120, 1.6);
     });
   }
 

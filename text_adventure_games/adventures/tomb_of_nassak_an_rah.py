@@ -2801,15 +2801,23 @@ def build_game(seed=None):
 
     coffin.make_container()
     coffin.set_property("is_closed", True)
-    coffin.set_property(
-        "figure", "sphere-b"
-    )  # PryCoffin (boots-gated) is the only way in
-    # ...and as a title plate on ARRIVAL (the chamber is gloom: a dark entry
-    # keeps the card). After the mend, arrivals show the Autarch at rest.
+    # The card follows the vessel (CCB): tenanted (11-B) until the pry,
+    # shattered (11-C) while the shards drift, reforged (11-D) -- the slow
+    # blue pulse -- once a mending makes it whole again.
+    def _coffin_card(g):
+        if coffin.get_property("fixed"):
+            return "sphere-d"
+        if coffin.get_property("pried"):
+            return "sphere-c"
+        return "sphere-b"
+
+    coffin.set_property("figure", _coffin_card)
+    # ...and as a title plate on ARRIVAL and LOOK (the chamber is gloom: a
+    # dark entry keeps the card). The same state map as the coffin's own.
     sphere.set_property(
         "figure",
         lambda g: (
-            ("autarch" if coffin.get_property("fixed") else "sphere-b")
+            _coffin_card(g)
             if perception.sight_for(g.player, sphere)[0] >= perception.Sight.CLEAR
             else None
         ),
