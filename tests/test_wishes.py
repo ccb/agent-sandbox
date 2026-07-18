@@ -513,3 +513,33 @@ def test_native_llm_parser_allows_decline_for_agent_actors_only():
     troll.set_agent(object())
     native.determine_intent("zibble the wumpus", actor=troll)  # agent-driven
     assert seen == [False, True]
+
+
+# ----------------------------------------------------------------------
+# Section J: end-to-end — a ReAct agent's unparseable action becomes a wish
+# ----------------------------------------------------------------------
+
+
+def test_react_agent_parse_gap_flows_to_the_sink():
+    from text_adventure_games.llm_client import MockLlmClient
+    from text_adventure_games.npc import make_react_behavior
+
+    game = tiny_game()
+    troll = game.characters["troll"]
+    streamed = []
+    game.on_wish = streamed.append
+    troll.set_behavior(
+        make_react_behavior(
+            MockLlmClient(
+                [
+                    "Reasoning: I will magic myself across\n"
+                    "Action: zibble the wumpus\n"
+                    "Duration: 5"
+                ]
+            )
+        )
+    )
+    troll.take_turn(game)
+    assert any(w.trigger == TRIGGER_PARSE_GAP for w in game.wishes)
+    assert troll.location.name == "Field"  # nothing executed
+    assert streamed  # the backend tap (#622) sees parse gaps too
