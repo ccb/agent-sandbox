@@ -401,3 +401,86 @@ def test_successful_and_precondition_failed_commands_are_not_parse_gaps():
     assert game.wishes == []
     game.parser.parse_command("propose", actor=troll)  # verb matched, gate failed
     assert game.wishes == []  # a precondition fail is NOT a parse gap
+
+
+# ----------------------------------------------------------------------
+# Section H: agent-only "none of these fit" in the LLM fallback (#621)
+# ----------------------------------------------------------------------
+
+
+def _numbered_options(messages):
+    """The numbered option lines LlmParser._pick_option put in the system
+    message, as (index, text) pairs (mirrors tests/test_agent_layer.py)."""
+    import re
+
+    lines = []
+    for line in messages[0]["content"].splitlines():
+        match = re.match(r"\s*(\d+)\.\s*(.*)", line)
+        if match:
+            lines.append((match.group(1), match.group(2)))
+    return lines
+
+
+def _force_mapping_llm(messages, max_tokens, temperature):
+    """Simulates the pre-#621 reality: an LLM told to say which command the
+    input 'most closely matches' always picks SOMETHING. It picks the decline
+    option iff one is offered, else the first real option (a force-map)."""
+    options = _numbered_options(messages)
+    for index, text in options:
+        if "none of these" in text.lower():
+            return index
+    return options[0][0] if options else None
+
+
+def _pick_option_containing(keyword):
+    """A responder that picks the first numbered option containing *keyword*."""
+
+    def responder(messages, max_tokens, temperature):
+        for index, text in _numbered_options(messages):
+            if keyword.lower() in text.lower():
+                return index
+        return None
+
+    return responder
+
+
+def _llm_game(responder):
+    from text_adventure_games.llm_client import MockLlmClient
+    from text_adventure_games.llm_parser import WebLlmParser
+
+    game = tiny_game()
+    game.set_parser(WebLlmParser(game, MockLlmClient(responder)))
+    return game
+
+
+def test_agent_actor_can_decline_and_the_gap_is_captured():
+    # Without the decline option, _force_mapping_llm maps "zibble the wumpus"
+    # onto the first real command and it EXECUTES (the gap becomes noise).
+    # With it, the agent-driven actor declines -> clean fail -> parse_gap wish.
+    game = _llm_game(_force_mapping_llm)
+    troll = game.characters["troll"]
+    troll.set_agent(object())  # the Character.set_agent seam marks it agent-driven
+    assert not game.parser.parse_command("zibble the wumpus", actor=troll)
+    [wish] = game.wishes
+    assert wish.trigger == TRIGGER_PARSE_GAP
+    assert wish.actor == "troll"
+
+
+def test_agent_actor_still_maps_real_paraphrases():
+    game = _llm_game(_pick_option_containing("Go in a direction"))
+    troll = game.characters["troll"]
+    troll.set_agent(object())
+    assert game.parser.determine_intent("vault the chasm", actor=troll) == "go"
+
+
+def test_human_path_has_no_decline_option():
+    captured = []
+
+    def responder(messages, max_tokens, temperature):
+        captured.append(messages[0]["content"])
+        return None
+
+    game = _llm_game(responder)
+    game.parser.determine_intent("zibble the wumpus", actor=None)
+    game.parser.determine_intent("zibble the wumpus", actor=game.player)
+    assert captured and all("none of these" not in c.lower() for c in captured)
