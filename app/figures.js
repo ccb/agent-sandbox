@@ -4361,9 +4361,10 @@
         `${EX + Math.cos(a + .12) * 24},${EY + Math.sin(a + .12) * 24}` });
     });
     el(svg, "circle", { cx: EX, cy: EY, r: 21, fill: BG, stroke: PH, "stroke-width": 1.6 });
-    const iris = el(svg, "circle", { cx: EX, cy: EY, r: 8.5, fill: "none",
+    // the eye, fixed: nothing left to consider (CCB: it does not move)
+    el(svg, "circle", { cx: EX, cy: EY, r: 8.5, fill: "none",
       stroke: PH, "stroke-width": 1.4, opacity: .7 });
-    const pupil = el(svg, "circle", { cx: EX, cy: EY, r: 3.2, fill: PH_BRIGHT, opacity: .55 });
+    el(svg, "circle", { cx: EX, cy: EY, r: 3.2, fill: PH_BRIGHT, opacity: .55 });
     Array.from({ length: 13 }, (_, i) => {                    // the fringe of threads
       const x = 206 + i * 7.4;
       el(svg, "line", { x1: x, y1: 218 + Math.sin(i * .9) * 4, x2: x,
@@ -4406,8 +4407,6 @@
       const T = t % 170;
       doWipe(T);
       typeOn(hdr, "THE OSSIFIED MYSTIC, BURNED OUT", T, 4, 1.4);
-      const look = [0, 2, 3, 1, -2, -3][Math.floor(t / 30) % 6];  // slower now
-      iris.setAttribute("cx", EX + look); pupil.setAttribute("cx", EX + look * 1.4);
       fronds.forEach((n, f) => n.setAttribute("points",
         fpts(f, t).map(p => p.join(",")).join(" ")));
       smoke.forEach((s, i) => {
