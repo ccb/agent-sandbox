@@ -248,7 +248,13 @@ SIM_API_URL=http://127.0.0.1:8080 ./godot-generative-agents/run.sh
 Key hygiene: only `ANTHROPIC_API_KEY` is ever read — never `LLM_PROVIDER` /
 `LLM_API_KEY` / `OPENAI_API_KEY` — and the server refuses to start without it
 (or with a non-Anthropic `provider:` in the config) rather than serving a day
-of silently failing calls.
+of silently failing calls. The key is also **verified at boot** with one free
+models-list request: an *invalid* key (typo, placeholder, revoked) aborts with
+a one-line fix instead of what it used to produce — a sim that ticks normally
+while every agent sits frozen on "waking up" at $0 spend, because a rejected
+call degrades to an idle-and-retry tick by design and never reaches the
+budget ledger. (Network trouble during the check only warns; the run's own
+retry path handles transient failures.)
 
 **The Start/Stop button.** Under `--brain llm` the loop boots **paused**: the
 server is up and the viewer connects, but not a single model call is made

@@ -33,11 +33,13 @@ from text_adventure_games.usage import UsageLedger
 from .cognition import (
     attach_agents,
     maybe_converse,
+    maybe_react,
     maybe_revise_plan,
     memories_for_frame,
     memory_stream_for_persona,
     observe_and_decide,
     remember_outcome,
+    score_new_memories,
 )
 from backend.drives import accrue_thirst
 from .sim_clock import SimClock
@@ -142,6 +144,8 @@ def step(
     clock: SimClock | None = None,
     conversation_enabled: bool = False,
     conversation_cooldowns: dict | None = None,
+    active_conversations: dict | None = None,
+    react_state: dict | None = None,
     cog: CognitionConfig | None = None,
     decide_executor: concurrent.futures.Executor | None = None,
     decide_timeout: float | None = None,
@@ -159,8 +163,9 @@ def step(
 
     Self-contained by design: no file I/O, no globals, no sleeping. It mutates
     ``state``, ``conversation_cooldowns`` and ``game.turn`` in place and returns
-    the movement frame for this step plus how many conversations fired (the
-    latter only for :func:`simulate`'s stdout heartbeat; the frame is the
+    the movement frame for this step plus how many conversations *completed* this
+    step (issue #371: a meeting spans ticks, so this counts endings, not starts;
+    used only for :func:`simulate`'s stdout heartbeat -- the frame is the
     byte-identical artifact the determinism tests and the Penn bake pin).
 
     ``conversation_cooldowns`` defaults to a throwaway dict and ``cog`` to
@@ -195,10 +200,35 @@ def step(
             raise ValueError("decide_executor requires decide_timeout")
         if decide_pending is None:
             raise ValueError("decide_executor requires decide_pending")
+    # Multi-tick conversations (#371) carry their in-progress state in
+    # active_conversations across ticks. A None default would hand maybe_converse a
+    # throwaway dict every tick, so a meeting could never advance: each tick would
+    # restart it, re-greet, and re-pin the pair -- which would then never resume
+    # their schedule. A caller that enables conversation must therefore own a
+    # persistent dict (simulate() and PennStepper both do); callers that don't
+    # converse leave both flags off.
+    if conversation_enabled and active_conversations is None:
+        raise ValueError(
+            "conversation_enabled requires a persistent active_conversations dict "
+            "(#371): without it a multi-tick meeting restarts every tick and the "
+            "pair never advances or unpins"
+        )
     conversation_cooldowns = (
         conversation_cooldowns if conversation_cooldowns is not None else {}
     )
     cog = cog if cog is not None else CognitionConfig()
+
+    # React gate (#370): edge-triggered encounter detection needs memory of
+    # who was already in range last tick. A throwaway dict would make every
+    # tick look like a fresh encounter and storm the brain with react
+    # consults, so -- like active_conversations above -- a caller that enables
+    # react must own a persistent dict.
+    if conversation_enabled and cog.react_enabled and react_state is None:
+        raise ValueError(
+            "react_enabled requires a persistent react_state dict (#370): "
+            "with a throwaway dict every tick looks like a fresh encounter "
+            "and the react consult fires every single tick"
+        )
 
     # Give per-agent memory a coherent time axis: the step index is the "turn"
     # memories are stamped and scored against (issue #75). The custom loop never
@@ -237,6 +267,7 @@ def step(
             st["performing"]
             and st["perform_until"] is not None
             and step_idx >= st["perform_until"]
+            and not st.get("conversing")
         ):
             if st.get("on_plan", True):
                 if char.agent.schedule.advance():
@@ -253,7 +284,7 @@ def step(
                 st["perform_until"] = None
                 st["stop_since"] = step_idx
 
-        if not st["path"] and not st["performing"]:
+        if not st["path"] and not st["performing"] and not st.get("conversing"):
             due.append(name)
 
     # Concurrent decisions (#366): everyone due this tick decides in parallel
@@ -363,6 +394,12 @@ def step(
                 )
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
+                # LLM-scored poignancy (issue #583): override this tick's new
+                # memories' importance with the model's 1-10 scores BEFORE the
+                # reflection check, so reflection timing tracks scored salience.
+                # A no-op for the mock brain (gated on brain-identity), so the
+                # bake stays byte-identical.
+                score_new_memories(char, step_idx)
                 # Periodic memory synthesis (issue #84): now that this step's
                 # outcome is in memory, reflect if enough importance has accrued.
                 # A no-op unless a reflector was wired on (real provider only), so
@@ -488,8 +525,11 @@ def step(
                     char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
                 )
 
-        # Advance one tile along any active walk.
-        if st["path"]:
+        # Advance one tile along any active walk -- unless pinned mid-walk by
+        # a react-started conversation (#370). Inert before #370: a
+        # conversation could only ever start between settled agents, whose
+        # path is empty, so no pinned agent ever had tiles left to walk.
+        if st["path"] and not st.get("conversing"):
             st["tile"] = st["path"].pop(0)
             if not st["path"]:
                 # Arrived: re-anchor the decide-context clock (#580) so
@@ -521,6 +561,23 @@ def step(
     # brain, so the default replay is unchanged.
     chats_this_step = 0
     if conversation_enabled:
+        # React-or-continue (#370): BEFORE the conversation pass, so a greet's
+        # first line is spoken this same tick by maybe_converse's advance
+        # phase. Off by default (cog.react_enabled) -> byte-identical.
+        if cog.react_enabled:
+            maybe_react(
+                chars,
+                state,
+                step_idx,
+                conversation_cooldowns,
+                order,
+                react_state=react_state,
+                active=active_conversations,
+                cooldown_steps=cog.conversation_cooldown_steps,
+                react_cooldown_steps=cog.react_cooldown_steps,
+                react_hour_cap=cog.react_hour_cap,
+                clock=clock,
+            )
         chats_this_step = maybe_converse(
             game,
             chars,
@@ -532,6 +589,7 @@ def step(
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
             clock=clock,
+            active=active_conversations,
         )
     return frame, chats_this_step
 
@@ -713,6 +771,10 @@ def simulate(
             # deviation keeps the pointer. Defaults True so a never-performed
             # agent's first advance is safe.
             "on_plan": True,
+            # Pinned while a multi-tick conversation runs (issue #371): step()'s
+            # pre-pass skips schedule-advance/decision/movement for a conversing
+            # agent, so the meeting isn't interrupted. Cleared when it ends.
+            "conversing": False,
         }
 
     # Conversation is gated on a real brain (issue #86): the deterministic mock
@@ -721,6 +783,14 @@ def simulate(
     # often the same pair re-converses across the run.
     conversation_enabled = llm_client is not None
     conversation_cooldowns: dict = {}
+    # In-progress conversations, carried across ticks (issue #371). Bakes run the
+    # SAME multi-tick form as live -- there is no separate in-tick path -- but the
+    # mock never speaks, so a bake holds zero conversations and stays byte-identical.
+    active_conversations: dict = {}
+    # Who was already within mutual sight last tick (issue #370) -- the react
+    # pass's edge detector. Persistent for the run, like the two dicts above;
+    # inert unless cognition.react_enabled is set in the caller's config.
+    react_state: dict = {}
 
     # Heartbeat plumbing (real-brain runs only). A live run makes many blocking
     # API calls per turn with no other output during quiet stretches, which reads
@@ -763,6 +833,8 @@ def simulate(
             clock=clock,
             conversation_enabled=conversation_enabled,
             conversation_cooldowns=conversation_cooldowns,
+            active_conversations=active_conversations,
+            react_state=react_state,
             cog=cog,
         )
         frames.append(frame)

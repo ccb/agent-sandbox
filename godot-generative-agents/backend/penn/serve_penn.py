@@ -45,6 +45,8 @@ import datetime
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -149,6 +151,42 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
             "(--brain mock runs offline, without keys)"
         )
     return llm
+
+
+def check_anthropic_key(urlopen=urllib.request.urlopen, timeout=10.0):
+    """Fail fast on a key the API rejects, before serving an all-day sim.
+
+    ``resolve_llm`` proves ``ANTHROPIC_API_KEY`` is *present*; this proves it
+    *works*, with one models-list request (free -- no tokens are billed). The
+    check matters because past boot a bad key is invisible by design: every
+    decide's API error degrades to an idle tick (the brain-outage contract),
+    so the whole cast just sits frozen on "waking up" at $0 spend with nothing
+    in the terminal. A 401/403 therefore exits with the fix; any *other*
+    failure (no network, a 5xx) warns and continues -- transient trouble is
+    the run's own retry path's job, not a boot blocker.
+    """
+    request = urllib.request.Request("https://api.anthropic.com/v1/models?limit=1")
+    request.add_header("x-api-key", os.environ["ANTHROPIC_API_KEY"])
+    request.add_header("anthropic-version", "2023-06-01")
+    try:
+        urlopen(request, timeout=timeout).close()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise SystemExit(
+                f"ANTHROPIC_API_KEY was rejected by the API (HTTP {e.code}): "
+                "the key is present but not valid. Fix the export in this "
+                "terminal (or the repo-root .env; template: .env.example), "
+                "then restart. Without this check, every model call would "
+                "fail silently and the cast would sit on 'waking up' forever."
+            )
+        print(
+            f"WARNING: could not verify ANTHROPIC_API_KEY (HTTP {e.code}); continuing."
+        )
+    except OSError as e:
+        # URLError (DNS, refused, timeout) is an OSError subclass.
+        print(f"WARNING: could not verify ANTHROPIC_API_KEY ({e}); continuing.")
+    else:
+        print("ANTHROPIC_API_KEY verified with the API (one free models-list request).")
 
 
 class LiveMeetingInjector:
@@ -362,6 +400,7 @@ class PennStepper:
         llm=None,
         run_store=None,
         cognition_tools=False,
+        react=False,
         decide_workers=0,
         decide_timeout=30.0,
         mock_latency=0.0,
@@ -429,6 +468,12 @@ class PennStepper:
         # read_plan before each decide. Held on the stepper -- not read from
         # argv -- so _build() re-applies it on every reset (POST /reset).
         self.cognition_tools = cognition_tools or (llm == SCRIPTED)
+        # React-or-continue (#370): perception-driven interruption while
+        # walking. Held on the stepper so _build() re-applies it on every
+        # reset. Mock-inert: under the mock brain the react pass never runs
+        # at all (step() gates it on conversation_enabled), so it is safe to
+        # leave on for mechanics demos.
+        self.react = react
         # Daily planning source (#397): "schedule" (default) keeps the authored
         # YAML day -- byte-identical, meeting overlaps intact. "llm" lets the
         # model author each day (LLMPlanner); free-play, so the hand-tuned
@@ -535,7 +580,9 @@ class PennStepper:
         # test_stepper_matches_simulate_prefix pins). If simulate's setup ever
         # drifts from this, the equivalence test fails -- on purpose.
         self.world = world if world is not None else build_penn_world()
-        self.cog = CognitionConfig(cognition_tools=self.cognition_tools)
+        self.cog = CognitionConfig(
+            cognition_tools=self.cognition_tools, react_enabled=self.react
+        )
         # The live analogue of the bake's meta start/sec_per_step (#580): one
         # SimClock so the decide-context block and the hourly BEHIND_SCHEDULE
         # revision seam see the same in-game time the viewer's navbar shows.
@@ -616,6 +663,14 @@ class PennStepper:
         # re-converse every single step). Fresh per day, like the rest of the
         # world state.
         self._convo_cooldowns = {}
+        # In-progress conversations carried across live ticks (issue #371), so a
+        # meeting spans ticks instead of resolving inside one. Fresh per day/reset
+        # (lives in _build, which reset() re-runs), like _convo_cooldowns.
+        self._active_conversations = {}
+        # Who was already within mutual sight last tick (issue #370): the
+        # react pass's edge detector. Fresh per day/reset, like the two
+        # conversation dicts above.
+        self._react_state = {}
         self.emoji = {p["name"]: p["emoji"] for p in self.world.personas}
         self.order = [p["name"] for p in self.world.personas]
         self.state = {}
@@ -632,6 +687,9 @@ class PennStepper:
                 "memories": [],
                 "chat": None,
                 "stop_since": 0,
+                # Pinned during a multi-tick conversation (issue #371); step()
+                # skips schedule-advance/decision/movement while set.
+                "conversing": False,
             }
         self.injector = LiveMeetingInjector(
             # Under a real brain the authored dialogue stands down entirely:
@@ -892,6 +950,8 @@ class PennStepper:
             # simulate() applies (conversation_enabled = llm_client is not None).
             conversation_enabled=self.llm_client is not None,
             conversation_cooldowns=self._convo_cooldowns,
+            active_conversations=self._active_conversations,
+            react_state=self._react_state,
             # Concurrent decides (#366): None executor = the serial path the
             # simulate-equivalence test pins; workers > 0 fans decisions out.
             decide_executor=self._decide_executor,
@@ -1228,6 +1288,18 @@ def main() -> int:
         "usual. --brain llm only; the mock brain never reaches the tool loop",
     )
     ap.add_argument(
+        "--react",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="perception-driven interruption (#370): a walking agent that "
+        "newly notices another resident may spend one 'react' model call "
+        "(continue/greet/replan), rule-gated and capped per sim hour; a "
+        "greet pauses the walk for a conversation, then the walk resumes. "
+        "Needs a real brain: under --brain mock the pass never runs "
+        "(conversation is disabled). Note: 'replan' only changes the day "
+        "under --plan llm",
+    )
+    ap.add_argument(
         "--decide-workers",
         type=_decide_workers_arg,
         default="auto",
@@ -1288,6 +1360,10 @@ def main() -> int:
     # steps it (a second build would waste the map load and fork patch state).
     world = build_penn_world()
     llm = resolve_llm(world.llm, args.brain, model=args.model, max_cost=args.max_cost)
+    if _is_paid(llm):
+        # The key exists (resolve_llm gates that); now prove the API accepts
+        # it, or an invalid key would serve a frozen, silent, $0 all-day sim.
+        check_anthropic_key()
     # A paying brain shouldn't spend before anyone is watching: under --brain
     # llm the loop boots paused and the viewer's Start button (POST /resume)
     # opens the day. The free mock keeps auto-starting. --[no-]start-paused
@@ -1320,6 +1396,7 @@ def main() -> int:
             llm=llm,
             run_store=store,
             cognition_tools=args.cognition_tools,
+            react=args.react,
             decide_workers=decide_workers,
             decide_timeout=args.decide_timeout,
             mock_latency=args.mock_latency,
@@ -1391,6 +1468,11 @@ def main() -> int:
             if llm is not None
             else "Cognition tools: ON, but the mock brain never reaches the "
             "tool loop -- pair it with --brain llm for any effect."
+        )
+    if args.react:
+        print(
+            "React gate: ON -- a mid-walk encounter may consult the brain "
+            "(continue/greet/replan, #370), capped per agent per sim hour."
         )
     if decide_workers > 0:
         print(
