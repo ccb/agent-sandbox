@@ -326,3 +326,74 @@ class Deactivate(base.Action):
     def apply_effects(self):
         self.item.set_property("is_on", False)
         return self.parser.ok(f"The {self.item.name} winds down and goes quiet.")
+
+
+class TalkTo(base.Action):
+    """Agent-initiated conversation (issue #614): ``talk_to <person> [about
+    <topic>]``.
+
+    Conversation today only fires engine-side when two settled residents happen
+    to be co-located (cognition.maybe_converse); this verb lets a brain CHOOSE
+    "go find Marcus and ask him about the demo". The engine's Talk was checked
+    for reuse and voices canned ``talk_text`` lines, not the LLM dialogue loop,
+    so this is a new Penn-local verb (the DrinkPenn precedent).
+
+    apply_effects does not run dialogue itself: it leaves a one-shot
+    ``talk_request`` (+ optional ``talk_topic``) marker on the actor, which
+    ``maybe_converse`` consumes THIS SAME TICK to open a #371
+    ActiveConversation -- so bubbles/feed/#582 consequences all ride the
+    existing machinery. The topic threads into the opener via the reflection
+    memory remember_outcome writes at parse time (the dialogue seam's opener
+    retrieval queries the partner's name and surfaces it) -- no new dialogue
+    machinery.
+
+    Gate = the same fact curation reads (action_tools_for drops/enum-fills the
+    tool from co-located living characters): target matched in the actor's room
+    + alive. "Conversations enabled" needs no explicit precondition: the verb
+    is only reachable from a real tool-calling brain, and without one the
+    marker is simply never consumed.
+    """
+
+    ACTION_NAME = "talk_to"
+    ACTION_DESCRIPTION = "Start a conversation with someone at your location"
+    ARGUMENTS_SCHEMA = {
+        "person": {
+            "type": "string",
+            "description": "the name of the person to talk to (someone here)",
+            "required": True,
+        },
+        "topic": {
+            "type": "string",
+            "description": "what to bring up, as a short phrase (optional)",
+            "connector": "about",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="talker")
+        # Match the person against the pre-topic head only, so a topic that
+        # happens to contain a resident's name can't hijack the match.
+        head, _, tail = command.partition(" about ")
+        self.target = self.character_in_room(head, self.character)
+        self.topic = tail.strip()
+
+    def check_preconditions(self) -> bool:
+        if self.target is None:
+            self.parser.fail("There is no one by that name here to talk to.")
+            return False
+        if self.target.get_property("is_dead"):
+            self.parser.fail(f"{self.target.name} is in no state to talk.")
+            return False
+        return True
+
+    def apply_effects(self):
+        self.character.set_property("talk_request", self.target.name)
+        if self.topic:
+            self.character.set_property("talk_topic", self.topic)
+        return self.parser.ok(
+            f"{self.character.name} strikes up a conversation with "
+            f"{self.target.name}."
+        )

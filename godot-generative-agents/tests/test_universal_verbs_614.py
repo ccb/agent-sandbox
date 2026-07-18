@@ -15,7 +15,7 @@ _SIM_DIR = (
 )
 sys.path.insert(0, str(_SIM_DIR))
 
-from backend.actions import WaitPenn  # TODO(Task 3): add TalkTo  # noqa: E402
+from backend.actions import TalkTo, WaitPenn  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import action_tools_for, attach_agents  # noqa: E402
 from penn_world import PENN_ACTION_VERBS, PENN_EXTRA_ACTIONS  # noqa: E402
@@ -139,3 +139,57 @@ def test_settled_wait_writes_the_honest_idle_memory():
     remember_outcome(ada, "wait", 3)
     texts = [r.text for r in ada.agent.memory.retrieve(query="waited", turn=3)]
     assert "I waited; nothing needed doing." in texts
+
+
+# ------------------------------------------------------------ talk_to gate
+
+
+def _colocate(game, chars, names, place="Plaza"):
+    loc = game.locations[place]
+    for n in names:
+        ch = chars[n]
+        if ch.location is not None:
+            ch.location.remove_character(ch)
+        loc.add_character(ch)
+
+
+def test_talk_to_is_registered_and_in_penn_action_verbs():
+    game, _chars = _world(["Ada"])
+    assert game.parser.actions["talk_to"] is TalkTo
+    assert "talk_to" in PENN_ACTION_VERBS
+
+
+def test_talk_to_gate_rejects_an_absent_target_with_actionable_feedback():
+    game, chars = _world(["Ada", "Bo"])
+    _colocate(game, chars, ["Ada"], "Plaza")
+    _colocate(game, chars, ["Bo"], "Cafe")  # not co-located
+    ok = game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert not ok
+    assert "no one" in game.parser.last_fail_message.lower()
+    assert not chars["Ada"].get_property("talk_request")
+
+
+def test_talk_to_gate_rejects_a_dead_target():
+    game, chars = _world(["Ada", "Bo"])
+    _colocate(game, chars, ["Ada", "Bo"])
+    chars["Bo"].set_property("is_dead", True)
+    ok = game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert not ok
+    assert "Bo" in game.parser.last_fail_message
+    assert not chars["Ada"].get_property("talk_request")
+
+
+def test_talk_to_success_sets_the_one_shot_markers():
+    game, chars = _world(["Ada", "Bo"])
+    _colocate(game, chars, ["Ada", "Bo"])
+    assert game.parser.parse_command("talk_to Bo about the demo", actor=chars["Ada"])
+    assert chars["Ada"].get_property("talk_request") == "Bo"
+    assert chars["Ada"].get_property("talk_topic") == "the demo"
+
+
+def test_talk_to_without_topic_sets_no_topic_marker():
+    game, chars = _world(["Ada", "Bo"])
+    _colocate(game, chars, ["Ada", "Bo"])
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert chars["Ada"].get_property("talk_request") == "Bo"
+    assert chars["Ada"].get_property("talk_topic") is False  # defaultdict default
