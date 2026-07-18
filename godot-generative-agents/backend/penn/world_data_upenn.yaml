@@ -292,12 +292,14 @@ locations:
 - name: Van Pelt — Moelis Reading Room
   description: The Moelis Family Grand Reading Room, Van Pelt's flagship study hall.
   address: UPenn:Van Pelt Library:Moelis Family Grand Reading Room
+  properties: [studyable]
 - name: Van Pelt — Book Stacks
   description: The west-wing book stacks, rows of open shelving.
   address: UPenn:Van Pelt Library:West Wing Books
 - name: Van Pelt — Study Booths
   description: Quiet individual study booths in the west wing.
   address: UPenn:Van Pelt Library:Study Booths
+  properties: [studyable]
 - name: Van Pelt — Microtext Collection
   description: The microfilm and microfiche archive of historical print.
   address: UPenn:Van Pelt Library:Microtext Collection
@@ -310,6 +312,7 @@ locations:
 - name: Houston Hall
   description: The student union -- the nation's first -- with dining and lounges.
   address: UPenn:Houston Hall:lobby
+  properties: [dining]
 # Named rooms inside Houston Hall (furnished arenas, same pattern as the Van Pelt
 # rooms above). Schedule stops can target these to put an agent in a specific
 # room instead of wherever the whole-building lobby routing settles. Two
