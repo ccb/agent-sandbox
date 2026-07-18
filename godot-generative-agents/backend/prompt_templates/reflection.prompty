@@ -34,7 +34,7 @@ inputs:
     description: Whether this drink just cured the persona's sickness (verb == "drink", #300).
   topic:
     type: string
-    description: What was studied (verb == "study"; may be empty).
+    description: What was brought up (verb == "talk_to") or studied (verb == "study"); may be empty.
   minutes:
     type: integer
     description: How many in-game minutes the study took (verb == "study", #615).

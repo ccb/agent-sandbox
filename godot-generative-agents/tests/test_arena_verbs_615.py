@@ -315,3 +315,70 @@ def test_remember_outcome_writes_the_eat_memory():
     remember_outcome(ada, "eat sandwich", 3)
     assert seen["text"] == "I ate the sandwich and I'm no longer hungry."
     assert seen["importance"] == 2.0
+
+
+# -- eat: curation + the get -> eat two-step (Task 4) --------------------------
+
+
+def test_eat_offered_only_where_something_edible_is_in_scope():
+    game, ada = _world()
+    assert "eat" not in _tool_names(game, ada)  # nothing EDIBLE on The Green
+    snack = Item("granola bar", "a granola bar")
+    snack.set_property(Property.EDIBLE, True)
+    game.locations["The Green"].add_item(snack)
+    assert "eat" in _tool_names(game, ada)  # offered <=> place-check passes
+
+
+def test_eat_gate_feedback_on_no_food_here_is_actionable():
+    game, ada = _world()
+    assert not game.parser.parse_command("eat sandwich", actor=ada)
+    assert getattr(game.parser, "last_fail_message", "") == (
+        "There is nothing to eat here."
+    )
+
+
+def test_penn_world_offers_the_615_verbs():
+    from penn_world import PENN_ACTION_VERBS
+
+    assert "eat" in PENN_ACTION_VERBS
+    assert "study" in PENN_ACTION_VERBS
+
+
+def test_houston_hall_meals_support_the_get_eat_two_step():
+    from penn_world import build_penn_world
+
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    hall = game.locations["Houston Hall"]
+    # Three discrete meals ARE the portions (engine Eat has none -- #615
+    # issue-comment decision): each is EDIBLE and gettable.
+    meals = [i for i in hall.items.values() if i.get_property(Property.EDIBLE)]
+    assert len(meals) == 3
+    assert all(m.get_property(Property.GETTABLE) for m in meals)
+
+    char = next(iter(chars.values()))
+    _move(game, char, "Houston Hall")
+    char.set_property(Property.IS_HUNGRY, True)
+    # Eating before getting fails -- Eat only matches carried items, so the
+    # two-step is the shape (documented in the #615 issue comment).
+    assert not game.parser.parse_command("eat sandwich", actor=char)
+    assert game.parser.parse_command("get sandwich", actor=char)
+    assert game.parser.parse_command("eat sandwich", actor=char)
+    assert not char.get_property(Property.IS_HUNGRY)  # satiety (engine-modeled)
+    assert "sandwich" not in char.inventory  # consumed whole -- one portion
+    assert "sandwich" not in hall.items
+
+
+def test_study_offered_in_van_pelt_reading_rooms_only():
+    from penn_world import PENN_ACTION_VERBS, build_penn_world
+
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas, extra_action_names=PENN_ACTION_VERBS)
+    char = next(iter(chars.values()))
+    _move(game, char, "Van Pelt — Moelis Reading Room")  # studyable (#613)
+    assert "study" in _tool_names(game, char)
+    assert game.parser.parse_command("study medieval history", actor=char)
+    assert char.get_property("studied_minutes") == DEFAULT_STUDY_MINUTES
+    _move(game, char, "College Hall")  # untagged
+    assert "study" not in _tool_names(game, char)

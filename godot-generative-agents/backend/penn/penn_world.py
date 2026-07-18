@@ -30,7 +30,7 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
-from backend.actions import Activate, Deactivate, DrinkPenn, TalkTo, WaitPenn
+from backend.actions import Activate, Deactivate, DrinkPenn, Study, TalkTo, WaitPenn
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
@@ -53,7 +53,7 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
 # boiling is now a declarative transform, not a bespoke action. Upstreaming these
 # into the engine library is #464.
-PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft, WaitPenn, TalkTo]
+PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft, WaitPenn, TalkTo, Study]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
 # boil-water scenario wires in, on top of the base travel/perform. `make` is the
@@ -61,7 +61,9 @@ PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft, WaitPenn, TalkTo]
 # universal honest-idle verb (#614) -- WaitPenn's pacing slots make a chosen
 # wait settle, so offering it is no longer a recurring-token-spend trap.
 # `talk_to` is the #614 agent-initiated conversation verb; its tool is curated
-# per-decide in `cognition.action_tools_for`. Handed to
+# per-decide in `cognition.action_tools_for`. `eat` (engine) and `study`
+# (Penn-local, #615) are affordance-curated -- offered only where an EDIBLE
+# meal / a `studyable` arena is in scope (#612). Handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
 PENN_ACTION_VERBS = [
     "get",
@@ -71,6 +73,8 @@ PENN_ACTION_VERBS = [
     "make",
     "wait",
     "talk_to",
+    "eat",
+    "study",
 ]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
@@ -455,6 +459,49 @@ def _furnish_boil_water(game) -> None:
     hall.add_item(make_murky_pot())
 
 
+def make_meal(name: str, description: str, examine: str) -> Item:
+    """A Houston Hall meal (#615): EDIBLE and gettable (the Item default), so
+    the natural loop is get -> eat -- the same possession gate as the drink
+    pattern. Discrete items ARE the portions: the engine's Eat consumes the
+    whole item (it has no Drink-style portions), so one meal = one portion."""
+    meal = Item(name, description, examine)
+    meal.set_property(Property.EDIBLE, True)
+    return meal
+
+
+def _furnish_meals(game) -> None:
+    """Stock Houston Hall with EDIBLE meals (#615). An EDIBLE thing in scope is
+    exactly what makes the engine's `eat` (declared `(Property.EDIBLE,)` in
+    #612) offered -- so agents can eat here and only here. Meals live in the
+    building-level "Houston Hall" location, next to the boil props, for the
+    same reason those do (see the world-YAML comment): schedule stops that act
+    on them must target "Houston Hall" itself."""
+    hall = game.locations.get("Houston Hall")
+    if hall is None:
+        return
+    hall.add_item(
+        make_meal(
+            "sandwich",
+            "a wrapped sandwich",
+            "A turkey club off the Houston Hall food-court counter.",
+        )
+    )
+    hall.add_item(
+        make_meal(
+            "bowl of soup",
+            "a bowl of lentil soup",
+            "Steaming lentil soup from the Houston Hall food court.",
+        )
+    )
+    hall.add_item(
+        make_meal(
+            "apple",
+            "a red apple",
+            "A crisp apple from the fruit basket by the register.",
+        )
+    )
+
+
 def build_penn_world(
     world_data=WORLD_DATA, upenn_dir=UPENN_DIR, *, withhold_boil: bool = False
 ) -> PennWorld:
@@ -499,6 +546,7 @@ def build_penn_world(
             wm, personas, locations, extra_actions=PENN_EXTRA_ACTIONS
         )
         _furnish_boil_water(game)
+        _furnish_meals(game)
         if not withhold_boil:
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))
