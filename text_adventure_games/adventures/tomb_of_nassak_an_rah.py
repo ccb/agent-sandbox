@@ -1908,7 +1908,19 @@ def _sphere_aftermath(g, ash):
         bones.add_alias("bones")
         bones.add_alias("skeleton")
         bones.add_alias("autarch")
-        bones.set_property("figure", "autarch-c")
+        # The card follows the tenancy (CCB): while the Horror lives, the
+        # bones read HOLLOWED (13-C); once it is defeated, the same examine
+        # deals THE AUTARCH in beatific slumber (13).
+        bones.set_property(
+            "figure",
+            lambda g: (
+                "autarch"
+                if g.locations["Burial Sphere of Nassak An-Rah"].get_property(
+                    "horror_dead"
+                )
+                else "autarch-c"
+            ),
+        )
     if ash and "drift of ash" not in sphere.items:
         ash_item = _scenery(
             sphere,
