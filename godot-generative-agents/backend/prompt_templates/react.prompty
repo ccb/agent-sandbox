@@ -1,0 +1,37 @@
+---
+name: react
+description: >
+  Real model prompt (issue #370): a walking agent that newly notices another
+  resident is asked -- via the `react` tool -- whether to keep going
+  ("continue"), pause for a hello ("greet", which starts a #371 multi-tick
+  conversation), or change the rest of its day ("replan"). Rendered by
+  cognition._consult_react(), only when a real tool-calling brain is wired --
+  the rule tier and the brain-identity gate keep the mock bake byte-identical.
+inputs:
+  partner:
+    type: string
+    description: The name of the resident who came into view.
+  doing:
+    type: string
+    description: What this agent is in the middle of.
+  time:
+    type: string
+    description: Preformatted sim time of day, or omitted when the run has no clock.
+  memories:
+    type: array
+    description: What this agent remembers about the partner (may be empty).
+sample:
+  partner: Ayesha Khan
+  doing: walking to Van Pelt Library
+  time: Monday 09:30 AM
+  memories:
+    - Ayesha Khan is my study partner.
+---
+{%- if time %}It is {{ time }}. {% endif %}While {{ doing }}, you notice {{ partner }} nearby.
+{%- if memories %}
+What you remember about {{ partner }}:
+{% for m in memories %}
+- {{ m }}
+{% endfor %}
+{%- endif %}
+Decide how to react: keep going ("continue"), stop for a quick hello ("greet"), or change your plans for the rest of the day ("replan"). Greet or replan only if it feels natural for you -- your schedule matters.

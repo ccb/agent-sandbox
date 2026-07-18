@@ -1,0 +1,24 @@
+---
+name: encounter
+description: >
+  First-person memory of noticing another resident mid-activity (issue #370):
+  the cheap perceive pass writes one of these into each mid-activity agent's
+  stream when another resident newly comes within mutual sight, so a
+  passed-by face is remembered even though no decision point fired. Rendered
+  by cognition.maybe_react(); only reachable when the react gate
+  (CognitionConfig.react_enabled) is on, so the default replay is
+  byte-identical.
+inputs:
+  partner:
+    type: string
+    description: The name of the resident who came into view.
+  doing:
+    type: string
+    description: >
+      What this agent was doing at the time -- "walking to <place>" mid-walk,
+      or its current activity while performing.
+sample:
+  partner: Ayesha Khan
+  doing: walking to Van Pelt Library
+---
+I noticed {{ partner }} nearby while {{ doing }}.
