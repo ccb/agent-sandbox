@@ -454,13 +454,18 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif command.startswith("perform") or model_duration_steps is not None:
-                    # Settle into an in-place activity. The trigger is "perform,
-                    # OR any action that carried a model duration" -- so a future
-                    # duration-bearing verb (#446 study/eat) settles here too,
-                    # while the #300 instantaneous verbs (get/drink/activate),
-                    # which carry no duration and aren't "perform", keep falling
-                    # through as one-tick actions (byte-identical).
+                elif (
+                    command.startswith(("perform", "study"))
+                    or model_duration_steps is not None
+                ):
+                    # Settle into an in-place activity. The trigger is "perform
+                    # or study (#615), OR any action that carried a model
+                    # duration" -- a duration-less study must still settle, or
+                    # the agent re-decides (and re-accumulates studied_minutes)
+                    # every tick. The #300 instantaneous verbs
+                    # (get/drink/activate), which carry no duration and aren't
+                    # listed, keep falling through as one-tick actions
+                    # (byte-identical: the mock never emits study).
                     st["performing"] = True
                     schedule = char.agent.schedule
                     # Place-match is the pacing-relevant signal: standing at the

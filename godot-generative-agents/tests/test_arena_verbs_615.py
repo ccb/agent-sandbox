@@ -194,3 +194,73 @@ def test_study_meta_args_stash_without_leaking_into_the_command():
     assert command == "study thermodynamics"  # no "45", no emoji spliced in
     assert ada.agent.last_duration_minutes == 45
     assert ada.agent.last_emoji == "\U0001f4da"
+
+
+# -- study: settles in the step loop (Task 2) ---------------------------------
+
+
+class _StubMap:
+    def walk_path(self, src, address, furniture=None):
+        return [(1, 1)]
+
+
+def _clock():
+    return SimClock(datetime.datetime(2023, 2, 13, 12, 0, 0), sec_per_step=10)
+
+
+def _state():
+    # Minimal per-agent state; step() fills the rest via st.get(...) defaults.
+    return {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f4d6",
+            "desc": "waking up",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "(waking up)",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+
+
+def _run_step(game, chars, state, idx, clock):
+    return step(
+        game,
+        chars,
+        state,
+        idx,
+        order=["Ada"],
+        world_map=_StubMap(),
+        emoji={"Ada": "\U0001f4d6"},
+        clock=clock,
+        cog=CognitionConfig(),
+    )
+
+
+def test_study_without_a_duration_settles_instead_of_re_deciding_every_tick():
+    # Scheduled at The Green (home, steps=None) so the study is on-plan;
+    # tag it studyable so the verb is offered + gated there.
+    brain = PerActionBrain("study", {"topic": "thermodynamics"})
+    game, ada = _world(llm_client=brain, place="The Green")
+    game.locations["The Green"].set_property("studyable", True)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    st = state["Ada"]
+    assert st["performing"] is True  # settled -- not the instantaneous branch
+    assert st["perform_until"] is None  # on-plan stay-put, exactly like perform
+    assert "studying thermodynamics" in st["desc"]
+
+
+def test_study_settles_for_the_model_duration():
+    # 20 minutes at 10s/step = 120 steps, same arithmetic the #581 tests pin.
+    brain = PerActionBrain("study", {"topic": "thermodynamics", "duration_minutes": 20})
+    game, ada = _world(llm_client=brain, place="The Green")
+    game.locations["The Green"].set_property("studyable", True)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert state["Ada"]["performing"] is True
+    assert state["Ada"]["perform_until"] == 0 + 120
+    assert ada.get_property("studied_minutes") == 20  # the accumulator saw 20
