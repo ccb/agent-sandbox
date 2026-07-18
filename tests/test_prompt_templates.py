@@ -186,6 +186,18 @@ def test_match_intent():
     )
 
 
+def test_match_intent_with_decline_option():
+    # The agent-driven rendering (#621): one extra sentence licensing the
+    # "none of these fit" option. The default rendering above must stay
+    # byte-identical -- that IS the human-player path.
+    assert prompt_templates.render("match_intent", allow_none=True) == (
+        "You are the parser for a text adventure game. For a user input, say which "
+        "of the commands it most closely matches. If none of them fit what the "
+        "input asks for, choose the option that says none of these commands fit "
+        "the input. The commands are:"
+    )
+
+
 def test_match_character_without_hint():
     out = prompt_templates.render("match_character", player_name="hero", hint=None)
     assert out == (

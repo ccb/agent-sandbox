@@ -15,6 +15,7 @@ from text_adventure_games import games
 from .things import Character, Item, Location
 from . import actions, blocks
 from .enums import ActionName, Direction, Role
+from .wishes import ActionWish, TRIGGER_PARSE_GAP
 from .reporting import Channel, Message, default_renderer, wrap_text
 
 # Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
@@ -537,6 +538,35 @@ class Parser:
             meta={"wish": wish} if wish else None,
         )
 
+    def _log_parse_gap(self, command: str, actor=None):
+        """Record a ``trigger="parse_gap"`` ActionWish (#621): *command*
+        matched no verb. The situation snapshot mirrors the propose verb's
+        (actions/wish.py) so wishes.jsonl consumers see one shape."""
+        char = actor if actor is not None else getattr(self.game, "player", None)
+        location = getattr(char, "location", None)
+        scope = []
+        if char is not None:
+            scope = sorted(self.get_items_in_scope(char).keys())
+            if location is not None:
+                scope += sorted(n for n in location.characters if n != char.name)
+        goals = [
+            g.description
+            for g in getattr(char, "goals", []) or []
+            if not getattr(g, "done", False)
+        ]
+        self.game.log_wish(
+            ActionWish(
+                actor=char.name if char is not None else None,
+                turn=self.game.turn,
+                location=location.name if location is not None else None,
+                desired=command,
+                trigger=TRIGGER_PARSE_GAP,
+                goals=goals,
+                scope=scope,
+                raw_command=command,
+            )
+        )
+
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
         typed ``agent_*`` methods above; kept so older callers keep working."""
@@ -565,6 +595,11 @@ class Parser:
                 # (and so a non-matching answer can't loop back in here).
                 self.game.clear_prompt()
                 return self.parse_command(forwarded, actor=actor)
+            # Parse-gap capture (#621): the command matched no verb at all.
+            # Record what was attempted (the automatic half of the wish
+            # channel, epic #619) before the generic fail. Unconditional for
+            # every actor: player typos are cheap noise the report filters.
+            self._log_parse_gap(command, actor)
             self.fail("I'm not sure what you want to do.")
             return False
         # Resolve the acting character and where they stand *before* the action
@@ -967,7 +1002,15 @@ class LlmParser(Parser):
             "best matches the player's command by meaning."
         )
         try:
-            choice = self._pick_one(instructions, options, command, allow_none=False)
+            choice = self._pick_one(
+                instructions,
+                options,
+                command,
+                # Agent-driven actors (#621) may decline: a missing verb then
+                # falls through to the deterministic parser and fails cleanly
+                # (captured as a parse-gap wish) instead of force-mapping.
+                allow_none=getattr(actor, "agent", None) is not None,
+            )
         except Exception:
             choice = None
         return (
