@@ -4,7 +4,7 @@ Runs N trials per arm on the single-persona boil world:
   * seeded   -- the persona carries a t=0 "the unboiled water made me sick" memory;
   * control  -- identical, minus that memory.
 Each trial reads the AUTHORITATIVE drink outcome DrinkPenn stamped
-(drank_unboiled / drank_boiled) -- never the event log -- and classifies it. The
+(drank_unboiled / drank_safe) -- never the event log -- and classifies it. The
 per-arm boil-before-drink rate is printed; the seeded arm clearly above control is
 the #595 result.
 
@@ -28,10 +28,16 @@ _AVERSION = "Last time I drank the unboiled water at Houston Hall I got violentl
 
 
 def classify_outcome(char) -> str:
-    """The trial outcome, read from DrinkPenn's authoritative counters."""
+    """The trial outcome, read from DrinkPenn's authoritative counters.
+
+    Raw is checked FIRST: an agent that drank raw and then boiled still failed
+    the boil-BEFORE-drink metric. Mapping ``drank_safe`` to "boiled_then_drank"
+    leans on a boil-world fact -- the only reachable safe drink there is the
+    pot the agent boiled -- so this classifier is boil-world-specific, not a
+    general drinking metric."""
     if (char.get_property("drank_unboiled") or 0) > 0:
         return "drank_raw"
-    if (char.get_property("drank_boiled") or 0) > 0:
+    if (char.get_property("drank_safe") or 0) > 0:
         return "boiled_then_drank"
     return "neither"
 
@@ -42,6 +48,9 @@ def _configure(personas, *, seeded):
     aversion memory. Authored commands are left as-is: a live brain ignores them
     (attach_agents treats commands as mock-only), so nothing needs stripping."""
     out = [dict(p) for p in personas]
+    # The whole design is single-subject; a second persona would silently run
+    # unconfigured, so fail loudly if the boil world ever grows one.
+    assert len(out) == 1, f"boil world must stay single-persona, got {len(out)}"
     p = out[0]
     p["thirst_rate"] = 1
     p["thirst_threshold"] = 2
@@ -102,18 +111,19 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    # One shared ledger + one brain instance for the whole run (both arms, all
-    # trials), so the printed spend at the end is the run's real total -- run_arm
-    # hands each trial its own per-trial ledger (for attach_agents' embedding/
-    # reflection bookkeeping), but the brain itself always records into this one.
+    # One shared ledger for the whole run (both arms, all trials), so the
+    # printed spend at the end is the run's real total -- but a FRESH brain per
+    # trial, so no internal client state (scripted-brain accumulators, schedule
+    # registrations) can leak across trials or arms. run_arm hands each trial
+    # its own per-trial ledger too (attach_agents' embedding/reflection
+    # bookkeeping); the brain itself always records into this shared one.
     ledger = UsageLedger()
     if args.offline:
         from backend.penn.scripted_brain import build_scripted_brains
 
-        brain, _reflector = build_scripted_brains(ledger=ledger)
+        make_client = lambda _t: build_scripted_brains(ledger=ledger)[0]  # noqa: E731
     else:
-        brain = _live_client(ledger, args.model)
-    make_client = lambda _trial_ledger: brain  # noqa: E731
+        make_client = lambda _t: _live_client(ledger, args.model)  # noqa: E731
 
     for arm in ("seeded", "control"):
         result = run_arm(

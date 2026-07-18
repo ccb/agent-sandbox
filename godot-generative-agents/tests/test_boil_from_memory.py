@@ -31,7 +31,7 @@ class _C:
 
 
 def test_classify_outcome_reads_the_authoritative_flags():
-    assert classify_outcome(_C(drank_boiled=1, drank_unboiled=0)) == "boiled_then_drank"
+    assert classify_outcome(_C(drank_safe=1, drank_unboiled=0)) == "boiled_then_drank"
     assert classify_outcome(_C(drank_unboiled=1)) == "drank_raw"
     assert classify_outcome(_C()) == "neither"
 

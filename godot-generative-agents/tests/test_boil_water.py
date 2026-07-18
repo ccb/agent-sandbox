@@ -626,7 +626,7 @@ def test_drink_stamps_authoritative_outcome_counters():
     assert game.parser.parse_command("get pot of murky water", actor=char)
     assert game.parser.parse_command("drink pot of murky water", actor=char)
     assert char.get_property("drank_unboiled") == 1
-    assert not char.get_property("drank_boiled")
+    assert not char.get_property("drank_safe")
     assert char.get_property("is_sick")
 
     # Boil, then drink the produced boiled pot: a later safe drink increments
@@ -634,7 +634,7 @@ def test_drink_stamps_authoritative_outcome_counters():
     assert game.parser.parse_command("make boiled water", actor=char)
     assert game.parser.parse_command("drink pot of boiled water", actor=char)
     assert char.get_property("drank_unboiled") == 1  # unchanged
-    assert char.get_property("drank_boiled") == 1
+    assert char.get_property("drank_safe") == 1
 
 
 def test_recovery_requires_boiled_water_not_just_any_safe_drink():

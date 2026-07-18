@@ -191,11 +191,13 @@ class DrinkPenn(consume.Drink):
         else:
             # Authoritative outcome (#595): any other successful, non-fatal
             # drink is safe -- boiled water, or water that never required
-            # boiling. The harness reads this counter directly instead of
-            # parsing the event log.
+            # boiling -- hence "safe", not "boiled": this counter also stamps
+            # outside the boil world, where safe drinks needn't involve a
+            # stove. The harness reads it directly instead of parsing the
+            # event log.
             self.character.set_property(
-                "drank_boiled",
-                (self.character.get_property("drank_boiled") or 0) + 1,
+                "drank_safe",
+                (self.character.get_property("drank_safe") or 0) + 1,
             )
             if self.character.get_property("is_sick") and self.item.get_property(
                 "is_boiled"
