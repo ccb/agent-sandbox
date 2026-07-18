@@ -39,7 +39,7 @@ sync when you add, rename, remove, or re-wire a template.**
 | `narrate_ok.prompty` | `llm_parser.py` — `LlmParser._ok_system_instructions()` (used by `ok()`) | Narrator instructions for a command that succeeded. |
 | `narrate_fail.prompty` | `llm_parser.py` — `LlmParser._fail_system_instructions()` (used by `fail()`) | Narrator instructions for a command that failed. |
 | `narrate_npc.prompty` | `llm_parser.py` — `LlmParser._npc_system_instructions()` (used by `npc_ok()`) | Narrator instructions for describing an NPC's action. |
-| `match_intent.prompty` | `llm_parser.py` — `LlmParser.determine_intent()` (LLM fallback) | Match the player's input to the closest known action. |
+| `match_intent.prompty` | `llm_parser.py` — `LlmParser.determine_intent()` (LLM fallback) | Match the player's input to the closest known action; with `allow_none` (agent-driven actors, #621), also license the "none of these commands fit the input" decline option. |
 | `match_character.prompty` | `llm_parser.py` — `LlmParser._llm_get_character()` | Match a character named in a command. |
 | `match_item.prompty` | `llm_parser.py` — `LlmParser._llm_match_item()` | Match an item named in a command. |
 | `match_direction.prompty` | `llm_parser.py` — `LlmParser._llm_get_direction()` | Match a movement direction named in a command. |

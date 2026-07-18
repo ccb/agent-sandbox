@@ -364,3 +364,182 @@ def test_react_agent_proposes_and_wish_flows_to_every_sink():
     assert msg.actor == "troll"
     # And the loop treated it as a successful action (no reflection retry):
     assert cap.by_channel(Channel.AGENT_REFLECTION) == []
+
+
+# ----------------------------------------------------------------------
+# Section G: parse-gap capture (#621) — the automatic trigger
+# ----------------------------------------------------------------------
+
+
+def test_unparseable_agent_command_records_parse_gap():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert not game.parser.parse_command("zibble the wumpus", actor=troll)
+    [wish] = game.wishes
+    assert wish.trigger == TRIGGER_PARSE_GAP
+    assert wish.actor == "troll"
+    assert wish.desired == "zibble the wumpus"
+    assert wish.reason == ""
+    assert wish.location == "Field"
+    assert wish.raw_command == "zibble the wumpus"
+    # The failure feedback is unchanged — the ReAct retry loop keeps working:
+    assert game.parser.last_fail_message == "I'm not sure what you want to do."
+
+
+def test_unparseable_player_command_records_parse_gap_too():
+    game = tiny_game()
+    assert not game.parser.parse_command("frobnicate")
+    [wish] = game.wishes
+    assert wish.actor == "player"
+    assert wish.trigger == TRIGGER_PARSE_GAP
+
+
+def test_successful_and_precondition_failed_commands_are_not_parse_gaps():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    game.parser.parse_command("go north", actor=troll)  # parses fine
+    assert game.wishes == []
+    game.parser.parse_command("propose", actor=troll)  # verb matched, gate failed
+    assert game.wishes == []  # a precondition fail is NOT a parse gap
+
+
+# ----------------------------------------------------------------------
+# Section H: agent-only "none of these fit" in the LLM fallback (#621)
+# ----------------------------------------------------------------------
+
+
+def _numbered_options(messages):
+    """The numbered option lines LlmParser._pick_option put in the system
+    message, as (index, text) pairs (mirrors tests/test_agent_layer.py)."""
+    import re
+
+    lines = []
+    for line in messages[0]["content"].splitlines():
+        match = re.match(r"\s*(\d+)\.\s*(.*)", line)
+        if match:
+            lines.append((match.group(1), match.group(2)))
+    return lines
+
+
+def _force_mapping_llm(messages, max_tokens, temperature):
+    """Simulates the pre-#621 reality: an LLM told to say which command the
+    input 'most closely matches' always picks SOMETHING. It picks the decline
+    option iff one is offered, else the first real option (a force-map)."""
+    options = _numbered_options(messages)
+    for index, text in options:
+        if "none of these" in text.lower():
+            return index
+    return options[0][0] if options else None
+
+
+def _pick_option_containing(keyword):
+    """A responder that picks the first numbered option containing *keyword*."""
+
+    def responder(messages, max_tokens, temperature):
+        for index, text in _numbered_options(messages):
+            if keyword.lower() in text.lower():
+                return index
+        return None
+
+    return responder
+
+
+def _llm_game(responder):
+    from text_adventure_games.llm_client import MockLlmClient
+    from text_adventure_games.llm_parser import WebLlmParser
+
+    game = tiny_game()
+    game.set_parser(WebLlmParser(game, MockLlmClient(responder)))
+    return game
+
+
+def test_agent_actor_can_decline_and_the_gap_is_captured():
+    # Without the decline option, _force_mapping_llm maps "zibble the wumpus"
+    # onto the first real command and it EXECUTES (the gap becomes noise).
+    # With it, the agent-driven actor declines -> clean fail -> parse_gap wish.
+    game = _llm_game(_force_mapping_llm)
+    troll = game.characters["troll"]
+    troll.set_agent(object())  # the Character.set_agent seam marks it agent-driven
+    assert not game.parser.parse_command("zibble the wumpus", actor=troll)
+    [wish] = game.wishes
+    assert wish.trigger == TRIGGER_PARSE_GAP
+    assert wish.actor == "troll"
+
+
+def test_agent_actor_still_maps_real_paraphrases():
+    game = _llm_game(_pick_option_containing("Go in a direction"))
+    troll = game.characters["troll"]
+    troll.set_agent(object())
+    assert game.parser.determine_intent("vault the chasm", actor=troll) == "go"
+
+
+def test_human_path_has_no_decline_option():
+    captured = []
+
+    def responder(messages, max_tokens, temperature):
+        captured.append(messages[0]["content"])
+        return None
+
+    game = _llm_game(responder)
+    game.parser.determine_intent("zibble the wumpus", actor=None)
+    game.parser.determine_intent("zibble the wumpus", actor=game.player)
+    assert captured and all("none of these" not in c.lower() for c in captured)
+
+
+# ----------------------------------------------------------------------
+# Section I: the native experimental parser honors the same seam (#621)
+# ----------------------------------------------------------------------
+
+
+def test_native_llm_parser_allows_decline_for_agent_actors_only():
+    from text_adventure_games import parsing
+
+    game = tiny_game()
+    native = parsing.LlmParser.__new__(parsing.LlmParser)  # skip Anthropic init
+    parsing.Parser.__init__(native, game, echo_commands=False)
+    seen = []
+
+    def fake_pick_one(instructions, options, query, allow_none=True):
+        # Only record the INTENT pick: after it declines, the keyword-sniff
+        # fallback consults the (also overridden) argument matchers, which
+        # route through _pick_one too and would muddy the assertion.
+        if "Choose the action" in instructions:
+            seen.append(allow_none)
+        return None
+
+    native._pick_one = fake_pick_one
+    troll = game.characters["troll"]
+    native.determine_intent("zibble the wumpus", actor=troll)  # no agent
+    troll.set_agent(object())
+    native.determine_intent("zibble the wumpus", actor=troll)  # agent-driven
+    assert seen == [False, True]
+
+
+# ----------------------------------------------------------------------
+# Section J: end-to-end — a ReAct agent's unparseable action becomes a wish
+# ----------------------------------------------------------------------
+
+
+def test_react_agent_parse_gap_flows_to_the_sink():
+    from text_adventure_games.llm_client import MockLlmClient
+    from text_adventure_games.npc import make_react_behavior
+
+    game = tiny_game()
+    troll = game.characters["troll"]
+    streamed = []
+    game.on_wish = streamed.append
+    troll.set_behavior(
+        make_react_behavior(
+            MockLlmClient(
+                [
+                    "Reasoning: I will magic myself across\n"
+                    "Action: zibble the wumpus\n"
+                    "Duration: 5"
+                ]
+            )
+        )
+    )
+    troll.take_turn(game)
+    assert any(w.trigger == TRIGGER_PARSE_GAP for w in game.wishes)
+    assert troll.location.name == "Field"  # nothing executed
+    assert streamed  # the backend tap (#622) sees parse gaps too

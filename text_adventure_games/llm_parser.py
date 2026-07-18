@@ -32,6 +32,13 @@ from text_adventure_games.prompt_templates import render
 from text_adventure_games.reporting import Channel
 from text_adventure_games.things import Character, Item, Location
 
+# The decline option (#621): appended to the intent-matching option list for
+# agent-driven actors so a genuinely missing verb fails cleanly (and is
+# captured as a parse-gap wish) instead of force-mapping to the nearest
+# existing verb. Human players keep friendly best-effort matching.
+_NO_MATCH = object()
+_NONE_OF_THESE = "none of these commands fit the input"
+
 
 class LlmParser(parsing.Parser):
     """Parser with LLM-enhanced narration and intent detection (terminal mode).
@@ -202,12 +209,29 @@ class LlmParser(parsing.Parser):
 
     def determine_intent(self, command: str, actor=None):
         """Try keyword matching first; fall back to LLM if no match."""
-        intent = super().determine_intent(command, actor=actor)
+        agent_driven = getattr(actor, "agent", None) is not None
+        # The base intent sniff consults get_direction, whose LLM fallback
+        # (below) can force-map an unrelated command onto GO -- the very
+        # mis-mapping #621 removes. Agent-driven actors therefore sniff with
+        # keyword direction-matching only; humans keep the friendly guess.
+        self._intent_sniff_keyword_only = agent_driven
+        try:
+            intent = super().determine_intent(command, actor=actor)
+        finally:
+            self._intent_sniff_keyword_only = False
         if intent is not None:
             return intent
-        # LLM fallback
-        instructions = render("match_intent")
-        return self._pick_option(instructions, self.command_descriptions, command)
+        # Agent-driven actors may also decline the intent fallback itself: a
+        # missing verb should fail cleanly -- and be captured as a parse-gap
+        # wish -- rather than force-map onto the nearest existing verb.
+        options = dict(self.command_descriptions)
+        if agent_driven:
+            options[_NONE_OF_THESE] = _NO_MATCH
+        instructions = render("match_intent", allow_none=agent_driven)
+        result = self._pick_option(instructions, options, command)
+        if result is _NO_MATCH:
+            return None
+        return result
 
     # ------------------------------------------------------------------
     # Entity matching (LLM-enhanced)
@@ -289,6 +313,11 @@ class LlmParser(parsing.Parser):
         result = super().get_direction(command, location)
         if result is not None:
             return result
+        if getattr(self, "_intent_sniff_keyword_only", False):
+            # Intent sniffing for an agent-driven actor (#621, see
+            # determine_intent): don't let an LLM direction guess turn an
+            # unmatched command into a GO.
+            return None
         # LLM fallback
         return self._llm_get_direction(command, location)
 
