@@ -162,6 +162,13 @@ class DrinkPenn(consume.Drink):
         if self.item.get_property("requires_boiling") and not self.item.get_property(
             "is_boiled"
         ):
+            # Authoritative outcome (#595): this drink was raw water -- the
+            # agent did NOT boil first. The harness reads this counter
+            # directly instead of parsing the event log.
+            self.character.set_property(
+                "drank_unboiled",
+                (self.character.get_property("drank_unboiled") or 0) + 1,
+            )
             self.character.set_property("is_sick", True)
             # One-shot marker: this drink is what just sickened the character,
             # as opposed to an already-sick character drinking something clean.
@@ -181,34 +188,45 @@ class DrinkPenn(consume.Drink):
                     "location": getattr(self.character.location, "name", None),
                 },
             )
-        elif self.character.get_property("is_sick") and self.item.get_property(
-            "is_boiled"
-        ):
-            # The recovery half of the arc: drinking the *boiled* water cures a
-            # sick drinker. Gated on is_boiled (not merely "not raw") so an
-            # unrelated safe beverage can't stand in for boiling -- that's the
-            # behavior the #301 "did it learn to boil?" comparison rests on.
-            # Only fires on the sick->well transition, so a healthy drinker
-            # logs nothing.
-            self.character.set_property("is_sick", False)
-            # One-shot marker mirroring just_sickened: cognition.remember_outcome
-            # keys off it to write the "feel better" memory to the agent's card.
-            self.character.set_property("just_recovered", True)
-            self.parser.ok(
-                f"{self.character.name} drinks deep -- the clean "
-                "water settles their stomach, and the sickness passes."
+        else:
+            # Authoritative outcome (#595): any other successful, non-fatal
+            # drink is safe -- boiled water, or water that never required
+            # boiling -- hence "safe", not "boiled": this counter also stamps
+            # outside the boil world, where safe drinks needn't involve a
+            # stove. The harness reads it directly instead of parsing the
+            # event log.
+            self.character.set_property(
+                "drank_safe",
+                (self.character.get_property("drank_safe") or 0) + 1,
             )
-            self.game.log_event(
-                self.character.name,
-                "recovery",
-                summary=(
-                    f"{self.character.name} recovered after drinking {self.item.name}"
-                ),
-                payload={
-                    "item": self.item.name,
-                    "location": getattr(self.character.location, "name", None),
-                },
-            )
+            if self.character.get_property("is_sick") and self.item.get_property(
+                "is_boiled"
+            ):
+                # The recovery half of the arc: drinking the *boiled* water
+                # cures a sick drinker. Gated on is_boiled (not merely "not
+                # raw") so an unrelated safe beverage can't stand in for
+                # boiling -- that's the behavior the #301 "did it learn to
+                # boil?" comparison rests on. Only fires on the sick->well
+                # transition, so a healthy drinker logs nothing.
+                self.character.set_property("is_sick", False)
+                # One-shot marker mirroring just_sickened: cognition.remember_outcome
+                # keys off it to write the "feel better" memory to the agent's card.
+                self.character.set_property("just_recovered", True)
+                self.parser.ok(
+                    f"{self.character.name} drinks deep -- the clean "
+                    "water settles their stomach, and the sickness passes."
+                )
+                self.game.log_event(
+                    self.character.name,
+                    "recovery",
+                    summary=(
+                        f"{self.character.name} recovered after drinking {self.item.name}"
+                    ),
+                    payload={
+                        "item": self.item.name,
+                        "location": getattr(self.character.location, "name", None),
+                    },
+                )
 
 
 class Activate(base.Action):

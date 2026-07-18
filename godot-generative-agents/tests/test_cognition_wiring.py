@@ -271,6 +271,29 @@ def test_furniture_hint_survives_the_planner_schedule_commit():
     assert chars["Ada"].agent.schedule.furniture == "blackboard"
 
 
+def test_decide_observation_surfaces_thirst_and_sickness():
+    game, ada = _world()  # existing single-persona helper (mock brain)
+    ada.set_property("is_thirsty", True)
+    ada.set_property("is_sick", True)
+    observe_and_decide(game, ada, 0)
+    obs = ada.agent.last_observation  # see note
+    assert "You are thirsty." in obs
+    assert "violently ill" in obs
+
+
+def test_thirst_sickness_lines_do_not_shift_retrieval():
+    game, ada = _world()
+    observe_and_decide(game, ada, 0)
+    healthy = list(ada.agent.last_retrieved)
+    game2, ada2 = _world()
+    ada2.set_property("is_thirsty", True)
+    ada2.set_property("is_sick", True)
+    observe_and_decide(game2, ada2, 0)
+    # Same seeded memories surface regardless of the appended state lines,
+    # because they append AFTER retrieve ran on the plain base.
+    assert [r.text for r in ada2.agent.last_retrieved] == [r.text for r in healthy]
+
+
 def test_replace_schedule_carries_furniture_over_positionally():
     # Unit-level root cause: a Stop round-trip yields entries without
     # `furniture`; replace_schedule must restore it for an entry that lines up
@@ -291,3 +314,24 @@ def test_replace_schedule_carries_furniture_over_positionally():
         [{"place": "Library", "activity": "teaching", "emoji": "x", "steps": None}]
     )
     assert sched.furniture == "blackboard"
+
+
+def test_seed_memories_are_added_and_retrievable():
+    personas = _personas()  # -- existing helper (single persona Ada)
+    personas[0]["seed_memories"] = [
+        "Last time I drank the unboiled water here I got violently ill."
+    ]
+    game, chars = build_world(None, personas, LOCATIONS)  # -- existing LOCATIONS
+    attach_agents(chars, personas)
+    mem = chars["Ada"].agent.memory
+    texts = [r.text for r in mem.retrieve(query="unboiled water sick", turn=1)]
+    assert any("violently ill" in t for t in texts)
+
+
+def test_no_seed_memories_key_adds_nothing_extra():
+    personas = _personas()
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    records = chars["Ada"].agent.memory.records
+    # -- Only the t=0 plan memory (add_plan) -- no extra seeded observation.
+    assert all("violently ill" not in r.text for r in records)

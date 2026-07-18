@@ -576,6 +576,13 @@ def attach_agents(
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
         char.vision_r = spec.get("vision_r", vision_r)
+        # Opt-in thirst drive (#594): copy the per-persona rate/threshold onto the
+        # character as properties the step loop's accrue_thirst reads. Absent keys
+        # set nothing, so a normal persona never accrues -> byte-identical bake.
+        if spec.get("thirst_rate"):
+            char.set_property("thirst_rate", spec["thirst_rate"])
+        if spec.get("thirst_threshold"):
+            char.set_property("thirst_threshold", spec["thirst_threshold"])
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -598,6 +605,12 @@ def attach_agents(
         # (knowledge) when the upstream assets are available (issue #79). Done
         # before planning so a generative planner can reason over them.
         seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
+        # -- "the unboiled water made me sick" memory) so a live brain can retrieve
+        # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
+        # -- ranks highly. Absent key -> nothing added (byte-identical).
+        for text in spec.get("seed_memories") or []:
+            agent.memory.add_observation(text, turn=0, importance=5.0)
         if base_personas_dir:
             tree = seed.load_spatial_memory(base_personas_dir, char.name)
             seed.seed_spatial_knowledge(char, tree)
@@ -991,6 +1004,18 @@ def observe_and_decide(
     context = decide_context_block(agent, step, clock, stop_since)
     if context:
         base = f"{base}\n\n{context}"
+    # Perceivable needs/consequences (#594): surface thirst + sickness in the
+    # decide prompt so a live brain can reason about them. Appended AFTER the
+    # retrieve above (like the #580 block), so these lines never shift which
+    # memories surface -- the mock/scripted bake stays byte-identical. Absent
+    # flags add nothing.
+    state_lines = []
+    if char.get_property("is_thirsty"):
+        state_lines.append("You are thirsty.")
+    if char.get_property("is_sick"):
+        state_lines.append("You feel violently ill -- your stomach is cramping.")
+    if state_lines:
+        base = base + "\n\n" + "\n".join(state_lines)
     # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
     # brain can choose to travel toward one (offers stay in-scope only). Gated
     # on the real-brain tool path -- the SAME predicate that guards the tool
@@ -1001,6 +1026,7 @@ def observe_and_decide(
         if nearby:
             base = f"{base}\n\n{nearby}"
     observation = format_observation_with_memories(base, relevant)
+    agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
     # instead of filling the single free-text choose_action schema. A decline

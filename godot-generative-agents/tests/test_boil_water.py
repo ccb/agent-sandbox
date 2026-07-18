@@ -619,6 +619,24 @@ def test_full_arc_sicken_then_boil_then_recover():
     assert [e for e in game.events if e.action == "recovery"]
 
 
+def test_drink_stamps_authoritative_outcome_counters():
+    # DrinkPenn records the causal outcome as first-class state so the #595
+    # harness reads it directly (not from the event log).
+    game, char, union = _boil_world()
+    assert game.parser.parse_command("get pot of murky water", actor=char)
+    assert game.parser.parse_command("drink pot of murky water", actor=char)
+    assert char.get_property("drank_unboiled") == 1
+    assert not char.get_property("drank_safe")
+    assert char.get_property("is_sick")
+
+    # Boil, then drink the produced boiled pot: a later safe drink increments
+    # the safe counter, not the raw one.
+    assert game.parser.parse_command("make boiled water", actor=char)
+    assert game.parser.parse_command("drink pot of boiled water", actor=char)
+    assert char.get_property("drank_unboiled") == 1  # unchanged
+    assert char.get_property("drank_safe") == 1
+
+
 def test_recovery_requires_boiled_water_not_just_any_safe_drink():
     """Finding 4 (#590 review): the cure is gated on is_boiled, not "any
     successful drink while sick". A sick agent drinking an unrelated safe
