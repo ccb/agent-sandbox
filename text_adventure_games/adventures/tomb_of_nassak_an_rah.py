@@ -1260,6 +1260,11 @@ class PryCoffin(actions.Action):
             if horror.location is not loc:
                 self.game.relocate(horror, loc)
             coffin.set_property("pried", True)
+            # The alive pry deals its cards in order (CCB): the broken house
+            # with the tenant out (11-F), then what the tenant is wearing --
+            # the hollowed Autarch (13-C) -- as the prelude to the fight.
+            self.game.show_figure("sphere-f", force=True)
+            self.game.show_figure("autarch-c", force=True)
             self.parser.ok(
                 "You work the blade into the seam and the glass FRACTURES -- "
                 "cracks racing from the blade's edge until the coffin gives "
@@ -1272,6 +1277,8 @@ class PryCoffin(actions.Action):
             _sphere_erupted(self.game)
             return
         coffin.set_property("pried", True)
+        # The quiet pry (the Horror already ash) deals the vacant shatter.
+        self.game.show_figure("sphere-e", force=True)
         edge = self.edge
         self.player.discard_item(edge)
         anchor = (
@@ -2822,14 +2829,16 @@ def build_game(seed=None):
 
     coffin.make_container()
     coffin.set_property("is_closed", True)
-    # The card follows the vessel (CCB): tenanted (11-B) until the pry,
-    # shattered full-cut (11-E) while the shards drift, reforged (11-D) --
-    # the slow blue pulse -- once a mending makes it whole again.
+    # The card follows the vessel (CCB): tenanted (11-B) until the pry;
+    # shattered while the shards drift -- full-cut and vacant (11-E) if the
+    # Horror died first, full-cut with the tenant OUT among the pieces
+    # (11-F) if the pry came early; reforged (11-D) -- the slow blue pulse
+    # -- once a mending makes it whole again.
     def _coffin_card(g):
         if coffin.get_property("fixed"):
             return "sphere-d"
         if coffin.get_property("pried"):
-            return "sphere-e"
+            return "sphere-e" if sphere.get_property("horror_dead") else "sphere-f"
         return "sphere-b"
 
     coffin.set_property("figure", _coffin_card)
@@ -3004,13 +3013,14 @@ def build_game(seed=None):
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
     horror.set_property("no_catch", True)  # a coil has no hands
-    # Its card follows its state: the coil in the coffin, or the bust ablaze.
+    # Its card follows its state: out among the shards (a close look only
+    # happens after the pry), or the bust ablaze.
     horror.set_property(
         "figure",
         lambda g: (
             "autarch-e"
             if g.characters["fungal horror"].get_property("ablaze")
-            else "sphere-b"
+            else "sphere-f"
         ),
     )
     horror.set_property("vigor", 5)

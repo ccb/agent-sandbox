@@ -82,7 +82,7 @@ def test_stateful_figure_property_is_called_with_the_game():
     horror = g.characters["fungal horror"]
     fig = horror.get_property("figure")
     assert callable(fig)
-    assert fig(g) == "sphere-b"  # coiled in the coffin
+    assert fig(g) == "sphere-f"  # out among the shards
     horror.set_property("ablaze", 3)
     assert fig(g) == "autarch-e"  # the bust, burning
 
