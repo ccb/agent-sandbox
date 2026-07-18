@@ -258,3 +258,40 @@ def test_propose_appears_in_help():
     listing = "\n".join(cap.texts(Channel.NARRATION))
     assert "propose" in listing
     assert "Record a request for an action the game doesn't offer" in listing
+
+
+# ----------------------------------------------------------------------
+# Section E: the tool-calling path (#356 machinery, no changes needed)
+# ----------------------------------------------------------------------
+
+
+def test_tools_for_offers_propose_with_desired_and_reason_slots():
+    from text_adventure_games.npc import tools_for
+
+    game = tiny_game()
+    troll = game.characters["troll"]
+    tools = {t["name"]: t for t in tools_for(game.parser, actor=troll)}
+    assert "propose" in tools
+    props = tools["propose"]["parameters"]["properties"]
+    assert set(props) == {"reasoning", "desired", "reason"}
+    assert tools["propose"]["parameters"]["required"] == ["desired"]
+
+
+def test_tool_call_reassembles_the_because_grammar():
+    from text_adventure_games.npc import command_from_tool_call
+
+    game = tiny_game()
+    command = command_from_tool_call(
+        "propose",
+        {"desired": "fill the pot from the sink", "reason": "boiling needs water"},
+        game.parser,
+    )
+    assert command == "propose fill the pot from the sink because boiling needs water"
+
+
+def test_choose_action_enum_includes_propose():
+    from text_adventure_games.npc import build_choose_action_tool
+
+    game = tiny_game()
+    tool = build_choose_action_tool(list(game.parser.actions))
+    assert "propose" in tool["parameters"]["properties"]["action"]["enum"]
