@@ -45,6 +45,8 @@ import datetime
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
 
 from backend.api import run
 from backend.contract import SCHEMA_VERSION
@@ -149,6 +151,42 @@ def resolve_llm(world_llm, brain, model=None, max_cost=None):
             "(--brain mock runs offline, without keys)"
         )
     return llm
+
+
+def check_anthropic_key(urlopen=urllib.request.urlopen, timeout=10.0):
+    """Fail fast on a key the API rejects, before serving an all-day sim.
+
+    ``resolve_llm`` proves ``ANTHROPIC_API_KEY`` is *present*; this proves it
+    *works*, with one models-list request (free -- no tokens are billed). The
+    check matters because past boot a bad key is invisible by design: every
+    decide's API error degrades to an idle tick (the brain-outage contract),
+    so the whole cast just sits frozen on "waking up" at $0 spend with nothing
+    in the terminal. A 401/403 therefore exits with the fix; any *other*
+    failure (no network, a 5xx) warns and continues -- transient trouble is
+    the run's own retry path's job, not a boot blocker.
+    """
+    request = urllib.request.Request("https://api.anthropic.com/v1/models?limit=1")
+    request.add_header("x-api-key", os.environ["ANTHROPIC_API_KEY"])
+    request.add_header("anthropic-version", "2023-06-01")
+    try:
+        urlopen(request, timeout=timeout).close()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise SystemExit(
+                f"ANTHROPIC_API_KEY was rejected by the API (HTTP {e.code}): "
+                "the key is present but not valid. Fix the export in this "
+                "terminal (or the repo-root .env; template: .env.example), "
+                "then restart. Without this check, every model call would "
+                "fail silently and the cast would sit on 'waking up' forever."
+            )
+        print(
+            f"WARNING: could not verify ANTHROPIC_API_KEY (HTTP {e.code}); continuing."
+        )
+    except OSError as e:
+        # URLError (DNS, refused, timeout) is an OSError subclass.
+        print(f"WARNING: could not verify ANTHROPIC_API_KEY ({e}); continuing.")
+    else:
+        print("ANTHROPIC_API_KEY verified with the API (one free models-list request).")
 
 
 class LiveMeetingInjector:
@@ -1296,6 +1334,10 @@ def main() -> int:
     # steps it (a second build would waste the map load and fork patch state).
     world = build_penn_world()
     llm = resolve_llm(world.llm, args.brain, model=args.model, max_cost=args.max_cost)
+    if _is_paid(llm):
+        # The key exists (resolve_llm gates that); now prove the API accepts
+        # it, or an invalid key would serve a frozen, silent, $0 all-day sim.
+        check_anthropic_key()
     # A paying brain shouldn't spend before anyone is watching: under --brain
     # llm the loop boots paused and the viewer's Start button (POST /resume)
     # opens the day. The free mock keeps auto-starting. --[no-]start-paused
