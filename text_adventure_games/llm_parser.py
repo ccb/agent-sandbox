@@ -89,7 +89,11 @@ class LlmParser(parsing.Parser):
             max_tokens=self.llm.count_tokens("") + 6000,  # leave room
             token_counter=self.llm.count_tokens,
         )
-        messages.extend(context)
+        # History entries carry attribution keys (actor/location, issue #629)
+        # that chat-completion APIs reject -- forward only the chat keys.
+        messages.extend(
+            {"role": entry["role"], "content": entry["content"]} for entry in context
+        )
         if self.verbose:
             import json
 

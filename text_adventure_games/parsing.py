@@ -158,8 +158,20 @@ class Parser:
         """
         return wrap_text(text, width)
 
-    def add_command_to_history(self, command: str):
-        message = {"role": Role.USER, "content": command}
+    def add_command_to_history(self, command: str, actor=None):
+        """Record *command*, attributed to the character who issued it and the
+        location they stood in when they did (issue #629). Renderers of the
+        shared history use these to label and scope what other characters
+        perceive; with no *actor* (trigger-fired or scripted commands) both
+        fields stay None and the entry renders and filters as before. Consumers
+        that forward history to a chat-completion API must strip entries down
+        to role/content first (see LlmParser._narrate)."""
+        message = {
+            "role": Role.USER,
+            "content": command,
+            "actor": getattr(actor, "name", None),
+            "location": getattr(getattr(actor, "location", None), "name", None),
+        }
         self.command_history.append(message)
         # CCB - todo - manage command_history size
 
@@ -520,7 +532,7 @@ class Parser:
 
     def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
-        self.add_command_to_history(command)
+        self.add_command_to_history(command, actor=actor)
         action = self.parse_action(command, actor=actor)
         if not action:
             # The command didn't name an action. If the game has posed a
