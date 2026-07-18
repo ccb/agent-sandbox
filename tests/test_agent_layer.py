@@ -23,7 +23,11 @@ import pytest
 from text_adventure_games import games, things
 from text_adventure_games.llm_client import LlmClient, MockLlmClient
 from text_adventure_games.llm_parser import WebLlmParser
-from text_adventure_games.npc import make_hybrid_behavior, make_react_behavior
+from text_adventure_games.npc import (
+    build_npc_context,
+    make_hybrid_behavior,
+    make_react_behavior,
+)
 from text_adventure_games.webapp.web_parser import WebParser
 
 
@@ -449,6 +453,88 @@ def test_decide_and_route_falls_back_to_legacy_when_no_tool_call(tiny_game):
     troll.take_turn(tiny_game)
     assert troll.location is tiny_game.locations["Forest"]
     assert len(mock.calls) == 2  # chat fallback drove both attempts
+
+
+# ----------------------------------------------------------------------
+# Section: command-history attribution (issue #629)
+#
+# The shared command_history feeds every agent's "Recent events:" block, so
+# entries must say WHO issued each command (not a blanket "Player:") and an
+# agent must only see commands issued where it stands.
+# ----------------------------------------------------------------------
+
+
+def _add_servant(game):
+    """A second NPC in the Field, to observe what the troll does."""
+    servant = things.Character("servant", "a meek servant", "I serve.")
+    game.add_character(servant)
+    game.locations["Field"].add_character(servant)
+    return servant
+
+
+def test_history_attributes_commands_to_their_actor(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    servant = _add_servant(tiny_game)
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)
+
+    context = build_npc_context(servant, tiny_game)
+    assert "troll: go north" in context
+    assert "Player: go north" not in context
+
+
+def test_history_labels_own_commands_as_you(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    # "go west" has no exit, so the troll stays put (and failed commands are
+    # recorded too -- they were typed, so they were observable).
+    tiny_game.parser.parse_command("go west", actor=troll)
+
+    context = build_npc_context(troll, tiny_game)
+    assert "You: go west" in context
+    assert "troll: go west" not in context
+
+
+def test_history_is_scoped_to_the_observers_location(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    servant = _add_servant(tiny_game)
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)  # issued in Field
+    tiny_game.parser.parse_command("go west", actor=troll)  # issued in Forest
+
+    context = build_npc_context(servant, tiny_game)  # servant is in the Field
+    assert "troll: go north" in context  # happened here
+    assert "go west" not in context  # happened in the Forest
+
+
+def test_history_keeps_the_player_label_for_unattributed_entries(tiny_game):
+    tiny_game.set_parser(WebParser(tiny_game))
+    troll = tiny_game.characters["troll"]
+
+    # Legacy path (trigger-fired / scripted commands): no actor is passed, so
+    # the entry stays unattributed and renders with the old label, unfiltered.
+    tiny_game.parser.parse_command("wait")
+
+    context = build_npc_context(troll, tiny_game)
+    assert "Player: wait" in context
+
+
+def test_llm_narration_receives_only_chat_keys(tiny_game):
+    """Attribution keys ride on history entries; the chat-completion payload
+    sent to a provider must still be pure role/content messages."""
+    mock = MockLlmClient(default="NARRATED TEXT")
+    tiny_game.set_parser(WebLlmParser(tiny_game, mock))
+    troll = tiny_game.characters["troll"]
+
+    tiny_game.parser.parse_command("go north", actor=troll)
+
+    assert mock.calls  # the move narrated through the LLM
+    for call in mock.calls:
+        for message in call["messages"]:
+            assert set(message) == {"role", "content"}
 
 
 if __name__ == "__main__":
