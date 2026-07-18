@@ -289,7 +289,7 @@ class Action(GatedEffect):
     def has_affordance_in_scope(
         self,
         character: Character,
-        error_message: str = None,
+        error_message: str | None = None,
         describe_error: bool = True,
     ) -> bool:
         """Precondition form of :meth:`affordance_in_scope`: same check, but
