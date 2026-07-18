@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-c": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-c": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -2815,6 +2815,123 @@
         s.n.setAttribute("points", pts.join(" "));
       });
       drift.textContent = "(" + "~".repeat(3 + Math.round(Math.sin(t * .05) + 1)) + ")";
+      motes.forEach(m => {
+        const a = t * m.sp + m.ph;
+        m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
+        m.q.setAttribute("cy", 228 + Math.sin(a) * m.R * .85);
+      });
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 14) {
+        callLead.setAttribute("points", `${c.at[0]},${c.at[1]} 160,66 166,66`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "THE SHARDS REMEMBER THEIR PLACES.", T, 120, 1.6);
+    });
+  });
+
+  /* ---------------- 11-E: the burial sphere, shattered, full-cut ---------------- */
+  FIG._define("sphere-e", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 420, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "CHAMBER 6 / ZERO-G / VACANT";
+    const CDOTS = stipple(svg, "dots-spheree", PH, .9);
+    el(svg, "line", { x1: 296, y1: 44, x2: 296, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 344, y1: 44, x2: 344, y2: 102, stroke: PH, "stroke-width": 1.6 });
+    el(svg, "line", { x1: 290, y1: 96, x2: 350, y2: 96, stroke: PH_DIM });
+    el(svg, "circle", { cx: 320, cy: 228, r: 132, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 2 });
+    el(svg, "circle", { cx: 320, cy: 228, r: 122, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "5 4" });
+    for (let a = 0; a < 24; a++) {
+      const th = a * Math.PI / 12;
+      el(svg, "line", { x1: 320 + Math.cos(th) * 114, y1: 228 + Math.sin(th) * 114,
+        x2: 320 + Math.cos(th) * 108, y2: 228 + Math.sin(th) * 108, stroke: PH_DIM });
+    }
+    el(svg, "ellipse", { cx: 320, cy: 356, rx: 26, ry: 7, fill: BG,
+      stroke: PH, "stroke-width": 1.4 });
+    const six = label(svg, 424, 300, 64, PH_DIM);
+    six.setAttribute("opacity", .3); six.textContent = "6";
+    // the ghost of the oval: where the pieces agree, once a cycle
+    el(svg, "ellipse", { cx: 320, cy: 232, rx: 30, ry: 52, fill: "none",
+      stroke: PH_DIM, "stroke-dasharray": "2 5", opacity: .5 });
+    // FULL-CUT SHARDS: six closed pieces of the oval. Each is its arc of the
+    // rim plus two jagged crack-edges; every crack is SHARED with the next
+    // piece (both sampled from the same jag), so at zero drift the six seat
+    // into the complete filled oval, cracks agreeing to the pixel.
+    const IMPACT = [312, 220];                       // the pry landed off-heart
+    const crackPts = (j) => {                        // impact -> rim, jagged
+      const jj = j % 6;
+      const bx = 320 + Math.cos(jj * Math.PI / 3) * 30,
+            by = 232 + Math.sin(jj * Math.PI / 3) * 52;
+      const dx = bx - IMPACT[0], dy = by - IMPACT[1], L = Math.hypot(dx, dy);
+      const pts = [];
+      for (let k = 1; k < 4; k++) {
+        const f = k / 4, jog = Math.sin(jj * 2.7 + k * 3.1) * 4.5;
+        pts.push([IMPACT[0] + dx * f - dy / L * jog,
+                  IMPACT[1] + dy * f + dx / L * jog]);
+      }
+      return pts;
+    };
+    const SHARDS = Array.from({ length: 6 }, (_, i) => {
+      const base = [IMPACT.slice()];
+      base.push(...crackPts(i));                     // out along crack i
+      const arc0 = base.length;
+      for (let k = 0; k <= 6; k++) {                 // the rim, arc i..i+1
+        const a = (i + k / 6) * Math.PI / 3;
+        base.push([320 + Math.cos(a) * 30, 232 + Math.sin(a) * 52]);
+      }
+      const arc1 = base.length;
+      base.push(...crackPts(i + 1).reverse());       // home along crack i+1
+      const cxm = base.reduce((s, p) => s + p[0], 0) / base.length;
+      const cym = base.reduce((s, p) => s + p[1], 0) / base.length;
+      return {
+        base, arc0, arc1, cxm, cym,
+        mid: (i + .5) * Math.PI / 3,
+        body: el(svg, "polygon", { fill: CDOTS, stroke: PH,
+          "stroke-width": .9, "stroke-opacity": .7 }),
+        rim: el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT,
+          "stroke-width": 1.8 }),
+      };
+    });
+    const motes = Array.from({ length: 8 }, (_, i) =>
+      ({ q: el(svg, "circle", { r: i % 3 ? 1 : 1.6, fill: PH_DIM }),
+         R: 44 + (i * 29) % 68, ph: i * .8, sp: .04 + (i % 3) * .015 }));
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 16, 62, 10, PH);
+    const CALLS = [
+      { at: [320, 232], text: "TENANT: NOT AT HOME" },
+      { at: [352, 198], text: "SHARDS: SIX, FULL-CUT, KEEPING THEIR CURVE" },
+      { at: [312, 220], text: "CRACKS: SIX, ALL TELLING THE SAME STORY" },
+      { at: [204, 310], text: "PRAYERS: ONE OF THEM IS A MENDING" },
+    ];
+    label(svg, 24, 396, 10, PH_DIM).textContent = "THE DRIFT";
+    const drift = label(svg, 104, 396, 10, PH_DIM);
+    const foot = label(svg, 380, 396, 10, FUNGUS);
+    const doWipe = wipe(svg, 640, 420, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "BURIAL SPHERE OF NASSAK AN-RAH", T, 4, 1.4);
+      // the envelope: seated whole through the wipe, apart by mid-cycle,
+      // and home -- held home -- while the footer makes its claim.
+      const ramp = (x) => x <= 0 ? 0 : x >= 1 ? 1 : (1 - Math.cos(Math.PI * x)) / 2;
+      const e = ramp((T - 26) / 34) * (1 - ramp((T - 110) / 40));
+      SHARDS.forEach((s, i) => {
+        const d = e * (20 + 7 * Math.sin(t * .05 + i * 1.9));
+        const spin = e * Math.sin(t * .03 + i * 2.4) * .5;
+        const ox = Math.cos(s.mid) * d * .9, oy = Math.sin(s.mid) * d;
+        const cs = Math.cos(spin), sn = Math.sin(spin);
+        const put = s.base.map(([px, py]) => {
+          const rx0 = px - s.cxm, ry0 = py - s.cym;
+          return ((s.cxm + rx0 * cs - ry0 * sn + ox).toFixed(1) + "," +
+                  (s.cym + rx0 * sn + ry0 * cs + oy).toFixed(1));
+        });
+        s.body.setAttribute("points", put.join(" "));
+        s.rim.setAttribute("points", put.slice(s.arc0, s.arc1).join(" "));
+      });
+      drift.textContent = "(" + "~".repeat(1 + Math.round(e * 4)) + ")";
       motes.forEach(m => {
         const a = t * m.sp + m.ph;
         m.q.setAttribute("cx", 320 + Math.cos(a) * m.R);
