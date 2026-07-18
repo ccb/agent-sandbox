@@ -23,6 +23,7 @@ Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_wish_feed.py -v
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -35,13 +36,15 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend import run_simulation  # noqa: E402
+from backend.build_world import _normalize_personas, build_world  # noqa: E402
+from backend.run_simulation import simulate  # noqa: E402
 from backend.run_store import RunStore  # noqa: E402
 from text_adventure_games.wishes import (  # noqa: E402
     ActionWish,
     TRIGGER_PARSE_GAP,
     TRIGGER_PROPOSED,
 )
-from penn_world import build_penn_world  # noqa: E402
+from penn_world import PENN_EXTRA_ACTIONS, build_penn_world  # noqa: E402
 from serve_penn import PennStepper  # noqa: E402
 
 
@@ -196,3 +199,94 @@ def test_penn_stepper_reset_restarts_the_persist_cursor(tmp_path):
     stepper.game.log_wish(_wish(desired="after reset"))
     stepper.tick()
     assert [w["desired"] for w in store.read_wishes(new_run_id)] == ["after reset"]
+
+
+# --- the bake carries a populated "wishes" array (#622 acceptance) ---------
+# Mirrors test_event_records.py's _testa_sip_world/sickness-arc split exactly:
+# content is pinned at the simulate() seam (a custom persona whose schedule
+# scripts a real command, #300's `commands` field -- ScheduleMockClient plays
+# it back verbatim, no LLM involved), and the real CLI bake is checked for
+# presence/shape only (test_penn_replay_bake_writes_events_key's own words).
+
+
+def _testa_wish_world():
+    """A one-persona world whose first stop scripts a `propose` -- the #622
+    acceptance scenario ("a live run with a scripted propose") at the
+    simulate()/bake seam."""
+    pw = build_penn_world()
+    persona = {
+        "name": "Testa Wish",
+        "home": "Houston Hall",
+        "persona": "I am Testa Wish, a hopeful test persona.",
+        "emoji": "\U0001f31f",
+        "start_tile": [25, 109],
+        "schedule": [
+            {
+                "place": "Houston Hall",
+                "activity": "wishing for a better campus",
+                "emoji": "\U0001f31f",
+                "steps": 3,
+                "commands": [
+                    "propose a working elevator because stairs are exhausting"
+                ],
+            }
+        ],
+    }
+    personas = _normalize_personas([persona])
+
+    def build_fn(wm):
+        return build_world(wm, personas, pw.locations, extra_actions=PENN_EXTRA_ACTIONS)
+
+    return pw, personas, build_fn
+
+
+def test_simulate_out_wishes_carries_the_scripted_propose():
+    """#622 acceptance, bake source: the run's ActionWish log comes back
+    through out_wishes with the scripted propose's content intact."""
+    pw, personas, build_fn = _testa_wish_world()
+    wishes: list = []
+    simulate(
+        pw.world_map,
+        10,
+        personas=personas,
+        build_world_fn=build_fn,
+        out_wishes=wishes,
+    )
+    assert wishes, f"no wish record in {wishes}"
+    record = wishes[0]
+    assert record["actor"] == "Testa Wish"
+    assert record["desired"] == "a working elevator"
+    assert record["reason"] == "stairs are exhausting"
+    assert record["trigger"] == "proposed"
+    assert record["location"] == "Houston Hall"
+
+
+def test_penn_replay_bake_writes_wishes_key(tmp_path, monkeypatch):
+    """#622 acceptance, bake artifact: the replay JSON carries the run's
+    wish log as a top-level `wishes` array (empty is fine for the default
+    cast, which never wishes -- presence and shape are the contract; the
+    scripted-propose *content* is pinned at the simulate() seam above,
+    mirroring test_penn_replay_bake_writes_events_key)."""
+    from backend.penn import generate_penn_replay
+
+    out = tmp_path / "penn_replay.json"
+    monkeypatch.setattr(
+        sys, "argv", ["generate_penn_replay", "--steps", "8", "--out", str(out)]
+    )
+    assert generate_penn_replay.main() == 0
+    replay = json.loads(out.read_text())
+    assert isinstance(replay["wishes"], list)
+    assert replay["wishes"] == []  # the default cast is the mock-brain vacuity case
+    for record in replay["wishes"]:
+        assert {
+            "actor",
+            "turn",
+            "location",
+            "desired",
+            "reason",
+            "trigger",
+            "goals",
+            "scope",
+            "raw_command",
+            "meta",
+        } <= set(record)
