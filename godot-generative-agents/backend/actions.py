@@ -426,3 +426,91 @@ class TalkTo(base.Action):
             f"{self.character.name} strikes up a conversation with "
             f"{self.target.name}."
         )
+
+
+DEFAULT_STUDY_MINUTES = 30
+
+
+class Study(base.Action):
+    """Study in place (#615) -- the first arena-tier affordance verb (#617).
+
+    Offered (and place-gated, via #612's shared declaration) only where
+    something in scope carries the ``studyable`` arena tag #613 authored on
+    the Van Pelt reading rooms. Effects mirror ``perform`` (an activity label
+    the exporter renders) plus the visible state that distinguishes a study
+    from a free-text perform: ``studied_minutes`` accumulates on the
+    character. The ARGUMENTS_SCHEMA opts into the #581 pacing slots, so a
+    live brain settles here for its chosen duration."""
+
+    ACTION_NAME = "study"
+    ACTION_DESCRIPTION = "Study here (only somewhere with a study space)"
+    REQUIRED_AFFORDANCES = ("studyable",)
+    ARGUMENTS_SCHEMA = {
+        "topic": {
+            "type": "string",
+            "description": "what to study, as a short phrase, e.g. "
+            "'thermodynamics problem sets' (optional)",
+            "required": False,
+        },
+        # Brain-authoritative pacing (#581), same contract as `perform`:
+        # popped off the tool call before reassembly, never reach the parser.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend studying "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while studying "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.command = command
+        self.character = self.acting_character(command, hint="studier")
+        parts = command.split(" ", 1)
+        self.topic = parts[1].strip() if len(parts) > 1 else ""
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is studying."):
+            return False
+        # The #612 place-check: same fact the toolset builder read to offer
+        # this verb, so offered <=> this passes (the #617 invariant).
+        if not self.has_affordance_in_scope(
+            self.character,
+            error_message="There is nothing to study here -- find a study space.",
+        ):
+            return False
+        return True
+
+    def apply_effects(self):
+        activity = f"studying {self.topic}" if self.topic else "studying"
+        self.character.set_property("activity", activity)
+        # The brain's duration pick for THIS decision (stashed by
+        # cognition._take_pacing_args before the command was routed), or a
+        # flat default when absent (the mock path, or a brain that gave none).
+        # ponytail: unclamped -- the settle clamps to cog.duration_*_minutes,
+        # so the ledger can differ from wall-time by the clamp width; wire the
+        # clamped value through if the #584 eval starts reading this.
+        minutes = getattr(
+            getattr(self.character, "agent", None), "last_duration_minutes", None
+        )
+        if (
+            not isinstance(minutes, (int, float))
+            or isinstance(minutes, bool)
+            or minutes <= 0
+        ):
+            minutes = DEFAULT_STUDY_MINUTES
+        minutes = int(minutes)
+        prev = self.character.get_property("studied_minutes")
+        self.character.set_property(
+            "studied_minutes", (int(prev) if prev else 0) + minutes
+        )
+        # One-shot marker (the just_sickened pattern): the delta this study
+        # added, consumed by cognition.remember_outcome for the memory line.
+        self.character.set_property("just_studied_minutes", minutes)
+        return self.parser.ok(f"{self.character.name} is {activity}.")
