@@ -118,6 +118,15 @@ class CognitionConfig:
     # Min steps between deviation-driven plan revisions for one agent, so a
     # wandering brain can't storm its planner (each revise is a real LLM call).
     deviation_cooldown_steps: int = 30
+    # React-or-continue (issue #370): perception-driven interruption while
+    # mid-activity. Off by default -- byte-identical. When on, a walking agent
+    # that newly comes within mutual sight of another resident may spend one
+    # bounded `react` LLM call (continue / greet / replan), rule-gated and
+    # rate-capped by the two knobs below; either way the encounter itself is
+    # written into memory (the cheap perceive pass).
+    react_enabled: bool = False
+    react_cooldown_steps: int = 90  # min steps between one agent's react consults
+    react_hour_cap: int = 4  # hard cap on one agent's react consults per sim hour
 
 
 @dataclass
