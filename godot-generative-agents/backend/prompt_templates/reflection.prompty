@@ -13,7 +13,7 @@ description: >
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", "check_out_book", "read", or anything else.
   person:
     type: string
     description: Who was talked to (used when verb == "talk_to").
@@ -25,7 +25,10 @@ inputs:
     description: What the persona is doing (used when verb == "perform").
   item:
     type: string
-    description: What was drunk (verb == "drink") or eaten (verb == "eat").
+    description: What was drunk (verb == "drink"), eaten (verb == "eat"), checked out, or read (verb == "check_out_book" or "read").
+  content:
+    type: string
+    description: The book's read_text, quoted in the read memory (verb == "read"; empty when the thing carried no text).
   sick:
     type: boolean
     description: Whether this drink just sickened the persona (verb == "drink").
@@ -74,6 +77,12 @@ I studied {{ topic }} for {{ minutes }} minutes.
 I studied for {{ minutes }} minutes.
 {%- elif verb == "eat" -%}
 I ate the {{ item }}.
+{%- elif verb == "check_out_book" -%}
+I checked out {{ item }} from the library.
+{%- elif verb == "read" and content -%}
+I read {{ item }}. It said: "{{ content }}"
+{%- elif verb == "read" -%}
+I read {{ item }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}

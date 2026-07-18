@@ -12,12 +12,18 @@ Fully offline. Run from the repo root::
 
 from backend.actions import CheckOutBook, ReadPenn
 from backend.build_world import _normalize_personas, build_world
-from backend.cognition import action_tools_for, attach_agents
+from backend.cognition import (
+    action_tools_for,
+    attach_agents,
+    memory_stream_for_persona,
+    remember_outcome,
+)
 from backend.penn.penn_world import (
     PENN_ACTION_VERBS,
     PENN_EXTRA_ACTIONS,
     build_penn_world,
 )
+from backend.prompt_templates import render
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -256,3 +262,58 @@ def test_book_verbs_ride_the_penn_registries():
     assert ReadPenn in PENN_EXTRA_ACTIONS
     assert "check_out_book" in PENN_ACTION_VERBS
     assert "read" in PENN_ACTION_VERBS
+
+
+# -- Task 4: memory both ends of the loop -----------------------------------
+
+
+def test_render_pins_the_book_loop_memories():
+    # Exact-pinned per the prompt_templates README escaping-guard convention.
+    assert (
+        render("reflection", verb="check_out_book", item="star atlas")
+        == "I checked out star atlas from the library."
+    )
+    assert (
+        render(
+            "reflection",
+            verb="read",
+            item="star atlas",
+            content="A chart of the winter sky.",
+        )
+        == 'I read star atlas. It said: "A chart of the winter sky."'
+    )
+    # A read of something with no read_text still gets a (plainer) memory.
+    assert (
+        render("reflection", verb="read", item="star atlas", content="")
+        == "I read star atlas."
+    )
+
+
+def test_checkout_is_remembered():
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+    assert game.parser.parse_command("check_out_book field guide", actor=char)
+
+    remember_outcome(char, "check_out_book field guide", 3)
+    entries = memory_stream_for_persona(char.agent)
+    assert entries[-1]["text"] == "I checked out field guide from the library."
+    assert entries[-1]["importance"] == 3.0
+
+
+def test_read_memory_carries_the_content():
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+    assert game.parser.parse_command("check_out_book field guide", actor=char)
+    assert game.parser.parse_command("read field guide", actor=char)
+
+    remember_outcome(char, "read field guide", 4)
+    entries = memory_stream_for_persona(char.agent)
+    assert entries[-1]["text"] == (
+        "I read field guide. It said: "
+        '"Mushrooms with white gills are often poisonous."'
+    )
+    assert entries[-1]["importance"] == 3.0
