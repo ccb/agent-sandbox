@@ -13,6 +13,11 @@ Fully offline. Run from the repo root::
 from backend.actions import CheckOutBook, ReadPenn
 from backend.build_world import _normalize_personas, build_world
 from backend.cognition import action_tools_for, attach_agents
+from backend.penn.penn_world import (
+    PENN_ACTION_VERBS,
+    PENN_EXTRA_ACTIONS,
+    build_penn_world,
+)
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -225,3 +230,29 @@ def test_read_follows_the_checked_out_book():
     assert "read" in _tool_names(game, char)
     assert "check_out_book" not in _tool_names(game, char)
     assert game.parser.parse_command("read field guide", actor=char)
+
+
+# -- Task 3: the Van Pelt furnishing ----------------------------------------
+
+
+def test_van_pelt_stacks_are_furnished():
+    pw = build_penn_world()
+    game, _ = pw.build_world_fn(pw.world_map)
+    stacks = game.locations["Van Pelt — Book Stacks"]
+
+    assert stacks.items["book shelf"].get_property("book_shelf")
+    assert not stacks.items["book shelf"].get_property(Property.GETTABLE)
+    for title in ("campus history book", "star atlas"):
+        book = stacks.items[title]
+        assert book.get_property("library_book")
+        assert book.get_property(Property.READABLE)
+        assert book.get_property(Property.READ_TEXT)
+        # Checkout is the only path into a pocket -- a plain get must refuse.
+        assert not book.get_property(Property.GETTABLE)
+
+
+def test_book_verbs_ride_the_penn_registries():
+    assert CheckOutBook in PENN_EXTRA_ACTIONS
+    assert ReadPenn in PENN_EXTRA_ACTIONS
+    assert "check_out_book" in PENN_ACTION_VERBS
+    assert "read" in PENN_ACTION_VERBS
