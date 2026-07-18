@@ -153,6 +153,15 @@ class Game:
         # learn_recipe(); recipes with the default known=True ignore this set.
         self.learned_recipes = set()
 
+        # Action wishes (#620): structured "an actor wanted an action the game
+        # doesn't have" records (see wishes.py) — the demand side of the
+        # self-coding loop (#299). Runtime-only, like recipes.
+        self.wishes = []
+        # Optional streaming sink, called with each ActionWish as it is logged
+        # (the UsageLedger._on_record pattern): how an out-of-process consumer
+        # taps the wish stream without a parallel data path.
+        self.on_wish = None
+
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
         # for an otherwise-unrecognized command. Transient conversational state,
@@ -371,6 +380,16 @@ class Game:
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def log_wish(self, wish):
+        """Record an :class:`~text_adventure_games.wishes.ActionWish` (#620):
+        append to ``wishes``, emit the one-line agent trace (with the full
+        record in ``meta``), and fire the optional ``on_wish`` callback."""
+        self.wishes.append(wish)
+        text = wish.desired + (f" — because {wish.reason}" if wish.reason else "")
+        self.parser.agent_wish(wish.actor, text, wish=wish.to_primitive())
+        if self.on_wish is not None:
+            self.on_wish(wish)
 
     def emit_sound(self, location, radius, description):
         """Emit an ambient noise at *location* -- a sound that no actor's command
