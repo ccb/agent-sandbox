@@ -703,7 +703,10 @@ class Game:
                     trigger.fired = True
                     fired_this_round.add(trigger)
                     self.log_event(
-                        EventKind.TRIGGER, trigger.name, f"{trigger.name} fired"
+                        None,
+                        EventKind.TRIGGER,
+                        f"{trigger.name} fired",
+                        payload={"trigger": trigger.name},
                     )
                     newly_fired = True
             if not newly_fired:
