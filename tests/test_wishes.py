@@ -162,3 +162,99 @@ def test_log_wish_trace_omits_empty_reason():
     game.log_wish(_wish(reason=""))
     [msg] = cap.by_channel(Channel.AGENT_WISH)
     assert msg.text == "a ladder"
+
+
+# ----------------------------------------------------------------------
+# Section D: the propose verb
+# ----------------------------------------------------------------------
+
+
+def test_propose_records_a_fully_populated_wish():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    troll.add_goal("cross the wall", things.characters.GoalType.SHORT)
+    ok = game.parser.parse_command(
+        "propose build a ladder because the wall is too high", actor=troll
+    )
+    assert ok is True
+    [wish] = game.wishes
+    assert wish.actor == "troll"
+    assert wish.trigger == TRIGGER_PROPOSED
+    assert wish.desired == "build a ladder"
+    assert wish.reason == "the wall is too high"
+    assert wish.location == "Field"
+    assert wish.turn == game.turn
+    assert "cross the wall" in wish.goals
+    assert "player" in wish.scope  # co-located characters are in the snapshot
+    assert wish.raw_command == "propose build a ladder because the wall is too high"
+
+
+def test_propose_without_because_records_empty_reason():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert game.parser.parse_command("propose build a ladder", actor=troll)
+    [wish] = game.wishes
+    assert wish.desired == "build a ladder"
+    assert wish.reason == ""
+
+
+def test_bare_propose_fails_and_teaches_the_format():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert not game.parser.parse_command("propose", actor=troll)
+    assert game.wishes == []
+    assert (
+        "propose <the action you need> because <why>" in game.parser.last_fail_message
+    )
+
+
+def test_propose_payload_with_direction_words_is_not_hijacked_to_go():
+    # Regression guard for the determine_intent ordering: the direction check
+    # (parsing.py, "elif self.get_direction(command, ...)") runs BEFORE the
+    # command-initial-verb match, so without the early propose branch this
+    # command would route to GO and move the troll north.
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert game.parser.parse_command(
+        "propose climb up and go north over the wall because i am stuck", actor=troll
+    )
+    assert troll.location.name == "Field"  # did NOT move
+    [wish] = game.wishes
+    assert wish.desired == "climb up and go north over the wall"
+
+
+def test_propose_succeeds_for_the_player_too():
+    game = tiny_game()
+    assert game.parser.parse_command("propose whistle for a dog because i am lonely")
+    [wish] = game.wishes
+    assert wish.actor == "player"
+
+
+def test_propose_lands_in_the_game_event_log():
+    # parse_command logs every gate-passing action as a GameEvent — a wish is
+    # an ordinary action, so recorded runs see it with zero extra plumbing.
+    game = tiny_game()
+    troll = game.characters["troll"]
+    game.parser.parse_command("propose build a ladder because reasons", actor=troll)
+    event = game.events[-1]
+    assert event.action == "propose"
+    assert event.actor == "troll"
+
+
+def test_propose_spends_the_turn_like_any_action():
+    # No FREE_ACTION flag: articulating the gap costs the turn — the wish is
+    # itself measurable behavior (spec decision 2).
+    from text_adventure_games.actions.wish import Propose
+
+    assert not getattr(Propose, "FREE_ACTION", False)
+    assert Propose.DURATION is None
+
+
+def test_propose_appears_in_help():
+    game = tiny_game()
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    game.parser.parse_command("help")
+    listing = "\n".join(cap.texts(Channel.NARRATION))
+    assert "propose" in listing
+    assert "Record a request for an action the game doesn't offer" in listing
