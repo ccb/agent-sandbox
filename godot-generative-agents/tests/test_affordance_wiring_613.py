@@ -18,11 +18,16 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.build_world import build_world  # noqa: E402
 from backend.cognition import (  # noqa: E402
+    ARENA_AFFORDANCE_TAGS,
     action_tools_for,
     attach_agents,
+    nearby_affordances_line,
+    observe_and_decide,
 )
+from backend.prompt_templates import render  # noqa: E402
 from penn_world import build_penn_world  # noqa: E402
 from text_adventure_games.enums import Property  # noqa: E402
+from text_adventure_games.llm_client import MockLlmClient, ToolCallResult  # noqa: E402
 from text_adventure_games.things import Item, Location  # noqa: E402
 
 
@@ -128,3 +133,108 @@ def test_penn_arena_tags_are_authored():
     # An untagged arena stays untagged -- tags are authored, not blanket.
     assert not game.locations["College Hall"].get_property("studyable")
     assert not game.locations["College Hall"].get_property("dining")
+
+
+TRAVEL = ToolCallResult(
+    text=None,
+    tool_calls=[
+        {
+            "id": "call_1",
+            "name": "travel",
+            "arguments": {"reasoning": "go study", "destination": "Library"},
+        }
+    ],
+)
+
+
+class _FakeGame:
+    """Just enough game for the helper: a fixed perceivable set."""
+
+    def __init__(self, perceivable):
+        self._perceivable = perceivable
+
+    def perceivable_locations(self, _char):
+        return self._perceivable
+
+
+class _CharAt:
+    def __init__(self, location):
+        self.location = location
+
+
+def _tagged(name, tag):
+    loc = Location(name, name)
+    loc.set_property(tag, True)
+    return loc
+
+
+def test_nearby_line_lists_tagged_arenas_and_skips_here_and_untagged():
+    here = Location("The Green", "the lawn")
+    reading = _tagged("Van Pelt — Moelis Reading Room", "studyable")
+    houston = _tagged("Houston Hall", "dining")
+    plain = Location("College Hall", "admin")  # no tag -> skipped
+    game = _FakeGame([here, plain, houston, reading])  # unsorted on purpose
+    char = _CharAt(here)
+
+    line = nearby_affordances_line(game, char)
+    # Sorted by name; `here` and the untagged arena are absent.
+    assert line == (
+        "Nearby, worth traveling to: "
+        "Houston Hall (dining); Van Pelt — Moelis Reading Room (studyable)."
+    )
+
+
+def test_nearby_line_is_empty_when_nothing_tagged_is_in_sight():
+    here = Location("The Green", "the lawn")
+    game = _FakeGame([here, Location("College Hall", "admin")])
+    assert nearby_affordances_line(game, _CharAt(here)) == ""
+
+
+def test_studyable_and_dining_are_known_arena_tags():
+    assert "studyable" in ARENA_AFFORDANCE_TAGS
+    assert "dining" in ARENA_AFFORDANCE_TAGS
+
+
+def test_decide_prompt_carries_the_nearby_line_under_a_real_brain():
+    brain = MockLlmClient(tool_calls_responses=[TRAVEL])
+    game, ada = _world_with_offer(None)
+    ada.agent.llm_client = brain  # make _use_action_tools(agent) true
+
+    # Ada stands on The Green (untagged); the Library nearby is studyable.
+    game.locations["Library"].set_property("studyable", True)
+    game.perceivable_locations = lambda char: [
+        game.locations["The Green"],
+        game.locations["Library"],
+    ]
+
+    observe_and_decide(game, ada, 0)
+
+    user = brain.tool_calls_log[0]["messages"][-1]["content"]
+    assert "Nearby, worth traveling to: Library (studyable)." in user
+
+
+def test_mock_never_sees_the_nearby_line():
+    # Default mock brain: _use_action_tools is false -> no line, bake unchanged.
+    game, ada = _world_with_offer(None)  # no llm_client -> mock == schedule brain
+    game.locations["Library"].set_property("studyable", True)
+    game.perceivable_locations = lambda char: [
+        game.locations["The Green"],
+        game.locations["Library"],
+    ]
+
+    base = game.describe_for(ada)
+    observe_and_decide(game, ada, 0)
+    # The mock decides off describe_for's first line; the nearby line is never
+    # added on its path. Assert the helper's phrase is absent from the base the
+    # mock reads (the deterministic guard the byte-identical bake relies on).
+    assert "Nearby, worth traveling to" not in base
+
+
+def test_render_pins_the_nearby_line():
+    assert render(
+        "nearby_affordances",
+        arenas="Van Pelt — Moelis Reading Room (studyable); Houston Hall (dining)",
+    ) == (
+        "Nearby, worth traveling to: "
+        "Van Pelt — Moelis Reading Room (studyable); Houston Hall (dining)."
+    )

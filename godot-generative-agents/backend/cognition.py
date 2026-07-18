@@ -851,6 +851,43 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     return command or None
 
 
+# Arena affordance tags surfaced in the nearby-affordances line (#613): the
+# tags a visible-but-distant arena carries that a verb will key on -- `studyable`
+# (the study verb, #615) and `dining` (Houston Hall meals, #615). An explicit
+# tuple, NOT "every property on the location", so the line stays a curated hint
+# rather than dumping the arena's whole bool bag. Later slices add their tag
+# names here as they land.
+ARENA_AFFORDANCE_TAGS = ("studyable", "dining")
+
+
+def nearby_affordances_line(game, char) -> str:
+    """Name visible-but-distant arenas and the affordance tags they carry
+    (issue #613, spec decision 2) so a live brain can choose to *travel* toward
+    one -- the perception half of desire -> travel -> act.
+
+    Scans the character's perceivable arenas (``game.perceivable_locations``,
+    the ``vision_r`` seam of #82), drops the arena it already stands in, and
+    turns each remaining arena that carries any tag in
+    :data:`ARENA_AFFORDANCE_TAGS` into a ``"name (tags)"`` fragment (sorted by
+    name for a stable line). Returns ``""`` when nothing nearby is tagged, so no
+    empty line is ever appended. This NEVER widens the toolset -- offers stay
+    in-scope only (:func:`npc.tools_for`); the verb appears on arrival.
+    """
+    here = char.location
+    fragments = []
+    for loc in sorted(
+        game.perceivable_locations(char), key=lambda location: location.name
+    ):
+        if loc is here:
+            continue
+        tags = [tag for tag in ARENA_AFFORDANCE_TAGS if loc.get_property(tag)]
+        if tags:
+            fragments.append(f"{loc.name} ({', '.join(tags)})")
+    if not fragments:
+        return ""
+    return render("nearby_affordances", arenas="; ".join(fragments))
+
+
 def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
@@ -948,6 +985,15 @@ def observe_and_decide(
     context = decide_context_block(agent, step, clock, stop_since)
     if context:
         base = f"{base}\n\n{context}"
+    # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
+    # brain can choose to travel toward one (offers stay in-scope only). Gated
+    # on the real-brain tool path -- the SAME predicate that guards the tool
+    # route below -- so the deterministic mock (and the byte-identical bake)
+    # never read it. Appended after the environment text, like the #580 block.
+    if _use_action_tools(agent):
+        nearby = nearby_affordances_line(game, char)
+        if nearby:
+            base = f"{base}\n\n{nearby}"
     observation = format_observation_with_memories(base, relevant)
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
