@@ -364,3 +364,40 @@ def test_react_agent_proposes_and_wish_flows_to_every_sink():
     assert msg.actor == "troll"
     # And the loop treated it as a successful action (no reflection retry):
     assert cap.by_channel(Channel.AGENT_REFLECTION) == []
+
+
+# ----------------------------------------------------------------------
+# Section G: parse-gap capture (#621) — the automatic trigger
+# ----------------------------------------------------------------------
+
+
+def test_unparseable_agent_command_records_parse_gap():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    assert not game.parser.parse_command("zibble the wumpus", actor=troll)
+    [wish] = game.wishes
+    assert wish.trigger == TRIGGER_PARSE_GAP
+    assert wish.actor == "troll"
+    assert wish.desired == "zibble the wumpus"
+    assert wish.reason == ""
+    assert wish.location == "Field"
+    assert wish.raw_command == "zibble the wumpus"
+    # The failure feedback is unchanged — the ReAct retry loop keeps working:
+    assert game.parser.last_fail_message == "I'm not sure what you want to do."
+
+
+def test_unparseable_player_command_records_parse_gap_too():
+    game = tiny_game()
+    assert not game.parser.parse_command("frobnicate")
+    [wish] = game.wishes
+    assert wish.actor == "player"
+    assert wish.trigger == TRIGGER_PARSE_GAP
+
+
+def test_successful_and_precondition_failed_commands_are_not_parse_gaps():
+    game = tiny_game()
+    troll = game.characters["troll"]
+    game.parser.parse_command("go north", actor=troll)  # parses fine
+    assert game.wishes == []
+    game.parser.parse_command("propose", actor=troll)  # verb matched, gate failed
+    assert game.wishes == []  # a precondition fail is NOT a parse gap
