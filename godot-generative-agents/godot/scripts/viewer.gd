@@ -95,7 +95,11 @@ const BUBBLE_Y_OFFSET := 78.0
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
-# line fades over its last FADE steps.
+# line fades over its last FADE steps. The backend paces to this constant so the
+# playback never outlives the talkers standing together: penn_world.py mirrors it
+# for the meeting injectors, and cognition.py's CONVERSATION_LINE_PLAYBACK_STEPS
+# (the #673 post-conversation hold) pins real #371 pairs for lines x this many
+# steps. Keep all three in sync.
 const DIALOGUE_LINE_STEPS := 14.0
 const DIALOGUE_FADE_STEPS := 2.0
 # Long utterances are clipped so a bubble stays a couple of lines tall.

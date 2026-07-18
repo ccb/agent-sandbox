@@ -45,6 +45,13 @@ from text_adventure_games.usage import UsageLedger, record_call
 # a single meeting is capped at this many lines.
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
+# After its last line a conversation HOLDS both participants in place for the
+# viewer's playback window -- this many steps per transcript line (issue #673).
+# The Godot viewer shows each line for DIALOGUE_LINE_STEPS (viewer.gd) steps, so
+# without the hold the pair would walk off mid-playback and the conversation
+# link would stretch between them across the map. Keep in sync with viewer.gd's
+# DIALOGUE_LINE_STEPS and penn_world.py's injector mirror of the same name.
+CONVERSATION_LINE_PLAYBACK_STEPS = 14
 
 # React-or-continue (issue #370): guards on the perception-driven interruption
 # consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
@@ -1433,6 +1440,12 @@ class ActiveConversation:
     the sim loop can advance one line per tick. ``next_speaker`` alternates each
     line; ``convo`` accumulates the transcript-so-far. This record is also the
     seam a future third-party join/interruption (#370) hangs off.
+
+    After the last line the record lingers as a **playback hold** (#673):
+    ``hold_until`` is stamped with the step the viewer finishes playing the
+    transcript back, and until then both participants stay pinned (and busy --
+    the record still occupies the active set) so the map shows them standing
+    together through the exchange.
     """
 
     a: str  # initiator name (stable pair ordering)
@@ -1440,6 +1453,7 @@ class ActiveConversation:
     convo: convo.Conversation
     next_speaker: str  # whose line the next advance generates
     started: int  # step the conversation began
+    hold_until: int | None = None  # set on end: release step of the playback hold
 
 
 def _stamp_convo_ctx(speaker, step: int) -> None:
@@ -1481,13 +1495,29 @@ def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
 
 
 def _advance_conversation(
-    game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+    game,
+    ac,
+    chars,
+    state,
+    frame,
+    step,
+    cooldowns,
+    max_exchanges,
+    clock,
+    line_playback_steps,
 ) -> tuple[bool, int]:
     """Generate ONE line for active conversation *ac*, publish the transcript,
     and finish it if an end condition fired. Returns ``(ended, completed_delta)``:
     ``ended`` tells the caller to drop *ac* from the active set; ``completed_delta``
-    (0/1) feeds the return count. Sets ``conversing`` True while it runs, clears
-    it on end."""
+    (0/1) feeds the return count. Sets ``conversing`` True while it runs.
+
+    A real exchange never returns ``ended`` on its end tick: the end-of-
+    conversation bookkeeping (cooldown + #582 outcome pass) runs right here, but
+    the record enters its **playback hold** (#673) -- ``hold_until`` stamped,
+    ``conversing`` kept True -- so the pair stands together for the
+    ``len(lines) * line_playback_steps`` steps the viewer needs to play the
+    transcript back. Only an empty conversation (the mock's zero-line open)
+    releases and ends immediately, exactly as before."""
     speaker = chars[ac.next_speaker]
     listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
     _stamp_convo_ctx(speaker, step)
@@ -1498,11 +1528,17 @@ def _advance_conversation(
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
         return False, 0
-    state[ac.a]["conversing"] = False
-    state[ac.b]["conversing"] = False
-    return True, _finish_conversation(
+    delta = _finish_conversation(
         chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
     )
+    if ac.convo.happened:
+        ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
+        state[ac.a]["conversing"] = True
+        state[ac.b]["conversing"] = True
+        return False, delta
+    state[ac.a]["conversing"] = False
+    state[ac.b]["conversing"] = False
+    return True, delta
 
 
 def maybe_converse(
@@ -1516,6 +1552,7 @@ def maybe_converse(
     *,
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+    line_playback_steps: int = CONVERSATION_LINE_PLAYBACK_STEPS,
     clock=None,
     active: dict | None = None,
 ) -> int:
@@ -1528,16 +1565,22 @@ def maybe_converse(
 
     1. **advances** each in-progress conversation by exactly one
        :func:`conversation.exchange` line -- publishing the transcript-so-far on
-       both cards -- and, when an end condition fires (empty utterance, wrap-up
-       flag, or ``max_exchanges`` lines), removes it, records the pair cooldown,
-       and runs one :func:`apply_conversation_outcome` pass per participant (#582);
+       both cards. When an end condition fires (empty utterance, wrap-up flag, or
+       ``max_exchanges`` lines) it records the pair cooldown and runs one
+       :func:`apply_conversation_outcome` pass per participant (#582) -- but a
+       real exchange is not removed yet: it enters a **playback hold** (#673) of
+       ``len(lines) * line_playback_steps`` further steps, its participants still
+       pinned (and busy), so the viewer can play the transcript back while the
+       pair visibly stands together. The sweep here releases each held pair once
+       its window elapses;
     2. **starts** a new conversation for each eligible settled, co-located pair
        (both ``performing`` and not walking, not already conversing, off cooldown),
        running its first line this same tick.
 
     Participants are marked ``state[name]["conversing"]`` while a conversation
-    runs; :func:`run_simulation.step` reads that flag to keep them from walking or
-    re-deciding. Returns how many conversations **completed** this step.
+    runs -- through its playback hold; :func:`run_simulation.step` reads that flag
+    to keep them from walking or re-deciding. Returns how many conversations
+    **completed** this step (counted on the end tick, not at release).
 
     **Gated by the caller / mock-inert**: only invoked under a real brain. The
     mock's ``Agent.converse`` returns nothing, so a started conversation dies on
@@ -1548,8 +1591,9 @@ def maybe_converse(
     active = active if active is not None else {}
     completed = 0
 
-    # (1) Advance every in-progress conversation by one line.
-    # A participant whose conversation COMPLETES this tick is captured into
+    # (1) Advance every in-progress conversation by one line, and release any
+    # held pair whose playback window has elapsed (#673).
+    # A participant whose conversation frees them this tick is captured into
     # finished_this_step (issue #187 fix): without it, phase 2's `busy` below --
     # computed after this loop's deletions -- would not see them as busy, and
     # they could immediately start (and finish) a second conversation with a
@@ -1557,6 +1601,16 @@ def maybe_converse(
     finished_this_step: set[str] = set()
     for key in list(active):
         ac = active[key]
+        if ac.hold_until is not None:
+            # Playback hold (#673): the exchange already completed (cooldown,
+            # outcome pass and the completed count all ran on its end tick);
+            # the pair just stands together while the viewer plays it back.
+            if step >= ac.hold_until:
+                state[ac.a]["conversing"] = False
+                state[ac.b]["conversing"] = False
+                del active[key]
+                finished_this_step.update((ac.a, ac.b))
+            continue
         ended, delta = _advance_conversation(
             game,
             ac,
@@ -1567,6 +1621,7 @@ def maybe_converse(
             cooldowns,
             max_exchanges,
             clock,
+            line_playback_steps,
         )
         completed += delta
         if ended:
@@ -1600,7 +1655,16 @@ def maybe_converse(
         )
         active[key] = ac
         ended, delta = _advance_conversation(
-            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+            line_playback_steps,
         )
         completed += delta
         if ended:
