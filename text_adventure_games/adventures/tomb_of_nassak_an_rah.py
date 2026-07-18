@@ -3113,6 +3113,8 @@ def build_game(seed=None):
     boots.set_property(Property.WEARABLE, True)
     boots.set_property("wear_slot", "feet")
     boots.add_alias("boots")
+    boots.set_property("figure", "boots")  # the stepping card (38): take once,
+    # examine and wear re-earn
     respirator = things.Item(
         "respirator",
         "an Autarchy respirator",

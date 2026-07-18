@@ -349,6 +349,27 @@ def test_the_cylinder_card_names_the_first_break():
         assert fig(g) == "cylinders"  # deeper wreckage: the generic plate
 
 
+def test_wearables_deal_their_cards_on_wear():
+    """Putting a carded wearable ON is as deliberate as examining it: WEAR
+    always draws the card (CCB) -- for the boots (38), the respirator (39),
+    and any wearable that gets a card later."""
+    g, cap = _game()
+    cyl = g.locations["Hall of Warriors"].items["viridian cylinder"]
+    boots = cyl.contents["magnetic boots"]
+    cyl.remove_item(boots)
+    g.player.add_to_inventory(boots)
+    g.do_command("wear boots")
+    assert cap.texts(Channel.FIGURE) == ["boots"]  # the donning draws it
+    g.do_command("examine boots")
+    assert cap.texts(Channel.FIGURE) == ["boots", "boots"]  # and a look re-earns
+    amber = g.locations["Hall of Warriors"].items["amber cylinder"]
+    mask = amber.contents["respirator"]
+    amber.remove_item(mask)
+    g.player.add_to_inventory(mask)
+    g.do_command("wear respirator")
+    assert cap.texts(Channel.FIGURE)[-1] == "resp"
+
+
 def test_the_respirator_deals_its_portrait_card():
     """The respirator (card 39): examining it always re-earns the card."""
     g, cap = _game()

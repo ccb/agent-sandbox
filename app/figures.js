@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -615,6 +615,101 @@
     cylCard(svg, "o", ["ORANGE"],
       "THE BURIAL CYLINDERS, ORANGE DOWN",
       "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS.");
+  });
+
+  /* ---------------- 38: the magnetic boots ---------------- */
+  FIG._define("boots", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "GUARD ISSUE / FEET / ANCHOR";
+    const VIR = "#4ee0a8";                                    // viridian issue
+    const BDOTS2 = stipple(svg, "dots-boots38", VIR, .85);
+    // the ferrous deck
+    el(svg, "line", { x1: 60, y1: 300, x2: 580, y2: 300, stroke: PH, "stroke-width": 1.6 });
+    for (let x = 72; x < 580; x += 26)
+      el(svg, "line", { x1: x, y1: 300, x2: x - 9, y2: 311, stroke: PH_DIM });
+    // the boot, per reference: tall buckled cuff, long boxy toe, slab sole
+    const BOOT = "0,-8 4,-40 2,-72 40,-72 42,-40 78,-16 86,-12 86,0 0,0";
+    const mkBoot = () => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const put = (nn, a) => { const q = document.createElementNS(NS, nn);
+        for (const k in a) q.setAttribute(k, a[k]); g.appendChild(q); return q; };
+      put("polygon", { points: BOOT, fill: BDOTS2, stroke: VIR, "stroke-width": 1.6 });
+      put("rect", { x: 0, y: 0, width: 86, height: 7, fill: "#2e7a5e",
+        "fill-opacity": .9, stroke: VIR, "stroke-width": 1.2 });  // the magnet sole
+      put("line", { x1: 5, y1: -58, x2: 39, y2: -58, stroke: VIR });  // cuff bands
+      put("rect", { x: 14, y: -62, width: 13, height: 7, fill: BG, stroke: VIR });
+      put("line", { x1: 5, y1: -42, x2: 40, y2: -42, stroke: VIR });
+      put("rect", { x: 14, y: -46, width: 13, height: 7, fill: BG, stroke: VIR });
+      put("line", { x1: 50, y1: -28, x2: 66, y2: -19, stroke: VIR });  // instep strap
+      put("rect", { x: 53, y: -30, width: 10, height: 6, fill: BG, stroke: VIR });
+      return g;
+    };
+    const left = mkBoot(); left.setAttribute("transform", "translate(150 293)");
+    const right = mkBoot();
+    // the field, bright white against the deck
+    const arcs = [];
+    [0, 1].forEach(b => [10, 17, 24].forEach((r, i) =>
+      arcs.push({ b, r, i, q: el(svg, "path", { fill: "none", stroke: PH_BRIGHT,
+        "stroke-width": 1.7, "stroke-dasharray": "3 3" }) })));
+    const grudge = [0, 1, 2].map(() => el(svg, "line",
+      { stroke: PH_BRIGHT, "stroke-dasharray": "2 3", opacity: 0 }));
+    const click = label(svg, 0, 326, 11, PH_BRIGHT); click.setAttribute("text-anchor", "middle");
+    const clickBar = el(svg, "line", { y1: 302, y2: 302, stroke: PH_BRIGHT,
+      "stroke-width": 2.5, opacity: 0 });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const CALLS = [
+      { at: [193, 296], text: "SOLE: MAGNET-METAL, DULL" },
+      { at: [193, 308], text: "GRIP: FERROUS, TOTAL" },
+      { at: [504, 254], text: "RELEASE: GRUDGING", track: true },
+    ];
+    const foot = label(svg, 320, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE MAGNETIC BOOTS", T, 4, 1.4);
+      let bx = 320, by = 0, strain = 0;
+      if (T < 34) { bx = 320; by = 0; }
+      else if (T < 64) { by = -Math.round(((T - 34) / 30) * 14 / 2) * 2; strain = 1; }
+      else if (T < 92) {
+        const k = (T - 64) / 28;
+        bx = 320 + Math.round(90 * k / 4) * 4;
+        by = -14 - Math.round(Math.sin(k * Math.PI) * 30 / 2) * 2;
+      } else { bx = 410; by = 0; }
+      right.setAttribute("transform", `translate(${bx} ${293 + by})`);
+      const beat = Math.floor(t / 6);
+      arcs.forEach(a => {
+        const cx = a.b ? bx + 43 : 193;
+        const on = a.b ? (T < 34 || T >= 92) : true;
+        a.q.setAttribute("d", `M ${cx - a.r} 300 Q ${cx} ${300 + a.r * .8} ${cx + a.r} 300`);
+        a.q.setAttribute("opacity", on ? .65 + ((beat + a.i) % 3 === 0 ? .35 : 0) : 0);
+      });
+      grudge.forEach((n, i) => {                              // the field, refusing
+        if (!strain) { n.setAttribute("opacity", 0); return; }
+        const gx = 328 + i * 32;
+        n.setAttribute("x1", gx); n.setAttribute("x2", gx);
+        n.setAttribute("y1", 300); n.setAttribute("y2", 300 + by);
+        n.setAttribute("opacity", (t + i) % 2 ? .9 : .4);
+      });
+      const clicked = T >= 92 && T < 104;
+      click.setAttribute("x", bx + 43);
+      click.textContent = clicked ? "CLICK." : "";
+      clickBar.setAttribute("x1", bx + 2); clickBar.setAttribute("x2", bx + 84);
+      clickBar.setAttribute("opacity", clicked && t % 2 ? .9 : 0);
+      const c = CALLS[Math.floor(T / 30) % CALLS.length];
+      if (T > 16) {
+        // a tracking call follows the boot; the text end stays anchored
+        const ax = c.track ? bx + 43 : c.at[0];
+        const ay = c.track ? 293 + by - 78 : c.at[1];
+        callLead.setAttribute("points", `${ax},${ay} 504,58 512,58`);
+        call.textContent = c.text;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, "THE CLICK MEANS IT.", T, 116, 1.5);
+    });
   });
 
   /* ---------------- 39: the respirator ---------------- */

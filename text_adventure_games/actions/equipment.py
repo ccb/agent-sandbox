@@ -59,6 +59,12 @@ class Wear(base.Action):
 
     def apply_effects(self):
         self.character.wear(self.item)
+        # Donning a carded wearable draws its card (CCB): putting a thing ON
+        # is as deliberate as examining it, so it always plays -- take and
+        # ambush cues stay once-per-game. Player wearers only.
+        if self.character is self.game.player:
+            fig = self.item.get_property("figure")
+            self.game.show_figure(fig(self.game) if callable(fig) else fig, force=True)
         # Items may carry their own flavor for being put on (``wear_text``).
         self.parser.ok(
             self.item.get_property("wear_text")
