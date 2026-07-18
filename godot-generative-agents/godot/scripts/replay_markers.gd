@@ -29,7 +29,13 @@ static func collect(frames: Array, names: Array, memory_streams: Dictionary,
 		var step := int((rec as Dictionary).get("turn", -1))
 		if step < 0 or step > last:
 			continue
-		var actor := String((rec as Dictionary).get("actor", ""))
+		# World-level stimuli (ambient sound, POST /world/event, the boil arc's
+		# `boiled` event) carry actor=null/"": label them "world". The raw value
+		# was crashing here -- String(null) has no constructor -- so the whole
+		# marker strip failed to build on any replay with a world event (#631).
+		var actor_raw: Variant = (rec as Dictionary).get("actor", "")
+		var actor := "world" if actor_raw == null or String(actor_raw).is_empty() \
+			else String(actor_raw)
 		# Carry the event `action` (sickness/boiled/recovery/...) so the strip can
 		# style each type distinctly (#593); the label stays "actor: summary".
 		markers.append({"step": step, "kind": "event", "agent": actor,

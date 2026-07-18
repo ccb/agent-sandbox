@@ -77,7 +77,9 @@ class EventState(_ContractModel):
     sickness cause) and deliberately stays an open dict."""
 
     turn: int
-    actor: str
+    actor: str | None  # world-level stimuli (ambient sound, POST /world/event,
+    # the boil arc's `boiled` event) legitimately have no single actor -- the
+    # store persists actor=None, so the contract must accept it too (#631).
     action: str
     summary: str
     payload: dict
