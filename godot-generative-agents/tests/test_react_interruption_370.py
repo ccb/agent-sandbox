@@ -12,17 +12,9 @@ Fully offline (fake brains). Run from the repo root::
         godot-generative-agents/tests/test_react_interruption_370.py -v
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-_SIM_DIR = (
-    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
-)
-sys.path.insert(0, str(_SIM_DIR))
-
-from backend.sim_config import CognitionConfig  # noqa: E402
+from backend.sim_config import CognitionConfig
 
 
 def test_cognition_config_react_defaults():
@@ -161,6 +153,28 @@ def test_encounter_memory_written_for_mid_activity_members():
     for name, other in (("Maria Lopez", "Ayesha Khan"), ("Ayesha Khan", "Maria Lopez")):
         texts = [r.text for r in chars[name].agent.memory.records]
         assert any(f"I noticed {other} nearby" in t for t in texts)
+
+
+def test_encounter_memory_deduped_within_react_cooldown_window():
+    # A pair pacing in and out of mutual range writes ONE encounter record per
+    # react-cooldown window, not one per re-entry -- repeated identical records
+    # are what buries a distinctive memory at retrieval (PR #650 review).
+    game, chars, state, frame, order = _pair(None)
+    react_state: dict = {}
+    kw = dict(react_state=react_state, active={}, react_cooldown_steps=100)
+    maybe_react(chars, state, 0, {}, order, **kw)
+    state["Ayesha Khan"]["tile"] = (50, 50)
+    maybe_react(chars, state, 1, {}, order, **kw)
+    state["Ayesha Khan"]["tile"] = (2, 0)
+    maybe_react(chars, state, 2, {}, order, **kw)  # re-edge inside the window
+    texts = [r.text for r in chars["Maria Lopez"].agent.memory.records]
+    assert sum("I noticed Ayesha Khan nearby" in t for t in texts) == 1
+    state["Ayesha Khan"]["tile"] = (50, 50)
+    maybe_react(chars, state, 150, {}, order, **kw)
+    state["Ayesha Khan"]["tile"] = (2, 0)
+    maybe_react(chars, state, 151, {}, order, **kw)  # window elapsed: news again
+    texts = [r.text for r in chars["Maria Lopez"].agent.memory.records]
+    assert sum("I noticed Ayesha Khan nearby" in t for t in texts) == 2
 
 
 def test_idle_agents_get_no_encounter_memory_and_no_consult():
@@ -341,6 +355,45 @@ def test_rule_tier_cooldowns_and_hour_cap():
             react_hour_cap=2,
         )
     assert len(brain.react_calls) - calls_before == 2
+
+
+def test_react_consult_threads_a_real_sim_clock():
+    # serve_penn always threads a SimClock, so exercise that branch (PR #650
+    # review): the prompt carries the formatted time, and the hourly-cap
+    # window follows the clock's step rate instead of the 360-step fallback.
+    import datetime as dt
+
+    from backend.sim_clock import SimClock
+
+    brain = _ReactBrain(choice="continue")
+    game, chars, state, frame, order = _pair(brain)
+    clock = SimClock(start_dt=dt.datetime(2026, 7, 13, 9, 0), sec_per_step=60)
+    react_state: dict = {}
+    kw = dict(
+        react_state=react_state,
+        active={},
+        react_cooldown_steps=0,
+        react_hour_cap=1,
+        clock=clock,
+    )
+    maybe_react(chars, state, 0, {}, order, **kw)
+    assert len(brain.react_calls) == 1
+    prompt = brain.react_calls[0]["messages"][1]["content"]
+    assert "It is Monday 09:00 AM." in prompt
+    # Cap window = clock.steps_for_seconds(3600) = 60 steps at 60 s/step.
+    # A re-edge inside it is capped (hour_cap=1)...
+    state["Ayesha Khan"]["tile"] = (50, 50)
+    maybe_react(chars, state, 30, {}, order, **kw)
+    state["Ayesha Khan"]["tile"] = (2, 0)
+    maybe_react(chars, state, 31, {}, order, **kw)
+    assert len(brain.react_calls) == 1
+    # ...but one past it consults again -- under the clockless 360-step
+    # fallback, step 71 would still be inside the window and blocked.
+    state["Ayesha Khan"]["tile"] = (50, 50)
+    maybe_react(chars, state, 70, {}, order, **kw)
+    state["Ayesha Khan"]["tile"] = (2, 0)
+    maybe_react(chars, state, 71, {}, order, **kw)
+    assert len(brain.react_calls) == 2
 
 
 def test_pair_conversation_cooldown_blocks_consult():
