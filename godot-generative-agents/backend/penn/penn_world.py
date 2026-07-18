@@ -70,7 +70,9 @@ SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 # bake's post-hoc one and the live server's on-the-fly one) only fire a meeting
 # when the participants stay together long enough for the whole exchange to play
 # out on the map (otherwise the bubbles/link would linger after they part).
-# Keep in sync with the constants of the same name in viewer.gd.
+# Real #371 conversations get the same guarantee from the playback hold
+# (cognition.CONVERSATION_LINE_PLAYBACK_STEPS, issue #673). Keep in sync with
+# the constants of the same name in viewer.gd.
 DIALOGUE_LINE_STEPS = 14
 DIALOGUE_FADE_STEPS = 2
 

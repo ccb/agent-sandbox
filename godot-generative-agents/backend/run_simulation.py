@@ -588,6 +588,7 @@ def step(
             order,
             cooldown_steps=cog.conversation_cooldown_steps,
             max_exchanges=cog.conversation_max_exchanges,
+            line_playback_steps=cog.conversation_line_playback_steps,
             clock=clock,
             active=active_conversations,
         )
@@ -773,7 +774,9 @@ def simulate(
             "on_plan": True,
             # Pinned while a multi-tick conversation runs (issue #371): step()'s
             # pre-pass skips schedule-advance/decision/movement for a conversing
-            # agent, so the meeting isn't interrupted. Cleared when it ends.
+            # agent, so the meeting isn't interrupted. Stays set through the
+            # post-conversation playback hold (#673) -- the pair stands together
+            # while the viewer plays the exchange back -- then clears.
             "conversing": False,
         }
 
