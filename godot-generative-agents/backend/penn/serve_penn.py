@@ -450,6 +450,13 @@ class PennStepper:
         # real brain's decision latency so the viewer's "thinking…" cue can be
         # exercised under the free mock brain. 0.0 = off (byte-identical timing).
         self.stall_seconds = stall_seconds
+        # Wish feed lock (#622): guards the two buffers `_on_wish` fills (see
+        # _build()). One lock, created once here (not per _build/reset), like
+        # the #551 deciding buffer's discipline -- a wish is logged from the
+        # same thread that resolves that tick's commands, so a plain list
+        # append would likely be safe on its own, but the lock keeps the seam
+        # correct even if a future path logs one from another thread.
+        self._wish_lock = threading.Lock()
         # The #304 persistence seam: a backend.run_store.RunStore, or None (the
         # default -- nothing is written, byte-identical to before). Set before
         # the _build() below so every build, first boot and each POST /reset,
@@ -601,6 +608,24 @@ class PennStepper:
         # Malformed events this run dropped rather than persisted (#637): 0 on
         # a healthy day, surfaced so a lossy artifact is at least visible.
         self._dropped_events = 0
+        # Wish feed (#622): install the engine's streaming tap on the FRESH
+        # game object every _build() makes (a reset gets a new Game, so the
+        # hook must be re-installed each time, like _events_seen above). Two
+        # independent buffers -- one for the live feed, one for persistence --
+        # both filled by the same _on_wish call, so draining one can never
+        # starve the other (mirrors game.events' dual-cursor design, but
+        # push- rather than pull-based per the engine's on_wish tap). Both are
+        # empty for the whole run under the mock brain BY CONSTRUCTION: it
+        # never proposes and its authored commands always parse, so
+        # game.log_wish is simply never called (contrast #551's `deciding`
+        # sink, which needs an explicit llm_client-is-not-None gate because
+        # every decide, mock included, passes through it).
+        self.game.on_wish = self._on_wish
+        self._wish_feed_buf: list = []
+        self._wish_persist_buf: list = []
+        # Malformed wishes this run dropped rather than persisted (#637-style
+        # tolerance, mirrors _dropped_events).
+        self._dropped_wishes = 0
         # Every client records into self.ledger; with a monitor, through a
         # write-through view that also prints one terminal line per call (the
         # base ledger stays the single source GET /usage sums). Under the mock
@@ -775,9 +800,10 @@ class PennStepper:
 
         Everything else is deliberately this-morning fresh: item properties,
         conversation cooldowns, meeting-injector arming, perform timers, and
-        the ``_events_seen``/``_persist_events_seen`` cursors (correct -- the
-        new ``game.events`` starts empty; the stored ``events.jsonl`` is
-        append-only history).
+        the ``_events_seen``/``_persist_events_seen`` cursors and the wish
+        buffers (correct -- the new ``game.events``/``game.wishes`` start
+        empty; the stored ``events.jsonl``/``wishes.jsonl`` are append-only
+        history).
         """
         if row is None:
             row = self._resumable_row(run_id)
@@ -833,6 +859,13 @@ class PennStepper:
         (#637). 0 on a healthy run; a non-zero value means the durable
         events.jsonl is missing records the feed may have shown."""
         return self._dropped_events
+
+    @property
+    def dropped_wishes(self) -> int:
+        """Count of malformed ActionWishes this run dropped rather than
+        persisting (#622, mirrors ``dropped_events``). 0 on a healthy run
+        (and always 0 under the mock brain, which never wishes at all)."""
+        return self._dropped_wishes
 
     def _run_cost_usd(self) -> float:
         # THE run-cost sum, defined once: this run's slice of the lifetime
@@ -1002,6 +1035,7 @@ class PennStepper:
                 self.run_store.record_memories(self._run_id, name, fresh)
                 self._mem_synced[name] = fresh[-1]["id"]
         self._persist_pending_events()
+        self._persist_pending_wishes()
         self.run_store.update_run(
             self._run_id,
             # The RUN's spend, not the server's lifetime total: the one
@@ -1043,8 +1077,10 @@ class PennStepper:
     def _finish_run(self) -> None:
         # Idempotent: the live loop keeps ticking a finished day (every tick
         # returns None) and only the first one flips the status. The tail
-        # flush catches events logged after the final tick (#307).
+        # flush catches events (and wishes, #622) logged after the final tick
+        # (#307).
         self._persist_pending_events()
+        self._persist_pending_wishes()
         if (
             self.run_store is not None
             and self._run_id is not None
@@ -1083,10 +1119,65 @@ class PennStepper:
         )
         return rows
 
+    def _on_wish(self, wish) -> None:
+        """Installed as ``game.on_wish`` by ``_build()`` (#622): the engine
+        fires this synchronously the moment ``Game.log_wish`` records an
+        :class:`~text_adventure_games.wishes.ActionWish` (a ``propose``, or an
+        unparsed command, #621). Buffers the same primitive record into BOTH
+        the feed queue (:meth:`drain_wishes`) and the persistence queue
+        (:meth:`_persist_pending_wishes`) so draining one can never steal a
+        record from the other."""
+        rec = wish.to_primitive()
+        with self._wish_lock:
+            self._wish_feed_buf.append(rec)
+            self._wish_persist_buf.append(rec)
+
+    def drain_wishes(self) -> list:
+        """New wish records formed since the last drain (#622).
+
+        ``backend.live`` probes this optional method after every tick and
+        publishes each returned dict as its OWN top-level ``kind: "wish"``
+        change-feed record -- unlike llm_call/game_event, a wish does not ride
+        inside the ``engine`` envelope (it mirrors the #551 ``deciding``
+        record's own top-level kind instead). Empty for the whole run under
+        the mock brain: it never proposes and its authored commands always
+        parse, so ``game.on_wish`` is simply never called (byte-identical by
+        vacuity, pinned by test_wish_feed.py's
+        ``test_mock_stepper_emits_no_wish_records``).
+        """
+        with self._wish_lock:
+            rows, self._wish_feed_buf = self._wish_feed_buf, []
+        return rows
+
+    def _persist_pending_wishes(self) -> None:
+        # ActionWishes buffered since the last flush -> wishes.jsonl (#622),
+        # mirroring _persist_pending_events. Also called by _finish_run() and
+        # _close_current_run(): a wish logged between the last tick and the
+        # day's close must not be lost. Drains the buffer unconditionally
+        # (even with no run_store) so an unpersisted run's persist-queue can
+        # never grow unbounded across a long, wish-heavy live-LLM day.
+        with self._wish_lock:
+            pending, self._wish_persist_buf = self._wish_persist_buf, []
+        if self.run_store is None or self._run_id is None:
+            return
+        if pending:
+            # Tolerant persistence (#637's precedent): a malformed wish -- an
+            # evolving `meta` field the allowlist rejects, a value that won't
+            # serialize -- is dropped and counted, never allowed to raise
+            # through the tick and permanently halt the run.
+            bad = self.run_store.append_wishes(self._run_id, pending, skip_bad=True)
+            for wish, reason in bad:
+                self._dropped_wishes += 1
+                print(
+                    f"  - DROPPED WISH @ step {self._step_idx}: {reason} "
+                    f"-- {wish.get('desired', wish)!r}"
+                )
+
     def _close_current_run(self) -> None:
         """Persist pending events and mark the live run 'reset' before a rebuild
         (a finished day keeps 'finished'). Shared by reset/create_run/resume_run."""
         self._persist_pending_events()
+        self._persist_pending_wishes()
         if (
             self.run_store is not None
             and self._run_id is not None

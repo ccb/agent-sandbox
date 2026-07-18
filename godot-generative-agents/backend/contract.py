@@ -24,7 +24,9 @@ and played by the Godot viewer) is::
       },
       "frames": [ {persona_name: AgentFrame}, ... ],   # one dict per step
       "memory_streams": {persona_name: [MemoryRecord, ...]},
-      "events": [EventState, ...]      # the GameEvent run record (#467) --
+      "events": [EventState, ...],     # the GameEvent run record (#467) --
+                                       #   absent from replays baked before it
+      "wishes": [WishState, ...]       # the ActionWish demand record (#622) --
                                        #   absent from replays baked before it
     }
 
@@ -62,3 +64,22 @@ MEMORY_RECORD_FIELDS = ("kind", "importance", "text", "created_turn")
 # One event-log entry (text_adventure_games.events.GameEvent.to_primitive), in
 # emitted order — the run record #467 persists into the replay's "events" key.
 EVENT_STATE_FIELDS = ("turn", "actor", "action", "summary", "payload")
+
+# One action-wish log entry (text_adventure_games.wishes.ActionWish.to_primitive),
+# in emitted order — the #622 demand-signal record: persisted verbatim into
+# wishes.jsonl, carried in the replay's "wishes" array, and published on the
+# live feed as its OWN top-level ``kind: "wish"`` record (unlike llm_call/
+# game_event, which ride inside the "engine" wrapper — a wish is a first-class
+# record, mirroring the #551 "deciding" record's own top-level kind).
+WISH_FIELDS = (
+    "actor",
+    "turn",
+    "location",
+    "desired",
+    "reason",
+    "trigger",
+    "goals",
+    "scope",
+    "raw_command",
+    "meta",
+)

@@ -1,0 +1,198 @@
+"""The wish change-feed record + wishes.jsonl + replay bake (#622).
+
+Mirrors the #551 deciding feed's structure -- emit (the engine's ``on_wish``
+hook, already installed by #620/#621) -> buffer under a lock -> drain per tick
+-> publish -- but the persistence half follows the #467 events precedent
+instead (a growing ``wishes.jsonl``, ``skip_bad``-tolerant), since a wish, like
+a GameEvent, is a permanent run record, not an ephemeral per-tick lifecycle
+signal like ``deciding``.
+
+Record shape: ``ActionWish.to_primitive()`` verbatim (actor/turn/location/
+desired/reason/trigger/goals/scope/raw_command/meta) under a live-feed record
+carrying its OWN top-level ``kind: "wish"`` -- NOT wrapped inside "engine" the
+way llm_call/game_event rows are (contrast test_event_records.py).
+
+Mock invariant: the mock brain never proposes and its authored commands always
+parse, so under ``--brain mock`` (the default PennStepper) the wish buffer
+never receives a record at all -- the feed is byte-identical BY VACUITY, not
+by an explicit brain-identity gate (contrast #551's ``deciding`` sink, which
+needs one because every decide, mock included, passes through it).
+
+Run from the repo root::
+
+    uv run pytest godot-generative-agents/tests/test_wish_feed.py -v
+"""
+
+import sys
+from pathlib import Path
+
+# The Penn sim modules live in the Godot tree and are run as scripts (no
+# package); tests import them the way the scripts import each other -- off the
+# sim directory itself.
+_SIM_DIR = (
+    Path(__file__).resolve().parents[2] / "godot-generative-agents" / "backend" / "penn"
+)
+sys.path.insert(0, str(_SIM_DIR))
+
+from backend import run_simulation  # noqa: E402
+from backend.run_store import RunStore  # noqa: E402
+from text_adventure_games.wishes import (  # noqa: E402
+    ActionWish,
+    TRIGGER_PARSE_GAP,
+    TRIGGER_PROPOSED,
+)
+from penn_world import build_penn_world  # noqa: E402
+from serve_penn import PennStepper  # noqa: E402
+
+
+def _wish(**over):
+    fields = dict(
+        actor="Diego Torres",
+        turn=0,
+        location="UPenn:Van Pelt Library",
+        desired="a bike rack near the library",
+        reason="mine keeps getting stolen",
+        trigger=TRIGGER_PROPOSED,
+        goals=[],
+        scope=[],
+        raw_command=(
+            "propose a bike rack near the library because mine keeps getting stolen"
+        ),
+    )
+    fields.update(over)
+    return ActionWish(**fields)
+
+
+# --- hook installation + buffer/drain ---------------------------------------
+
+
+def test_stepper_installs_on_wish_as_the_engine_hook():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    assert stepper.game.on_wish == stepper._on_wish
+
+
+def test_stepper_buffers_and_drains_a_wish_record():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    wish = _wish()
+    stepper.game.log_wish(wish)  # fires game.on_wish -> stepper._on_wish
+    rows = stepper.drain_wishes()
+    assert rows == [wish.to_primitive()]
+    # Draining again is idempotent (buffer cleared) -- mirrors drain_events.
+    assert stepper.drain_wishes() == []
+
+
+def test_stepper_buffers_multiple_wishes_in_order():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    first = _wish(desired="a working printer")
+    second = _wish(trigger=TRIGGER_PARSE_GAP, desired="dance with the statue")
+    stepper.game.log_wish(first)
+    stepper.game.log_wish(second)
+    assert stepper.drain_wishes() == [first.to_primitive(), second.to_primitive()]
+
+
+def test_reset_restarts_the_wish_buffer():
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    stepper.game.log_wish(_wish())
+    stepper.reset()
+    assert stepper.drain_wishes() == []  # the old day's buffer didn't survive
+    stepper.game.log_wish(_wish(desired="after reset"))
+    assert [w["desired"] for w in stepper.drain_wishes()] == ["after reset"]
+
+
+# --- the mock invariant, pinned (#622 acceptance) ---------------------------
+
+
+def test_mock_stepper_emits_no_wish_records():
+    # The core invariant: --brain mock (PennStepper's default) never calls
+    # propose and its authored travel/perform commands always parse, so
+    # game.wishes -- and this buffer -- stay empty for the whole run. The feed
+    # is byte-identical to a world with no wish channel at all.
+    stepper = PennStepper(num_steps=5, world=build_penn_world())
+    for _ in range(5):
+        stepper.tick()
+    assert stepper.game.wishes == []
+    assert stepper.drain_wishes() == []
+
+
+# --- a scripted propose produces a wish within one tick (acceptance) -------
+
+
+def test_stepper_publishes_a_scripted_propose_within_a_tick(monkeypatch):
+    # Every persona is due to decide on step 0 (fresh state: no path, not
+    # performing, not conversing) -- so stubbing observe_and_decide (the same
+    # seam test_deciding_feed.py stubs) to return a "propose" command routes
+    # it through the real parser on the very first tick, exactly like the
+    # #622 acceptance scenario ("a live run with a scripted propose").
+    monkeypatch.setattr(
+        run_simulation,
+        "observe_and_decide",
+        lambda *a, **k: (
+            "propose a bike rack near the library because mine keeps getting stolen"
+        ),
+    )
+    stepper = PennStepper(num_steps=2, world=build_penn_world())
+    stepper.tick()
+    rows = stepper.drain_wishes()
+    assert rows, "a scripted propose must produce a wish record within one tick"
+    assert all(r["trigger"] == "proposed" for r in rows)
+    assert all(r["desired"] == "a bike rack near the library" for r in rows)
+    assert all(r["reason"] == "mine keeps getting stolen" for r in rows)
+
+
+# --- persistence: wishes.jsonl (#622, mirrors test_stepper_persists_game_events) --
+
+
+def test_stepper_persists_wishes(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    run_id = stepper.run_id
+    stepper.tick()
+    stepper.game.log_wish(_wish(turn=stepper.game.turn))
+    stepper.drain_wishes()  # the feed reads first; persistence must still see it
+    stepper.tick()
+    assert store.read_wishes(run_id) == [w.to_primitive() for w in stepper.game.wishes]
+    assert store.read_wishes(run_id)[-1]["desired"] == "a bike rack near the library"
+    # A straggler after the last tick is flushed by the day's close (#307's
+    # POST /world/event window has a wish analogue: a wish logged after the
+    # final tick but before the day formally ends).
+    stepper.game.log_wish(_wish(turn=stepper.game.turn, desired="last call"))
+    assert stepper.tick() is None  # end of day -> _finish_run tail-flushes
+    assert store.read_wishes(run_id) == [w.to_primitive() for w in stepper.game.wishes]
+    assert store.read_wishes(run_id)[-1]["desired"] == "last call"
+
+
+def test_stepper_drops_a_bad_wish_instead_of_halting(tmp_path):
+    # #637's tolerance, extended to wishes: one malformed record (an evolving
+    # `meta` field the store's allowlist can't serialize) must be dropped and
+    # counted, never halt the run.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    run_id = stepper.run_id
+    stepper.tick()
+    good = _wish(turn=stepper.game.turn, desired="a working printer")
+    bad = _wish(
+        turn=stepper.game.turn,
+        desired="unserializable",
+        meta={"nope": object()},  # passes the key check, fails json.dumps
+    )
+    stepper.game.log_wish(good)
+    stepper.game.log_wish(bad)
+    stepper.tick()  # must NOT raise despite the bad wish
+    desires = {w["desired"] for w in store.read_wishes(run_id)}
+    assert "a working printer" in desires
+    assert "unserializable" not in desires
+    assert stepper.dropped_wishes == 1
+    assert stepper.tick() is None
+    assert store.get_run(run_id)["status"] == "finished"
+
+
+def test_penn_stepper_reset_restarts_the_persist_cursor(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    stepper.game.log_wish(_wish(desired="before reset"))
+    stepper.tick()
+    stepper.reset()
+    new_run_id = stepper.run_id
+    stepper.game.log_wish(_wish(desired="after reset"))
+    stepper.tick()
+    assert [w["desired"] for w in store.read_wishes(new_run_id)] == ["after reset"]
