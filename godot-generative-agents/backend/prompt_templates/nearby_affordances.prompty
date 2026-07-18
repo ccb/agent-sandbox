@@ -1,0 +1,22 @@
+---
+name: nearby_affordances
+description: >
+  The perception half of the affordance layer (#446 decision 2, issue #613):
+  a one-line hint naming visible-but-distant arenas and the affordance tags
+  they carry, appended to a live decide observation so a brain can choose to
+  travel toward one. Offers themselves stay in-scope only (npc.tools_for), so
+  this line NEVER widens the toolset -- it only motivates the walk. Rendered by
+  cognition.nearby_affordances_line() and appended only on the real-brain tool
+  path, so the deterministic mock (and the byte-identical bake) never read it.
+  The arena list is assembled in Python (it is data); only the wording lives
+  here.
+inputs:
+  arenas:
+    type: string
+    description: >
+      Pre-joined "<name> (<tags>)" fragments, e.g.
+      "Van Pelt — Moelis Reading Room (studyable); Houston Hall (dining)".
+sample:
+  arenas: "Van Pelt — Moelis Reading Room (studyable); Houston Hall (dining)"
+---
+Nearby, worth traveling to: {{ arenas }}.

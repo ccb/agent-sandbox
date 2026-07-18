@@ -22,10 +22,11 @@ mock is both brain and schedule driver and the replay is byte-identical.
 
 import json
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from text_adventure_games import conversation as convo
 from text_adventure_games.llm_client import MockReActClient, run_tool_loop
+from text_adventure_games.memory import MemoryKind
 from text_adventure_games.planning import RevisionTrigger
 from text_adventure_games.npc import (
     COGNITION_BUDGET,
@@ -45,10 +46,26 @@ from text_adventure_games.usage import UsageLedger, record_call
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
 
+# React-or-continue (issue #370): guards on the perception-driven interruption
+# consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
+# never an LLM storm; the hour window falls back to 360 steps (one hour at the
+# default 10 s/step) when a run threads no clock.
+REACT_COOLDOWN_STEPS = 90
+REACT_HOUR_CAP = 4
+REACT_HOUR_FALLBACK_STEPS = 360
+# The encounter memory the cheap perceive pass writes -- same weight as a
+# travel/perform outcome: notable enough to retrieve, not a reflection driver.
+ENCOUNTER_IMPORTANCE = 2.0
+
 # Conversation consequences (issue #582). A backend-local revision reason -- the
 # engine's RevisionTrigger.reason is a plain string (planning.py), so an
 # agreement reached in dialogue needs no engine change to reach a planner.
 CONVERSATION = "conversation"
+
+# React-or-continue (issue #370). A backend-local revision reason, like
+# CONVERSATION/DEVIATED: an agent chose "replan" when it noticed someone
+# mid-activity. RevisionTrigger.reason is a plain string, so no engine change.
+REACTED = "reacted"
 
 # Distinguishing substring of the engine's free-text dialogue system prompt
 # (text_adventure_games/prompt_templates/npc_dialogue.prompty), used by
@@ -102,6 +119,83 @@ CONVERSATION_OUTCOME_TOOL = {
             },
         },
         "required": ["plans_changed"],
+    },
+}
+
+# The react tool (#370): one structured call when a walking agent newly
+# notices another resident. Normalized {name, description, parameters}, the
+# shape llm_client.call_tool translates per provider, like the outcome tool.
+REACT_TOOL = {
+    "name": "react",
+    "description": (
+        "You noticed someone while in the middle of what you were doing. "
+        "Decide whether to keep going, stop to greet them, or change your "
+        "plans for the rest of the day."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "choice": {
+                "type": "string",
+                "enum": ["continue", "greet", "replan"],
+                "description": (
+                    "continue: carry on as you were. greet: pause and say "
+                    "hello (a short conversation starts). replan: what you "
+                    "noticed changes the rest of your day."
+                ),
+            },
+            "detail": {
+                "type": "string",
+                "description": (
+                    "If replan: what should change and why. Omit otherwise."
+                ),
+            },
+        },
+        "required": ["choice"],
+    },
+}
+
+# Memory importance scoring (issue #583). MemoryRecord.metadata keys the scorer
+# reads/writes: _LOCKED marks a ground-truth importance the model must never
+# re-guess (the #300 sickness signal, the #582 relationship note); _SCORED marks
+# a record the scorer has already examined, so each is asked about at most once.
+_IMPORTANCE_LOCKED = "importance_locked"
+_IMPORTANCE_SCORED = "importance_scored"
+
+# One structured call per acting agent per tick scores that agent's new memories
+# 1-10 (Generative Agents "poignancy"), replacing the hardcoded importance
+# constants. Batched: every unscored record in one request. Normalized
+# {name, description, parameters}, the shape llm_client.call_tool translates per
+# provider, like the planner's and the conversation-outcome tools.
+IMPORTANCE_SCORE_TOOL = {
+    "name": "score_memories",
+    "description": (
+        "Rate how significant (poignant) each memory is to you, from 1 "
+        "(utterly mundane) to 10 (momentous), one score per memory id."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "scores": {
+                "type": "array",
+                "description": "One entry per memory: its id and a 1-10 importance.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "integer",
+                            "description": "The memory's id, exactly as listed.",
+                        },
+                        "score": {
+                            "type": "integer",
+                            "description": "1 (mundane) to 10 (momentous).",
+                        },
+                    },
+                    "required": ["id", "score"],
+                },
+            },
+        },
+        "required": ["scores"],
     },
 }
 
@@ -770,6 +864,43 @@ def decide_with_action_tools(game, char, observation: str) -> str | None:
     return command or None
 
 
+# Arena affordance tags surfaced in the nearby-affordances line (#613): the
+# tags a visible-but-distant arena carries that a verb will key on -- `studyable`
+# (the study verb, #615) and `dining` (Houston Hall meals, #615). An explicit
+# tuple, NOT "every property on the location", so the line stays a curated hint
+# rather than dumping the arena's whole bool bag. Later slices add their tag
+# names here as they land.
+ARENA_AFFORDANCE_TAGS = ("studyable", "dining")
+
+
+def nearby_affordances_line(game, char) -> str:
+    """Name visible-but-distant arenas and the affordance tags they carry
+    (issue #613, spec decision 2) so a live brain can choose to *travel* toward
+    one -- the perception half of desire -> travel -> act.
+
+    Scans the character's perceivable arenas (``game.perceivable_locations``,
+    the ``vision_r`` seam of #82), drops the arena it already stands in, and
+    turns each remaining arena that carries any tag in
+    :data:`ARENA_AFFORDANCE_TAGS` into a ``"name (tags)"`` fragment (sorted by
+    name for a stable line). Returns ``""`` when nothing nearby is tagged, so no
+    empty line is ever appended. This NEVER widens the toolset -- offers stay
+    in-scope only (:func:`npc.tools_for`); the verb appears on arrival.
+    """
+    here = char.location
+    fragments = []
+    for loc in sorted(
+        game.perceivable_locations(char), key=lambda location: location.name
+    ):
+        if loc is here:
+            continue
+        tags = [tag for tag in ARENA_AFFORDANCE_TAGS if loc.get_property(tag)]
+        if tags:
+            fragments.append(f"{loc.name} ({', '.join(tags)})")
+    if not fragments:
+        return ""
+    return render("nearby_affordances", arenas="; ".join(fragments))
+
+
 def decide_context_block(agent, step: int, clock, stop_since: int = 0) -> str:
     """Render the always-on decide context (issue #580), or ``""``.
 
@@ -821,6 +952,12 @@ def observe_and_decide(
     4. **Contextualize** (#580): when the loop threads a ``clock``, append the
        decide-context block -- sim time, current plan stop, elapsed -- after
        the environment text (never read by the deterministic mock).
+    5. **Nearby affordances** (#613): append the visible-but-distant tagged
+       arenas (:func:`nearby_affordances_line`) so a live brain can choose to
+       *travel* toward one. Gated on the same real-brain tool-path predicate
+       (:func:`_use_action_tools`) as the decide route below, so the
+       deterministic mock never reads this line and the bake stays
+       byte-identical.
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
     retrieval scoring (weights / decay / how many memories surface); ``None``
@@ -879,6 +1016,15 @@ def observe_and_decide(
         state_lines.append("You feel violently ill -- your stomach is cramping.")
     if state_lines:
         base = base + "\n\n" + "\n".join(state_lines)
+    # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
+    # brain can choose to travel toward one (offers stay in-scope only). Gated
+    # on the real-brain tool path -- the SAME predicate that guards the tool
+    # route below -- so the deterministic mock (and the byte-identical bake)
+    # never read it. Appended after the environment text, like the #580 block.
+    if _use_action_tools(agent):
+        nearby = nearby_affordances_line(game, char)
+        if nearby:
+            base = f"{base}\n\n{nearby}"
     observation = format_observation_with_memories(base, relevant)
     agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
@@ -998,12 +1144,15 @@ def apply_conversation_outcome(
         return False
     note = result.get("relationship_note")
     if isinstance(note, str) and note.strip():
-        agent.memory.add_chat(
+        note_record = agent.memory.add_chat(
             note.strip(),
             turn=step,
             partner=partner_name,
             importance=RELATIONSHIP_NOTE_IMPORTANCE,
         )
+        # #583: the relationship note is a deliberate high signal (#582), not a
+        # guessable importance -- lock it so score_new_memories leaves it be.
+        note_record.metadata[_IMPORTANCE_LOCKED] = True
     # Require a real boolean True -- not merely a truthy value. A lenient or
     # fake client that returns a stringy "false" or a 1 must not trip a
     # revision; the schema declares plans_changed as a required boolean, so a
@@ -1017,6 +1166,120 @@ def apply_conversation_outcome(
         else transcript
     )
     return maybe_revise_plan(char, RevisionTrigger(CONVERSATION, step, detail), clock)
+
+
+def score_new_memories(char, step: int) -> None:
+    """Score ``char``'s newly-formed memories 1-10 with the model (issue #583).
+
+    Replaces the hardcoded importance constants (``remember_outcome``'s per-verb
+    numbers, ``add_chat``'s DEFAULT_CHAT_IMPORTANCE, perception's
+    PRESENCE_IMPORTANCE) with the paper's model-scored *poignancy*, so reflection
+    timing and retrieval ranking track what actually mattered rather than a flat
+    schedule. Called once per acting agent per tick, right before ``maybe_reflect``
+    (:mod:`run_simulation`), over every record not yet scored:
+
+    * **One batched call.** All unscored, unlocked records go in a single
+      ``score_memories`` tool request -- never one call per record, which would
+      double live call volume. Each returned ``{id, score}`` overrides that
+      record's importance (clamped to 1-10) and shifts
+      ``importance_since_reflection`` by the delta, so ``should_reflect`` reads
+      the *scored* accumulator.
+    * **Constants are the floor.** A non-dict / malformed reply leaves the
+      constants intact and does NOT mark records scored, so a transient failure
+      simply retries next decide. A record the model omits keeps its constant but
+      is marked scored (we asked; don't re-ask). Over-budget is inherited: this
+      runs only after a successful decide, and decides are gated by the run's
+      cost-ceiling kill-switch.
+    * **Ground-truth stays.** Records flagged ``_IMPORTANCE_LOCKED`` (the #300
+      sickness outcome, the #582 relationship note) are skipped entirely -- event
+      knowledge the model can't see from text, so it must not re-guess it.
+
+    Mock byte-identical: gated on brain-identity. ``attach_agents`` wires the mock
+    brain AS ``agent.schedule`` (same object), so ``brain is agent.schedule`` is
+    exactly "no real client supplied" -- the same gate #485/#582 use. Checking
+    ``callable(call_tool)`` alone would NOT do: ``ScheduleMockClient`` scripts
+    ``call_tool``, so the default offline run would score and the bake would drift.
+    """
+    agent = char.agent
+    brain = getattr(agent, "llm_client", None)
+    # Real, tool-calling brain only -- identity gate first (see docstring).
+    if (
+        brain is None
+        or brain is getattr(agent, "schedule", None)
+        or not callable(getattr(brain, "call_tool", None))
+    ):
+        return
+
+    memory = agent.memory
+    # Mark any locked record examined so it drops out of future candidate scans,
+    # and collect the unscored, unlocked ones to send.
+    candidates = []
+    for record in memory.records:
+        if record.metadata.get(_IMPORTANCE_SCORED):
+            continue
+        # Only observations and chat carry the hardcoded importance constants
+        # this pass replaces. Reflections and plans set their own salience, and
+        # reflect() zeroes importance_since_reflection after writing REFLECTION
+        # records -- re-scoring one on a later tick would leak its delta into the
+        # fresh window and skew reflection cadence. Skip them (mark scored so the
+        # scan stays bounded).
+        if record.kind not in (MemoryKind.OBSERVATION, MemoryKind.CHAT):
+            record.metadata[_IMPORTANCE_SCORED] = True
+            continue
+        if record.metadata.get(_IMPORTANCE_LOCKED):
+            record.metadata[_IMPORTANCE_SCORED] = True
+            continue
+        candidates.append(record)
+    if not candidates:
+        return
+
+    # Attribute the call to this agent (usage.py); "role" labels the monitor line.
+    ctx = getattr(brain, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "score"})
+    messages = [
+        # In character (same persona system message the decide path sends), so
+        # poignancy is judged from who this agent is.
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "importance_score",
+                memories=[{"id": r.id, "text": r.text} for r in candidates],
+            ),
+        },
+    ]
+    # No temperature -> call_tool's default 0.0, deliberately: this is a numeric
+    # classification, not free-text generation, so it stays deterministic (like
+    # apply_conversation_outcome; don't "fix" it to agent.temperature).
+    result = brain.call_tool(
+        messages, IMPORTANCE_SCORE_TOOL, max_tokens=agent.max_tokens
+    )
+    # Malformed / transient failure: leave everything unscored, floor stands, retry.
+    if not isinstance(result, dict):
+        return
+    scores = result.get("scores")
+    if not isinstance(scores, list):
+        return
+
+    by_id: dict[int, object] = {}
+    for entry in scores:
+        if not isinstance(entry, dict):
+            continue
+        eid = entry.get("id")
+        # bool is an int subclass, so a boolean id would pass an isinstance int
+        # check and then collide with real id 0/1 (hash(True) == hash(1)),
+        # mis-scoring that record. Reject it (mirrors the score-side guard below).
+        if isinstance(eid, int) and not isinstance(eid, bool):
+            by_id[eid] = entry.get("score")
+    for record in candidates:
+        record.metadata[_IMPORTANCE_SCORED] = True  # asked; never re-ask
+        raw = by_id.get(record.id)
+        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+            continue  # model omitted / non-numeric: keep the constant floor
+        new = max(1.0, min(float(raw), 10.0))
+        memory.importance_since_reflection += new - record.importance
+        record.importance = new
 
 
 def memories_for_frame(records) -> list[dict]:
@@ -1154,7 +1417,92 @@ def remember_outcome(char, command: str, step: int) -> None:
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0
-    agent.memory.add_observation(text, turn=step, importance=importance)
+    record = agent.memory.add_observation(text, turn=step, importance=importance)
+    # #583: the sick/recovered drink outcome is event knowledge the model can't
+    # derive from text (the #300 water arc's ground-truth 8.0/5.0), so lock it --
+    # score_new_memories skips locked records rather than re-guessing them.
+    if sick or recovered:
+        record.metadata[_IMPORTANCE_LOCKED] = True
+
+
+@dataclass
+class ActiveConversation:
+    """A conversation in progress across ticks (issue #371).
+
+    Carried in the caller-owned ``active`` dict, keyed by the pair frozenset, so
+    the sim loop can advance one line per tick. ``next_speaker`` alternates each
+    line; ``convo`` accumulates the transcript-so-far. This record is also the
+    seam a future third-party join/interruption (#370) hangs off.
+    """
+
+    a: str  # initiator name (stable pair ordering)
+    b: str  # partner name
+    convo: convo.Conversation
+    next_speaker: str  # whose line the next advance generates
+    started: int  # step the conversation began
+
+
+def _stamp_convo_ctx(speaker, step: int) -> None:
+    """Attribute this line's LLM call to *speaker* (usage.py); "role" labels the
+    monitor line. Each multi-tick line is one speaker, so we stamp just that one
+    (unlike the old whole-loop path, which stamped both up front)."""
+    ctx = getattr(getattr(speaker.agent, "llm_client", None), "context", None)
+    if ctx is not None:
+        ctx.update(
+            {"actor": speaker.name, "turn": step, "attempt": 0, "role": "converse"}
+        )
+
+
+def _publish_chat(state, frame, a_name: str, b_name: str, convo_obj) -> None:
+    """Mirror the transcript-so-far onto both participants' cards. No-op when
+    nothing has been said, so the mock (zero lines) never turns ``chat`` from
+    ``None`` into ``[]`` -- the bake stays byte-identical."""
+    if not convo_obj.lines:
+        return
+    lines = [[speaker, text] for speaker, text in convo_obj.lines]
+    for nm in (a_name, b_name):
+        state[nm]["chat"] = lines
+        if nm in frame:
+            frame[nm]["chat"] = lines
+
+
+def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
+    """End-of-conversation bookkeeping: record the pair cooldown and run the
+    #582 outcome pass for each participant. Returns 1 if the conversation
+    produced any lines (a real meeting), else 0 -- so a mock/empty conversation
+    sets no cooldown and counts for nothing."""
+    if not convo_obj.happened:
+        return 0
+    cooldowns[frozenset((a.name, b.name))] = step
+    transcript = convo_obj.transcript()
+    apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
+    apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
+    return 1
+
+
+def _advance_conversation(
+    game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+) -> tuple[bool, int]:
+    """Generate ONE line for active conversation *ac*, publish the transcript,
+    and finish it if an end condition fired. Returns ``(ended, completed_delta)``:
+    ``ended`` tells the caller to drop *ac* from the active set; ``completed_delta``
+    (0/1) feeds the return count. Sets ``conversing`` True while it runs, clears
+    it on end."""
+    speaker = chars[ac.next_speaker]
+    listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
+    _stamp_convo_ctx(speaker, step)
+    cont = convo.exchange(game, ac.convo, speaker, listener, turn=step)
+    _publish_chat(state, frame, ac.a, ac.b, ac.convo)
+    if cont and len(ac.convo.lines) < max_exchanges:
+        ac.next_speaker = ac.b if ac.next_speaker == ac.a else ac.a
+        state[ac.a]["conversing"] = True
+        state[ac.b]["conversing"] = True
+        return False, 0
+    state[ac.a]["conversing"] = False
+    state[ac.b]["conversing"] = False
+    return True, _finish_conversation(
+        chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
+    )
 
 
 def maybe_converse(
@@ -1169,89 +1517,336 @@ def maybe_converse(
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
     clock=None,
+    active: dict | None = None,
 ) -> int:
-    """Run conversations between co-located, settled residents this step (#86).
+    """Advance and start co-located residents' conversations this step (#86, #371).
 
-    Called once per step *after* movement resolves. A pair is eligible when both
-    are *settled into an activity* (standing still, not walking) and co-located --
-    decided by the engine's ``audience_for`` seam via
-    :func:`conversation.find_conversation_pairs`. The same pair is throttled to one
-    conversation per :data:`CONVERSATION_COOLDOWN_STEPS`, so residents sharing a
-    cafe for an hour chat once, not every tick.
+    Called once per step *after* movement resolves. A conversation is now a
+    multi-tick activity (issue #371): ``active`` (a caller-owned dict keyed by the
+    pair frozenset, persisted across ticks) holds each in-progress
+    :class:`ActiveConversation`. Every step this function
 
-    Each conversation runs the engine turn-taking loop
-    (:func:`conversation.converse`), which writes every line into *both* agents'
-    memory streams as ``MemoryKind.CHAT`` and surfaces the last line on both
-    participants' replay cards (``state``/``frame`` ``"chat"``).
+    1. **advances** each in-progress conversation by exactly one
+       :func:`conversation.exchange` line -- publishing the transcript-so-far on
+       both cards -- and, when an end condition fires (empty utterance, wrap-up
+       flag, or ``max_exchanges`` lines), removes it, records the pair cooldown,
+       and runs one :func:`apply_conversation_outcome` pass per participant (#582);
+    2. **starts** a new conversation for each eligible settled, co-located pair
+       (both ``performing`` and not walking, not already conversing, off cooldown),
+       running its first line this same tick.
 
-    **Gated by the caller**: only invoked when a real brain is driving. With the
-    deterministic mock brain, ``Agent.converse`` returns nothing anyway (its tool
-    answer carries no ``utterance``), so even an accidental call is a no-op -- the
-    mock replay stays byte-identical. Returns how many conversations happened.
+    Participants are marked ``state[name]["conversing"]`` while a conversation
+    runs; :func:`run_simulation.step` reads that flag to keep them from walking or
+    re-deciding. Returns how many conversations **completed** this step.
 
-    After a conversation happens, each participant runs one
-    :func:`apply_conversation_outcome` pass (issue #582): an agreement revises
-    the rest of that agent's day, a notable exchange becomes a durable
-    relationship memory. ``clock`` is threaded to the revision plumbing. Both are
-    reached only when a real brain produced actual dialogue, so the mock bake --
-    which never converses -- never runs the outcome pass and stays byte-identical.
+    **Gated by the caller / mock-inert**: only invoked under a real brain. The
+    mock's ``Agent.converse`` returns nothing, so a started conversation dies on
+    its first empty line with zero lines -- no chat write, no cooldown, no outcome
+    -- and the bake stays byte-identical. ``active`` defaults to a throwaway dict
+    for single-shot callers (e.g. tests that drive one tick directly).
     """
+    active = active if active is not None else {}
+    completed = 0
+
+    # (1) Advance every in-progress conversation by one line.
+    # A participant whose conversation COMPLETES this tick is captured into
+    # finished_this_step (issue #187 fix): without it, phase 2's `busy` below --
+    # computed after this loop's deletions -- would not see them as busy, and
+    # they could immediately start (and finish) a second conversation with a
+    # different resident in this same tick. Deferred instead to next tick.
+    finished_this_step: set[str] = set()
+    for key in list(active):
+        ac = active[key]
+        ended, delta = _advance_conversation(
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            finished_this_step.update((ac.a, ac.b))
+
+    # (2) Start new conversations among settled, co-located, non-busy residents.
+    busy = {
+        name for ac in active.values() for name in (ac.a, ac.b)
+    } | finished_this_step
     settled = [
         chars[name]
         for name in order
-        if state[name]["performing"] and not state[name]["path"]
+        if state[name]["performing"] and not state[name]["path"] and name not in busy
     ]
-    happened = 0
-    # An agent can hold only one conversation per step. In a room of 3+ settled
-    # residents find_conversation_pairs reports every eligible pair, so the same
-    # agent shows up in several (A-B and A-C) -- the engine deliberately leaves
-    # the pick to the caller. Take a first-come matching: once someone has
-    # conversed this step, skip any later pair that includes them, so no agent
-    # double-writes its memory / chat frame in one tick (#187).
-    spoken: set[str] = set()
+    # First-come matching: once someone is conversing this step, skip any later
+    # pair that includes them, so no agent double-writes in one tick (#187).
+    spoken: set[str] = set(busy)
     for a, b in convo.find_conversation_pairs(game, settled):
         if a.name in spoken or b.name in spoken:
             continue
         key = frozenset((a.name, b.name))
         if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
-        # Attribute the meeting's LLM calls per speaker: converse() alternates
-        # speakers through each speaker's OWN client, so when the two clients
-        # are separate instances (#366 per-agent brains) each gets its owner's
-        # name and GET /usage's by_actor splits the dialogue correctly. Under
-        # the classic SHARED client both `ctx` are the same dict, so only the
-        # initiator is stamped -- the pre-#366 behavior, byte-identical. The
-        # "role" key labels the terminal request monitor's line (llm_monitor).
-        ctx_a = getattr(a.agent.llm_client, "context", None)
-        ctx_b = getattr(b.agent.llm_client, "context", None)
-        if ctx_b is ctx_a:
-            ctx_b = None  # classic shared client: stamp once, initiator wins
-        for char, ctx in ((a, ctx_a), (b, ctx_b)):
-            if ctx is not None:
-                ctx.update(
-                    {"actor": char.name, "turn": step, "attempt": 0, "role": "converse"}
-                )
-        conversation = convo.converse(
-            game, a, b, turn=step, max_exchanges=max_exchanges
+        ac = ActiveConversation(
+            a=a.name,
+            b=b.name,
+            convo=convo.Conversation(participants=(a.name, b.name)),
+            next_speaker=a.name,
+            started=step,
         )
-        if not conversation.happened:
+        active[key] = ac
+        ended, delta = _advance_conversation(
+            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            if not ac.convo.happened:
+                continue  # opened with nothing (mock) -> nothing to reserve
+        spoken.update((a.name, b.name))  # this pair is busy for the rest of the step
+
+    return completed
+
+
+def _tile_gap(a, b) -> int:
+    """Chebyshev distance between two raw ``(x, y)`` tiles.
+
+    Mid-walk proximity works off the live per-step tiles in ``state`` -- the
+    engine's location-footprint distance can't apply here, because ``travel``
+    moves ``char.location`` to the destination the instant the command
+    resolves, while the sprite is still tiles away walking there."""
+    return max(abs(int(a[0]) - int(b[0])), abs(int(a[1]) - int(b[1])))
+
+
+def _doing(char, st) -> str:
+    """What this agent is in the middle of, for the encounter/react prompts.
+
+    Mid-walk the logical location IS the walk's destination (see
+    :func:`_tile_gap`); settled, it's the current activity."""
+    if st["path"]:
+        where = char.location.name if char.location is not None else "somewhere"
+        return f"walking to {where}"
+    return char.get_property("activity") or "spending time"
+
+
+def _consult_react(char, other_name: str, st, step: int, clock=None):
+    """One ``react`` tool call for *char*: ``(attempted, choice, detail)``.
+
+    Real, tool-calling brain only -- the same brain-identity gate as
+    #485/#582/#583 (``attach_agents`` wires the mock brain AS ``agent.schedule``,
+    so identity is exactly "no real client supplied"). Billed to *char* under
+    ``role: "react"``. What the agent remembers about the other resident is
+    retrieved locally (free) and folded into the prompt, so familiarity informs
+    the choice without a recall round.
+
+    ``attempted`` is False only when the gate itself failed (no real brain) --
+    no call was made. It's True whenever a call was actually placed, whether
+    or not the reply came back usable, so the caller can bill every real
+    request against the cooldown/cap -- a persistently malformed brain must
+    not become an uncapped call storm. A malformed reply degrades to
+    ``(True, None, None)`` -- the rule tier alone, no behavior change."""
+    agent = char.agent
+    brain = getattr(agent, "llm_client", None)
+    if (
+        brain is None
+        or brain is getattr(agent, "schedule", None)
+        or not callable(getattr(brain, "call_tool", None))
+    ):
+        return False, None, None
+    ctx = getattr(brain, "context", None)
+    if ctx is not None:
+        ctx.update({"actor": char.name, "turn": step, "attempt": 0, "role": "react"})
+    remembered = agent.memory.retrieve(query=other_name, turn=step, max_records=3)
+    messages = [
+        {"role": "system", "content": agent._structured_system_message()},
+        {
+            "role": "user",
+            "content": render(
+                "react",
+                partner=other_name,
+                doing=_doing(char, st),
+                time=(
+                    clock.time_at(step).strftime("%A %I:%M %p")
+                    if clock is not None
+                    else None
+                ),
+                memories=[r.text for r in remembered],
+            ),
+        },
+    ]
+    # No temperature -> call_tool's default 0.0, deliberately: a three-way
+    # classification, like the outcome/score passes (don't "fix" this).
+    result = brain.call_tool(messages, REACT_TOOL, max_tokens=agent.max_tokens)
+    if not isinstance(result, dict):
+        return True, None, None
+    choice = result.get("choice")
+    if choice not in ("continue", "greet", "replan"):
+        return True, None, None
+    detail = result.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        return True, choice, detail.strip()
+    return True, choice, None
+
+
+def maybe_react(
+    chars,
+    state,
+    step,
+    cooldowns,
+    order,
+    *,
+    react_state: dict,
+    active: dict,
+    cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
+    react_cooldown_steps: int = REACT_COOLDOWN_STEPS,
+    react_hour_cap: int = REACT_HOUR_CAP,
+    clock=None,
+) -> int:
+    """Notice-and-maybe-interrupt, once per tick (issue #370).
+
+    Runs in :func:`run_simulation.step` after movement and BEFORE
+    :func:`maybe_converse`, so a greet's first line is spoken the same tick by
+    the conversation pass's advance phase. Edge-triggered: a pair is handled
+    only on the tick it newly comes within *mutual* sight (the smaller of the
+    two ``vision_r``, Chebyshev tiles over the live ``state`` positions), and
+    ``react_state`` -- caller-owned, persistent across ticks -- remembers who
+    was already in range. Per new pair:
+
+    1. **Cheap perceive:** each mid-activity member (walking or performing)
+       writes one ``encounter`` observation -- the agent remembers who it
+       passed even though no decision point fired. Idle agents are skipped
+       (they perceive at their own decision points). At most one record per
+       pair per ``react_cooldown_steps`` window, so re-crossings don't flood
+       the memory stream with identical records.
+    2. **Rule tier (free):** the reactor is the first *walking* member in
+       ``order`` -- a fully settled pair is maybe_converse's job. Skipped when
+       either member is conversing/busy, when the pair talked recently (the
+       same conversation ``cooldowns``), when the reactor reacted recently
+       (``react_cooldown_steps``), or past its hourly cap (``react_hour_cap``
+       consults per sim hour; 360-step window with no clock). The issue's
+       example "known persona" / "schedule has slack" rules are deliberately
+       NOT hard gates: an unseeded run would then never react, so familiarity
+       is instead retrieved into the react prompt (see
+       :func:`_consult_react`) and the model weighs it -- along with the
+       schedule context it carries in persona -- itself.
+    3. **LLM gate:** one :data:`REACT_TOOL` call (:func:`_consult_react`),
+       role ``"react"`` in the ledger. Inert under the mock brain (identity
+       gate), so mechanics are testable offline with a scripted client.
+    4. **Hand back to existing seams:** ``greet`` inserts a #371
+       :class:`ActiveConversation` and pins both ``conversing`` (step()'s
+       movement gate pauses a pinned walk; the untouched ``path`` resumes when
+       the pin clears); ``replan`` fires :func:`maybe_revise_plan` with the
+       backend-local :data:`REACTED` reason. ``continue`` changes nothing --
+       the encounter memory already landed.
+
+    Prior art consciously not reused (issue scope): the engine's
+    ``npc.react_behavior`` is the per-turn ReAct loop for ``take_turn``-driven
+    NPCs -- this loop never calls ``take_turn`` and already reproduces its
+    perceive->retrieve->decide wiring in :func:`observe_and_decide`; and
+    ``reactions.py``'s thing-owned reflexes are *scripted* gate->effect
+    triggers evaluated by the engine's round phase, with no brain consult and
+    no knowledge of this loop's path/performing state machine. What #370 needs
+    is a rate-limited brain consult keyed on tile proximity mid-walk, which
+    neither provides.
+
+    Returns how many LLM react consults were made this tick.
+    """
+    idx = {n: i for i, n in enumerate(order)}
+    # O(n^2) pair scan over live tiles -- fine at this sim's scale (~25 agents,
+    # the same budget as tiled_game's perception scan).
+    in_range: set[frozenset] = set()
+    for i, a_name in enumerate(order):
+        for b_name in order[i + 1 :]:
+            radius = min(
+                getattr(chars[a_name], "vision_r", 0),
+                getattr(chars[b_name], "vision_r", 0),
+            )
+            if radius > 0 and (
+                _tile_gap(state[a_name]["tile"], state[b_name]["tile"]) <= radius
+            ):
+                in_range.add(frozenset((a_name, b_name)))
+    new_pairs = in_range - react_state.get("in_range", set())
+    react_state["in_range"] = in_range
+
+    last_react = react_state.setdefault("last_react", {})
+    last_encounter = react_state.setdefault("last_encounter", {})
+    consult_log = react_state.setdefault("consults", {})
+    window = (
+        clock.steps_for_seconds(3600)
+        if clock is not None
+        else REACT_HOUR_FALLBACK_STEPS
+    )
+    consults = 0
+    for key in sorted(new_pairs, key=lambda k: sorted(idx[n] for n in k)):
+        a_name, b_name = sorted(key, key=idx.get)
+        # (1) Cheap perceive: mid-activity members remember the encounter --
+        # at most once per pair per react-cooldown window, so two agents
+        # pacing in and out of mutual range don't flood both memory streams
+        # with identical records all day (PR #650 review).
+        seen = last_encounter.get(key)
+        if seen is None or step - seen >= react_cooldown_steps:
+            for me, other in ((a_name, b_name), (b_name, a_name)):
+                st = state[me]
+                if not (st["path"] or st["performing"]):
+                    continue
+                chars[me].agent.memory.add_observation(
+                    render("encounter", partner=other, doing=_doing(chars[me], st)),
+                    turn=step,
+                    importance=ENCOUNTER_IMPORTANCE,
+                )
+                last_encounter[key] = step
+        # (2) Rule tier.
+        reactor = next((n for n in (a_name, b_name) if state[n]["path"]), None)
+        if reactor is None:
             continue
-        cooldowns[key] = step
-        happened += 1
-        spoken.update((a.name, b.name))  # both are now busy for this step (#187)
-        # The frontend renders chat as a list of [speaker, line] pairs (see
-        # main_script.html), so hand it the whole transcript. It persists (like
-        # desc/reasoning) on state until the agent's next conversation.
-        lines = [[speaker, text] for speaker, text in conversation.lines]
-        for nm in (a.name, b.name):
-            state[nm]["chat"] = lines
-            if nm in frame:
-                frame[nm]["chat"] = lines
-        # Conversation consequences (issue #582): each participant reflects on
-        # what the meeting changed. Reached only for a real conversation, so the
-        # mock bake never runs it. Costs at most two calls, throttled by the pair
-        # cooldown recorded above.
-        transcript = conversation.transcript()
-        apply_conversation_outcome(a, b.name, transcript, step, clock=clock)
-        apply_conversation_outcome(b, a.name, transcript, step, clock=clock)
-    return happened
+        other = b_name if reactor == a_name else a_name
+        if state[reactor].get("conversing") or state[other].get("conversing"):
+            continue
+        busy = {n for ac in active.values() for n in (ac.a, ac.b)}
+        if reactor in busy or other in busy:
+            continue
+        if step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+            continue  # they talked recently; crossing paths again isn't news
+        last = last_react.get(reactor)
+        if last is not None and step - last < react_cooldown_steps:
+            continue
+        recent = [s for s in consult_log.get(reactor, []) if step - s < window]
+        if len(recent) >= react_hour_cap:
+            consult_log[reactor] = recent  # prune while we're here
+            continue
+        # (3) The LLM gate. Cap/cooldown bookkeeping keys on the ATTEMPT --
+        # every real request counts, usable reply or not, so a brain that
+        # answers the react tool badly can't become an uncapped call storm.
+        attempted, choice, detail = _consult_react(
+            chars[reactor], other, state[reactor], step, clock=clock
+        )
+        if not attempted:
+            continue  # no real tool-calling brain: rule tier only
+        last_react[reactor] = step
+        consult_log[reactor] = recent + [step]
+        consults += 1
+        if choice is None:
+            continue  # reply unusable: billed + capped, but no behavior change
+        # (4) Hand back to the existing seams.
+        if choice == "greet":
+            ac = ActiveConversation(
+                a=reactor,
+                b=other,
+                convo=convo.Conversation(participants=(reactor, other)),
+                next_speaker=reactor,
+                started=step,
+            )
+            active[key] = ac
+            state[reactor]["conversing"] = True
+            state[other]["conversing"] = True
+        elif choice == "replan":
+            maybe_revise_plan(
+                chars[reactor],
+                RevisionTrigger(REACTED, step, detail or f"I noticed {other} nearby"),
+                clock,
+            )
+    return consults

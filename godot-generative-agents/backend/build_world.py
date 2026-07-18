@@ -143,6 +143,12 @@ def build_world(
         # Plain attribute (not a bool property): the tile-map address this engine
         # location resolves to.
         loc.tile_address = spec["address"]
+        # Affordance tags (#613): a Location IS a Thing, so an arena tag is a
+        # plain bool property -- the same fact npc.tools_for curation and the
+        # verb's place-precondition read (#612). An absent `properties:` key
+        # means no tags, so every existing world stays unchanged.
+        for tag in spec.get("properties", ()):
+            loc.set_property(tag, True)
         locations[spec["name"]] = loc
         if spec.get("hub"):
             hub = spec["name"]

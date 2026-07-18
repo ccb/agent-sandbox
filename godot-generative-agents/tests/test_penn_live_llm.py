@@ -6,6 +6,8 @@ no network, no key -- a scripted "real-shaped" brain stands in for Anthropic):
 * ``resolve_llm`` -- the mock default builds nothing; the llm mode merges the
   world YAML's ``llm:`` block with CLI overrides, accepts only Anthropic, and
   refuses to start without ``ANTHROPIC_API_KEY``;
+* ``check_anthropic_key`` -- boot aborts when the API *rejects* the key (401/
+  403), and shrugs off transient trouble (network down, 5xx) with a warning;
 * the world YAML declares the model (``claude-haiku-4-5``) and cost ceiling,
   and ``PennWorld``/``meta()`` carry them to the stepper and the viewer;
 * with a real brain wired: every agent decides through it, real conversations
@@ -20,6 +22,7 @@ Run from the repo root::
 
 import io
 import sys
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -90,6 +93,70 @@ def test_llm_brain_requires_the_anthropic_key(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-should-never-be-read")
     with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY"):
         resolve_llm({"provider": "anthropic"}, "llm")
+
+
+# --------------------------------------------------- check_anthropic_key
+#
+# resolve_llm proves the key EXISTS; check_anthropic_key proves it WORKS,
+# with one free models-list request at boot. Past boot, a rejected key is
+# invisible by design (every decide error degrades to an idle tick -- the
+# brain-outage contract), so the whole cast just sits on "waking up" at $0
+# spend. The tests inject a fake ``urlopen`` and stay offline.
+
+
+class _OkResponse:
+    def close(self):
+        pass
+
+
+def test_key_check_exits_when_the_api_rejects_the_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-wrong")
+
+    def reject(request, timeout):
+        raise urllib.error.HTTPError(
+            request.full_url, 401, "Unauthorized", hdrs=None, fp=None
+        )
+
+    with pytest.raises(SystemExit, match="rejected"):
+        serve_penn.check_anthropic_key(urlopen=reject)
+
+
+def test_key_check_sends_the_key_and_passes_on_200(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-good")
+    seen = {}
+
+    def accept(request, timeout):
+        seen["url"] = request.full_url
+        seen["key"] = request.get_header("X-api-key")
+        return _OkResponse()
+
+    serve_penn.check_anthropic_key(urlopen=accept)  # must not raise
+    assert seen["url"].startswith("https://api.anthropic.com/v1/models")
+    assert seen["key"] == "sk-ant-good"
+
+
+def test_key_check_shrugs_off_network_trouble(monkeypatch, capsys):
+    # Transient trouble (no network, a 5xx) is the run's retry path's job,
+    # not a boot blocker: warn and continue instead of refusing to start.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-good")
+
+    def down(request, timeout):
+        raise urllib.error.URLError("no route to host")
+
+    serve_penn.check_anthropic_key(urlopen=down)  # must not raise
+    assert "could not verify" in capsys.readouterr().out
+
+
+def test_key_check_shrugs_off_server_errors(monkeypatch, capsys):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-good")
+
+    def overloaded(request, timeout):
+        raise urllib.error.HTTPError(
+            request.full_url, 529, "Overloaded", hdrs=None, fp=None
+        )
+
+    serve_penn.check_anthropic_key(urlopen=overloaded)  # must not raise
+    assert "could not verify" in capsys.readouterr().out
 
 
 # ------------------------------------------------- the world's llm: block
@@ -385,7 +452,19 @@ def test_drain_events_feeds_the_monitor_rows_to_the_live_feed(monkeypatch):
         assert ev["model"] == "claude-haiku-4-5"
         # "outcome" (issue #582): maybe_converse now runs the post-conversation
         # consequence pass for each participant right after a real "speak" call.
-        assert ev["role"] in {"decide", "converse", "reflect", "outcome"}
+        # "score" (issue #583): score_new_memories now runs on the real-brain
+        # path right after remember_outcome, one score_memories call per acting
+        # agent per tick -- the scripted brain answers it via the same
+        # catch-all as every other unrecognized tool, so a "score" row is
+        # expected here too.
+        assert ev["role"] in {
+            "decide",
+            "converse",
+            "reflect",
+            "outcome",
+            "score",
+            "react",
+        }
         assert {"call_no", "cum_cost_usd", "time", "actor", "cost_usd"} <= set(ev)
     all_drained = stepper.drain_events()
     assert all_drained == []  # drained means drained

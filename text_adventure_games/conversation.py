@@ -136,18 +136,48 @@ def converse(
 
     speaker, listener = initiator, partner
     for _ in range(max_exchanges):
-        observation = _dialogue_observation(speaker, listener, convo, turn)
-        utterance = speaker.agent.converse(observation, listener.name)
-        _trace_cognition(game, speaker)
-        if not utterance or not utterance.strip():
-            break
-        utterance = utterance.strip()
-        _deliver(speaker, listener, utterance, turn, importance)
-        convo.lines.append((speaker.name, utterance))
-        if getattr(speaker.agent, "last_dialogue_done", False):
+        if not exchange(
+            game, convo, speaker, listener, turn=turn, importance=importance
+        ):
             break
         speaker, listener = listener, speaker
     return convo
+
+
+def exchange(
+    game,
+    convo: Conversation,
+    speaker,
+    listener,
+    *,
+    turn: int,
+    importance: float = DEFAULT_CHAT_IMPORTANCE,
+) -> bool:
+    """Generate and record ONE line of *convo* (issue #371).
+
+    Ask *speaker* (via ``agent.converse``) for its next line given the dialogue
+    so far; on a real line, dual-write it to both memory streams and the
+    listener's ``heard`` buffer (exactly as the whole-loop ``converse`` does) and
+    append it to ``convo.lines``. Emit any cognition-tool trace the line used.
+
+    Returns ``True`` if a line was said and the conversation may continue,
+    ``False`` if the speaker bowed out (``None``/empty -- a decline or natural
+    end) or flagged a wrap-up (``agent.last_dialogue_done``). Does **not** enforce
+    ``max_exchanges``: the caller stops when ``len(convo.lines)`` hits its cap.
+    This is the one-exchange seam that lets the backend spread a meeting across
+    ticks; :func:`converse` is the in-process loop over it. Co-location is
+    checked once by the caller (``converse`` / the backend's pair scan), not
+    re-checked here -- a multi-tick caller keeps its participants pinned.
+    """
+    observation = _dialogue_observation(speaker, listener, convo, turn)
+    utterance = speaker.agent.converse(observation, listener.name)
+    _trace_cognition(game, speaker)
+    if not utterance or not utterance.strip():
+        return False
+    utterance = utterance.strip()
+    _deliver(speaker, listener, utterance, turn, importance)
+    convo.lines.append((speaker.name, utterance))
+    return not getattr(speaker.agent, "last_dialogue_done", False)
 
 
 def _trace_cognition(game, speaker) -> None:
