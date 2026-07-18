@@ -50,6 +50,7 @@ import datetime
 import json
 import random
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -189,7 +190,9 @@ def _segments_for(frames: list[dict], name: str) -> list[Segment]:
     """Collapse one agent's per-step ``act`` strings into segments."""
     segments: list[Segment] = []
     for step, frame in enumerate(frames):
-        act = frame[name].get("act", "")
+        # .get like every other frame reader here: a frame missing an agent
+        # (truncated bake, partial resume) reads as an empty act, not a crash.
+        act = frame.get(name, {}).get("act", "")
         if segments and segments[-1].act == act:
             segments[-1].end = step
         else:
@@ -204,6 +207,11 @@ def _conversations_in(frames: list[dict]) -> list[Conversation]:
     for the frames the conversation spans, so a conversation is a maximal
     stretch of steps where the same transcript appears -- its participants
     are the agents carrying it.
+
+    This leans on the viewer contract that a window's transcript is repainted
+    *identically* frame to frame. A producer that instead accumulated lines
+    per frame would key each growth as a new window and overcount -- if that
+    contract ever changes, this grouping must change with it.
     """
     conversations: list[Conversation] = []
     open_convs: dict[str, Conversation] = {}  # transcript key -> in-progress window
@@ -1073,7 +1081,12 @@ def main(argv=None) -> int:
             client.ledger.max_cost_usd = args.max_cost_usd
             judge = LlmJudge(client)
     if judge is None:
-        print("No LLM judge (set LLM_PROVIDER to enable one); using the heuristic.")
+        # Informational only, and on stderr: stdout carries nothing but the
+        # report itself, so `--format json | jq` always parses.
+        print(
+            "No LLM judge (set LLM_PROVIDER to enable one); using the heuristic.",
+            file=sys.stderr,
+        )
 
     report = audit(replay, judge=judge, source=str(args.path), scramble=args.scramble)
     text = (

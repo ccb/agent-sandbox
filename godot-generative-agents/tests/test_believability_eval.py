@@ -508,6 +508,19 @@ def test_cli_scramble_flag_and_json_format(tmp_path, monkeypatch):
     assert report["summary"]["overall"] < intact["summary"]["overall"]
 
 
+def test_cli_json_stdout_is_pure_json(tmp_path, monkeypatch, capsys):
+    # The no-provider notice must land on stderr, not stdout, so a
+    # `--format json | jq`-style consumer can parse stdout as-is.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    replay_path = tmp_path / "penn_replay.json"
+    replay_path.write_text(json.dumps(make_replay()), encoding="utf-8")
+    assert main([str(replay_path), "--format", "json"]) == 0
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)  # parses only if stdout is pure JSON
+    assert set(report["agents"]) == {"Ada", "Bea"}
+    assert "No LLM judge" in captured.err
+
+
 def test_cli_uses_the_mock_provider_offline(tmp_path, monkeypatch):
     # LLM_PROVIDER=mock: real client plumbing, zero spend, no keys -- the
     # mock declines the tool call, so every agent falls back to heuristic,
