@@ -54,9 +54,9 @@ def test_examine_cues_a_things_card():
         stone = next(it for it in merchant.contents.values() if it.name == "glowstone")
     g.player.add_to_inventory(stone)
     g.do_command("examine glowstone")
-    assert cap.texts(Channel.FIGURE) == ["glowstone"]
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b"]  # found dark: the switch card
     g.do_command("examine glowstone")  # an explicit look always re-earns it
-    assert cap.texts(Channel.FIGURE) == ["glowstone", "glowstone"]
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b", "glowstone-b"]
 
 
 def test_npc_examines_draw_nothing():
@@ -110,11 +110,11 @@ def test_figure_keys_survive_the_journal_replay():
     g.do_command("search merchant")
     g.do_command("take glowstone")
     g.do_command("examine glowstone")
-    assert "glowstone" in g.figures_shown
+    assert "glowstone-b" in g.figures_shown
     g2 = tomb.build_game(seed=0)
     g2.parser.set_renderer(CaptureRenderer())
     g2.replay(list(g.journal))
-    assert "glowstone" in g2.figures_shown
+    assert "glowstone-b" in g2.figures_shown
 
 
 def test_text_renderers_stay_silent_below_verbose():
@@ -189,7 +189,7 @@ def test_the_bridge_carries_figure_events():
     app_api.command("take glowstone")
     payload = json.loads(app_api.command("examine glowstone"))
     figs = [e for e in payload["events"] if e["channel"] == "figure"]
-    assert [e["text"] for e in figs] == ["glowstone"]
+    assert [e["text"] for e in figs] == ["glowstone-b"]
 
 
 def test_arriving_at_the_tomb_cues_the_approach_above_the_description():
@@ -306,10 +306,25 @@ def test_taking_a_carded_item_draws_it_once():
     g, cap = _game()
     g.do_command("search merchant")
     g.do_command("take glowstone")  # the acquisition is the moment
-    assert cap.texts(Channel.FIGURE) == ["glowstone"]
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b"]
     g.do_command("drop glowstone")
     g.do_command("take glowstone")  # re-pocketing is not
-    assert cap.texts(Channel.FIGURE) == ["glowstone"]
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b"]
+
+
+def test_the_glowstone_card_follows_the_switch():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")  # found dark: the switch, set to OFF
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b"]
+    g.do_command("light glowstone")  # the toggle: the interactive demo
+    assert cap.texts(Channel.FIGURE) == ["glowstone-b", "glowstone"]
+    g.do_command("examine glowstone")  # lit in hand: the burn and the bill
+    assert cap.texts(Channel.FIGURE)[-1] == "glowstone-c"
+    g.do_command("douse glowstone")  # going dark is a demo too
+    assert cap.texts(Channel.FIGURE)[-1] == "glowstone"
+    g.do_command("examine glowstone")  # and dark in hand is the switch again
+    assert cap.texts(Channel.FIGURE)[-1] == "glowstone-b"
 
 
 def test_lighting_up_in_the_dark_earns_the_look():

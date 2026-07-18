@@ -866,6 +866,27 @@ class Refill(actions.Action):
         )
 
 
+class LightWithDemo(actions.Light):
+    """LIGHT, plus the tutorial: throwing the glowstone's switch is the
+    game's first lesson, so the interactive card (08, both states) plays
+    over the toggle itself -- the state cards (08-B / 08-C) belong to
+    take and examine."""
+
+    def apply_effects(self):
+        if self.character is self.game.player and self.item.name == "glowstone":
+            self.game.show_figure("glowstone", force=True)
+        super().apply_effects()
+
+
+class DouseWithDemo(actions.Douse):
+    """DOUSE, with the same demo card as :class:`LightWithDemo`."""
+
+    def apply_effects(self):
+        if self.character is self.game.player and self.item.name == "glowstone":
+            self.game.show_figure("glowstone", force=True)
+        super().apply_effects()
+
+
 class TieSilk(actions.Action):
     """Lash the drifting coffin fast with the merchant's spider-silk (CCB
     design) -- the bootless anchor. Cobweb-thin, and it holds like law."""
@@ -3292,7 +3313,18 @@ def build_game(seed=None):
     glowstone.add_alias(
         "stone"
     )  # no "lantern" alias: the Ulfire Lantern owns that word
-    glowstone.set_property("figure", "glowstone")
+    # The card follows the switch (CCB): found dark, the stone shows its one
+    # amenity set to OFF (08-B) -- so nobody mistakes it for already lit;
+    # examined lit, the burn and the bill (08-C). The interactive demo (08)
+    # plays on the LIGHT / DOUSE commands themselves.
+    glowstone.set_property(
+        "figure",
+        lambda g: (
+            "glowstone-c"
+            if glowstone.get_property(Property.IS_LIT)
+            else "glowstone-b"
+        ),
+    )
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
     glowstone.set_property(Property.IS_HIDDEN, True)
@@ -3348,7 +3380,9 @@ def build_game(seed=None):
         custom_actions=[
             Sneak,
             Burn,
+            DouseWithDemo,
             ExamineSelf,
+            LightWithDemo,
             FixCoffin,
             PryCoffin,
             Remember,

@@ -223,6 +223,23 @@
   </section>
 
   <section>
+    <div class="slate"><h2>08-B &mdash; THE GLOWSTONE, OFF</h2><span class="kind">WIREFRAME / STATE</span></div>
+    <div class="screen"><canvas id="glowstone-b" width="640" height="300"></canvas></div>
+    <p class="spec">The stone as found: dark, faceted, and equipped with exactly one
+       amenity &mdash; a switch, currently exercising its factory setting. The dry
+       commentary rotates; the bright prompt in the corner is the whole tutorial.
+       <span class="attach">Attaches: taking or examining the glowstone, unlit.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>08-C &mdash; THE GLOWSTONE, LIT</h2><span class="kind">WIREFRAME / STATE</span></div>
+    <div class="screen"><canvas id="glowstone-c" width="640" height="300"></canvas></div>
+    <p class="spec">The stone at work: the warm burn breathing, the ATTENTION gauge paying
+       for it, and the standing advice about what light costs down here.
+       <span class="attach">Attaches: examining the glowstone while it is lit.</span></p>
+  </section>
+
+  <section>
     <div class="slate"><h2>09 &mdash; SILAS</h2><span class="kind">LITHO / CHARACTER CARD</span></div>
     <div class="screen">
       <svg id="silas" viewBox="0 0 640 400" aria-label="Silas the synthetic archivist"></svg>
@@ -1159,6 +1176,111 @@
     }
     cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
     clock(t => { if (t && t % 48 === 0) lit = !lit; draw(t); }); // it demos itself
+  }
+
+  /* ---------------- 08-B: the glowstone, off ---------------- */
+  {
+    const cv = document.getElementById("glowstone-b"), ctx = cv.getContext("2d");
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    const QUIPS = [
+      "COLD LAZULITE, FACTORY SET TO OFF.",
+      "ONE MOVING PART. NOBODY HAS MOVED IT.",
+      "FOUR THOUSAND YEARS WITHOUT A COMPLAINT.",
+      "A STONE THAT TAKES INSTRUCTION. RARE.",
+    ];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      // the shard, asleep
+      ctx.strokeStyle = PH_DIM; ctx.lineWidth = 1.6;
+      ctx.shadowColor = PH_DIM; ctx.shadowBlur = 3;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // once in a while one facet glints -- proof of life, not light
+      if (Math.floor(t / 3) % 20 === 0) {
+        const [a, b] = FACETS[Math.floor(t / 60) % FACETS.length];
+        ctx.strokeStyle = PH; ctx.shadowColor = PH; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]);
+        ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // the amenity
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = PH_DIM; ctx.fillRect(274, 242, 44, 14);
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = PH_BRIGHT;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the chevron, tapping on the glass above the switch
+      const bob = Math.floor(t / 4) % 2 ? 2 : 0;
+      ctx.fillStyle = PH;
+      ctx.beginPath();
+      ctx.moveTo(313, 220 + bob); ctx.lineTo(327, 220 + bob); ctx.lineTo(320, 230 + bob);
+      ctx.closePath(); ctx.fill();
+      // the dry commentary
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText(QUIPS[Math.floor(t / 40) % QUIPS.length], 18, 24);
+      ctx.fillText("ATTENTION: ..........", 18, 288);
+      // the prompt: the whole point of the card
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> LIGHT GLOWSTONE" + cur, 622, 288);
+      ctx.textAlign = "left";
+    });
+  }
+
+  /* ---------------- 08-C: the glowstone, lit ---------------- */
+  {
+    const cv = document.getElementById("glowstone-c"), ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const k = 5 + (Math.floor(t / 8) % 2);              // the burn breathes
+      const kk = k / 6;
+      const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+      halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+      halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+      halo.addColorStop(1, "rgba(255,215,106,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+      for (let r = 1; r <= k; r++) {
+        ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
+        ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = YELLOW; ctx.lineWidth = 1.6;
+      ctx.shadowColor = YELLOW; ctx.shadowBlur = 4 + k * 4;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      ctx.shadowBlur = 0;
+      // the switch, thrown
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = YELLOW; ctx.fillRect(322, 242, 44, 14);
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.fillStyle = YELLOW;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the ledger, running
+      const att = 9 + Math.floor(t / 12) % 2;
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 18, 288);
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> DOUSE GLOWSTONE" + cur, 622, 288);
+      ctx.textAlign = "left";
+      ctx.fillStyle = YELLOW;
+      ctx.fillText("LIGHT IS DEAR; ATTENTION DEARER", 18, 24);
+    });
   }
 
 

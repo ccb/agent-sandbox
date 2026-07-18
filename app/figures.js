@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-c": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-c": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -568,6 +568,111 @@
     }
     cv.addEventListener("pointerdown", () => { lit = !lit; if (reduced) draw(lastT + 1); });
     clock(t => { if (t && t % 48 === 0) lit = !lit; draw(t); }); // it demos itself
+  });
+
+  /* ---------------- 08-B: the glowstone, off ---------------- */
+  FIG._define("glowstone-b", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    const QUIPS = [
+      "COLD LAZULITE, FACTORY SET TO OFF.",
+      "ONE MOVING PART. NOBODY HAS MOVED IT.",
+      "FOUR THOUSAND YEARS WITHOUT A COMPLAINT.",
+      "A STONE THAT TAKES INSTRUCTION. RARE.",
+    ];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      // the shard, asleep
+      ctx.strokeStyle = PH_DIM; ctx.lineWidth = 1.6;
+      ctx.shadowColor = PH_DIM; ctx.shadowBlur = 3;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      // once in a while one facet glints -- proof of life, not light
+      if (Math.floor(t / 3) % 20 === 0) {
+        const [a, b] = FACETS[Math.floor(t / 60) % FACETS.length];
+        ctx.strokeStyle = PH; ctx.shadowColor = PH; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]);
+        ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // the amenity
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = PH_DIM; ctx.fillRect(274, 242, 44, 14);
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = PH_BRIGHT;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the chevron, tapping on the glass above the switch
+      const bob = Math.floor(t / 4) % 2 ? 2 : 0;
+      ctx.fillStyle = PH;
+      ctx.beginPath();
+      ctx.moveTo(313, 220 + bob); ctx.lineTo(327, 220 + bob); ctx.lineTo(320, 230 + bob);
+      ctx.closePath(); ctx.fill();
+      // the dry commentary
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText(QUIPS[Math.floor(t / 40) % QUIPS.length], 18, 24);
+      ctx.fillText("ATTENTION: ..........", 18, 288);
+      // the prompt: the whole point of the card
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> LIGHT GLOWSTONE" + cur, 622, 288);
+      ctx.textAlign = "left";
+    });
+  });
+
+  /* ---------------- 08-C: the glowstone, lit ---------------- */
+  FIG._define("glowstone-c", "canvas", function (cv) {
+    const ctx = cv.getContext("2d");
+    const YELLOW = "#ffd76a";
+    const OUTLINE = [[250,128],[286,84],[338,72],[386,96],[402,142],[376,184],[318,198],[268,176]];
+    const FACETS = [[1,6],[2,5],[0,4],[3,7]];
+    clock(t => {
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+      const k = 5 + (Math.floor(t / 8) % 2);              // the burn breathes
+      const kk = k / 6;
+      const halo = ctx.createRadialGradient(324, 138, 8, 324, 138, 84 + k * 26);
+      halo.addColorStop(0, `rgba(255,215,106,${.30 * kk})`);
+      halo.addColorStop(.45, `rgba(255,215,106,${.13 * kk})`);
+      halo.addColorStop(1, "rgba(255,215,106,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(324, 138, 84 + k * 26, 0, Math.PI * 2); ctx.fill();
+      for (let r = 1; r <= k; r++) {
+        ctx.strokeStyle = YELLOW; ctx.globalAlpha = .2 * kk * (1 - r / 8);
+        ctx.beginPath(); ctx.arc(324, 138, 60 + r * 22, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = YELLOW; ctx.lineWidth = 1.6;
+      ctx.shadowColor = YELLOW; ctx.shadowBlur = 4 + k * 4;
+      ctx.beginPath();
+      OUTLINE.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.closePath(); ctx.stroke();
+      FACETS.forEach(([a, b]) => { ctx.beginPath();
+        ctx.moveTo(OUTLINE[a][0], OUTLINE[a][1]); ctx.lineTo(OUTLINE[b][0], OUTLINE[b][1]); ctx.stroke(); });
+      ctx.shadowBlur = 0;
+      // the switch, thrown
+      ctx.strokeStyle = PH; ctx.strokeRect(270, 238, 100, 22);
+      ctx.fillStyle = YELLOW; ctx.fillRect(322, 242, 44, 14);
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = PH_DIM;
+      ctx.textAlign = "right"; ctx.fillText("DOUSED", 262, 253);
+      ctx.fillStyle = YELLOW;
+      ctx.textAlign = "left"; ctx.fillText("LIT", 378, 253);
+      // the ledger, running
+      const att = 9 + Math.floor(t / 12) % 2;
+      ctx.fillStyle = PH_DIM;
+      ctx.fillText("ATTENTION: " + "|".repeat(att) + ".".repeat(10 - att), 18, 288);
+      const cur = Math.floor(t / 5) % 2 ? "_" : " ";
+      ctx.textAlign = "right"; ctx.fillStyle = PH_BRIGHT;
+      ctx.fillText("> DOUSE GLOWSTONE" + cur, 622, 288);
+      ctx.textAlign = "left";
+      ctx.fillStyle = YELLOW;
+      ctx.fillText("LIGHT IS DEAR; ATTENTION DEARER", 18, 24);
+    });
   });
 
 
