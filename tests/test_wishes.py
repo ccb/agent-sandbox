@@ -484,3 +484,32 @@ def test_human_path_has_no_decline_option():
     game.parser.determine_intent("zibble the wumpus", actor=None)
     game.parser.determine_intent("zibble the wumpus", actor=game.player)
     assert captured and all("none of these" not in c.lower() for c in captured)
+
+
+# ----------------------------------------------------------------------
+# Section I: the native experimental parser honors the same seam (#621)
+# ----------------------------------------------------------------------
+
+
+def test_native_llm_parser_allows_decline_for_agent_actors_only():
+    from text_adventure_games import parsing
+
+    game = tiny_game()
+    native = parsing.LlmParser.__new__(parsing.LlmParser)  # skip Anthropic init
+    parsing.Parser.__init__(native, game, echo_commands=False)
+    seen = []
+
+    def fake_pick_one(instructions, options, query, allow_none=True):
+        # Only record the INTENT pick: after it declines, the keyword-sniff
+        # fallback consults the (also overridden) argument matchers, which
+        # route through _pick_one too and would muddy the assertion.
+        if "Choose the action" in instructions:
+            seen.append(allow_none)
+        return None
+
+    native._pick_one = fake_pick_one
+    troll = game.characters["troll"]
+    native.determine_intent("zibble the wumpus", actor=troll)  # no agent
+    troll.set_agent(object())
+    native.determine_intent("zibble the wumpus", actor=troll)  # agent-driven
+    assert seen == [False, True]

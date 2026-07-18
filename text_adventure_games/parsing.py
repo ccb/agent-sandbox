@@ -1002,7 +1002,15 @@ class LlmParser(Parser):
             "best matches the player's command by meaning."
         )
         try:
-            choice = self._pick_one(instructions, options, command, allow_none=False)
+            choice = self._pick_one(
+                instructions,
+                options,
+                command,
+                # Agent-driven actors (#621) may decline: a missing verb then
+                # falls through to the deterministic parser and fails cleanly
+                # (captured as a parse-gap wish) instead of force-mapping.
+                allow_none=getattr(actor, "agent", None) is not None,
+            )
         except Exception:
             choice = None
         return (
