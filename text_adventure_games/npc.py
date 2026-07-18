@@ -313,7 +313,7 @@ def tools_for(parser, actor=None, names=None, max_enum: int | None = _MAX_SCOPE_
         if (
             actor is not None
             and action is not None
-            and getattr(action, "REQUIRED_AFFORDANCES", ())
+            and action.REQUIRED_AFFORDANCES
             and not action.affordance_in_scope(actor, parser.game)
         ):
             continue
