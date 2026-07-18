@@ -187,6 +187,9 @@ class ActionName(_StrEnum):
     # a new item (see crafting.py). Games opt in by registering recipes.
     CRAFT = "craft"
 
+    # Agent demand channel (#620): record a request for a missing action.
+    PROPOSE = "propose"
+
     # Vehicles/mounts (see actions/vehicles.py): board and ride a horse, a
     # motorcycle, a boat; some exits require being mounted.
     MOUNT = "mount"

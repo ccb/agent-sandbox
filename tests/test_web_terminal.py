@@ -37,7 +37,7 @@ def test_the_win_route_plays_through_the_bridge():
         if last["status"]["game_over"]:
             break
     assert last["status"]["won"]
-    assert last["status"]["score"] == last["status"]["max_score"] == 115
+    assert last["status"]["score"] == last["status"]["max_score"] == 145
 
 
 def test_events_carry_channels_not_prose_parsing():
@@ -56,6 +56,25 @@ def test_suggestions_thin_out_in_the_dark():
     sug = json.loads(app_api.command("wait"))["suggestions"]
     room_only_nouns = [n for n in sug["nouns"] if n not in game.player.carried_items()]
     assert room_only_nouns == []  # nothing of the room is offered unseen
+
+
+def test_revealed_contents_join_the_chips_only_once_seen():
+    """Items inside things reach the noun chips exactly when the player could
+    reach them -- after the SEARCH or OPEN that reveals them, never before
+    (CCB: early chips are spoilers)."""
+    app_api.boot(0)
+    sug = json.loads(app_api.command("look"))["suggestions"]
+    assert "glowstone" not in sug["nouns"]  # still hidden on the merchant
+    sug = json.loads(app_api.command("search merchant"))["suggestions"]
+    assert "glowstone" in sug["nouns"]  # the search revealed it
+    assert "waterskin" in sug["nouns"]
+    for cmd in ("take glowstone", "light glowstone", "in"):
+        sug = json.loads(app_api.command(cmd))["suggestions"]
+    assert "crates" in sug["nouns"]  # the lit hold shows the crates...
+    assert "crate of dates" not in sug["nouns"]  # ...but not inside them
+    sug = json.loads(app_api.command("open crates"))["suggestions"]
+    assert "crate of dates" in sug["nouns"]  # opening reveals the goods
+    assert "bolt of spider-silk" in sug["nouns"]
 
 
 def test_restore_flows_through_the_bridge():
@@ -99,13 +118,44 @@ def test_panel_data_maps_only_the_explored():
     data = json.loads(app_api.panel_data())
     m = data["map"]
     assert set(m["nodes"]) == {"The Caravan Wreck", "Tomb Exterior", "The Summit"}
-    assert {"from": "The Caravan Wreck", "to": "Tomb Exterior", "dir": "north"} in m[
-        "edges"
-    ]
+    assert {
+        "from": "The Caravan Wreck",
+        "to": "Tomb Exterior",
+        "dir": "north",
+        "back": "south",
+    } in m["edges"]
     assert m["here"] == "The Summit"
     assert any(st["dir"] == "in" for st in m["stubs"])  # the unexplored beckons
     all_names = " ".join(m["nodes"])
     assert "Hall of" not in all_names  # frontier rooms stay unspoiled
+
+
+def test_map_edges_name_both_sides_of_a_passage():
+    """Tap-to-walk needs the word each SIDE answers to (CCB: the map's
+    routes must parse): the canopic stairs are RIGHT STAIRS going down but
+    UP coming back, and the edge carries both."""
+    app_api.boot(0)
+    for cmd in (
+        "search merchant",
+        "take glowstone",
+        "light glowstone",
+        "north",
+        "north",
+        "north",
+        "up",
+        "right stairs",
+    ):
+        app_api.command(cmd)
+    m = json.loads(app_api.panel_data())["map"]
+    stairs = [
+        e
+        for e in m["edges"]
+        if {e["from"], e["to"]} == {"Hall of the Canopic Jars", "Hall of Hounds"}
+    ]
+    assert len(stairs) == 1
+    e = stairs[0]
+    names = {e["dir"], e["back"]}
+    assert "right stairs" in names and "up" in names  # asymmetric, both real
 
 
 def test_panel_data_inventory_shape():
@@ -127,6 +177,42 @@ def test_restore_rebuilds_the_explored_map():
     m = json.loads(app_api.panel_data())["map"]
     assert m["here"] == "Tomb Exterior"
     assert "The Caravan Wreck" in m["nodes"]  # the journey survived the rebuild
+
+
+def test_the_dead_cannot_walk_but_can_restart():
+    """Post-mortem, the bridge refuses world commands (engine gate) while
+    the app-level RESTART confirmation still works."""
+    app_api.boot(0)
+    app_api._game.player.set_property("is_dead", True)
+    payload = json.loads(app_api.command("go north"))
+    assert payload["status"]["game_over"]
+    assert any(e["channel"] == "blocked" for e in payload["events"])
+    assert payload["status"]["room"] == "The Caravan Wreck"  # unmoved
+    payload = json.loads(app_api.command("restart"))
+    assert any("Begin a new expedition?" in e["text"] for e in payload["events"])
+    payload = json.loads(app_api.command("y"))
+    assert not payload["status"]["game_over"]  # a fresh expedition stands
+
+
+def test_restart_begins_a_fresh_expedition():
+    """CCB: 'reload' at the death screen did nothing. RESTART (and its
+    aliases) now boots a new seed and clears the autosave, so the title
+    screen doesn't offer the dead past back."""
+    app_api.boot(0)
+    app_api.command("north")
+    assert app_api._store.read("auto") is not None
+    ask = json.loads(app_api.command("restart"))
+    assert any("(y / n)" in e["text"] for e in ask["events"])  # confirmed first
+    assert ask["status"]["turn"] == 1  # nothing lost yet
+    stay = json.loads(app_api.command("n"))
+    assert any("continues" in e["text"] for e in stay["events"])
+    assert stay["status"]["room"] == "Tomb Exterior"  # unharmed
+    app_api.command("restart")
+    payload = json.loads(app_api.command("y"))
+    assert payload["status"]["turn"] == 0
+    assert payload["status"]["room"] == "The Caravan Wreck"
+    assert app_api._store.read("auto") is None
+    assert any("new expedition" in e["text"] for e in payload["events"])
 
 
 _AUDIT = r"""

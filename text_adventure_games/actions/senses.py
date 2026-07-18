@@ -12,6 +12,7 @@ engine's auto-discovery of default actions would otherwise make them always-on.
 """
 
 from . import base
+from ..enums import Property
 from ..perception import Sense
 
 
@@ -139,4 +140,55 @@ class Smell(_Probe):
             " ".join(smelled)
             if smelled
             else "The air here smells of nothing in particular."
+        )
+
+
+class Taste(_Probe):
+    """Taste (or LICK) a thing -- the cautious cousin of EAT. A taste never
+    consumes anything; it reads the thing's flavor and owns up to whether it
+    is food. Sources, in order: a ``perceptible_by(Sense.TASTE, ...)`` tag
+    (a full authored sentence), the ``Property.TASTE`` string Eat/Drink
+    already narrate ("It tastes of ..."), and finally an edibility verdict."""
+
+    ACTION_NAME = "taste"
+    ACTION_DESCRIPTION = (
+        "Taste a thing -- a lick tells you if it's food (never eats it)"
+    )
+    ACTION_ALIASES = ["lick"]
+    SENSE = Sense.TASTE
+
+    def _nothing_from(self, target) -> str:
+        if target is self.matched_character:
+            return (
+                f"You are not going to lick {target.name}. Some questions "
+                "are better asked out loud."
+            )
+        line = None
+        taste = target.get_property(Property.TASTE)
+        if taste:
+            line = f"You touch the {target.name} to your tongue. It tastes {taste}"
+            if not line.endswith((".", "!", "?")):
+                line += "."
+        if target.get_property(Property.IS_POISONOUS):
+            return (
+                (line or f"You touch the {target.name} to your tongue.")
+                + " Something under the taste your body flatly refuses -- swallowing this would be worse."
+            )
+        if target.get_property(Property.EDIBLE):
+            return (
+                line
+                or f"You taste the {target.name}: plain, but nothing wrong with it."
+            ) + " But you could eat it."
+        return (
+            line
+            or f"You touch your tongue to the {target.name}. It is not food, "
+            "and now you are both certain of it."
+        )
+
+    def _probe_room(self, loc) -> str:
+        tasted = self._room_texts(loc)
+        return (
+            " ".join(tasted)
+            if tasted
+            else "You taste the air: stone, dust, and your own thirst."
         )

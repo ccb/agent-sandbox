@@ -18,6 +18,7 @@ import pytest
 
 from text_adventure_games import games, things
 from text_adventure_games.clock import GameClock
+from text_adventure_games.enums import EventKind
 
 
 @pytest.fixture
@@ -313,8 +314,8 @@ def test_scheduled_event_is_recorded_in_event_log(tiny_game_factory):
     game.schedule_event(1, lambda g: None, name="nightfall")
 
     game.do_command("go north")
-    trigger_events = [e for e in game.events if e.actor == "trigger"]
-    assert any(e.action == "nightfall" for e in trigger_events)
+    trigger_events = [e for e in game.events if e.action == EventKind.TRIGGER]
+    assert any(e.payload.get("trigger") == "nightfall" for e in trigger_events)
 
 
 def test_schedule_event_validates_arguments(tiny_game_factory):
