@@ -314,3 +314,24 @@ def test_replace_schedule_carries_furniture_over_positionally():
         [{"place": "Library", "activity": "teaching", "emoji": "x", "steps": None}]
     )
     assert sched.furniture == "blackboard"
+
+
+def test_seed_memories_are_added_and_retrievable():
+    personas = _personas()  # -- existing helper (single persona Ada)
+    personas[0]["seed_memories"] = [
+        "Last time I drank the unboiled water here I got violently ill."
+    ]
+    game, chars = build_world(None, personas, LOCATIONS)  # -- existing LOCATIONS
+    attach_agents(chars, personas)
+    mem = chars["Ada"].agent.memory
+    texts = [r.text for r in mem.retrieve(query="unboiled water sick", turn=1)]
+    assert any("violently ill" in t for t in texts)
+
+
+def test_no_seed_memories_key_adds_nothing_extra():
+    personas = _personas()
+    game, chars = build_world(None, personas, LOCATIONS)
+    attach_agents(chars, personas)
+    records = chars["Ada"].agent.memory.records
+    # -- Only the t=0 plan memory (add_plan) -- no extra seeded observation.
+    assert all("violently ill" not in r.text for r in records)
