@@ -288,7 +288,26 @@ async def run_loop(
                 elapsed = 0.0  # a paused loop keeps its full-tick cadence
                 continue
             started = time.monotonic()
-            result = await loop.run_in_executor(None, controller.tick_once)
+            try:
+                result = await loop.run_in_executor(None, controller.tick_once)
+            except Exception as exc:
+                # A tick that raises -- a persistence failure, a full disk, an
+                # event that slipped every tolerant path -- must not silently
+                # kill the loop task and truncate the run (the old behavior:
+                # fall through to the finally's spurious 'stopped', keep serving
+                # reads, never tick again). Pause with a visible error status so
+                # the cause is diagnosable and reads keep working (#637).
+                # CancelledError is a BaseException, so clean shutdown still
+                # propagates to the finally below.
+                controller.pause()
+                elapsed = 0.0
+                log.append(
+                    "status",
+                    reason="error",
+                    error=f"{type(exc).__name__}: {exc}",
+                    **controller.status(),
+                )
+                continue
             elapsed = time.monotonic() - started
             if result["generation"] != controller.generation:
                 continue  # a reset raced this tick; drop the stale frame
