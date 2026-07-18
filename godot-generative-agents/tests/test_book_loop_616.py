@@ -317,3 +317,45 @@ def test_read_memory_carries_the_content():
         '"Mushrooms with white gills are often poisonous."'
     )
     assert entries[-1]["importance"] == 3.0
+
+
+# -- Task 5: the full loop on the real campus (#616 acceptance) -------------
+
+
+def test_full_book_loop_on_the_real_campus():
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas, extra_action_names=PENN_ACTION_VERBS)
+    char = next(iter(chars.values()))
+
+    # Away from the shelf: neither book verb is offered.
+    _move(game, char, "College Hall")
+    offered = {t["name"] for t in action_tools_for(game, char)}
+    assert "check_out_book" not in offered
+    assert "read" not in offered
+
+    # At the stacks both are: the shelf affords checkout, READABLE affords read.
+    _move(game, char, "Van Pelt — Book Stacks")
+    offered = {t["name"] for t in action_tools_for(game, char)}
+    assert "check_out_book" in offered
+    assert "read" in offered
+
+    # Checkout: shelf -> inventory, ownership stamped.
+    assert game.parser.parse_command("check_out_book campus history book", actor=char)
+    book = char.inventory["campus history book"]
+    assert book.get_property("checked_out_by") == char.name
+    assert "campus history book" not in game.locations["Van Pelt — Book Stacks"].items
+
+    # The book follows the borrower: read stays offered away from the library.
+    _move(game, char, "College Hall")
+    assert "read" in {t["name"] for t in action_tools_for(game, char)}
+
+    # Reading writes the content into memory -- the payoff of the loop.
+    assert game.parser.parse_command("read campus history book", actor=char)
+    remember_outcome(char, "read campus history book", 5)
+    entries = memory_stream_for_persona(char.agent)
+    assert entries[-1]["text"] == (
+        'I read campus history book. It said: "College Hall opened in 1873; '
+        "its green serpentine stone is so soft the university repairs it "
+        'block by block."'
+    )
