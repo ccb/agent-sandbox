@@ -1012,17 +1012,33 @@ def build_npc_context(character, game) -> str:
     # Full environment observation from the game engine
     lines.append(game.describe_for(character))
 
-    # Recent command history (last 5 exchanges)
-    # "Last 5" is a bit misleading, since llm_parser and parser respond differently to failure
-    # Could be something to look into
-    history = game.parser.command_history[-10:]
+    # Recent command history, scoped and attributed (issue #629): a command
+    # only appears if it was issued where this character now stands, and it is
+    # labeled with the name of whoever issued it ("You:" for the character's
+    # own commands). Unattributed entries (trigger-fired/scripted commands,
+    # actor=None) keep the legacy "Player:" label and are never filtered, and
+    # game narrations ("Game:") stay unscoped.
+    here = character.location.name if character.location else None
+    history = []
+    for entry in game.parser.command_history:
+        where = entry.get("location")
+        if entry["role"] == Role.USER and None not in (where, here) and where != here:
+            continue
+        history.append(entry)
+    history = history[-10:]
     if history:
         lines.append("")
         lines.append("Recent events:")
         for entry in history:
-            role = entry["role"]
             content = entry["content"]
-            prefix = "  Player:" if role == Role.USER else "  Game:"
+            if entry["role"] != Role.USER:
+                prefix = "  Game:"
+            elif entry.get("actor") == character.name:
+                prefix = "  You:"
+            elif entry.get("actor"):
+                prefix = f"  {entry['actor']}:"
+            else:
+                prefix = "  Player:"
             lines.append(f"{prefix} {content[:200]}")
 
     # What the character has recently heard. This is scoped per-character: only
