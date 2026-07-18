@@ -326,6 +326,29 @@ def test_burning_the_mystic_deals_the_cleanse_then_the_aftermath():
     assert "mystic-b" not in cap.texts(Channel.FIGURE)
 
 
+def test_the_cylinder_card_names_the_first_break():
+    """The Hall of Warriors deals 06-B while all four stand; the FIRST break
+    earns that colour's own plate (06-C/A/V/O); any deeper wreckage falls
+    back to the generic scavenged plate (06)."""
+    for colour, key in (
+        ("cerulean", "cyl-c"),
+        ("amber", "cyl-a"),
+        ("viridian", "cyl-v"),
+        ("orange", "cyl-o"),
+    ):
+        g, _cap = _game()
+        warriors = g.locations["Hall of Warriors"]
+        fig = warriors.items["cylinders"].get_property("figure")
+        assert fig(g) == "cylinders-b"  # as the tombwrights left it
+        g.relocate(g.player, warriors)
+        g.do_command(f"break {colour} cylinder")
+        assert fig(g) == key  # the first break gets its own plate
+        g.do_command(
+            "break viridian cylinder" if colour != "viridian" else "break amber cylinder"
+        )
+        assert fig(g) == "cylinders"  # deeper wreckage: the generic plate
+
+
 def test_a_purged_fungus_also_retires_the_gift_card():
     """The other road to a dead network -- the Horror slain in the sphere --
     must also retire 19-B at the summit (CCB: don't replay the gift once

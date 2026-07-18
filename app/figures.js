@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -512,6 +512,149 @@
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       typeOn(foot, "BREAK AMBER FIRST. WEAR WHAT YOU FIND.", T, 120, 1.6);
     });
+  });
+
+  /* ---- the burial-cylinder factory (CCB): one card per combination of
+     broken cylinders. Stations hold canon order -- cerulean, amber,
+     viridian, orange -- each drawn sealed (tenant, kit signature, bubbles)
+     or burst (stump, hue-tinted spill, shards, slump; the orange one vents
+     spores). 06-C/A/V/O below are the four first-break states; deeper
+     combinations stamp from this same mold when wanted. ---- */
+  function cylCard(svg, uid, broken, hdrText, footText) {
+    const AMBERH = "#ffd06a", VIRIDIANH = "#4ee0a8";
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "GUARD ISSUE / " +
+      ["INTACT", "ONE BURST", "TWO BURST", "THREE BURST", "ALL BURST"][broken.length];
+    const CYLS = [
+      { cx: 105, hue: PH, name: "CERULEAN",
+        kept: "CERULEAN: A PRISMATIC BLADE AT REST",
+        gone: "CERULEAN: BURST -- THE BLADE RANG FREE" },
+      { cx: 245, hue: AMBERH, name: "AMBER",
+        kept: "AMBER: A RESPIRATOR, STILL SEALED",
+        gone: "AMBER: BURST -- MASK UP" },
+      { cx: 385, hue: VIRIDIANH, name: "VIRIDIAN",
+        kept: "VIRIDIAN: MAGNETIC BOOTS, GUARD ISSUE",
+        gone: "VIRIDIAN: BURST -- THE BOOTS LET GO" },
+      { cx: 525, hue: FUNGUS, name: "ORANGE",
+        kept: "ORANGE: A PLASMA-IGNITER -- AND A BLOOM",
+        gone: "ORANGE: VENTED -- THE BLOOM IS LOOSE" },
+    ];
+    const bubbles = [], spores = [];
+    const groups = CYLS.map((c, i) => {
+      c.down = broken.indexOf(c.name) >= 0;
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      const put = (nn, a) => { const q = document.createElementNS(NS, nn);
+        for (const k in a) q.setAttribute(k, a[k]); g.appendChild(q); return q; };
+      const gel = stipple(svg, "gel" + uid + i, c.hue, 1);
+      if (!c.down) {
+        put("rect", { x: c.cx - 32, y: 130, width: 64, height: 186, fill: gel });
+        put("line", { x1: c.cx - 34, y1: 122, x2: c.cx - 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("line", { x1: c.cx + 34, y1: 122, x2: c.cx + 34, y2: 318, stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 122, rx: 34, ry: 9, fill: "none", stroke: PH_BRIGHT, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        // the tenant, at an attention no order will relieve
+        put("circle", { cx: c.cx, cy: 165, r: 7, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("polyline", { points: `${c.cx - 11},178 ${c.cx + 11},178 ${c.cx + 8},240 ${c.cx + 6},296 ` +
+          `${c.cx - 6},296 ${c.cx - 8},240 ${c.cx - 11},178`, fill: "none", stroke: PH_DIM, "stroke-width": 1.4 });
+        put("line", { x1: c.cx - 9, y1: 196, x2: c.cx + 7, y2: 212, stroke: PH_DIM });
+        put("line", { x1: c.cx + 9, y1: 196, x2: c.cx - 7, y2: 212, stroke: PH_DIM });
+        // each guard's kit, sealed in with him
+        if (c.name === "CERULEAN") {                          // the blade, shouldered
+          put("line", { x1: c.cx + 10, y1: 160, x2: c.cx + 22, y2: 236, stroke: PH_BRIGHT, "stroke-width": 1.5 });
+          put("line", { x1: c.cx + 13, y1: 172, x2: c.cx + 21, y2: 167, stroke: c.hue });
+          put("line", { x1: c.cx + 16, y1: 190, x2: c.cx + 24, y2: 185, stroke: c.hue });
+        }
+        if (c.name === "AMBER")                               // the respirator, strapped on
+          put("path", { d: `M ${c.cx - 6} 166 Q ${c.cx} 174 ${c.cx + 6} 166 L ${c.cx + 4} 171 ` +
+            `Q ${c.cx} 177 ${c.cx - 4} 171 Z`, fill: c.hue, stroke: "none", opacity: .9 });
+        if (c.name === "VIRIDIAN") {                          // the boots, still gripping
+          put("rect", { x: c.cx - 10, y: 298, width: 8, height: 7, fill: "none", stroke: c.hue, "stroke-width": 1.2 });
+          put("rect", { x: c.cx + 2, y: 298, width: 8, height: 7, fill: "none", stroke: c.hue, "stroke-width": 1.2 });
+        }
+        if (c.name === "ORANGE")                              // the bloom, veining
+          [[-22, 300, -14, 250, -20, 214], [0, 306, 4, 262, -2, 226], [20, 300, 14, 246, 22, 208]]
+            .forEach(v => put("polyline", { points:
+              `${c.cx + v[0]},${v[1]} ${c.cx + v[2]},${v[3]} ${c.cx + v[4]},${v[5]}`,
+              fill: "none", stroke: FUNGUS, "stroke-width": 1 }));
+        for (let b = 0; b < 3; b++)
+          bubbles.push({ q: el(svg, "circle", { cx: c.cx + (b - 1) * 12, cy: 300, r: 2,
+            fill: "none", stroke: c.hue, opacity: .8 }), phase: i * 31 + b * 57 });
+      } else {
+        // burst: a jagged stump, shards, the spill, the slumped dead
+        put("polyline", { points: `${c.cx - 34},318 ${c.cx - 34},236 ${c.cx - 22},252 ${c.cx - 12},230 ` +
+          `${c.cx},248 ${c.cx + 12},226 ${c.cx + 22},250 ${c.cx + 34},232 ${c.cx + 34},318`,
+          fill: "none", stroke: PH, "stroke-width": 1.5 });
+        put("ellipse", { cx: c.cx, cy: 318, rx: 34, ry: 9, fill: "none", stroke: PH });
+        put("ellipse", { cx: c.cx, cy: 336, rx: 52, ry: 8, fill: gel, stroke: "none" });
+        [[-48, 300, -40, 290], [44, 306, 52, 296], [40, 316, 50, 314]].forEach(v =>
+          put("line", { x1: c.cx + v[0], y1: v[1], x2: c.cx + v[2], y2: v[3], stroke: PH_BRIGHT }));
+        put("polyline", { points: `${c.cx - 20},306 ${c.cx - 6},296 ${c.cx + 10},304 ${c.cx + 20},298`,
+          fill: "none", stroke: PH_DIM, "stroke-width": 1.6 }); // the slump
+        if (c.name === "ORANGE")                              // vented: airborne now
+          for (let s = 0; s < 4; s++)
+            spores.push({ q: el(svg, "circle", { r: 1.6, fill: FUNGUS }),
+              x: c.cx + (s - 1.5) * 16, phase: s * 37 + i * 11 });
+      }
+      const cap = label(svg, c.cx, 362, 10, c.down ? PH_DIM : c.hue);
+      cap.setAttribute("text-anchor", "middle");
+      cap.textContent = c.name;
+      return { g, c };
+    });
+    const callLead = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-dasharray": "3 3" });
+    const call = label(svg, 624, 62, 10, PH); call.setAttribute("text-anchor", "end");
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, hdrText, T, 4, 1.4);
+      groups.forEach(({ g }, i) => g.setAttribute("opacity", T > 10 + i * 7 ? 1 : 0));
+      bubbles.forEach(b => b.q.setAttribute("cy", 300 - ((t * 3 + b.phase) % 156)));
+      spores.forEach(s => {                                   // the loose bloom
+        const k = (t * 2 + s.phase) % 120;
+        s.q.setAttribute("cx", s.x + Math.sin((t + s.phase) * .25) * 10);
+        s.q.setAttribute("cy", 320 - k * 1.6);
+        s.q.setAttribute("opacity", k > 100 ? 0 : .35 + (k % 3) * .2);
+      });
+      const k = Math.floor(T / 26) % CYLS.length;
+      if (T > 40) {
+        const c = CYLS[k];
+        callLead.setAttribute("points", `${c.cx},${c.down ? 230 : 116} ${c.cx},58 448,58`);
+        call.textContent = c.down ? c.gone : c.kept;
+      } else { call.textContent = ""; callLead.setAttribute("points", ""); }
+      typeOn(foot, footText, T, 120, 1.6);
+    });
+  }
+
+  /* ---------------- 06-C: the cylinders, cerulean down ---------------- */
+  FIG._define("cyl-c", "svg", function (svg) {
+    cylCard(svg, "c", ["CERULEAN"],
+      "THE BURIAL CYLINDERS, CERULEAN DOWN",
+      "THE BLADE FIRST. AMBER NEXT, IF YOU LIKE BREATHING.");
+  });
+
+  /* ---------------- 06-A: the cylinders, amber down ---------------- */
+  FIG._define("cyl-a", "svg", function (svg) {
+    cylCard(svg, "a", ["AMBER"],
+      "THE BURIAL CYLINDERS, AMBER DOWN",
+      "AMBER FIRST. EXACTLY AS THE MANUAL WOULD HAVE IT.");
+  });
+
+  /* ---------------- 06-V: the cylinders, viridian down ---------------- */
+  FIG._define("cyl-v", "svg", function (svg) {
+    cylCard(svg, "v", ["VIRIDIAN"],
+      "THE BURIAL CYLINDERS, VIRIDIAN DOWN",
+      "BOOTS FIRST: A SCAVENGER WHO PLANS AHEAD.");
+  });
+
+  /* ---------------- 06-O: the cylinders, orange down ---------------- */
+  FIG._define("cyl-o", "svg", function (svg) {
+    cylCard(svg, "o", ["ORANGE"],
+      "THE BURIAL CYLINDERS, ORANGE DOWN",
+      "ORANGE FIRST. THE BLOOM THANKS YOU FOR YOUR LUNGS.");
   });
 
   /* ---------------- 08: the glowstone (interactive) ---------------- */

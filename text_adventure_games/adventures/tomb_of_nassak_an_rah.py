@@ -2675,21 +2675,38 @@ def build_game(seed=None):
             "where the blows landed."
         )
 
+    # The hall's card follows the wreckage (CCB): all sealed is 06-B; exactly
+    # one down gets that colour's own plate (06-C/A/V/O); deeper wreckage
+    # falls back to the generic scavenged plate (06) until those combinations
+    # are stamped from the same mold.
+    _CYL_CARDS = {
+        "cerulean": "cyl-c",
+        "amber": "cyl-a",
+        "viridian": "cyl-v",
+        "orange": "cyl-o",
+    }
+
+    def _cylinders_card(g=None):
+        standing = _standing_cylinders()
+        if len(standing) == 4:
+            return "cylinders-b"
+        if len(standing) == 3:
+            (down,) = set(_CYL_CARDS) - set(standing)
+            return _CYL_CARDS[down]
+        return "cylinders"
+
     _scenery(
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
         _cylinders_examine,
-    ).set_property(
-        "figure",
-        lambda g: "cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders",
-    )
+    ).set_property("figure", _cylinders_card)
     # ...and the same card as a title plate on ARRIVAL, light permitting
     # (the hall is pitch dark; a blind arrival keeps the card unburned).
     warriors.set_property(
         "figure",
         lambda g: (
-            ("cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders")
+            _cylinders_card(g)
             if perception.sight_for(g.player, warriors)[0] >= perception.Sight.CLEAR
             else None
         ),
