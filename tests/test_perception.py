@@ -215,6 +215,52 @@ def test_npc_hears_a_loud_event_from_an_adjacent_room():
     assert added[0].importance == 0.5  # fainter than a witnessed event
 
 
+def test_actor_less_world_event_is_perceived_at_its_payload_importance():
+    """A world-level stimulus (actor=None) that declares where it happened is
+    witnessed by a co-located agent, and carries the importance its emitter
+    chose -- not the old hardcoded 1.0 that made every injected stimulus
+    maximally forgettable regardless of what was injected (#631)."""
+    game, player, troll, field, forest = _origin_world("Field")
+    mem = AgentMemory(owner="troll")
+    game.log_event(
+        None,  # world-level: no single actor
+        "boiled",
+        summary="the pot is boiled clear on the stove",
+        payload={"location": "Field", "importance": 8.0},
+    )
+    added = mem.ingest_events(game, troll)  # the troll is in the Field
+    assert len(added) == 1
+    assert added[0].importance == 8.0
+
+
+def test_actor_less_world_event_defaults_to_mundane_importance():
+    """No declared importance -> the mundane 1.0 default is preserved, so
+    existing world events are unchanged (#631)."""
+    game, player, troll, field, forest = _origin_world("Field")
+    mem = AgentMemory(owner="troll")
+    game.log_event(
+        None, "boiled", summary="the pot boiled", payload={"location": "Field"}
+    )
+    added = mem.ingest_events(game, troll)
+    assert len(added) == 1 and added[0].importance == 1.0
+
+
+def test_a_loud_world_event_is_heard_at_its_scaled_importance():
+    """A declared importance also lifts the fainter HEARD case above the flat
+    0.5, while an event with no importance still heard at exactly 0.5 (#631)."""
+    game, player, troll, field, forest = _origin_world("Forest")
+    mem = AgentMemory(owner="troll")
+    game.log_event(
+        None,
+        "explosion",
+        summary="a deafening blast",
+        payload={"location": "Field", "heard_radius": 1, "importance": 9.0},
+    )
+    added = mem.ingest_events(game, troll)  # troll is in the Forest, one hop away
+    assert len(added) == 1
+    assert added[0].importance == 4.5  # 9.0 attenuated by the heard half-weight
+
+
 class _Scream(base.Action):
     ACTION_NAME = "scream"
     AUDIBLE_RADIUS = 2
