@@ -53,4 +53,5 @@ Based on your persona, goals, and the current situation, choose a single game co
 {{ reasoning_label }} <one short sentence explaining your choice>
 {{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>
 {{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>
+If no available command can accomplish what you need, your Action may be: propose <what you need> because <why> — this records your request for the world's designers.
 {%- endif %}

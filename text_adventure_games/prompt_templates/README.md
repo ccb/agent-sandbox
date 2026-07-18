@@ -33,7 +33,7 @@ sync when you add, rename, remove, or re-wire a template.**
 
 | Template | Rendered by | Used for |
 | --- | --- | --- |
-| `npc_decision.prompty` | `npc.py` — `LLMAgent._render_system()` (via `_system_message()` and `_structured_system_message()`) | The NPC's ReAct decision system message: persona + goals, plus the labeled `Reasoning:`/`Action:`/`Duration:` instruction on the free-text path (omitted on the structured tool-calling path). |
+| `npc_decision.prompty` | `npc.py` — `LLMAgent._render_system()` (via `_system_message()` and `_structured_system_message()`) | The NPC's ReAct decision system message: persona + goals, plus the labeled `Reasoning:`/`Action:`/`Duration:` instruction on the free-text path (omitted on the structured tool-calling path), plus the propose licensing line (#620: how an agent records a wish for a missing action) on the free-text path. |
 | `npc_dialogue.prompty` | `npc.py` — `LLMAgent._dialogue_system_message()` | The NPC's conversation system message (issue #86): the same persona + goals block as `npc_decision`, plus the one-line dialogue instruction (say the next line in character; bow out with a brief goodbye). |
 | `reflect_system.prompty` | `reflection.py` — `LLMReflector._call()` (both reflection steps) | System message for periodic reflection (issue #84): synthesize higher-level insights grounded only in the memories given. The per-call user message (numbered memory window + step instruction) is assembled in code. |
 | `narrate_ok.prompty` | `llm_parser.py` — `LlmParser._ok_system_instructions()` (used by `ok()`) | Narrator instructions for a command that succeeded. |
