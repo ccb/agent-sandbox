@@ -68,3 +68,35 @@ class TiledGame(games.Game):
         # `origin == origin` -> gap 0, so the current room is always included;
         # `or [loc]` is a belt-and-braces guard for an odd address mapping.
         return near or [loc]
+
+    def can_perceive(self, observer, thing) -> bool:
+        """Whether *observer* actually notices *thing* in a room it sees into
+        (the engine's character-level seam, issue #662).
+
+        :meth:`perceivable_locations` above gates *rooms* by footprint distance,
+        but it can't help when both parties stand in the SAME room -- and this
+        world's outdoor hub is a single Location covering the whole campus, so
+        room membership says nothing about proximity. Here the gate is
+        per-thing: characters carry their live map tile (``char.tile``, stamped
+        at spawn by ``build_world`` and kept fresh by ``run_simulation.step``),
+        and a thing is perceived only within ``observer.vision_r`` Chebyshev
+        tiles -- the same metric as :meth:`WorldMap.tile_gap`, so "how far can I
+        see" means one thing across both seams.
+
+        Anything without a tile (items, un-stamped characters) keeps room
+        granularity, the engine default -- so this never hides more than the
+        old behavior showed for things the sim doesn't track on the map. The
+        one exception is the silent Observer, the engine's required "player":
+        it never acts and is plumbing rather than a resident, so residents
+        never perceive it (no more "I see Observer nearby." -- the #662 side
+        wart). The Observer itself still perceives everyone, which is what the
+        api.py world-state view reads.
+        """
+        if thing is self.player:
+            return False
+        radius = getattr(observer, "vision_r", 0)
+        mine = getattr(observer, "tile", None)
+        theirs = getattr(thing, "tile", None)
+        if radius <= 0 or mine is None or theirs is None:
+            return True
+        return max(abs(mine[0] - theirs[0]), abs(mine[1] - theirs[1])) <= radius
