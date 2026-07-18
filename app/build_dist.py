@@ -15,6 +15,7 @@ static host for the web version.
 
 import glob
 import json
+import time
 import os
 import shutil
 import subprocess
@@ -64,8 +65,34 @@ def main() -> int:
         print("no wheel produced", file=sys.stderr)
         return 1
     wheel = os.path.basename(wheels[-1])
-    for name in ("index.html", "terminal.css", "terminal.js", "app_api.py"):
+    # figures.js regenerates from the reel every build (single source of truth)
+    sys.path.insert(0, HERE)
+    import gen_figures
+
+    gen_figures.generate()
+    for name in (
+        "index.html",
+        "terminal.css",
+        "terminal.js",
+        "app_api.py",
+        "figures.js",
+    ):
         shutil.copy(os.path.join(HERE, name), DIST)
+    # the animation-prototype reel ships as a shareable subpage
+    reel = os.path.join(HERE, "prototypes", "retro-animations.html")
+    if os.path.exists(reel):
+        os.makedirs(os.path.join(DIST, "animations"), exist_ok=True)
+        shutil.copy(reel, os.path.join(DIST, "animations", "index.html"))
+    # Cache-bust the static assets: browsers and GH Pages hold terminal.css
+    # and the scripts long enough to hide fresh fixes behind stale copies.
+    stamp = str(int(time.time()))
+    idx = os.path.join(DIST, "index.html")
+    with open(idx) as fh:
+        html = fh.read()
+    for name in ("terminal.css", "terminal.js", "figures.js"):
+        html = html.replace(f'{name}"', f'{name}?v={stamp}"')
+    with open(idx, "w") as fh:
+        fh.write(html)
     manifest = {"wheel": wheel}
     if with_pyodide:
         _vendor_pyodide()

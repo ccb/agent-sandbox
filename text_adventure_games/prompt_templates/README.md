@@ -33,13 +33,13 @@ sync when you add, rename, remove, or re-wire a template.**
 
 | Template | Rendered by | Used for |
 | --- | --- | --- |
-| `npc_decision.prompty` | `npc.py` — `LLMAgent._render_system()` (via `_system_message()` and `_structured_system_message()`) | The NPC's ReAct decision system message: persona + goals, plus the labeled `Reasoning:`/`Action:`/`Duration:` instruction on the free-text path (omitted on the structured tool-calling path). |
+| `npc_decision.prompty` | `npc.py` — `LLMAgent._render_system()` (via `_system_message()` and `_structured_system_message()`) | The NPC's ReAct decision system message: persona + goals, plus the labeled `Reasoning:`/`Action:`/`Duration:` instruction on the free-text path (omitted on the structured tool-calling path), plus the propose licensing line (#620: how an agent records a wish for a missing action) on the free-text path. |
 | `npc_dialogue.prompty` | `npc.py` — `LLMAgent._dialogue_system_message()` | The NPC's conversation system message (issue #86): the same persona + goals block as `npc_decision`, plus the one-line dialogue instruction (say the next line in character; bow out with a brief goodbye). |
 | `reflect_system.prompty` | `reflection.py` — `LLMReflector._call()` (both reflection steps) | System message for periodic reflection (issue #84): synthesize higher-level insights grounded only in the memories given. The per-call user message (numbered memory window + step instruction) is assembled in code. |
 | `narrate_ok.prompty` | `llm_parser.py` — `LlmParser._ok_system_instructions()` (used by `ok()`) | Narrator instructions for a command that succeeded. |
 | `narrate_fail.prompty` | `llm_parser.py` — `LlmParser._fail_system_instructions()` (used by `fail()`) | Narrator instructions for a command that failed. |
 | `narrate_npc.prompty` | `llm_parser.py` — `LlmParser._npc_system_instructions()` (used by `npc_ok()`) | Narrator instructions for describing an NPC's action. |
-| `match_intent.prompty` | `llm_parser.py` — `LlmParser.determine_intent()` (LLM fallback) | Match the player's input to the closest known action. |
+| `match_intent.prompty` | `llm_parser.py` — `LlmParser.determine_intent()` (LLM fallback) | Match the player's input to the closest known action; with `allow_none` (agent-driven actors, #621), also license the "none of these commands fit the input" decline option. |
 | `match_character.prompty` | `llm_parser.py` — `LlmParser._llm_get_character()` | Match a character named in a command. |
 | `match_item.prompty` | `llm_parser.py` — `LlmParser._llm_match_item()` | Match an item named in a command. |
 | `match_direction.prompty` | `llm_parser.py` — `LlmParser._llm_get_direction()` | Match a movement direction named in a command. |

@@ -28,6 +28,7 @@ const DEFAULTS = {
   haptics: true,
   chips: true,
   textsize: "normal", // "small" | "normal" | "large"
+  illustrations: true, // the litho cards (figures.js), drawn inline
 };
 let settings = { ...DEFAULTS };
 try {
@@ -46,6 +47,7 @@ function applySettings() {
 
 const SETTING_ROWS = [
   ["crt", "CRT EFFECTS", [true, false], (v) => (v ? "ON" : "OFF")],
+  ["illustrations", "ILLUSTRATIONS", [true, false], (v) => (v ? "ON" : "OFF")],
   ["typewriter", "TYPEWRITER", ["on", "fast", "off"], (v) => v.toUpperCase()],
   ["sound", "SOUND", [true, false], (v) => (v ? "ON" : "OFF")],
   ["haptics", "HAPTICS", [true, false], (v) => (v ? "ON" : "OFF")],
@@ -85,7 +87,6 @@ function renderSettings() {
 function toggleSettings(show) {
   const on = show ?? settingsPanel.classList.contains("hidden");
   settingsPanel.classList.toggle("hidden", !on);
-  if (!on) cmd.focus();
 }
 document.getElementById("gear").addEventListener("pointerdown", (e) => {
   e.preventDefault();
@@ -170,17 +171,22 @@ const sounds = {
 const queue = [];
 let typing = false;
 
+function nearBottom() {
+  return output.scrollTop + output.clientHeight >= output.scrollHeight - 80;
+}
+
 function print(text, cls, instant) {
   const p = document.createElement("p");
   if (cls) p.className = cls;
   output.appendChild(p);
   if (instant || settings.typewriter === "off") {
     p.textContent = text;
-    output.scrollTop = output.scrollHeight;
+    if (nearBottom()) output.scrollTop = output.scrollHeight;
   } else {
     queue.push({ p, text, done: false });
     if (!typing) typeNext();
   }
+  return p;
 }
 
 function typeNext() {
@@ -194,7 +200,9 @@ function typeNext() {
     if (job.done) { typeNext(); return; } // flushed mid-type
     i = Math.min(i + step, job.text.length);
     job.p.textContent = job.text.slice(0, i);
-    output.scrollTop = output.scrollHeight;
+    // Follow the reveal only if the reader is at the bottom; a long room
+    // description reads from the TOP, at the reader's own pace (CCB).
+    if (nearBottom()) output.scrollTop = output.scrollHeight;
     if (i % 24 < step) sounds.tick();
     if (i < job.text.length) setTimeout(tick, delay);
     else typeNext();
@@ -209,7 +217,6 @@ function flushTypewriter() {
   }
   queue.length = 0;
   typing = false;
-  output.scrollTop = output.scrollHeight;
 }
 
 output.addEventListener("pointerdown", flushTypewriter);
@@ -222,28 +229,72 @@ function haptic(kind) {
   try { window.webkit.messageHandlers.haptic.postMessage(kind); } catch (e) {}
 }
 
+let wasGameOver = false;
+let lastWound = null; // the most recent wound's name, for the epitaph's cause line
+
+/* An illustration card, drawn inline in the transcript. The engine cues
+   these on the "figure" channel (a card KEY, not prose); the registry in
+   figures.js does the drawing. Off-switch: the ILLUSTRATIONS setting. A
+   missing registry or unknown key is silently skipped -- text is always
+   the complete game. */
+function showFigure(key, opts = {}) {
+  if (!settings.illustrations) return null;
+  const F = window.TombFigures;
+  if (!F || !F.has(key)) return null;
+  const box = document.createElement("div");
+  box.className = "figure";
+  try {
+    if (opts.prepend) output.prepend(box);
+    else output.appendChild(box);
+    F.render(key, box);
+  } catch (e) {
+    box.remove();
+    return null;
+  }
+  if (!opts.prepend && nearBottom()) output.scrollTop = output.scrollHeight;
+  return box;
+}
+
 function render(payloadJson, opts = {}) {
   const payload = JSON.parse(payloadJson);
   const instant = opts.instant || payload.events.length > 10;
   for (const ev of payload.events) {
+    if (ev.channel === "figure") { showFigure(ev.text); continue; }
     const cls =
       ev.channel === "damage" ? "damage" :
       ev.channel === "blocked" ? "blocked" : "";
     const prefix = ev.channel === "damage" ? "♥ " :
                    ev.channel === "blocked" ? "✗ " : "";
     print(prefix + ev.text, cls, instant);
-    if (ev.channel === "damage") { haptic("damage"); sounds.damage(); }
+    if (ev.channel === "damage") {
+      lastWound = (ev.text.split(" - ")[0] || "").trim() || lastWound;
+      haptic("damage"); sounds.damage();
+    }
     if (ev.channel === "blocked") sounds.blocked();
   }
   const s = payload.status;
   statusRoom.textContent = (s.room || "").toUpperCase();
   statusScore.textContent = `${s.score}/${s.max_score}   T:${s.turn}`;
   renderChips(payload.suggestions);
-  if (s.game_over) {
+  // The banner marks the MOMENT the game ends, not every payload after it
+  // (CCB: it was reprinting each turn). Post-mortem commands are refused by
+  // the engine itself, with the RESTORE/RESTART hint in the refusal.
+  if (s.game_over && !wasGameOver) {
+    if (!s.won) {
+      // the Trail's tombstone, client-cued -- with the REAL ledger carved
+      // in: the score, the hints owned up to, and the wound that did it
+      if (window.TombFigures)
+        window.TombFigures.context = {
+          score: s.score, max: s.max_score, hints: s.hints, cause: lastWound,
+        };
+      showFigure("epitaph");
+    }
     if (!s.won) { haptic("death"); sounds.damage(); }
-    print(s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***", "echo", instant);
-    print("(type RESTORE to return to a saved position, or reload to start over)", "blocked", instant);
+    const hinted = s.hints ? ` (${s.hints} hint${s.hints === 1 ? "" : "s"} taken)` : "";
+    print((s.won ? "*** You have won. ***" : "*** The tomb keeps you. ***") + hinted, "echo", instant);
+    print("(type RESTORE to return to a saved position, or RESTART to begin anew)", "blocked", instant);
   }
+  wasGameOver = s.game_over;
 }
 
 function chip(word, cls, withSpace) {
@@ -256,7 +307,8 @@ function chip(word, cls, withSpace) {
     click();
     const sep = cmd.value && !cmd.value.endsWith(" ") ? " " : "";
     cmd.value += sep + word + (withSpace ? " " : "");
-    cmd.focus();
+    // No focus here: composing by chip should not summon the keyboard
+    // (CCB) -- tap the input line when you want to type.
   });
   return el;
 }
@@ -274,14 +326,39 @@ function submit() {
   if (!text || !api) return;
   cmd.value = "";
   flushTypewriter();
-  print("> " + text, "echo", true);
-  render(api.command(text));
+  // A comma chains commands ("go east, go south" -- the map's tap-to-walk
+  // routes, or typed by hand). Each step runs as its own turn; a blocked
+  // step abandons the rest, so a shifted tomb never walks you blind.
+  const steps = text.split(",").map((s) => s.trim()).filter(Boolean);
+  let anchor = null;
+  for (const step of steps) {
+    const echo = print("> " + step, "echo", true);
+    anchor = anchor ?? echo;
+    const payload = api.command(step);
+    render(payload);
+    if (
+      steps.length > 1 &&
+      JSON.parse(payload).events.some((ev) => ev.channel === "blocked")
+    ) {
+      print("(the way is barred -- the rest of the route is abandoned)", "blocked", true);
+      break;
+    }
+  }
+  // Read from the TOP of the turn (CCB): the echoed command pins to the
+  // top of the view and the player scrolls down at their own pace.
+  output.scrollTop = Math.max(0, anchor.offsetTop - 4);
 }
 
 cmd.addEventListener("keydown", (e) => {
   ensureAudio();
   click();
   if (e.key === "Enter") submit();
+});
+document.getElementById("send").addEventListener("pointerdown", (e) => {
+  e.preventDefault(); // don't steal focus from wherever it is
+  ensureAudio();
+  click();
+  submit();
 });
 document.addEventListener("pointerdown", ensureAudio, { once: true });
 
@@ -297,6 +374,13 @@ const panelMap = document.getElementById("panel-map");
 function closePanels() {
   panelInv.classList.add("hidden");
   panelMap.classList.add("hidden");
+  // Empty the panels once they have slid away: iOS WebKit can otherwise
+  // show STALE painted content (ghost room labels) from the previous
+  // render when the layer comes back (CCB's phantom 'Tomb Exterior').
+  setTimeout(() => {
+    if (panelInv.classList.contains("hidden")) panelInv.replaceChildren();
+    if (panelMap.classList.contains("hidden")) panelMap.replaceChildren();
+  }, 260);
 }
 
 function el(tag, cls, text) {
@@ -334,31 +418,99 @@ function openInventory() {
   panelInv.classList.remove("hidden");
 }
 
+/* Compass geometry: where each direction PLACES the far room, in grid cells.
+   North is up, west is left; up/down and in/out lean diagonally (the old
+   IF-mapper convention) so they read apart from north/south. Odd passages
+   ("left stairs") have no vector and take the nearest free diagonal. */
+const DIR_VEC = {
+  north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0],
+  northeast: [1, -1], northwest: [-1, -1], southeast: [1, 1], southwest: [-1, 1],
+  up: [1, -1], down: [-1, 1], in: [1, 1], inside: [1, 1],
+  out: [-1, -1], outside: [-1, -1],
+};
+const DIR_OPP = {
+  north: "south", south: "north", east: "west", west: "east",
+  northeast: "southwest", southwest: "northeast",
+  northwest: "southeast", southeast: "northwest",
+  up: "down", down: "up", in: "out", out: "in",
+  inside: "outside", outside: "inside",
+};
+
 function mapLayout(nodes, edges, here) {
-  // Columns by BFS depth from the current room: small graph, honest shape.
+  // COMPASS-TRUE layout: BFS out from the current room, placing each new
+  // room in the cell its direction actually points to, so the geometry
+  // never argues with the labels. An occupied cell pushes the room further
+  // out along the same bearing.
   const adj = new Map(nodes.map((n) => [n, []]));
   for (const e of edges) {
-    adj.get(e.from)?.push(e.to);
-    adj.get(e.to)?.push(e.from);
+    // The layout bearing comes from whichever side speaks compass: the
+    // canopic stairs are "right stairs" one way but "up" the other, and
+    // one honest bearing is enough to draw the line true.
+    const v = DIR_VEC[e.dir] || (DIR_VEC[e.back] || []).map((c) => -c);
+    adj.get(e.from)?.push({ to: e.to, vec: v.length ? v : null });
+    adj.get(e.to)?.push({ to: e.from, vec: v.length ? v.map((c) => -c) : null });
   }
-  const depth = new Map([[here ?? nodes[0], 0]]);
-  const queue = [here ?? nodes[0]];
+  const start = here ?? nodes[0];
+  const grid = new Map([[start, [0, 0]]]);
+  const key = (x, y) => `${Math.round(x * 2)},${Math.round(y * 2)}`;
+  const taken = new Set([key(0, 0)]);
+  const place = (from, vec) => {
+    const [fx, fy] = grid.get(from);
+    const tries = vec
+      ? [1, 2, 3, 4].map((k) => [fx + vec[0] * k, fy + vec[1] * k])
+      : [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]
+          .map(([dx, dy]) => [fx + dx, fy + dy]);
+    for (const [x, y] of tries) if (!taken.has(key(x, y))) return [x, y];
+    return [fx + 5, fy + 5];
+  };
+  const queue = [start];
   while (queue.length) {
     const n = queue.shift();
-    for (const m of adj.get(n) || []) {
-      if (!depth.has(m)) { depth.set(m, depth.get(n) + 1); queue.push(m); }
+    for (const hop of adj.get(n) || []) {
+      if (grid.has(hop.to)) continue;
+      const p = place(n, hop.vec);
+      grid.set(hop.to, p);
+      taken.add(key(p[0], p[1]));
+      queue.push(hop.to);
     }
   }
-  for (const n of nodes) if (!depth.has(n)) depth.set(n, 0);
-  const cols = new Map();
+  let parked = 0;
+  for (const n of nodes) if (!grid.has(n)) grid.set(n, [parked++, 3]);
+  const xs = [...grid.values()].map((p) => p[0]);
+  const ys = [...grid.values()].map((p) => p[1]);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
   const pos = new Map();
-  for (const n of nodes) {
-    const d = depth.get(n);
-    const row = cols.get(d) ?? 0;
-    cols.set(d, row + 1);
-    pos.set(n, { x: 20 + d * 150, y: 26 + row * 52 });
-  }
+  for (const [n, [x, y]] of grid)
+    pos.set(n, { x: 14 + (x - minX) * 150, y: 24 + (y - minY) * 92 });
   return pos;
+}
+
+function mapRoute(m, target) {
+  // Shortest explored path from HERE to the tapped room, as the commands
+  // that actually walk it -- each hop uses the word its own side of the
+  // passage answers to ("right stairs" down, "up" back). One-way passages
+  // (back: null) are never walked backward.
+  const adj = new Map(m.nodes.map((n) => [n, []]));
+  for (const e of m.edges) {
+    adj.get(e.from)?.push({ to: e.to, cmd: e.dir });
+    if (e.back) adj.get(e.to)?.push({ to: e.from, cmd: e.back });
+  }
+  const prev = new Map([[m.here, null]]);
+  const queue = [m.here];
+  while (queue.length) {
+    const n = queue.shift();
+    if (n === target) break;
+    for (const hop of adj.get(n) || [])
+      if (!prev.has(hop.to)) {
+        prev.set(hop.to, { from: n, cmd: hop.cmd });
+        queue.push(hop.to);
+      }
+  }
+  if (!prev.has(target)) return null;
+  const route = [];
+  for (let n = target; prev.get(n); n = prev.get(n).from)
+    route.unshift(prev.get(n).cmd);
+  return route;
 }
 
 function openMap() {
@@ -366,11 +518,18 @@ function openMap() {
   const m = JSON.parse(api.panels()).map;
   panelMap.replaceChildren(el("h2", "", "THE EXPEDITION SO FAR"));
   const pos = mapLayout(m.nodes, m.edges, m.here);
-  const W = 20 + 150 * (Math.max(...[...pos.values()].map((p) => p.x - 20)) / 150 + 1);
-  const H = Math.max(...[...pos.values()].map((p) => p.y)) + 46;
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${Math.max(W, 320)} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
+  // The viewBox is set AFTER drawing, from the true extent of everything
+  // drawn -- stub labels overshoot the node grid and were getting cropped.
+  const box = { x0: 0, y0: 0, x1: 300, y1: 80 };
+  const ext = (x, y, padX = 0, padY = 0) => {
+    box.x0 = Math.min(box.x0, x - padX);
+    box.y0 = Math.min(box.y0, y - padY);
+    box.x1 = Math.max(box.x1, x + padX);
+    box.y1 = Math.max(box.y1, y + padY);
+  };
   const sub = (name, attrs, cls) => {
     const q = document.createElementNS(NS, name);
     for (const [k, v] of Object.entries(attrs)) q.setAttribute(k, v);
@@ -379,17 +538,50 @@ function openMap() {
     return q;
   };
   const center = (n) => ({ x: pos.get(n).x + 62, y: pos.get(n).y + 14 });
+  // An edge label sits a third of the way out from ITS OWN room, nudged off
+  // the line, so each end reads as "leave this room that way". The reverse
+  // is labeled only when it answers to a different word than the opposite.
+  const edgeLabel = (a, b, word) => {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // Step just past the edge of the label's own box (66 wide, 18 tall at
+    // the worst angle), clamped so two-ended labels can't cross the middle.
+    const clear = Math.abs(dx / len) * 66 + Math.abs(dy / len) * 18 + 10;
+    const f = Math.min(0.42, clear / len);
+    const lx = a.x + dx * f - (dy / len) * 9;
+    const ly = a.y + dy * f + (dx / len) * 9 + 3;
+    const t = sub("text", { x: lx, y: ly }, "map-label");
+    t.setAttribute("text-anchor", "middle");
+    t.textContent = word;
+    ext(lx, ly, 30, 10);
+  };
   for (const e of m.edges) {
     const a = center(e.from), b = center(e.to);
     sub("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, "map-edge");
-    const t = sub("text", { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 3 }, "map-label");
-    t.textContent = e.dir;
+    edgeLabel(a, b, e.dir);
+    if (e.back && e.back !== DIR_OPP[e.dir]) edgeLabel(b, a, e.back);
   }
+  let stubTilt = -1;
   for (const st of m.stubs) {
     const a = center(st.from);
-    sub("line", { x1: a.x, y1: a.y + 10, x2: a.x + 26, y2: a.y + 30 }, "map-stub");
-    const t = sub("text", { x: a.x + 28, y: a.y + 38 }, "map-label");
+    let v = DIR_VEC[st.dir];
+    if (!v) {
+      stubTilt = -stubTilt; // odd directions alternate sides, un-piled
+      v = [0.6 * stubTilt, 0.6];
+    }
+    const bx = a.x + v[0] * 88, by = a.y + v[1] * 42;
+    sub("line", { x1: a.x, y1: a.y, x2: bx, y2: by }, "map-stub");
+    const t = sub(
+      "text",
+      { x: bx + Math.sign(v[0]) * 4, y: by + (v[1] >= 0 ? 12 : -6) },
+      "map-label"
+    );
+    t.setAttribute(
+      "text-anchor",
+      v[0] > 0 ? "start" : v[0] < 0 ? "end" : "middle"
+    );
     t.textContent = st.dir + "?";
+    ext(bx, by, 64, 16);
   }
   for (const n of m.nodes) {
     const p = pos.get(n);
@@ -404,11 +596,28 @@ function openMap() {
     label.setAttribute("text-anchor", "middle");
     label.textContent = n.length > 22 ? n.slice(0, 21) + "\u2026" : n;
     g.append(rect, label);
+    ext(p.x, p.y);
+    ext(p.x + 124, p.y + 28);
+    // Tap a room to walk back to it: the explored route lands in the input
+    // as "go X, go Y" for the player to review and send (CCB's user ask).
+    g.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      click();
+      if (n === m.here || !m.here) { closePanels(); return; }
+      const route = mapRoute(m, n);
+      if (!route) return; // unreachable through explored passages
+      cmd.value = route.map((d) => "go " + d).join(", ");
+      closePanels();
+    });
     svg.appendChild(g);
   }
+  svg.setAttribute(
+    "viewBox",
+    `${box.x0 - 8} ${box.y0 - 8} ${box.x1 - box.x0 + 16} ${box.y1 - box.y0 + 16}`
+  );
   panelMap.appendChild(svg);
   panelMap.appendChild(el("div", "inv-section",
-    m.here ? `you are in ${m.here}` : ""));
+    m.here ? `you are in ${m.here} -- tap a room to walk back to it` : ""));
   panelMap.appendChild(closeButton());
   panelInv.classList.add("hidden");
   panelMap.classList.remove("hidden");
@@ -485,8 +694,7 @@ async function main() {
     panels: () => pyodide.runPython("app_api.panel_data()"),
   };
 
-  // Seed: resume the autosave's seed when one exists (so RESTORE AUTO is
-  // meaningful across visits), else the clock.
+  // Seed: resume the autosave's seed when one exists, else the clock.
   let seed = Date.now() % 1000000;
   let hasAuto = false;
   try {
@@ -496,30 +704,66 @@ async function main() {
 
   applySettings();
 
-  // The title holds until the player asks for the tomb (CCB): warm-up done,
-  // show the invitation and wait for a tap or a key before the opening scene.
-  boottext.textContent =
-    "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition\n\n" +
-    "[ tap or press any key to begin ]";
+  // Let the phosphor actually warm (CCB): on a fast cache the loading
+  // beat blinks past, so the warming screen holds a moment longer before
+  // the title takes over.
+  await new Promise((r) => setTimeout(r, 1500));
+
+  // The title holds until the player asks for the tomb (CCB). When an
+  // unfinished expedition is on file, the CHOICE lives here on the title
+  // screen -- continue it, or begin anew -- not as a banner in the story.
+  boottext.textContent = "TOMB OF NASSAK AN-RAH\na Vaults of Vaarn expedition";
   boottext.classList.add("ready");
-  await new Promise((begin) => {
-    const go = () => {
-      document.removeEventListener("pointerdown", go);
-      document.removeEventListener("keydown", go);
-      begin();
-    };
-    document.addEventListener("pointerdown", go);
-    document.addEventListener("keydown", go);
+  const resume = await new Promise((begin) => {
+    if (!hasAuto) {
+      boottext.textContent += "\n\n[ tap or press any key to begin ]";
+      const go = () => {
+        document.removeEventListener("pointerdown", go);
+        document.removeEventListener("keydown", go);
+        begin(false);
+      };
+      document.addEventListener("pointerdown", go);
+      document.addEventListener("keydown", go);
+      return;
+    }
+    boottext.textContent += "\n\nan unfinished expedition is on file";
+    const menu = document.createElement("div");
+    menu.id = "bootmenu";
+    for (const [label, value] of [
+      ["[ CONTINUE THE EXPEDITION ]", true],
+      ["[ BEGIN ANEW ]", false],
+    ]) {
+      const b = document.createElement("div");
+      b.className = "boot-option";
+      b.textContent = label;
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        menu.remove();
+        begin(value);
+      });
+      menu.appendChild(b);
+    }
+    boottext.after(menu);
   });
 
-  render(api.boot(seed));
-  if (hasAuto) {
-    print("(an unfinished expedition is on file -- type RESTORE AUTO to resume it)", "blocked", true);
+  if (resume && hasAuto) {
+    render(api.boot(seed), { instant: true });
+    output.replaceChildren(); // the restored look is the real opening
+    render(api.command("restore auto"), { instant: true });
+  } else {
+    if (hasAuto) {
+      try { localStorage.removeItem("tomb_save_auto"); } catch (e) {}
+      seed = Date.now() % 1000000;
+    }
+    // The Trail card rides the boot payload itself (app_api cues it), so
+    // fresh boots and RESTARTs open the same way.
+    render(api.boot(seed));
   }
+  output.scrollTop = 0; // the expedition reads from the top (CCB)
   bootscreen.classList.add("done");
   ensureAudio();
   sounds.boot();
-  cmd.focus();
+  // No autofocus (CCB): the keyboard comes when the player taps the input.
 }
 
 main().catch((e) => {

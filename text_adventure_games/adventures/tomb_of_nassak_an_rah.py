@@ -21,9 +21,10 @@ from text_adventure_games import (
     blocks,
     reactions,
     perception,
-    vaarn_chargen,
 )
 from text_adventure_games.enums import Property
+from text_adventure_games.adventures import vaarn_selves
+from text_adventure_games.hints import Hint
 from text_adventure_games.slots import Wound, roll_wound
 
 # Wound rolls draw from a module RNG so tests can seed it.
@@ -83,53 +84,248 @@ _QUIET_SPAWN = _QUIET - {"go", "talk"}
 # act alone: prying its coffin (the boss fight, below).
 
 
-# The lattice holds the Autarch's DAYS (CCB: a different memory per look, not
-# always the embalming). The embalming replay -- the jar-puzzle clue -- stays
-# in the pool: you sift a dead king's days for the useful one, and Silas
-# points the way ("the lattice remembers his embalming, for those who trouble
-# to look").
-_LATTICE_MEMORIES = (
-    "the Autarch's embalming: the baboon took his lungs, the human his "
-    "liver, the mantis his eyes; the falcon was given his intestines, and "
-    "the jackal -- strangely -- his brain.",
-    "a bath: full immersion, water to the chin and warm -- a luxury no one "
-    "now living has tasted. He weeps in it, quietly, where no court can "
-    "see, and the crystal keeps the weeping with the warmth.",
-    "his mother's hand on the back of his neck, from before either crown "
-    "or name. The facet is brief. It is the most consulted bank in the "
-    "lattice; the wear on the crystal says so.",
-    "the first time he drew blood: a training yard, a cousin's forearm "
-    "opened by accident, and the long second in which he understands that "
-    "no one is going to punish him. The facet ends on that second.",
-    "the day they raised him: ten thousand banners the colour of this sand, "
-    "and his own hands shaking too hard to take the staff, so that he grips "
-    "his wrist to steady it -- the gesture his historians would later call "
-    "the Vice.",
-    "a physician's chamber. Something orange in a sample-jar, small as a "
-    "coin, and An-Rah watching it move against the glass with an expression "
-    "the facet preserves exactly. It is not fear.",
-    "a memory that is not his: eight-jointed hands sorting seeds by "
-    "starlight, patient as arithmetic. The lattice does not say whose day "
-    "this was, or how it got in among the king's.",
-    "an old man's hands -- his own, by then -- teaching a kestrel to stand "
-    "on a wrist, over and over, with the patience of a man who has outlived "
-    "everyone who would have laughed at him.",
-    "the tombwrights taking his measurements while he still lived; his own "
-    "voice, bored, asking whether the sky-facing face might be made to "
-    "smile. It was not.",
+# The lattice holds the Autarch's DAYS (CCB: deeper now). Each facet has a
+# NAME the REMEMBER verb answers to, and a continuation that notices what the
+# expedition has since done -- the lattice is the tomb's commentary track.
+# EXAMINE draws unseen facets first; once every remembered day has been
+# consulted, a hidden bank wakes: the keep-list, the day he chose. The
+# embalming replay (the jar-puzzle clue) stays findable by name the moment
+# Silas points at it.
+_LATTICE_FACETS = (
+    {
+        "key": "embalming",
+        "name": "THE EMBALMING",
+        "words": ("embalming", "embalm", "funeral", "organs"),
+        "text": (
+            "the Autarch's embalming: the baboon took his lungs, the human his "
+            "liver, the mantis his eyes; the falcon was given his intestines, and "
+            "the jackal -- strangely -- his brain."
+        ),
+        "more": lambda g: (
+            " The jars stand answered on their plinths now; the stair took "
+            "the lattice at its word."
+            if g.locations["Hall of the Canopic Jars"].get_property("seal_open")
+            else (
+                " The hall of plinths below wears the same five faces. The "
+                "lattice has been telling you where things go."
+                if g.locations["Hall of the Canopic Jars"].has_been_visited
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "bath",
+        "name": "THE BATH",
+        "words": ("bath", "water", "weeping", "immersion"),
+        "text": (
+            "a bath: full immersion, water to the chin and warm -- a luxury no one "
+            "now living has tasted. He weeps in it, quietly, where no court can "
+            "see, and the crystal keeps the weeping with the warmth."
+        ),
+        "more": lambda g: (
+            " Water still mends, in Vaarn. You have felt what he wept for."
+            if g.scored("healed")
+            else ""
+        ),
+    },
+    {
+        "key": "mother",
+        "name": "HIS MOTHER",
+        "words": ("mother", "neck", "his mother"),
+        "text": (
+            "his mother's hand on the back of his neck, from before either crown "
+            "or name. The facet is brief. It is the most consulted bank in the "
+            "lattice; the wear on the crystal says so."
+        ),
+        "more": lambda g: (
+            " Silas says there is a daughter counting to a hundred in the "
+            "ego-core. The hand he kept HERE, at hand-height, where hands "
+            "could reach it."
+            if g.characters["Silas"].get_property("core_traded")
+            else ""
+        ),
+    },
+    {
+        "key": "first blood",
+        "name": "FIRST BLOOD",
+        "words": ("first blood", "blood", "cousin", "training yard"),
+        "text": (
+            "the first time he drew blood: a training yard, a cousin's forearm "
+            "opened by accident, and the long second in which he understands that "
+            "no one is going to punish him. The facet ends on that second."
+        ),
+        "more": lambda g: (
+            " No one has punished you, either."
+            if g.scored("spawn_guts")
+            or g.scored("spawn_brain")
+            or g.scored("jackals_settled")
+            else ""
+        ),
+    },
+    {
+        "key": "the raising",
+        "name": "THE RAISING",
+        "words": ("raising", "banners", "vice", "staff", "crown"),
+        "text": (
+            "the day they raised him: ten thousand banners the colour of this sand, "
+            "and his own hands shaking too hard to take the staff, so that he grips "
+            "his wrist to steady it -- the gesture his historians would later call "
+            "the Vice."
+        ),
+        "more": lambda g: (
+            " The guards in the western hall were buried gripping their "
+            "wrists the same way. The Vice outlived his historians."
+            if g.locations["Hall of Warriors"].has_been_visited
+            else ""
+        ),
+    },
+    {
+        "key": "physician",
+        "name": "THE PHYSICIAN'S CHAMBER",
+        "words": ("physician", "sample", "chamber", "orange"),
+        "text": (
+            "a physician's chamber. Something orange in a sample-jar, small as a "
+            "coin, and An-Rah watching it move against the glass with an expression "
+            "the facet preserves exactly. It is not fear."
+        ),
+        "more": lambda g: (
+            " The sample outlived him by four thousand years. You have "
+            "since corrected that."
+            if g.locations["Burial Sphere of Nassak An-Rah"].get_property("horror_dead")
+            else (
+                " You have seen that expression since -- on the thing "
+                "wearing his bones."
+                if g.characters["fungal horror"].location
+                is g.locations["Burial Sphere of Nassak An-Rah"]
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "seeds",
+        "name": "THE EIGHT-JOINTED HANDS",
+        "words": ("seeds", "starlight", "eight", "eight-jointed"),
+        "text": (
+            "a memory that is not his: eight-jointed hands sorting seeds by "
+            "starlight, patient as arithmetic. The lattice does not say whose day "
+            "this was, or how it got in among the king's."
+        ),
+        "more": lambda g: (
+            " Something in the jar-hall below sorts SOUND the way these "
+            "hands sort seeds. The lattice keeps its counsel."
+            if g.locations["Hall of the Canopic Jars"].has_been_visited
+            else ""
+        ),
+    },
+    {
+        "key": "kestrel",
+        "name": "THE KESTREL",
+        "words": ("kestrel", "bird", "falconry", "wrist"),
+        "text": (
+            "an old man's hands -- his own, by then -- teaching a kestrel to stand "
+            "on a wrist, over and over, with the patience of a man who has outlived "
+            "everyone who would have laughed at him."
+        ),
+        "more": lambda g: (
+            " That wrist lies composed now among its wrappings. You "
+            "arranged it yourself."
+            if g.locations["Burial Sphere of Nassak An-Rah"]
+            .items["coffin"]
+            .get_property("fixed")
+            else (
+                " That wrist is adrift in the sphere below, gold wire "
+                "loose at the joints."
+                if g.locations["Burial Sphere of Nassak An-Rah"].get_property(
+                    "horror_dead"
+                )
+                else ""
+            )
+        ),
+    },
+    {
+        "key": "tombwrights",
+        "name": "THE TOMBWRIGHTS",
+        "words": ("tombwrights", "measurements", "smile", "faces", "sky"),
+        "text": (
+            "the tombwrights taking his measurements while he still lived; his own "
+            "voice, bored, asking whether the sky-facing face might be made to "
+            "smile. It was not."
+        ),
+        "more": lambda g: (
+            " You have since taught the face's owner to smile after all "
+            "-- from the inside."
+            if g.locations["Burial Sphere of Nassak An-Rah"]
+            .items["prayers"]
+            .get_property("slumber_spent")
+            else ""
+        ),
+    },
+    {
+        "key": "the choosing",
+        "name": "THE CHOOSING",
+        "words": ("choosing", "keep-list", "chose", "kept", "the day he chose"),
+        "hidden": True,  # wakes only once every other day has been consulted
+        "text": (
+            "the day he chose: a table of wax tablets, the tombwrights' "
+            "ledger of what a lattice can hold, and An-Rah, old, striking "
+            "lines from it. The decrees go. The conquests go. The ten "
+            "thousand banners go. What stays: the bath. The hand on the "
+            "neck. The kestrel, the weeping, the seeds that were never his. "
+            "And at the bottom, in the king's own unpracticed hand, one "
+            "entry the wrights did not offer: THE DAY I CHOSE. KEEP THIS "
+            "TOO, SO THAT WHOEVER READS ME KNOWS I KNEW."
+        ),
+    },
 )
+
+#: Compatibility view (tests and prose tooling read the raw day-texts).
+_LATTICE_MEMORIES = tuple(f["text"] for f in _LATTICE_FACETS if not f.get("hidden"))
+
+
+def _facet_text(g, lattice, i):
+    """Show facet *i*: mark it consulted, pay the first-look award (and the
+    completion award if this is the hidden keep-list), and return the text
+    with any continuation the expedition has earned."""
+    mask = int(lattice.get_property("_seen") or 0)
+    first = not mask & (1 << i)
+    lattice.set_property("_seen", mask | (1 << i))
+    g.award("lattice", 5, "[+5 -- a dead king's days]")
+    facet = _LATTICE_FACETS[i]
+    if facet.get("hidden") and first:
+        g.award("remembered", 5, "[+5 -- every remembered day, in its order]")
+    extra = facet["more"](g) if facet.get("more") else ""
+    return facet["text"] + (extra or "")
 
 
 def _lattice_look(g=None):
-    """A different facet each look (callable examine_text; engine support in
-    actions.things.Examine / Thing.sense_text)."""
-    if g is not None:
-        g.award("lattice", 5, "[+5 -- a dead king's days]")
-    return (
+    """A facet per look (callable examine_text): UNSEEN days first, so the
+    sifting converges; when every remembered day has been consulted, the
+    hidden bank -- the keep-list -- wakes exactly once, then the lattice
+    returns to replaying at its own whim."""
+    intro = (
         "Lazulite crystals knit across the walls, worn smooth at "
         "hand-height. A bank wakes at your attention and replays "
-        + _RNG.choice(_LATTICE_MEMORIES)
     )
+    if g is None:
+        return intro + _RNG.choice(_LATTICE_MEMORIES)
+    lattice = g.locations["Hall of Memory"].items["crystal lattice"]
+    mask = int(lattice.get_property("_seen") or 0)
+    unseen = [
+        i
+        for i, f in enumerate(_LATTICE_FACETS)
+        if not f.get("hidden") and not mask & (1 << i)
+    ]
+    if unseen:
+        return intro + _facet_text(g, lattice, _RNG.choice(unseen))
+    hidden_i = next(i for i, f in enumerate(_LATTICE_FACETS) if f.get("hidden"))
+    if not mask & (1 << hidden_i):
+        return (
+            "The banks go quiet at your attention -- all of them, at once: "
+            "every remembered day consulted, and the lattice knows it. Deep "
+            "in the wall a bank you have never seen wakes, unworn, and "
+            "replays " + _facet_text(g, lattice, hidden_i)
+        )
+    return intro + _facet_text(g, lattice, _RNG.choice(range(len(_LATTICE_FACETS))))
 
 
 def _wound_player(g, name, slots_n, desc):
@@ -532,6 +728,7 @@ class Burn(actions.Action):
         elif target == "chimney":
             chimney_loc = self.game.locations["The Fungal Chimney"]
             chimney_loc.set_property("burned", True)
+            _chimney_burned_out(self.game)
             if loc is chimney_loc:
                 # Lit from INSIDE the shaft: it works, and it costs you --
                 # you are standing in the thing you just made a flue.
@@ -579,6 +776,7 @@ class Burn(actions.Action):
             horror = self.game.characters["fungal horror"]
             was_doused = horror.get_property("gel_doused")
             horror.set_property("ablaze", 3)
+            self.game.show_figure("autarch-e")
             horror.set_property("gel_doused", False)
             tool = _spark_name(self.player)
             if was_doused:
@@ -710,6 +908,239 @@ class TieSilk(actions.Action):
         )
 
 
+class ExamineSelf(actions.Action):
+    """EXAMINE SELF (CCB's easter egg): once per expedition, the scavenger
+    discovers who they have been all along -- one of a hundred pregenerated
+    Vaarnish selves (vaarn_selves.py). The draw happens at action time and
+    the command journals, so a save remembers your face; every later look
+    finds the same one."""
+
+    ACTION_NAME = "examine self"
+    ACTION_DESCRIPTION = "Take stock of yourself"
+    ACTION_ALIASES = [
+        "examine myself",
+        "x self",
+        "x myself",
+        "look at self",
+        "look at myself",
+        "inspect self",
+        "who am i",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        return True
+
+    def apply_effects(self):
+        i = self.player.get_property("_self_index")
+        if i is False or i is None:  # never rolled (index 0 is a real self)
+            i = _RNG.randrange(len(vaarn_selves.SELVES))
+            self.player.set_property("_self_index", i)
+            intro = (
+                "You take stock of yourself, perhaps for the first time "
+                "since the Cacklemaw. "
+            )
+        else:
+            intro = "You remain, on inspection, yourself. "
+        self.parser.ok(intro + vaarn_selves.SELVES[int(i)])
+
+
+class Remember(actions.Action):
+    """REMEMBER <day> (CCB): directed recall at the lattice. A bank answers
+    to its NAME -- the embalming, his mother, the kestrel -- for whoever
+    knows what to ask for (Silas names several; the rest are earned by
+    looking). EXAMINE stays the lattice choosing; REMEMBER is you asking."""
+
+    ACTION_NAME = "remember"
+    ACTION_DESCRIPTION = "Ask the lattice for one of the Autarch's days by name"
+    ACTION_ALIASES = ["recall"]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+        loc = self.player.location
+        self.lattice = loc.items.get("crystal lattice") if loc else None
+        self.facet_i = None
+        for i, f in enumerate(_LATTICE_FACETS):
+            if any(w in self.command for w in f["words"]):
+                self.facet_i = i
+                break
+
+    def check_preconditions(self) -> bool:
+        if self.lattice is None:
+            self.parser.fail(
+                "Nothing here holds a dead man's days. The memory-crystal "
+                "is in the Hall of Memory."
+            )
+            return False
+        mask = int(self.lattice.get_property("_seen") or 0)
+        if self.facet_i is None:
+            consulted = [
+                f["name"] for i, f in enumerate(_LATTICE_FACETS) if mask & (1 << i)
+            ]
+            if consulted:
+                self.parser.fail(
+                    "Which day? The banks you have consulted answer to: "
+                    + "; ".join(consulted)
+                    + ". (REMEMBER THE EMBALMING -- and Silas may name "
+                    "others.)"
+                )
+            else:
+                self.parser.fail(
+                    "The lattice shows what it chooses (EXAMINE LATTICE) -- "
+                    "but a bank answers to its NAME, for whoever knows what "
+                    "to ask for. Silas has named a few."
+                )
+            return False
+        facet = _LATTICE_FACETS[self.facet_i]
+        if facet.get("hidden") and not mask & (1 << self.facet_i):
+            self.parser.fail(
+                "If the lattice keeps such a day, it has not shown it to "
+                "you. Some banks wake only for a finished reader."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        self.parser.ok(
+            "You lay your fingers where the wear is deepest and ask. The "
+            "bank wakes under them and replays "
+            + _facet_text(self.game, self.lattice, self.facet_i)
+        )
+
+
+class FixCoffin(actions.Action):
+    """FIX COFFIN (CCB): once the Fungal Horror is destroyed, gather the
+    orbiting shards around the Autarch's drifting bones, wrap the whole in
+    spider-silk, and let the sphere's anti-entropy field fuse the cracks.
+    The chamber answers the kindness: every spoken prayer is re-cut into
+    the walls, and a NEW line rises -- the Prayer of Peaceful Slumber."""
+
+    ACTION_NAME = "fix coffin"
+    ACTION_DESCRIPTION = (
+        "Re-house the Autarch: gather the shards, wrap them in silk, let "
+        "the field fuse them"
+    )
+    ACTION_ALIASES = [
+        "fix the coffin",
+        "repair coffin",
+        "repair the coffin",
+        "rebuild coffin",
+        "rebuild the coffin",
+        "restore coffin",
+        "restore the coffin",
+        "reassemble coffin",
+        "gather shards",
+        "gather the shards",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+
+    def check_preconditions(self) -> bool:
+        loc = self.player.location
+        if loc is None or "coffin" not in loc.items:
+            self.parser.fail("There's no coffin here to fix.")
+            return False
+        coffin = loc.items["coffin"]
+        bones_adrift = "Autarch's bones" in loc.items
+        if not coffin.get_property("pried") and not bones_adrift:
+            self.parser.fail("The coffin is whole, and its tenant housed.")
+            return False
+        if not loc.get_property("horror_dead"):
+            self.parser.fail(
+                "Not while the thing that wore him still lives. The fixing "
+                "of this room starts with the Horror's ending."
+            )
+            return False
+        if (
+            "bolt of spider-silk" not in self.player.carried_items()
+            and not coffin.get_property("tethered")
+        ):
+            self.parser.fail(
+                "The pieces want holding while the field thinks -- "
+                "something long, light, and stronger than it looks. Silk."
+            )
+            return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        coffin = loc.items["coffin"]
+        silk = self.player.carried_items().get("bolt of spider-silk")
+        if silk is not None:
+            self.player.discard_item(silk)
+            wrap = (
+                "A wrap of spider-silk, paid out arm over arm, holds the "
+                "puzzle closed."
+            )
+        else:  # the old lashing, re-purposed
+            coffin.set_property("tethered", False)
+            wrap = (
+                "The lashing you tied for the prying serves a gentler "
+                "purpose now, drawn tight around the whole."
+            )
+        pried = coffin.get_property("pried")
+        gather = (
+            "You gather the orbiting shards out of the air one by one and "
+            "fit them around the Autarch's drifting bones -- a glass "
+            "eggshell reassembled in zero gravity around its king. "
+            if pried
+            else "You open the seam the field left soft, gather the "
+            "Autarch's drifting bones, and settle them home among their "
+            "wrappings. "
+        )
+        bones = loc.items.get("Autarch's bones")
+        if bones is not None:
+            loc.remove_item(bones)
+        coffin.set_property("pried", False)
+        coffin.set_property("is_closed", True)
+        coffin.set_property("fixed", True)
+        coffin.description = "the Autarch's anti-entropy coffin, made whole"
+        coffin.examine_text = (
+            "The glass sphere hangs whole at the chamber's heart, its "
+            "equator seamless -- you know where the cracks were, and cannot "
+            "find them. Past the clearing cloud, Nassak An-Rah lies "
+            "re-housed among his wrappings, composed, the gold wire at his "
+            "joints at rest."
+        )
+        desc = (
+            "A spherical chamber carved over every inch with funeral "
+            "prayers, and nothing in it obeys the ground. The coffin hangs "
+            "whole at the dead centre, seam sealed, the Autarch re-housed "
+            "within; the chamber is quiet in the way of a made bed."
+        )
+        if "drift of ash" in loc.items:
+            desc += " The ash of the Horror turns in its slow orbit, out of respect."
+        loc.description = desc
+        loc.dim_description = (
+            "A spherical chamber, weightless and quiet. A whole dark shape "
+            "hangs at the centre, and nothing in the room is broken."
+        )
+        prayers = loc.items.get("prayers")
+        if prayers is not None:
+            for key in ("balm", "wrath", "mending"):
+                prayers.set_property(key + "_spent", False)
+            prayers.set_property("slumber_known", True)
+            prayers.set_property("read_text", _prayers_text(prayers))
+        self.parser.ok(
+            gather + wrap + " Then the chamber does what it was built to "
+            "do: the anti-entropy field leans on the cracks until they "
+            "remember being whole, seams closing like water under the "
+            "silk, and the coffin hangs at the centre of its sphere as if "
+            "nothing had ever presumed to open it. Along the walls, the "
+            "answered prayers rise again out of the smooth stone, re-cut "
+            "-- and beneath them a NEW line, deeper than the rest: the "
+            "PRAYER OF PEACEFUL SLUMBER."
+        )
+        self.game.show_figure("autarch")
+
+
 class PryCoffin(actions.Action):
     """Pry open the Autarch's anti-entropy coffin in the zero-g Burial Sphere to
     claim the Exotica. Prying wants two things: an ANCHOR (the magnetic boots
@@ -807,6 +1238,260 @@ class PryCoffin(actions.Action):
         _sphere_aftermath(self.game, ash=False)
 
 
+def _prayers_text(prayers):
+    """The carvings' READ text, kept current as the chamber answers each
+    prayer: a spoken prayer's line goes smooth and unlettered."""
+    entries = [
+        ("balm", "the PRAYER OF BALM, for the mourner's hurts"),
+        (
+            "wrath",
+            "the PRAYER OF WRATH, a word the Autarchs kept for what would not die",
+        ),
+        (
+            "mending",
+            "the PRAYER OF MENDING, for vessels broken before their time",
+        ),
+    ]
+    if prayers.get_property("slumber_known"):
+        entries.append(
+            (
+                "slumber",
+                "the PRAYER OF PEACEFUL SLUMBER, new-cut and deepest, for a "
+                "king put properly to bed",
+            )
+        )
+    live = [text for key, text in entries if not prayers.get_property(key + "_spent")]
+    spent = [key.upper() for key, _ in entries if prayers.get_property(key + "_spent")]
+    parts = [
+        "Line over line, wall over wall -- most of it is names, titles, and "
+        "grief in the old liturgical hand."
+    ]
+    if live:
+        parts.append(
+            "Three lines are cut deeper than the rest, ringed to be spoken "
+            "aloud, and the chamber answers each ONCE: "
+            + "; ".join(live)
+            + ". To speak one: SAY PRAYER OF BALM."
+            if len(live) == 3
+            else "Of the three ringed prayers, these still wait to be spoken: "
+            + "; ".join(live)
+            + "."
+        )
+    if spent:
+        parts.append(
+            "Where the "
+            + " and the ".join("PRAYER OF " + k for k in spent)
+            + " stood, the stone is smooth and unlettered now; the chamber "
+            "has answered."
+        )
+    if not live:
+        parts.append("The chamber owes nothing more.")
+    return " ".join(parts)
+
+
+class SayPrayer(actions.Action):
+    """SAY one of the Burial Sphere's carved funeral prayers (CCB): the
+    chamber was carved to be read aloud from every direction at once, and it
+    answers each of its three prayers exactly once. BALM closes a wound;
+    WRATH strikes the Fungal Horror like a blow; MENDING calls the shattered
+    coffin's glass back into one piece."""
+
+    ACTION_NAME = "say prayer"
+    ACTION_DESCRIPTION = "Say one of the carved funeral prayers aloud"
+    ACTION_ALIASES = [
+        "say prayers",
+        "say the prayers",
+        "recite prayer",
+        "recite prayers",
+        "pray",
+        "say prayer of balm",
+        "say balm prayer",
+        "say healing prayer",
+        "say prayer of wrath",
+        "say wrath prayer",
+        "say attack prayer",
+        "say prayer of mending",
+        "say mending prayer",
+    ]
+
+    def __init__(self, game, command, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = self.game.player
+        self.command = command.lower()
+        loc = self.player.location
+        self.prayers = loc.items.get("prayers") if loc else None
+        if "balm" in self.command or "heal" in self.command:
+            self.which = "balm"
+        elif "wrath" in self.command or "attack" in self.command:
+            self.which = "wrath"
+        elif "mend" in self.command:
+            self.which = "mending"
+        elif any(w in self.command for w in ("slumber", "sleep", "peaceful")):
+            self.which = "slumber"
+        else:
+            self.which = None
+
+    def check_preconditions(self) -> bool:
+        if self.prayers is None:
+            self.parser.fail(
+                "Nothing here is carved to be answered. The funeral prayers "
+                "are cut into the Burial Sphere, and they listen only there."
+            )
+            return False
+        if self.which is None:
+            self.parser.fail(
+                "The carvings ring three prayers to be spoken (READ PRAYERS "
+                "to study them): SAY PRAYER OF BALM, SAY PRAYER OF WRATH, or "
+                "SAY PRAYER OF MENDING."
+            )
+            return False
+        if self.prayers.get_property(self.which + "_spent"):
+            self.parser.fail(
+                f"Where the Prayer of {self.which.capitalize()} was carved, "
+                "the stone is smooth and unlettered. The chamber has "
+                "answered it once, and owes nothing more."
+            )
+            return False
+        if self.which == "balm" and not self.player.wounds:
+            self.parser.fail(
+                "You shape the first syllable of the Prayer of Balm and the "
+                "carvings do not warm to it. You are unhurt; the chamber "
+                "will not spend its grace on whole flesh."
+            )
+            return False
+        if self.which == "wrath":
+            horror = self.game.characters.get("fungal horror")
+            if (
+                horror is None
+                or horror.get_property("is_dead")
+                or horror.location is not self.player.location
+            ):
+                self.parser.fail(
+                    "The Prayer of Wrath wants a target the Autarchs feared, "
+                    "and nothing before you answers that description."
+                )
+                return False
+        if self.which == "mending":
+            coffin = self.player.location.items.get("coffin")
+            if coffin is None or not coffin.get_property("pried"):
+                self.parser.fail(
+                    "The Prayer of Mending finds no broken vessel to close. "
+                    "The coffin is whole."
+                )
+                return False
+        if self.which == "slumber":
+            if not self.prayers.get_property("slumber_known"):
+                self.parser.fail(
+                    "No such line is carved here -- not yet. The chamber "
+                    "cuts new prayers only for new kindnesses."
+                )
+                return False
+            coffin = self.player.location.items.get("coffin")
+            if coffin is None or not coffin.get_property("fixed"):
+                self.parser.fail(
+                    "The Prayer of Peaceful Slumber wants a king properly "
+                    "housed to say it over."
+                )
+                return False
+        return True
+
+    def apply_effects(self):
+        loc = self.player.location
+        if self.which == "balm":
+            healed = self.player.heal_wound()
+            self.parser.ok(
+                "You say the Prayer of Balm, and the chamber says it back "
+                "from every direction at once, a round of carved voices "
+                "closing over you like warm water. The "
+                f"{healed.name.lower()} troubles you no more."
+            )
+        elif self.which == "wrath":
+            horror = self.game.characters["fungal horror"]
+            vigor = int(horror.get_property("vigor") or 0) - 1
+            if vigor <= 0:
+                horror.set_property("vigor", 0)
+                # The engine's KO contract: the horror_struck trigger converts
+                # this to the death it really is at the end of the round.
+                horror.set_property("is_unconscious", True)
+                self.parser.ok(
+                    "You say the Prayer of Wrath and the whole chamber says "
+                    "it with you -- a word with an edge on it, kept a "
+                    "thousand years for exactly this. It goes through the "
+                    "Fungal Horror like heat through frost: the coil lets go "
+                    "of everything it holds, all at once."
+                )
+            else:
+                horror.set_property("vigor", vigor)
+                self.parser.ok(
+                    "You say the Prayer of Wrath and the chamber says it "
+                    "with you, a word with an edge on it. Ropes of fungus "
+                    "char and drop away where it lands; the Fungal Horror "
+                    "is smaller than it was."
+                )
+        elif self.which == "slumber":
+            coffin = loc.items["coffin"]
+            coffin.examine_text = (
+                "The glass sphere hangs whole at the chamber's heart. Past "
+                "the clearing cloud, Nassak An-Rah lies among his "
+                "wrappings, and his face -- you would swear it -- has "
+                "untightened: the look of a man dreaming something kind, "
+                "four thousand years into a good night's sleep."
+            )
+            self.parser.ok(
+                "You say the Prayer of Peaceful Slumber, and the chamber "
+                "says it back so softly it is almost a hum. Through the "
+                "clouded glass the Autarch's face lets go of some ancient "
+                "argument; what settles over it is beatific, the rest he "
+                "built this whole blue mountain hoping for. The prayers on "
+                "the walls seem, briefly, less like grief."
+            )
+        else:  # mending
+            coffin = loc.items["coffin"]
+            coffin.set_property("pried", False)
+            coffin.set_property("is_closed", True)
+            coffin.description = "the Autarch's anti-entropy coffin, made whole again"
+            coffin.examine_text = (
+                "The glass sphere hangs whole at the chamber's heart again, "
+                "its equator seamless -- the shards remembered their places "
+                "and the places closed. The keeping is over; it is a "
+                "reliquary now, clouded and quiet."
+            )
+            dead = loc.get_property("horror_dead")
+            desc = (
+                "A spherical chamber carved over every inch with funeral "
+                "prayers, and nothing in it obeys the ground. The coffin "
+                "hangs whole again at the dead centre, seam sealed, glass "
+                "clouded and still."
+            )
+            if "Autarch's bones" in loc.items:
+                desc += (
+                    " The Autarch's bones drift around it in slow orbits, "
+                    "gold wire glinting at the joints."
+                )
+            if "drift of ash" in loc.items:
+                desc += " The ash of the Horror hangs in the air like a held breath."
+            if not dead:
+                desc += (
+                    " The light in the chamber is the Fungal Horror itself, "
+                    "coiled and moving."
+                )
+            loc.description = desc
+            loc.dim_description = (
+                "A spherical chamber, weightless and quiet. A whole dark "
+                "shape hangs at the centre; pale shapes drift around it in "
+                "the half-dark."
+            )
+            self.parser.ok(
+                "You say the Prayer of Mending, and the chamber takes it up "
+                "in a thousand carved voices. The orbiting glass remembers "
+                "its places: shard streams home to shard along old "
+                "symmetries, seams closing like water, until the coffin "
+                "hangs whole at the heart of the chamber."
+            )
+        self.prayers.set_property(self.which + "_spent", True)
+        self.prayers.set_property("read_text", _prayers_text(self.prayers))
+
+
 class Butcher(actions.Action):
     """BUTCHER ZOXEN (CCB): with a blade in hand, the dead draught-beasts at
     the wreck become trail food -- two cuts before the sand claims the rest.
@@ -835,7 +1520,10 @@ class Butcher(actions.Action):
         if zoxen is None:
             self.parser.fail("There is nothing here to butcher.")
             return False
-        if not any("blade" in n or "dagger" in n for n in self.player.carried_items()):
+        if not any(
+            "blade" in n or "dagger" in n or it.get_property("edged")
+            for n, it in self.player.carried_items().items()
+        ):
             self.parser.fail(
                 "Butchery wants an edge. Your hands alone won't part zox hide."
             )
@@ -860,17 +1548,101 @@ class Butcher(actions.Action):
         )
         meat.set_property(Property.EDIBLE, True)
         meat.set_property("smells_edible", True)  # the pack's nose (jackal scent)
+        meat.set_property(
+            Property.TASTE,
+            "of iron and brine -- zoxen are half salt by weight. Food, "
+            "honestly, and better bait: you are not the hungriest thing "
+            "down here.",
+        )
         meat.add_alias("meat")
         meat.add_alias("zox meat")
         meat.add_alias("haunch")
         self.player.location.add_item(meat)
+        if cut == 1:
+            # The first cut catches the blood too (CCB): zoxen are half
+            # water by weight, and in Vaarn that is the better half.
+            blood = things.Item(
+                "zox blood",
+                "zox blood, caught warm (2 doses)",
+                "Zox blood, thick and dark, caught before the sand could "
+                "claim it. Half water by weight, like everything about a "
+                "zox. Two honest doses; it would keep better in a skin.",
+            )
+            blood.set_property(Property.DRINKABLE, True)
+            blood.set_property("portions", 2)
+            blood.set_property("gettable", True)
+            blood.set_property(
+                Property.TASTE,
+                "of hot metal and brine, with an aftertaste of long roads. "
+                "In Vaarn, this counts as a drink.",
+            )
+            blood.add_alias("blood")
+            self.player.location.add_item(blood)
         self.parser.ok(
             "You open the nearer zox along the flank the sand hasn't "
             "claimed and carve loose a haunch. Road-butchery: quick, "
-            "ungentle, honest."
+            "ungentle, honest. The blood you catch before the sand can "
+            "have it: two dark doses, warm as the day was."
             if cut == 1
             else "You take a second haunch, leaner than the first. The road "
             "will have what's left by morning."
+        )
+
+
+class DecantBlood(actions.Action):
+    """POUR the caught zox blood into the waterskin (CCB): half water by
+    weight, so it stores as rations -- drink later, heal later. The blood's
+    remaining doses become waterskin rations and the vessel is discarded."""
+
+    ACTION_NAME = "pour blood"
+    ACTION_DESCRIPTION = "Pour the zox blood into the waterskin to keep it"
+    ACTION_ALIASES = [
+        "pour blood into waterskin",
+        "pour zox blood into waterskin",
+        "pour blood in waterskin",
+        "put blood in waterskin",
+        "put zox blood in waterskin",
+        "store blood in waterskin",
+        "decant blood",
+        "pour blood into skin",
+    ]
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.player = game.player
+        carried = self.player.carried_items()
+        here = self.player.location.items if self.player.location else {}
+        self.blood = carried.get("zox blood") or here.get("zox blood")
+        self.skin = carried.get("waterskin") or here.get("waterskin")
+
+    def check_preconditions(self) -> bool:
+        if self.blood is None:
+            self.parser.fail("You have no blood to pour.")
+            return False
+        if self.skin is None:
+            self.parser.fail("Nothing here will hold it -- the waterskin is elsewhere.")
+            return False
+        if int(self.blood.get_property("portions") or 0) <= 0:
+            self.parser.fail("The blood is spent; only the stain remains.")
+            return False
+        return True
+
+    def apply_effects(self):
+        doses = int(self.blood.get_property("portions") or 0)
+        rations = int(self.skin.get_property("portions") or 0) + doses
+        self.skin.set_property("portions", rations)
+        self.skin.description = (
+            f"a waterskin with {rations} ration{'s' if rations != 1 else ''}"
+        )
+        owner = self.blood.location or self.player
+        if self.blood.name in self.player.carried_items():
+            self.player.discard_item(self.blood)
+        elif self.player.location and self.blood.name in self.player.location.items:
+            self.player.location.remove_item(self.blood)
+        self.parser.ok(
+            f"You decant the blood into the waterskin, brine and all -- "
+            f"{doses} dose{'s' if doses != 1 else ''} the sand will never "
+            f"see. The skin holds {rations} rations now, none of them shy."
         )
 
 
@@ -954,12 +1726,30 @@ class TossCentipede(actions.Action):
             "the shattered remains of the glass centipede",
             "A spray of translucent chitin across the stones, glittering "
             "like a burst chandelier. The venom dries to nothing in the "
-            "open air.",
+            "open air. One long splinter of carapace survived the fall "
+            "whole -- edged like a surgeon's regret.",
         )
         remains.set_property("gettable", False)
         remains.add_alias("remains")
         remains.add_alias("shattered centipede")
         exterior.add_item(remains)
+        # The fall that kills it forges a knife (CCB): one splinter of
+        # carapace survives whole, and it takes an edge nothing metal does.
+        shard = things.Item(
+            "crystal shard",
+            "a long shard of glass carapace, edged like a knife",
+            "A hand-length splinter of the centipede's carapace, clear as "
+            "water and edged on both sides. It cuts the light just holding "
+            "it. A knife by any honest measure.",
+        )
+        shard.set_property("gettable", True)
+        shard.set_property("is_weapon", True)
+        shard.set_property(Property.WIELDABLE, True)
+        shard.set_property("edged", True)  # butchery accepts it
+        shard.add_alias("shard")
+        shard.add_alias("carapace shard")
+        shard.add_alias("glass knife")
+        exterior.add_item(shard)
 
 
 class CrystalSeal(blocks.Block):
@@ -1070,6 +1860,7 @@ def _sphere_aftermath(g, ash):
         bones.add_alias("bones")
         bones.add_alias("skeleton")
         bones.add_alias("autarch")
+        bones.set_property("figure", "autarch-c")
     if ash and "drift of ash" not in sphere.items:
         ash_item = _scenery(
             sphere,
@@ -1106,8 +1897,9 @@ def _sphere_quieted(g):
         coffin.examine_text = (
             "A clouded glass sphere at the chamber's heart, its field "
             "failing. Past the cloud, nothing moves any more; the slow "
-            "churn has stopped. The seam at its equator is fine as a hair "
-            "-- made to be pried, never opened."
+            "churn has stopped. No handle or latch, but there is a seam "
+            "at its equator, fine as a hair -- it could be pried, with the "
+            "right tool."
         )
         sphere.description = (
             "A spherical chamber carved over every inch with funeral "
@@ -1130,6 +1922,47 @@ def _sphere_quieted(g):
         )
 
 
+def _chimney_burned_out(g):
+    """The burn is PERMANENT (CCB: the growth must not return): the room, its
+    half-light, and the growth itself all read as aftermath from now on. The
+    shaft keeps a faint glow -- the carved prayers far below -- so the gloom
+    stays gloom, not blindness."""
+    chimney = g.locations["The Fungal Chimney"]
+    chimney.description = (
+        "A vertical throat scoured black, bare rock and crumbling char from "
+        "throat to crown, dropping from the summit toward a glow of carved "
+        "prayers far below. The air is only air now, and cool."
+    )
+    chimney.dim_description = (
+        "A black, bare shaft; char flakes away under your hands. The air is "
+        "only air, and cool."
+    )
+    for veil in chimney.veils:
+        if isinstance(veil, perception.Gloom):
+            veil._blurb = (
+                "The shaft is dark and quiet, rimmed faintly from below by "
+                "the glow of carved prayers. Char, and cool air."
+            )
+    growth = chimney.items.get("orange growth")
+    if growth is not None:
+        chimney.remove_item(growth)
+    if "charred growth" not in chimney.items:
+        stub = _scenery(
+            chimney,
+            "charred growth",
+            "the charred stubble of the burned growth",
+            "Black wisps and crumbling char, packed in the seams where the "
+            "growth was. Nothing left to burn, and nothing left breathing.",
+        )
+        stub.add_alias("growth")
+        stub.add_alias("char")
+        stub.add_alias("stubble")
+        stub.perceptible_by(
+            perception.Sense.TASTE,
+            "Char. It tastes of a fire that has finished its work.",
+        )
+
+
 def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     """A sealed canopic jar: a closed container holding the Autarch's preserved
     organ. The organ is revealed only when the jar is OPENED (examining the sealed
@@ -1137,6 +1970,13 @@ def _canopic_jar(name, description, examine_text, organ_name, organ_desc):
     and the organ is edible, God help you, or feedable to things that eat."""
     jar = things.Item(name, description, examine_text).make_container()
     jar.set_property("is_closed", True)
+    fig = {
+        "mantis jar": "jar-mantis",
+        "jackal jar": "jar-jackal",
+        "falcon jar": "jar-falcon",
+    }.get(name)
+    if fig:
+        jar.set_property("figure", fig)
     organ = things.Item(organ_name, organ_desc, organ_desc)
     organ.set_property("gettable", True)
     organ.set_property(Property.EDIBLE, True)
@@ -1169,7 +2009,7 @@ def build_game(seed=None):
     # docs/design/vaarn-style-guide.md.)
     wreck = things.Location(
         "The Caravan Wreck",
-        "The Tomblands road, at the hour after the Cacklemaw. A trade caravan lies "
+        "The Tomblands road, at the hour after the Cacklemaw attack. A trade caravan lies "
         "heeled over in the blue sand -- wind-wagon ribs of pale wood, cargo "
         "strewn and already sanding under -- and the dead have been arranged by "
         "the wind into attitudes of sleep. It is said the road to Gnomon is "
@@ -1281,6 +2121,18 @@ def build_game(seed=None):
         _good.add_alias(_name.split()[0])  # bale / crate / bolt
         if "dates" in _name:
             _good.set_property(Property.EDIBLE, True)
+            _good.set_property(
+                Property.TASTE,
+                "of honey and sun under the road-dust. Proper trail food -- "
+                "and anything in these halls with a nose will know you "
+                "carry it.",
+            )
+        if "saffron" in _name:
+            _good.set_property(
+                Property.TASTE,
+                "of bitter gold. A spice worth more than the wagon that "
+                "hauled it -- seasoning, not supper.",
+            )
         _good.add_alias(_name.split()[-1].strip())  # saffron / dates / spider-silk
         if "silk" in _name:
             _good.add_alias("silk")
@@ -1337,59 +2189,45 @@ def build_game(seed=None):
     waterskin.set_property(Property.IS_HIDDEN, True)
     merchant.add_item(waterskin)
 
-    # The TEAMSTER is a NEWBEAST (Issue 1: humanoid animal-people who "speak
-    # and walk like men", wearing masks in imitation of the human face) --
-    # and a different one each expedition: rolled on the zine's own spark
-    # tables (vaarn_chargen), from a side-RNG derived from the game seed so
-    # the roll never shifts the main stream (saves stay deterministic).
-    # Newbeasts are never beasts of burden; the zoxen pulled, she drove.
-    _nb = vaarn_chargen.generate(
-        random.Random(None if seed is None else f"teamster-{seed}"),
-        ancestry="newbeast",
-    )
-    _beast = _nb.sparks["beast"]
-    _hue = _nb.sparks["hue"].lower()
-    _mask = _nb.sparks["mask"]
-    _mask_line = (
-        "She wears no mask; her beast face meets you bare, which among "
-        "newbeasts is either candor or challenge."
-        if _mask == "None"
-        else f"A carved mask in imitation of a human face -- a {_mask.lower()} "
-        "one -- hangs at her neck on a cord; there is no one left on the "
-        "road to wear it for."
-    )
-    _oddity = _nb.sparks["oddity"]
+    # The TEAMSTER is CRITCH (CCB's pick from the rolled slate; the chargen
+    # slate lives in docs/design/teamster-candidates.md): a golden new-hyena
+    # of Vaarn's mask-wearing newbeasts -- except Critch declines. Won't
+    # wear clothes, either; the brass pin rides a cord. The RANDOM chargen
+    # survives as the EXAMINE SELF easter egg (vaarn_selves.py).
     teamster = things.Character(
-        _nb.name,
-        f"a {_beast.lower()} teamster",
-        f"I am {_nb.name}. I drove the wagon; now there is no wagon.",
+        "Critch",
+        "a golden new-hyena teamster",
+        "I am Critch. I drove the wagon; now there is no wagon.",
     )
     teamster.examine_text = (
-        f"A {_hue}-coated {_beast.lower()} in a drover's long coat, upright, "
-        "dressed in the road's dust. Patient, mournful, unhurt. "
-        f"{_mask_line} ({_oddity.rstrip('.')}.) A brass pin on the coat "
-        f"reads {_nb.name.upper()}."
+        "A golden-coated new-hyena, upright, unhurt, and bare of any stitch "
+        "-- newbeasts dress to reassure, and Critch has declined. A carved "
+        "mask in imitation of a human face, cracked clean across the smile, "
+        "hangs at her neck on a cord beside a brass pin that reads CRITCH. "
+        "She laughs, softly and steadily, at nothing you can see; with "
+        "new-hyenas it is a manner of breathing, not an opinion."
     )
 
     def _teamster_talk(g):
         teamster.set_property("has_spoken", True)
         return (
-            f'"They came at moonset, laughing," {_nb.name} says. "I ran, and '
-            "the merchant could not, and that is the whole story. The "
-            'Cacklemaw make no secret of their coming." She looks north, to '
-            'the faces in the azure stone. "Take what he no longer needs -- '
-            "better you than the sand. He carried water, three rations of "
-            "it, and a glowstone; search him, he is past minding. The hold "
-            "is yours too, whatever you can carry. But mind the tomb, "
-            "scavenger. The caravans give its mouths a wide berth, and a "
-            'caravan is seldom wrong twice." She settles her pack straps as '
-            "she speaks, the way people do who have already decided to be "
-            "elsewhere."
+            '"They came at moonset, laughing," Critch says, and laughs '
+            'herself, without pleasure. "I ran, and the merchant could not, '
+            "and that is the whole story. The Cacklemaw make no secret of "
+            'their coming." She looks north, to the faces in the azure '
+            'stone. "Take what he no longer needs -- better you than the '
+            "sand. He carried water, three rations of it, and a glowstone; "
+            "search him, he is past minding. The hold is yours too, "
+            "whatever you can carry. But mind the tomb, scavenger. The "
+            "caravans give its mouths a wide berth, and a caravan is seldom "
+            'wrong twice." She settles her pack straps as she speaks, the '
+            "way people do who have already decided to be elsewhere."
         )
 
     teamster.talk_text = _teamster_talk
     teamster.add_alias("teamster")
-    teamster.add_alias(_beast.lower())
+    teamster.add_alias("new-hyena")
+    teamster.add_alias("hyena")
     wreck.add_character(teamster)
 
     # --- The eight locations -------------------------------------------------
@@ -1399,9 +2237,12 @@ def build_game(seed=None):
         "over every seam with creeping orange fungus. Three faces are carved in "
         "it: westward, the dead Autarch as a young boy; eastward, a helmed "
         "warrior; far up, an old man turned to the sky, orange tendrils weeping "
-        "from his open mouth. Each mouth is a door. The wind has been reading "
-        "these faces for aeons and keeps its findings to itself.",
+        "from his open mouth. Each mouth is a door. Wind and sand have been "
+        "scoring these faces for ages, and yet they remain intact somehow.",
     )
+    # The approach (card 17-C): a title plate above the first arrival's
+    # description (the Go hook) -- and EXAMINE TOMB, whichever comes first.
+    exterior.set_property("figure", "ext1c")
     youth = things.Location(
         "Hall of Youth",
         # The LIT view -- what you see once a light is raised. Pitch dark until
@@ -1532,6 +2373,38 @@ def build_game(seed=None):
     ):
         for _d in _room.connections:
             _room.move_verbs.setdefault(_d, _verb)
+    # Anticipated phrasings (CCB playtest): each room teaches the parser how
+    # players actually ask to move there. Exact-command synonyms only -- they
+    # never show in Exits: or on the map.
+    for phrase in ("enter tomb", "enter the tomb", "enter", "inside", "go inside"):
+        exterior.add_direction_alias(phrase, "north")
+    for phrase in (
+        "climb",
+        "climb tomb",
+        "climb the tomb",
+        "climb stone",
+        "climb up the tomb",
+        "scale the tomb",
+    ):
+        exterior.add_direction_alias(phrase, "up")
+    for phrase in (
+        "tomb",
+        "go to tomb",
+        "to tomb",
+        "approach tomb",
+        "approach the tomb",
+    ):
+        wreck.add_direction_alias(phrase, "north")
+    for phrase in ("enter wagon", "enter the wagon", "wagon", "enter hold", "hold"):
+        wreck.add_direction_alias(phrase, "in")
+    for phrase in ("leave", "exit", "leave wagon", "exit wagon", "outside"):
+        hold.add_direction_alias(phrase, "out")
+    for phrase in ("descend", "climb down", "climb down the tomb"):
+        summit.add_direction_alias(phrase, "down")
+    for room in (youth, warriors):
+        back = next(d for d, dest in room.connections.items() if dest is exterior)
+        for phrase in ("outside", "leave tomb", "exit tomb", "leave", "exit"):
+            room.add_direction_alias(phrase, back)
     exterior.move_verbs.setdefault("north", "walk, footfalls carrying,")
     exterior.move_verbs.setdefault("east", "walk, footfalls carrying,")
     exterior.move_verbs.setdefault("up", "climb")
@@ -1548,7 +2421,9 @@ def build_game(seed=None):
         "The two lower mouths gape as doorways. From the elder's mouth -- a "
         "chimney -- bright orange tendrils and fungal vines sprout, webbing "
         "down over the stone, shifting drowsily in the red light of the sun.",
-    )
+    ).set_property(
+        "figure", "ext1e"
+    )  # X TOMB: the surveyor's elevations
     # The statues can be felt in the dark (TOUCH); the ceiling of bats can be
     # heard (HEARING) -- so EXAMINE-in-the-dark and the feel/listen probes reveal
     # them without a light (perception Layer 2). The ceiling's *visual* text is
@@ -1573,6 +2448,7 @@ def build_game(seed=None):
         "with roosting bats, packed wing to wing, thousands of them -- and "
         "the nearest have already let go of the stone.",
     )
+    ceiling.set_property("figure", "bats-c")  # RESIDENTS (THOUSANDS)
     ceiling.perceptible_by(
         perception.Sense.HEARING,
         "You can't see a thing, but the vault overhead seethes -- a dry, "
@@ -1637,6 +2513,7 @@ def build_game(seed=None):
     hound_pile.set_property("slots", 3)
     hound_pile.add_alias("hound")
     hound_pile.add_alias("dog")
+    hound_pile.set_property("figure", "hound")
     # SEARCH the hound and its chest gives up a second fire-starter (design
     # doc §17.1) -- the corpse-searching habit pays out a third time.
     servo = things.Item(
@@ -1651,15 +2528,66 @@ def build_game(seed=None):
     servo.add_alias("servo")
     hound_pile.add_item(servo)
     tank.add_item(hound_pile)
+    _CYLINDER_NAMES = (
+        "cerulean cylinder",
+        "amber cylinder",
+        "viridian cylinder",
+        "orange cylinder",
+    )
+
+    def _standing_cylinders():
+        return [n.split()[0] for n in _CYLINDER_NAMES if n in warriors.items]
+
+    def _colour_list(colours):
+        if len(colours) <= 1:
+            return colours[0] if colours else ""
+        if len(colours) == 2:
+            return f"{colours[0]} and {colours[1]}"
+        return ", ".join(colours[:-1]) + f", and {colours[-1]}"
+
+    def _cylinders_examine(g=None):
+        standing = _standing_cylinders()
+        if len(standing) == 4:
+            return (
+                "Four guard-mummies at an attention no order will ever "
+                "relieve, each sealed under its own gel -- cerulean, amber, "
+                "viridian, orange -- and each armed as in life. Whatever "
+                "they carried went under the glass with them. The plexiglas "
+                "is crazed to milk at the corners; a firm blow would finish "
+                "what the centuries started."
+            )
+        if not standing:
+            return (
+                "All four cylinders lie burst. The guard-mummies sprawl "
+                "where their gel let them down, at attention from the waist "
+                "up, relieved of everything but posture."
+            )
+        kept = _colour_list(standing)
+        return (
+            f"Only the {kept} still {'stands' if len(standing) == 1 else 'stand'} "
+            "sealed, its dead still armed as in life. The broken ones gape, "
+            "their guard-mummies slumped in drying gel, glass crazed to milk "
+            "where the blows landed."
+        )
+
     _scenery(
         warriors,
         "cylinders",
         "four plexiglas burial cylinders",
-        "Four guard-mummies at an attention no order will ever relieve, each "
-        "sealed under its own gel -- cerulean, amber, viridian, orange -- and "
-        "each armed as in life. Whatever they carried went under the glass "
-        "with them. The plexiglas is crazed to milk at the corners; a firm "
-        "blow would finish what the centuries started.",
+        _cylinders_examine,
+    ).set_property(
+        "figure",
+        lambda g: "cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders",
+    )
+    # ...and the same card as a title plate on ARRIVAL, light permitting
+    # (the hall is pitch dark; a blind arrival keeps the card unburned).
+    warriors.set_property(
+        "figure",
+        lambda g: (
+            ("cylinders-b" if len(_standing_cylinders()) == 4 else "cylinders")
+            if perception.sight_for(g.player, warriors)[0] >= perception.Sight.CLEAR
+            else None
+        ),
     )
     # The three present jars sit on their plinths -- sealed containers. OPEN one to
     # learn which organ it holds (a second route to the head->organ matching, on
@@ -1689,6 +2617,23 @@ def build_game(seed=None):
     )
     mantis_jar.contents["fungal eyes"].add_alias("eyes")
     baboon_jar.contents["lungs"].add_alias("lung")
+    # Each organ keeps its own taste (CCB) -- the shared preservative note
+    # in _canopic_jar is only the fallback.
+    baboon_jar.contents["lungs"].set_property(
+        Property.TASTE,
+        "of dust and cedar; they crackle faintly, like old paper. Whatever "
+        "they last breathed is four thousand years gone.",
+    )
+    human_jar.contents["liver"].set_property(
+        Property.TASTE,
+        "of bitter iron and resin -- the organ that kept the Autarch's "
+        "score. It is, God help you, edible.",
+    )
+    mantis_jar.contents["fungal eyes"].set_property(
+        Property.TASTE,
+        "of orange rot and salt, and your tongue itches where it touched. "
+        "You would swear, briefly, that the eyes taste you back.",
+    )
     for j in (baboon_jar, human_jar, mantis_jar):
         j.set_property("gettable", True)
         canopic.add_item(j)
@@ -1698,17 +2643,44 @@ def build_game(seed=None):
     falcon_plinth = things.Item(
         "falcon plinth",
         "an empty plinth carved with a falcon",
-        "A plinth carved as a falcon, lit crimson and empty. The carving's "
-        "talons are cupped, curled around the shape of something it has lost.",
+        lambda g=None: (
+            "A plinth carved as a falcon, lit crimson and empty. The "
+            "carving's talons are cupped, curled around the shape of "
+            "something it has lost."
+            if not falcon_plinth.contents
+            else (
+                "A plinth carved as a falcon, the crimson gone white. The "
+                "talons cup their jar again, and the carving reads as "
+                "finished."
+                if "falcon jar" in falcon_plinth.contents
+                else "A plinth carved as a falcon, still burning crimson. "
+                "The talons hold the jar awkwardly, like a word in the "
+                "wrong mouth."
+            )
+        ),
     ).make_surface(capacity=1)
     falcon_plinth.set_property("gettable", False)
+    falcon_plinth.set_property("figure", "canopic-c")
     jackal_plinth = things.Item(
         "jackal plinth",
         "an empty plinth carved with a jackal",
-        "A plinth carved as a jackal, lit crimson and empty. The stone jaws are "
-        "parted, holding their grip on an absence.",
+        lambda g=None: (
+            "A plinth carved as a jackal, lit crimson and empty. The stone "
+            "jaws are parted, holding their grip on an absence."
+            if not jackal_plinth.contents
+            else (
+                "A plinth carved as a jackal, the crimson gone white. The "
+                "stone jaws close true around their jar, grip answered at "
+                "last."
+                if "jackal jar" in jackal_plinth.contents
+                else "A plinth carved as a jackal, still burning crimson. "
+                "The stone jaws hold the jar without conviction; this is "
+                "not what they were parted for."
+            )
+        ),
     ).make_surface(capacity=1)
     jackal_plinth.set_property("gettable", False)
+    jackal_plinth.set_property("figure", "canopic-c")
     canopic.add_item(falcon_plinth)
     canopic.add_item(jackal_plinth)
     dagger = things.Item(
@@ -1727,17 +2699,46 @@ def build_game(seed=None):
         "hypergeometric, and heavier inside than out.",
     )
     manifold_box.add_alias("box")
+    manifold_box.set_property("figure", "tesseract")
     coffin = _scenery(
         sphere,
         "coffin",
         "the Autarch's anti-entropy coffin",
         "A clouded glass sphere at the chamber's heart, its field failing, its "
         "interior a slow orange churn. Past the cloud, shapes drift and turn "
-        "like fish under ice: bone, and things that were buried to be kept. The "
-        "seam at its equator is fine as a hair -- made to be pried, never opened.",
+        "like fish under ice: bone, and things that were buried to be kept. No "
+        "handle or latch, but there is a seam at its equator, fine as a hair "
+        "-- it could be pried, with the right tool.",
     )
+    prayers = _scenery(
+        sphere,
+        "prayers",
+        "the funeral prayers, carved over every inch of the chamber",
+        "Carved to be read from every direction at once. READ them to study "
+        "the lines; three of them are rung to be SAID aloud.",
+    )
+    prayers.add_alias("prayer")
+    prayers.add_alias("funeral prayers")
+    prayers.add_alias("carvings")
+    prayers.add_alias("carved prayers")
+    prayers.set_property("read_text", _prayers_text(prayers))
+    prayers.add_command_hint("read prayers")
+
     coffin.make_container()
-    coffin.set_property("is_closed", True)  # PryCoffin (boots-gated) is the only way in
+    coffin.set_property("is_closed", True)
+    coffin.set_property(
+        "figure", "sphere-b"
+    )  # PryCoffin (boots-gated) is the only way in
+    # ...and as a title plate on ARRIVAL (the chamber is gloom: a dark entry
+    # keeps the card). After the mend, arrivals show the Autarch at rest.
+    sphere.set_property(
+        "figure",
+        lambda g: (
+            ("autarch" if coffin.get_property("fixed") else "sphere-b")
+            if perception.sight_for(g.player, sphere)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     # The failing anti-entropy field still counts as a lock: SEARCH (which
     # rummages open ordinary closed containers) must not bypass the pry puzzle.
     coffin.set_property(Property.IS_LOCKED, True)
@@ -1758,6 +2759,10 @@ def build_game(seed=None):
     corpse.add_alias("mystic")
     corpse.make_surface()
     corpse.set_property("reveals_on_examine", True)
+    corpse.set_property("figure", "mystic-b")
+    # ...and the same card as a title plate on first ARRIVING at the Summit
+    # (open sky at sunset: no sight gate needed).
+    summit.set_property("figure", "mystic-b")
     corpse.set_property(
         "contents_relation", "Nested in the hollow of its clasped hands you find"
     )
@@ -1769,8 +2774,19 @@ def build_game(seed=None):
         "and stays that way for hours. The mystic was holding it when he turned "
         "to stone -- for himself, or for whatever came up the mountain.",
     )
+    fungus.set_property("figure", "fungus")
     fungus.set_property("gettable", True)
     fungus.set_property(Property.EDIBLE, True)
+    # A LICK is a microdose (CCB): the taste rehearses the fungus's whole
+    # function -- and points, gently, at giving it away rather than eating it.
+    fungus.perceptible_by(
+        perception.Sense.TASTE,
+        "A crumb on the tongue, no more -- and warmth spreads outward from "
+        "it, and for one held breath everything in Vaarn seems to mean "
+        "well: the tomb, the dark, even you. Then it passes, and you miss "
+        "it. A whole dose would make fast friends of whoever ate it -- it "
+        "feels meant for someone lonelier than you.",
+    )
     fungus.set_property(
         Property.TASTE,
         "sweet, chemical, and companionable. For the next while "
@@ -1799,6 +2815,18 @@ def build_game(seed=None):
         "brain",
         "the Autarch's shrivelled brain",
     )
+    falcon_jar.contents["intestines"].set_property(
+        Property.TASTE,
+        "of offal -- cured, ancient, and unmistakably what it is. Food, "
+        "technically. Tribute, ideally: you are not the hungriest thing "
+        "in these halls.",
+    )
+    jackal_jar.contents["brain"].set_property(
+        Property.TASTE,
+        "of resin and long memory. Somewhere behind your teeth, for one "
+        "beat, a thought that is not yours: blue sand, and a mother's "
+        "voice. Swallowing more would be somebody's biography.",
+    )
 
     spawn_guts = things.Character(
         "spawn of guts",
@@ -1810,6 +2838,7 @@ def build_game(seed=None):
         "intestine -- though even that doesn't quite get it -- wearing the "
         "falcon canopic jar on top like a hat. It sways toward any sound."
     )
+    spawn_guts.set_property("figure", "guts-a")
     spawn_guts.add_to_inventory(falcon_jar)
     spawn_brain = things.Character(
         "spawn of brain",
@@ -1821,6 +2850,7 @@ def build_game(seed=None):
         "worn as a hat. It has no eyes and does not appear to want any; it "
         "twitches toward every noise, precise as a metronome."
     )
+    spawn_brain.set_property("figure", "spawn-a")
     spawn_brain.add_to_inventory(jackal_jar)
     warriors.add_character(spawn_guts)
     hounds.add_character(spawn_brain)
@@ -1842,8 +2872,9 @@ def build_game(seed=None):
         "eyes do sums -- you, minus what you carry, minus what you bleed. It "
         "is not you they want."
     )
-    for _a in ("jackals", "jackal", "pack of jackals", "pthalo-jackals"):
+    for _a in ("jackals", "jackal", "pack", "pack of jackals", "pthalo-jackals"):
         jackal_pack.add_alias(_a)
+    jackal_pack.set_property("figure", "jackal")
     # A PACK does not drop to one swing (the vigor system, CCB): three blows
     # thin it to nothing.
     jackal_pack.set_property("vigor", 3)
@@ -1869,6 +2900,15 @@ def build_game(seed=None):
     for _a in ("horror", "the horror", "mass", "fungal mass"):
         horror.add_alias(_a)
     horror.set_property("no_catch", True)  # a coil has no hands
+    # Its card follows its state: the coil in the coffin, or the bust ablaze.
+    horror.set_property(
+        "figure",
+        lambda g: (
+            "autarch-e"
+            if g.characters["fungal horror"].get_property("ablaze")
+            else "sphere-b"
+        ),
+    )
     horror.set_property("vigor", 5)
     horror.set_property(
         "struck_text",
@@ -1893,6 +2933,7 @@ def build_game(seed=None):
     )
     for _a in ("centipede", "glass"):
         centipede.add_alias(_a)
+    centipede.set_property("figure", "centipede")
     den.add_character(centipede)
 
     # The prismatic blade -- a weapon, pried from a guard's cylinder. (The full
@@ -1907,6 +2948,7 @@ def build_game(seed=None):
     blade.set_property(Property.WIELDABLE, True)
     blade.set_property("slots", 2)  # a medium weapon (source: "d8, 2 slots")
     blade.add_alias("blade")
+    blade.set_property("figure", "blade")
 
     # Endgame gear: a plasma-igniter and magnetic boots (more guard kit), and a
     # flask of flammable embalming gel from the hound tank.
@@ -2023,6 +3065,7 @@ def build_game(seed=None):
         "lattice in slow bright threads. Patient, courteous, elsewhere. Now "
         "and then his lips move -- circular glyphs, no sound."
     )
+    silas.set_property("figure", "silas")
     _silas_speech = (
         'Silas speaks without turning. "Scavenger. You walk in a house of '
         "memory; mind what you wake. Two of the Autarch's organs have got up and "
@@ -2035,6 +3078,7 @@ def build_game(seed=None):
     )
 
     def _silas_talk(g):
+        g.show_figure("silas")  # his card, if the arrival or a look hasn't
         g.award("silas", 5, "[+5 -- the archivist's acquaintance]")
         # With a living spawn in earshot, Silas will not perform the lecture.
         for name in ("spawn of guts", "spawn of brain"):
@@ -2156,9 +3200,15 @@ def build_game(seed=None):
         "dark: light is dear, and attention dearer.",
     )
     glowstone.set_property(Property.FLAMMABLE, True)
+    glowstone.set_property(
+        Property.TASTE,
+        "like a nine-volt battery: a flat electric fizz that finds every "
+        "filling you own. Not food. Possibly not polite.",
+    )
     glowstone.add_alias(
         "stone"
     )  # no "lantern" alias: the Ulfire Lantern owns that word
+    glowstone.set_property("figure", "glowstone")
     glowstone.add_command_hint("light glowstone")
     glowstone.add_command_hint("douse glowstone")
     glowstone.set_property(Property.IS_HIDDEN, True)
@@ -2214,14 +3264,19 @@ def build_game(seed=None):
         custom_actions=[
             Sneak,
             Burn,
+            ExamineSelf,
+            FixCoffin,
             PryCoffin,
+            Remember,
+            SayPrayer,
             TieSilk,
             Refill,
             TossCentipede,
             Butcher,
+            DecantBlood,
         ],
     )
-    game.max_score = 115
+    game.max_score = 145
     game.rng_seed = seed  # the save blob records this alongside game.journal
     # Turn on the feel / listen / smell probes: the Hall of Youth's dark clue
     # (the unseen bats overhead) is meant to be heard and felt, not just seen.
@@ -2231,6 +3286,178 @@ def build_game(seed=None):
     # for a hand-held demo/classroom run; the wreck's tutorial items carry
     # their hints ("open pack", "light glowstone", "read ledger") for that mode.
     game.give_hints = False
+
+    # --- The hint booklet (InvisiClues style; engine hints.py) --------------
+    # Question-based, met-before-listed, one level deeper per ask: level 1
+    # restates what the fiction already said, level 2 names the thing, level
+    # 3 is walkthrough-grade. Solved puzzles leave the menu; HINT costs no
+    # turn but is journaled, and the final score owns up to hints taken.
+    for _h in (
+        Hint(
+            "light",
+            "How am I supposed to see anything in there?",
+            [
+                "The caravan did not die carrying nothing.",
+                "SEARCH the dead merchant. Traders of the Tomblands carry "
+                "their own light.",
+                "TAKE GLOWSTONE, then LIGHT GLOWSTONE -- and DOUSE it when "
+                "the dark is the safer company.",
+            ],
+            resolved=lambda g: g.scored("first_light"),
+        ),
+        Hint(
+            "bats",
+            "What do I do about the bats?",
+            [
+                "They hate your light. They love something else more.",
+                "The caravan's crates hold what a starving colony wants far "
+                "more than your scalp.",
+                "THROW DATES (or drop the crate). In the Hall of Youth the "
+                "colony feasts -- five quiet rounds. Carried to another "
+                "room, it follows and ROOSTS there for good. Under open "
+                "sky, it wheels and scatters.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: bool(youth.get_property("bats_flown")),
+        ),
+        Hint(
+            "jackals",
+            "How do I get past the pthalo-jackals?",
+            [
+                "They are scavengers, not sentries. Scavengers can be paid.",
+                "Think about what a jackal wants, and what this expedition "
+                "is carrying (or could butcher) that smells like it.",
+                "Carry the CRATE OF DATES (or BUTCHER ZOXEN at the wreck for "
+                "haunches) and let the pack take its tribute; a real toll "
+                "buys a long peace. Steel works too, three blows' worth.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: jackal_pack.get_property("is_dead")
+            or any((h.get_property(f"_jk:{h.name}") or 0) < 0 for h in _halls),
+        ),
+        Hint(
+            "spawn",
+            "The things in the jars keep finding me.",
+            [
+                "They have no eyes. Ask yourself what they are using instead.",
+                "Walking SOUNDS like something in these halls -- the arrival "
+                "line says so. There is a quieter way to move.",
+                "SNEAK <direction> to move silently. If you must fight them, "
+                "make your racket in the Canopic hall, where the mantis jar "
+                "sings them to you on your own terms.",
+            ],
+            available=lambda g: youth.has_been_visited,
+            resolved=lambda g: spawn_guts.get_property("is_dead")
+            and spawn_brain.get_property("is_dead"),
+        ),
+        Hint(
+            "seal",
+            "How do I open the crimson seal on the stair?",
+            [
+                "Five plinths, three jars. The room is telling you its own "
+                "inventory.",
+                "The falcon and jackal jars were carried off. One walks the "
+                "halls on a spawn's shoulders; one waits among the dead "
+                "guards.",
+                "Take the FALCON JAR from the fallen spawn and the JACKAL "
+                "JAR from the Hall of Warriors, then PUT each ON its "
+                "matching plinth. The seal answers the jars.",
+            ],
+            available=lambda g: canopic.has_been_visited,
+            resolved=lambda g: bool(canopic.get_property("seal_open")),
+        ),
+        Hint(
+            "cylinders",
+            "What is in the burial cylinders?",
+            [
+                "Kit outlasts its owners. These owners were guards.",
+                "BREAK them -- but read the colors first: one holds a mask, "
+                "one holds boots, and the orange one holds a bloom you do "
+                "not want in your lungs.",
+                "BREAK AMBER CYLINDER for the respirator (WEAR IT FIRST), "
+                "then BREAK ORANGE CYLINDER for the plasma-igniter, and "
+                "BREAK VIRIDIAN CYLINDER for the magnetic boots.",
+            ],
+            available=lambda g: warriors.has_been_visited,
+            resolved=lambda g: all(
+                c not in warriors.items
+                for c in ("amber cylinder", "viridian cylinder", "orange cylinder")
+            ),
+        ),
+        Hint(
+            "spores",
+            "The orange spores are searing my lungs.",
+            [
+                "The fungus is the air itself. You need to change one of " "the two.",
+                "An Autarchy respirator was buried with the guards -- WORN, "
+                "not held. Or remember that everything the gel has touched "
+                "is ready to burn.",
+                "WEAR RESPIRATOR (amber cylinder, Hall of Warriors) -- or "
+                "douse the growth with gel and BURN GROWTH to clear the "
+                "chimney for good. Standing outside it first is wise.",
+            ],
+            available=lambda g: chimney.has_been_visited
+            or bool(warriors.get_property("spores_vented")),
+            resolved=lambda g: bool(chimney.get_property("burned"))
+            or "respirator" in game.player.worn,
+        ),
+        Hint(
+            "coffin",
+            "How do I open the Autarch's coffin?",
+            [
+                "Nothing in the sphere holds you down. Prying wants bracing, "
+                "and the seam wants an edge.",
+                "A guard was buried with boots that grip, and the merchant "
+                "carried silk strong enough to lash a coffin still.",
+                "WEAR MAGNETIC BOOTS (or TIE SILK TO COFFIN), then PRY "
+                "COFFIN with the prismatic blade in hand. The blade will "
+                "not survive the coffin -- and what sleeps inside will "
+                "mind the knock.",
+            ],
+            available=lambda g: sphere.has_been_visited,
+            resolved=lambda g: bool(coffin.get_property("pried"))
+            or bool(sphere.get_property("horror_dead")),
+        ),
+        Hint(
+            "horror",
+            "How do I kill the Fungal Horror?",
+            [
+                "Watch it for one round doing nothing. What you see it do "
+                "is the whole problem.",
+                "Steel is a treadmill: it knits faster than you cut. "
+                "Everything the embalming gel touches is ready to burn -- "
+                "and the chamber itself was carved to take your side.",
+                "THROW GEL AT HORROR, then BURN HORROR with the igniter or "
+                "glowstone spark -- ablaze, it cannot mend, so keep "
+                "cutting. The carved PRAYER OF WRATH is a free blow, and "
+                "the PRAYER OF BALM will close a wound mid-fight.",
+            ],
+            available=lambda g: horror.location is sphere,
+            resolved=lambda g: bool(horror.get_property("is_dead")),
+        ),
+        Hint(
+            "score",
+            "What am I still missing?",
+            [
+                "The score pays for light, water, wisdom spent, both jars, "
+                "the seal, the tomb's lesser hosts quelled, the Horror -- "
+                "and leaving alive.",
+                "READ LEDGER at the wreck; DRINK WATER on a wound; the "
+                "lattice remembers a dead king's days; Silas rewards a "
+                "civil TALK.",
+                "The full 145: threshold 5, first light 5, water 5, a "
+                "healed wound 5, the lattice memory 5, every remembered day "
+                "in its order 5, Silas's acquaintance "
+                "5, falcon jar 5, jackal jar 5, the dagger 5, the manifold "
+                "box 5, the Friend's Fungus 5, the archivist made whole 5, "
+                "each spawn quelled 5, the "
+                "pack settled (paid or put down) 5, the seal 20, the Horror "
+                "25, and out alive 20.",
+            ],
+            resolved=lambda g: g.score >= g.max_score,
+        ),
+    ):
+        game.add_hint(_h)
 
     # The Spawn home in on noise (DrawnToSound); the mantis-headed jar amplifies
     # any noise in the Canopic hall into a luring song. Make a racket there and the
@@ -2293,6 +3520,20 @@ def build_game(seed=None):
             "walls of faint constellations, and nothing else legible."
         )
     )
+    # Silas at his reading (card 09): a title plate on ARRIVING in the Hall
+    # of Memory -- but only when you can actually see him (the hall is gloom;
+    # a dark arrival doesn't burn the card, and EXAMINE SILAS remains the
+    # backstop cue once a light is raised).
+    memory.set_property(
+        "figure",
+        lambda g: (
+            "silas"
+            if "Silas" in memory.characters
+            and not g.characters["Silas"].get_property("is_dead")
+            and perception.sight_for(g.player, memory)[0] >= perception.Sight.CLEAR
+            else None
+        ),
+    )
     memory.dim_description = (
         "A hall lit only by the lattice itself -- drifts of pale glimmer "
         "crawling the walls, each point a day someone else lived. Between "
@@ -2354,6 +3595,7 @@ def build_game(seed=None):
                 "closes over the light. THE END.",
             )
         else:
+            g.show_figure("bats-c")  # the residents, eyes opening
             g.parser.ok(
                 "The bats drop in a wheeling rake of claws -- your scalp and "
                 "hands pay for the light. (You are mauled; douse it, or feed "
@@ -2367,8 +3609,11 @@ def build_game(seed=None):
     _hazard(
         game,
         youth,
-        danger=lambda g: perception.carries_light(g.player)
-        or _player_was_loud_in(g, youth, _QUIET),
+        danger=lambda g: not youth.get_property("bats_flown")
+        and (youth.get_property("bats_feeding") or 0) <= 0
+        and (
+            perception.carries_light(g.player) or _player_was_loud_in(g, youth, _QUIET)
+        ),
         warns=(
             "The rustle overhead deepens. Grit sifts down through your light; "
             "the whole vault has begun, gently, to move.",
@@ -2376,6 +3621,146 @@ def build_game(seed=None):
         limit=2,  # one warning -- the bats' patience is short
         harm=_bat_maul,
     )
+
+    # --- Getting rid of the bats (CCB): THROW THE DATES ----------------------
+    # Fruit on the air empties the vault. Thrown in an interior room, the
+    # colony streams there, eats, and ROOSTS -- sated and harmless, and the
+    # Hall of Youth is only a room now. Thrown under open sky, they strip the
+    # dates, circle the tomb for ten turns, and disperse for good. Either way
+    # the dates are spent -- the same dates the jackals would take as tribute.
+    _outdoors = (wreck, exterior, summit)
+
+    def _dates_thrown(g):
+        # Thrown OR set down: food on the floor is food on the floor. The
+        # colony answers wherever the dates come to rest -- including one
+        # room over, for a scavenger who throws them through a doorway.
+        return not youth.get_property("bats_flown") and any(
+            e.actor == g.player.name
+            and e.action in ("throw", "drop")
+            and "date" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _bats_follow(g):
+        here = next(
+            (room for room in g.locations.values() if "crate of dates" in room.items),
+            None,
+        )
+        if here is None:
+            return  # still in hand (a failed throw); the colony stays
+        dates = here.items["crate of dates"]
+        if here is youth:
+            # Fed at home (CCB): the colony falls on the dates and cares
+            # about nothing else for five rounds -- a bought window to
+            # cross the vault, light and all. Then the dates are gone,
+            # and the ceiling resumes its opinions.
+            here.remove_item(dates)
+            youth.set_property("bats_feeding", 6)  # spawn round burns one
+            g.parser.ok(
+                "The ceiling DETACHES. The whole colony falls on the dates "
+                "in a boiling carpet of wings, and for the moment nothing "
+                "in this room cares about you at all."
+            )
+            return
+        youth.set_property("bats_flown", True)
+        here.remove_item(dates)  # stripped to the palm-fibre
+        ceiling.examine_text = (
+            "The vault overhead hangs bare, guano-scarred, and silent. "
+            "Whatever roosted here has followed its stomach elsewhere."
+        )
+        ceiling.perceptible_by(
+            perception.Sense.HEARING,
+            "Silence overhead -- true silence, the first this room has "
+            "held in centuries.",
+        )
+        if here in _outdoors:
+            # 11: the trigger pass on the toss round itself burns one tick,
+            # so the wheel turns ten full turns AFTER the dates land.
+            here.set_property("_bat_wheel", 11)
+            wheel = _scenery(
+                here,
+                "wheel of bats",
+                "a wheel of bats, circling overhead",
+                "Thousands of bats turn overhead in a slow black gyre, "
+                "drunk on dates and daylight, unsure what to do with "
+                "either.",
+            )
+            wheel.add_alias("bats")
+            wheel.set_property("figure", "bats")
+            g.parser.ok(
+                "The mouths of the tomb EXHALE -- a river of leather "
+                "pouring into the open air. The colony strips the dates in "
+                "one boiling knot, and then rises, and circles, a slow "
+                "black wheel over the tomb."
+            )
+        else:
+            roost = _scenery(
+                here,
+                "roost of bats",
+                "a fresh roost of bats, folded and sated",
+                "The ceiling here seethes gently now: the colony, moved in "
+                "and fed, packed wing to wing and fast asleep. They have "
+                "no further opinions about your light.",
+            )
+            roost.add_alias("bats")
+            roost.set_property("figure", "bats-c")
+            g.parser.ok(
+                "A sound like a tide through the halls -- and the colony "
+                "arrives, a river of leather that breaks over the dates "
+                "and strips them to the palm-fibre. Then, gorged, they "
+                "climb the walls and fold themselves to sleep. The Hall "
+                "of Youth is only a room now."
+            )
+
+    game.add_trigger("bats_follow_dates", _dates_thrown, _bats_follow)
+
+    def _wheel_turning(g):
+        loc = next(
+            (r for r in _outdoors if (r.get_property("_bat_wheel") or 0) > 0),
+            None,
+        )
+        return loc is not None
+
+    def _wheel_tick(g):
+        for room in _outdoors:
+            n = room.get_property("_bat_wheel") or 0
+            if n <= 0:
+                continue
+            n -= 1
+            room.set_property("_bat_wheel", n)
+            if n == 0:
+                if "wheel of bats" in room.items:
+                    room.remove_item(room.items["wheel of bats"])
+                g.parser.ok(
+                    "Overhead, the wheel of bats thins, breaks, and "
+                    "scatters toward the horizon's molten line. The tomb "
+                    "has one tenant fewer."
+                    if g.player.location in _outdoors
+                    else "Somewhere above the stone, a long dry rustle "
+                    "fades to nothing."
+                )
+
+    game.add_trigger("bat_wheel", _wheel_turning, _wheel_tick, repeatable=True)
+
+    def _feeding(g):
+        return (youth.get_property("bats_feeding") or 0) > 0
+
+    def _feeding_tick(g):
+        n = (youth.get_property("bats_feeding") or 0) - 1
+        youth.set_property("bats_feeding", n)
+        if n == 0 and g.player.location is youth:
+            g.parser.ok(
+                "The last of the dates is gone. Gorged, the colony climbs "
+                "back into the vault, wing over wing -- and resumes its "
+                "opinion of light."
+            )
+        elif n == 0:
+            g.parser.ok(
+                "From the boy's mouth of the tomb, a long rustle: the "
+                "feast below is over, and the vault refills."
+            )
+
+    game.add_trigger("bats_feeding", _feeding, _feeding_tick, repeatable=True)
 
     # The Pthalo-jackals: drawn by sustained loud NOISE in the lower halls (walking
     # and rummaging are fine; shouting and smashing are not).
@@ -2420,7 +3805,9 @@ def build_game(seed=None):
         )
         g.relocate(jackal_pack, den)
         for h in _halls:
-            h.set_property(f"_jk:{h.name}", -4)  # a fed pack forgets you a while
+            # A real tribute buys real peace: deep enough that even a
+            # cylinder-looting spree won't burn back through it.
+            h.set_property(f"_jk:{h.name}", -6)
 
     game.add_trigger("jackal_feed", _jackal_feed_check, _jackal_feed, repeatable=True)
 
@@ -2487,8 +3874,20 @@ def build_game(seed=None):
                 n += 1
                 spawn.set_property(key, n)
                 if n == 1:
+                    # the card first, then the warning (CCB): the sway is
+                    # what you SEE as it swings toward your noise -- forced,
+                    # so a spent examine key cannot mute the beat
+                    g.show_figure(
+                        "guts-a" if spawn is spawn_guts else "spawn-a", force=True
+                    )
                     g.parser.ok(warn_text)
                 else:
+                    # the close-up plays FIRST, then the blow lands (CCB);
+                    # forced on the FIRST blow only (later blows do not spam)
+                    g.show_figure(
+                        "guts-b" if spawn is spawn_guts else "spawn-b",
+                        force=(n == 2),
+                    )
                     attack(g)
             # No decay while you share its room: it heard you once, and it is
             # still listening. Only distance (handled above) lets it settle.
@@ -2608,14 +4007,12 @@ def build_game(seed=None):
         if not _floor_light(g):
             youth.set_property("_mob", 0)
             return
-        (
+        if g.player.location in (youth, exterior, memory, hounds):
+            g.show_figure("bats-c")  # the card plays first, then the swarm
             g.parser.ok(
                 "In the Hall of Youth, the swarm pours down onto the light where "
                 "it lies, a screaming wheel around a still point."
             )
-            if g.player.location in (youth, exterior, memory, hounds)
-            else None
-        )
         youth.set_property("_mob", (youth.get_property("_mob") or 0) + 1)
         # Anything on the floor beside the light takes the swarm.
         for sp in (spawn_guts, spawn_brain):
@@ -2655,6 +4052,7 @@ def build_game(seed=None):
     game.add_trigger("bat_mobbing", lambda g: True, _bat_mobbing, repeatable=True)
 
     def _jackal_maul(g):
+        g.show_figure("jackal", force=True)  # a story beat: always plays
         g.parser.ok("The pack takes its due before you can raise an arm.")
         _, messages, fatal = roll_wound(g.player, rng=_RNG, game=g)
         for m in messages:
@@ -2674,19 +4072,54 @@ def build_game(seed=None):
         if _pack_out(g):
             return
         here = g.player.location
+        # The mantis song is the tomb's dinner bell: every round the jar
+        # sings, every ground hall's ledger climbs. Noise begets the song;
+        # the song begets the pack.
+        song_round = any(
+            "insect song" in ((e.payload or {}).get("sound") or "")
+            for e in g.events[g._round_event_start :]
+        )
         for hall in _halls:
             key = f"_jk:{hall.name}"
+            streak_key = f"_jkq:{hall.name}"
             n = hall.get_property(key) or 0
+            if song_round and n >= 0:
+                hall.set_property(streak_key, 0)  # the song IS noise
+                n += 1
+                hall.set_property(key, n)
+                if n >= 4 and jackal_pack.location is den:
+                    g.relocate(jackal_pack, hall)
+                    jackal_pack.set_property("_stride", True)
+                    g.show_figure(
+                        "jackal", force=True
+                    )  # the prowl, then the arithmetic
+                    g.parser.ok(
+                        "They come in low and unhurried, cerulean-coated, "
+                        "filling the doorways -- the song called, and the "
+                        "pack answers what it summons."
+                        if here is hall
+                        else "Somewhere below, a yipping rises to meet the "
+                        "song, gathers, and goes quiet. Purposeful."
+                    )
+                    continue
             if here is not hall:
                 # The trail cools toward calm from either side (suspicion
-                # drains, post-feed grace wears off). The pack itself, once
-                # out, PURSUES -- handled below, not here.
-                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                # drains, post-feed grace wears off) -- but only after THREE
+                # consecutive quiet rounds (CCB: the jackals were MIA in real
+                # play; a -1 per quiet round cancelled almost every +1, so
+                # only back-to-back crashes ever summoned them). Suspicion
+                # outlasts a pause to read a ledger.
+                streak = (hall.get_property(streak_key) or 0) + 1
+                if streak >= 3 and n != 0:
+                    hall.set_property(key, n - 1 if n > 0 else n + 1)
+                    streak = 0
+                hall.set_property(streak_key, streak)
                 continue
             if jackal_pack.location is hall:
                 _jackal_maul(g)  # unfed, unfled: they collect
                 continue
             if _player_was_loud_in(g, hall, _QUIET):
+                hall.set_property(streak_key, 0)
                 # A crash carries: breaking things counts double on the ledger.
                 crashed = any(
                     e.actor == g.player.name
@@ -2696,12 +4129,15 @@ def build_game(seed=None):
                 )
                 n += 2 if crashed else 1
                 hall.set_property(key, n)
-                if n <= 2:
+                if n <= 0:
+                    pass  # sated (or long-calmed): the noise only burns patience
+                elif n <= 2:
                     g.parser.ok(
                         "Somewhere off in the halls, a yipping answers your "
                         "noise -- once, and then again, nearer."
                     )
                 elif n == 3:
+                    g.show_figure("jackal", force=True)
                     g.parser.ok(
                         "Yellow eyes ring the doorways, unhurried. "
                         "Pthalo-jackals: cautious, clever, and done being "
@@ -2710,6 +4146,7 @@ def build_game(seed=None):
                 elif n >= 4:
                     g.relocate(jackal_pack, hall)
                     jackal_pack.set_property("_stride", True)  # first beat: hang back
+                    g.show_figure("jackal", force=True)  # the prowl, first
                     g.parser.ok(
                         "They come in low and unhurried, cerulean-coated, "
                         "filling the doorways. The nearest growls -- a sound "
@@ -2719,7 +4156,11 @@ def build_game(seed=None):
                 # n <= 0: a fed (or long-calmed) pack lets it go -- the noise
                 # only burns through their patience.
             else:
-                hall.set_property(key, n - 1 if n > 0 else min(0, n + 1))
+                streak = (hall.get_property(streak_key) or 0) + 1
+                if streak >= 3 and n != 0:
+                    hall.set_property(key, n - 1 if n > 0 else n + 1)
+                    streak = 0
+                hall.set_property(streak_key, streak)
 
     game.add_trigger("jackal_pack", lambda g: True, _jackal_tick, repeatable=True)
 
@@ -2768,6 +4209,7 @@ def build_game(seed=None):
             if step is not None:
                 g.relocate(jackal_pack, step)
                 if step is here:
+                    g.show_figure("jackal")  # the card plays first
                     g.parser.ok(
                         "The pack comes through the doorway at a lope, "
                         "unhurried, sure of you."
@@ -2886,13 +4328,149 @@ def build_game(seed=None):
             g.award("falcon_jar", 5, "[+5 -- the falcon jar]")
         if "jackal jar" in inv:
             g.award("jackal_jar", 5, "[+5 -- the jackal jar]")
-        if "synth-hunting dagger" in inv and "manifold box" in inv:
-            g.award("exotica", 10, "[+10 -- the Autarch's Exotica, both]")
+        # Each Exotica pays on ITS OWN find (CCB: no waiting for the pair),
+        # and the Friend's Fungus pays when claimed from the mystic's hands.
+        if "synth-hunting dagger" in inv:
+            g.award("dagger", 5, "[+5 -- the synth-hunting dagger]")
+        if "manifold box" in inv:
+            g.award("box", 5, "[+5 -- the manifold box]")
+        if "friend's fungus" in inv:
+            g.award("fungus", 5, "[+5 -- the Friend's Fungus, claimed]")
         stone = inv.get("glowstone")
         if stone is not None and stone.get_property(Property.IS_LIT):
             g.award("first_light", 5, "[+5 -- light, learned]")
+        # The minor threats pay when QUELLED, by any means (CCB): a spawn
+        # dropped by blade or raked down by the bat-swarm, the pack paid
+        # its tribute or put down. The clever route and the bloody one
+        # score the same.
+        for sp, key, card in (
+            (spawn_guts, "spawn_guts", "guts-c"),
+            (spawn_brain, "spawn_brain", "spawn-c"),
+        ):
+            if sp.get_property("is_dead") or sp.get_property("is_unconscious"):
+                g.award(key, 5, f"[+5 -- the {sp.name} is quelled]")
+                g.show_figure(card)  # the felled beat; the jar, claimable
+        if jackal_pack.get_property("is_dead") or any(
+            (h.get_property(f"_jk:{h.name}") or 0) <= -6 for h in _halls
+        ):
+            g.award("jackals_settled", 5, "[+5 -- the pack is settled]")
 
     game.add_trigger("score_beats", lambda g: True, _score_beats, repeatable=True)
+
+    # The Hall of Warriors reads its own wreckage (CCB): the room description
+    # recomputes whenever the set of standing cylinders changes.
+    warriors.set_property("_cyl_state", ",".join(_standing_cylinders()))
+
+    def _warriors_desc_stale(g):
+        return warriors.get_property("_cyl_state") != ",".join(_standing_cylinders())
+
+    def _warriors_desc_update(g):
+        standing = _standing_cylinders()
+        warriors.set_property("_cyl_state", ",".join(standing))
+        fungus = (
+            " Fungus has found the orange one; veins fan out under its "
+            "glass like pressed flowers."
+            if "orange" in standing
+            else ""
+        )
+        if not standing:
+            warriors.description = (
+                "The four cylinders lie burst on the uneven floor, their "
+                "gels run together into one darkening lake. The guard-"
+                "mummies sprawl at attention from the waist up, and their "
+                "scattered kit outlasts them still, as kit does."
+            )
+            return
+        kept = _colour_list(standing)
+        verb = "stands" if len(standing) == 1 else "stand"
+        warriors.description = (
+            f"Of the four plexiglas cylinders, only the {kept} still {verb} "
+            "sealed, the guard-mummy within at an attention no order will "
+            "relieve. The rest lie burst, their dead slumped in drifts of "
+            f"drying gel, kit scattered where the flood carried it.{fungus} "
+            "What kit remains has outlasted its owners, as kit does."
+        )
+
+    game.add_trigger(
+        "warriors_desc", _warriors_desc_stale, _warriors_desc_update, repeatable=True
+    )
+
+    # The plinths' one-line descriptions read true (CCB): "empty" only while
+    # they are.
+    def _plinth_descs(g):
+        for plinth, beast in ((falcon_plinth, "falcon"), (jackal_plinth, "jackal")):
+            plinth.description = (
+                f"an empty plinth carved with a {beast}"
+                if not plinth.contents
+                else f"a {beast}-carved plinth, its jar seated"
+            )
+
+    game.add_trigger("plinth_descs", lambda g: True, _plinth_descs, repeatable=True)
+
+    # The Canopic hall reads its own progress too (CCB: "two stand empty" is
+    # out of date the moment it isn't): plinth occupancy, per-plinth verdicts,
+    # the seal, and whether the listener is even still in the room.
+    def _canopic_state():
+        occupied = sum(1 for pl in (falcon_plinth, jackal_plinth) if pl.contents)
+        right = sum(
+            1
+            for pl, jar in (
+                (falcon_plinth, "falcon jar"),
+                (jackal_plinth, "jackal jar"),
+            )
+            if jar in pl.contents
+        )
+        return (
+            occupied,
+            right,
+            bool(canopic.get_property("seal_open")),
+            "mantis jar" in canopic.items,
+        )
+
+    def _canopic_desc_stale(g):
+        return canopic.get_property("_desc_state") != str(_canopic_state())
+
+    def _canopic_desc_update(g):
+        occupied, right, seal_open, listener = _canopic_state()
+        canopic.set_property("_desc_state", str(_canopic_state()))
+        parts = ["Five plinths ring a central stair in a pentagon of dressed stone."]
+        if occupied == 0:
+            parts.append(
+                "Three still bear their canopic jars; two stand empty, lit "
+                "from within by a crimson light that does not flicker."
+            )
+        elif occupied == 1:
+            parts.append(
+                "Four bear jars now; the fifth stands empty, lit from within "
+                "by a crimson light that does not flicker."
+            )
+        else:
+            parts.append("For the first time in an age, none stands empty.")
+        if not seal_open and right == 1 and occupied >= 1:
+            parts.append(
+                "One of the restored lights has turned white; the crimson "
+                "of the rest is unconvinced."
+            )
+        elif not seal_open and occupied == 2 and right == 0:
+            parts.append(
+                "The crimson has not gone out of either restored plinth; "
+                "the stone is not persuaded."
+            )
+        parts.append(
+            "The stair climbs open into the dark above; of the seal, only "
+            "a red glitter remains on the treads."
+            if seal_open
+            else "The stair climbs into shadow, barred by a seal of red " "crystal."
+        )
+        if listener:
+            parts.append(
+                "Something in this room is listening; you can tell, the way " "one can."
+            )
+        canopic.description = " ".join(parts)
+
+    game.add_trigger(
+        "canopic_desc", _canopic_desc_stale, _canopic_desc_update, repeatable=True
+    )
 
     # --- Breaking the lattice: a shard, and Silas's wrath (CCB) --------------
     def _lattice_broken(g):
@@ -3030,20 +4608,24 @@ def build_game(seed=None):
         "fibrous, faintly warm, and -- like everything the gel has ever "
         "touched -- ready to burn.",
     ).add_alias("growth")
+    chimney.items["orange growth"].perceptible_by(
+        perception.Sense.TASTE,
+        "You touch your tongue to the growth, briefly, like a fool. Orange "
+        "rot blooms across it and your throat itches for a long minute. "
+        "Whatever this fungus wants with a body, do not volunteer more of "
+        "yours.",
+    )
 
+    # No grace rounds and no credit for a mask in your HAND (CCB): the air
+    # itself is the hazard, so every round unmasked in the throat is a wound
+    # -- WEAR the respirator, or burn the growth out, or don't linger.
     _hazard(
         game,
         chimney,
-        danger=lambda g: not (
-            _is_holding(g.player, "respirator") or "respirator" in g.player.worn
-        ),
+        danger=lambda g: "respirator" not in g.player.worn,
         gate=lambda g: not chimney.get_property("burned"),
-        warns=(
-            "Each breath comes back smaller than it went out. The spores "
-            "settle on your lips and taste of orange rot.",
-            "Your lungs sear; the glow below swims and doubles. The chimney's "
-            "warmth has begun to feel like a mouth.",
-        ),
+        limit=1,
+        warns=(),  # unreachable at limit=1: the first breath IS the harm
         harm=_spore_sear,
     )
 
@@ -3062,11 +4644,14 @@ def build_game(seed=None):
 
     def _open_seal(g):
         canopic.set_property("seal_open", True)
+        g.show_figure("seal")
         g.parser.ok(
             "As the last jar settles onto its plinth, the crimson light steadies to "
-            "white. The crystal seal sighs apart into motes, baring the stair up."
+            "white. The crystal seal sighs apart into motes, unblocking the "
+            "stair: the way up stands open."
         )
         g.award("seal", 20, "[+20 -- the seal answers the jars]")
+        _canopic_desc_update(g)  # the room reads open THIS round, not next
 
     game.add_trigger("canopic_seal", _seal_solved, _open_seal, repeatable=False)
 
@@ -3102,6 +4687,63 @@ def build_game(seed=None):
 
     game.add_trigger("silas_fungus", _silas_dosed, _silas_mellows, repeatable=False)
 
+    # GIVE CORE TO SILAS (CCB): the item's own tease -- 'Silas would trade
+    # his robes for it' -- honored. The Seeker's reading is finished; the
+    # stated price is paid; the chain finally has an ending.
+    monk_robes = things.Item(
+        "yellow monk's robes",
+        "the yellow robes of a Seeker of Eyeless Wisdom",
+        "Plain-woven and dust-hemmed, yellow so the road shows on them: the "
+        "rule of a mendicant order that reads the dead where they kept "
+        "their own records. Given freely exactly once -- when a Seeker's "
+        "reading is done.",
+    )
+    monk_robes.set_property(Property.WEARABLE, True)
+    monk_robes.set_property("wear_slot", "body")
+    monk_robes.add_alias("robes")
+    monk_robes.add_alias("yellow robes")
+    monk_robes.add_alias("monk's robes")
+
+    def _core_given(g):
+        return "ego-core" in silas.inventory and not silas.get_property("core_traded")
+
+    def _core_trade(g):
+        silas.set_property("core_traded", True)
+        g.player.add_to_inventory(monk_robes)
+        silas.description = (
+            "a gaunt synthetic archivist, bare-chassised, wholly given to "
+            "his reading"
+        )
+        silas.examine_text = (
+            "The synth without his robes: a lattice of dust-dulled alloy, "
+            "unbothered by the cold, the ego-core held to his chest the way "
+            "a man holds water in the desert. The bright threads of the "
+            "lattice spool around him in patterns like thought."
+        )
+        silas.talk_text = (
+            '"He was afraid," Silas says, not looking up from the core. '
+            '"Under the jars and the seal and all this keeping -- afraid '
+            "that to be forgotten was to have never been. Most of what he "
+            "chose to keep is ordinary: bread, an argument, rain on a fig "
+            "tree, a daughter counting to a hundred. Four centuries of a "
+            'man practicing goodbye. I will finish it for him."'
+        )
+        g.parser.ok(
+            "Silas goes still the way only a machine can, every thread of "
+            "the lattice hanging mid-spool. He takes the ego-core in both "
+            'hands, the way a man takes water in the desert. "A thousand '
+            'years I have read this tomb from its margins," he says. "You '
+            'have just handed me the author." He unknots the yellow robes '
+            "and folds them over your arm, unasked -- the rule of his "
+            'order, and the stated price, paid in full. "When he is whole, '
+            "we will speak him aloud once, and let him go. You will have "
+            "finished a king, scavenger. Wear the yellow; you have earned "
+            'the dust it shows."'
+        )
+        g.award("archivist", 5, "[+5 -- the archivist made whole]")
+
+    game.add_trigger("silas_core", _core_given, _core_trade, repeatable=False)
+
     # Water mends (the canon short rest is "a quick sit-down, with a glug of
     # water"): drinking the waterskin heals the most recent wound.
     def _drank_water(g):
@@ -3117,7 +4759,7 @@ def build_game(seed=None):
             healed = g.player.heal_wound()
             g.parser.ok(
                 f"The water does what water does in Vaarn. The {healed.name.lower()} "
-                "troubles you less; something knits."
+                "troubles you less; a wound heals."
             )
             g.award("healed", 5, "[+5 -- water, spent wisely]")
         n = int(waterskin.get_property("portions") or 0)
@@ -3129,6 +4771,36 @@ def build_game(seed=None):
             )
 
     game.add_trigger("water_mends", _drank_water, _water_mends, repeatable=True)
+
+    # Zox blood mends the same way (CCB): half water by weight, and the
+    # better half at that. Each dose heals the most recent wound.
+    def _drank_blood(g):
+        return any(
+            e.actor == g.player.name
+            and e.action == "drink"
+            and "blood" in (e.summary or "").lower()
+            for e in g.events[g._round_event_start :]
+        )
+
+    def _blood_mends(g):
+        if g.player.wounds:
+            healed = g.player.heal_wound()
+            g.parser.ok(
+                f"The blood goes down like a meal and a drink at once. The "
+                f"{healed.name.lower()} troubles you less; a wound heals."
+            )
+        blood = g.player.carried_items().get("zox blood") or (
+            g.player.location.items.get("zox blood") if g.player.location else None
+        )
+        if blood is not None:
+            n = int(blood.get_property("portions") or 0)
+            blood.description = (
+                "a smear of zox blood, spent"
+                if n <= 0
+                else f"zox blood, caught warm ({n} dose{'s' if n != 1 else ''})"
+            )
+
+    game.add_trigger("blood_mends", _drank_blood, _blood_mends, repeatable=True)
 
     # Drinking the GEL is legal and inadvisable (design doc §17.1).
     def _drank_gel(g):
@@ -3355,6 +5027,7 @@ def build_game(seed=None):
             centipede.set_property("sprung", True)
             if centipede.location is not chimney:
                 g.relocate(centipede, chimney)
+            g.show_figure("centipede", force=True)  # a story beat: always plays
             g.parser.ok(
                 "The growth beside you bends wrong -- and four feet of glass "
                 "uncoils out of it, faster than the eye wants to allow."
@@ -3453,9 +5126,13 @@ def build_game(seed=None):
     ego_core = things.Item(
         "ego-core",
         "An-Rah's ego-core",
-        "A spindle of smoke-grey memory-crystal, heavier than it looks and "
-        "warmer than it should be: Nassak An-Rah, or what he chose to keep of "
-        "himself. Silas would trade his robes for it.",
+        "A spindle of smoke-grey memory-crystal that has not fully agreed "
+        "to be in this room: look away and back and it hangs at a slightly "
+        "different angle than you left it, and its faint shadow falls "
+        "against the light. Heavier than it looks, warmer than it should "
+        "be. Nassak An-Rah -- or what he chose to keep of himself, stored "
+        "where geometry could not evict him. Silas would trade his robes "
+        "for it.",
     )
     ego_core.add_alias("core")
 
@@ -3471,12 +5148,24 @@ def build_game(seed=None):
         manifold_box.set_property("compartment_found", True)
         g.player.add_to_inventory(ego_core)
         g.parser.ok(
-            "The ulfire light soaks through the manifold box's gilded walls, "
-            "and its true interior opens to your eye: a compartment three "
-            "times larger than the box that holds it, empty except for a "
-            "spindle of grey crystal hanging in the middle of that impossible "
-            "room. You reach in along the angle of the light and draw out "
-            "An-Rah's ego-core."
+            "Under the ninth colour, the manifold box stops pretending. Its "
+            "gilded walls go glassy, then merely ADVISORY -- and the "
+            "interior opens away from you: not a compartment but a hall, "
+            "receding along a direction the tomb does not otherwise have. "
+            "The geometry in there has stopped agreeing with the geometry "
+            "out here. Corners count wrong. Parallel edges meet, twice, "
+            "somewhere behind you. The vanishing point sits over your own "
+            "shoulder, and the far end of that unlit hall is a pace away "
+            "and a province away, in the manner of stars. There, hanging "
+            "where every wrong angle converges, a spindle of smoke-grey "
+            "crystal turns without turning, its shadow falling UP the "
+            "light. You reach in. Your arm bends along an angle that has "
+            "no name; your hand goes cold as television static, in a place "
+            "your eyes decline to file. Your fingers close on it anyway. "
+            "You draw out An-Rah's ego-core, your arm comes back honest, "
+            "and the hall folds itself away like a sentence ending -- "
+            "leaving the box merely gilded, merely small, and very "
+            "slightly heavier than the room it keeps."
         )
 
     game.add_trigger("ulfire_box", _box_viewed, _reveal_core, repeatable=False)
@@ -3605,23 +5294,30 @@ WALK = [
 # the Spawn to claim the jars, open the seal, climb out and burn the corpse to
 # kill the Horror, then loot the now-safe Sphere with the boots and escape.
 WIN_WALKTHROUGH = [
-    # Loot the wreck (water heals; the glowstone lights the dark Warriors).
+    # Loot the wreck (water heals; the glowstone lights the dark Warriors)
+    # -- and bring the dates: the crashes ahead ring the mantis song, the
+    # song calls the jackals, and the pack is BOUGHT, not fought.
     "search merchant",
     "take glowstone",
     "take waterskin",
+    "in",
+    "open crates",
+    "take crate of dates",
+    "out",
     "north",
     "sneak east",  # Warriors: pitch dark; the kit is sealed in the cylinders
     "light glowstone",  # safe here -- no bats -- and the colours matter
     "break amber cylinder",  # the eyeless spawn swings toward the crash --
     "take respirator",  # -- and the crashes call its brother from next door
     "wear respirator",
-    "break cerulean cylinder",  # second crash: the lash lands; take the blade
+    "break cerulean cylinder",  # second crash: the song has the pack's ear now
+    "give dates to jackal pack",  # -- so pay the toll the moment they fill the doorways
     "take blade",
     "attack spawn of guts with blade",  # answer it: the falcon jar drops
     "take falcon jar",
     "attack spawn of brain with blade",  # its brother came to the noise: fell it too
     "take jackal jar",
-    "drink water",  # a glug; something knits (keep the blade: the coffin wants it)
+    "drink water",  # a glug; a wound heals (keep the blade: the coffin wants it)
     "drink water",  # another -- the brain got its thoughts in
     "drink water",  # the last ration; the skin runs dry
     "drop waterskin",  # travel light; the climbs refuse a full pack
@@ -3646,6 +5342,8 @@ WIN_WALKTHROUGH = [
     "sneak south",
     "sneak south",  # Canopic -> Exterior (dark and quiet through the Youth)
     "up",
+    "search corpse",  # the mystic's hands hold the Friend's Fungus...
+    "take fungus",  # ...claimed BEFORE the burn consumes it (+5)
     "burn corpse",  # Summit: cleanse the root
     "down",
     "sneak north",
@@ -3658,6 +5356,20 @@ WIN_WALKTHROUGH = [
     "take manifold box",
     "sneak down",  # Sphere -> Canopic
     "sneak left stairs",  # -> Memory
+    "give fungus to silas",  # the lonely archivist hands over the lantern
+    "light ulfire lantern",  # ...which opens the manifold box's true interior
+    "give core to silas",  # the stated price: his robes, and an ending (+5)
+    # Consult every remembered day (unseen facets draw first, so nine looks
+    # cover the nine) -- and the tenth look wakes the keep-list (+5).
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
+    "x lattice",
     "sneak south",
     "sneak south",  # escape -> WIN
 ]
