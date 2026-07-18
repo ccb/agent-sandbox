@@ -38,6 +38,12 @@ class Read(base.Action):
     ACTION_NAME = ActionName.READ
     ACTION_DESCRIPTION = "Read the writing on something"
     DURATION = 1  # a quick read (issue #24)
+    # Offer filter only (issue #612): READ is offered to an agent where
+    # something READABLE is in scope. The gate below deliberately stays an OR
+    # (READ_TEXT *or* READABLE), so a read_text-only item still reads fine --
+    # it just isn't offered. For OR-gated verbs like this the #612 invariant
+    # is one-directional: offered => the gate's place-check passes.
+    REQUIRED_AFFORDANCES = (Property.READABLE,)
 
     def __init__(self, game, command: str, actor=None):
         super().__init__(game, actor=actor)
