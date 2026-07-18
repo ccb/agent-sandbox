@@ -547,16 +547,15 @@ def attach_agents(
         # closed enum can choose them even without an authored commands: stop),
         # then whatever authored-command verbs remain (sorted), deduplicating
         # while preserving that order.
+        # "wait" was once stripped here (a Wait tool on every decide invited
+        # sitting idle at recurring token spend); #614 retires that -- WaitPenn's
+        # required duration_minutes makes a chosen wait SETTLE like perform, so
+        # authored wait spacers now promote like any other verb.
         authored_verbs = sorted(
             {
-                verb
+                cmd.split(" ", 1)[0]
                 for stop in spec["schedule"]
                 for cmd in stop.get("commands") or []
-                # "wait" is an idle spacer deliberately excluded from
-                # PENN_ACTION_VERBS; never promote it to a real-brain tool -- a
-                # Wait schema on every decide is recurring token spend and
-                # invites the model to sit idle.
-                if (verb := cmd.split(" ", 1)[0]) != "wait"
             }
         )
         ordered = ["travel", "perform", *(extra_action_names or []), *authored_verbs]

@@ -134,6 +134,55 @@ class Act(base.Action):
         return self.parser.ok(f"{self.character.name} is {self.activity}.")
 
 
+class WaitPenn(base.Wait):
+    """The engine's Wait, offered to Penn brains with the #581 pacing slots
+    (issue #614): a chosen wait *settles* like ``perform`` -- one decision, one
+    tick of execution, then no re-decide until the duration elapses -- which is
+    what retires the original objection to offering Wait (a per-decide Wait
+    tool invites sitting idle and is recurring token spend). Registered under
+    the same "wait" action name so it overrides the built-in for this game
+    only (the DrinkPenn precedent). The step loop needs no change: its settle
+    trigger is already "perform, OR any action that carried a model duration"
+    (run_simulation.step), so a wait carrying ``duration_minutes`` settles and
+    a schedule-spacer wait (no stash) stays a one-tick no-op -- byte-identical.
+    """
+
+    # duration_minutes is REQUIRED, unlike perform's optional slot: perform
+    # falls back to the authored stop's steps, but a bare wait has nothing to
+    # fall back to and would just re-decide every tick -- the exact spend the
+    # settle design exists to kill. (A brain that omits it anyway degrades to
+    # that one-tick wait: harmless, just not settled.)
+    ARGUMENTS_SCHEMA = {
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to wait before deciding " "again",
+            "required": True,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while waiting "
+            "(optional)",
+            "required": False,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, command, actor=actor)
+        self.character = self.acting_character(command, hint="waiter")
+
+    def apply_effects(self):
+        # Stamp "waiting" so the settle branch's card/desc reads honest idle
+        # instead of the previous stop's stale activity -- but ONLY when this
+        # wait actually settles (a real brain stashed a duration this decide;
+        # observe_and_decide resets the stash every tick). The mock's schedule
+        # spacers never stash, take the super() path verbatim, and the bake
+        # stays byte-identical.
+        agent = getattr(self.character, "agent", None)
+        if getattr(agent, "last_duration_minutes", None) is not None:
+            self.character.set_property("activity", "waiting")
+        return super().apply_effects()
+
+
 class DrinkPenn(consume.Drink):
     """The engine's Drink, plus the Penn boil-water twist (#300): drinking a
     liquid that ``requires_boiling`` and is not ``is_boiled`` sets ``is_sick``
