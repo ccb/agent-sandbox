@@ -5,13 +5,20 @@ description: >
   memory (backend/cognition.py, remember_outcome). The command verb
   selects the phrasing: arriving somewhere, doing an activity, drinking
   (with a sick variant for contaminated water, #300), idling (if chosen
-  as a settled-wait #614), or a quoted fallback for any other command.
+  as a settled-wait #614), agent-initiated talk_to (with an optional topic,
+  #614), or a quoted fallback for any other command.
   The memory's importance is chosen in Python (it is data, not text), so
   only the wording lives here.
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", "boil", "wait", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", or anything else.
+  person:
+    type: string
+    description: Who was talked to (used when verb == "talk_to").
+  topic:
+    type: string
+    description: What was brought up, if any (used when verb == "talk_to").
   location:
     type: string
     description: The place arrived at (used when verb == "travel").
@@ -53,6 +60,10 @@ I drank the {{ item }}.
 I boiled the water to make it safe to drink.
 {%- elif verb == "wait" -%}
 I waited; nothing needed doing.
+{%- elif verb == "talk_to" and topic -%}
+I went to talk to {{ person }} about {{ topic }}.
+{%- elif verb == "talk_to" -%}
+I went to talk to {{ person }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}

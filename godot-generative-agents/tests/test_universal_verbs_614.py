@@ -256,3 +256,106 @@ def test_agentless_observer_is_never_a_talk_target():
     _colocate(game, chars, ["Bo"], "Cafe")
     assert "talk_to" not in _tools(game, chars["Ada"])  # Observer doesn't count
     assert not game.parser.parse_command("talk_to Observer", actor=chars["Ada"])
+
+
+# ------------------------------------------- talk_request -> conversation
+
+from backend.cognition import maybe_converse  # noqa: E402
+
+
+class _ScriptedConvoBrain:
+    """Speaks fixed lines (one per converse() ask) then goes silent; answers
+    conversation_outcome inertly and counts those calls (the #582 assert).
+    Mirrors test_conversation_multitick_371's brain."""
+
+    def __init__(self, lines):
+        self._lines = list(lines)
+        self.context: dict = {}
+        self.outcome_calls = 0
+
+    def call_tool(self, messages, tool, max_tokens=256, temperature=0.0):
+        if tool["name"] == "conversation_outcome":
+            self.outcome_calls += 1
+            return {"plans_changed": False}
+        if self._lines:
+            return {"utterance": self._lines.pop(0), "done": not self._lines}
+        return {}
+
+
+def _request_setup(brain, target_walking=False):
+    game, chars = _world(["Ada", "Bo"], llm_client=brain)
+    _colocate(game, chars, ["Ada", "Bo"])
+    order = ["Ada", "Bo"]
+    state = {n: {"performing": True, "path": [], "chat": None} for n in order}
+    if target_walking:
+        state["Bo"]["path"] = [(1, 1), (2, 2)]
+    frame = {n: {} for n in order}
+    return game, chars, state, frame, order
+
+
+def test_talk_request_opens_the_conversation_same_tick_initiator_first():
+    brain = _ScriptedConvoBrain(["About that demo...", "Sure, let's sync."])
+    game, chars, state, frame, order = _request_setup(brain)
+    assert game.parser.parse_command("talk_to Bo about the demo", actor=chars["Ada"])
+    active: dict = {}
+    completed = maybe_converse(game, chars, state, frame, 0, {}, order, active=active)
+    assert completed == 0 and len(active) == 1
+    assert frame["Ada"]["chat"] == [["Ada", "About that demo..."]]  # Ada opens
+    assert state["Ada"]["conversing"] and state["Bo"]["conversing"]
+    assert chars["Ada"].get_property("talk_request") is False  # marker consumed
+
+
+def test_talk_request_conversation_end_fires_the_582_outcome():
+    brain = _ScriptedConvoBrain(["Hi Bo!"])  # one line, done=True -> ends tick 0
+    game, chars, state, frame, order = _request_setup(brain)
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    cooldowns: dict = {}
+    completed = maybe_converse(
+        game, chars, state, frame, 0, cooldowns, order, active={}
+    )
+    assert completed == 1
+    assert brain.outcome_calls == 2  # one pass per participant (#582)
+    assert frozenset(("Ada", "Bo")) in cooldowns
+
+
+def test_talk_request_respects_the_pair_cooldown():
+    brain = _ScriptedConvoBrain(["Hi again!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    cooldowns = {frozenset(("Ada", "Bo")): 0}  # just talked
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(
+        game, chars, state, frame, 1, cooldowns, order, active={}
+    )
+    assert completed == 0
+    assert frame["Ada"].get("chat") is None
+    assert chars["Ada"].get_property("talk_request") is False  # still consumed
+
+
+def test_talk_request_dropped_while_target_is_walking():
+    brain = _ScriptedConvoBrain(["Hey!"])
+    game, chars, state, frame, order = _request_setup(brain, target_walking=True)
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert completed == 0
+    assert frame["Ada"].get("chat") is None
+
+
+def test_talk_to_reflection_memory_carries_the_topic():
+    assert (
+        render("reflection", verb="talk_to", person="Bo", topic="the demo")
+        == "I went to talk to Bo about the demo."
+    )
+    assert (
+        render("reflection", verb="talk_to", person="Bo", topic="")
+        == "I went to talk to Bo."
+    )
+
+
+def test_talk_to_command_writes_the_topic_memory_at_parse_time():
+    game, chars = _world(["Ada", "Bo"])
+    _colocate(game, chars, ["Ada", "Bo"])
+    ada = chars["Ada"]
+    assert game.parser.parse_command("talk_to Bo about the demo", actor=ada)
+    remember_outcome(ada, "talk_to Bo about the demo", 0)
+    texts = [r.text for r in ada.agent.memory.retrieve(query="Bo", turn=0)]
+    assert "I went to talk to Bo about the demo." in texts

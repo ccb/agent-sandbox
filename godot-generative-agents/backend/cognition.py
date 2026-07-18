@@ -1409,6 +1409,18 @@ def remember_outcome(char, command: str, step: int) -> None:
         # memory, unlike the 1.0 catch-all below.
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
+    elif verb == "talk_to":
+        # #614: record the intent (with any topic) at parse time -- BEFORE
+        # maybe_converse opens the dialogue later this same tick. The opener's
+        # memory retrieval queries the partner's name, so this fresh record
+        # surfaces in the first line's prompt: that's how the topic threads
+        # into the opener without new dialogue machinery. Dialogue-tier
+        # importance (matches conversation.DEFAULT_CHAT_IMPORTANCE).
+        target, _, topic = rest.partition(" about ")
+        text = render(
+            "reflection", verb=verb, person=target.strip(), topic=topic.strip()
+        )
+        importance = 4.0
     elif verb == "wait":
         # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
         # the duration): still not worth a memory -- identical 1.0 "I did wait"
@@ -1584,6 +1596,56 @@ def maybe_converse(
     busy = {
         name for ac in active.values() for name in (ac.a, ac.b)
     } | finished_this_step
+
+    # (1.5) Agent-initiated requests (#614): a talk_to command earlier this
+    # tick left a one-shot marker; open that conversation NOW, before the
+    # proximity pair scan, so the explicit choice wins the tick and the first
+    # line is spoken this same step (mirroring phase 2's start-and-advance).
+    # The marker is consumed unconditionally: a request that cannot start
+    # (target left / busy / mid-walk, pair on cooldown) is dropped and the
+    # initiator -- unpinned, un-settled -- simply re-decides next tick. Mock
+    # brains never emit talk_to, so this loop is inert offline.
+    for name in order:
+        char = chars[name]
+        target_name = char.get_property("talk_request")
+        if not target_name:
+            continue
+        char.set_property("talk_request", False)
+        char.set_property("talk_topic", False)
+        target = chars.get(target_name)
+        if (
+            name in busy
+            or target is None
+            or target_name in busy
+            or target.location is not char.location
+            or state[target_name]["path"]
+            or state[target_name].get("conversing")
+        ):
+            continue
+        key = frozenset((name, target_name))
+        if key in active or step - cooldowns.get(key, -(10**9)) < cooldown_steps:
+            continue
+        ac = ActiveConversation(
+            a=name,
+            b=target_name,
+            convo=convo.Conversation(participants=(name, target_name)),
+            # The initiator opens: its fresh topic memory (remember_outcome,
+            # this same tick) surfaces in the opener's partner-name retrieval
+            # -- topic threading with no new dialogue machinery.
+            next_speaker=name,
+            started=step,
+        )
+        active[key] = ac
+        ended, delta = _advance_conversation(
+            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+        )
+        completed += delta
+        if ended:
+            del active[key]
+            if not ac.convo.happened:
+                continue  # opened with nothing -> reserve no one
+        busy.update((name, target_name))
+
     settled = [
         chars[name]
         for name in order
