@@ -28,7 +28,10 @@ _INSTRUCTION = (
     "game command to execute. Reply with exactly three lines:\n"
     "Reasoning: <one short sentence explaining your choice>\n"
     "Action: <the command, e.g. 'attack player', 'go north', 'take sword'>\n"
-    "Duration: <estimated in-game minutes this action takes, e.g. 5>"
+    "Duration: <estimated in-game minutes this action takes, e.g. 5>\n"
+    "If no available command can accomplish what you need, your Action may be: "
+    "propose <what you need> because <why> — this records your request for the "
+    "world's designers."
 )
 
 
