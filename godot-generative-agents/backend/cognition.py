@@ -1641,7 +1641,9 @@ def maybe_react(
     1. **Cheap perceive:** each mid-activity member (walking or performing)
        writes one ``encounter`` observation -- the agent remembers who it
        passed even though no decision point fired. Idle agents are skipped
-       (they perceive at their own decision points).
+       (they perceive at their own decision points). At most one record per
+       pair per ``react_cooldown_steps`` window, so re-crossings don't flood
+       the memory stream with identical records.
     2. **Rule tier (free):** the reactor is the first *walking* member in
        ``order`` -- a fully settled pair is maybe_converse's job. Skipped when
        either member is conversing/busy, when the pair talked recently (the
@@ -1693,6 +1695,7 @@ def maybe_react(
     react_state["in_range"] = in_range
 
     last_react = react_state.setdefault("last_react", {})
+    last_encounter = react_state.setdefault("last_encounter", {})
     consult_log = react_state.setdefault("consults", {})
     window = (
         clock.steps_for_seconds(3600)
@@ -1702,16 +1705,22 @@ def maybe_react(
     consults = 0
     for key in sorted(new_pairs, key=lambda k: sorted(idx[n] for n in k)):
         a_name, b_name = sorted(key, key=idx.get)
-        # (1) Cheap perceive: mid-activity members remember the encounter.
-        for me, other in ((a_name, b_name), (b_name, a_name)):
-            st = state[me]
-            if not (st["path"] or st["performing"]):
-                continue
-            chars[me].agent.memory.add_observation(
-                render("encounter", partner=other, doing=_doing(chars[me], st)),
-                turn=step,
-                importance=ENCOUNTER_IMPORTANCE,
-            )
+        # (1) Cheap perceive: mid-activity members remember the encounter --
+        # at most once per pair per react-cooldown window, so two agents
+        # pacing in and out of mutual range don't flood both memory streams
+        # with identical records all day (PR #650 review).
+        seen = last_encounter.get(key)
+        if seen is None or step - seen >= react_cooldown_steps:
+            for me, other in ((a_name, b_name), (b_name, a_name)):
+                st = state[me]
+                if not (st["path"] or st["performing"]):
+                    continue
+                chars[me].agent.memory.add_observation(
+                    render("encounter", partner=other, doing=_doing(chars[me], st)),
+                    turn=step,
+                    importance=ENCOUNTER_IMPORTANCE,
+                )
+                last_encounter[key] = step
         # (2) Rule tier.
         reactor = next((n for n in (a_name, b_name) if state[n]["path"]), None)
         if reactor is None:
