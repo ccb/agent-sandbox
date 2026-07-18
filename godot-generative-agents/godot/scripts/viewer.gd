@@ -131,6 +131,15 @@ const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
+const PayloadGuards := preload("res://scripts/payload_guards.gd")
+
+# The replay/live contract schema this viewer renders (backend.contract
+# SCHEMA_VERSION). A payload declaring a different one still renders, but warns
+# once about likely drift (#638); an absent one is tolerated (older payloads).
+const SUPPORTED_SCHEMA_VERSION := "1.0"
+# One-shot dedupe for the "unknown feed kind" warning so a newer backend
+# streaming an unrecognized kind every tick warns once, not per record (#638).
+var _warned_feed_kinds := {}
 
 var _tile_px := 16
 var _sec_per_step := 10
@@ -510,12 +519,21 @@ func _on_replay_request_completed(
 
 func _load_replay_from_text(text: String) -> void:
 	var data: Variant = JSON.parse_string(text)
-	if typeof(data) != TYPE_DICTIONARY:
-		push_error("penn_replay: replay payload is not valid replay JSON")
+	# One structural check + a single push_error + graceful abort, instead of
+	# hard-indexing meta/frames off a truncated re-bake or a skewed backend (#638).
+	var load_error := PayloadGuards.replay_load_error(data)
+	if load_error != "":
+		push_error("penn_replay: %s" % load_error)
 		return
+	var replay := data as Dictionary
+	var meta := replay["meta"] as Dictionary
+	if not PayloadGuards.schema_ok(meta, SUPPORTED_SCHEMA_VERSION):
+		push_warning(
+			"penn_replay: replay schema_version '%s' != supported '%s'; rendering may be degraded"
+			% [String(meta.get("schema_version", "?")), SUPPORTED_SCHEMA_VERSION])
 
-	_apply_meta(data["meta"])
-	_frames = data["frames"]
+	_apply_meta(meta)
+	_frames = replay["frames"]
 	# The per-persona full memory history, for the State Details inspector's memory
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
@@ -532,9 +550,12 @@ func _load_replay_from_text(text: String) -> void:
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
 	# sim plays. The building is the middle segment of each `act` address (see _building_of).
 	var buildings := {}  # used as a set
-	for frame in _frames:
+	for fi in _frames.size():
 		for name in _names:
-			var b := _building_of(String((frame[name] as Dictionary)["act"]))
+			var entry := PayloadGuards.agent_entry(_frames, fi, name)
+			if entry.is_empty():
+				continue
+			var b := _building_of(PayloadGuards.act_of(entry))
 			if b != "":
 				buildings[b] = true
 	var sorted_buildings := buildings.keys()
@@ -570,7 +591,10 @@ func _load_replay_from_text(text: String) -> void:
 func _apply_meta(meta: Dictionary) -> void:
 	# World shape + cast, shared verbatim by the baked loader and the live
 	# handshake (issue #263) -- so an agent spawns identically either way.
-	_tile_px = int(meta["tile_px"])
+	# tile_px is guaranteed by the load boundary (replay_load_error); default to
+	# the current value on the live-handshake path so a meta without it can't
+	# crash a typed int() of a missing key (#638).
+	_tile_px = int(meta.get("tile_px", _tile_px))
 	_sec_per_step = int(meta.get("sec_per_step", 10))
 	# Perception radius for the tracking fog -- the sim's vision_r, falling back to
 	# the Smallville default for older replays that don't record it.
@@ -580,9 +604,16 @@ func _apply_meta(meta: Dictionary) -> void:
 	# Older replays/backends don't carry the key; [] just means an empty seed view.
 	_relationships = meta.get("relationships", [])
 	var thumb := _make_thumbnail()
-	for i in meta["personas"].size():
-		var persona: Dictionary = meta["personas"][i]
-		var pname: String = persona["name"]
+	var personas: Variant = meta.get("personas", [])
+	if typeof(personas) != TYPE_ARRAY:
+		personas = []
+	for i in (personas as Array).size():
+		var pentry: Variant = (personas as Array)[i]
+		if typeof(pentry) != TYPE_DICTIONARY or not (pentry as Dictionary).has("name"):
+			push_warning("penn_replay: skipping persona %d with no name in meta" % i)
+			continue
+		var persona := pentry as Dictionary
+		var pname: String = String(persona["name"])
 		var tint: Color = TINTS[i % TINTS.size()]
 		_names.append(pname)
 		# Keep the full persona entry for the State Details inspector (issue #408).
@@ -754,7 +785,15 @@ func _apply_record(rec: Variant) -> void:
 	if cursor >= 0 and cursor <= _last_cursor:
 		return  # already applied
 	_last_cursor = maxi(_last_cursor, cursor)
-	match String(record.get("kind", "")):
+	var kind := String(record.get("kind", ""))
+	# A newer backend's record kind (#622 `wish`, #371 conversation, ...) is
+	# still fail-soft-dropped, but leaves a one-shot breadcrumb so version drift
+	# isn't invisible (#638).
+	if not PayloadGuards.is_known_kind(kind) and not _warned_feed_kinds.has(kind):
+		_warned_feed_kinds[kind] = true
+		push_warning(
+			"penn_replay: ignoring unknown feed kind '%s' -- viewer may be out of date" % kind)
+	match kind:
 		"frame":
 			_apply_live_frame(int(record.get("step", -1)), record.get("agents"))
 		"status":
@@ -783,6 +822,13 @@ func _apply_live_frame(step: int, agents: Variant) -> void:
 	# trails and the heatmap index the live array the same way they index a
 	# baked one. A gap (shouldn't happen -- cursors are contiguous) is padded by
 	# holding the previous pose rather than crashing the renderer.
+	# A contiguous cursor never skips far ahead; a corrupt/huge step must be
+	# dropped, not grown into by allocating millions of hold-frames (#638).
+	if PayloadGuards.gap_too_large(step, _frames.size()):
+		push_error(
+			"penn_replay: frame step %d is %d ahead of %d buffered; dropping (corrupt cursor?)"
+			% [step, step - _frames.size(), _frames.size()])
+		return
 	var prev_size := _frames.size()
 	while _frames.size() < step:
 		_frames.append(_frames[-1] if not _frames.is_empty() else agents)
@@ -1273,8 +1319,11 @@ func _update_trail(trail: Line2D, name: String, step: int, head: Vector2) -> voi
 	var pts := PackedVector2Array()
 	var start := maxi(0, step - TRAIL_LEN + 1)
 	for k in range(start, step + 1):
-		var f: Dictionary = _frames[k][name]
-		pts.append(_tile_to_world(int(f["x"]), int(f["y"])))
+		var f := PayloadGuards.agent_entry(_frames, k, name)
+		if f.is_empty():
+			continue  # a partial frame in the trail window: skip that crumb (#638)
+		var t := PayloadGuards.tile_of(f)
+		pts.append(_tile_to_world(t.x, t.y))
 	pts.append(head)
 	trail.points = pts
 
@@ -1875,22 +1924,33 @@ func _process(delta: float) -> void:
 	# that reasons about tiles (heatmap dwell, picking, conversations) is affected.
 	var fanout_tiles := {}
 	for name in _names:
-		var fa: Dictionary = _frames[i][name]
-		fanout_tiles[name] = Vector2i(int(fa["x"]), int(fa["y"]))
+		# A partial frame missing this persona (#605's mid-tick streaming) must
+		# skip it, not hard-index null into a typed Dictionary and crash the hot
+		# loop every frame (#638).
+		var fa := PayloadGuards.agent_entry(_frames, i, name)
+		if fa.is_empty():
+			continue
+		fanout_tiles[name] = PayloadGuards.tile_of(fa)
 	var fanout_groups: Dictionary = AgentFanout.groups(fanout_tiles)
 
 	for name in _names:
-		var a: Dictionary = _frames[i][name]
-		var b: Dictionary = _frames[j][name]
-		var pa := _tile_to_world(int(a["x"]), int(a["y"]))
-		var pb := _tile_to_world(int(b["x"]), int(b["y"]))
+		var a := PayloadGuards.agent_entry(_frames, i, name)
+		if a.is_empty():
+			continue  # no pose this frame: skip (also keeps _agents[name] safe)
+		var b := PayloadGuards.agent_entry(_frames, j, name)
+		if b.is_empty():
+			b = a  # next frame lacks this persona: hold the current pose
+		var ta := PayloadGuards.tile_of(a)
+		var tb := PayloadGuards.tile_of(b)
+		var pa := _tile_to_world(ta.x, ta.y)
+		var pb := _tile_to_world(tb.x, tb.y)
 		var agent: Dictionary = _agents[name]
 		agent["node"].position = pa.lerp(pb, frac)
 		# Ease the fan-out offset toward its target so agents glide into/out of
 		# formation when they join/leave a shared tile, instead of teleporting.
 		# Space by the sprite's on-screen size (SPRITE_HALF_PX), not the tile, so
 		# the ~2x-scaled sprites visibly clear each other (#560).
-		var grp: Array = fanout_groups[Vector2i(int(a["x"]), int(a["y"]))]
+		var grp: Array = fanout_groups.get(ta, [name])
 		var fan_target := Vector2.ZERO
 		if grp.size() > 1:
 			fan_target = AgentFanout.offset(grp.find(name), grp.size(), SPRITE_HALF_PX)
@@ -1900,9 +1960,9 @@ func _process(delta: float) -> void:
 		if show_trail:
 			_update_trail(agent["trail"], name, i, agent["node"].position)
 
-		var moving: bool = a["x"] != b["x"] or a["y"] != b["y"]
-		if moving and b["x"] != a["x"]:
-			agent["sprite"].flip_h = int(b["x"]) < int(a["x"])
+		var moving: bool = ta != tb
+		if moving and tb.x != ta.x:
+			agent["sprite"].flip_h = tb.x < ta.x
 		var frame_in_row: int = (int(_anim_t * ANIM_FPS) % WALK_LEN) if moving else 0
 		agent["sprite"].frame = WALK_ROW * SHEET_HFRAMES + frame_in_row
 
@@ -1913,11 +1973,14 @@ func _process(delta: float) -> void:
 		if _is_live:
 			_panel.set_live_clip_ready(_frames.size() >= LIVE_CLIP_MIN_N)
 		for name in _names:
-			var a: Dictionary = _frames[i][name]
+			var a := PayloadGuards.agent_entry(_frames, i, name)
+			if a.is_empty():
+				continue
 			# The current activity shows in the sidebar row (not as a map bubble); the
 			# location half of the same string feeds the Focus spotlight below.
-			var full := String(a["act"])
-			_panel.set_character_status(name, "%s %s" % [a["e"], full.split(" @ ")[0]])
+			var full := PayloadGuards.act_of(a)
+			_panel.set_character_status(
+				name, "%s %s" % [PayloadGuards.emoji_of(a), full.split(" @ ")[0]])
 			_agent_location[name] = _building_of(full)
 			_update_agent_speech(name, a, i)
 		# Re-evaluate the location spotlight now that everyone's building is up to date.
