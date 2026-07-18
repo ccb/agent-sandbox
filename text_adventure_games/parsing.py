@@ -237,6 +237,14 @@ class Parser:
             # swallow ("light" in command -> LIGHT).
             return "hint"
 
+        if command == "propose" or command.startswith("propose "):
+            # The wish channel (#620): propose takes its payload as free text
+            # ("propose fill the pot ... because ...") which may contain
+            # direction words or verb keywords ("go", "eat", ...). Like say and
+            # hint above, it must win before the direction check and the
+            # keyword branches below can hijack its content.
+            return ActionName.PROPOSE
+
         if (
             command.startswith("say ")
             or command.startswith("speak ")
