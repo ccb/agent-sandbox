@@ -10,7 +10,7 @@ that, each going through the engine's precondition gate like any built-in action
   character so the exporter can render it as the on-screen action label.
 """
 
-from text_adventure_games.actions import base, consume
+from text_adventure_games.actions import base, consume, investigate
 
 
 class Travel(base.Action):
@@ -607,3 +607,35 @@ class CheckOutBook(base.Action):
         return self.parser.ok(
             f"{self.character.name} checks out {self.book.name} from the shelf."
         )
+
+
+class ReadPenn(investigate.Read):
+    """The engine's Read with the Penn tool-schema enrichments (#616): a typed
+    item slot (scope-enum'd like every engine item slot) and the #581
+    duration/emoji pacing meta-slots, so a live brain can settle in with a
+    book instead of skimming it in one tick. Registered under the same "read"
+    name, overriding the built-in for this game only (the DrinkPenn
+    precedent). Gate, narration, and the READABLE affordance declaration are
+    all inherited unchanged."""
+
+    ARGUMENTS_SCHEMA = {
+        "item": {
+            "type": "item",
+            "description": "the exact name of the thing to read",
+            "required": True,
+        },
+        # Brain-authoritative pacing (#581), same contract as Act: popped off
+        # the tool call before command reassembly, never seen by the parser.
+        "duration_minutes": {
+            "type": "number",
+            "description": "how many in-game minutes to spend reading "
+            "before deciding again (optional; omit to use the planned duration)",
+            "required": False,
+        },
+        "emoji": {
+            "type": "string",
+            "description": "a single emoji shown on the map while reading "
+            "(optional; omit to use the planned/persona default)",
+            "required": False,
+        },
+    }

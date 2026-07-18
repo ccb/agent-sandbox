@@ -10,9 +10,9 @@ Fully offline. Run from the repo root::
     uv run pytest godot-generative-agents/tests/test_book_loop_616.py -v
 """
 
-from backend.actions import CheckOutBook
+from backend.actions import CheckOutBook, ReadPenn
 from backend.build_world import _normalize_personas, build_world
-from backend.cognition import attach_agents
+from backend.cognition import action_tools_for, attach_agents
 from text_adventure_games.enums import Property
 from text_adventure_games.things.items import Item
 
@@ -41,8 +41,8 @@ def _persona(name="Testa"):
 
 def _tiny_world(
     names=("Testa",),
-    extra_actions=(CheckOutBook,),
-    offer=("check_out_book",),
+    extra_actions=(CheckOutBook, ReadPenn),
+    offer=("check_out_book", "read"),
 ):
     """(game, chars) for a small world with the book verbs registered."""
     personas = _normalize_personas([_persona(n) for n in names])
@@ -166,3 +166,62 @@ def test_an_unknown_title_is_not_matched():
 
     assert not game.parser.parse_command("check_out_book necronomicon", actor=char)
     assert game.parser.last_fail_message == "I don't see that book on the shelf."
+
+
+# -- Task 2: ReadPenn — typed slot + #581 pacing ----------------------------
+
+
+def _tool_names(game, char):
+    return {t["name"] for t in action_tools_for(game, char)}
+
+
+def test_read_override_is_registered():
+    game, _ = _tiny_world()
+    assert game.parser.actions["read"] is ReadPenn
+
+
+def test_read_tool_advertises_item_enum_and_pacing_slots():
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+
+    tools = {t["name"]: t for t in action_tools_for(game, char)}
+    read = tools["read"]
+    props = read["parameters"]["properties"]
+    assert "field guide" in props["item"]["enum"]
+    assert "item" in read["parameters"]["required"]
+    # The #581 pacing opt-in: decide_with_action_tools detects these slots
+    # verb-agnostically, so a live brain can linger over a book.
+    assert "duration_minutes" in props
+    assert "emoji" in props
+
+
+def test_book_verbs_are_curated_by_scope():
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+
+    # Bare campus: no shelf, nothing READABLE -> neither verb is offered.
+    assert "check_out_book" not in _tool_names(game, char)
+    assert "read" not in _tool_names(game, char)
+
+    # At the stocked stacks: the shelf affords checkout, READABLE affords read.
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+    assert "check_out_book" in _tool_names(game, char)
+    assert "read" in _tool_names(game, char)
+
+
+def test_read_follows_the_checked_out_book():
+    game, chars = _tiny_world()
+    char = chars["Testa"]
+    _stocked_stacks(game)
+    _move(game, char, "Stacks")
+    assert game.parser.parse_command("check_out_book field guide", actor=char)
+
+    # Back on campus, holding the book: read stays offered (it's in scope);
+    # check_out_book does not (no shelf here).
+    _move(game, char, "Campus")
+    assert "read" in _tool_names(game, char)
+    assert "check_out_book" not in _tool_names(game, char)
+    assert game.parser.parse_command("read field guide", actor=char)
