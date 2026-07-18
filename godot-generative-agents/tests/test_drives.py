@@ -47,3 +47,30 @@ def test_thirst_rate_greater_than_one_reaches_threshold_faster():
     c.set_property("thirst_threshold", 3)
     accrue_thirst(c)
     assert c.get_property(Property.IS_THIRSTY)
+
+
+def test_simulate_accrues_thirst_for_an_opted_in_persona():
+    # A persona with thirst_rate accrues over a short run; the default personas
+    # (no thirst_rate) never do -> the bake stays byte-identical.
+    from backend.run_simulation import simulate
+    from penn_world import build_penn_world
+
+    pw = build_penn_world()
+
+    def _opt_in(personas):
+        personas[0]["thirst_rate"] = 1
+        personas[0]["thirst_threshold"] = 2
+        return personas
+
+    personas = _opt_in([dict(p) for p in pw.personas])
+    chars_out: dict = {}
+
+    def build_capture(world_map):
+        game, chars = pw.build_world_fn(world_map)
+        chars_out.update(chars)
+        return game, chars
+
+    simulate(pw.world_map, 5, personas=personas, build_world_fn=build_capture)
+    target = chars_out[personas[0]["name"]]
+    assert target.get_property("thirst") >= 2
+    assert target.get_property("is_thirsty")
