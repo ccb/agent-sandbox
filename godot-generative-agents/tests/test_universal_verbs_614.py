@@ -193,3 +193,66 @@ def test_talk_to_without_topic_sets_no_topic_marker():
     assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
     assert chars["Ada"].get_property("talk_request") == "Bo"
     assert chars["Ada"].get_property("talk_topic") is False  # defaultdict default
+
+
+# ------------------------------------------------------- talk_to curation
+
+
+def _tools(game, char):
+    return {t["name"]: t for t in action_tools_for(game, char)}
+
+
+def test_talk_to_not_offered_when_alone():
+    game, chars = _world(
+        ["Ada", "Bo"], extra=list(PENN_ACTION_VERBS), llm_client=_ToolBrain()
+    )
+    _colocate(game, chars, ["Ada"], "Plaza")
+    _colocate(game, chars, ["Bo"], "Cafe")
+    assert "talk_to" not in _tools(game, chars["Ada"])
+
+
+def test_talk_to_offered_with_colocated_living_names_as_enum():
+    game, chars = _world(
+        ["Ada", "Bo"], extra=list(PENN_ACTION_VERBS), llm_client=_ToolBrain()
+    )
+    _colocate(game, chars, ["Ada", "Bo"])
+    tool = _tools(game, chars["Ada"])["talk_to"]
+    assert tool["parameters"]["properties"]["person"]["enum"] == ["Bo"]
+
+
+def test_talk_to_not_offered_when_the_only_other_is_dead():
+    game, chars = _world(
+        ["Ada", "Bo"], extra=list(PENN_ACTION_VERBS), llm_client=_ToolBrain()
+    )
+    _colocate(game, chars, ["Ada", "Bo"])
+    chars["Bo"].set_property("is_dead", True)
+    assert "talk_to" not in _tools(game, chars["Ada"])
+
+
+def test_offered_iff_gate_passes():
+    # The symmetry the epic's invariant demands: whenever the tool is offered,
+    # a talk_to at one of the enum names passes the gate; whenever it isn't,
+    # the gate fails for every co-located candidate.
+    game, chars = _world(
+        ["Ada", "Bo"], extra=list(PENN_ACTION_VERBS), llm_client=_ToolBrain()
+    )
+    for placement, expect_offered in ((["Ada", "Bo"], True), (["Ada"], False)):
+        _colocate(game, chars, placement, "Plaza")
+        if "Bo" not in placement:
+            _colocate(game, chars, ["Bo"], "Cafe")
+        offered = "talk_to" in _tools(game, chars["Ada"])
+        gate = game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+        assert offered == expect_offered == bool(gate)
+        chars["Ada"].set_property("talk_request", False)  # reset between rounds
+
+
+def test_agentless_observer_is_never_a_talk_target():
+    # build_world's silent "Observer" (the engine's required player) has no
+    # agent, so it can never converse -- neither offered nor gate-passable.
+    game, chars = _world(
+        ["Ada", "Bo"], extra=list(PENN_ACTION_VERBS), llm_client=_ToolBrain()
+    )
+    _colocate(game, chars, ["Ada"], "Plaza")
+    _colocate(game, chars, ["Bo"], "Cafe")
+    assert "talk_to" not in _tools(game, chars["Ada"])  # Observer doesn't count
+    assert not game.parser.parse_command("talk_to Observer", actor=chars["Ada"])

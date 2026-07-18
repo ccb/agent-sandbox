@@ -349,9 +349,13 @@ class TalkTo(base.Action):
 
     Gate = the same fact curation reads (action_tools_for drops/enum-fills the
     tool from co-located living characters): target matched in the actor's room
-    + alive. "Conversations enabled" needs no explicit precondition: the verb
-    is only reachable from a real tool-calling brain, and without one the
-    marker is simply never consumed.
+    + alive + has an ``agent`` -- the same fact the engine's
+    ``conversation.can_converse`` requires of both sides, which is what excludes
+    build_world's silent "Observer" player (the engine's required player,
+    never scripted with an agent) from ever being a talk target. "Conversations
+    enabled" needs no explicit precondition: the verb is only reachable from a
+    real tool-calling brain, and without one the marker is simply never
+    consumed.
     """
 
     ACTION_NAME = "talk_to"
@@ -386,6 +390,9 @@ class TalkTo(base.Action):
             return False
         if self.target.get_property("is_dead"):
             self.parser.fail(f"{self.target.name} is in no state to talk.")
+            return False
+        if getattr(self.target, "agent", None) is None:
+            self.parser.fail(f"{self.target.name} is not up for a conversation.")
             return False
         return True
 

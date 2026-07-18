@@ -200,7 +200,7 @@ IMPORTANCE_SCORE_TOOL = {
 }
 
 from . import seed
-from .actions import Travel
+from .actions import TalkTo, Travel
 from .planner import LLMPlanner, MockPlanner
 from .prompt_templates import render
 
@@ -690,13 +690,41 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
         game.parser, actor=char, names=agent.action_names, max_enum=max_enum
     )
     destinations = sorted(game.locations)
-    if len(destinations) > max_enum:
-        return tools  # too many venues to enumerate: the slot stays free text
-    for tool in tools:
-        if tool["name"] == Travel.ACTION_NAME:
-            prop = tool["parameters"]["properties"].get("destination")
+    if len(destinations) <= max_enum:
+        for tool in tools:
+            if tool["name"] == Travel.ACTION_NAME:
+                prop = tool["parameters"]["properties"].get("destination")
+                if prop is not None:
+                    prop["enum"] = destinations
+    # else: too many venues to enumerate -- the slot stays free text
+
+    # Bespoke curation for talk_to (#614): "another living character is
+    # co-located" is not expressible as a REQUIRED_AFFORDANCES tag -- the #612
+    # helper's scope is items / inventory / the location itself, never its
+    # characters (flagged on #612) -- so the toolset builder reads the same
+    # facts TalkTo.check_preconditions reads, keeping offered <=> gate. The
+    # third leg -- the target must have an ``agent`` -- is the same fact the
+    # engine's conversation.can_converse requires of both sides; without it
+    # build_world's silent "Observer" player (the engine's required player,
+    # standing at the hub, never scripted with an agent) would be offered as
+    # a talk target it can never actually converse with. The person slot's
+    # enum comes from the same character dict the gate matches against, so
+    # menu and gate cannot disagree about who is present.
+    others = sorted(
+        c.name
+        for c in (char.location.characters.values() if char.location else [])
+        if c is not char
+        and not c.get_property("is_dead")
+        and getattr(c, "agent", None) is not None
+    )
+    talk_tool = next((t for t in tools if t["name"] == TalkTo.ACTION_NAME), None)
+    if talk_tool is not None:
+        if not others:
+            tools.remove(talk_tool)
+        elif len(others) <= max_enum:
+            prop = talk_tool["parameters"]["properties"].get("person")
             if prop is not None:
-                prop["enum"] = destinations
+                prop["enum"] = others
     return tools
 
 
