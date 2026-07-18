@@ -113,3 +113,52 @@ def test_web_renderer_maps_wish_to_npc_wish_type():
     web = WebRenderer()
     web.emit(Message(Channel.AGENT_WISH, "a ladder", actor="troll"))
     assert web.drain() == [{"type": "npc_wish", "text": "troll [wish] a ladder"}]
+
+
+# ----------------------------------------------------------------------
+# Section C: the Game sink
+# ----------------------------------------------------------------------
+
+
+def _wish(**overrides):
+    base = dict(
+        actor="troll",
+        turn=1,
+        location="Field",
+        desired="a ladder",
+        reason="the wall is too high",
+    )
+    base.update(overrides)
+    return ActionWish(**base)
+
+
+def test_log_wish_appends_and_fires_streaming_callback():
+    game = tiny_game()
+    assert game.wishes == []  # empty by default; games that never wish are unchanged
+    seen = []
+    game.on_wish = seen.append  # the UsageLedger._on_record pattern (#622's tap)
+    wish = _wish()
+    game.log_wish(wish)
+    assert game.wishes == [wish]
+    assert seen == [wish]
+
+
+def test_log_wish_without_callback_is_fine_and_emits_trace():
+    game = tiny_game()
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    game.log_wish(_wish())
+    assert len(game.wishes) == 1
+    [msg] = cap.by_channel(Channel.AGENT_WISH)
+    assert msg.actor == "troll"
+    assert msg.text == "a ladder — because the wall is too high"
+    assert msg.meta["wish"]["trigger"] == "proposed"
+
+
+def test_log_wish_trace_omits_empty_reason():
+    game = tiny_game()
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    game.log_wish(_wish(reason=""))
+    [msg] = cap.by_channel(Channel.AGENT_WISH)
+    assert msg.text == "a ladder"
