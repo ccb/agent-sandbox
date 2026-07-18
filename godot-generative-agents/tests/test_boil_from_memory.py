@@ -15,6 +15,7 @@ _SIM_DIR = (
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.penn.experiments.boil_from_memory import (  # noqa: E402
+    _configure,
     classify_outcome,
     run_arm,
 )
@@ -45,3 +46,32 @@ def test_run_arm_smoke_with_scripted_brain():
     )
     assert set(result) >= {"boiled_then_drank", "drank_raw", "neither", "rate"}
     assert result["boiled_then_drank"] + result["drank_raw"] + result["neither"] == 1
+
+
+def test_seeded_aversion_is_retrieved_at_the_water_decision():
+    # The #595 prerequisite: the seeded memory must actually reach the decide
+    # prompt near the water, or the live brain can't reason from it.
+    from backend.run_simulation import simulate
+    from penn_world import WORLD_DATA_BOIL, build_penn_world
+
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL)
+    personas = _configure(pw.personas, seeded=True)
+    captured = {}
+
+    def build_capture(world_map):
+        game, chars = pw.build_world_fn(world_map)
+        captured.update(chars)
+        return game, chars
+
+    simulate(
+        pw.world_map,
+        40,
+        personas=personas,
+        build_world_fn=build_capture,
+        llm_client=build_scripted_brains()[0],
+    )
+    agent = captured[personas[0]["name"]].agent
+    # By the end of a Houston-centred run the aversion has surfaced at least once.
+    assert any(
+        "violently ill" in r.text for r in agent.last_retrieved
+    ), "seeded aversion never retrieved -- raise its importance or tag it"
