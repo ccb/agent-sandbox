@@ -246,6 +246,18 @@ def test_propose_succeeds_for_the_player_too():
     assert wish.actor == "player"
 
 
+def test_player_propose_is_attributed_to_the_player_not_a_named_npc():
+    # Regression guard (PR #667 review pass): the payload is a free-text action
+    # description, so a co-located name in it ("propose talk to troll ...") must
+    # NOT be mined as the proposer -- the wish and its whole context snapshot
+    # belong to whoever acted (the player here), not the character they named.
+    game = tiny_game()
+    assert game.parser.parse_command("propose talk to troll because i have no way to")
+    [wish] = game.wishes
+    assert wish.actor == "player"  # not "troll"
+    assert wish.location == "Field"  # the player's location, not mined context
+
+
 def test_propose_lands_in_the_game_event_log():
     # parse_command logs every gate-passing action as a GameEvent — a wish is
     # an ordinary action, so recorded runs see it with zero extra plumbing.

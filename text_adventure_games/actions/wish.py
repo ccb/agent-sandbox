@@ -44,7 +44,14 @@ class Propose(Action):
         desired, _, reason = payload.partition(" because ")
         self.desired = desired.strip()
         self.reason = reason.strip()
-        self.character = self.acting_character(command)
+        # The proposer is the actor (explicit for every agent-driven NPC) or the
+        # player -- NOT anyone the payload happens to name. The payload is a
+        # free-text description of a wanted action, so the usual command-string
+        # character scan (acting_character) would mine a co-located name out of
+        # it ("propose talk to troll ..." -> attributed to troll) and misfile
+        # the whole wish -- actor, location, scope, goals. Resolve who is acting
+        # directly instead.
+        self.character = self.actor if self.actor is not None else self.game.player
 
     def check_preconditions(self) -> bool:
         if not self.desired:
