@@ -3194,7 +3194,8 @@ def build_game(seed=None):
     )
     gel.add_alias("gel")
     gel.add_alias("flask")
-    hounds.add_item(gel)
+    gel.set_property("figure", "flask")  # the specimen card (40): take once,
+    hounds.add_item(gel)                 # examine re-earns
 
     # Silas -- the synthetic archivist (the hint NPC). His combat / pacify / rob
     # outcomes arrive with later phases (the dagger, Friend's Fungus); for now he

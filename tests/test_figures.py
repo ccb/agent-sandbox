@@ -349,6 +349,19 @@ def test_the_cylinder_card_names_the_first_break():
         assert fig(g) == "cylinders"  # deeper wreckage: the generic plate
 
 
+def test_the_flask_deals_its_specimen_card():
+    """The flask of gel (card 40): examining it always re-earns the card."""
+    g, cap = _game()
+    hounds = g.locations["Hall of Hounds"]
+    gel = hounds.items["flask of gel"]
+    hounds.remove_item(gel)
+    g.player.add_to_inventory(gel)
+    g.do_command("examine flask")
+    assert cap.texts(Channel.FIGURE) == ["flask"]
+    g.do_command("examine flask")
+    assert cap.texts(Channel.FIGURE) == ["flask", "flask"]
+
+
 def test_a_purged_fungus_also_retires_the_gift_card():
     """The other road to a dead network -- the Horror slain in the sphere --
     must also retire 19-B at the summit (CCB: don't replay the gift once
