@@ -251,6 +251,25 @@ def test_the_spawns_warning_draws_its_card_first():
     assert fig_at < warn_at  # the sway plays, THEN the warning prints
 
 
+def test_dates_tossed_under_open_sky_cue_the_wheel_of_bats():
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    g.do_command("light glowstone")
+    g.relocate(g.player, g.locations["The Wagon's Hold"])
+    g.do_command("open crates")
+    g.do_command("take crate of dates")
+    g.relocate(g.player, g.locations["The Caravan Wreck"])
+    g.do_command("drop dates")  # food on the floor is food on the floor
+    msgs = [(m.channel, m.text) for m in cap.messages]
+    fig_at = next(
+        i for i, (c, t) in enumerate(msgs) if c is Channel.FIGURE and t == "bats"
+    )
+    txt_at = next(i for i, (c, t) in enumerate(msgs) if "EXHALE" in t)
+    assert fig_at < txt_at  # the wheel plays, THEN the tomb exhales
+    assert "wheel of bats" in g.player.location.items
+
+
 def test_talking_to_silas_is_a_backstop_cue():
     g, cap = _game()
     g.relocate(g.player, g.locations["Hall of Memory"])

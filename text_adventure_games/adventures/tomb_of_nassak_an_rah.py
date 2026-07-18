@@ -3771,6 +3771,7 @@ def build_game(seed=None):
             )
             wheel.add_alias("bats")
             wheel.set_property("figure", "bats")
+            g.show_figure("bats", force=True)  # a story beat: always plays
             g.parser.ok(
                 "The mouths of the tomb EXHALE -- a river of leather "
                 "pouring into the open air. The colony strips the dates in "
