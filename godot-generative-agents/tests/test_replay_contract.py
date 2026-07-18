@@ -29,6 +29,7 @@ from backend.contract import (  # noqa: E402
     EVENT_STATE_FIELDS,
     MEMORY_RECORD_FIELDS,
     SCHEMA_VERSION,
+    WISH_FIELDS,
 )
 from backend.contract_models import (  # noqa: E402
     AgentFrame,
@@ -40,8 +41,10 @@ from backend.contract_models import (  # noqa: E402
     RelationshipEdge,
     Replay,
     ScheduleStop,
+    WishState,
 )
 from text_adventure_games.events import GameEvent  # noqa: E402
+from text_adventure_games.wishes import ActionWish  # noqa: E402
 from penn_world import build_penn_world, replay_frame_entry  # noqa: E402
 from serve_penn import PennStepper  # noqa: E402
 
@@ -205,6 +208,7 @@ _TS_PAIRS = {
     "AgentFrame": AgentFrame,
     "MemoryRecord": MemoryRecord,
     "EventState": EventState,
+    "WishState": WishState,
     "Replay": Replay,
 }
 
@@ -218,6 +222,30 @@ def test_event_state_field_order_matches_emitter():
     sample = GameEvent(3, "Diego Torres", "drink", "felt ill", {"cause": "raw water"})
     assert tuple(sample.to_primitive().keys()) == EVENT_STATE_FIELDS
     EventState.model_validate(sample.to_primitive())
+
+
+def test_wish_state_field_order_matches_emitter():
+    # Same three-way lock, for the #622 demand-signal record: the constant,
+    # the model, and the real emitter (ActionWish.to_primitive) all agree —
+    # so "wishes" in the replay and kind:"wish" live-feed rows validate the
+    # moment their emitter lands.
+    assert tuple(WishState.model_fields) == WISH_FIELDS
+    sample = ActionWish(
+        actor="Diego Torres",
+        turn=3,
+        location="UPenn:Van Pelt Library",
+        desired="a bike rack near the library",
+        reason="mine keeps getting stolen",
+    )
+    assert tuple(sample.to_primitive().keys()) == WISH_FIELDS
+    WishState.model_validate(sample.to_primitive())
+
+
+def test_wish_state_contract_accepts_a_null_actor():
+    # Parse-gap wishes (#621) may carry no actor, exactly like world-level
+    # GameEvents (#631) -- the contract must accept it.
+    sample = ActionWish(actor=None, turn=1, location=None, desired="ring the bell")
+    WishState.model_validate(sample.to_primitive())
 
 
 def _ts_interface_fields() -> dict[str, set[str]]:

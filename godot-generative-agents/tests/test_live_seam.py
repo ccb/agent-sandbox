@@ -403,6 +403,50 @@ def test_game_event_rows_ride_the_engine_feed():
     assert rows == [record]
 
 
+def test_wish_rows_ride_their_own_top_level_kind():
+    """#622: a stepper's drained wish records come out of GET /events as their
+    OWN top-level ``kind: "wish"`` record -- NOT wrapped inside "engine" the
+    way llm_call/game_event rows are (contrast the test just above). serve_penn's
+    PennStepper produces these for real (test_wish_feed.py); here a scripted
+    stepper pins the transport."""
+    wish = {
+        "actor": "Diego Torres",
+        "turn": 1,
+        "location": "UPenn:Van Pelt Library",
+        "desired": "a bike rack near the library",
+        "reason": "mine keeps getting stolen",
+        "trigger": "proposed",
+        "goals": [],
+        "scope": [],
+        "raw_command": (
+            "propose a bike rack near the library because mine keeps getting stolen"
+        ),
+        "meta": {},
+    }
+
+    class _WishStepper(ScriptedStepper):
+        def __init__(self):
+            super().__init__(
+                lambda step: {
+                    "a": {"x": step, "y": 0, "act": "walking @ demo", "e": "@"}
+                },
+                meta=_META,
+            )
+            self._drained = False
+
+        def drain_wishes(self):
+            if self._drained:
+                return []
+            self._drained = True
+            return [dict(wish)]
+
+    with _live_client(stepper=_WishStepper()) as c:
+        events = _wait_for_events(c, lambda evs: any(e["kind"] == "wish" for e in evs))
+    rows = [e for e in events if e["kind"] == "wish"]
+    assert len(rows) == 1
+    assert {k: v for k, v in rows[0].items() if k not in ("cursor", "kind")} == wish
+
+
 # --- run registry (#306) -----------------------------------------------------
 
 

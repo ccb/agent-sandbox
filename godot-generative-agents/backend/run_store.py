@@ -10,6 +10,7 @@ durable, zero-infrastructure home (SQLite is stdlib; frames are plain JSONL):
         manifest.json           # mirrors the runs row's manifest column
         frames.jsonl            # line N = the step-N frame (dict[str, AgentFrame])
         events.jsonl            # the run's GameEvent log (EventState dicts, #467)
+        wishes.jsonl            # the run's ActionWish log (WishState dicts, #622)
 
 Producers: ``serve_penn --persist`` (live, per tick) and
 ``generate_penn_replay --persist`` (bake, post-hoc). Consumers: the #307
@@ -35,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.cognition import memories_for_frame
-from backend.contract import AGENT_FRAME_FIELDS, EVENT_STATE_FIELDS
+from backend.contract import AGENT_FRAME_FIELDS, EVENT_STATE_FIELDS, WISH_FIELDS
 from backend.sim_config import RetrievalConfig
 from text_adventure_games.memory import AgentMemory, MemoryRecord
 
@@ -310,6 +311,54 @@ class RunStore:
             raise KeyError(f"unknown run id: {run_id}")
         return run_dir / "events.jsonl"
 
+    # --- wishes (#622) ----------------------------------------------------------
+
+    def append_wishes(
+        self, run_id: str, wishes: list[dict], *, skip_bad: bool = False
+    ) -> list[tuple[dict, str]]:
+        """Append ``ActionWish.to_primitive()`` dicts to the run's wishes.jsonl.
+
+        Mirrors :meth:`append_events` exactly (same append-order-not-line-count
+        contract, same advance-or-nothing batch write, same ``skip_bad``
+        tolerance for #637-style schema drift) -- a wish is a permanent run
+        record like a GameEvent, not an ephemeral per-tick signal. Most runs
+        never call this at all: the mock brain never proposes and its
+        authored commands always parse, so wishes.jsonl is simply absent from
+        a mock-brain run's directory (byte-identical by vacuity, #622).
+        """
+        path = self._wishes_path(run_id)
+        lines: list[str] = []
+        bad: list[tuple[dict, str]] = []
+        for wish in wishes:
+            try:
+                _validate_wish(wish)
+                lines.append(
+                    json.dumps(wish, ensure_ascii=False, separators=(",", ":"))
+                )
+            except (ValueError, TypeError) as exc:
+                if not skip_bad:
+                    raise
+                bad.append((wish, str(exc)))
+        if lines:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write("".join(line + "\n" for line in lines))
+        return bad
+
+    def read_wishes(self, run_id: str) -> list[dict]:
+        """The run's persisted ActionWish log, in append order ([] when none)."""
+        path = self._wishes_path(run_id)
+        if not path.exists():
+            return []
+        return self._read_jsonl(path)
+
+    def _wishes_path(self, run_id: str) -> Path:
+        # Lazily created on first append, like events.jsonl -- a wish-less run
+        # (the common case under the mock brain) never grows a file.
+        run_dir = self.root / run_id
+        if not run_dir.is_dir():
+            raise KeyError(f"unknown run id: {run_id}")
+        return run_dir / "wishes.jsonl"
+
     # --- memories ---------------------------------------------------------------
 
     def record_memories(self, run_id: str, agent: str, records: list[dict]) -> None:
@@ -519,3 +568,17 @@ def _validate_event(event: dict) -> None:
     missing = [k for k in EVENT_STATE_FIELDS if k not in event]
     if missing:
         raise ValueError(f"event is missing {missing}")
+
+
+def _validate_wish(wish: dict) -> None:
+    """Structural #622 WishState check: the ten pinned fields, keys only --
+    same rationale as ``_validate_event`` (a parse-gap wish legitimately
+    carries ``actor=None``, mirroring a world-level GameEvent)."""
+    if not isinstance(wish, dict):
+        raise ValueError("wish must be a dict of WishState fields")
+    unpinned = sorted(set(wish) - set(WISH_FIELDS))
+    if unpinned:
+        raise ValueError(f"wish has unpinned fields: {unpinned}")
+    missing = [k for k in WISH_FIELDS if k not in wish]
+    if missing:
+        raise ValueError(f"wish is missing {missing}")
