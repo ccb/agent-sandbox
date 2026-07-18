@@ -1003,6 +1003,26 @@ class Craft(base.Action):
         learned = getattr(self.game, "learned_recipes", None) or set()
         return any(name in learned for name in recipe.names())
 
+    def _unlearned_match(self) -> bool:
+        """Whether an UNLEARNED recipe (registered, but gated by #135's
+        learning gate) would otherwise have matched the target -- mirrors
+        ``_resolve``'s by-output-name (#1) and by-ingredients (#2) paths, but
+        scans the FULL recipe list, since ``_recipes()`` already filtered
+        these out. Distinguishes "haven't learned it yet" from "truly
+        unknown" in ``check_preconditions`` (#628)."""
+        if not self.target:
+            return False
+        for r in getattr(self.game, "recipes", []) or []:
+            if self._is_known(r):
+                continue
+            if any(n and n in self.target for n in r.names()):
+                return True
+            if r.inputs and all(
+                ing.name and ing.name in self.target for ing in r.inputs
+            ):
+                return True
+        return False
+
     def _held(self):
         """name -> item across the crafter's hands and open carried containers."""
         return self.character.carried_items()
@@ -1097,7 +1117,19 @@ class Craft(base.Action):
     def check_preconditions(self) -> bool:
         if self.recipe is None:
             if self.target:
-                self.parser.fail(f"You don't know how to make '{self.target}'.")
+                if self._unlearned_match():
+                    # Case 1 (#628): a recipe for this target exists but the
+                    # crafter hasn't learned it (#135) -- a learnable enabler,
+                    # not missing demand, so no wish here.
+                    self.parser.fail(
+                        f"You haven't learned how to make '{self.target}' yet."
+                    )
+                else:
+                    # Case 2 (#628): no recipe anywhere matches the target --
+                    # truly unknown demand, so log a craft_gap wish alongside
+                    # the (unchanged) failure message.
+                    self.parser.fail(f"You don't know how to make '{self.target}'.")
+                    self.parser.log_craft_gap(self.command, self.character)
             else:
                 self.parser.fail("There's nothing you can make here right now.")
             return False
