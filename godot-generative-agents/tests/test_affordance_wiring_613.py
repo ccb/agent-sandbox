@@ -21,6 +21,7 @@ from backend.cognition import (  # noqa: E402
     action_tools_for,
     attach_agents,
 )
+from penn_world import build_penn_world  # noqa: E402
 from text_adventure_games.enums import Property  # noqa: E402
 from text_adventure_games.things import Item, Location  # noqa: E402
 
@@ -94,3 +95,36 @@ def test_action_tools_for_curates_a_tagged_verb_by_scope():
     game.locations["The Green"].remove_character(ada)
     game.locations["Cafe"].add_character(ada)
     assert "read" in _tool_names(game, ada)
+
+
+def test_build_world_applies_location_properties():
+    locs = [
+        {"name": "Hub", "description": "h", "address": None, "hub": True},
+        {
+            "name": "Lib",
+            "description": "l",
+            "address": "T:Lib:x",
+            "properties": ["studyable"],
+        },
+    ]
+    personas = _personas()
+    personas[0]["home"] = "Hub"
+    personas[0]["destination"] = "Hub"
+    personas[0]["schedule"] = [
+        {"place": "Hub", "activity": "idling", "emoji": "\U0001f4d6", "steps": None}
+    ]
+    game, _chars = build_world(None, personas, locs)
+    assert game.locations["Lib"].get_property("studyable")
+    # No `properties:` key -> no tags, existing worlds unchanged.
+    assert not game.locations["Hub"].get_property("studyable")
+
+
+def test_penn_arena_tags_are_authored():
+    pw = build_penn_world()
+    game, _chars = pw.build_world_fn(pw.world_map)
+    assert game.locations["Van Pelt — Moelis Reading Room"].get_property("studyable")
+    assert game.locations["Van Pelt — Study Booths"].get_property("studyable")
+    assert game.locations["Houston Hall"].get_property("dining")
+    # An untagged arena stays untagged -- tags are authored, not blanket.
+    assert not game.locations["College Hall"].get_property("studyable")
+    assert not game.locations["College Hall"].get_property("dining")
