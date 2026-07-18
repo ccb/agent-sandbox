@@ -295,3 +295,44 @@ def test_choose_action_enum_includes_propose():
     game = tiny_game()
     tool = build_choose_action_tool(list(game.parser.actions))
     assert "propose" in tool["parameters"]["properties"]["action"]["enum"]
+
+
+# ----------------------------------------------------------------------
+# Section F: end-to-end through the ReAct loop (offline, mock brain)
+# ----------------------------------------------------------------------
+
+
+def test_react_agent_proposes_and_wish_flows_to_every_sink():
+    from text_adventure_games.llm_client import MockLlmClient
+    from text_adventure_games.npc import make_react_behavior
+
+    game = tiny_game()
+    cap = CaptureRenderer()
+    game.parser.set_renderer(cap)
+    troll = game.characters["troll"]
+    streamed = []
+    game.on_wish = streamed.append
+    troll.set_behavior(
+        make_react_behavior(
+            MockLlmClient(
+                [
+                    "Reasoning: no command here lets me cross the wall\n"
+                    "Action: propose build a ladder because the wall is too high\n"
+                    "Duration: 5"
+                ]
+            )
+        )
+    )
+    troll.take_turn(game)
+    # The record, fully populated:
+    [wish] = game.wishes
+    assert wish.actor == "troll"
+    assert wish.desired == "build a ladder"
+    assert wish.reason == "the wall is too high"
+    # The streaming callback (what #622's backend will install):
+    assert streamed == [wish]
+    # The trace channel:
+    [msg] = cap.by_channel(Channel.AGENT_WISH)
+    assert msg.actor == "troll"
+    # And the loop treated it as a successful action (no reflection retry):
+    assert cap.by_channel(Channel.AGENT_REFLECTION) == []
