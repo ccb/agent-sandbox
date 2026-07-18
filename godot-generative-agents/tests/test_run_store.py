@@ -143,6 +143,69 @@ def test_append_events_validates_and_rejects_unknown_runs(tmp_path):
     assert store.read_events("run-a") == []
 
 
+def test_append_events_skip_bad_drops_the_bad_and_keeps_the_good(tmp_path):
+    """The live path (skip_bad=True) must never let one malformed record halt
+    the run: bad records are dropped and reported, the good ones still land."""
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    good0 = dict(EVENT, turn=0)
+    unpinned = dict(EVENT, turn=1, mood="tense")  # extra field -> validation
+    unserializable = dict(EVENT, turn=2, payload={"o": object()})  # bad value
+    good3 = dict(EVENT, turn=3, summary="still fine")
+    bad = store.append_events(
+        "run-a", [good0, unpinned, unserializable, good3], skip_bad=True
+    )
+    # Only the well-formed events reached disk, in order.
+    assert store.read_events("run-a") == [good0, good3]
+    # Both malformed records were reported back (with a reason) so the caller
+    # can count and log them -- nothing was raised.
+    assert [event for event, _reason in bad] == [unpinned, unserializable]
+
+
+def test_append_events_writes_nothing_when_a_value_wont_serialize(tmp_path):
+    """Key-only validation lets a non-JSON value slip through to json.dumps.
+    Strict mode must still be advance-or-nothing: a serialize failure partway
+    through the batch leaves NO torn prefix behind (the duplicate-on-retry
+    mode, #637)."""
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    good = dict(EVENT, turn=0)
+    unserializable = dict(EVENT, turn=1, payload={"o": object()})
+    with pytest.raises(TypeError):
+        store.append_events("run-a", [good, unserializable])
+    assert store.read_events("run-a") == []  # the good prefix did NOT leak
+
+
+def test_reads_tolerate_a_torn_final_line(tmp_path):
+    """A crash mid-append can leave a partial last line (no trailing newline).
+    read_events/read_frames must skip it and keep serving, not raise on every
+    subsequent read/export (#637)."""
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    store.append_events("run-a", [dict(EVENT, turn=0), dict(EVENT, turn=1)])
+    with (tmp_path / "runs" / "run-a" / "events.jsonl").open("a") as fh:
+        fh.write('{"turn": 2, "actor": "Ada"')  # torn: unterminated, no newline
+    assert store.read_events("run-a") == [dict(EVENT, turn=0), dict(EVENT, turn=1)]
+
+    store.append_frame("run-a", 0, FRAME)
+    with (tmp_path / "runs" / "run-a" / "frames.jsonl").open("a") as fh:
+        fh.write('{"Ada": {"x": 1')  # torn final frame
+    assert store.read_frames("run-a") == [FRAME]
+
+
+def test_reads_still_raise_on_a_corrupt_interior_line(tmp_path):
+    """Tolerance is only for the torn TAIL of a crash. A fully terminated but
+    non-JSON line in the middle is real corruption and must not be swallowed."""
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    store.append_events("run-a", [dict(EVENT, turn=0)])
+    with (tmp_path / "runs" / "run-a" / "events.jsonl").open("a") as fh:
+        fh.write("not json at all\n")  # terminated -> an interior line now
+    store.append_events("run-a", [dict(EVENT, turn=2)])
+    with pytest.raises(json.JSONDecodeError):
+        store.read_events("run-a")
+
+
 def _record(i, text, *, turn=0, kind="observation", importance=3.0, embedding=None):
     return MemoryRecord(
         id=i,

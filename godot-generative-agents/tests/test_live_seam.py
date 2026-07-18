@@ -310,6 +310,46 @@ def test_run_loop_drops_the_in_flight_tick_after_a_reset_bumps_generation():
     assert kinds[-1] == "status"  # ... stopped
 
 
+def test_run_loop_pauses_on_a_tick_error_instead_of_dying():
+    # A tick that raises (a persistence failure -- a bad event, a torn write, a
+    # full disk) must NOT silently kill the loop task and truncate the run. The
+    # only handler used to be a `finally:` that logged a spurious 'stopped', so
+    # the server kept answering reads but never ticked again, losing every later
+    # frame. run_loop must catch it, publish a visible status(reason='error')
+    # with the cause, and pause -- alive, serving, diagnosable (#637).
+    async def scenario():
+        def frames(step):
+            raise RuntimeError("boom: events.jsonl write failed")
+
+        stepper = ScriptedStepper(frames, meta=_META)
+        controller = LiveRunController(stepper, threading.Lock())
+        log = EventLog()
+        task = asyncio.create_task(run_loop(controller, log, 0.001))
+        async with asyncio.timeout(5):
+            while not any(
+                r["kind"] == "status" and r.get("reason") == "error"
+                for r in log.since(0)
+            ):
+                await asyncio.sleep(0.001)
+        records = list(log.since(0))  # capture BEFORE cancel adds its 'stopped'
+        alive, paused = not task.done(), controller.paused
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        return records, alive, paused
+
+    records, alive, paused = asyncio.run(scenario())
+    errors = [
+        r for r in records if r["kind"] == "status" and r.get("reason") == "error"
+    ]
+    assert errors, "a raising tick should publish status(reason='error')"
+    assert "boom" in errors[0].get("error", "")  # the cause is surfaced, not hidden
+    assert alive  # the loop task did NOT die
+    assert paused  # ticking stopped; reads keep working
+    # And it did NOT emit the spurious 'stopped' a crash-through-finally does.
+    assert not any(r.get("reason") == "stopped" for r in records)
+
+
 # --- resume after finished (#349) ------------------------------------------
 
 
