@@ -551,6 +551,9 @@ class PennStepper:
         # ...and how much the #307 persistence hook has flushed to the store.
         # Its own cursor: --persist must never steal rows from the feed above.
         self._persist_events_seen = 0
+        # Malformed events this run dropped rather than persisted (#637): 0 on
+        # a healthy day, surfaced so a lossy artifact is at least visible.
+        self._dropped_events = 0
         # Every client records into self.ledger; with a monitor, through a
         # write-through view that also prints one terminal line per call (the
         # base ledger stays the single source GET /usage sums). Under the mock
@@ -766,6 +769,13 @@ class PennStepper:
         """The store id of the current day's run, or None when not persisting."""
         return self._run_id
 
+    @property
+    def dropped_events(self) -> int:
+        """Count of malformed GameEvents this run dropped rather than persisting
+        (#637). 0 on a healthy run; a non-zero value means the durable
+        events.jsonl is missing records the feed may have shown."""
+        return self._dropped_events
+
     def _run_cost_usd(self) -> float:
         # THE run-cost sum, defined once: this run's slice of the lifetime
         # ledger (#526's baseline) plus whatever the run spent before this
@@ -949,9 +959,25 @@ class PennStepper:
             return
         pending = self.game.events[self._persist_events_seen :]
         if pending:
-            self.run_store.append_events(
-                self._run_id, [event.to_primitive() for event in pending]
+            # Tolerant persistence (#637): a malformed event -- an evolving
+            # schema field the allowlist rejects, a value that won't serialize
+            # -- is dropped and counted, never allowed to raise through the tick
+            # and permanently halt the run. The cursor advances past it either
+            # way: a record the store can't accept must not be re-flushed
+            # forever.
+            bad = self.run_store.append_events(
+                self._run_id,
+                [event.to_primitive() for event in pending],
+                skip_bad=True,
             )
+            for event, reason in bad:
+                self._dropped_events += 1
+                # Mirror the DECIDE TIMEOUT print: a dropped record must be
+                # visible in the run log, not silently swallowed.
+                print(
+                    f"  - DROPPED EVENT @ step {self._step_idx}: {reason} "
+                    f"-- {event.get('summary', event)!r}"
+                )
         self._persist_events_seen = len(self.game.events)
 
     def _finish_run(self) -> None:

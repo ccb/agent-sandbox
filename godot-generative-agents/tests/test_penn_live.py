@@ -282,6 +282,36 @@ def test_stepper_persists_game_events(tmp_path):
     assert store.read_events(run_id)[-1]["summary"] == "last call"
 
 
+def test_stepper_drops_a_bad_game_event_instead_of_halting(tmp_path):
+    # #637: one malformed GameEvent -- an evolving-schema payload the store's
+    # allowlist can't serialize (exactly what #622's wishes.jsonl will risk) --
+    # must be DROPPED and counted, never raise through the tick and permanently
+    # halt the run. The good events in the same batch still persist, and the day
+    # keeps ticking to a clean finish.
+    store = RunStore(tmp_path / "runs")
+    stepper = PennStepper(num_steps=2, world=build_penn_world(), run_store=store)
+    run_id = stepper.run_id
+    stepper.tick()  # step 0
+    good = GameEvent(stepper.game.turn, None, "world_event", summary="a siren wails")
+    bad = GameEvent(
+        stepper.game.turn,
+        None,
+        "world_event",
+        summary="unserializable",
+        payload={"nope": object()},  # passes the key check, fails json.dumps
+    )
+    stepper.game.events.extend([good, bad])
+    stepper.tick()  # step 1 -- must NOT raise despite the bad event
+    summaries = {e["summary"] for e in store.read_events(run_id)}
+    assert "a siren wails" in summaries  # the good event landed
+    assert "unserializable" not in summaries  # the bad one was dropped
+    assert stepper.dropped_events == 1  # ...and counted for visibility
+    # The cursor advanced past the bad record, so it is not retried forever, and
+    # the day finishes normally.
+    assert stepper.tick() is None
+    assert store.get_run(run_id)["status"] == "finished"
+
+
 def _spend(ledger, cost, actor="Diego Torres"):
     # Synthetic spend: the mock brain bills $0, so tests inject priced records
     # to make the per-run arithmetic visible. A REAL provider on purpose -- the
