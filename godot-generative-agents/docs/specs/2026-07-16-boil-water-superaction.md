@@ -40,7 +40,9 @@ live in `godot-generative-agents/backend/actions.py`, not the shared engine).
 > - **De-clumped without `wait` filler:** the arc is three same-place Houston
 >   stops whose `steps:` gaps space the events, so no `wait` commands flood the
 >   card with 1.0 memories / events. `boil` is remembered at 6.0 (the arc's
->   hinge); `wait` is never remembered nor offered as a real-brain tool.
+>   hinge); `wait` is never remembered nor offered as a real-brain tool (retired
+  by #614: a chosen `wait` is now offered with pacing slots and, when
+  settled, remembered).
 > - **`boil` takes npc.py's free-text slot** (dropped the advisory-but-ignored
 >   `target` schema); single-vessel effect + scalar `item` event payload.
 

@@ -17,8 +17,16 @@ sys.path.insert(0, str(_SIM_DIR))
 
 from backend.actions import TalkTo, WaitPenn  # noqa: E402
 from backend.build_world import build_world  # noqa: E402
-from backend.cognition import action_tools_for, attach_agents  # noqa: E402
+from backend.cognition import (  # noqa: E402
+    ActiveConversation,
+    action_tools_for,
+    attach_agents,
+    maybe_converse,
+    remember_outcome,
+)
+from backend.prompt_templates import render  # noqa: E402
 from penn_world import PENN_ACTION_VERBS, PENN_EXTRA_ACTIONS  # noqa: E402
+from text_adventure_games import conversation as convo  # noqa: E402
 
 _LOCATIONS = [
     {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
@@ -115,9 +123,6 @@ def test_settled_wait_stamps_waiting_activity():
 
 
 # ------------------------------------------------------------ wait memory
-
-from backend.cognition import remember_outcome  # noqa: E402
-from backend.prompt_templates import render  # noqa: E402
 
 
 def test_reflection_template_pins_the_wait_line():
@@ -260,8 +265,6 @@ def test_agentless_observer_is_never_a_talk_target():
 
 # ------------------------------------------- talk_request -> conversation
 
-from backend.cognition import maybe_converse  # noqa: E402
-
 
 class _ScriptedConvoBrain:
     """Speaks fixed lines (one per converse() ask) then goes silent; answers
@@ -338,6 +341,49 @@ def test_talk_request_dropped_while_target_is_walking():
     completed = maybe_converse(game, chars, state, frame, 0, {}, order, active={})
     assert completed == 0
     assert frame["Ada"].get("chat") is None
+
+
+def test_talk_request_dropped_when_target_or_initiator_is_busy():
+    # Target already conversing: the request is consumed and dropped. (Mirror
+    # the caller's real invariant -- run_simulation.step() clears `performing`
+    # while conversing -- so phase 2's own pair-scan doesn't independently
+    # re-match them and mask which guard actually fired.)
+    brain = _ScriptedConvoBrain(["Hey!"])
+    game, chars, state, frame, order = _request_setup(brain)
+    state["Bo"]["conversing"] = True
+    state["Bo"]["performing"] = False
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    completed = maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    assert completed == 0
+    assert frame["Ada"].get("chat") is None
+    assert chars["Ada"].get_property("talk_request") is False
+
+    # Initiator already mid-conversation (in the active set): a pre-seeded
+    # Ada/Bo ActiveConversation dies on its first (inert) advance -- landing
+    # both in finished_this_step, still "busy" for the rest of this tick -- so
+    # Ada's talk_to toward a third resident is dropped by the same guard.
+    brain2 = _ScriptedConvoBrain([])  # no lines: the pre-seeded convo ends at once
+    game2, chars2 = _world(["Ada", "Bo", "Cara"], llm_client=brain2)
+    _colocate(game2, chars2, ["Ada", "Bo", "Cara"])
+    order2 = ["Ada", "Bo", "Cara"]
+    state2 = {n: {"performing": True, "path": [], "chat": None} for n in order2}
+    frame2 = {n: {} for n in order2}
+    active = {
+        frozenset(("Ada", "Bo")): ActiveConversation(
+            a="Ada",
+            b="Bo",
+            convo=convo.Conversation(participants=("Ada", "Bo")),
+            next_speaker="Ada",
+            started=0,
+        )
+    }
+    assert game2.parser.parse_command("talk_to Cara", actor=chars2["Ada"])
+    completed2 = maybe_converse(
+        game2, chars2, state2, frame2, 0, {}, order2, active=active
+    )
+    assert completed2 == 0
+    assert frame2["Ada"].get("chat") is None
+    assert chars2["Ada"].get_property("talk_request") is False
 
 
 def test_talk_to_reflection_memory_carries_the_topic():

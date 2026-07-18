@@ -1611,6 +1611,9 @@ def maybe_converse(
         if not target_name:
             continue
         char.set_property("talk_request", False)
+        # talk_topic is write-only here: it already rode into memory via
+        # remember_outcome at parse time (that's what threads it into the
+        # opener below). Clearing it just retires the one-shot marker pair.
         char.set_property("talk_topic", False)
         target = chars.get(target_name)
         if (
