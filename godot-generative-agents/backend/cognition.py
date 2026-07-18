@@ -939,6 +939,12 @@ def observe_and_decide(
     4. **Contextualize** (#580): when the loop threads a ``clock``, append the
        decide-context block -- sim time, current plan stop, elapsed -- after
        the environment text (never read by the deterministic mock).
+    5. **Nearby affordances** (#613): append the visible-but-distant tagged
+       arenas (:func:`nearby_affordances_line`) so a live brain can choose to
+       *travel* toward one. Gated on the same real-brain tool-path predicate
+       (:func:`_use_action_tools`) as the decide route below, so the
+       deterministic mock never reads this line and the bake stays
+       byte-identical.
 
     Pass a ``retrieval`` (:class:`sim_config.RetrievalConfig`) to tune the
     retrieval scoring (weights / decay / how many memories surface); ``None``

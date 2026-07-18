@@ -214,20 +214,28 @@ def test_decide_prompt_carries_the_nearby_line_under_a_real_brain():
 
 
 def test_mock_never_sees_the_nearby_line():
-    # Default mock brain: _use_action_tools is false -> no line, bake unchanged.
+    # Default mock brain: _use_action_tools is false -> the nearby line is never
+    # appended, so the bake stays byte-identical. Spy on agent.decide (the seam
+    # the mock path calls) to inspect the observation the mock ACTUALLY received
+    # -- this fails if the gate regresses and the line leaks onto the mock path.
     game, ada = _world_with_offer(None)  # no llm_client -> mock == schedule brain
     game.locations["Library"].set_property("studyable", True)
-    game.perceivable_locations = lambda char: [
+    game.perceivable_locations = lambda character: [
         game.locations["The Green"],
         game.locations["Library"],
     ]
+    captured = {}
+    orig_decide = ada.agent.decide
 
-    base = game.describe_for(ada)
+    def _spy(observation):
+        captured["observation"] = observation
+        return orig_decide(observation)
+
+    ada.agent.decide = _spy
     observe_and_decide(game, ada, 0)
-    # The mock decides off describe_for's first line; the nearby line is never
-    # added on its path. Assert the helper's phrase is absent from the base the
-    # mock reads (the deterministic guard the byte-identical bake relies on).
-    assert "Nearby, worth traveling to" not in base
+
+    assert "observation" in captured  # the mock path really ran
+    assert "Nearby, worth traveling to" not in captured["observation"]
 
 
 def test_render_pins_the_nearby_line():
