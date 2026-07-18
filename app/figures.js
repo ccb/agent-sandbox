@@ -625,7 +625,7 @@
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
     cls.textContent = "GUARD ISSUE / FACE / SEALED";
-    const RDOTS = stipple(svg, "dots-resp", PH, .85);
+    const RDOTS = stipple(svg, "dots-resp", YEL, .85);        // amber-issue yellow
     // the mannequin head that wears it
     el(svg, "ellipse", { cx: 320, cy: 168, rx: 60, ry: 76, fill: "none",
       stroke: PH_DIM, "stroke-width": 1.4 });
@@ -637,29 +637,29 @@
       el(svg, "ellipse", { cx: ex, cy: 152, rx: 8, ry: 4, fill: "none", stroke: PH_DIM });
       el(svg, "circle", { cx: ex, cy: 152, r: 1.6, fill: PH_DIM });
     });
-    // straps, buckled at the temples
-    el(svg, "line", { x1: 296, y1: 184, x2: 266, y2: 152, stroke: PH_DIM, "stroke-width": 2 });
-    el(svg, "line", { x1: 344, y1: 184, x2: 374, y2: 152, stroke: PH_DIM, "stroke-width": 2 });
-    el(svg, "line", { x1: 292, y1: 230, x2: 263, y2: 206, stroke: PH_DIM, "stroke-width": 2 });
-    el(svg, "line", { x1: 348, y1: 230, x2: 377, y2: 206, stroke: PH_DIM, "stroke-width": 2 });
-    el(svg, "rect", { x: 259, y: 144, width: 11, height: 9, fill: BG, stroke: PH_DIM });
-    el(svg, "rect", { x: 370, y: 144, width: 11, height: 9, fill: BG, stroke: PH_DIM });
+    // straps, buckled at the temples -- amber issue, like the cup
+    el(svg, "line", { x1: 296, y1: 184, x2: 266, y2: 152, stroke: YEL, "stroke-width": 2 });
+    el(svg, "line", { x1: 344, y1: 184, x2: 374, y2: 152, stroke: YEL, "stroke-width": 2 });
+    el(svg, "line", { x1: 292, y1: 230, x2: 263, y2: 206, stroke: YEL, "stroke-width": 2 });
+    el(svg, "line", { x1: 348, y1: 230, x2: 377, y2: 206, stroke: YEL, "stroke-width": 2 });
+    el(svg, "rect", { x: 259, y: 144, width: 11, height: 9, fill: BG, stroke: YEL });
+    el(svg, "rect", { x: 370, y: 144, width: 11, height: 9, fill: BG, stroke: YEL });
     // the half-mask: cup, nose wedge, central grille, chin exhaust
     el(svg, "path", { d: "M 320 160 L 298 184 Q 280 202 286 226 Q 294 250 320 258 " +
-      "Q 346 250 354 226 Q 360 202 342 184 Z", fill: RDOTS, stroke: PH, "stroke-width": 1.8 });
+      "Q 346 250 354 226 Q 360 202 342 184 Z", fill: RDOTS, stroke: YEL, "stroke-width": 1.8 });
     el(svg, "polygon", { points: "313,178 320,166 327,178", fill: BG,
-      stroke: PH, "stroke-width": 1.3 });
+      stroke: YEL, "stroke-width": 1.3 });
     const spinners = [];
     const grille = (cx, cy, r) => {                           // the fan grille
-      el(svg, "circle", { cx, cy, r, fill: BG, stroke: PH, "stroke-width": 1.8 });
+      el(svg, "circle", { cx, cy, r, fill: BG, stroke: YEL, "stroke-width": 1.8 });
       el(svg, "circle", { cx, cy, r: r * .76, fill: "none", stroke: PH_DIM });
-      const bl = el(svg, "g", {});                            // the blades, spinning
-      for (let a = 0; a < 10; a++) {
-        const th = a * Math.PI / 5 + .31;
+      const bl = el(svg, "g", {});                            // the blades, spinning --
+      for (let a = 0; a < 10; a++) {                          // fungus-orange, like
+        const th = a * Math.PI / 5 + .31;                     // what they catch
         el(bl, "line", { x1: cx + Math.cos(th) * r * .2, y1: cy + Math.sin(th) * r * .2,
-          x2: cx + Math.cos(th) * r * .66, y2: cy + Math.sin(th) * r * .66, stroke: PH_DIM });
+          x2: cx + Math.cos(th) * r * .66, y2: cy + Math.sin(th) * r * .66, stroke: FUNGUS });
       }
-      el(svg, "circle", { cx, cy, r: r * .13, fill: PH_DIM });
+      el(svg, "circle", { cx, cy, r: r * .13, fill: FUNGUS });
       spinners.push({ bl, cx, cy, k: spinners.length });
     };
     grille(320, 224, 19);
