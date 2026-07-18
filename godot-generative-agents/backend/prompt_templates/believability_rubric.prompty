@@ -1,0 +1,38 @@
+---
+name: believability_rubric
+description: >
+  Real model prompt (issue #584): the believability audit's judge rubric.
+  Rendered by eval/believability.py LlmJudge.score_agent() once per agent over
+  a finished run's exported artifacts -- an OFFLINE tool, never part of a live
+  sim. `evidence` is the per-agent digest evidence_text() assembles in code
+  (persona, schedule, plan memories, collapsed timeline, conversations,
+  retrieved-memory samples); only the rubric wording lives here. The grades
+  come back as structured data via the grade_believability tool.
+inputs:
+  evidence:
+    type: string
+    description: The preformatted per-agent evidence digest, from evidence_text().
+sample:
+  evidence: |-
+    Agent: Ada
+    Schedule:
+    1. Cafe -- eating breakfast (20 steps)
+---
+You are auditing one simulated agent's recorded day for believability.
+Judge only what the record shows; be strict.
+
+{{ evidence }}
+
+Grade each dimension from 1 (broken) to 10 (fully believable), citing
+step ranges from the timeline as evidence:
+
+- plan_coherence: the agent's actions matched its plan, or deviated for
+  a reason visible in the timeline or memories.
+- temporal_sanity: activities suit the sim clock and the schedule's
+  timing.
+- social_grounding: conversation lines reference real shared context
+  from both participants' memory streams, not confabulation.
+- memory_use: the memories retrieved for each decision were relevant
+  to the decision made.
+
+Call grade_believability once, with all four dimensions.
