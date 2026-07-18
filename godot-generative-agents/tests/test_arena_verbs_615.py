@@ -264,3 +264,54 @@ def test_study_settles_for_the_model_duration():
     assert state["Ada"]["performing"] is True
     assert state["Ada"]["perform_until"] == 0 + 120
     assert ada.get_property("studied_minutes") == 20  # the accumulator saw 20
+
+
+# -- memory lines (Task 3) -----------------------------------------------------
+
+
+def test_render_pins_the_study_and_eat_reflections():
+    assert (
+        render("reflection", verb="study", topic="thermodynamics", minutes=45)
+        == "I studied thermodynamics for 45 minutes."
+    )
+    assert (
+        render("reflection", verb="study", topic="", minutes=30)
+        == "I studied for 30 minutes."
+    )
+    assert (
+        render("reflection", verb="eat", item="sandwich")
+        == "I ate the sandwich and I'm no longer hungry."
+    )
+
+
+def _spy_memory(char):
+    seen = {}
+    orig = char.agent.memory.add_observation
+
+    def spy(text, turn=0, importance=1.0):
+        seen["text"], seen["importance"] = text, importance
+        return orig(text, turn=turn, importance=importance)
+
+    char.agent.memory.add_observation = spy
+    return seen
+
+
+def test_remember_outcome_writes_the_study_memory_and_consumes_the_marker():
+    game, ada = _world()
+    _move(game, ada, "Library")
+    ada.agent.last_duration_minutes = 45
+    assert game.parser.parse_command("study thermodynamics", actor=ada)
+    seen = _spy_memory(ada)
+    remember_outcome(ada, "study thermodynamics", 3)
+    assert seen["text"] == "I studied thermodynamics for 45 minutes."
+    assert seen["importance"] == 2.0
+    # One-shot consumed, so a later unrelated outcome can't re-read it.
+    assert not ada.get_property("just_studied_minutes")
+
+
+def test_remember_outcome_writes_the_eat_memory():
+    game, ada = _world()
+    seen = _spy_memory(ada)
+    remember_outcome(ada, "eat sandwich", 3)
+    assert seen["text"] == "I ate the sandwich and I'm no longer hungry."
+    assert seen["importance"] == 2.0
