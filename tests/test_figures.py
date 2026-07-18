@@ -293,6 +293,51 @@ def test_arriving_at_the_summit_cues_the_mystic():
         assert "mystic-b" in cap.texts(Channel.FIGURE)
 
 
+def test_burning_the_mystic_deals_the_cleanse_then_the_aftermath():
+    """BURN MYSTIC deals 19-C as a story beat, above the prose -- and from
+    then on the summit and the corpse show the burned-out plate (19-F),
+    never the gift again."""
+    g, cap = _game()
+    summit = g.locations["The Summit"]
+    corpse = summit.items["ossified corpse"]
+    fig = corpse.get_property("figure")
+    assert fig(g) == "mystic-b"  # the gift, while the network lives
+    # arm the cleanse: a spark and the gel, as the walkthrough carries them
+    cyl = g.locations["Hall of Warriors"].items["orange cylinder"]
+    igniter = cyl.contents["plasma-igniter"]
+    cyl.remove_item(igniter)
+    g.player.add_to_inventory(igniter)
+    gel = g.locations["Hall of Hounds"].items["flask of gel"]
+    g.locations["Hall of Hounds"].remove_item(gel)
+    g.player.add_to_inventory(gel)
+    g.relocate(g.player, summit)
+    g.do_command("burn mystic")
+    msgs = [(m.channel, m.text) for m in cap.messages]
+    fig_at = next(
+        i for i, (c, t) in enumerate(msgs) if c is Channel.FIGURE and t == "mystic-c"
+    )
+    txt_at = next(i for i, (c, t) in enumerate(msgs) if "whole rotten network" in t)
+    assert fig_at < txt_at  # the burning plays, THEN the tomb goes quiet
+    assert fig(g) == "mystic-f"  # ash now: the aftermath replaces the gift
+    assert summit.get_property("figure")(g) == "mystic-f"
+    cap.messages.clear()
+    g.do_command("look")
+    assert "mystic-f" in cap.texts(Channel.FIGURE)
+    assert "mystic-b" not in cap.texts(Channel.FIGURE)
+
+
+def test_a_purged_fungus_also_retires_the_gift_card():
+    """The other road to a dead network -- the Horror slain in the sphere --
+    must also retire 19-B at the summit (CCB: don't replay the gift once
+    the fungus is gone)."""
+    g, _cap = _game()
+    summit = g.locations["The Summit"]
+    fig = summit.items["ossified corpse"].get_property("figure")
+    assert fig(g) == "mystic-b"
+    g.locations["Burial Sphere of Nassak An-Rah"].set_property("horror_dead", True)
+    assert fig(g) == "mystic-f"
+
+
 def test_look_replays_the_rooms_card():
     g, cap = _game()
     g.do_command("go north")  # ext1c, the arrival plate

@@ -729,6 +729,9 @@ class Burn(actions.Action):
                     # Never erupted: the thing in the coffin dies unseen, and
                     # the slow churn behind the glass goes still.
                     _sphere_quieted(self.game)
+            # The cleanse is a story beat: the burning of the mystic (19-C)
+            # always plays, above the prose.
+            self.game.show_figure("mystic-c", force=True)
             self.parser.ok(message)
             self.game.award("horror", 25, "[+25 -- the Horror is ended]")
         elif target == "chimney":
@@ -2872,10 +2875,21 @@ def build_game(seed=None):
     corpse.add_alias("mystic")
     corpse.make_surface()
     corpse.set_property("reveals_on_examine", True)
-    corpse.set_property("figure", "mystic-b")
-    # ...and the same card as a title plate on first ARRIVING at the Summit
+    # The mystic's card follows the network's fate (CCB): the gifted plate
+    # (19-B) while the fungus lives; the burned-out aftermath (19-F) once the
+    # corpse is ash OR the fungus is purged some other way -- never replay
+    # the gift over a dead network.
+    def _mystic_card(g):
+        return (
+            "mystic-f"
+            if summit.get_property("cleansed") or sphere.get_property("horror_dead")
+            else "mystic-b"
+        )
+
+    corpse.set_property("figure", _mystic_card)
+    # ...and the same card as a title plate on ARRIVING at the Summit
     # (open sky at sunset: no sight gate needed).
-    summit.set_property("figure", "mystic-b")
+    summit.set_property("figure", _mystic_card)
     corpse.set_property(
         "contents_relation", "Nested in the hollow of its clasped hands you find"
     )

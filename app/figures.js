@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -4104,6 +4104,324 @@
         n.setAttribute("cx", pts[q][0]); n.setAttribute("cy", pts[q][1] - 4);
       });
       typeOn(foot, "THE GIFT DID NOT EXPIRE WITH HIM.", T, 40, 1.6);
+    });
+  });
+
+
+  /* ---------------- 19-C: the ossified mystic, burned ---------------- */
+  FIG._define("mystic-c", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE SUMMIT / FIRE / RELEASED";
+    const CDOTS3 = stipple(svg, "dots-mysticc", PH, .85);
+    const YEL = "#ffd76a", AMBER = "#e5b955";
+    const CHARC = [74, 42, 20], ORANGE = [255, 154, 60];
+    const mix = (a, b, k) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",")})`;
+    const clamp = x => Math.max(0, Math.min(1, x));
+    const ground = el(svg, "line", { x1: 40, y1: 322, x2: 600, y2: 322, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "ellipse", { cx: 560, cy: 322, rx: 36, ry: 10, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });                     // the flue mouth
+    [546, 560, 574].forEach(x =>
+      el(svg, "line", { x1: x, y1: 328, x2: x, y2: 350, stroke: PH_DIM }));
+    const stones = [[96, 322], [122, 322]].map(([x, y]) =>
+      el(svg, "polygon", { fill: CDOTS3, stroke: PH, "stroke-width": 1.3,
+        points: `${x - 9},${y} ${x + 9},${y} ${x + 6},${y - 34} ${x - 6},${y - 30}` }));
+    const robe = el(svg, "path", { fill: CDOTS3, stroke: PH, "stroke-width": 1.8,
+      d: "M 152 322 Q 162 226 222 172 Q 248 148 276 162 Q 330 184 342 248 Q 350 296 358 322 Z" });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, d: "M 190 300 Q 214 268 208 236" });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, d: "M 300 306 Q 296 270 306 246" });
+    const EX = 248, EY = 186;
+    const lashes = Array.from({ length: 7 }, (_, i) => {
+      const a = -Math.PI * (.22 + i * .093);
+      return el(svg, "polygon", { fill: PH, stroke: PH, "stroke-width": 1, points:
+        `${EX + Math.cos(a) * 24},${EY + Math.sin(a) * 24} ` +
+        `${EX + Math.cos(a + .05) * (36 + (i % 2) * 7)},${EY + Math.sin(a + .05) * (36 + (i % 2) * 7)} ` +
+        `${EX + Math.cos(a + .12) * 24},${EY + Math.sin(a + .12) * 24}` });
+    });
+    const eyeRing = el(svg, "circle", { cx: EX, cy: EY, r: 21, fill: BG, stroke: PH, "stroke-width": 1.6 });
+    const iris = el(svg, "circle", { cx: EX, cy: EY, r: 8.5, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    const pupil = el(svg, "circle", { cx: EX, cy: EY, r: 3.2, fill: PH_BRIGHT });
+    Array.from({ length: 13 }, (_, i) => {                    // the fringe of threads
+      const x = 206 + i * 7.4;
+      el(svg, "line", { x1: x, y1: 218 + Math.sin(i * .9) * 4, x2: x,
+        y2: 238 + (i % 3) * 7, stroke: PH, "stroke-width": 1.1, opacity: .8 });
+    });
+    el(svg, "line", { x1: 204, y1: 216, x2: 296, y2: 216, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      points: "306,262 334,288 344,298" });
+    const orb = el(svg, "circle", { cx: 352, cy: 296, r: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.4 });
+    el(svg, "path", { d: "M 330 310 Q 352 322 376 310 L 372 320 Q 352 328 334 320 Z",
+      fill: CDOTS3, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "polygon", { points: "398,320 404,306 410,320", fill: "none", stroke: PH_DIM });
+    // the gift: the bolt and the hung geometry, as 19-B built them
+    const ZAG = [[270, 158], [322, 122], [302, 92], [382, 102], [360, 58],
+      [452, 82], [430, 38], [524, 68], [508, 30]];
+    const bolt = el(svg, "polyline", { fill: "none", stroke: PH_BRIGHT, "stroke-width": 2 });
+    const bolt2 = el(svg, "polyline", { fill: "none", stroke: PH_DIM, "stroke-width": 1.2 });
+    const shapes = [];
+    const shape = (cx, cy, k) => {
+      const g = document.createElementNS(NS, "g"); svg.appendChild(g);
+      shapes.push({ g, cx, cy, k }); return g;
+    };
+    let g = shape(478, 44, 0);                                // a diamond
+    el(g, "polygon", { points: "0,-13 9,0 0,13 -9,0", fill: CDOTS3,
+      stroke: PH, "stroke-width": 1.3 });
+    g = shape(556, 96, 1);                                    // a frame in a frame
+    el(g, "rect", { x: -14, y: -14, width: 28, height: 28, fill: "none",
+      stroke: PH, "stroke-width": 1.4 });
+    el(g, "rect", { x: -6, y: -6, width: 12, height: 12, fill: CDOTS3,
+      stroke: PH, "stroke-width": 1.2 });
+    g = shape(606, 152, 2);                                   // a ring
+    el(g, "circle", { cx: 0, cy: 0, r: 13, fill: "none", stroke: PH, "stroke-width": 1.4 });
+    el(g, "circle", { cx: 0, cy: 0, r: 6, fill: "none", stroke: PH_DIM });
+    g = shape(592, 52, 3);                                    // a cube
+    el(g, "polygon", { points: "-10,-5 0,-11 10,-5 10,6 0,12 -10,6", fill: CDOTS3,
+      stroke: PH, "stroke-width": 1.3 });
+    el(g, "polyline", { fill: "none", stroke: PH, points: "-10,-5 0,1 10,-5" });
+    el(g, "line", { x1: 0, y1: 1, x2: 0, y2: 12, stroke: PH });
+    g = shape(624, 210, 4);                                   // a splash
+    el(g, "polygon", { fill: CDOTS3, stroke: PH, "stroke-width": 1.2,
+      points: "0,-10 8,-4 14,2 6,6 10,14 -2,8 -12,12 -8,2 -14,-4 -4,-4" });
+    el(g, "circle", { cx: 18, cy: -8, r: 2, fill: PH });
+    el(g, "circle", { cx: -16, cy: 16, r: 1.6, fill: PH });
+    g = shape(438, 48, 5);                                    // a small diamond
+    el(g, "polygon", { points: "0,-7 5,0 0,7 -5,0", fill: "none",
+      stroke: PH, "stroke-width": 1.2 });
+    // the fronds and their sap-motes
+    const FRONDS = [[242, 206, -1], [258, 208, 1], [250, 232, 0]];
+    const HX = 556, HY = 316;
+    const fpts = (f, tt, k) => {
+      const [x0, y0, ph] = FRONDS[f], pts = [];
+      const calm = 1 - k * .7;                                // burnt ropes slow
+      for (let q = 0; q <= 9; q++) {
+        const u = q / 9;
+        pts.push([x0 + (HX - x0) * u,
+          y0 + (HY - y0) * u
+          - Math.sin(u * Math.PI) * (30 + ph * 9) * (1 - k * 1.25)  // and sag
+          + Math.sin(tt * .3 * calm + u * 5 + ph) * 4 * u * calm]);
+      }
+      return pts;
+    };
+    const fronds = FRONDS.map(() => el(svg, "polyline",
+      { fill: "none", stroke: FUNGUS, "stroke-width": 2 }));
+    const motes = Array.from({ length: 5 }, () =>
+      el(svg, "circle", { r: 1.6, fill: FUNGUS }));
+    // the fire: 13-E's machinery, riding the scene itself -- five flames
+    // stand ON the fronds (sampled from the same polylines, so they sag
+    // and slow together), three ON the robe's arc, one ON the pupil (it
+    // burns wherever the eye looks), and five keep the ground they held
+    const FSTATIC = [[176, 318], [286, 300], [352, 316], [206, 262], [330, 258]];
+    const FARC = [[174, 237], [249, 158], [333, 219]];
+    const FRIDE = [[0, 3], [1, 5], [2, 7], [0, 6], [1, 8]];   // [frond, sample]
+    const FSCALE = FSTATIC.map(() => 1).concat(FARC.map(() => .9),
+      FRIDE.map(() => .85), [.65]);
+    const flames = FSCALE.map(() => el(svg, "polygon", { stroke: "none" }));
+    const embers = Array.from({ length: 26 }, (_, i) => {
+      const x = 160 + i * 16;
+      return { x, ph: i * 23, dir: (x < 300 ? -1 : 1) * (.3 + (i % 5) * .35),
+        q: el(svg, "circle", { r: i % 3 ? 1.4 : 2.1, fill: i % 4 ? YEL : FUNGUS }) };
+    });
+    const smoke = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+        "stroke-dasharray": "2 5", opacity: 0 }));
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 260;
+      doWipe(T);
+      typeOn(hdr, "THE OSSIFIED MYSTIC, BURNED", T, 4, 1.4);
+      const burn = clamp((T - 30) / 115);                     // the charring
+      const fire = clamp((T - 16) / 14) * (1 - clamp((T - 148) / 26));
+      const leave = clamp((T - 152) / 34);                    // the recall
+      const beat = Math.floor(t / 8);
+      const lit = fire > .25;                                 // slow firelight,
+      robe.setAttribute("stroke", lit && beat % 5 === 0 ? AMBER : PH);
+      ground.setAttribute("stroke", lit && (beat + 2) % 5 === 0 ? AMBER : PH);
+      stones.forEach((n, i) =>
+        n.setAttribute("stroke", lit && (beat + i + 1) % 4 === 0 ? AMBER : PH));
+      eyeRing.setAttribute("stroke", lit && (beat + 3) % 5 === 0 ? AMBER : PH);
+      lashes.forEach((n, i) => {
+        const hot = lit && (beat + i) % 5 === 0;
+        n.setAttribute("stroke", hot ? AMBER : PH);
+        n.setAttribute("fill", hot ? AMBER : PH);
+      });
+      const look = leave > 0 ? 0 : [0, 2, 3, 1, -2, -3][Math.floor(T / 18) % 6];
+      const fks = FRONDS.map((_, f) => clamp(burn * 1.35 - f * .12));
+      const fps2 = FRONDS.map((_, f) => fpts(f, T, fks[f]));
+      fronds.forEach((n, f) => {                              // the fronds recant
+        n.setAttribute("stroke", mix(ORANGE, CHARC, fks[f]));
+        n.setAttribute("points", fps2[f].map(p => p.join(",")).join(" "));
+      });
+      const roots = FSTATIC.concat(FARC,
+        FRIDE.map(([f, q]) => fps2[f][q]),                    // riding the ropes
+        [[EX + look * 1.4, EY + 4]]);                         // and the pupil
+      flames.forEach((fl, i) => {                             // the fire, working
+        if (fire <= .02) { fl.setAttribute("opacity", 0); return; }
+        const [fx, fy] = roots[i], s = FSCALE[i];
+        const h = (14 + ((t * 7 + i * 13) % 15) + burn * 8) * fire * s;
+        const wob = Math.sin(t * .9 + i * 2.2) * 5 * s;
+        fl.setAttribute("points",
+          `${fx - 6 * s},${fy} ${fx + wob * .4},${fy - h * .55} ${fx + wob},${fy - h} ` +
+          `${fx + 4 * s + wob * .3},${fy - h * .5} ${fx + 7 * s},${fy}`);
+        fl.setAttribute("fill", (t + i) % 3 ? FUNGUS : YEL);
+        fl.setAttribute("opacity", (.5 + ((t + i) % 2) * .3) * fire);
+      });
+      // sparks outlive the flames: they climb with the leaving shapes,
+      // and fade once the last of them is gone
+      const spark = clamp((T - 16) / 14) * (1 - clamp((T - 190) / 22));
+      embers.forEach(e2 => {
+        const k = (t * 3 + e2.ph) % 190;
+        e2.q.setAttribute("cx", e2.x + e2.dir * k * .5 + Math.sin((t + e2.ph) * .35) * 8);
+        e2.q.setAttribute("cy", 300 - k);
+        e2.q.setAttribute("opacity", k > 160 ? 0 : (.4 + ((t + e2.ph) % 3) * .25) * spark);
+      });
+      // the bolt lets go of the mystic and reels in, point by point
+      const drop = Math.floor(leave * ZAG.length);
+      const zz = ZAG.slice(drop);
+      if (zz.length > 1 && leave < 1) {
+        bolt.setAttribute("points", zz.map(([x, y], i) =>
+          `${x + ((beat + i) % 3 - 1) * 4},${y + ((beat + i * 2) % 3 - 1) * 4}`).join(" "));
+        bolt.setAttribute("opacity", (t % 3 ? 1 : .55) * (1 - leave * .5));
+      } else bolt.setAttribute("opacity", 0);
+      bolt2.setAttribute("points", ZAG.slice(2, 7).map(([x, y], i) =>
+        `${x + 16 + ((beat + i) % 3 - 1) * 5},${y + 40 + ((beat + i) % 3 - 1) * 5}`).join(" "));
+      bolt2.setAttribute("opacity", Math.max(0, .9 - leave * 2));
+      shapes.forEach(sh => {                                  // released, skyward
+        const li = clamp((T - (152 + sh.k * 4)) / 26);
+        const bob = Math.round(Math.sin(t * .12 + sh.k * 1.3) * 2) * 2;
+        const rot = (Math.floor(t / 8) * 15 * (sh.k % 2 ? -1 : 1)) % 360;
+        const rise = li * li * 150;
+        const dx = (sh.k % 2 ? 1 : -1) * li * 26;
+        sh.g.setAttribute("transform",
+          `translate(${sh.cx + dx} ${sh.cy + bob - rise}) rotate(${sh.k < 4 ? rot : 0})`);
+        sh.g.setAttribute("opacity", 1 - li);
+      });
+      iris.setAttribute("cx", EX + look); pupil.setAttribute("cx", EX + look * 1.4);
+      pupil.setAttribute("opacity", 1 - leave * .75);         // the eye dims last
+      iris.setAttribute("opacity", 1 - leave * .5);
+      orb.setAttribute("stroke-width", leave >= 1 ? 1.2 : 1.2 + (Math.floor(t / 6) % 3) * .5);
+      motes.forEach((n, j) => {                               // the sap rides, then rises
+        if (leave <= 0) {
+          const pts = fps2[j % 3];
+          const q = Math.floor(((T * 2 + j * 37) % 90) / 10);
+          n.setAttribute("cx", pts[q][0]); n.setAttribute("cy", pts[q][1] - 4);
+          n.setAttribute("opacity", 1);
+        } else {
+          const pts = fpts(j % 3, 152, 1);
+          const q = Math.floor(((152 * 2 + j * 37) % 90) / 10);
+          n.setAttribute("cx", pts[q][0] + (j % 2 ? 14 : -10) * leave);
+          n.setAttribute("cy", pts[q][1] - 4 - leave * (46 + j * 15));
+          n.setAttribute("opacity", 1 - leave);
+        }
+      });
+      smoke.forEach((s, i) => {                               // what fire leaves
+        const on = T > 170 && T < 244 ? .5 : 0;
+        s.setAttribute("opacity", on);
+        if (on) {
+          const x0 = 210 + i * 52, up = (t * 2 + i * 17) % 40;
+          s.setAttribute("points", Array.from({ length: 5 }, (_, q) =>
+            `${x0 + Math.sin(t * .2 + q + i * 2) * 6},${306 - up - q * 12}`).join(" "));
+        }
+      });
+      typeOn(foot, "THE GIFT EXPIRED AFTER ALL.", T, 196, 1.5);
+    });
+  });
+
+
+  /* ---------------- 19-F: the ossified mystic, burned out ---------------- */
+  FIG._define("mystic-f", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 400, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE SUMMIT / ASH / QUIET";
+    const FDOTS2 = stipple(svg, "dots-mysticf", PH, .85);
+    const CHARCOL = "rgb(74,42,20)";
+    el(svg, "line", { x1: 40, y1: 322, x2: 600, y2: 322, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "ellipse", { cx: 560, cy: 322, rx: 36, ry: 10, fill: BG,
+      stroke: PH, "stroke-width": 1.5 });                     // the flue mouth
+    [546, 560, 574].forEach(x =>
+      el(svg, "line", { x1: x, y1: 328, x2: x, y2: 350, stroke: PH_DIM }));
+    [[96, 322], [122, 322]].forEach(([x, y]) =>               // the standing stones
+      el(svg, "polygon", { fill: FDOTS2, stroke: PH, "stroke-width": 1.3,
+        points: `${x - 9},${y} ${x + 9},${y} ${x + 6},${y - 34} ${x - 6},${y - 30}` }));
+    el(svg, "path", { fill: FDOTS2, stroke: PH, "stroke-width": 1.8,
+      d: "M 152 322 Q 162 226 222 172 Q 248 148 276 162 Q 330 184 342 248 Q 350 296 358 322 Z" });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, d: "M 190 300 Q 214 268 208 236" });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, d: "M 300 306 Q 296 270 306 246" });
+    const EX = 248, EY = 186;
+    Array.from({ length: 7 }, (_, i) => {                     // the lash crown
+      const a = -Math.PI * (.22 + i * .093);
+      el(svg, "polygon", { fill: PH, stroke: PH, "stroke-width": 1, points:
+        `${EX + Math.cos(a) * 24},${EY + Math.sin(a) * 24} ` +
+        `${EX + Math.cos(a + .05) * (36 + (i % 2) * 7)},${EY + Math.sin(a + .05) * (36 + (i % 2) * 7)} ` +
+        `${EX + Math.cos(a + .12) * 24},${EY + Math.sin(a + .12) * 24}` });
+    });
+    el(svg, "circle", { cx: EX, cy: EY, r: 21, fill: BG, stroke: PH, "stroke-width": 1.6 });
+    const iris = el(svg, "circle", { cx: EX, cy: EY, r: 8.5, fill: "none",
+      stroke: PH, "stroke-width": 1.4, opacity: .7 });
+    const pupil = el(svg, "circle", { cx: EX, cy: EY, r: 3.2, fill: PH_BRIGHT, opacity: .55 });
+    Array.from({ length: 13 }, (_, i) => {                    // the fringe of threads
+      const x = 206 + i * 7.4;
+      el(svg, "line", { x1: x, y1: 218 + Math.sin(i * .9) * 4, x2: x,
+        y2: 238 + (i % 3) * 7, stroke: PH, "stroke-width": 1.1, opacity: .8 });
+    });
+    el(svg, "line", { x1: 204, y1: 216, x2: 296, y2: 216, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "polyline", { fill: "none", stroke: PH, "stroke-width": 1.5,
+      points: "306,262 334,288 344,298" });
+    el(svg, "circle", { cx: 352, cy: 296, r: 9, fill: "none",
+      stroke: PH_BRIGHT, "stroke-width": 1.2 });              // the orb, gone dull
+    el(svg, "path", { d: "M 330 310 Q 352 322 376 310 L 372 320 Q 352 328 334 320 Z",
+      fill: FDOTS2, stroke: PH, "stroke-width": 1.4 });
+    el(svg, "polygon", { points: "398,320 404,306 410,320", fill: "none", stroke: PH_DIM });
+    // the fronds, kept as charred rope (19-C's last frame)
+    const FRONDS = [[242, 206, -1], [258, 208, 1], [250, 232, 0]];
+    const HX = 556, HY = 316;
+    const fpts = (f, tt) => {
+      const [x0, y0, ph] = FRONDS[f], pts = [];
+      for (let q = 0; q <= 9; q++) {                          // k = 1 throughout:
+        const u = q / 9;                                      // sagged, slowed
+        pts.push([x0 + (HX - x0) * u,
+          y0 + (HY - y0) * u
+          + Math.sin(u * Math.PI) * (30 + ph * 9) * .25
+          + Math.sin(tt * .09 + u * 5 + ph) * 1.2 * u]);
+      }
+      return pts;
+    };
+    const fronds = FRONDS.map(() => el(svg, "polyline",
+      { fill: "none", stroke: CHARCOL, "stroke-width": 2 }));
+    const smoke = Array.from({ length: 3 }, () =>
+      el(svg, "polyline", { fill: "none", stroke: PH_DIM,
+        "stroke-dasharray": "2 5", opacity: .5 }));
+    // a stray spark now and then, out of habit
+    const strays = Array.from({ length: 3 }, (_, i) =>
+      ({ ph: i * 67, x: 220 + i * 90,
+         q: el(svg, "circle", { r: 1.4, fill: i % 2 ? "#ffd76a" : FUNGUS }) }));
+    const foot = label(svg, 320, 390, 10, FUNGUS); foot.setAttribute("text-anchor", "middle");
+    const doWipe = wipe(svg, 640, 400, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE OSSIFIED MYSTIC, BURNED OUT", T, 4, 1.4);
+      const look = [0, 2, 3, 1, -2, -3][Math.floor(t / 30) % 6];  // slower now
+      iris.setAttribute("cx", EX + look); pupil.setAttribute("cx", EX + look * 1.4);
+      fronds.forEach((n, f) => n.setAttribute("points",
+        fpts(f, t).map(p => p.join(",")).join(" ")));
+      smoke.forEach((s, i) => {
+        const x0 = 210 + i * 52, up = (t * 2 + i * 17) % 40;
+        s.setAttribute("points", Array.from({ length: 5 }, (_, q) =>
+          `${x0 + Math.sin(t * .2 + q + i * 2) * 6},${306 - up - q * 12}`).join(" "));
+      });
+      strays.forEach(sp => {
+        const k = (t * 2 + sp.ph) % 200;                      // long quiet gaps
+        sp.q.setAttribute("cx", sp.x + Math.sin((t + sp.ph) * .3) * 7);
+        sp.q.setAttribute("cy", 302 - k * 1.4);
+        sp.q.setAttribute("opacity", k < 90 ? .35 + (k % 3) * .15 : 0);
+      });
+      typeOn(foot, "NOTHING LEFT TO GIVE.", T, 60, 1.4);
     });
   });
 
