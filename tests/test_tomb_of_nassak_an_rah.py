@@ -310,7 +310,7 @@ def test_silas_warns_about_the_spawn_and_the_seal():
     # Silas is oblique now (design doc §16.1): he points at the lattice and the
     # plinths rather than reciting the seal solution.
     said = " ".join(cap.texts(Channel.NARRATION))
-    assert "lattice remembers his embalming" in said
+    assert "lattice remembers his father's embalming" in said
     assert "Step softly" in said
 
 

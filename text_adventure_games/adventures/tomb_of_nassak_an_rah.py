@@ -95,14 +95,19 @@ _LATTICE_FACETS = (
     {
         "key": "embalming",
         "name": "THE EMBALMING",
-        "words": ("embalming", "embalm", "funeral", "organs"),
+        "words": ("embalming", "embalm", "funeral", "organs", "father"),
         # The replay is the litho (CCB): the bank shows the canopic system
         # as it teaches it -- the same card the plinths wear downstairs.
+        # HIS FATHER'S embalming, not his own (CCB): a lattice holds only
+        # days a man lived; this is the funeral the boy watched, and the
+        # order he memorized is the order the plinths still want.
         "figure": "canopic-c",
         "text": (
-            "the Autarch's embalming: the baboon took his lungs, the human his "
-            "liver, the mantis his eyes; the falcon was given his intestines, and "
-            "the jackal -- strangely -- his brain."
+            "his father's embalming, watched from between the courtiers' robes: "
+            "the baboon took the old king's lungs, the human his liver, the "
+            "mantis his eyes; the falcon was given his intestines, and the "
+            "jackal -- strangely -- his brain. The boy memorized the order, in "
+            "case it should ever matter."
         ),
         "more": lambda g: (
             " The jars stand answered on their plinths now; the stair took "
@@ -3221,7 +3226,7 @@ def build_game(seed=None):
         "memory; mind what you wake. Two of the Autarch's organs have got up and "
         "walk these halls wearing their own jars -- his appetites and his "
         "thoughts, if you follow me. I do not fight them; I read. The lattice "
-        "remembers his embalming, for those who trouble to look, and the plinths "
+        "remembers his father's embalming, for those who trouble to look, and the plinths "
         'above remember what they held." A pause; a brief run of clipped, '
         'circular syllables, like a quotation. "The dead here listen. Step '
         'softly."'
