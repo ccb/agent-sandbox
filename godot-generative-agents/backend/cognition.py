@@ -482,6 +482,13 @@ def attach_agents(
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
         char.vision_r = spec.get("vision_r", vision_r)
+        # Opt-in thirst drive (#594): copy the per-persona rate/threshold onto the
+        # character as properties the step loop's accrue_thirst reads. Absent keys
+        # set nothing, so a normal persona never accrues -> byte-identical bake.
+        if spec.get("thirst_rate"):
+            char.set_property("thirst_rate", spec["thirst_rate"])
+        if spec.get("thirst_threshold"):
+            char.set_property("thirst_threshold", spec["thirst_threshold"])
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
