@@ -108,7 +108,9 @@ export interface MemoryRecord {
  * GameEvent.to_primitive()). `payload` is event-specific structured detail. */
 export interface EventState {
   turn: number;
-  actor: string;
+  /** null for world-level stimuli with no single actor — ambient sound,
+   * POST /world/event, the boil arc's `boiled` event (#631). */
+  actor: string | null;
   action: string;
   summary: string;
   payload: Record<string, unknown>;

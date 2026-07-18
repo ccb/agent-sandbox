@@ -89,6 +89,26 @@ func _initialize() -> void:
 	_check(String(evts[0]["label"]) == "Ada: drank unboiled water", "event label is 'actor: summary'")
 	_check(String(evts[0]["action"]) == "drink", "event marker carries the action type (#593)")
 
+	# --- actor-less world events get a "world" fallback label (#631) ---
+	# Ambient sound, POST /world/event, the boil arc's `boiled` event carry
+	# actor=None (or ""); the tooltip must read "world: summary", not the broken
+	# "<null>: ..." / ": ..." the raw actor produced.
+	var world_events := [
+		{"turn": 3, "actor": null, "action": "boiled",
+			"summary": "the pot is boiled clear on the stove", "payload": {}},
+		{"turn": 3, "actor": "", "action": "world_event",
+			"summary": "a siren wails", "payload": {}},
+	]
+	var world_evts := _of_kind(
+		ReplayMarkers.collect(frames, names, {}, world_events), "event")
+	_check(world_evts.size() == 2, "actor-less world events still produce markers")
+	_check(String(world_evts[0]["label"]) == "world: the pot is boiled clear on the stove",
+		"a null-actor event labels as 'world: summary' (#631)")
+	_check(String(world_evts[0]["agent"]) == "world",
+		"a null-actor event's agent is 'world' (#631)")
+	_check(String(world_evts[1]["label"]) == "world: a siren wails",
+		"an empty-actor event also labels as 'world' (#631)")
+
 	# --- per-event-type styling (timeline_markers.gd), #593 ---
 	var c_sick := TimelineMarkers.color_for("event", "sickness")
 	var c_boil := TimelineMarkers.color_for("event", "boiled")
