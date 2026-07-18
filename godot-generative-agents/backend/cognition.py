@@ -861,7 +861,20 @@ def observe_and_decide(
     context = decide_context_block(agent, step, clock, stop_since)
     if context:
         base = f"{base}\n\n{context}"
+    # Perceivable needs/consequences (#594): surface thirst + sickness in the
+    # decide prompt so a live brain can reason about them. Appended AFTER the
+    # retrieve above (like the #580 block), so these lines never shift which
+    # memories surface -- the mock/scripted bake stays byte-identical. Absent
+    # flags add nothing.
+    state_lines = []
+    if char.get_property("is_thirsty"):
+        state_lines.append("You are thirsty.")
+    if char.get_property("is_sick"):
+        state_lines.append("You feel violently ill -- your stomach is cramping.")
+    if state_lines:
+        base = base + "\n\n" + "\n".join(state_lines)
     observation = format_observation_with_memories(base, relevant)
+    agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
     # instead of filling the single free-text choose_action schema. A decline
