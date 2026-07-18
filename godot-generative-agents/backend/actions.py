@@ -510,3 +510,100 @@ class Study(base.Action):
         # added, consumed by cognition.remember_outcome for the memory line.
         self.character.set_property("just_studied_minutes", minutes)
         return self.parser.ok(f"{self.character.name} is {activity}.")
+
+
+class CheckOutBook(base.Action):
+    """Check a library book out from the shelf (#616) -- Penn's first
+    object-tier verb: the book moves shelf -> inventory and records who has
+    it, which is what unlocks the engine's ``read`` (the book travels in the
+    borrower's pocket, so READABLE stays in their scope).
+
+    The affordance is the SHELF, not the book: ``book_shelf`` rides on the
+    ungettable shelf Item, so the verb is offered exactly in the shelf's
+    arena (#612 offered <=> place-check) -- including after every book is
+    borrowed, where the gate then explains who has what. Books are not
+    GETTABLE, so checkout is the only path into a pocket and
+    ``checked_out_by`` can never be bypassed by a plain ``get``. There is
+    deliberately no return verb (YAGNI until agents hoard)."""
+
+    ACTION_NAME = "check_out_book"
+    ACTION_DESCRIPTION = "Check out a library book from the shelf"
+    REQUIRED_AFFORDANCES = ("book_shelf",)
+    ARGUMENTS_SCHEMA = {
+        "book": {
+            "type": "item",
+            "description": "the exact name of the book to check out",
+            "required": True,
+        },
+    }
+
+    def __init__(self, game, command: str, actor=None):
+        super().__init__(game, actor=actor)
+        self.character = self.acting_character(command, hint="borrower")
+        self.book = self._match_book(command)
+
+    def _match_book(self, command: str):
+        """The named book: in the actor's own scope, or -- so the gate can say
+        WHO has it instead of "I don't see it" -- checked out by someone here
+        (the simultaneous-round contention case, issue #42: both decided
+        against the same turn-start shelf, the loser re-checks after the book
+        already moved into the winner's inventory)."""
+        if self.character is None:
+            return None
+        items_in_scope = self.parser.get_items_in_scope(self.character)
+        # First, try to match library books only (to avoid matching the shelf)
+        books = {
+            name: item
+            for name, item in items_in_scope.items()
+            if item.get_property("library_book")
+        }
+        book = self.parser.match_item(command, books, hint="book")
+        if book is not None:
+            return book
+        # If no library book matched, try any item (for error checking)
+        book = self.parser.match_item(command, items_in_scope, hint=None)
+        if book is not None:
+            return book
+        loc = self.character.location
+        if loc is None:
+            return None
+        held = {
+            name: item
+            for other in loc.characters.values()
+            if other is not self.character
+            for name, item in other.inventory.items()
+            if item.get_property("library_book")
+        }
+        return self.parser.match_item(command, held, hint="book")
+
+    def check_preconditions(self) -> bool:
+        if not self.was_matched(self.character, "No one is checking out a book."):
+            return False
+        if not self.has_affordance_in_scope(
+            self.character,
+            "There is no library shelf to check a book out from here.",
+        ):
+            return False
+        if self.book is not None and self.book.get_property("checked_out_by"):
+            holder = self.book.get_property("checked_out_by")
+            message = (
+                f"You already have {self.book.name} checked out."
+                if holder == self.character.name
+                else f"The {self.book.name} is already checked out by {holder}."
+            )
+            self.parser.fail(message)
+            return False
+        if not self.was_matched(self.book, "I don't see that book on the shelf."):
+            return False
+        if not self.book.get_property("library_book"):
+            self.parser.fail(f"The {self.book.name} isn't a library book.")
+            return False
+        return True
+
+    def apply_effects(self):
+        # add_to_inventory removes the book from the shelf's location itself.
+        self.character.add_to_inventory(self.book)
+        self.book.set_property("checked_out_by", self.character.name)
+        return self.parser.ok(
+            f"{self.character.name} checks out {self.book.name} from the shelf."
+        )
