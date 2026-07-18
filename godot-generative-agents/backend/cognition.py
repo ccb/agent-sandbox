@@ -1382,11 +1382,17 @@ def remember_outcome(char, command: str, step: int) -> None:
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
     elif verb == "wait":
-        # Idle filler (#300 spacers, or a live brain choosing to wait): not
-        # worth a memory at all. Skip it so a run doesn't accrue identical 1.0
-        # "I did wait" entries that crowd the agent's card and feed
-        # maybe_reflect's importance accumulator with noise.
-        return
+        # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
+        # the duration): still not worth a memory -- identical 1.0 "I did wait"
+        # entries would crowd the card and feed maybe_reflect's accumulator
+        # with noise, and the mock bake must stay byte-identical.
+        # A SETTLED wait (#614: a real brain chose a duration this decide --
+        # the stash is reset every observe_and_decide, so it can't leak from
+        # an earlier tick) is an honest, legible decision: record it once.
+        if getattr(agent, "last_duration_minutes", None) is None:
+            return
+        text = render("reflection", verb=verb)
+        importance = 1.0
     else:
         text = render("reflection", verb=verb, command=command)
         importance = 1.0

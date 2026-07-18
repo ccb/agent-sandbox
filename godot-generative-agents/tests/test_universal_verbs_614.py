@@ -112,3 +112,30 @@ def test_settled_wait_stamps_waiting_activity():
     ada.agent.last_duration_minutes = 20  # what _take_pacing_args stashes
     assert game.parser.parse_command("wait", actor=ada)
     assert ada.get_property("activity") == "waiting"
+
+
+# ------------------------------------------------------------ wait memory
+
+from backend.cognition import remember_outcome  # noqa: E402
+from backend.prompt_templates import render  # noqa: E402
+
+
+def test_reflection_template_pins_the_wait_line():
+    assert render("reflection", verb="wait") == "I waited; nothing needed doing."
+
+
+def test_spacer_wait_writes_no_memory():
+    game, chars = _world(["Ada"])
+    ada = chars["Ada"]
+    remember_outcome(ada, "wait", 3)
+    texts = [r.text for r in ada.agent.memory.retrieve(query="waited", turn=3)]
+    assert "I waited; nothing needed doing." not in texts
+
+
+def test_settled_wait_writes_the_honest_idle_memory():
+    game, chars = _world(["Ada"])
+    ada = chars["Ada"]
+    ada.agent.last_duration_minutes = 20
+    remember_outcome(ada, "wait", 3)
+    texts = [r.text for r in ada.agent.memory.retrieve(query="waited", turn=3)]
+    assert "I waited; nothing needed doing." in texts
