@@ -2823,13 +2823,13 @@ def build_game(seed=None):
     coffin.make_container()
     coffin.set_property("is_closed", True)
     # The card follows the vessel (CCB): tenanted (11-B) until the pry,
-    # shattered (11-C) while the shards drift, reforged (11-D) -- the slow
-    # blue pulse -- once a mending makes it whole again.
+    # shattered full-cut (11-E) while the shards drift, reforged (11-D) --
+    # the slow blue pulse -- once a mending makes it whole again.
     def _coffin_card(g):
         if coffin.get_property("fixed"):
             return "sphere-d"
         if coffin.get_property("pried"):
-            return "sphere-c"
+            return "sphere-e"
         return "sphere-b"
 
     coffin.set_property("figure", _coffin_card)
