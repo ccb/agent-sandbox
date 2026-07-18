@@ -557,7 +557,7 @@ class CheckOutBook(base.Action):
             for name, item in items_in_scope.items()
             if item.get_property("library_book")
         }
-        book = self.parser.match_item(command, books, hint="book")
+        book = self.parser.match_item(command, books, hint=None)
         if book is not None:
             return book
         # If no library book matched, try any item (for error checking)
@@ -574,7 +574,7 @@ class CheckOutBook(base.Action):
             for name, item in other.inventory.items()
             if item.get_property("library_book")
         }
-        return self.parser.match_item(command, held, hint="book")
+        return self.parser.match_item(command, held, hint=None)
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is checking out a book."):

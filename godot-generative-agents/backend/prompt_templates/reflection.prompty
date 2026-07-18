@@ -6,8 +6,9 @@ description: >
   selects the phrasing: arriving somewhere, doing an activity, drinking
   (with a sick variant for contaminated water, #300), idling (if chosen
   as a settled-wait #614), agent-initiated talk_to (with an optional topic,
-  #614), studying or eating (#615), or a quoted fallback for any other
-  command.
+  #614), studying or eating (#615), checking out or reading a library book
+  (#616, the read phrasing quoting the book's content when there is any),
+  or a quoted fallback for any other command.
   The memory's importance is chosen in Python (it is data, not text), so
   only the wording lives here.
 inputs:

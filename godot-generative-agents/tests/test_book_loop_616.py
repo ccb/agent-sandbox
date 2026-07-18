@@ -359,3 +359,36 @@ def test_full_book_loop_on_the_real_campus():
         "its green serpentine stone is so soft the university repairs it "
         'block by block."'
     )
+
+
+# -- Final-review fix: the "book" hint must never out-rank the exact title --
+
+
+def test_check_out_names_the_exact_book():
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas, extra_action_names=PENN_ACTION_VERBS)
+    char = next(iter(chars.values()))
+    _move(game, char, "Van Pelt — Book Stacks")
+
+    assert game.parser.parse_command("check_out_book star atlas", actor=char)
+    assert "star atlas" in char.inventory
+    assert char.inventory["star atlas"].get_property("checked_out_by") == char.name
+    assert "campus history book" in game.locations["Van Pelt — Book Stacks"].items
+
+
+def test_contention_message_is_not_preempted_by_the_other_book():
+    pw = build_penn_world()
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas, extra_action_names=PENN_ACTION_VERBS)
+    char_a, char_b = list(chars.values())[:2]
+    _move(game, char_a, "Van Pelt — Book Stacks")
+    _move(game, char_b, "Van Pelt — Book Stacks")
+
+    assert game.parser.parse_command("check_out_book star atlas", actor=char_a)
+    assert not game.parser.parse_command("check_out_book star atlas", actor=char_b)
+    assert (
+        game.parser.last_fail_message
+        == f"The star atlas is already checked out by {char_a.name}."
+    )
+    assert "campus history book" in game.locations["Van Pelt — Book Stacks"].items
