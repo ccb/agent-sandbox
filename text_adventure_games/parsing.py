@@ -216,6 +216,16 @@ class Parser:
             # Let the player type in a comma separted sequence of commands
             return ActionName.SEQUENCE
 
+        if command == "propose" or command.startswith("propose "):
+            # The wish channel (#620): propose takes its payload as free text
+            # ("propose talk to the mayor because ...") that may contain any
+            # verb keyword, multi-word alias, or direction. Its exact-prefix
+            # guard can't over-trigger, so it wins first -- before even the
+            # specific-first substring match below, whose naive `alias in
+            # command` test would otherwise let a payload naming "talk to",
+            # "chat with", etc. hijack the whole command and drop the wish.
+            return ActionName.PROPOSE
+
         # Specific-first: if a registered action's MULTI-WORD name or alias
         # appears in the command, it wins over the generic verb keywords below.
         # This lets game-defined verbs ("give axe to smith", "say yes") and
@@ -515,6 +525,17 @@ class Parser:
 
     def agent_reflection(self, actor: str, text: str):
         self._emit(Channel.AGENT_REFLECTION, text, actor=actor)
+
+    def agent_wish(self, actor: str, text: str, wish: dict | None = None):
+        """An actor's recorded wish for a missing action (#620). *wish* is the
+        structured record (``ActionWish.to_primitive()``), carried in ``meta``
+        for surfaces that want more than the one-line trace."""
+        self._emit(
+            Channel.AGENT_WISH,
+            text,
+            actor=actor,
+            meta={"wish": wish} if wish else None,
+        )
 
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
