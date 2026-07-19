@@ -408,6 +408,15 @@ def step(
                 st["memories"] = memories_for_frame(
                     getattr(char.agent, "last_retrieved", None)
                 )
+            # #581 pacing args are minutes -> steps; with no clock they can't
+            # be honored (_model_duration_steps below returns None), so drop
+            # the stash BEFORE the command runs. This keeps the settled-wait
+            # consumers (WaitPenn's activity stamp, remember_outcome's
+            # honest-idle memory) aligned with the settle trigger: a clockless
+            # wait is a plain one-tick idle, not a settled one. No-op for the
+            # mock brain, which never stashes -- the bake is untouched.
+            if clock is None and char.agent is not None:
+                char.agent.last_duration_minutes = None
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
                 # LLM-scored poignancy (issue #583): override this tick's new
