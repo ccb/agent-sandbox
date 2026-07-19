@@ -103,6 +103,21 @@ const BUBBLE_MAX_CHARS := 120
 # Near-black dialogue text on the white speech bubble.
 const SPEECH_TEXT_COLOR := Color(0.10, 0.10, 0.12)
 
+# Wish bubble (#622 ActionWish, surfaced #625): a distinct 💭 marker shown over
+# the wishing agent, parked ABOVE the dialogue bubble's slot (BUBBLE_Y_OFFSET)
+# so the two never overlap on the rare step where both fire. Unlike the
+# dialogue bubble's staggered turn-taking playback, a wish is a single flash:
+# it fades in, holds, and fades out over WISH_FADE_STEPS sim steps once
+# triggered (see _update_agent_wish / _refresh_wish_bubble).
+const WISH_BUBBLE_Y_OFFSET := 140.0
+const WISH_FADE_STEPS := 8.0
+const WISH_FADE_IN_STEPS := 1.0
+const WISH_FADE_OUT_STEPS := 2.0
+# Rose-pink, matching timeline_markers.gd's KIND_COLORS["wish"] and
+# live_hud.gd's WISH_TINT -- the same demand-signal color across every surface.
+const WISH_BORDER_COLOR := Color("d9569f")
+const WISH_TEXT_COLOR := Color(0.25, 0.08, 0.20)
+
 # Perception fog: while you Track an agent, the campus OUTSIDE their perception
 # radius is dimmed under a translucent grey cover, leaving a clear circle around
 # them -- so you see what that agent can actually perceive (the same vision_r tiles
@@ -199,6 +214,21 @@ var _bubble_idx := {}       # name -> transcript line currently in its bubble (-
 var _links_node: Node2D     # parents one Line2D per active conversation pair
 var _link_lines := {}       # sorted "A\nB" pair key -> Line2D
 var _speech_style: StyleBoxFlat
+
+# Wishes (#622 ActionWish record, surfaced #625): `_wishes` holds every record
+# seen so far -- the baked replay's `wishes` array at load, plus each live
+# `wish` feed record appended as it arrives (see _apply_live_wish) -- so the
+# scene marker works identically in both modes, the same way `_frames` unifies
+# baked and live for the rest of the renderer. `_wish_index` is a "%d:%s" %
+# [turn, actor] -> record lookup (built alongside), so the per-step trigger
+# below doesn't rescan the whole array every frame. `_wish_start`/`_wish_text`
+# are the per-agent bubble state the fade animation reads (see
+# _update_agent_wish / _refresh_wish_bubble), mirroring _convo_start/_bubble_idx.
+var _wishes: Array = []
+var _wish_index := {}
+var _wish_start := {}       # name -> sim step (float) its current wish began showing
+var _wish_text := {}        # name -> the bubble text for that wish (💭 + clipped desired)
+var _wish_style: StyleBoxFlat
 
 # Perception fog (see FOG_* above). `_tracked_name` is the agent the camera is
 # following (set on Track, cleared on release), or "" when free -- the fog only
@@ -372,6 +402,10 @@ func _ready() -> void:
 	# Dialogue bubble: a bright white speech bubble with a blue outline and a
 	# squared-off bottom-left corner (a pointer down toward the speaker).
 	_speech_style = _make_bubble_style(Color(1.0, 1.0, 1.0, 0.95), Color(0.25, 0.52, 0.85), 3, true)
+	# Wish bubble (#625): a pale rose-pink card with the matching WISH_BORDER_COLOR
+	# outline, so a 💭 marker reads as a distinct "thought" from a "spoken" dialogue
+	# bubble at a glance even though it's built from the same shape.
+	_wish_style = _make_bubble_style(Color(0.99, 0.93, 0.97, 0.95), WISH_BORDER_COLOR, 3, true)
 
 	# Holds the per-agent breadcrumb Line2Ds. Added here, before the agent sprites are
 	# spawned during load, so the trails always draw underneath the sprites they trail
@@ -437,6 +471,7 @@ func _setup_hud() -> void:
 	_hud_source.halted_changed.connect(_on_run_halted)
 	_hud_source.llm_call.connect(_hud.add_llm_call)
 	_hud_source.engine_event.connect(_hud.add_engine_event)
+	_hud_source.wish.connect(_hud.add_wish)
 	_hud.stop_requested.connect(_hud_source.request_stop)
 	add_child(_hud_source)
 
@@ -538,12 +573,19 @@ func _load_replay_from_text(text: String) -> void:
 	# stream (issue #408). Baked replays carry it; a payload without it (or the live
 	# feed) leaves this empty and the inspector shows only the retrieved-this-step set.
 	_memory_streams = data.get("memory_streams", {})
+	# The ActionWish demand-signal record (#622), surfaced in the scene as a 💭
+	# bubble (#625). Absent from replays baked before #622 -- .get() degrades to
+	# no wishes rather than a load error. Indexed by (turn, actor) so the scene
+	# marker's per-step trigger (_update_agent_wish) doesn't rescan the array.
+	_wishes = data.get("wishes", [])
+	_rebuild_wish_index()
 
 	# The timeline's "interesting moments" (issue #249): game events (#476 —
 	# this is the baked events key's first consumer), chat onsets, reflections,
-	# arrivals. One scan at load; live mode never gets here (no scrubber).
+	# arrivals, wishes (#625). One scan at load; live mode never gets here (no
+	# scrubber).
 	_panel.set_timeline_markers(
-		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", [])),
+		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", []), _wishes),
 		maxi(_frames.size() - 1, 0))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
@@ -786,9 +828,9 @@ func _apply_record(rec: Variant) -> void:
 		return  # already applied
 	_last_cursor = maxi(_last_cursor, cursor)
 	var kind := String(record.get("kind", ""))
-	# A newer backend's record kind (#622 `wish`, #371 conversation, ...) is
-	# still fail-soft-dropped, but leaves a one-shot breadcrumb so version drift
-	# isn't invisible (#638).
+	# A newer backend's record kind (an `intervention`, #371 conversation, ...)
+	# is still fail-soft-dropped, but leaves a one-shot breadcrumb so version
+	# drift isn't invisible (#638). `wish` (#622) is known as of #625.
 	if not PayloadGuards.is_known_kind(kind) and not _warned_feed_kinds.has(kind):
 		_warned_feed_kinds[kind] = true
 		push_warning(
@@ -811,6 +853,44 @@ func _apply_record(rec: Variant) -> void:
 					_hud_source.note_llm_call(ev)
 				else:
 					_hud_source.note_engine_event(ev)
+		"wish":
+			# A first-class ActionWish demand-signal record (#622) -- NOT
+			# nested inside "engine" the way llm_call/game_event rows are.
+			# Feed it to the scene marker (same _wishes/_wish_index the baked
+			# loader fills, so _update_agent_wish triggers identically either
+			# way) and, live-only, the HUD's request log (#625).
+			_apply_live_wish(record)
+
+
+func _apply_live_wish(record: Dictionary) -> void:
+	# A live `wish` feed record: grow the same _wishes/_wish_index the baked
+	# loader fills at load, so the scene's 💭 marker (_update_agent_wish) works
+	# identically whether the record came from a live tick or a bake -- and
+	# push it to the HUD's request log (hidden entirely in baked-replay mode,
+	# so this is effectively live-only, matching add_llm_call/add_engine_event).
+	_wishes.append(record)
+	_index_wish(record)
+	if _hud_source != null:
+		_hud_source.note_wish(record)
+
+
+func _index_wish(wish: Dictionary) -> void:
+	# `_wish_index["turn:actor"] -> record`, so _update_agent_wish's per-step
+	# trigger is an O(1) lookup instead of rescanning all of `_wishes` every
+	# frame. A wish with no `turn` or no `actor` can't be keyed (ActionWish.actor
+	# is only null when no actor resolved, #622) -- skip it rather than crash.
+	var step := int(wish.get("turn", -1))
+	var actor := String(wish.get("actor", ""))
+	if step < 0 or actor == "":
+		return
+	_wish_index["%d:%s" % [step, actor]] = wish
+
+
+func _rebuild_wish_index() -> void:
+	_wish_index.clear()
+	for w in _wishes:
+		if w is Dictionary:
+			_index_wish(w as Dictionary)
 
 
 func _apply_live_frame(step: int, agents: Variant) -> void:
@@ -951,6 +1031,12 @@ func _teardown_cast() -> void:
 	_live_started = false
 	_t = 0.0
 	_last_status_step = -1
+	# A rejoin's wishes belong to the OLD run; a stale entry would flash a 💭
+	# bubble on a coincidentally-matching (step, actor) key in the new one.
+	_wishes.clear()
+	_wish_index.clear()
+	_wish_start.clear()
+	_wish_text.clear()
 
 
 func _set_backend_run_state(state: String) -> void:
@@ -1221,6 +1307,24 @@ func _spawn_agent(name: String, index: int) -> void:
 	bubble.visible = false
 	node.add_child(bubble)
 
+	# A wish "thought" marker (#622 ActionWish, surfaced #625): a distinct 💭
+	# bubble that flashes over the agent the moment they wish for an action the
+	# game doesn't have. Parked further above the nameplate than the dialogue
+	# bubble (WISH_BUBBLE_Y_OFFSET > BUBBLE_Y_OFFSET) so the two never overlap;
+	# _update_agent_wish triggers it, _refresh_wish_bubble fades it.
+	var wish_bubble := Label.new()
+	wish_bubble.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
+	wish_bubble.add_theme_stylebox_override("normal", _wish_style)
+	wish_bubble.add_theme_color_override("font_color", WISH_TEXT_COLOR)
+	wish_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wish_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	wish_bubble.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
+	wish_bubble.position = Vector2(
+		-BUBBLE_WIDTH / 2.0, -(foot_lift + SPRITE_HALF_PX + 50.0 + WISH_BUBBLE_Y_OFFSET)
+	)
+	wish_bubble.visible = false
+	node.add_child(wish_bubble)
+
 	# A click target over the sprite, so you can track an agent by clicking them on
 	# the map (not just via the sidebar's Track button). The box roughly covers the
 	# scaled character; clicking it toggles tracking through the same panel path the
@@ -1263,7 +1367,10 @@ func _spawn_agent(name: String, index: int) -> void:
 
 	# "fan" is the agent's current (eased) fan-out offset (#560); it glides toward
 	# the target ring offset each frame so co-located sprites don't teleport.
-	_agents[name] = {"node": node, "sprite": spr, "label": label, "bubble": bubble, "trail": trail, "fan": Vector2.ZERO}
+	_agents[name] = {
+		"node": node, "sprite": spr, "label": label, "bubble": bubble,
+		"wish_bubble": wish_bubble, "trail": trail, "fan": Vector2.ZERO,
+	}
 
 
 func _make_bubble_style(bg: Color, border_col: Color, border_w: int, tail: bool) -> StyleBoxFlat:
@@ -1983,6 +2090,7 @@ func _process(delta: float) -> void:
 				name, "%s %s" % [PayloadGuards.emoji_of(a), full.split(" @ ")[0]])
 			_agent_location[name] = _building_of(full)
 			_update_agent_speech(name, a, i)
+			_update_agent_wish(name, i)
 		# Re-evaluate the location spotlight now that everyone's building is up to date.
 		_apply_spotlight()
 		# Tick the State Details inspector's dynamic sections (current action,
@@ -1995,6 +2103,7 @@ func _process(delta: float) -> void:
 	# turn-taking + fade play out smoothly as the playhead advances within a step.
 	for name in _names:
 		_refresh_bubble(name, fpos)
+		_refresh_wish_bubble(name, fpos)
 	_refresh_links(fpos)
 
 	# Dim everything outside the tracked agent's perception radius (no-op when free).
@@ -2079,6 +2188,41 @@ func _refresh_bubble(name: String, fpos: float) -> void:
 	var within := elapsed - float(idx) * DIALOGUE_LINE_STEPS
 	var fade_in := clampf(within, 0.0, 1.0)
 	var fade_out := clampf((DIALOGUE_LINE_STEPS - within) / DIALOGUE_FADE_STEPS, 0.0, 1.0)
+	bubble.modulate.a = minf(fade_in, fade_out)
+
+
+func _update_agent_wish(name: String, step: int) -> void:
+	# Trigger this agent's 💭 bubble the step a wish for them lands in
+	# `_wish_index` (built at replay load, or grown live -- see
+	# _apply_live_wish). One flash per (step, actor) key: re-entering the same
+	# step (a paused replay ticking sub-frames) must not restart the fade.
+	var key := "%d:%s" % [step, name]
+	if not _wish_index.has(key):
+		return
+	if float(_wish_start.get(name, -1.0)) == float(step):
+		return  # already triggered for this step
+	var wish: Dictionary = _wish_index[key]
+	_wish_start[name] = float(step)
+	_wish_text[name] = "💭 %s" % _clip(String(wish.get("desired", "")))
+
+
+func _refresh_wish_bubble(name: String, fpos: float) -> void:
+	# Flash this agent's wish bubble for WISH_FADE_STEPS sim steps after it's
+	# triggered, easing in/out the same way a dialogue line does (_refresh_bubble)
+	# -- but a single flash, not staggered turn-taking (a wish has no reply).
+	var bubble: Label = _agents[name]["wish_bubble"]
+	var start: float = _wish_start.get(name, -1.0)
+	if start < 0.0:
+		bubble.visible = false
+		return
+	var elapsed := fpos - start
+	if elapsed < 0.0 or elapsed >= WISH_FADE_STEPS:
+		bubble.visible = false
+		return
+	bubble.text = String(_wish_text.get(name, ""))
+	bubble.visible = true
+	var fade_in := clampf(elapsed / WISH_FADE_IN_STEPS, 0.0, 1.0)
+	var fade_out := clampf((WISH_FADE_STEPS - elapsed) / WISH_FADE_OUT_STEPS, 0.0, 1.0)
 	bubble.modulate.a = minf(fade_in, fade_out)
 
 
