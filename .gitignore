@@ -165,6 +165,9 @@ cython_debug/
 *.jsonl
 *.json.*
 *.jsonl.*
+# ...except #623's committed golden-test fixture: hand-authored test data, not
+# generated output, for the most-wanted-actions report's aggregator.
+!godot-generative-agents/tests/fixtures/wishes_sample.jsonl
 
 # Generated per-checkout / per-run — regenerable, never commit.
 godot-generative-agents/godot/maps/penn_replay.json
