@@ -78,13 +78,15 @@ static func schema_ok(meta: Dictionary, supported: String) -> bool:
 
 # --- feed record kind ---
 
-const KNOWN_KINDS := ["frame", "status", "engine"]
+const KNOWN_KINDS := ["frame", "status", "engine", "wish"]
 
 
 static func is_known_kind(kind: String) -> bool:
 	## Whether the change-feed record kind is one this viewer renders. An
-	## unknown kind (a newer backend's #622 `wish`, say) should be warned about,
-	## not dropped without a breadcrumb.
+	## unknown kind (some future backend record type) should be warned about,
+	## not dropped without a breadcrumb. `wish` (#622) is known as of #625 (the
+	## viewer surfaces it: scene marker + HUD row + timeline). NB: `intervention`
+	## is a real emitted kind still missing from KNOWN_KINDS — tracked in #687.
 	return KNOWN_KINDS.has(kind)
 
 
