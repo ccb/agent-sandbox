@@ -130,6 +130,28 @@ def test_row_fields_for_the_study_room_group():
     ]
 
 
+def test_row_fields_example_goals_dedup_cap_first_seen_order():
+    report = mwa.build_report(_load())
+    row = report.rows[0]
+    assert row.key == "book a study room"
+    # 3 distinct goals appear across the group's 5 records (two records
+    # repeat an earlier goal from the same actor); all 3 fit under the cap,
+    # so nothing is truncated here -- contrast with example_reasons, which
+    # *does* truncate this same group's 4 distinct reasons down to 3.
+    assert row.example_goals == [
+        "pass the biology midterm",
+        "finish the group project",
+        "find a quiet spot to write my essay",
+    ]
+
+
+def test_row_fields_example_goals_empty_when_group_has_no_goals():
+    report = mwa.build_report(_load())
+    row = report.rows[3]
+    assert row.key == "dance with the statue"
+    assert row.example_goals == []
+
+
 def test_tie_on_count_is_broken_by_distinct_agents():
     # "lock up my bike outside the library" sorts alphabetically BEFORE "way
     # to get upstairs", and its first record appears EARLIER in the fixture
@@ -267,6 +289,7 @@ def test_render_markdown_escapes_pipes_and_newlines_in_a_row():
         distinct_agents=1,
         trigger_mix={"proposed": 1},
         example_reasons=["it's confusing | unsafe\nat night"],
+        example_goals=[],
         first_turn=1,
         last_turn=1,
     )
