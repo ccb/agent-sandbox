@@ -570,6 +570,10 @@ def step(
                 maybe_revise_plan(
                     char, RevisionTrigger(ACTION_FAILED, step_idx, reason), clock
                 )
+                if is_talk:
+                    # #689: a blocked talk (no co-located target this tick) is
+                    # just as retry-prone as an empty one -- settle here too.
+                    _settle_after_dead_talk(st, step_idx, cog)
 
         # Advance one tile along any active walk -- unless pinned mid-walk by
         # a react-started conversation (#370). Inert before #370: a
