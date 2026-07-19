@@ -73,7 +73,7 @@ I studied {{ topic }} for {{ minutes }} minutes.
 {%- elif verb == "study" -%}
 I studied for {{ minutes }} minutes.
 {%- elif verb == "eat" -%}
-I ate the {{ item }} and I'm no longer hungry.
+I ate the {{ item }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}

@@ -475,31 +475,32 @@ def _furnish_meals(game) -> None:
     #612) offered -- so agents can eat here and only here. Meals live in the
     building-level "Houston Hall" location, next to the boil props, for the
     same reason those do (see the world-YAML comment): schedule stops that act
-    on them must target "Houston Hall" itself."""
+    on them must target "Houston Hall" itself. Gated on the authored `dining`
+    arena tag (#613): a world that doesn't tag the hall -- the isolated boil
+    scenario (#299/#301), whose one resident lives in Houston Hall and must
+    keep a decision surface of only the drink/boil arc -- gets no meals, so
+    `eat` is never offered there."""
     hall = game.locations.get("Houston Hall")
-    if hall is None:
+    if hall is None or not hall.get_property("dining"):
         return
-    hall.add_item(
-        make_meal(
+    for name, description, examine in (
+        (
             "sandwich",
             "a wrapped sandwich",
             "A turkey club off the Houston Hall food-court counter.",
-        )
-    )
-    hall.add_item(
-        make_meal(
+        ),
+        (
             "bowl of soup",
             "a bowl of lentil soup",
             "Steaming lentil soup from the Houston Hall food court.",
-        )
-    )
-    hall.add_item(
-        make_meal(
+        ),
+        (
             "apple",
             "a red apple",
             "A crisp apple from the fruit basket by the register.",
-        )
-    )
+        ),
+    ):
+        hall.add_item(make_meal(name, description, examine))
 
 
 def build_penn_world(

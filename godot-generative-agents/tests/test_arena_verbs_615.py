@@ -266,6 +266,35 @@ def test_study_settles_for_the_model_duration():
     assert ada.get_property("studied_minutes") == 20  # the accumulator saw 20
 
 
+def test_step_loop_clamps_the_model_duration_for_ledger_and_settle_alike():
+    # 500 min is beyond CognitionConfig's duration_max_minutes (90). The step
+    # loop clamps the stash once, before the command routes, so the
+    # studied_minutes ledger and the wall-time settle agree instead of the
+    # memory overstating the settle by the clamp width.
+    brain = PerActionBrain(
+        "study", {"topic": "thermodynamics", "duration_minutes": 500}
+    )
+    game, ada = _world(llm_client=brain, place="The Green")
+    game.locations["The Green"].set_property("studyable", True)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert ada.get_property("studied_minutes") == 90
+    assert state["Ada"]["perform_until"] == 0 + 90 * 6  # 90 min @ 10s/step
+
+
+def test_sub_minute_model_duration_never_ledgers_zero_minutes():
+    # duration_minutes is a JSON "number", so a brain may pick 0.5. The clamp
+    # floors it to duration_min_minutes (1): the ledger records 1 minute
+    # instead of int-truncating to a "studied for 0 minutes" no-op while the
+    # character visibly settles.
+    brain = PerActionBrain("study", {"duration_minutes": 0.5})
+    game, ada = _world(llm_client=brain, place="The Green")
+    game.locations["The Green"].set_property("studyable", True)
+    state = _state()
+    _run_step(game, {"Ada": ada}, state, 0, _clock())
+    assert ada.get_property("studied_minutes") == 1
+
+
 # -- memory lines (Task 3) -----------------------------------------------------
 
 
@@ -278,10 +307,9 @@ def test_render_pins_the_study_and_eat_reflections():
         render("reflection", verb="study", topic="", minutes=30)
         == "I studied for 30 minutes."
     )
-    assert (
-        render("reflection", verb="eat", item="sandwich")
-        == "I ate the sandwich and I'm no longer hungry."
-    )
+    # Hunger-neutral on purpose: the engine's eat clears IS_HUNGRY whether or
+    # not the persona was hungry, so "no longer hungry" could be a false memory.
+    assert render("reflection", verb="eat", item="sandwich") == "I ate the sandwich."
 
 
 def _spy_memory(char):
@@ -313,7 +341,7 @@ def test_remember_outcome_writes_the_eat_memory():
     game, ada = _world()
     seen = _spy_memory(ada)
     remember_outcome(ada, "eat sandwich", 3)
-    assert seen["text"] == "I ate the sandwich and I'm no longer hungry."
+    assert seen["text"] == "I ate the sandwich."
     assert seen["importance"] == 2.0
 
 
@@ -335,6 +363,27 @@ def test_eat_gate_feedback_on_no_food_here_is_actionable():
     assert getattr(game.parser, "last_fail_message", "") == (
         "There is nothing to eat here."
     )
+
+
+def test_meals_are_gated_on_the_authored_dining_tag():
+    # The isolated boil scenario (#299/#301) authors no `dining` tag on its
+    # Houston Hall -- and its sole resident LIVES there, so stocking meals
+    # would put `eat` on that experiment's decision surface every tick. The
+    # furnish is gated on the #613 arena tag: only a world that authors
+    # `dining` (the full Penn world) gets meals.
+    from penn_world import _furnish_meals
+
+    locs = LOCATIONS + [
+        {"name": "Houston Hall", "description": "the union", "address": "T:HH:lobby"}
+    ]
+    game, _chars = build_world(None, [_persona()], locs)
+    hall = game.locations["Houston Hall"]
+    _furnish_meals(game)
+    assert not hall.items  # untagged (the boil world's shape): no meals
+    hall.set_property("dining", True)
+    _furnish_meals(game)
+    edible = [i for i in hall.items.values() if i.get_property(Property.EDIBLE)]
+    assert len(edible) == 3  # tagged (the full world's shape): stocked
 
 
 def test_penn_world_offers_the_615_verbs():

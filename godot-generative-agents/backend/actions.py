@@ -490,22 +490,18 @@ class Study(base.Action):
     def apply_effects(self):
         activity = f"studying {self.topic}" if self.topic else "studying"
         self.character.set_property("activity", activity)
-        # The brain's duration pick for THIS decision (stashed by
-        # cognition._take_pacing_args before the command was routed), or a
-        # flat default when absent (the mock path, or a brain that gave none).
-        # ponytail: unclamped -- the settle clamps to cog.duration_*_minutes,
-        # so the ledger can differ from wall-time by the clamp width; wire the
-        # clamped value through if the #584 eval starts reading this.
+        # The brain's duration pick for THIS decision -- validated by
+        # cognition._take_pacing_args when stashed and clamped by the step
+        # loop to the run's cog.duration_*_minutes before the command routed,
+        # so this ledger matches the settled wall-time -- or a flat default
+        # when absent (the mock path, or a brain that gave none). The floor
+        # guards paths that route a command without the step loop.
         minutes = getattr(
             getattr(self.character, "agent", None), "last_duration_minutes", None
         )
-        if (
-            not isinstance(minutes, (int, float))
-            or isinstance(minutes, bool)
-            or minutes <= 0
-        ):
+        if minutes is None:
             minutes = DEFAULT_STUDY_MINUTES
-        minutes = int(minutes)
+        minutes = max(1, int(round(minutes)))
         prev = self.character.get_property("studied_minutes")
         self.character.set_property(
             "studied_minutes", (int(prev) if prev else 0) + minutes
