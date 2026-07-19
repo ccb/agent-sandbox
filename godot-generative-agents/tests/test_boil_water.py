@@ -9,6 +9,7 @@ from backend.build_world import _normalize_personas, build_world
 from backend.actions import DrinkPenn, Activate, Deactivate
 from backend.penn.penn_world import (
     PENN_EXTRA_ACTIONS,
+    WORLD_DATA_BOIL,
     _boil_recipe,
     _furnish_boil_water,
     build_penn_world,
@@ -160,7 +161,7 @@ def test_custom_action_fallback_routing_intact_through_delegation():
 
 # -- authored per-stop commands: normalization, mock replay, action_names --
 
-from backend.cognition import ScheduleMockClient, attach_agents
+from backend.cognition import ScheduleMockClient, action_tools_for, attach_agents
 
 COMMANDS = ["get cup of murky water", "drink cup of murky water"]
 
@@ -303,6 +304,65 @@ def test_extra_action_names_yields_penn_verb_set_without_authored_commands():
         "activate",
         "deactivate",
     ]
+
+
+# -- #635: item-bearing verbs get a scoped enum, and loose phrasings route ----
+
+
+def _boil_agent_world():
+    """The real boil scenario world with a fully-wired agent (get/drink/make in
+    its action_names), so ``action_tools_for`` builds the item verbs' tools."""
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL)
+    game, chars = pw.build_world_fn(pw.world_map)
+    attach_agents(chars, pw.personas)
+    return game, chars[pw.personas[0]["name"]]
+
+
+def _arg_enum(tools, name, slot):
+    return {t["name"]: t for t in tools}[name]["parameters"]["properties"][slot].get(
+        "enum"
+    )
+
+
+def test_item_verbs_expose_scoped_enums_635():
+    """A tool-calling brain otherwise blind-guesses the exact item string into a
+    generic free-text slot; #635 fills each verb's enum with the routable
+    argument so it picks a real name from a menu (like travel's destination)."""
+    game, char = _boil_agent_world()
+    tools = action_tools_for(game, char)
+    assert _arg_enum(tools, "get", "arguments") == ["pot of murky water"]
+    assert _arg_enum(tools, "drink", "arguments") == ["pot of murky water"]
+    assert _arg_enum(tools, "make", "arguments") == ["boiled water"]
+    # travel's destination enum still survives alongside the new item enums.
+    assert "Houston Hall" in _arg_enum(tools, "travel", "destination")
+
+
+def test_drink_enum_tracks_scope_after_boiling_635():
+    """The enum is recomputed per decide from live scope: once the murky pot is
+    boiled into a carried pot of boiled water, that -- not the consumed murky
+    pot -- is what `drink` offers."""
+    game, char = _boil_agent_world()
+    game.parser.parse_command("get pot of murky water", actor=char)
+    game.parser.parse_command("make boiled water", actor=char)
+    assert _arg_enum(action_tools_for(game, char), "drink", "arguments") == [
+        "pot of boiled water"
+    ]
+
+
+def test_boil_arc_completes_via_loose_phrasings_635():
+    """The aliases let the natural phrasings a live brain emits route through --
+    `get water`, `drink water` -- so the full drink->sicken->boil->recover arc
+    (and its authoritative #595 counters) is reachable without the verbose
+    full item names."""
+    game, char = _boil_agent_world()
+    assert game.parser.parse_command("get water", actor=char)
+    assert game.parser.parse_command("drink water", actor=char)  # raw murky pot
+    assert char.get_property("is_sick")
+    assert char.get_property("drank_unboiled") == 1
+    assert game.parser.parse_command("make boiled water", actor=char)
+    assert game.parser.parse_command("drink water", actor=char)  # now the boiled pot
+    assert not char.get_property("is_sick")
+    assert char.get_property("drank_safe") == 1
 
 
 # -- remember_outcome memory branching (#300) --------------------------------
