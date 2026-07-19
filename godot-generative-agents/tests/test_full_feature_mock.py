@@ -25,6 +25,15 @@ from text_adventure_games.memory import MemoryKind  # noqa: E402
 
 def _run(steps=400):
     stepper = PennStepper(num_steps=steps, llm=serve_penn.SCRIPTED)
+    # Post-#662 recalibration: with perception tile-gated, this scripted day
+    # accrues slightly less importance than the old room-granular one -- the
+    # second Diego/Sofia conversation used to fire across 19 tiles of Irvine
+    # Auditorium (exactly the #662 bug) and its CHAT importance was what pushed
+    # the day over the engine's default reflection threshold (30). The
+    # legitimate day tops out just under it, so pin the per-agent threshold
+    # (the documented ``maybe_reflect`` seam) at a level this day reaches.
+    for char in stepper.chars.values():
+        char.agent.reflection_threshold = 25.0
     for _ in range(steps):
         stepper.tick()
     return stepper
@@ -64,7 +73,22 @@ def test_scripted_run_populates_every_gated_feature():
     # 3. Conversation produced CHAT memories (real converse ran, not the injector).
     assert MemoryKind.CHAT.value in kinds, "no CHAT memories -- conversation dark"
 
-    # 4. Reflection wrote memories.
+    # 4. Reflection wrote memories. The recalibrated threshold (25, see _run)
+    #    is only honest while the legitimate day accrues in the 25-30 band:
+    #    above the pinned threshold, below the engine default of 30 that the
+    #    phantom Irvine conversation used to cross. Assert the band directly so
+    #    a future importance-weighting change fails HERE, at the real
+    #    invariant, instead of silently hollowing out the reflection assert --
+    #    if this trips, re-derive the threshold rather than patching either
+    #    assert (#669 review).
+    day_totals = {}
+    for char in stepper.chars.values():
+        stream = memory_stream_for_persona(char.agent)
+        day_totals[char.name] = sum(
+            m["importance"] for m in stream if m["kind"] != MemoryKind.REFLECTION.value
+        )
+    top = max(day_totals.values())
+    assert 25 <= top < 30, f"day importance profile drifted: {day_totals}"
     assert MemoryKind.REFLECTION.value in kinds, "no reflection memories"
 
     # 5. The usage ledger is non-empty (GET /usage surface populated offline).

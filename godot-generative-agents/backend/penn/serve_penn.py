@@ -819,6 +819,11 @@ class PennStepper:
                     int(last[name]["x"]),
                     int(last[name]["y"]),
                 )
+                # The character mirrors the state tile (issue #662): perception
+                # must resume from where the agent stood, not its spawn stamp.
+                # tuple(...) like the other two tile writers, so char.tile has
+                # one shape everywhere.
+                self.chars[name].tile = tuple(self.state[name]["tile"])
                 # desc/pron/reasoning stay at their waking-up defaults: the
                 # first resumed tick is a decision point (no path, not
                 # performing) and overwrites them all.

@@ -201,8 +201,14 @@ def build_world(
     # the engine parser unchanged.
     game.set_parser(PennParser(game))
 
-    # Place each persona in their home location (Game only auto-places the player).
+    # Place each persona in their home location (Game only auto-places the player)
+    # and stamp its spawn tile: characters carry their live map position so
+    # TiledGame.can_perceive can judge real distance inside one big Location
+    # (issue #662). run_simulation.step keeps the stamp fresh as they walk.
     for spec in personas:
-        locations[spec["home"]].add_character(characters[spec["name"]])
+        char = characters[spec["name"]]
+        locations[spec["home"]].add_character(char)
+        if spec.get("start_tile"):
+            char.tile = tuple(spec["start_tile"])
 
     return game, characters
