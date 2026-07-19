@@ -85,6 +85,7 @@ def run_arm(*, seeded, trials, steps, make_client):
     for _ in range(trials):
         pw = build_penn_world(world_data=WORLD_DATA_BOIL)  # fresh world per trial
         personas = _configure(pw.personas, seeded=seeded)
+        name = personas[0]["name"]
         ledger = UsageLedger()
         captured: dict = {}
 
@@ -92,6 +93,16 @@ def run_arm(*, seeded, trials, steps, make_client):
             game, chars = pw.build_world_fn(world_map)
             captured.update(chars)
             return game, chars
+
+        # End the trial the instant the outcome is decided -- the agent's first
+        # drink (raw or boiled) latches classify_outcome away from "neither".
+        # Without this the agent flails for the rest of `steps` with nothing left
+        # to pursue (make with no pot, drink an empty pot), and every flail is a
+        # real live LLM call; stopping also tightens the metric to "did it boil
+        # before its *first* drink" rather than "over `steps`".
+        def _outcome_decided(_game):
+            ch = captured.get(name)
+            return ch is not None and classify_outcome(ch) != "neither"
 
         simulate(
             pw.world_map,
@@ -108,8 +119,9 @@ def run_arm(*, seeded, trials, steps, make_client):
             # Importance-forward retrieval so the seeded aversion isn't buried
             # (#633); a no-op for the control arm, which has no seed.
             retrieval=_RETRIEVAL,
+            stop_when=_outcome_decided,
         )
-        char = captured[personas[0]["name"]]
+        char = captured[name]
         tally[classify_outcome(char)] += 1
     rate = tally["boiled_then_drank"] / trials if trials else 0.0
     return {**tally, "rate": rate}

@@ -116,3 +116,35 @@ def test_importance_forward_retrieval_rescues_a_buried_seed_633():
         alpha_importance=_RETRIEVAL.alpha_importance,
         alpha_relevance=_RETRIEVAL.alpha_relevance,
     ), "importance-forward retrieval should surface the seed"
+
+
+def test_stop_when_ends_the_run_early_676():
+    """simulate() breaks as soon as the stop_when predicate is truthy, so the
+    boil experiment stops paying for idle live decides once the outcome latches.
+    The deciding step's frame is still recorded."""
+    from backend.run_simulation import simulate
+
+    pw = build_penn_world(world_data=WORLD_DATA_BOIL)
+    personas = _configure(pw.personas, seeded=False)
+    captured = {}
+
+    def cap(wm):
+        game, chars = pw.build_world_fn(wm)
+        captured.update(chars)
+        return game, chars
+
+    calls = {"n": 0}
+
+    def stop_after_third(_game):
+        calls["n"] += 1
+        return calls["n"] >= 3
+
+    frames = simulate(
+        pw.world_map,
+        50,
+        personas=personas,
+        build_world_fn=cap,
+        llm_client=build_scripted_brains()[0],
+        stop_when=stop_after_third,
+    )
+    assert len(frames) == 3  # stopped at the third step, not all 50
