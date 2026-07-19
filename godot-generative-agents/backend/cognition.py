@@ -550,7 +550,11 @@ def attach_agents(
         # "wait" was once stripped here (a Wait tool on every decide invited
         # sitting idle at recurring token spend); #614 retires that -- WaitPenn's
         # required duration_minutes makes a chosen wait SETTLE like perform, so
-        # authored wait spacers now promote like any other verb.
+        # authored wait spacers now promote like any other verb. NB: that safety
+        # lives in the REGISTERED action, not here -- a world that offers the
+        # engine's bare Wait (no duration slot) to a real brain re-opens the
+        # idle trap; every Penn entry point registers WaitPenn (penn_world's
+        # PENN_EXTRA_ACTIONS).
         authored_verbs = sorted(
             {
                 cmd.split(" ", 1)[0]
@@ -1410,17 +1414,13 @@ def remember_outcome(char, command: str, step: int) -> None:
         text = render("reflection", verb=verb, command=command)
         importance = 2.0
     elif verb == "talk_to":
-        # #614: record the intent (with any topic) at parse time -- BEFORE
-        # maybe_converse opens the dialogue later this same tick. The opener's
-        # memory retrieval queries the partner's name, so this fresh record
-        # surfaces in the first line's prompt: that's how the topic threads
-        # into the opener without new dialogue machinery. Dialogue-tier
-        # importance (matches conversation.DEFAULT_CHAT_IMPORTANCE).
-        target, _, topic = rest.partition(" about ")
-        text = render(
-            "reflection", verb=verb, person=target.strip(), topic=topic.strip()
-        )
-        importance = 4.0
+        # #614: nothing at parse time. The intent memory ("I went to talk to
+        # X ...") is written by maybe_converse's phase 1.5 IFF the conversation
+        # actually opens -- a request that phase 1.5 drops (pair on cooldown,
+        # target busy/walking) would otherwise stamp a false dialogue-tier
+        # record, and the un-settled initiator can retry every tick for the
+        # whole cooldown window.
+        return
     elif verb == "wait":
         # Spacer / one-tick idle (#300 mock spacers, or a brain that omitted
         # the duration): still not worth a memory -- identical 1.0 "I did wait"
@@ -1592,7 +1592,8 @@ def maybe_converse(
             del active[key]
             finished_this_step.update((ac.a, ac.b))
 
-    # (2) Start new conversations among settled, co-located, non-busy residents.
+    # Residents already conversing (or whose conversation just finished this
+    # tick) are ineligible to start another one below (#187).
     busy = {
         name for ac in active.values() for name in (ac.a, ac.b)
     } | finished_this_step
@@ -1611,9 +1612,7 @@ def maybe_converse(
         if not target_name:
             continue
         char.set_property("talk_request", False)
-        # talk_topic is write-only here: it already rode into memory via
-        # remember_outcome at parse time (that's what threads it into the
-        # opener below). Clearing it just retires the one-shot marker pair.
+        topic = char.get_property("talk_topic") or ""
         char.set_property("talk_topic", False)
         target = chars.get(target_name)
         if (
@@ -1628,13 +1627,23 @@ def maybe_converse(
         key = frozenset((name, target_name))
         if key in active or step - cooldowns.get(key, -(10**9)) < cooldown_steps:
             continue
+        # Record the intent only now that the conversation actually opens (a
+        # dropped request must leave no false record -- the un-settled
+        # initiator can retry every tick), and BEFORE the first line: the
+        # opener's partner-name retrieval surfaces this fresh topic memory.
+        # That's the #614 topic-threading seam, dialogue-tier importance.
+        char.agent.memory.add_observation(
+            render("reflection", verb="talk_to", person=target_name, topic=topic),
+            turn=step,
+            importance=convo.DEFAULT_CHAT_IMPORTANCE,
+        )
         ac = ActiveConversation(
             a=name,
             b=target_name,
             convo=convo.Conversation(participants=(name, target_name)),
-            # The initiator opens: its fresh topic memory (remember_outcome,
-            # this same tick) surfaces in the opener's partner-name retrieval
-            # -- topic threading with no new dialogue machinery.
+            # The initiator opens: its fresh topic memory (written just above)
+            # surfaces in the opener's partner-name retrieval -- topic
+            # threading with no new dialogue machinery.
             next_speaker=name,
             started=step,
         )

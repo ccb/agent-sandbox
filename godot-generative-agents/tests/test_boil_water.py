@@ -240,9 +240,12 @@ def test_action_names_include_authored_verbs():
 
 def test_wait_commands_now_enter_the_tool_enum():
     """Finding A (#590 review) excluded `wait` as a deliberately-stripped idle
-    verb; #614 retires that -- WaitPenn's required duration_minutes makes a
-    chosen wait SETTLE like perform, so an authored stop's `wait` spacers now
-    promote like any other verb, same as the real authored verbs."""
+    verb; #614 retires the strip, so an authored stop's `wait` spacers now
+    promote like any other verb, same as the real authored verbs. This pins
+    verb derivation only: the world here registers no WaitPenn, so its `wait`
+    is the engine's bare (settle-less) one -- the settle safety the removal
+    leans on (a required duration_minutes) lives with WaitPenn in the Penn
+    worlds (test_universal_verbs_614 pins that half)."""
     persona = _persona(
         [
             {

@@ -342,10 +342,10 @@ class TalkTo(base.Action):
     ``talk_request`` (+ optional ``talk_topic``) marker on the actor, which
     ``maybe_converse`` consumes THIS SAME TICK to open a #371
     ActiveConversation -- so bubbles/feed/#582 consequences all ride the
-    existing machinery. The topic threads into the opener via the reflection
-    memory remember_outcome writes at parse time (the dialogue seam's opener
-    retrieval queries the partner's name and surfaces it) -- no new dialogue
-    machinery.
+    existing machinery. The topic threads into the opener via the intent
+    memory maybe_converse writes when the conversation actually opens (the
+    dialogue seam's opener retrieval queries the partner's name and surfaces
+    it) -- no new dialogue machinery, and a dropped request records nothing.
 
     Gate = the same fact curation reads (action_tools_for drops/enum-fills the
     tool from co-located living characters): target matched in the actor's room
@@ -379,8 +379,12 @@ class TalkTo(base.Action):
         self.command = command
         self.character = self.acting_character(command, hint="talker")
         # Match the person against the pre-topic head only, so a topic that
-        # happens to contain a resident's name can't hijack the match.
+        # happens to contain a resident's name can't hijack the match -- and
+        # with the verb token dropped, since character_in_room scans by
+        # substring and a resident named e.g. "Al" would match inside the
+        # literal "talk_to".
         head, _, tail = command.partition(" about ")
+        _, _, head = head.partition(" ")
         self.target = self.character_in_room(head, self.character)
         self.topic = tail.strip()
 

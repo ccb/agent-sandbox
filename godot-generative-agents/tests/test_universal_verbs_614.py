@@ -25,8 +25,11 @@ from backend.cognition import (  # noqa: E402
     remember_outcome,
 )
 from backend.prompt_templates import render  # noqa: E402
+from backend.run_simulation import step  # noqa: E402
+from backend.sim_config import CognitionConfig  # noqa: E402
 from penn_world import PENN_ACTION_VERBS, PENN_EXTRA_ACTIONS  # noqa: E402
 from text_adventure_games import conversation as convo  # noqa: E402
+from text_adventure_games.llm_client import ToolCallResult  # noqa: E402
 
 _LOCATIONS = [
     {"name": "Plaza", "description": "the plaza", "address": None, "hub": True},
@@ -332,6 +335,9 @@ def test_talk_request_respects_the_pair_cooldown():
     assert completed == 0
     assert frame["Ada"].get("chat") is None
     assert chars["Ada"].get_property("talk_request") is False  # still consumed
+    # The dropped request leaves no false "I went to talk to Bo." record.
+    texts = [r.text for r in chars["Ada"].agent.memory.retrieve(query="Bo", turn=1)]
+    assert "I went to talk to Bo." not in texts
 
 
 def test_talk_request_dropped_while_target_is_walking():
@@ -397,11 +403,93 @@ def test_talk_to_reflection_memory_carries_the_topic():
     )
 
 
-def test_talk_to_command_writes_the_topic_memory_at_parse_time():
-    game, chars = _world(["Ada", "Bo"])
-    _colocate(game, chars, ["Ada", "Bo"])
+def test_talk_to_memory_is_written_only_when_the_conversation_opens():
+    # Parse alone records nothing: a request phase 1.5 drops (cooldown, busy
+    # target) must not stamp a false 4.0 memory on every un-settled retry.
+    brain = _ScriptedConvoBrain(["About that demo..."])
+    game, chars, state, frame, order = _request_setup(brain)
     ada = chars["Ada"]
     assert game.parser.parse_command("talk_to Bo about the demo", actor=ada)
     remember_outcome(ada, "talk_to Bo about the demo", 0)
     texts = [r.text for r in ada.agent.memory.retrieve(query="Bo", turn=0)]
+    assert "I went to talk to Bo about the demo." not in texts
+    # The open writes it -- before the first line, so the opener's retrieval
+    # (query = partner name) can thread the topic into what gets said.
+    maybe_converse(game, chars, state, frame, 0, {}, order, active={})
+    texts = [r.text for r in ada.agent.memory.retrieve(query="Bo", turn=0)]
     assert "I went to talk to Bo about the demo." in texts
+
+
+def test_talk_to_target_match_skips_the_verb_token():
+    # character_in_room scans by substring: a resident named "Al" sits inside
+    # the literal "talk_to", so the match must only see the person head.
+    game, chars = _world(["Ada", "Al", "Bo"])
+    _colocate(game, chars, ["Ada", "Al", "Bo"])
+    assert game.parser.parse_command("talk_to Bo", actor=chars["Ada"])
+    assert chars["Ada"].get_property("talk_request") == "Bo"
+    # And an absent target fails the gate instead of ghost-matching Al.
+    game2, chars2 = _world(["Ada", "Al"])
+    _colocate(game2, chars2, ["Ada", "Al"])
+    assert not game2.parser.parse_command("talk_to Zoe", actor=chars2["Ada"])
+    assert chars2["Ada"].get_property("talk_request") is False
+
+
+def test_clockless_wait_is_a_plain_one_tick_idle():
+    # With no SimClock the #581 duration can't be honored (the settle trigger
+    # reads minutes -> steps), so step() drops the stash pre-command: no
+    # "waiting" stamp, no honest-idle memory, no settle -- the predicates
+    # agree instead of recording a settled wait that never settles.
+    class _WaitOnceBrain:
+        def __init__(self):
+            self.context: dict = {}
+
+        def call_tools(self, messages, tools, **kwargs):
+            return ToolCallResult(
+                text=None,
+                tool_calls=[
+                    {
+                        "id": "c1",
+                        "name": "wait",
+                        "arguments": {"reasoning": "idle", "duration_minutes": 20},
+                    }
+                ],
+            )
+
+    class _StubMap:
+        def walk_path(self, src, address, furniture=None):
+            return []
+
+    game, chars = _world(
+        ["Ada"], extra=list(PENN_ACTION_VERBS), llm_client=_WaitOnceBrain()
+    )
+    ada = chars["Ada"]
+    ada.set_property("activity", "reading")
+    state = {
+        "Ada": {
+            "tile": (0, 0),
+            "path": [],
+            "pron": "\U0001f9d1",
+            "desc": "idling",
+            "performing": False,
+            "perform_until": None,
+            "reasoning": "",
+            "memories": [],
+            "chat": None,
+            "stop_since": 0,
+        }
+    }
+    step(
+        game,
+        {"Ada": ada},
+        state,
+        0,
+        order=["Ada"],
+        world_map=_StubMap(),
+        emoji={"Ada": "\U0001f9d1"},
+        clock=None,
+        cog=CognitionConfig(),
+    )
+    assert ada.get_property("activity") == "reading"  # no "waiting" stamp
+    assert state["Ada"]["performing"] is False  # did not settle
+    texts = [r.text for r in ada.agent.memory.retrieve(query="waited", turn=0)]
+    assert "I waited; nothing needed doing." not in texts
