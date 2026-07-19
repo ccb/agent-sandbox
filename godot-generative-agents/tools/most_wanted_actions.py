@@ -227,8 +227,9 @@ def render_markdown(report: Report) -> str:
         f"- distinct groups: {len(report.rows)}",
         f"- trigger mix: {trigger_line}",
         "",
-        "| Rank | Desired action | Count | Agents | Turns | Trigger mix | Example reasons |",
-        "|---|---|---|---|---|---|---|",
+        "| Rank | Desired action | Count | Agents | Turns | Trigger mix |"
+        " Example reasons | Goals blocked |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for rank, row in enumerate(report.rows, start=1):
         triggers = ", ".join(f"{k}={v}" for k, v in row.trigger_mix.items())
@@ -237,11 +238,16 @@ def render_markdown(report: Report) -> str:
             if row.example_reasons
             else "-"
         )
+        goals = (
+            "; ".join(_escape_md(g) for g in row.example_goals)
+            if row.example_goals
+            else "-"
+        )
         lines.append(
             f"| {rank} | {_escape_md(row.key)}"
             f' (e.g. "{_escape_md(row.representative)}") | {row.count} |'
             f" {row.distinct_agents} | {row.first_turn}-{row.last_turn} |"
-            f" {triggers} | {reasons} |"
+            f" {triggers} | {reasons} | {goals} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -260,6 +266,7 @@ def render_json(report: Report) -> dict:
                 "distinct_agents": row.distinct_agents,
                 "trigger_mix": row.trigger_mix,
                 "example_reasons": row.example_reasons,
+                "example_goals": row.example_goals,
                 "first_turn": row.first_turn,
                 "last_turn": row.last_turn,
             }

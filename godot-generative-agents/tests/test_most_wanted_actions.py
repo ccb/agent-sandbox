@@ -30,8 +30,8 @@ trigger="parse_gap") wouldn't arise from the real engine today but are legal
 inputs the normalizer must still handle. The `desired` phrases are
 action-shaped (things an agent tried to DO, not amenities it wants built)
 and every actor-bearing row carries the populated `goals`/`scope` snapshot
-both capture paths record -- mirroring real wishes even though the v1
-report doesn't consume those fields yet.
+both capture paths record -- mirroring real wishes. `goals` is aggregated
+into `example_goals` as of #688; `scope` remains unconsumed.
 """
 
 from __future__ import annotations
@@ -188,18 +188,22 @@ EXPECTED_MARKDOWN = (
     "- distinct groups: 4\n"
     "- trigger mix: parse_gap=5, proposed=7\n"
     "\n"
-    "| Rank | Desired action | Count | Agents | Turns | Trigger mix | Example reasons |\n"
-    "|---|---|---|---|---|---|---|\n"
+    "| Rank | Desired action | Count | Agents | Turns | Trigger mix |"
+    " Example reasons | Goals blocked |\n"
+    "|---|---|---|---|---|---|---|---|\n"
     '| 1 | book a study room (e.g. "book a study room") | 5 | 3 | 1-12 |'
     " parse_gap=1, proposed=4 | midterms are coming up; group project needs space;"
-    " the library is always full |\n"
+    " the library is always full | pass the biology midterm; finish the group project;"
+    " find a quiet spot to write my essay |\n"
     '| 2 | way to get upstairs (e.g. "propose a way to get upstairs") | 3 | 3 | 3-10 |'
-    " parse_gap=2, proposed=1 | stairs are exhausting |\n"
+    " parse_gap=2, proposed=1 | stairs are exhausting | get to the seminar on the"
+    " second floor; deliver a note to the second-floor office |\n"
     '| 3 | lock up my bike outside the library (e.g. "lock up my bike outside the library")'
     " | 3 | 2 | 2-9 |"
-    " parse_gap=1, proposed=2 | mine keeps getting stolen; need somewhere safe to lock up |\n"
+    " parse_gap=1, proposed=2 | mine keeps getting stolen; need somewhere safe to lock up |"
+    " keep my bike safe while I study; return my library books |\n"
     '| 4 | dance with the statue (e.g. "dance with the statue") | 1 | 0 | 4-4 |'
-    " parse_gap=1 | - |\n"
+    " parse_gap=1 | - | - |\n"
 )
 
 EXPECTED_JSON = {
@@ -218,6 +222,11 @@ EXPECTED_JSON = {
                 "group project needs space",
                 "the library is always full",
             ],
+            "example_goals": [
+                "pass the biology midterm",
+                "finish the group project",
+                "find a quiet spot to write my essay",
+            ],
             "first_turn": 1,
             "last_turn": 12,
         },
@@ -228,6 +237,10 @@ EXPECTED_JSON = {
             "distinct_agents": 3,
             "trigger_mix": {"parse_gap": 2, "proposed": 1},
             "example_reasons": ["stairs are exhausting"],
+            "example_goals": [
+                "get to the seminar on the second floor",
+                "deliver a note to the second-floor office",
+            ],
             "first_turn": 3,
             "last_turn": 10,
         },
@@ -241,6 +254,10 @@ EXPECTED_JSON = {
                 "mine keeps getting stolen",
                 "need somewhere safe to lock up",
             ],
+            "example_goals": [
+                "keep my bike safe while I study",
+                "return my library books",
+            ],
             "first_turn": 2,
             "last_turn": 9,
         },
@@ -251,6 +268,7 @@ EXPECTED_JSON = {
             "distinct_agents": 0,
             "trigger_mix": {"parse_gap": 1},
             "example_reasons": [],
+            "example_goals": [],
             "first_turn": 4,
             "last_turn": 4,
         },
@@ -279,9 +297,9 @@ def test_escape_md_escapes_pipes_and_newlines():
 
 
 def test_render_markdown_escapes_pipes_and_newlines_in_a_row():
-    # A hand-built row (not the fixture) whose key/representative/reason all
-    # carry a literal "|" and a newline -- free-form agent/player text that
-    # would otherwise break the Markdown table's column count.
+    # A hand-built row (not the fixture) whose key/representative/reason/goal
+    # all carry a literal "|" and a newline -- free-form agent/player text
+    # that would otherwise break the Markdown table's column count.
     row = mwa.ActionDemand(
         key="fix the | broken\nsign",
         representative="fix the | broken\nsign please",
@@ -289,7 +307,7 @@ def test_render_markdown_escapes_pipes_and_newlines_in_a_row():
         distinct_agents=1,
         trigger_mix={"proposed": 1},
         example_reasons=["it's confusing | unsafe\nat night"],
-        example_goals=[],
+        example_goals=["stay safe | sound\nno matter what"],
         first_turn=1,
         last_turn=1,
     )
@@ -306,6 +324,7 @@ def test_render_markdown_escapes_pipes_and_newlines_in_a_row():
     assert unescaped_pipes == header.count("|")
     assert "fix the \\| broken sign" in data_line
     assert "it's confusing \\| unsafe at night" in data_line
+    assert "stay safe \\| sound no matter what" in data_line
 
 
 # --- CLI: writes both output files -----------------------------------------
