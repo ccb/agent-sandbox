@@ -261,7 +261,13 @@ def main(argv: list[str] | None = None) -> int:
         "--format",
         choices=("md", "json"),
         default="md",
-        help="stdout format when neither --out-md nor --out-json is given (default: md)",
+        help=(
+            "stdout format when neither --out-md nor --out-json is given "
+            "(default: md); ignored if either --out-md or --out-json is "
+            "given -- in that case nothing prints to stdout except the "
+            "'wrote <path>' lines, and both formats are written via their "
+            "respective flags regardless of --format"
+        ),
     )
     ap.add_argument(
         "--out-md", type=Path, help="write the Markdown report to this path"
