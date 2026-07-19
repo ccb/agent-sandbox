@@ -254,6 +254,9 @@ def main() -> int:
     # --persist hands the RunStore; the lean memory_streams cannot rehydrate.
     memory_records: dict = {}
     events: list = []
+    # The run's ActionWish demand log (#622) -- empty under the mock brain by
+    # construction (it never proposes and its authored commands always parse).
+    wishes: list = []
 
     # --brain scripted (#563): a key-free, deterministic brain that still drives
     # the full tool loop -- cognition tools, conversation, reflection -- so the
@@ -282,6 +285,7 @@ def main() -> int:
         out_memories=memory_streams,
         out_memory_records=memory_records,
         out_events=events,
+        out_wishes=wishes,
         extra_action_names=PENN_ACTION_VERBS,
         cognition=cognition,
         reflector_client=reflector,
@@ -327,6 +331,11 @@ def main() -> int:
         # from GameEvent.to_primitive(). The viewer ignores unknown top-level
         # keys; post-hoc metrics (#299) read this instead of the memory stream.
         "events": events,
+        # The run's ActionWish demand log (#622): WishState-shaped records
+        # straight from ActionWish.to_primitive() -- empty under the mock
+        # brain by construction. The eventual #623 "most wanted" report reads
+        # this instead of re-deriving demand from the memory stream.
+        "wishes": wishes,
     }
 
     # Light up the viewer's speech-bubble + conversation-link feature with authored
@@ -354,10 +363,13 @@ def main() -> int:
         for name in order:
             store.record_memories(run_id, name, memory_records.get(name, []))
         store.append_events(run_id, replay["events"])
+        store.append_wishes(run_id, replay["wishes"])
         store.update_run(
             run_id, status="finished", steps=len(replay["frames"]), cost=0.0
         )
-        print(f"Persisted run {run_id} to {store.root} (frames + events + sim.db).")
+        print(
+            f"Persisted run {run_id} to {store.root} (frames + events + wishes + sim.db)."
+        )
     return 0
 
 

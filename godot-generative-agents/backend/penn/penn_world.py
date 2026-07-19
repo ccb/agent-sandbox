@@ -82,7 +82,9 @@ SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
 # bake's post-hoc one and the live server's on-the-fly one) only fire a meeting
 # when the participants stay together long enough for the whole exchange to play
 # out on the map (otherwise the bubbles/link would linger after they part).
-# Keep in sync with the constants of the same name in viewer.gd.
+# Real #371 conversations get the same guarantee from the playback hold
+# (cognition.CONVERSATION_LINE_PLAYBACK_STEPS, issue #673). Keep in sync with
+# the constants of the same name in viewer.gd.
 DIALOGUE_LINE_STEPS = 14
 DIALOGUE_FADE_STEPS = 2
 
@@ -264,9 +266,20 @@ def _gate_conversations_by_perception(built):
     game, characters = built
 
     def audience_for(speaker, message, target=None):
+        # Two gates (issue #662): perceivable_locations picks the *rooms* in
+        # earshot, can_perceive then drops same-room residents who are actually
+        # out of range -- the outdoor hub is one room spanning the whole campus,
+        # so room membership alone would let agents converse across the map.
+        # Deliberately observer-only: the gate reads the SPEAKER's vision_r, so
+        # if per-agent vision ever diverges, A can address a B who can't
+        # perceive A back (shouting at someone with narrow sight is fine).
         audience = []
         for loc in game.perceivable_locations(speaker):
-            audience.extend(c for c in loc.characters.values() if c is not speaker)
+            audience.extend(
+                c
+                for c in loc.characters.values()
+                if c is not speaker and game.can_perceive(speaker, c)
+            )
         return audience
 
     game.audience_for = audience_for
@@ -366,6 +379,12 @@ def make_murky_pot() -> Item:
     pot.set_property("requires_boiling", True)
     pot.set_property("is_boiled", False)
     pot.set_property("portions", 3)
+    # Aliases (#635): the full name is long and a model naturally says "water" /
+    # "murky water" / "the pot". Safe because Drink matches *carried* items only
+    # and the arc never carries both pots at once (make consumes this one), so
+    # the "water"/"pot" it shares with the boiled pot can't collide in practice.
+    for alias in ("water", "murky water", "pot", "murky pot"):
+        pot.add_alias(alias)
     return pot
 
 
@@ -382,6 +401,10 @@ def make_boiled_pot() -> Item:
     pot.set_property(Property.DRINKABLE, True)
     pot.set_property("is_boiled", True)
     pot.set_property("portions", 3)
+    # Aliases (#635): see make_murky_pot -- the recovery drink must be nameable
+    # as "boiled water" / "water" / "the pot", not only the full string.
+    for alias in ("water", "boiled water", "pot", "boiled pot"):
+        pot.add_alias(alias)
     return pot
 
 
@@ -432,12 +455,28 @@ def _furnish_boil_water(game) -> None:
     hall.add_item(make_murky_pot())
 
 
-def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
+def build_penn_world(
+    world_data=WORLD_DATA, upenn_dir=UPENN_DIR, *, withhold_boil: bool = False
+) -> PennWorld:
     """Load + patch the Penn world, exactly as the replay bake configures it.
 
     Every call returns a *fresh* world (fresh ``WorldMap``, fresh patch state),
     because the routing patches are stateful -- a live server's ``reset()``
-    must call this again rather than reuse the old map."""
+    must call this again rather than reuse the old map.
+
+    Pass ``withhold_boil=True`` to build the world WITHOUT registering the boil
+    Recipe (#624): restores the #300 capability gap ("no agent can boil water
+    yet") on demand, instrumented, for the boil-wish-articulation experiment
+    (``experiments/boil_wish_articulation.py``). Houston Hall is still furnished
+    with the murky pot / sink / stove -- an agent can see and reach for them --
+    only the Recipe (and so the ``make``/Craft route to it) is missing, and
+    ``game.recipes`` stays empty. A YAML flag was considered and rejected: the
+    Penn world loader (``load_world_data``) silently drops unknown keys, so a
+    flag added to a world YAML would need the loader taught to read it too --
+    an explicit builder parameter is the direct, unambiguous wiring. Every
+    other call site (the bake, the live server, #595's experiment) passes the
+    default ``False`` and is unaffected.
+    """
     personas, locations = load_world_data(world_data)
     meetings = _load_meetings(world_data)
 
@@ -460,7 +499,8 @@ def build_penn_world(world_data=WORLD_DATA, upenn_dir=UPENN_DIR) -> PennWorld:
             wm, personas, locations, extra_actions=PENN_EXTRA_ACTIONS
         )
         _furnish_boil_water(game)
-        game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
+        if not withhold_boil:
+            game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))
 
     return PennWorld(

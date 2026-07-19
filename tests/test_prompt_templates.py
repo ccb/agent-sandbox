@@ -28,7 +28,10 @@ _INSTRUCTION = (
     "game command to execute. Reply with exactly three lines:\n"
     "Reasoning: <one short sentence explaining your choice>\n"
     "Action: <the command, e.g. 'attack player', 'go north', 'take sword'>\n"
-    "Duration: <estimated in-game minutes this action takes, e.g. 5>"
+    "Duration: <estimated in-game minutes this action takes, e.g. 5>\n"
+    "If no available command can accomplish what you need, your Action may be: "
+    "propose <what you need> because <why> — this records your request for the "
+    "world's designers."
 )
 
 
@@ -180,6 +183,18 @@ def test_match_intent():
     assert prompt_templates.render("match_intent") == (
         "You are the parser for a text adventure game. For a user input, say which "
         "of the commands it most closely matches. The commands are:"
+    )
+
+
+def test_match_intent_with_decline_option():
+    # The agent-driven rendering (#621): one extra sentence licensing the
+    # "none of these fit" option. The default rendering above must stay
+    # byte-identical -- that IS the human-player path.
+    assert prompt_templates.render("match_intent", allow_none=True) == (
+        "You are the parser for a text adventure game. For a user input, say which "
+        "of the commands it most closely matches. If none of them fit what the "
+        "input asks for, choose the option that says none of these commands fit "
+        "the input. The commands are:"
     )
 
 

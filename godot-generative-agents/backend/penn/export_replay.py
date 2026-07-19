@@ -2,10 +2,11 @@
 
 The live->replay bridge: ``serve_penn --persist`` (or a persisted bake)
 records a run into the #304 RunStore; this module reads it back out as the
-exact four-key replay the bake writes -- ``{meta, frames, memory_streams,
-events}``, every shape pinned by the #305 contract -- so a recorded live run
-re-opens in the Godot viewer ("Open a local replay file" in the landing
-menu) with bubbles, memory streams, and timeline markers intact.
+exact five-key replay the bake writes -- ``{meta, frames, memory_streams,
+events, wishes}``, every shape pinned by the #305 contract -- so a recorded
+live run re-opens in the Godot viewer ("Open a local replay file" in the
+landing menu) with bubbles, memory streams, timeline markers, and demand
+records (#622) intact.
 
     uv run python -m backend.penn.export_replay              # newest run
     uv run python -m backend.penn.export_replay <run_id> --out replay.json
@@ -45,6 +46,7 @@ def build_replay(store: RunStore, run_id: str) -> dict:
             p["name"]: store.memories_for(run_id, p["name"]) for p in meta["personas"]
         },
         "events": store.read_events(run_id),
+        "wishes": store.read_wishes(run_id),
     }
 
 
@@ -86,8 +88,8 @@ def main() -> int:
     print(
         f"Wrote {out.resolve()} ({len(replay['frames'])} steps, "
         f"{len(replay['meta']['personas'])} personas, "
-        f"{len(replay['events'])} events). Open it in the viewer via "
-        '"Open a local replay file".'
+        f"{len(replay['events'])} events, {len(replay['wishes'])} wishes). "
+        'Open it in the viewer via "Open a local replay file".'
     )
     return 0
 

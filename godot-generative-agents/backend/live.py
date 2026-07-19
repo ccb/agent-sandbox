@@ -59,6 +59,16 @@ class SimStepper(Protocol):
     * ``last_deciders`` -- how many agents were at a decision point in the last
       ``tick()`` (#366); when present, the loop stamps it onto each ``frame``
       record so a viewer can tell a "thinking" stall from a frozen sim (#372).
+    * ``drain_wishes() -> list[dict]`` -- buffered ``ActionWish.to_primitive()``
+      records (#622) formed during the last ``tick()``; when present, the loop
+      appends each as its OWN ``kind: "wish"`` record (not wrapped in
+      ``engine`` -- a wish is a first-class demand-signal record). Empty for
+      the whole run under a mock/scripted brain that never proposes.
+    * ``drain_deciding() -> list[dict]`` -- buffered ``{agent, state, step,
+      elapsed_ms?}`` begin/end records from decisions made during the last
+      ``tick()`` (#551); when present, the loop appends each as its own
+      ``kind: "deciding"`` record, so a viewer can show which agent is
+      currently thinking rather than just a step-level decider count.
     * ``run_usage() -> dict`` -- additive per-run usage fields
       (``run_calls``/``run_cost_usd``/``run_by_actor``) merged into
       ``GET /usage`` beside the lifetime summary (#526, #569); the ledger itself
@@ -221,12 +231,18 @@ class LiveRunController:
             drain = getattr(self._stepper, "drain_events", None)
             events = list(drain()) if drain is not None else []
             deciders = getattr(self._stepper, "last_deciders", None)
+            drain_w = getattr(self._stepper, "drain_wishes", None)
+            wishes = list(drain_w()) if drain_w is not None else []
+            drain_dec = getattr(self._stepper, "drain_deciding", None)
+            deciding = list(drain_dec()) if drain_dec is not None else []
         return {
             "generation": generation,
             "step": step,
             "agents": agents,
             "events": events,
             "deciders": deciders,
+            "wishes": wishes,
+            "deciding": deciding,
         }
 
     def pause(self) -> None:
@@ -266,10 +282,11 @@ async def run_loop(
     """The #349 stepping task: sleep, tick in a worker thread, publish.
 
     The tick boundary is the publish point (#262): each completed step appends
-    one ``frame`` record (plus any drained ``engine`` records), which wakes
-    every ``WS /ws`` subscriber. Pausing keeps the task alive (reads keep
-    working; ticking stops); cancellation is the clean shutdown path and still
-    publishes a final ``status(reason="stopped")`` record.
+    one ``frame`` record (plus any drained ``engine`` records and, when a
+    stepper wishes, ``wish`` records, #622), which wakes every ``WS /ws``
+    subscriber. Pausing keeps the task alive (reads keep working; ticking
+    stops); cancellation is the clean shutdown path and still publishes a
+    final ``status(reason="stopped")`` record.
 
     ``tick_seconds`` is the *target* cadence: each sleep subtracts the wall
     time the previous tick actually took (:func:`_pace`), so LLM-heavy
@@ -288,12 +305,41 @@ async def run_loop(
                 elapsed = 0.0  # a paused loop keeps its full-tick cadence
                 continue
             started = time.monotonic()
-            result = await loop.run_in_executor(None, controller.tick_once)
+            try:
+                result = await loop.run_in_executor(None, controller.tick_once)
+            except Exception as exc:
+                # A tick that raises -- a persistence failure, a full disk, an
+                # event that slipped every tolerant path -- must not silently
+                # kill the loop task and truncate the run (the old behavior:
+                # fall through to the finally's spurious 'stopped', keep serving
+                # reads, never tick again). Pause with a visible error status so
+                # the cause is diagnosable and reads keep working (#637).
+                # CancelledError is a BaseException, so clean shutdown still
+                # propagates to the finally below.
+                controller.pause()
+                elapsed = 0.0
+                log.append(
+                    "status",
+                    reason="error",
+                    error=f"{type(exc).__name__}: {exc}",
+                    **controller.status(),
+                )
+                continue
             elapsed = time.monotonic() - started
             if result["generation"] != controller.generation:
                 continue  # a reset raced this tick; drop the stale frame
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
+                # A terminal tick publishes no frame, but tick_once still drained
+                # the deciding buffer into result["deciding"] -- and a parked #366
+                # straggler may have appended its `end` there after the last real
+                # tick. Publish those before "finished" (the buffer is already
+                # cleared, so it's here or nowhere), else the agent's thinking
+                # bubble stays stuck on the finished screen (#598 review). Engine
+                # events stay empty by construction (tick() returns None before it
+                # logs any), so only deciding needs republishing here.
+                for rec in result.get("deciding", ()):
+                    log.append("deciding", **rec)
                 log.append("status", reason="finished", **controller.status())
                 continue
             extra = (
@@ -308,6 +354,10 @@ async def run_loop(
             )
             for event in result["events"]:
                 log.append("engine", step=result["step"], event=event)
+            for wish in result.get("wishes", ()):
+                log.append("wish", **wish)
+            for rec in result.get("deciding", ()):
+                log.append("deciding", **rec)
     finally:
         controller.running = False
         log.append("status", reason="stopped", **controller.status())

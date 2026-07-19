@@ -310,6 +310,46 @@ def test_run_loop_drops_the_in_flight_tick_after_a_reset_bumps_generation():
     assert kinds[-1] == "status"  # ... stopped
 
 
+def test_run_loop_pauses_on_a_tick_error_instead_of_dying():
+    # A tick that raises (a persistence failure -- a bad event, a torn write, a
+    # full disk) must NOT silently kill the loop task and truncate the run. The
+    # only handler used to be a `finally:` that logged a spurious 'stopped', so
+    # the server kept answering reads but never ticked again, losing every later
+    # frame. run_loop must catch it, publish a visible status(reason='error')
+    # with the cause, and pause -- alive, serving, diagnosable (#637).
+    async def scenario():
+        def frames(step):
+            raise RuntimeError("boom: events.jsonl write failed")
+
+        stepper = ScriptedStepper(frames, meta=_META)
+        controller = LiveRunController(stepper, threading.Lock())
+        log = EventLog()
+        task = asyncio.create_task(run_loop(controller, log, 0.001))
+        async with asyncio.timeout(5):
+            while not any(
+                r["kind"] == "status" and r.get("reason") == "error"
+                for r in log.since(0)
+            ):
+                await asyncio.sleep(0.001)
+        records = list(log.since(0))  # capture BEFORE cancel adds its 'stopped'
+        alive, paused = not task.done(), controller.paused
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        return records, alive, paused
+
+    records, alive, paused = asyncio.run(scenario())
+    errors = [
+        r for r in records if r["kind"] == "status" and r.get("reason") == "error"
+    ]
+    assert errors, "a raising tick should publish status(reason='error')"
+    assert "boom" in errors[0].get("error", "")  # the cause is surfaced, not hidden
+    assert alive  # the loop task did NOT die
+    assert paused  # ticking stopped; reads keep working
+    # And it did NOT emit the spurious 'stopped' a crash-through-finally does.
+    assert not any(r.get("reason") == "stopped" for r in records)
+
+
 # --- resume after finished (#349) ------------------------------------------
 
 
@@ -361,6 +401,50 @@ def test_game_event_rows_ride_the_engine_feed():
         if e["kind"] == "engine" and e["event"].get("kind") == "game_event"
     ]
     assert rows == [record]
+
+
+def test_wish_rows_ride_their_own_top_level_kind():
+    """#622: a stepper's drained wish records come out of GET /events as their
+    OWN top-level ``kind: "wish"`` record -- NOT wrapped inside "engine" the
+    way llm_call/game_event rows are (contrast the test just above). serve_penn's
+    PennStepper produces these for real (test_wish_feed.py); here a scripted
+    stepper pins the transport."""
+    wish = {
+        "actor": "Diego Torres",
+        "turn": 1,
+        "location": "UPenn:Van Pelt Library",
+        "desired": "a bike rack near the library",
+        "reason": "mine keeps getting stolen",
+        "trigger": "proposed",
+        "goals": [],
+        "scope": [],
+        "raw_command": (
+            "propose a bike rack near the library because mine keeps getting stolen"
+        ),
+        "meta": {},
+    }
+
+    class _WishStepper(ScriptedStepper):
+        def __init__(self):
+            super().__init__(
+                lambda step: {
+                    "a": {"x": step, "y": 0, "act": "walking @ demo", "e": "@"}
+                },
+                meta=_META,
+            )
+            self._drained = False
+
+        def drain_wishes(self):
+            if self._drained:
+                return []
+            self._drained = True
+            return [dict(wish)]
+
+    with _live_client(stepper=_WishStepper()) as c:
+        events = _wait_for_events(c, lambda evs: any(e["kind"] == "wish" for e in evs))
+    rows = [e for e in events if e["kind"] == "wish"]
+    assert len(rows) == 1
+    assert {k: v for k, v in rows[0].items() if k not in ("cursor", "kind")} == wish
 
 
 # --- run registry (#306) -----------------------------------------------------

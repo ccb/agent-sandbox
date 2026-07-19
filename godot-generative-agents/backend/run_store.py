@@ -10,6 +10,7 @@ durable, zero-infrastructure home (SQLite is stdlib; frames are plain JSONL):
         manifest.json           # mirrors the runs row's manifest column
         frames.jsonl            # line N = the step-N frame (dict[str, AgentFrame])
         events.jsonl            # the run's GameEvent log (EventState dicts, #467)
+        wishes.jsonl            # the run's ActionWish log (WishState dicts, #622)
 
 Producers: ``serve_penn --persist`` (live, per tick) and
 ``generate_penn_replay --persist`` (bake, post-hoc). Consumers: the #307
@@ -29,12 +30,13 @@ import secrets
 import shutil
 import sqlite3
 import struct
+import warnings
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.cognition import memories_for_frame
-from backend.contract import AGENT_FRAME_FIELDS, EVENT_STATE_FIELDS
+from backend.contract import AGENT_FRAME_FIELDS, EVENT_STATE_FIELDS, WISH_FIELDS
 from backend.sim_config import RetrievalConfig
 from text_adventure_games.memory import AgentMemory, MemoryRecord
 
@@ -205,14 +207,17 @@ class RunStore:
             raise ValueError(
                 f"{run_id} has {count} frames; expected step {count}, got {step}"
             )
+        # One write of the whole line (json + newline): a crash can leave the
+        # line absent or torn, never a body without its terminator to confuse
+        # the next append's line count.
         with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(frame, ensure_ascii=False, separators=(",", ":")))
-            fh.write("\n")
+            fh.write(
+                json.dumps(frame, ensure_ascii=False, separators=(",", ":")) + "\n"
+            )
 
     def read_frames(self, run_id: str) -> list[dict]:
         """Every persisted frame, in step order."""
-        with self._frames_path(run_id).open("r", encoding="utf-8") as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+        return self._read_jsonl(self._frames_path(run_id))
 
     def _frames_path(self, run_id: str) -> Path:
         path = self.root / run_id / "frames.jsonl"
@@ -222,32 +227,80 @@ class RunStore:
 
     # --- events ---------------------------------------------------------------
 
-    def append_events(self, run_id: str, events: list[dict]) -> None:
+    def append_events(
+        self, run_id: str, events: list[dict], *, skip_bad: bool = False
+    ) -> list[tuple[dict, str]]:
         """Append ``GameEvent.to_primitive()`` dicts to the run's events.jsonl.
 
         Unlike frames there is no step == line invariant: a step can log zero
         or many events and each carries its own ``turn`` -- order is append
-        order. The whole batch is validated first (#305 EventState, keys
-        only), so one bad event keeps the batch off disk. An empty list is a
-        no-op: a run with no events never grows a file.
+        order. An empty list is a no-op: a run with no events never grows a
+        file.
+
+        The whole batch is serialized in memory first, then written in a
+        single ``fh.write`` -- advance-or-nothing. So a record that fails
+        validation (#305 EventState, keys only) OR JSON encoding partway
+        through the batch can never leave a torn prefix on disk to be
+        re-flushed as duplicate lines on the next attempt (#637).
+
+        ``skip_bad=True`` (the live per-tick path) drops each such record and
+        returns them as ``(event, reason)`` pairs -- so one malformed record,
+        e.g. an evolving-schema field the allowlist rejects, never halts the
+        run. The default stays strict: the first bad record raises, exactly as
+        before. Returns the dropped records ([] in strict mode).
         """
         path = self._events_path(run_id)
+        lines: list[str] = []
+        bad: list[tuple[dict, str]] = []
         for event in events:
-            _validate_event(event)
-        if not events:
-            return
-        with path.open("a", encoding="utf-8") as fh:
-            for event in events:
-                fh.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
-                fh.write("\n")
+            try:
+                _validate_event(event)
+                lines.append(
+                    json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                )
+            except (ValueError, TypeError) as exc:
+                if not skip_bad:
+                    raise
+                bad.append((event, str(exc)))
+        if lines:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write("".join(line + "\n" for line in lines))
+        return bad
 
     def read_events(self, run_id: str) -> list[dict]:
         """The run's persisted GameEvent log, in append order ([] when none)."""
         path = self._events_path(run_id)
         if not path.exists():
             return []
+        return self._read_jsonl(path)
+
+    @staticmethod
+    def _read_jsonl(path: Path) -> list[dict]:
+        """Parse a JSONL artifact, tolerating a single torn final line left by
+        a crash mid-append -- an unterminated body with no trailing newline
+        (#637). It is skipped with a warning instead of raising on every
+        subsequent read/export. A terminated-but-invalid *interior* line is
+        real corruption, not a torn tail, and still raises.
+        """
         with path.open("r", encoding="utf-8") as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+            raw = fh.readlines()
+        out: list[dict] = []
+        last = len(raw) - 1
+        for i, line in enumerate(raw):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                if i == last and not line.endswith("\n"):
+                    warnings.warn(
+                        f"{path.name}: ignoring a torn final line "
+                        f"({len(line)} chars, no newline) -- crash mid-append?",
+                        stacklevel=2,
+                    )
+                    continue
+                raise
+        return out
 
     def _events_path(self, run_id: str) -> Path:
         # Existence-check the run DIR, not the file: unlike frames.jsonl
@@ -257,6 +310,54 @@ class RunStore:
         if not run_dir.is_dir():
             raise KeyError(f"unknown run id: {run_id}")
         return run_dir / "events.jsonl"
+
+    # --- wishes (#622) ----------------------------------------------------------
+
+    def append_wishes(
+        self, run_id: str, wishes: list[dict], *, skip_bad: bool = False
+    ) -> list[tuple[dict, str]]:
+        """Append ``ActionWish.to_primitive()`` dicts to the run's wishes.jsonl.
+
+        Mirrors :meth:`append_events` exactly (same append-order-not-line-count
+        contract, same advance-or-nothing batch write, same ``skip_bad``
+        tolerance for #637-style schema drift) -- a wish is a permanent run
+        record like a GameEvent, not an ephemeral per-tick signal. Most runs
+        never call this at all: the mock brain never proposes and its
+        authored commands always parse, so wishes.jsonl is simply absent from
+        a mock-brain run's directory (byte-identical by vacuity, #622).
+        """
+        path = self._wishes_path(run_id)
+        lines: list[str] = []
+        bad: list[tuple[dict, str]] = []
+        for wish in wishes:
+            try:
+                _validate_wish(wish)
+                lines.append(
+                    json.dumps(wish, ensure_ascii=False, separators=(",", ":"))
+                )
+            except (ValueError, TypeError) as exc:
+                if not skip_bad:
+                    raise
+                bad.append((wish, str(exc)))
+        if lines:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write("".join(line + "\n" for line in lines))
+        return bad
+
+    def read_wishes(self, run_id: str) -> list[dict]:
+        """The run's persisted ActionWish log, in append order ([] when none)."""
+        path = self._wishes_path(run_id)
+        if not path.exists():
+            return []
+        return self._read_jsonl(path)
+
+    def _wishes_path(self, run_id: str) -> Path:
+        # Lazily created on first append, like events.jsonl -- a wish-less run
+        # (the common case under the mock brain) never grows a file.
+        run_dir = self.root / run_id
+        if not run_dir.is_dir():
+            raise KeyError(f"unknown run id: {run_id}")
+        return run_dir / "wishes.jsonl"
 
     # --- memories ---------------------------------------------------------------
 
@@ -467,3 +568,17 @@ def _validate_event(event: dict) -> None:
     missing = [k for k in EVENT_STATE_FIELDS if k not in event]
     if missing:
         raise ValueError(f"event is missing {missing}")
+
+
+def _validate_wish(wish: dict) -> None:
+    """Structural #622 WishState check: the ten pinned fields, keys only --
+    same rationale as ``_validate_event`` (a parse-gap wish legitimately
+    carries ``actor=None``, mirroring a world-level GameEvent)."""
+    if not isinstance(wish, dict):
+        raise ValueError("wish must be a dict of WishState fields")
+    unpinned = sorted(set(wish) - set(WISH_FIELDS))
+    if unpinned:
+        raise ValueError(f"wish has unpinned fields: {unpinned}")
+    missing = [k for k in WISH_FIELDS if k not in wish]
+    if missing:
+        raise ValueError(f"wish is missing {missing}")

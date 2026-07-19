@@ -45,6 +45,13 @@ from text_adventure_games.usage import UsageLedger, record_call
 # a single meeting is capped at this many lines.
 CONVERSATION_COOLDOWN_STEPS = 90
 CONVERSATION_MAX_EXCHANGES = 6
+# After its last line a conversation HOLDS both participants in place for the
+# viewer's playback window -- this many steps per transcript line (issue #673).
+# The Godot viewer shows each line for DIALOGUE_LINE_STEPS (viewer.gd) steps, so
+# without the hold the pair would walk off mid-playback and the conversation
+# link would stretch between them across the map. Keep in sync with viewer.gd's
+# DIALOGUE_LINE_STEPS and penn_world.py's injector mirror of the same name.
+CONVERSATION_LINE_PLAYBACK_STEPS = 14
 
 # React-or-continue (issue #370): guards on the perception-driven interruption
 # consult. Per-agent cooldown + a hard per-sim-hour cap, so a busy hallway is
@@ -198,6 +205,9 @@ IMPORTANCE_SCORE_TOOL = {
         "required": ["scores"],
     },
 }
+
+from text_adventure_games.actions.things import CRAFT_VERBS
+from text_adventure_games.enums import ActionName, Property
 
 from . import seed
 from .actions import TalkTo, Travel
@@ -579,6 +589,13 @@ def attach_agents(
         # perceivable_locations reads this to fold nearby residents/objects into
         # memory; with the vanilla Game (no world_map) it just means the room.
         char.vision_r = spec.get("vision_r", vision_r)
+        # Opt-in thirst drive (#594): copy the per-persona rate/threshold onto the
+        # character as properties the step loop's accrue_thirst reads. Absent keys
+        # set nothing, so a normal persona never accrues -> byte-identical bake.
+        if spec.get("thirst_rate"):
+            char.set_property("thirst_rate", spec["thirst_rate"])
+        if spec.get("thirst_threshold"):
+            char.set_property("thirst_threshold", spec["thirst_threshold"])
         # Bind the private memory to this character and seed the day's plan: the
         # whole itinerary, so retrieval has the agent's intentions to surface from
         # turn 0 (and the first stop still mentions destination + activity, which
@@ -601,6 +618,12 @@ def attach_agents(
         # (knowledge) when the upstream assets are available (issue #79). Done
         # before planning so a generative planner can reason over them.
         seed.seed_relationships(agent.memory, relationships.get(char.name, []))
+        # -- Opt-in seeded memories (#595): author t=0 observations (e.g. an aversive
+        # -- "the unboiled water made me sick" memory) so a live brain can retrieve
+        # -- and reason from them. Importance 5.0 matches the plan-memory seed so it
+        # -- ranks highly. Absent key -> nothing added (byte-identical).
+        for text in spec.get("seed_memories") or []:
+            agent.memory.add_observation(text, turn=0, importance=5.0)
         if base_personas_dir:
             tree = seed.load_spatial_memory(base_personas_dir, char.name)
             seed.seed_spatial_knowledge(char, tree)
@@ -688,19 +711,51 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     :class:`~backend.actions.Travel` action matches a command against. The
     menu and the precondition gate can therefore never disagree about which
     venues exist.
+
+    The same enrichment (#635) covers the item-bearing verbs: without it a
+    tool-calling brain must blind-guess the exact item string into the engine's
+    generic free-text ``arguments`` slot, and the Penn boil items ship long,
+    alias-thin names (``pot of murky water``) a model reliably mis-phrases
+    (``water``) -- so the boil arc is unexpressible and #595 measures nothing.
+    We fill each verb's ``arguments`` enum with the *routable argument string*:
+    gettable / drinkable item names in scope for ``get`` / ``drink``, and recipe
+    names for the craft verb (``make``). Every enum is guarded by ``max_enum``
+    (too many candidates -> the slot stays free text, the model reads them off
+    the observation instead). The precondition gate still owns validity -- e.g.
+    Drink's carried-only check -- so enumerating a name never widens what's
+    actually doable; it only makes the name *nameable*.
     """
     agent = char.agent
     tools = tools_for(
         game.parser, actor=char, names=agent.action_names, max_enum=max_enum
     )
     destinations = sorted(game.locations)
-    if len(destinations) <= max_enum:
-        for tool in tools:
-            if tool["name"] == Travel.ACTION_NAME:
-                prop = tool["parameters"]["properties"].get("destination")
-                if prop is not None:
-                    prop["enum"] = destinations
-    # else: too many venues to enumerate -- the slot stays free text
+    # Per-verb enum of the exact argument string the model should emit. Keyed by
+    # the verb (== tool name); the craft verbs are matched separately below since
+    # any of CRAFT_VERBS ("make"/"cook"/...) may be the authored one.
+    scope = game.parser.get_items_in_scope(char)
+    arg_enums = {
+        ActionName.GET: sorted(
+            n for n, it in scope.items() if it.get_property(Property.GETTABLE)
+        ),
+        ActionName.DRINK: sorted(
+            n for n, it in scope.items() if it.get_property(Property.DRINKABLE)
+        ),
+    }
+    craftable = sorted({n for r in getattr(game, "recipes", []) for n in r.names()})
+    for tool in tools:
+        name = tool["name"]
+        props = tool["parameters"]["properties"]
+        if name == Travel.ACTION_NAME:
+            if len(destinations) <= max_enum and "destination" in props:
+                props["destination"]["enum"] = destinations
+            continue
+        values = craftable if name in CRAFT_VERBS else arg_enums.get(name)
+        if values and len(values) <= max_enum and "arguments" in props:
+            props["arguments"]["enum"] = values
+            # Overwrite the engine's generic placeholder ("... e.g. 'player with
+            # club'"), which actively misleads once the slot is a closed menu.
+            props["arguments"]["description"] = "choose exactly one of the listed names"
 
     # Bespoke curation for talk_to (#614): "another living character is
     # co-located" is not expressible as a REQUIRED_AFFORDANCES tag -- the #612
@@ -713,7 +768,9 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     # standing at the hub, never scripted with an agent) would be offered as
     # a talk target it can never actually converse with. The person slot's
     # enum comes from the same character dict the gate matches against, so
-    # menu and gate cannot disagree about who is present.
+    # menu and gate cannot disagree about who is present. (TalkTo's slots are
+    # ``person``/``topic``, never the engine's generic ``arguments``, so the
+    # #635 enum loop above leaves it untouched.)
     others = sorted(
         c.name
         for c in (char.location.characters.values() if char.location else [])
@@ -1022,6 +1079,18 @@ def observe_and_decide(
     context = decide_context_block(agent, step, clock, stop_since)
     if context:
         base = f"{base}\n\n{context}"
+    # Perceivable needs/consequences (#594): surface thirst + sickness in the
+    # decide prompt so a live brain can reason about them. Appended AFTER the
+    # retrieve above (like the #580 block), so these lines never shift which
+    # memories surface -- the mock/scripted bake stays byte-identical. Absent
+    # flags add nothing.
+    state_lines = []
+    if char.get_property("is_thirsty"):
+        state_lines.append("You are thirsty.")
+    if char.get_property("is_sick"):
+        state_lines.append("You feel violently ill -- your stomach is cramping.")
+    if state_lines:
+        base = base + "\n\n" + "\n".join(state_lines)
     # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
     # brain can choose to travel toward one (offers stay in-scope only). Gated
     # on the real-brain tool path -- the SAME predicate that guards the tool
@@ -1032,6 +1101,7 @@ def observe_and_decide(
         if nearby:
             base = f"{base}\n\n{nearby}"
     observation = format_observation_with_memories(base, relevant)
+    agent.last_observation = observation
     # Per-action tools (issue #485): a real supplied brain picks between typed
     # per-verb tools -- travel's destination an enum of real venue names --
     # instead of filling the single free-text choose_action schema. A decline
@@ -1452,6 +1522,12 @@ class ActiveConversation:
     the sim loop can advance one line per tick. ``next_speaker`` alternates each
     line; ``convo`` accumulates the transcript-so-far. This record is also the
     seam a future third-party join/interruption (#370) hangs off.
+
+    After the last line the record lingers as a **playback hold** (#673):
+    ``hold_until`` is stamped with the step the viewer finishes playing the
+    transcript back, and until then both participants stay pinned (and busy --
+    the record still occupies the active set) so the map shows them standing
+    together through the exchange.
     """
 
     a: str  # initiator name (stable pair ordering)
@@ -1459,6 +1535,7 @@ class ActiveConversation:
     convo: convo.Conversation
     next_speaker: str  # whose line the next advance generates
     started: int  # step the conversation began
+    hold_until: int | None = None  # set on end: release step of the playback hold
 
 
 def _stamp_convo_ctx(speaker, step: int) -> None:
@@ -1500,13 +1577,29 @@ def _finish_conversation(a, b, convo_obj, step, cooldowns, clock) -> int:
 
 
 def _advance_conversation(
-    game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+    game,
+    ac,
+    chars,
+    state,
+    frame,
+    step,
+    cooldowns,
+    max_exchanges,
+    clock,
+    line_playback_steps,
 ) -> tuple[bool, int]:
     """Generate ONE line for active conversation *ac*, publish the transcript,
     and finish it if an end condition fired. Returns ``(ended, completed_delta)``:
     ``ended`` tells the caller to drop *ac* from the active set; ``completed_delta``
-    (0/1) feeds the return count. Sets ``conversing`` True while it runs, clears
-    it on end."""
+    (0/1) feeds the return count. Sets ``conversing`` True while it runs.
+
+    A real exchange never returns ``ended`` on its end tick: the end-of-
+    conversation bookkeeping (cooldown + #582 outcome pass) runs right here, but
+    the record enters its **playback hold** (#673) -- ``hold_until`` stamped,
+    ``conversing`` kept True -- so the pair stands together for the
+    ``len(lines) * line_playback_steps`` steps the viewer needs to play the
+    transcript back. Only an empty conversation (the mock's zero-line open)
+    releases and ends immediately, exactly as before."""
     speaker = chars[ac.next_speaker]
     listener = chars[ac.b if ac.next_speaker == ac.a else ac.a]
     _stamp_convo_ctx(speaker, step)
@@ -1517,11 +1610,17 @@ def _advance_conversation(
         state[ac.a]["conversing"] = True
         state[ac.b]["conversing"] = True
         return False, 0
-    state[ac.a]["conversing"] = False
-    state[ac.b]["conversing"] = False
-    return True, _finish_conversation(
+    delta = _finish_conversation(
         chars[ac.a], chars[ac.b], ac.convo, step, cooldowns, clock
     )
+    if ac.convo.happened:
+        ac.hold_until = step + len(ac.convo.lines) * line_playback_steps
+        state[ac.a]["conversing"] = True
+        state[ac.b]["conversing"] = True
+        return False, delta
+    state[ac.a]["conversing"] = False
+    state[ac.b]["conversing"] = False
+    return True, delta
 
 
 def maybe_converse(
@@ -1535,6 +1634,7 @@ def maybe_converse(
     *,
     cooldown_steps: int = CONVERSATION_COOLDOWN_STEPS,
     max_exchanges: int = CONVERSATION_MAX_EXCHANGES,
+    line_playback_steps: int = CONVERSATION_LINE_PLAYBACK_STEPS,
     clock=None,
     active: dict | None = None,
 ) -> int:
@@ -1547,16 +1647,22 @@ def maybe_converse(
 
     1. **advances** each in-progress conversation by exactly one
        :func:`conversation.exchange` line -- publishing the transcript-so-far on
-       both cards -- and, when an end condition fires (empty utterance, wrap-up
-       flag, or ``max_exchanges`` lines), removes it, records the pair cooldown,
-       and runs one :func:`apply_conversation_outcome` pass per participant (#582);
+       both cards. When an end condition fires (empty utterance, wrap-up flag, or
+       ``max_exchanges`` lines) it records the pair cooldown and runs one
+       :func:`apply_conversation_outcome` pass per participant (#582) -- but a
+       real exchange is not removed yet: it enters a **playback hold** (#673) of
+       ``len(lines) * line_playback_steps`` further steps, its participants still
+       pinned (and busy), so the viewer can play the transcript back while the
+       pair visibly stands together. The sweep here releases each held pair once
+       its window elapses;
     2. **starts** a new conversation for each eligible settled, co-located pair
        (both ``performing`` and not walking, not already conversing, off cooldown),
        running its first line this same tick.
 
     Participants are marked ``state[name]["conversing"]`` while a conversation
-    runs; :func:`run_simulation.step` reads that flag to keep them from walking or
-    re-deciding. Returns how many conversations **completed** this step.
+    runs -- through its playback hold; :func:`run_simulation.step` reads that flag
+    to keep them from walking or re-deciding. Returns how many conversations
+    **completed** this step (counted on the end tick, not at release).
 
     **Gated by the caller / mock-inert**: only invoked under a real brain. The
     mock's ``Agent.converse`` returns nothing, so a started conversation dies on
@@ -1567,8 +1673,9 @@ def maybe_converse(
     active = active if active is not None else {}
     completed = 0
 
-    # (1) Advance every in-progress conversation by one line.
-    # A participant whose conversation COMPLETES this tick is captured into
+    # (1) Advance every in-progress conversation by one line, and release any
+    # held pair whose playback window has elapsed (#673).
+    # A participant whose conversation frees them this tick is captured into
     # finished_this_step (issue #187 fix): without it, phase 2's `busy` below --
     # computed after this loop's deletions -- would not see them as busy, and
     # they could immediately start (and finish) a second conversation with a
@@ -1576,6 +1683,16 @@ def maybe_converse(
     finished_this_step: set[str] = set()
     for key in list(active):
         ac = active[key]
+        if ac.hold_until is not None:
+            # Playback hold (#673): the exchange already completed (cooldown,
+            # outcome pass and the completed count all ran on its end tick);
+            # the pair just stands together while the viewer plays it back.
+            if step >= ac.hold_until:
+                state[ac.a]["conversing"] = False
+                state[ac.b]["conversing"] = False
+                del active[key]
+                finished_this_step.update((ac.a, ac.b))
+            continue
         ended, delta = _advance_conversation(
             game,
             ac,
@@ -1586,6 +1703,7 @@ def maybe_converse(
             cooldowns,
             max_exchanges,
             clock,
+            line_playback_steps,
         )
         completed += delta
         if ended:
@@ -1649,7 +1767,16 @@ def maybe_converse(
         )
         active[key] = ac
         ended, delta = _advance_conversation(
-            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+            line_playback_steps,
         )
         completed += delta
         if ended:
@@ -1681,7 +1808,16 @@ def maybe_converse(
         )
         active[key] = ac
         ended, delta = _advance_conversation(
-            game, ac, chars, state, frame, step, cooldowns, max_exchanges, clock
+            game,
+            ac,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            max_exchanges,
+            clock,
+            line_playback_steps,
         )
         completed += delta
         if ended:

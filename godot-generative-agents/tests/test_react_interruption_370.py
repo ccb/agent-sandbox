@@ -413,6 +413,72 @@ def test_pair_conversation_cooldown_blocks_consult():
     assert consults == 0 and brain.react_calls == []
 
 
+def test_greeted_walkers_hold_through_playback_then_resume():
+    """#673 on the react path: when a greet-started conversation ends, the
+    playback hold keeps BOTH pinned walks paused for ``len(lines) *
+    line_playback_steps`` further steps; the release sweep then un-pins them
+    and the untouched paths resume via step()'s movement gate."""
+    brain = _ReactBrain(choice="greet", lines=["Oh hey!", "Hi, in a rush!"])
+    game, chars, state, frame, order = _pair(brain)
+    react_state: dict = {}
+    active: dict = {}
+    cooldowns: dict = {}
+    maybe_react(
+        chars, state, 0, cooldowns, order, react_state=react_state, active=active
+    )
+    # Tick 0 speaks line 1; tick 1 speaks line 2 (done=True) -> the exchange
+    # ends at tick 1 with 2 lines -> hold_until = 1 + 2 x 2 = 5.
+    for step in (0, 1):
+        maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            order,
+            active=active,
+            line_playback_steps=2,
+        )
+    assert len(frame["Maria Lopez"]["chat"]) == 2
+    assert state["Maria Lopez"]["conversing"] is True  # held past the last line
+    assert state["Maria Lopez"]["path"] == [(1, 0)]  # paused walk preserved
+
+    # Ticks 2-4: still held -- the walker stands through the playback window.
+    for step in (2, 3, 4):
+        maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            order,
+            active=active,
+            line_playback_steps=2,
+        )
+        assert state["Maria Lopez"]["conversing"] is True, f"released early at {step}"
+        assert state["Ayesha Khan"]["conversing"] is True
+
+    # Tick 5: the window elapses -> released, paths intact for step() to resume.
+    maybe_converse(
+        game,
+        chars,
+        state,
+        frame,
+        5,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
+    )
+    assert active == {}
+    assert state["Maria Lopez"]["conversing"] is False
+    assert state["Ayesha Khan"]["conversing"] is False
+    assert state["Maria Lopez"]["path"] == [(1, 0)]
+    assert state["Ayesha Khan"]["path"] == [(3, 0)]
+
+
 def test_busy_or_conversing_pairs_are_skipped():
     brain = _ReactBrain(choice="greet")
     game, chars, state, frame, order = _pair(brain)

@@ -31,12 +31,14 @@ _store = None
 #: The accessory bar's verb row: curated, not exhaustive (HELP lists all).
 VERBS = [
     "look",
+    "hint",
     "examine",
     "take",
     "drop",
     "open",
     "search",
     "read",
+    "taste",
     "attack",
     "burn",
     "throw",
@@ -66,6 +68,9 @@ class _LocalStorageStore:
     def write(self, slot, blob):
         self._ls.setItem(self.PREFIX + str(slot), json.dumps(blob))
 
+    def clear(self, slot):
+        self._ls.removeItem(self.PREFIX + str(slot))
+
     def list(self):
         out = {}
         for slot in saves.SLOTS:
@@ -94,7 +99,17 @@ def _status():
         "max_score": _game.max_score,
         "game_over": _game.is_game_over(),
         "won": _game.is_won(),
+        "hints": _game.hints_taken,
     }
+
+
+def _reachable_contents(holder):
+    out, frontier = [], [holder]
+    while frontier:
+        for name, item in frontier.pop().accessible_contents().items():
+            out.append(name)
+            frontier.append(item)
+    return out
 
 
 def _suggestions():
@@ -104,9 +119,20 @@ def _suggestions():
     scene = _game.perceive(_game.player)
     nouns = []
     if scene.sight >= Sight.CLEAR:
-        nouns += [i.name for i in loc.items.values() if not i.get_property("is_hidden")]
+        for i in loc.items.values():
+            if i.get_property("is_hidden"):
+                continue
+            nouns.append(i.name)
+            # What's visibly inside/on it -- accessible_contents is the
+            # engine's own no-spoiler seam (CCB): closed holders yield
+            # nothing, and hidden-until-SEARCH items stay off the bar
+            # until the search actually reveals them. Recursive, matching
+            # parser scope: an open jar on a plinth still offers its organ.
+            nouns += _reachable_contents(i)
         nouns += [c.name for c in loc.characters.values() if c is not _game.player]
-    nouns += list(_game.player.carried_items().keys())
+    for it in _game.player.carried_items().values():
+        nouns.append(it.name)
+        nouns += _reachable_contents(it)
     seen, deduped = set(), []
     for n in nouns:
         if n not in seen:
@@ -174,7 +200,16 @@ def panel_data():
                 if pair in seen_pairs:
                     continue
                 seen_pairs.add(pair)
-                edges.append({"from": name, "to": dest.name, "dir": label})
+                # Both sides of the passage, named exactly as each room
+                # names it -- the canopic stairs go UP one way and RIGHT
+                # STAIRS back, and the map's labels and click-to-walk
+                # routes must use the word that actually parses. ``back``
+                # is None for a one-way drop.
+                back = dest.get_direction(room)
+                back = str(getattr(back, "value", back)) if back else None
+                edges.append(
+                    {"from": name, "to": dest.name, "dir": label, "back": back}
+                )
             else:
                 stubs.append({"from": name, "dir": label})
     return json.dumps(
@@ -187,20 +222,61 @@ def panel_data():
 
 def boot(seed):
     """Build the Tomb (seeded) and return the opening scene's events."""
-    global _game, _cap, _store
+    global _game, _cap, _store, _pending_restart
+    _pending_restart = False
     _game = tomb.build_game(seed=int(seed))
     _cap = CaptureRenderer()
     _game.parser.set_renderer(_cap)
     _store = _make_store()
     _game.save_store = _store
     _visited.clear()
+    _game.show_figure("road")  # the Trail card opens every fresh expedition
     _game.parser.parse_command("look")
     return _payload()
 
 
+RESTART_WORDS = {"restart", "reload", "new game", "start over", "begin anew"}
+
+
+_pending_restart = False
+
+
+def _do_restart():
+    import time
+
+    try:
+        _store.clear("auto")
+    except Exception:
+        pass
+    boot(int(time.time()) % 1000000)
+    # boot()'s own payload (the look, the Trail card) is discarded above, so
+    # re-cue the card for THIS response: a restart earns the title reel too.
+    _game.show_figure("road", force=True)
+    _game.parser.ok(
+        "The sand takes the old story. A new expedition stands at the wreck."
+    )
+    return _payload()
+
+
 def command(text):
-    """One player turn. Owns the RESTORE contract and the every-turn autosave."""
-    global _game, _cap
+    """One player turn. Owns the RESTORE contract, the every-turn autosave,
+    and RESTART (confirmed with y/n -- CCB: an expedition should not die to
+    a slipped word)."""
+    global _game, _cap, _pending_restart
+    t = str(text).strip().lower()
+    if _pending_restart:
+        _pending_restart = False
+        if t in ("y", "yes"):
+            return _do_restart()
+        _game.parser.ok("The expedition continues.")
+        return _payload()
+    if t in RESTART_WORDS:
+        _pending_restart = True
+        _game.parser.ok(
+            "Begin a new expedition? The one underway will be lost to the "
+            "sand. (y / n)"
+        )
+        return _payload()
     _game.do_command(str(text))
     pending = getattr(_game, "pending_restore", None)
     if pending is not None:

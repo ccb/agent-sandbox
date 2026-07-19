@@ -29,12 +29,26 @@ EVENT = {
     "payload": {},
 }
 
+WISH = {
+    "actor": "Ada",
+    "turn": 0,
+    "location": None,
+    "desired": "a working printer",
+    "reason": "",
+    "trigger": "proposed",
+    "goals": [],
+    "scope": [],
+    "raw_command": "propose a working printer",
+    "meta": {},
+}
+
 
 def _seed_run(store, run_id):
     store.create_run(MANIFEST, run_id=run_id)
     for i in range(2):
         store.append_frame(run_id, i, FRAME)
     store.append_events(run_id, [EVENT])
+    store.append_wishes(run_id, [WISH])
     store.record_memories(
         run_id,
         "Ada",
@@ -52,18 +66,19 @@ def _seed_run(store, run_id):
     return run_id
 
 
-def test_build_replay_assembles_the_four_keys(tmp_path):
+def test_build_replay_assembles_the_five_keys(tmp_path):
     store = RunStore(tmp_path / "runs")
     run_id = _seed_run(store, "run-a")
     replay = build_replay(store, run_id)
-    # Key order matches the bake's file exactly (#305 Replay).
-    assert list(replay) == ["meta", "frames", "memory_streams", "events"]
+    # Key order matches the bake's file exactly (#305 Replay; "wishes" #622).
+    assert list(replay) == ["meta", "frames", "memory_streams", "events", "wishes"]
     # A live manifest has no steps -> filled from the frame count; the llm
     # key rides along untouched.
     assert replay["meta"]["steps"] == 2
     assert replay["meta"]["llm"] == MANIFEST["llm"]
     assert replay["frames"] == [FRAME, FRAME]
     assert replay["events"] == [EVENT]
+    assert replay["wishes"] == [WISH]
     assert replay["memory_streams"]["Ada"] == store.memories_for(run_id, "Ada")
     assert replay["memory_streams"]["Bea"] == []  # every persona present
 

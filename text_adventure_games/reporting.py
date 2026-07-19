@@ -52,7 +52,9 @@ class Channel(Enum):
     AGENT_REASONING = "agent_reasoning"  # ReAct "Think"
     AGENT_ACTION = "agent_action"  # ReAct chosen command
     AGENT_REFLECTION = "agent_reflection"  # ReAct "Reflect" after a failure
+    AGENT_WISH = "agent_wish"  # a recorded wish for a missing action (#620)
     SYSTEM = "system"  # turn header, clock, meta-command, game-over
+    FIGURE = "figure"  # an illustration cue: text is a card KEY, not prose
 
 
 # The agent's private ReAct trace -- never enters command_history, and the
@@ -63,6 +65,7 @@ AGENT_CHANNELS = frozenset(
         Channel.AGENT_REASONING,
         Channel.AGENT_ACTION,
         Channel.AGENT_REFLECTION,
+        Channel.AGENT_WISH,
     }
 )
 
@@ -106,7 +109,12 @@ _BASE = {
 _LEVEL_CHANNELS = {
     QUIET: _BASE,
     NORMAL: _BASE
-    | {Channel.AGENT_REASONING, Channel.AGENT_ACTION, Channel.AGENT_REFLECTION},
+    | {
+        Channel.AGENT_REASONING,
+        Channel.AGENT_ACTION,
+        Channel.AGENT_REFLECTION,
+        Channel.AGENT_WISH,
+    },
     VERBOSE: set(Channel),  # everything, including AGENT_OBSERVATION
 }
 
@@ -181,12 +189,16 @@ class PlainRenderer(Renderer):
             return self._wrap(f"{m.actor} [action] {m.text}")
         if c is Channel.AGENT_REFLECTION:
             return self._wrap(f"{m.actor} [reflect] {m.text}")
+        if c is Channel.AGENT_WISH:
+            return self._wrap(f"{m.actor} [wish] {m.text}")
         if c is Channel.AGENT_OBSERVATION:
             return self._wrap(f"{m.actor} [observe]\n{m.text}")
         if c is Channel.CONFLICT:
             return self._wrap(f"⚔ {m.text}")
         if c is Channel.COMMAND:
             return f"> {m.text}"
+        if c is Channel.FIGURE:
+            return f"[figure: {m.text}]"  # a key, not prose; VERBOSE-only
         return self._wrap(m.text)  # NARRATION, NPC_NARRATION, BLOCKED, SYSTEM
 
 
@@ -218,6 +230,7 @@ class RichTerminalRenderer(Renderer):
         Channel.AGENT_OBSERVATION: ("◦", "[observation]", "dim cyan"),
         Channel.AGENT_REASONING: ("·", "[reasoning]", "cyan"),
         Channel.AGENT_REFLECTION: ("↺", "[reflection]", "yellow"),
+        Channel.AGENT_WISH: ("✦", "[wish]", "magenta"),
     }
     # channel -> (glyph, label, style) for the top-level lines. The glyph is a
     # quick visual cue and the bracketed label names the channel in words;

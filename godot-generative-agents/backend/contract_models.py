@@ -18,6 +18,7 @@ from backend.contract import (
     EVENT_STATE_FIELDS,
     MEMORY_RECORD_FIELDS,
     SCHEMA_VERSION,
+    WISH_FIELDS,
 )
 
 
@@ -77,10 +78,30 @@ class EventState(_ContractModel):
     sickness cause) and deliberately stays an open dict."""
 
     turn: int
-    actor: str
+    actor: str | None  # world-level stimuli (ambient sound, POST /world/event,
+    # the boil arc's `boiled` event) legitimately have no single actor -- the
+    # store persists actor=None, so the contract must accept it too (#631).
     action: str
     summary: str
     payload: dict
+
+
+class WishState(_ContractModel):
+    """One ActionWish log entry (#622) — the verbatim shape of
+    ``text_adventure_games.wishes.ActionWish.to_primitive()``. Field order ==
+    WISH_FIELDS. ``goals``/``scope`` are situation snapshots (incomplete goals,
+    item/character names) at wish time; ``meta`` is an open extension point."""
+
+    actor: str | None  # None only if no actor resolved (mirrors EventState)
+    turn: int
+    location: str | None
+    desired: str
+    reason: str
+    trigger: str
+    goals: list[str]
+    scope: list[str]
+    raw_command: str
+    meta: dict
 
 
 class AgentFrame(_ContractModel):
@@ -121,9 +142,11 @@ class Replay(_ContractModel):
     frames: list[dict[str, AgentFrame]]
     memory_streams: dict[str, list[MemoryRecord]] | None = None
     events: list[EventState] | None = None  # the #467 run record; absent pre-#467
+    wishes: list[WishState] | None = None  # the #622 demand record; absent pre-#622
 
 
 # Sanity: the pinned orders and the models can never drift from each other.
 assert tuple(AgentFrame.model_fields) == AGENT_FRAME_FIELDS
 assert tuple(MemoryRecord.model_fields) == MEMORY_RECORD_FIELDS
 assert tuple(EventState.model_fields) == EVENT_STATE_FIELDS
+assert tuple(WishState.model_fields) == WISH_FIELDS
