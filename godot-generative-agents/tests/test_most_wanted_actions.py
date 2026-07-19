@@ -8,15 +8,16 @@ built to exercise, in one pass:
   whitespace, a leading "propose"/article) into a single group -- the
   "book a study room" group (5 records, 3 distinct actors, 4 distinct
   reasons -- more than the 3-example cap);
-- a count TIE between two groups ("bike rack near the library" and
-  "working elevator", 3 records each) broken by distinct-agents desc --
-  deliberately set up so alphabetical order and file-insertion order both
-  *disagree* with the correct answer: "bike rack..." sorts alphabetically
-  before "working elevator" and its first record appears earlier in the
-  file, yet "working elevator" has 3 distinct agents vs "bike rack..."'s 2,
-  so it must outrank "bike rack..." -- a golden order that can only be
-  produced by the documented `(-count, -distinct_agents, key)` sort key,
-  not by alphabetical-only or insertion-order tiebreaks (#623 review);
+- a count TIE between two groups ("lock up my bike outside the library"
+  and "way to get upstairs", 3 records each) broken by distinct-agents
+  desc -- deliberately set up so alphabetical order and file-insertion
+  order both *disagree* with the correct answer: "lock up my bike..."
+  sorts alphabetically before "way to get upstairs" and its first record
+  appears earlier in the file, yet "way to get upstairs" has 3 distinct
+  agents vs "lock up my bike..."'s 2, so it must outrank "lock up my
+  bike..." -- a golden order that can only be produced by the documented
+  `(-count, -distinct_agents, key)` sort key, not by alphabetical-only or
+  insertion-order tiebreaks (#623 review);
 - a null ``actor`` (a parse-gap wish with no resolvable actor), which must
   count toward the group's record count but not its distinct-agent count;
 - a mixed, open ``trigger`` vocabulary (``proposed`` and ``parse_gap``),
@@ -26,7 +27,11 @@ The fixture's records are hand-authored dicts in the pinned #622
 ActionWish.to_primitive() shape -- not literal engine output -- chosen to hit
 these cases; a couple (e.g. an unstripped "propose ..." string filed as
 trigger="parse_gap") wouldn't arise from the real engine today but are legal
-inputs the normalizer must still handle.
+inputs the normalizer must still handle. The `desired` phrases are
+action-shaped (things an agent tried to DO, not amenities it wants built)
+and every actor-bearing row carries the populated `goals`/`scope` snapshot
+both capture paths record -- mirroring real wishes even though the v1
+report doesn't consume those fields yet.
 """
 
 from __future__ import annotations
@@ -96,8 +101,8 @@ def test_report_ranks_by_count_then_distinct_agents_then_key():
     report = mwa.build_report(_load())
     assert [row.key for row in report.rows] == [
         "book a study room",
-        "working elevator",
-        "bike rack near the library",
+        "way to get upstairs",
+        "lock up my bike outside the library",
         "dance with the statue",
     ]
 
@@ -126,21 +131,21 @@ def test_row_fields_for_the_study_room_group():
 
 
 def test_tie_on_count_is_broken_by_distinct_agents():
-    # "bike rack near the library" sorts alphabetically BEFORE "working
-    # elevator", and its first record appears EARLIER in the fixture file --
-    # so an alphabetical-only or insertion-order-only tiebreak would rank it
-    # first. The distinct-agents-desc tiebreak overrides both: elevator has
-    # more distinct agents, so it must rank higher despite its later key and
-    # later file position.
+    # "lock up my bike outside the library" sorts alphabetically BEFORE "way
+    # to get upstairs", and its first record appears EARLIER in the fixture
+    # file -- so an alphabetical-only or insertion-order-only tiebreak would
+    # rank it first. The distinct-agents-desc tiebreak overrides both:
+    # upstairs has more distinct agents, so it must rank higher despite its
+    # later key and later file position.
     report = mwa.build_report(_load())
-    elevator, bike = report.rows[1], report.rows[2]
-    assert elevator.key == "working elevator"
-    assert bike.key == "bike rack near the library"
-    assert elevator.count == bike.count == 3
-    assert elevator.distinct_agents == 3
+    upstairs, bike = report.rows[1], report.rows[2]
+    assert upstairs.key == "way to get upstairs"
+    assert bike.key == "lock up my bike outside the library"
+    assert upstairs.count == bike.count == 3
+    assert upstairs.distinct_agents == 3
     assert bike.distinct_agents == 2  # fewer distinct agents -> ranks lower
     # despite an alphabetically-earlier, file-earlier key.
-    assert bike.key < elevator.key
+    assert bike.key < upstairs.key
 
 
 def test_null_actor_counts_the_record_but_not_the_agent():
@@ -166,9 +171,10 @@ EXPECTED_MARKDOWN = (
     '| 1 | book a study room (e.g. "book a study room") | 5 | 3 | 1-12 |'
     " parse_gap=1, proposed=4 | midterms are coming up; group project needs space;"
     " the library is always full |\n"
-    '| 2 | working elevator (e.g. "propose a working elevator") | 3 | 3 | 3-10 |'
+    '| 2 | way to get upstairs (e.g. "propose a way to get upstairs") | 3 | 3 | 3-10 |'
     " parse_gap=2, proposed=1 | stairs are exhausting |\n"
-    '| 3 | bike rack near the library (e.g. "a bike rack near the library") | 3 | 2 | 2-9 |'
+    '| 3 | lock up my bike outside the library (e.g. "lock up my bike outside the library")'
+    " | 3 | 2 | 2-9 |"
     " parse_gap=1, proposed=2 | mine keeps getting stolen; need somewhere safe to lock up |\n"
     '| 4 | dance with the statue (e.g. "dance with the statue") | 1 | 0 | 4-4 |'
     " parse_gap=1 | - |\n"
@@ -194,8 +200,8 @@ EXPECTED_JSON = {
             "last_turn": 12,
         },
         {
-            "key": "working elevator",
-            "representative": "propose a working elevator",
+            "key": "way to get upstairs",
+            "representative": "propose a way to get upstairs",
             "count": 3,
             "distinct_agents": 3,
             "trigger_mix": {"parse_gap": 2, "proposed": 1},
@@ -204,8 +210,8 @@ EXPECTED_JSON = {
             "last_turn": 10,
         },
         {
-            "key": "bike rack near the library",
-            "representative": "a bike rack near the library",
+            "key": "lock up my bike outside the library",
+            "representative": "lock up my bike outside the library",
             "count": 3,
             "distinct_agents": 2,
             "trigger_mix": {"parse_gap": 1, "proposed": 2},
