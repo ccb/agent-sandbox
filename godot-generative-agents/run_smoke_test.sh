@@ -56,6 +56,8 @@ fi
   | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_restart_detect.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_run_state.gd 2>&1 \
+  | tee /dev/stderr | grep -q "all checks passed"
 "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_payload_guards.gd 2>&1 \
   | tee /dev/stderr | grep -q "all checks passed"
 
