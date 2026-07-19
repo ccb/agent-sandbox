@@ -117,6 +117,29 @@ def test_mock_stepper_emits_no_wish_records():
     assert stepper.drain_wishes() == []
 
 
+def test_mock_run_feed_is_unaffected_by_the_wish_channel():
+    """#622 review finding (Minor): a stronger, more direct pin than the
+    buffer-emptiness check above. That test proves the buffer *happens to be*
+    empty; this one proves the tick/frame stream a mock run publishes is
+    genuinely unreachable by the wish channel -- byte-identical whether
+    ``game.on_wish`` is installed at all -- by diffing two independently
+    built steppers over the same deterministic mock schedule, one with the
+    hook removed entirely (simulating a world with no wish channel wired).
+    Any drift would mean the wish plumbing was leaking into the ordinary
+    tick path; there is none, and neither run ever produces a ``kind:
+    "wish"`` record."""
+    wired = PennStepper(num_steps=5, world=build_penn_world())
+    unwired = PennStepper(num_steps=5, world=build_penn_world())
+    unwired.game.on_wish = None  # no wish channel wired at all
+
+    wired_frames = [wired.tick() for _ in range(5)]
+    unwired_frames = [unwired.tick() for _ in range(5)]
+    assert wired_frames == unwired_frames  # the rest of the feed is untouched
+
+    assert wired.game.wishes == unwired.game.wishes == []
+    assert wired.drain_wishes() == unwired.drain_wishes() == []
+
+
 # --- a scripted propose produces a wish within one tick (acceptance) -------
 
 
@@ -187,6 +210,30 @@ def test_stepper_drops_a_bad_wish_instead_of_halting(tmp_path):
     assert stepper.dropped_wishes == 1
     assert stepper.tick() is None
     assert store.get_run(run_id)["status"] == "finished"
+
+
+def test_storeless_stepper_drains_the_persist_buffer_every_tick():
+    """#622 review finding (Important): ``_persist_pending_wishes()`` was
+    only reachable per-tick through ``_persist_tick()``, itself only called
+    ``if self.run_store is not None``. A live run with NO ``--persist`` store
+    therefore never drained ``_wish_persist_buf`` on a tick -- only at
+    ``_finish_run``/``_close_current_run`` -- so an endless, no-persist run
+    driven by a proposing brain would grow that buffer without bound even
+    though nothing was ever going to be written to disk. ``tick()`` must
+    drain it directly when storeless, every tick, not just at the run's end.
+    """
+    stepper = PennStepper(num_steps=10, world=build_penn_world())
+    assert stepper.run_store is None
+    for i in range(5):
+        stepper.game.log_wish(_wish(turn=i, desired=f"wish {i}"))
+        stepper.game.log_wish(_wish(turn=i, desired=f"wish {i}b"))
+        stepper.tick()
+        # Drained every tick regardless of run_store -- never left to pile
+        # up, even with nothing to persist it to.
+        assert stepper._wish_persist_buf == []
+    # The live feed buffer is a separate list, filled by the same _on_wish
+    # call, and unaffected by this fix -- every wish still reaches it.
+    assert len(stepper.drain_wishes()) == 10
 
 
 def test_penn_stepper_reset_restarts_the_persist_cursor(tmp_path):

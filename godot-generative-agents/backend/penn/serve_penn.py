@@ -1017,6 +1017,15 @@ class PennStepper:
         self.injector.apply(frame, self._step_idx)
         if self.run_store is not None:
             self._persist_tick(frame)
+        else:
+            # No store: _persist_tick (and its _persist_pending_wishes call)
+            # never runs, but the wish persist-buffer still needs draining
+            # every tick -- otherwise an endless, no-persist live run driven
+            # by a proposing brain grows _wish_persist_buf without bound
+            # (#622 review finding). _persist_pending_wishes() itself already
+            # no-ops the actual write when there's no store; only the buffer
+            # swap matters here.
+            self._persist_pending_wishes()
         self._step_idx += 1
         return frame
 
