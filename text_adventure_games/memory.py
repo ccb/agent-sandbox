@@ -594,6 +594,7 @@ class AgentMemory:
         alpha_recency: float = ALPHA_RECENCY,
         alpha_importance: float = ALPHA_IMPORTANCE,
         alpha_relevance: float = ALPHA_RELEVANCE,
+        landmark_importance: float | None = None,
         touch: bool = True,
     ) -> list[MemoryRecord]:
         """Return the most useful memories for *query* at *turn*.
@@ -619,12 +620,30 @@ class AgentMemory:
         ``last_accessed_turn`` -- for inspecting or comparing what would surface
         without disturbing recency (e.g. scoring the same stream under two
         relevance modes). The default ``touch=True`` is the decision-time path.
+
+        ``landmark_importance`` (issue #633): recency decays as
+        ``decay**(turn - last_accessed)``, which collapses toward 0 for any old
+        memory -- so a deliberately-seeded high-importance memory (an aversion, a
+        vow) is mathematically buried once enough fresh memories accrue, no
+        matter its importance, because a fresh memory's recency of 1.0 outweighs
+        importance alone. Set this threshold and any record whose importance is
+        ``>=`` it is treated as a *landmark*: exempt from recency decay (its
+        recency term is pinned to 1.0), so it stays eligible to surface however
+        long ago it formed. ``None`` (the default) changes nothing -- scoring is
+        byte-identical to before, so existing games and replays are unaffected.
         """
         relevance = self._relevance_by_id(query)
         scored = []
         for record in self.records:
+            recency = recency_score(record, turn, decay)
+            if (
+                landmark_importance is not None
+                and record.importance >= landmark_importance
+            ):
+                # A landmark memory never decays out of contention (#633).
+                recency = 1.0
             score = (
-                alpha_recency * recency_score(record, turn, decay)
+                alpha_recency * recency
                 + alpha_importance * importance_score(record)
                 + alpha_relevance * relevance[record.id]
             )
