@@ -131,6 +131,7 @@ const ThinkingIndicator := preload("res://scripts/thinking_indicator.gd")
 const AgentFanout := preload("res://scripts/agent_fanout.gd")
 const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
+const RunState := preload("res://scripts/run_state.gd")
 const PayloadGuards := preload("res://scripts/payload_guards.gd")
 
 # The replay/live contract schema this viewer renders (backend.contract
@@ -729,12 +730,12 @@ func _on_live_handshake_completed(
 	# Seed the sidebar's Start/Stop toggle from the handshake. A backend booted
 	# with --start-paused (the --brain llm default) is armed but has never
 	# ticked: the day — and its spend — waits behind "▶ Start simulation".
-	if bool((data as Dictionary).get("paused", false)):
-		_set_backend_run_state(
-			"waiting" if int((data as Dictionary).get("step", 0)) == 0 else "paused"
+	_set_backend_run_state(
+		RunState.from_status(
+			bool((data as Dictionary).get("paused", false)),
+			int((data as Dictionary).get("step", 0)),
 		)
-	else:
-		_set_backend_run_state("running")
+	)
 	# The HTTP backfill only earns its double-fetch (the socket's ?since= replay
 	# covers the same window) when it still has to place the playhead: the first
 	# join and a re-anchor, both of which have _live_started false (a re-anchor's
@@ -867,12 +868,11 @@ func _on_live_status(record: Dictionary) -> void:
 		"started", "resumed":
 			# "started" can carry paused=true (a --start-paused boot): the day
 			# is still behind the sidebar's ▶ Start button.
-			if bool(record.get("paused", false)):
-				_set_backend_run_state(
-					"waiting" if int(record.get("step", 0)) == 0 else "paused"
-				)
-			else:
-				_set_backend_run_state("running")
+			var st := RunState.from_status(
+				bool(record.get("paused", false)), int(record.get("step", 0))
+			)
+			_set_backend_run_state(st)
+			if st == "running":
 				_panel.set_live_status("following backend")
 		"paused":
 			_set_backend_run_state("paused")
@@ -922,6 +922,18 @@ func _on_reset_meta_completed(
 	# as the initial join does (?since=_last_cursor is overlap-safe).
 	_request_backfill()
 	_panel.set_live_status("following the new run")
+	# Re-arm the Start/Stop toggle from the new run's own state (#678). A reset
+	# day stays paused (a finished day was auto-paused, and reset doesn't
+	# resume), and no started/resumed record follows the reset one -- so without
+	# this the state would stay "finished", the ▶ Start button hidden, and the
+	# paused new run could never be started from the UI. "waiting" also swaps
+	# the status line for the actionable "press ▶ Start" message.
+	_set_backend_run_state(
+		RunState.from_status(
+			bool((data as Dictionary).get("paused", false)),
+			int((data as Dictionary).get("step", 0)),
+		)
+	)
 	# Normally the socket rides through a reset untouched. But if it dropped while
 	# this reset retry was pending, _schedule_retry's single-flight swallowed the
 	# socket's own reconnect (#549) — leaving no socket and no rewind detection.
@@ -955,8 +967,9 @@ func _teardown_cast() -> void:
 
 func _set_backend_run_state(state: String) -> void:
 	# Backend run state -> the sidebar Start/Stop toggle + status line. Driven
-	# only by the handshake and the feed's status records — never by button
-	# clicks — so a failed control request leaves the UI truthful.
+	# only by the handshake, the feed's status records, and the reset-follow
+	# re-arm (#678) — never by button clicks — so a failed control request
+	# leaves the UI truthful.
 	if state == _backend_run_state:
 		return
 	_backend_run_state = state
