@@ -1305,6 +1305,39 @@ memory streams, and timeline markers intact. A round-trip test pins that a
 persisted bake's export equals its replay file exactly. The #306 run-lifecycle
 endpoints (`/runs`, above) serve the same history over HTTP.
 
+## Believability audit: `backend/eval/believability.py` (#584)
+
+An **offline** eval over a finished run's exported artifacts — no live
+coupling, no new export fields. It reads a baked replay JSON *or* a RunStore
+run directory and writes a per-agent day-coherence report: four rubric
+dimensions (plan coherence, temporal sanity, social grounding, memory use),
+each scored 1–10 with cited step examples, plus a run-level summary — so
+cognition changes (#579) can be compared run-over-run.
+
+```bash
+# a baked replay (regenerate it first — it's git-ignored):
+uv run python -m backend.eval.believability godot-generative-agents/godot/maps/penn_replay.json
+
+# a persisted RunStore run, markdown to a file:
+uv run python -m backend.eval.believability godot-generative-agents/runs/<run_id> --out report.md
+
+# the acceptance control: the same run, deliberately broken, scores worse
+uv run python -m backend.eval.believability <path> --scramble frames --seed 7
+```
+
+Two judges score the same evidence digest. The **heuristic** judge is free and
+deterministic (word overlap with the schedule, schedule-window fit,
+co-location, retrieved-memory relevance) — it runs whenever no `LLM_PROVIDER`
+is set (or with `--no-llm`), and it is the baseline the scrambled-control test
+pins. The **LLM** judge (`LLM_PROVIDER=anthropic|openai`) makes one
+`grade_believability` tool call per agent using the rubric prompt
+(`prompt_templates/believability_rubric.prompty`); its spend is billed to the
+shared usage ledger under a hard ceiling (`--max-cost-usd`, default $1), and
+any declined/malformed reply — including the free `LLM_PROVIDER=mock`
+provider, which declines every tool call — falls back to the heuristic, so a
+report always completes. `--format json` emits the raw report dict instead of
+markdown.
+
 ## Penn world matrix artifacts
 
 The generative-agents backend reads the UPenn campus world via `WorldMap`
