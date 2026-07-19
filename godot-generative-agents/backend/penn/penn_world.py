@@ -356,6 +356,12 @@ def make_murky_pot() -> Item:
     pot.set_property("requires_boiling", True)
     pot.set_property("is_boiled", False)
     pot.set_property("portions", 3)
+    # Aliases (#635): the full name is long and a model naturally says "water" /
+    # "murky water" / "the pot". Safe because Drink matches *carried* items only
+    # and the arc never carries both pots at once (make consumes this one), so
+    # the "water"/"pot" it shares with the boiled pot can't collide in practice.
+    for alias in ("water", "murky water", "pot", "murky pot"):
+        pot.add_alias(alias)
     return pot
 
 
@@ -372,6 +378,10 @@ def make_boiled_pot() -> Item:
     pot.set_property(Property.DRINKABLE, True)
     pot.set_property("is_boiled", True)
     pot.set_property("portions", 3)
+    # Aliases (#635): see make_murky_pot -- the recovery drink must be nameable
+    # as "boiled water" / "water" / "the pot", not only the full string.
+    for alias in ("water", "boiled water", "pot", "boiled pot"):
+        pot.add_alias(alias)
     return pot
 
 
