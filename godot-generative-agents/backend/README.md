@@ -694,6 +694,7 @@ advancing **on its own** while frontends follow along:
   { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
   { "cursor": 16, "kind": "intervention", "intervention": "say", "name": "Maya Chen", "speaker": "Alistair", "text": "The market closes at noon.", "turn": 12 }
   { "cursor": 17, "kind": "intervention", "intervention": "world_event", "text": "A storm rolls in.", "location": "The Willows Market", "turn": 12 }
+  { "cursor": 18, "kind": "wish", "actor": "Diego Torres", "turn": 118, "location": "UPenn:Houston Hall", "desired": "fill the pot from the sink", "reason": "the recipe needs water", "trigger": "proposed", "goals": ["make the water safe to drink"], "scope": ["pot", "sink"], "raw_command": "propose fill the pot from the sink because the recipe needs water", "meta": {} }
   ```
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
@@ -706,6 +707,20 @@ advancing **on its own** while frontends follow along:
   or [`POST /world/event`](#post-worldevent), #369), discriminated by its
   `intervention` field, so a viewer sees the same perturbation the operator made.
   (These record shapes are pinned by the forthcoming data contract, #305.)
+
+  `wish` records an `ActionWish` (#620/#622) — an actor's structured "I wanted
+  an action the game doesn't have" note, either deliberate (the `propose`
+  verb) or automatic (a command that matched no verb at all, #621). Fields
+  mirror `text_adventure_games.wishes.ActionWish.to_primitive()` exactly
+  (`actor`/`turn`/`location`/`desired`/`reason`/`trigger`/`goals`/`scope`/
+  `raw_command`/`meta`) under this record's own top-level `kind` -- unlike
+  `llm_call`/`game_event`, a wish is NOT wrapped in `engine`. A stepper opts in
+  by implementing `drain_wishes()` (`serve_penn.PennStepper` does, and also
+  persists the identical records to the per-run `wishes.jsonl` beside
+  `frames.jsonl`/`events.jsonl`, and to the baked replay's `wishes` array).
+  Under the mock brain this never fires: it never proposes and its authored
+  commands always parse, so the buffer stays empty and the feed is
+  byte-identical to a world with no wish channel at all.
 
   One `engine` payload has its own sub-contract: **`event.kind: "llm_call"`** —
   one record per LLM request (#398), the buffered copy of the row the terminal
@@ -1236,10 +1251,11 @@ retyped); additive optional fields don't bump it.
 `tests/test_replay_contract.py` holds the two field-for-field in lock-step,
 alongside conformance tests that validate the real bake output and live meta.
 The RunStore (`backend/run_store.py`, #304) writes `frames.jsonl` lines in the
-`dict[str, AgentFrame]` shape and `events.jsonl` lines in the `EventState`
-shape — both checked structurally at write time, since the base env has no
-pydantic — and the #307 exporter (`backend/penn/export_replay.py`) emits a
-full `Replay`-shaped file back out of the store.
+`dict[str, AgentFrame]` shape, `events.jsonl` lines in the `EventState` shape,
+and `wishes.jsonl` lines in the `WishState` shape (#622) — all three checked
+structurally at write time, since the base env has no pydantic — and the #307
+exporter (`backend/penn/export_replay.py`) emits a full `Replay`-shaped file
+back out of the store.
 
 ## RunStore: durable runs (#304)
 
@@ -1250,6 +1266,9 @@ full `Replay`-shaped file back out of the store.
       <run_id>/manifest.json             # the run's meta() blob
       <run_id>/frames.jsonl              # line N = the step-N frame (#305 shape)
       <run_id>/events.jsonl              # the run's GameEvent log (#467 EventState)
+      <run_id>/wishes.jsonl              # the run's ActionWish log (#622 WishState);
+                                          # absent when the run never wished (the
+                                          # mock brain's byte-identical default)
 
 Two opt-in producers: `serve_penn.py --persist` records a live run as it ticks
 (each `POST /reset` closes the current run and opens a new id), and
@@ -1257,7 +1276,7 @@ Two opt-in producers: `serve_penn.py --persist` records a live run as it ticks
 fact — round-trip tests pin that a persisted bake equals its replay file.
 A live run row's `cost` is that run's own spend (per-run ledger baseline,
 #526); the budget gate (`max_cost_usd`) stays lifetime.
-Reads: `read_frames`, `read_events`, `memories_for` (the lean wire
+Reads: `read_frames`, `read_events`, `read_wishes`, `memories_for` (the lean wire
 projection), `full_records` (the lossless per-record dicts), `hydrated_records`
 (those rows back as live engine `MemoryRecord`s — what a resumed run restores
 from, #543), and `query_memories`, which scores the hydrated records via

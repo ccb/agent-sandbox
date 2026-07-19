@@ -206,6 +206,76 @@ def test_reads_still_raise_on_a_corrupt_interior_line(tmp_path):
         store.read_events("run-a")
 
 
+# --- wishes (#622) -----------------------------------------------------------
+# Mirrors the events tests above field-for-field: wishes.jsonl is the same
+# append-only, skip_bad-tolerant sink as events.jsonl, just with WISH_FIELDS
+# in place of EVENT_STATE_FIELDS (see backend/contract.py).
+
+WISH = {
+    "actor": "Diego Torres",
+    "turn": 0,
+    "location": "UPenn:Van Pelt Library",
+    "desired": "a bike rack near the library",
+    "reason": "mine keeps getting stolen",
+    "trigger": "proposed",
+    "goals": [],
+    "scope": [],
+    "raw_command": (
+        "propose a bike rack near the library because mine keeps getting stolen"
+    ),
+    "meta": {},
+}
+
+
+def test_append_and_read_wishes_in_order(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    # No wishes yet: no file on disk, and read_wishes is [] -- not an error
+    # (most runs never wish at all -- the mock-brain invariant, #622).
+    assert store.read_wishes("run-a") == []
+    assert not (tmp_path / "runs" / "run-a" / "wishes.jsonl").exists()
+    first = [dict(WISH, turn=0), dict(WISH, turn=1, actor=None)]  # a parse-gap
+    second = [dict(WISH, turn=2, desired="a working printer")]
+    store.append_wishes("run-a", first)
+    store.append_wishes("run-a", [])  # a no-op, not an error
+    store.append_wishes("run-a", second)
+    assert store.read_wishes("run-a") == first + second
+
+
+def test_append_wishes_validates_and_rejects_unknown_runs(tmp_path):
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    with pytest.raises(KeyError):
+        store.append_wishes("missing", [WISH])
+    with pytest.raises(KeyError):
+        store.read_wishes("missing")
+    with pytest.raises(ValueError):
+        store.append_wishes("run-a", [{"turn": 0, "actor": "Ada"}])  # missing fields
+    with pytest.raises(ValueError):
+        store.append_wishes("run-a", [dict(WISH, urgency="high")])  # unpinned field
+    # A bad wish anywhere in the batch keeps the WHOLE batch off disk.
+    with pytest.raises(ValueError):
+        store.append_wishes("run-a", [WISH, "not-a-dict"])
+    assert store.read_wishes("run-a") == []
+
+
+def test_append_wishes_skip_bad_drops_the_bad_and_keeps_the_good(tmp_path):
+    """The live path (skip_bad=True) must never let one malformed wish halt
+    the run: bad records are dropped and reported, the good ones still land
+    (the same #637 tolerance test_run_store.py already pins for events)."""
+    store = RunStore(tmp_path / "runs")
+    store.create_run(MANIFEST, run_id="run-a")
+    good0 = dict(WISH, turn=0)
+    unpinned = dict(WISH, turn=1, urgency="high")  # extra field -> validation
+    unserializable = dict(WISH, turn=2, meta={"o": object()})  # bad value
+    good3 = dict(WISH, turn=3, desired="still fine")
+    bad = store.append_wishes(
+        "run-a", [good0, unpinned, unserializable, good3], skip_bad=True
+    )
+    assert store.read_wishes("run-a") == [good0, good3]
+    assert [wish for wish, _reason in bad] == [unpinned, unserializable]
+
+
 def _record(i, text, *, turn=0, kind="observation", importance=3.0, embedding=None):
     return MemoryRecord(
         id=i,

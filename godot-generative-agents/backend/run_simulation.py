@@ -615,6 +615,7 @@ def simulate(
     out_planner_sources: dict | None = None,
     out_plans: dict | None = None,
     out_events: list | None = None,
+    out_wishes: list | None = None,
     extra_action_names: list[str] | None = None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
@@ -704,6 +705,12 @@ def simulate(
     Pass an ``out_events`` list to collect the run's full ``GameEvent`` log
     (issue #467) as ``to_primitive()`` dicts — the #305 ``EventState`` shape
     the bake artifacts persist and the live feed publishes.
+
+    Pass an ``out_wishes`` list to collect the run's full ``ActionWish`` log
+    (issue #622) as ``to_primitive()`` dicts — the demand-signal record a
+    ``propose`` (or an unparsed command, #621) leaves behind. Empty for a
+    mock-brain run by construction: the mock never proposes and its authored
+    commands always parse, so ``game.wishes`` stays empty for the whole day.
 
     Pass ``extra_action_names`` (spec §3, #300) through to :func:`attach_agents` to
     widen every agent's ``action_names`` beyond its own authored-command verbs.
@@ -879,5 +886,12 @@ def simulate(
     # and the live feed carry the identical record.
     if out_events is not None:
         out_events.extend(event.to_primitive() for event in game.events)
+
+    # Hand back the run's full ActionWish log, if the caller asked for it
+    # (issue #622). Already-serialized WishState dicts, so bake artifacts and
+    # the live feed carry the identical record. Empty under the mock brain by
+    # construction (see the docstring above).
+    if out_wishes is not None:
+        out_wishes.extend(wish.to_primitive() for wish in game.wishes)
 
     return frames

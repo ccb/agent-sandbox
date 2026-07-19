@@ -116,6 +116,28 @@ export interface EventState {
   payload: Record<string, unknown>;
 }
 
+/** One ActionWish log entry — the #622 demand record (verbatim
+ * ActionWish.to_primitive()). Recorded deliberately (the `propose` verb) or
+ * automatically (a command that matched no verb at all, #621). */
+export interface WishState {
+  /** null if no actor resolved (mirrors EventState's null actor). */
+  actor: string | null;
+  turn: number;
+  location: string | null;
+  desired: string;
+  /** The because-clause; "" for parse-gap wishes. */
+  reason: string;
+  /** "proposed" | "parse_gap". */
+  trigger: string;
+  /** Incomplete goals, described, at wish time. */
+  goals: string[];
+  /** Item/character names in scope at wish time. */
+  scope: string[];
+  raw_command: string;
+  /** Extension point (#41 nouns, ...). */
+  meta: Record<string, unknown>;
+}
+
 export interface Replay {
   meta: ReplayMeta;
   frames: Frame[];
@@ -124,4 +146,6 @@ export interface Replay {
   memory_streams?: Record<string, MemoryRecord[]>;
   /** The GameEvent run record (#467). Absent from replays baked before it. */
   events?: EventState[];
+  /** The ActionWish demand record (#622). Absent from replays baked before it. */
+  wishes?: WishState[];
 }

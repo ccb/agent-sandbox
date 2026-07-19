@@ -59,6 +59,11 @@ class SimStepper(Protocol):
     * ``last_deciders`` -- how many agents were at a decision point in the last
       ``tick()`` (#366); when present, the loop stamps it onto each ``frame``
       record so a viewer can tell a "thinking" stall from a frozen sim (#372).
+    * ``drain_wishes() -> list[dict]`` -- buffered ``ActionWish.to_primitive()``
+      records (#622) formed during the last ``tick()``; when present, the loop
+      appends each as its OWN ``kind: "wish"`` record (not wrapped in
+      ``engine`` -- a wish is a first-class demand-signal record). Empty for
+      the whole run under a mock/scripted brain that never proposes.
     * ``run_usage() -> dict`` -- additive per-run usage fields
       (``run_calls``/``run_cost_usd``/``run_by_actor``) merged into
       ``GET /usage`` beside the lifetime summary (#526, #569); the ledger itself
@@ -221,12 +226,15 @@ class LiveRunController:
             drain = getattr(self._stepper, "drain_events", None)
             events = list(drain()) if drain is not None else []
             deciders = getattr(self._stepper, "last_deciders", None)
+            drain_w = getattr(self._stepper, "drain_wishes", None)
+            wishes = list(drain_w()) if drain_w is not None else []
         return {
             "generation": generation,
             "step": step,
             "agents": agents,
             "events": events,
             "deciders": deciders,
+            "wishes": wishes,
         }
 
     def pause(self) -> None:
@@ -266,10 +274,11 @@ async def run_loop(
     """The #349 stepping task: sleep, tick in a worker thread, publish.
 
     The tick boundary is the publish point (#262): each completed step appends
-    one ``frame`` record (plus any drained ``engine`` records), which wakes
-    every ``WS /ws`` subscriber. Pausing keeps the task alive (reads keep
-    working; ticking stops); cancellation is the clean shutdown path and still
-    publishes a final ``status(reason="stopped")`` record.
+    one ``frame`` record (plus any drained ``engine`` records and, when a
+    stepper wishes, ``wish`` records, #622), which wakes every ``WS /ws``
+    subscriber. Pausing keeps the task alive (reads keep working; ticking
+    stops); cancellation is the clean shutdown path and still publishes a
+    final ``status(reason="stopped")`` record.
 
     ``tick_seconds`` is the *target* cadence: each sleep subtracts the wall
     time the previous tick actually took (:func:`_pace`), so LLM-heavy
@@ -327,6 +336,8 @@ async def run_loop(
             )
             for event in result["events"]:
                 log.append("engine", step=result["step"], event=event)
+            for wish in result.get("wishes", ()):
+                log.append("wish", **wish)
     finally:
         controller.running = False
         log.append("status", reason="stopped", **controller.status())
