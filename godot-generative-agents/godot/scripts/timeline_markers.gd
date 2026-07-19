@@ -1,8 +1,8 @@
 extends Control
 ## The event-marker strip above the timeline scrubber (issue #249): one thin
 ## colored tick per "interesting moment" (game event / chat onset / reflection /
-## arrival), aligned to the scrubber's 0..total frame axis. Clicking seeks (the
-## panel routes marker_clicked into its seek_requested); hovering names the
+## arrival / wish), aligned to the scrubber's 0..total frame axis. Clicking seeks
+## (the panel routes marker_clicked into its seek_requested); hovering names the
 ## nearest moments via the dynamic tooltip. Pure UI: agent_panel.gd feeds it via
 ## set_markers()/set_filter() and it knows nothing about the sim.
 
@@ -13,19 +13,22 @@ signal marker_clicked(step: int)
 # Tick colors by marker kind. Red matches the sidebar's LIVE-badge red; blue and
 # green are the Cute Fantasy pack's own (the graph glyph's node blue, the gallery
 # glyph's hill green) so the strip doesn't look foreign on the parchment theme.
+# wish (#622, surfaced #625) gets its own rose-pink -- distinct from every other
+# tick color already on the strip (see test_replay_markers.gd's _far checks).
 const KIND_COLORS := {
 	"event": Color(0.82, 0.20, 0.15),
 	"chat": Color("0099db"),
 	"reflection": Color("7b4fbe"),
 	"arrival": Color("3e8948"),
+	"wish": Color("d9569f"),
 }
 # Per-event-type signature (issue #593): a game event's `action` picks a color +
 # a hover emoji so the boil-water arc reads at a glance. The colors are chosen to
 # stay clear of the other tick kinds already on the strip: sickness is a deep
 # crimson (NOT the default event red the lifecycle go/perform/travel ticks use),
 # boiled is amber, recovery is a teal (NOT the arrival green). Unknown action
-# types still fall back to the default event red so new events render. #302 will
-# add `code_rewrite` here.
+# types still fall back to the default event red so new events render. (#302,
+# still unbuilt as of #625, would add `code_rewrite` here.)
 const EVENT_STYLE := {
 	"sickness": {"color": Color("b3122b"), "emoji": "🤢"},   # crimson
 	"boiled": {"color": Color(0.95, 0.65, 0.15), "emoji": "🍵"},  # amber

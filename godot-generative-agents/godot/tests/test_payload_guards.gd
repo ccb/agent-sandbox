@@ -83,7 +83,9 @@ func _initialize() -> void:
 	_check(PayloadGuards.is_known_kind("frame"), "frame is a known kind")
 	_check(PayloadGuards.is_known_kind("status"), "status is a known kind")
 	_check(PayloadGuards.is_known_kind("engine"), "engine is a known kind")
-	_check(not PayloadGuards.is_known_kind("wish"), "a newer backend's 'wish' is unknown")
+	_check(PayloadGuards.is_known_kind("wish"), "wish is a known kind (#625)")
+	_check(not PayloadGuards.is_known_kind("intervention"),
+		"a newer backend's 'intervention' is still unknown")
 	_check(not PayloadGuards.is_known_kind(""), "empty kind is unknown")
 
 	# --- gap_too_large: a corrupt step can't allocate unboundedly ---
