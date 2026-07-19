@@ -30,7 +30,7 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
-from backend.actions import Activate, Deactivate, DrinkPenn
+from backend.actions import Activate, Deactivate, DrinkPenn, TalkTo, WaitPenn
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
@@ -53,13 +53,25 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
 # boiling is now a declarative transform, not a bespoke action. Upstreaming these
 # into the engine library is #464.
-PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft]
+PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft, WaitPenn, TalkTo]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
 # boil-water scenario wires in, on top of the base travel/perform. `make` is the
-# crafting verb the brain uses to boil ("make boiled water"); handed to
+# crafting verb the brain uses to boil ("make boiled water"); `wait` is the
+# universal honest-idle verb (#614) -- WaitPenn's pacing slots make a chosen
+# wait settle, so offering it is no longer a recurring-token-spend trap.
+# `talk_to` is the #614 agent-initiated conversation verb; its tool is curated
+# per-decide in `cognition.action_tools_for`. Handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
-PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate", "make"]
+PENN_ACTION_VERBS = [
+    "get",
+    "drink",
+    "activate",
+    "deactivate",
+    "make",
+    "wait",
+    "talk_to",
+]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
