@@ -694,7 +694,7 @@ advancing **on its own** while frontends follow along:
   { "cursor": 14, "kind": "engine", "step": 12, "event": { "channel": "narration", "text": "...", "actor": null, "turn": 12, "phase": null, "meta": {} } }
   { "cursor": 16, "kind": "intervention", "intervention": "say", "name": "Maya Chen", "speaker": "Alistair", "text": "The market closes at noon.", "turn": 12 }
   { "cursor": 17, "kind": "intervention", "intervention": "world_event", "text": "A storm rolls in.", "location": "The Willows Market", "turn": 12 }
-  { "cursor": 18, "kind": "wish", "actor": "Diego Torres", "turn": 118, "location": "UPenn:Van Pelt Library", "desired": "a bike rack near the library", "reason": "mine keeps getting stolen", "trigger": "proposed", "goals": [], "scope": [], "raw_command": "propose a bike rack near the library because mine keeps getting stolen", "meta": {} }
+  { "cursor": 18, "kind": "wish", "actor": "Diego Torres", "turn": 118, "location": "UPenn:Houston Hall", "desired": "fill the pot from the sink", "reason": "the recipe needs water", "trigger": "proposed", "goals": ["make the water safe to drink"], "scope": ["pot", "sink"], "raw_command": "propose fill the pot from the sink because the recipe needs water", "meta": {} }
   ```
 
   `frame` is one sim step in the **replay frame schema** — the same per-agent
