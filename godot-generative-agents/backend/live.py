@@ -64,6 +64,11 @@ class SimStepper(Protocol):
       appends each as its OWN ``kind: "wish"`` record (not wrapped in
       ``engine`` -- a wish is a first-class demand-signal record). Empty for
       the whole run under a mock/scripted brain that never proposes.
+    * ``drain_deciding() -> list[dict]`` -- buffered ``{agent, state, step,
+      elapsed_ms?}`` begin/end records from decisions made during the last
+      ``tick()`` (#551); when present, the loop appends each as its own
+      ``kind: "deciding"`` record, so a viewer can show which agent is
+      currently thinking rather than just a step-level decider count.
     * ``run_usage() -> dict`` -- additive per-run usage fields
       (``run_calls``/``run_cost_usd``/``run_by_actor``) merged into
       ``GET /usage`` beside the lifetime summary (#526, #569); the ledger itself
@@ -228,6 +233,8 @@ class LiveRunController:
             deciders = getattr(self._stepper, "last_deciders", None)
             drain_w = getattr(self._stepper, "drain_wishes", None)
             wishes = list(drain_w()) if drain_w is not None else []
+            drain_dec = getattr(self._stepper, "drain_deciding", None)
+            deciding = list(drain_dec()) if drain_dec is not None else []
         return {
             "generation": generation,
             "step": step,
@@ -235,6 +242,7 @@ class LiveRunController:
             "events": events,
             "deciders": deciders,
             "wishes": wishes,
+            "deciding": deciding,
         }
 
     def pause(self) -> None:
@@ -322,6 +330,16 @@ async def run_loop(
                 continue  # a reset raced this tick; drop the stale frame
             if result["agents"] is None:
                 controller.pause()  # run finished: stop ticking, keep serving
+                # A terminal tick publishes no frame, but tick_once still drained
+                # the deciding buffer into result["deciding"] -- and a parked #366
+                # straggler may have appended its `end` there after the last real
+                # tick. Publish those before "finished" (the buffer is already
+                # cleared, so it's here or nowhere), else the agent's thinking
+                # bubble stays stuck on the finished screen (#598 review). Engine
+                # events stay empty by construction (tick() returns None before it
+                # logs any), so only deciding needs republishing here.
+                for rec in result.get("deciding", ()):
+                    log.append("deciding", **rec)
                 log.append("status", reason="finished", **controller.status())
                 continue
             extra = (
@@ -338,6 +356,8 @@ async def run_loop(
                 log.append("engine", step=result["step"], event=event)
             for wish in result.get("wishes", ()):
                 log.append("wish", **wish)
+            for rec in result.get("deciding", ()):
+                log.append("deciding", **rec)
     finally:
         controller.running = False
         log.append("status", reason="stopped", **controller.status())

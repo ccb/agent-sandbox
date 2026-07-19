@@ -92,6 +92,10 @@ const BUBBLE_WIDTH := 210.0
 # Bubble text size, and how far the bubble's top sits above the nameplate.
 const BUBBLE_FONT_SIZE := 18
 const BUBBLE_Y_OFFSET := 78.0
+# The per-agent "thinking…" cue (#551) parks this much further up than the
+# speech bubble, so a mid-decision agent who is also mid-conversation shows
+# both without them overlapping.
+const THINK_Y_EXTRA := 30.0
 # A conversation plays back as staggered turn-taking: each line is shown for this
 # many sim steps, by ONLY its speaker, before the reply takes over -- so a
 # back-and-forth reads as a real exchange, not both agents talking at once. Each
@@ -152,6 +156,7 @@ const LivePacer := preload("res://scripts/live_pacer.gd")
 const RestartDetect := preload("res://scripts/restart_detect.gd")
 const RunState := preload("res://scripts/run_state.gd")
 const PayloadGuards := preload("res://scripts/payload_guards.gd")
+const DecidingState := preload("res://scripts/deciding_indicator.gd")
 
 # The replay/live contract schema this viewer renders (backend.contract
 # SCHEMA_VERSION). A payload declaring a different one still renders, but warns
@@ -289,6 +294,7 @@ const CATCHUP_MAX := 3.0
 var _last_frame_ms := 0
 var _thinking := false
 var _thinking_badge: Control
+var _deciding_state  # DecidingState: per-agent "deciding" lifecycle (#551)
 var _live_url := ""
 var _live_token := ""
 var _ws: WebSocketPeer = null
@@ -378,6 +384,10 @@ func _ready() -> void:
 	# sidebar so it draws in screen space above the world; hidden until a stall.
 	_thinking_badge = preload("res://scripts/thinking_badge.gd").new()
 	$UI.add_child(_thinking_badge)
+	# Per-agent "deciding" lifecycle (#551): fed by the backend's `deciding` feed
+	# records (_apply_record); drives each agent's thinking bubble and lets the
+	# global badge above prefer the real signal over #372's stall-inference.
+	_deciding_state = DecidingState.new()
 	_panel.gallery_requested.connect(_toggle_gallery)
 	_gallery.close_requested.connect(_close_gallery)
 
@@ -865,6 +875,11 @@ func _apply_record(rec: Variant) -> void:
 			# loader fills, so _update_agent_wish triggers identically either
 			# way) and, live-only, the HUD's request log (#625).
 			_apply_live_wish(record)
+		"deciding":
+			# Per-agent thinking lifecycle (#551): update state, refresh the
+			# one affected agent's bubble.
+			_deciding_state.apply(record)
+			_refresh_deciding(String(record.get("agent", "")))
 
 
 func _apply_live_wish(record: Dictionary) -> void:
@@ -1053,6 +1068,8 @@ func _teardown_cast() -> void:
 	_wish_index.clear()
 	_wish_start.clear()
 	_wish_text.clear()
+	if _deciding_state != null:
+		_deciding_state.clear()
 
 
 func _set_backend_run_state(state: String) -> void:
@@ -1342,6 +1359,26 @@ func _spawn_agent(name: String, index: int) -> void:
 	wish_bubble.visible = false
 	node.add_child(wish_bubble)
 
+	# A "thinking…" bubble parked above the nameplate, shown only while this agent
+	# is mid-decision (#551, driven by the backend `deciding` feed record). Styled
+	# as a status cue, distinct from the #245 white speech balloon; parked above
+	# where the speech bubble would sit so the two never overlap.
+	var think := Label.new()
+	think.add_theme_font_size_override("font_size", BUBBLE_FONT_SIZE)
+	think.add_theme_color_override("font_color", Color(0.96, 0.95, 0.90))
+	# A dark outline so the near-white status text stays legible over light map
+	# tiles (roads/grass), where bare font_color alone washes out (#598 review).
+	think.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	think.add_theme_constant_override("outline_size", 4)
+	think.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	think.custom_minimum_size = Vector2(BUBBLE_WIDTH, 0)
+	think.position = Vector2(
+		-BUBBLE_WIDTH / 2.0, -(SPRITE_HALF_PX + 50.0 + BUBBLE_Y_OFFSET + THINK_Y_EXTRA)
+	)
+	think.visible = false
+	think.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	node.add_child(think)
+
 	# A click target over the sprite, so you can track an agent by clicking them on
 	# the map (not just via the sidebar's Track button). The box roughly covers the
 	# scaled character; clicking it toggles tracking through the same panel path the
@@ -1384,9 +1421,11 @@ func _spawn_agent(name: String, index: int) -> void:
 
 	# "fan" is the agent's current (eased) fan-out offset (#560); it glides toward
 	# the target ring offset each frame so co-located sprites don't teleport.
+	# "think" is the per-agent "thinking…" bubble (#551), shown while deciding.
 	_agents[name] = {
 		"node": node, "sprite": spr, "label": label, "bubble": bubble,
 		"wish_bubble": wish_bubble, "trail": trail, "fan": Vector2.ZERO,
+		"think": think
 	}
 
 
@@ -2006,7 +2045,16 @@ func _process(delta: float) -> void:
 	# on _is_live, so baked replay never shows it. Edge-triggered so the sidebar
 	# text is only rewritten on change.
 	if _is_live:
-		var stalled := ThinkingIndicator.should_show(
+		# The explicit per-agent signal OR #372's head-hasn't-grown heuristic
+		# (#598 review): the `deciding` feed only publishes at the tick boundary,
+		# so a decide that begins AND ends within one tick leaves any_deciding()
+		# already false by the time we read it. Latching the heuristic off the
+		# moment any record arrived (the old behavior) therefore turned the badge
+		# dark under a real brain -- the opposite of the intended cue. OR-ing keeps
+		# the stall heuristic live to catch within-tick decides, while any_deciding()
+		# adds the cases that DO span ticks (a parked #366 straggler). Mock is
+		# unaffected: no records -> any_deciding() false -> pure stall-inference.
+		var stalled: bool = _deciding_state.any_deciding() or ThinkingIndicator.should_show(
 			_is_live, _backend_run_state, i >= last,
 			Time.get_ticks_msec() - _last_frame_ms, THINKING_STALL_MS)
 		if stalled != _thinking:
@@ -2123,6 +2171,18 @@ func _process(delta: float) -> void:
 		_refresh_wish_bubble(name, fpos)
 	_refresh_links(fpos)
 
+	# Animate per-agent thinking bubbles (#551): a shared ellipsis clock so every
+	# visible bubble ticks in lockstep, same cadence as the global badge's cue.
+	# Skip the recompute + per-agent sweep entirely when nobody is deciding -- a
+	# bubble is visible only while its agent is (is_deciding => any_deciding), so
+	# there is nothing to animate otherwise (#598 review).
+	if _deciding_state.any_deciding():
+		var _dots := ThinkingIndicator.ellipsis(Time.get_ticks_msec())
+		for _n in _agents:
+			var _t_bubble: Label = _agents[_n]["think"]
+			if _t_bubble.visible:
+				_t_bubble.text = _dots
+
 	# Dim everything outside the tracked agent's perception radius (no-op when free).
 	_update_fog()
 
@@ -2173,6 +2233,14 @@ func _clip(text: String) -> String:
 	if text.length() <= BUBBLE_MAX_CHARS:
 		return text
 	return text.substr(0, BUBBLE_MAX_CHARS - 1).strip_edges() + "…"
+
+
+func _refresh_deciding(name: String) -> void:
+	# Show/hide this agent's thinking bubble from the authoritative signal (#551).
+	if not _agents.has(name):
+		return
+	var think: Label = _agents[name]["think"]
+	think.visible = _deciding_state.is_deciding(name)
 
 
 func _refresh_bubble(name: String, fpos: float) -> void:
