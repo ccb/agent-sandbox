@@ -367,7 +367,9 @@ def main() -> int:
         store.update_run(
             run_id, status="finished", steps=len(replay["frames"]), cost=0.0
         )
-        print(f"Persisted run {run_id} to {store.root} (frames + events + sim.db).")
+        print(
+            f"Persisted run {run_id} to {store.root} (frames + events + wishes + sim.db)."
+        )
     return 0
 
 
