@@ -716,7 +716,8 @@ class PennStepper:
                 "chat": None,
                 "stop_since": 0,
                 # Pinned during a multi-tick conversation (issue #371); step()
-                # skips schedule-advance/decision/movement while set.
+                # skips schedule-advance/decision/movement while set. Stays set
+                # through the post-conversation playback hold (#673).
                 "conversing": False,
             }
         self.injector = LiveMeetingInjector(
