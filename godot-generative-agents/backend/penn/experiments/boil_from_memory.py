@@ -20,11 +20,31 @@ _SIM_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_SIM_DIR))
 
 from backend.run_simulation import simulate  # noqa: E402
-from penn_world import WORLD_DATA_BOIL, build_penn_world  # noqa: E402
+from penn_world import (  # noqa: E402
+    PENN_ACTION_VERBS,
+    WORLD_DATA_BOIL,
+    build_penn_world,
+)
+from backend.sim_config import RetrievalConfig  # noqa: E402
 from text_adventure_games.llm_client import LlmConfig, create_llm_client  # noqa: E402
 from text_adventure_games.usage import UsageLedger  # noqa: E402
 
 _AVERSION = "Last time I drank the unboiled water at Houston Hall I got violently ill."
+
+# Importance-forward retrieval (#633). The default profile weights recency at
+# 1.0. In the sparse nominal run the seeded t=0 aversion still surfaces, but the
+# default is fragile: recency = decay**(turn - last_accessed) collapses toward 0
+# for an old memory, so once enough fresh same-place memories accrue (a live
+# brain deciding every few ticks) the importance-5 aversion drops out of the
+# top-k and the seeded arm silently reads like control for plumbing reasons, not
+# cognition. Down-weighting recency to 0.25 (importance/relevance stay 1.0) makes
+# a high-importance seed rank top-1 regardless of decide density -- verified
+# against the real Houston decide observation at 80 accrued same-place memories,
+# where the default buries it and this surfaces it. Applied to BOTH arms, so it
+# removes a retrieval confound rather than biasing one: control has no aversion
+# to surface. (The general engine-side fix -- an importance/relevance floor in
+# memory.retrieve -- is the #633 follow-up to main.)
+_RETRIEVAL = RetrievalConfig(alpha_recency=0.25)
 
 
 def classify_outcome(char) -> str:
@@ -80,6 +100,14 @@ def run_arm(*, seeded, trials, steps, make_client):
             personas=personas,
             build_world_fn=build_capture,
             llm_client=make_client(ledger),
+            # Hand the live brain Penn's full verb set (#635 parity with the
+            # bake/serve entry points). get/drink/make arrive via authored
+            # commands anyway, but this keeps activate/deactivate available and
+            # the wiring identical to the canonical runners.
+            extra_action_names=PENN_ACTION_VERBS,
+            # Importance-forward retrieval so the seeded aversion isn't buried
+            # (#633); a no-op for the control arm, which has no seed.
+            retrieval=_RETRIEVAL,
         )
         char = captured[personas[0]["name"]]
         tally[classify_outcome(char)] += 1

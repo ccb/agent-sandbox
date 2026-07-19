@@ -199,6 +199,9 @@ IMPORTANCE_SCORE_TOOL = {
     },
 }
 
+from text_adventure_games.actions.things import CRAFT_VERBS
+from text_adventure_games.enums import ActionName, Property
+
 from . import seed
 from .actions import Travel
 from .planner import LLMPlanner, MockPlanner
@@ -698,19 +701,51 @@ def action_tools_for(game, char, max_enum: int = DECIDE_MAX_ENUM):
     :class:`~backend.actions.Travel` action matches a command against. The
     menu and the precondition gate can therefore never disagree about which
     venues exist.
+
+    The same enrichment (#635) covers the item-bearing verbs: without it a
+    tool-calling brain must blind-guess the exact item string into the engine's
+    generic free-text ``arguments`` slot, and the Penn boil items ship long,
+    alias-thin names (``pot of murky water``) a model reliably mis-phrases
+    (``water``) -- so the boil arc is unexpressible and #595 measures nothing.
+    We fill each verb's ``arguments`` enum with the *routable argument string*:
+    gettable / drinkable item names in scope for ``get`` / ``drink``, and recipe
+    names for the craft verb (``make``). Every enum is guarded by ``max_enum``
+    (too many candidates -> the slot stays free text, the model reads them off
+    the observation instead). The precondition gate still owns validity -- e.g.
+    Drink's carried-only check -- so enumerating a name never widens what's
+    actually doable; it only makes the name *nameable*.
     """
     agent = char.agent
     tools = tools_for(
         game.parser, actor=char, names=agent.action_names, max_enum=max_enum
     )
     destinations = sorted(game.locations)
-    if len(destinations) > max_enum:
-        return tools  # too many venues to enumerate: the slot stays free text
+    # Per-verb enum of the exact argument string the model should emit. Keyed by
+    # the verb (== tool name); the craft verbs are matched separately below since
+    # any of CRAFT_VERBS ("make"/"cook"/...) may be the authored one.
+    scope = game.parser.get_items_in_scope(char)
+    arg_enums = {
+        ActionName.GET: sorted(
+            n for n, it in scope.items() if it.get_property(Property.GETTABLE)
+        ),
+        ActionName.DRINK: sorted(
+            n for n, it in scope.items() if it.get_property(Property.DRINKABLE)
+        ),
+    }
+    craftable = sorted({n for r in getattr(game, "recipes", []) for n in r.names()})
     for tool in tools:
-        if tool["name"] == Travel.ACTION_NAME:
-            prop = tool["parameters"]["properties"].get("destination")
-            if prop is not None:
-                prop["enum"] = destinations
+        name = tool["name"]
+        props = tool["parameters"]["properties"]
+        if name == Travel.ACTION_NAME:
+            if len(destinations) <= max_enum and "destination" in props:
+                props["destination"]["enum"] = destinations
+            continue
+        values = craftable if name in CRAFT_VERBS else arg_enums.get(name)
+        if values and len(values) <= max_enum and "arguments" in props:
+            props["arguments"]["enum"] = values
+            # Overwrite the engine's generic placeholder ("... e.g. 'player with
+            # club'"), which actively misleads once the slot is a closed menu.
+            props["arguments"]["description"] = "choose exactly one of the listed names"
     return tools
 
 
