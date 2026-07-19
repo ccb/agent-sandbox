@@ -312,6 +312,11 @@ def _settle_pair_at_an_arena(stepper):
     a, b, c = (stepper.chars[name] for name in stepper.order)
     for char, spot in ((a, near), (b, near), (c, far)):
         _move(char, spot)
+        # Teleporting must move the character's map tile too (issue #662):
+        # perception and the conversation audience are tile-gated, so a pair
+        # is only really "co-located" when standing on its arena, not when
+        # parked there by location with spawn-distant tiles.
+        char.tile = min(stepper.world.world_map.tiles_for(spot.tile_address))
         stepper.state[char.name].update({"performing": True, "path": []})
     return a, b
 

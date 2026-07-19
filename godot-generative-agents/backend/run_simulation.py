@@ -529,8 +529,12 @@ def step(
         # a react-started conversation (#370). Inert before #370: a
         # conversation could only ever start between settled agents, whose
         # path is empty, so no pinned agent ever had tiles left to walk.
+        # The character mirrors the state tile so TiledGame.can_perceive
+        # judges distance from where the agent actually stands, not its
+        # spawn point (issue #662).
         if st["path"] and not st.get("conversing"):
             st["tile"] = st["path"].pop(0)
+            chars[name].tile = tuple(st["tile"])
             if not st["path"]:
                 # Arrived: re-anchor the decide-context clock (#580) so
                 # "how long on this stop" counts time AT the stop --
