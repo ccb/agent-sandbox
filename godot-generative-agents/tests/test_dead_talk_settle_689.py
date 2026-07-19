@@ -142,3 +142,58 @@ def test_empty_talk_settles_briefly_and_bounds_the_retry():
     step(game, chars, state, 30, order=order, world_map=_StubMap(), emoji=emoji)
     assert len(calls) == 2
     assert chars["Diego Cruz"].agent.schedule.stop_index == 0
+
+
+from text_adventure_games.planning import ACTION_FAILED  # noqa: E402
+
+
+class _RecordingPlanner:
+    """A stub planner that records every revision trigger it's offered and
+    proposes no change -- mirrors the pattern in
+    test_react_interruption_370.py's test_replan_choice_fires_reacted_revision_trigger.
+    """
+
+    def __init__(self):
+        self.triggers = []
+
+    def revise(self, plan, trigger, memory, clock=None):
+        self.triggers.append(trigger)
+        return plan  # unchanged -> no schedule commit needed
+
+
+def test_blocked_talk_settles_and_still_offers_the_planner_a_replan():
+    game, chars, order = _build(sofia_home="Library")  # NOT co-located -> blocked
+    calls = _script_decide_forever(chars, "Diego Cruz", "talk to Sofia Reyes")
+    recorder = _RecordingPlanner()
+    chars["Diego Cruz"].agent.planner = recorder
+    state = {n: _full_state() for n in order}
+    emoji = {n: "\U0001f9d1" for n in order}
+
+    step(game, chars, state, 0, order=order, world_map=_StubMap(), emoji=emoji)
+    assert len(calls) == 1
+    assert state["Diego Cruz"]["performing"] is True
+    assert state["Diego Cruz"]["on_plan"] is False
+    assert state["Diego Cruz"]["perform_until"] == 30
+    # The existing ACTION_FAILED revise-plan hook still fires alongside the
+    # new settle -- this fix adds a bound, it doesn't remove the nudge.
+    assert len(recorder.triggers) == 1
+    assert recorder.triggers[0].reason == ACTION_FAILED
+
+    # Bounded here too: no re-decide until the settle expires.
+    step(game, chars, state, 5, order=order, world_map=_StubMap(), emoji=emoji)
+    assert len(calls) == 1
+
+
+def test_non_talk_instantaneous_command_is_unaffected():
+    # Regression guard: a real one-tick verb (#300 get/drink/boil-style) must
+    # keep re-deciding every tick exactly as before #689 -- only a dead talk
+    # gets the settle.
+    game, chars, order = _build(sofia_home="Plaza")
+    calls = _script_decide_forever(chars, "Diego Cruz", "wait")
+    state = {n: _full_state() for n in order}
+    emoji = {n: "\U0001f9d1" for n in order}
+
+    step(game, chars, state, 0, order=order, world_map=_StubMap(), emoji=emoji)
+    assert state["Diego Cruz"]["performing"] is False
+    step(game, chars, state, 1, order=order, world_map=_StubMap(), emoji=emoji)
+    assert len(calls) == 2  # re-decided next tick, unchanged from today
