@@ -616,6 +616,7 @@ def simulate(
     out_plans: dict | None = None,
     out_events: list | None = None,
     extra_action_names: list[str] | None = None,
+    stop_when=None,
 ) -> list[dict]:
     """Run the simulation and return one movement frame per step.
 
@@ -707,6 +708,13 @@ def simulate(
 
     Pass ``extra_action_names`` (spec §3, #300) through to :func:`attach_agents` to
     widen every agent's ``action_names`` beyond its own authored-command verbs.
+
+    Pass ``stop_when`` (a ``game -> bool`` predicate, #676) to end the run early:
+    it is checked after each step's frame is recorded, and a truthy result breaks
+    the loop (the deciding step stays in the returned frames). Used by the boil
+    experiment to stop the moment the outcome is decided instead of paying for
+    idle live decides afterward. ``None`` (the default) runs the full ``num_steps``
+    -- so the bake path is byte-identical.
     """
     # The world is injected: a caller passes its own personas + builder (e.g.
     # penn_world's perception-gated builder). The builder receives the world_map
@@ -859,6 +867,15 @@ def simulate(
                     f"+{delta} LLM calls ({total_calls} total){chat_note}",
                 )
             )
+
+        # Early termination (#676): a caller can end the run as soon as the
+        # thing it measures has happened -- e.g. the boil experiment stops the
+        # moment the agent drinks, rather than paying for ~75 more live decides
+        # by an agent with nothing left to pursue. Checked after the frame is
+        # recorded, so the deciding step stays in the replay. Never set on the
+        # bake path, so the bundled replay is byte-identical.
+        if stop_when is not None and stop_when(game):
+            break
 
     # Hand back each agent's complete memory stream, if the caller asked for it.
     if out_memories is not None:
