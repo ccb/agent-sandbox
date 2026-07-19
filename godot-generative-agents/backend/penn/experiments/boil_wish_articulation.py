@@ -32,11 +32,12 @@ The propose tool must be reachable: Penn's live entry points only expose
 ``PENN_ACTION_VERBS`` (get/drink/activate/deactivate/make) to a real brain's
 tool menu (via ``attach_agents(extra_action_names=...)``) -- "propose" isn't
 among them, so this experiment passes its own
-``extra_action_names=[*PENN_ACTION_VERBS, "propose"]`` to ``simulate()``,
-independent of the world's authored schedule commands (which only cover
-get/drink here -- "make" is deliberately never authored, since scripting the
-boil attempt would defeat the point of testing whether the agent reaches for
-it on its own).
+``extra_action_names=[*PENN_ACTION_VERBS, "propose"]`` to ``simulate()`` so a
+live brain can reach ``propose`` at all: "propose" is never in a schedule's
+authored commands (scripting the proposal would defeat the point of testing
+whether the agent reaches for it on its own). ("make" *is* authored in the
+reused boil fixture, so it already reaches the tool menu via authored_verbs --
+widening the menu here is only needed for "propose".)
 
 After a run, this module's own #623 wiring (:func:`demand_report`) runs the
 ``most_wanted_actions`` aggregator over the run's whole wish log: the withheld
