@@ -103,6 +103,11 @@ class CognitionConfig:
     conversation_max_exchanges: int = (
         6  # max back-and-forth lines per conversation (CONVERSATION_MAX_EXCHANGES)
     )
+    # Post-conversation playback hold (#673): steps per transcript line that a
+    # just-finished pair stays pinned, so the viewer can play the exchange back
+    # while they visibly stand together. Mirrors viewer.gd's DIALOGUE_LINE_STEPS
+    # (CONVERSATION_LINE_PLAYBACK_STEPS).
+    conversation_line_playback_steps: int = 14
     # Cognition tools (issue #512; the sim-level mirror of the engine's
     # AgentConfig.cognition_tools, #358): when True, a real supplied brain may
     # consult recall / query_knowledge / read_plan before picking its action

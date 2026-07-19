@@ -1,10 +1,14 @@
-"""Multi-tick conversation pacing (issue #371).
+"""Multi-tick conversation pacing (issue #371) and the playback hold (#673).
 
 A conversation is a stateful activity spread across ticks: roughly one line per
 tick, participants pinned "conversing" (they neither walk nor re-decide), each
 line published on the tick it was said, and the #582 outcome pass firing only
-when the conversation ends. The deterministic mock never produces an utterance,
-so every conversation dies on its first empty line -> the bake is byte-identical.
+when the conversation ends. After the last line the pair stays pinned for the
+viewer's playback window -- ``len(lines) * line_playback_steps`` further steps
+(#673) -- so the map shows them standing together while the exchange plays back,
+instead of a conversation link stretching between two walkers. The deterministic
+mock never produces an utterance, so every conversation dies on its first empty
+line, holds nobody, and the bake is byte-identical.
 
 Fully offline (fake brains). Run from the repo root::
 
@@ -90,7 +94,9 @@ def _colocated_pair(brain):
 
 
 def test_conversation_spans_multiple_ticks_one_line_each():
-    # Three lines -> three ticks with a line, then a fourth tick that ends it.
+    # Three lines -> three ticks with a line; the end tick completes the
+    # conversation (outcome + cooldown) but HOLDS the pair for the playback
+    # window (#673): 3 lines x 2 steps/line -> released at tick 2 + 6 = 8.
     brain = _ScriptedConvoBrain(["Hi!", "How are you?", "Good, bye!"])
     game, chars, state, frame, order = _colocated_pair(brain)
     active: dict = {}
@@ -98,7 +104,15 @@ def test_conversation_spans_multiple_ticks_one_line_each():
 
     # Tick 0: conversation starts, first line said, still going.
     completed = maybe_converse(
-        game, chars, state, frame, 0, cooldowns, order, active=active
+        game,
+        chars,
+        state,
+        frame,
+        0,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
     )
     assert completed == 0
     assert len(active) == 1
@@ -109,7 +123,15 @@ def test_conversation_spans_multiple_ticks_one_line_each():
 
     # Tick 1: second line, transcript grows by one.
     completed = maybe_converse(
-        game, chars, state, frame, 1, cooldowns, order, active=active
+        game,
+        chars,
+        state,
+        frame,
+        1,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
     )
     assert completed == 0
     assert frame["Maria Lopez"]["chat"] == [
@@ -117,22 +139,70 @@ def test_conversation_spans_multiple_ticks_one_line_each():
         ["Ayesha Khan", "How are you?"],
     ]
 
-    # Tick 2: third line carries done=True -> conversation ends this tick.
+    # Tick 2: third line carries done=True -> the conversation COMPLETES this
+    # tick (counted, outcome pass, cooldown) but the pair stays pinned.
     completed = maybe_converse(
-        game, chars, state, frame, 2, cooldowns, order, active=active
+        game,
+        chars,
+        state,
+        frame,
+        2,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
     )
     assert completed == 1
-    assert active == {}  # conversation removed
-    assert state["Maria Lopez"]["conversing"] is False
-    assert state["Ayesha Khan"]["conversing"] is False
     assert brain.outcome_calls == 2  # outcome fires once per participant, on end
     assert cooldowns  # cooldown recorded on end
     # Full transcript on both cards.
     assert len(frame["Maria Lopez"]["chat"]) == 3
+    # The playback hold (#673): the record stays active, both stay conversing.
+    assert len(active) == 1
+    assert state["Maria Lopez"]["conversing"] is True
+    assert state["Ayesha Khan"]["conversing"] is True
+
+    # Ticks 3..7: held -- no new lines, no new completions, still pinned.
+    for step in range(3, 8):
+        completed = maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            order,
+            active=active,
+            line_playback_steps=2,
+        )
+        assert completed == 0
+        assert len(frame["Maria Lopez"]["chat"]) == 3
+        assert state["Maria Lopez"]["conversing"] is True, f"released early at {step}"
+        assert state["Ayesha Khan"]["conversing"] is True
+
+    # Tick 8: the window (3 lines x 2 steps) has elapsed -> released.
+    completed = maybe_converse(
+        game,
+        chars,
+        state,
+        frame,
+        8,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
+    )
+    assert completed == 0
+    assert active == {}
+    assert state["Maria Lopez"]["conversing"] is False
+    assert state["Ayesha Khan"]["conversing"] is False
+    assert brain.outcome_calls == 2  # release runs no second outcome pass
 
 
 def test_max_exchanges_caps_across_ticks():
     # Ramble forever; the cap ends the conversation after max_exchanges lines.
+    # Lines land ticks 0-3, so the 1-step/line playback hold (#673) elapses at
+    # tick 3 + 4 = 7 -- comfortably inside the 10-tick drive.
     brain = _ScriptedConvoBrain([f"line{i}" for i in range(50)])
     game, chars, state, frame, order = _colocated_pair(brain)
     active: dict = {}
@@ -149,6 +219,7 @@ def test_max_exchanges_caps_across_ticks():
             order,
             active=active,
             max_exchanges=4,
+            line_playback_steps=1,
         )
     assert total == 1  # exactly one conversation, capped and completed
     assert active == {}
@@ -245,6 +316,74 @@ def test_finished_participant_not_repaired_same_tick():
     assert c_name not in brain.outcome_by_actor
 
 
+def test_playback_hold_keeps_pair_busy_and_undraftable():
+    """#673: for the whole playback window a just-finished pair is still "busy"
+    -- neither participant may be drafted into a new conversation -- and the
+    release sweep runs no second outcome/cooldown pass. Diego (settled, willing)
+    has no free partner until the window elapses."""
+    a_name, b_name, c_name = "Maria Lopez", "Ayesha Khan", "Diego Fields"
+    brain = _ScriptedConvoBrain(["Hi!", "How are you?", "Good, bye!"])
+    game, chars, state, frame = _colocated_trio(brain, [a_name, b_name, c_name])
+    order = [a_name, b_name, c_name]
+    active: dict = {}
+    cooldowns: dict = {}
+
+    # Ticks 0-2: A-B talk (first-come matching leaves C without a partner);
+    # the third line carries done=True, ending the exchange at tick 2.
+    completed = 0
+    for step in range(3):
+        completed += maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            order,
+            active=active,
+            line_playback_steps=2,
+        )
+    assert completed == 1
+    assert brain.outcome_calls == 2
+    cooldowns_at_end = dict(cooldowns)
+
+    # Hold window: 3 lines x 2 steps/line -> ticks 3..7 held, released at 8.
+    for step in range(3, 8):
+        maybe_converse(
+            game,
+            chars,
+            state,
+            frame,
+            step,
+            cooldowns,
+            order,
+            active=active,
+            line_playback_steps=2,
+        )
+        assert state[a_name]["conversing"] is True, f"released early at {step}"
+        assert state[b_name]["conversing"] is True
+        # C never got a partner: both A and B are still busy while held.
+        assert state[c_name]["chat"] is None
+
+    maybe_converse(
+        game,
+        chars,
+        state,
+        frame,
+        8,
+        cooldowns,
+        order,
+        active=active,
+        line_playback_steps=2,
+    )
+    assert active == {}
+    assert state[a_name]["conversing"] is False
+    assert state[b_name]["conversing"] is False
+    # The release is bookkeeping only: no second outcome pass, no new cooldown.
+    assert brain.outcome_calls == 2
+    assert cooldowns == cooldowns_at_end
+
+
 def test_mock_brain_never_converses_and_stays_inert():
     personas = [_persona("Maria Lopez"), _persona("Ayesha Khan")]
     game, chars = build_world(None, personas, _LOCATIONS)
@@ -271,6 +410,7 @@ def test_mock_brain_never_converses_and_stays_inert():
 
 
 from backend.run_simulation import step  # noqa: E402
+from backend.sim_config import CognitionConfig  # noqa: E402
 from backend.world_map import WorldMap  # noqa: E402
 
 
@@ -415,6 +555,105 @@ def test_step_perform_until_gate_holds_conversing_agent_pinned():
     assert state["Maria Lopez"]["performing"] is True
     assert state["Maria Lopez"]["tile"] == tile_before
     assert len(frame["Maria Lopez"]["chat"]) == chat_before + 1
+
+
+def test_step_holds_pair_through_playback_window_then_releases():
+    """#673 at the step() level: after the last line, an elapsed activity timer
+    must NOT un-pin the pair -- they stand together (no walk, no re-decide, no
+    schedule advance) until the playback window elapses, then the sweep releases
+    them. With 3 lines at 1 step/line, the exchange ends at tick 2 and the hold
+    covers ticks 3-5."""
+    brain = _ScriptedConvoBrain(["Hi!", "Hello!", "Bye!"])
+    game, chars, state, _seed, order = _colocated_pair(brain)
+    for name in order:
+        state[name].update(
+            {
+                "tile": (0, 0),
+                "path": [],
+                "pron": "\U0001f9d1",
+                "desc": "reading",
+                "perform_until": 100,  # far off while the conversation runs
+                "reasoning": "",
+                "memories": [],
+                "stop_since": 0,
+                "on_plan": True,
+            }
+        )
+    active: dict = {}
+    wm = WorldMap.__new__(WorldMap)  # unused: held agents never path
+    emoji = {n: "\U0001f9d1" for n in order}
+    cog = CognitionConfig(conversation_line_playback_steps=1)
+
+    # Ticks 0-2: the conversation runs and ends (done=True on the third line).
+    for step_idx in range(3):
+        frame, _ = step(
+            game,
+            chars,
+            state,
+            step_idx,
+            order=order,
+            world_map=wm,
+            emoji=emoji,
+            conversation_enabled=True,
+            active_conversations=active,
+            cog=cog,
+        )
+    assert len(frame["Maria Lopez"]["chat"]) == 3
+    assert state["Maria Lopez"]["conversing"] is True  # held past the last line
+    tile_before = state["Maria Lopez"]["tile"]
+
+    # The scheduled activity's timer elapses mid-hold: without the hold the
+    # pre-pass would advance the schedule and free the agents to walk.
+    state["Maria Lopez"]["perform_until"] = 1
+    state["Ayesha Khan"]["perform_until"] = 1
+
+    # Ticks 3-4: held -- pinned in place, schedule untouched, transcript frozen.
+    for step_idx in (3, 4):
+        frame, _ = step(
+            game,
+            chars,
+            state,
+            step_idx,
+            order=order,
+            world_map=wm,
+            emoji=emoji,
+            conversation_enabled=True,
+            active_conversations=active,
+            cog=cog,
+        )
+        assert state["Maria Lopez"]["conversing"] is True, f"released at {step_idx}"
+        assert state["Maria Lopez"]["performing"] is True
+        assert state["Maria Lopez"]["tile"] == tile_before
+        assert len(frame["Maria Lopez"]["chat"]) == 3
+
+    # Tick 5: the window (3 lines x 1 step) elapses -> the sweep releases both.
+    # The pre-pass ran before the sweep this tick, so they still didn't move;
+    # from the next tick they resume their schedules normally.
+    frame, _ = step(
+        game,
+        chars,
+        state,
+        5,
+        order=order,
+        world_map=wm,
+        emoji=emoji,
+        conversation_enabled=True,
+        active_conversations=active,
+        cog=cog,
+    )
+    assert active == {}
+    assert state["Maria Lopez"]["conversing"] is False
+    assert state["Ayesha Khan"]["conversing"] is False
+    assert state["Maria Lopez"]["tile"] == tile_before
+
+
+def test_playback_pacing_mirrors_viewer_constant():
+    """The backend hold and the viewer's playback must count the same steps, or
+    the link/bubbles outlive the pin again (#673). viewer.gd shows each line for
+    DIALOGUE_LINE_STEPS (14.0) steps; penn_world.py mirrors it for the authored
+    meeting injectors; cognition.py mirrors it for the hold. Pin all three."""
+    assert cognition.CONVERSATION_LINE_PLAYBACK_STEPS == 14
+    assert CognitionConfig().conversation_line_playback_steps == 14
 
 
 def test_step_rejects_conversation_enabled_without_active_dict():
