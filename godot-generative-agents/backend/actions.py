@@ -551,30 +551,31 @@ class CheckOutBook(base.Action):
         if self.character is None:
             return None
         items_in_scope = self.parser.get_items_in_scope(self.character)
-        # First, try to match library books only (to avoid matching the shelf)
+        loc = self.character.location
+        # Every library book the command could mean, as ONE pool: books in the
+        # actor's own scope (shelf or pocket) plus books checked out by someone
+        # standing here. One pool means the longest-name tie-break resolves the
+        # exact title even when a shorter-named cousin is still shelved, and a
+        # borrowed book always reaches the "checked out by X" gate instead of
+        # being shadowed by whatever else shares a word with it.
         books = {
             name: item
-            for name, item in items_in_scope.items()
-            if item.get_property("library_book")
-        }
-        book = self.parser.match_item(command, books, hint=None)
-        if book is not None:
-            return book
-        # If no library book matched, try any item (for error checking)
-        book = self.parser.match_item(command, items_in_scope, hint=None)
-        if book is not None:
-            return book
-        loc = self.character.location
-        if loc is None:
-            return None
-        held = {
-            name: item
-            for other in loc.characters.values()
+            for other in (loc.characters.values() if loc is not None else ())
             if other is not self.character
             for name, item in other.inventory.items()
             if item.get_property("library_book")
         }
-        return self.parser.match_item(command, held, hint=None)
+        books.update(
+            (name, item)
+            for name, item in items_in_scope.items()
+            if item.get_property("library_book")
+        )
+        book = self.parser.match_item(command, books, hint=None)
+        if book is not None:
+            return book
+        # No library book named: match any in-scope item so the gate can say
+        # "The X isn't a library book" instead of "I don't see it".
+        return self.parser.match_item(command, items_in_scope, hint=None)
 
     def check_preconditions(self) -> bool:
         if not self.was_matched(self.character, "No one is checking out a book."):
@@ -584,15 +585,16 @@ class CheckOutBook(base.Action):
             "There is no library shelf to check a book out from here.",
         ):
             return False
-        if self.book is not None and self.book.get_property("checked_out_by"):
+        if self.book is not None:
             holder = self.book.get_property("checked_out_by")
-            message = (
-                f"You already have {self.book.name} checked out."
-                if holder == self.character.name
-                else f"The {self.book.name} is already checked out by {holder}."
-            )
-            self.parser.fail(message)
-            return False
+            if holder:
+                message = (
+                    f"You already have {self.book.name} checked out."
+                    if holder == self.character.name
+                    else f"The {self.book.name} is already checked out by {holder}."
+                )
+                self.parser.fail(message)
+                return False
         if not self.was_matched(self.book, "I don't see that book on the shelf."):
             return False
         if not self.book.get_property("library_book"):

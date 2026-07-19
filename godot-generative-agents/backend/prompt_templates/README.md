@@ -66,7 +66,8 @@ and double quotes in this text (`Isabella Rodriguez's apartment`, `— its`,
 `tests/test_prompt_templates.py` only pins the shared *engine's* templates
 (`text_adventure_games/prompt_templates/`); the exact rendered output of these
 Smallville/Penn templates is pinned by the memory tests in
-`godot-generative-agents/tests/test_boil_water.py` (`remember_outcome`'s
+`godot-generative-agents/tests/test_boil_water.py` and
+`godot-generative-agents/tests/test_book_loop_616.py` (`remember_outcome`'s
 `reflection` renders), which guard this escaping behavior for this package.
 `decide_context`'s exact output is pinned by `godot-generative-agents/tests/test_decide_context.py`;
 `nearby_affordances`'s by `godot-generative-agents/tests/test_affordance_wiring_613.py`;

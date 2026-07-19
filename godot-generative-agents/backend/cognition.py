@@ -1413,20 +1413,6 @@ def kind_counts_for_persona(agent) -> dict[str, int]:
     return counts
 
 
-def _named_thing(char, command: str):
-    """The inventory or room item *command* names -- longest name wins,
-    mirroring the parser's own tie-break -- or None. remember_outcome runs
-    after the action resolved, so a just-read book is found in the pocket."""
-    cmd = command.lower()
-    pool = dict(getattr(char.location, "items", {}) or {})
-    pool.update(char.inventory)
-    best = None
-    for name, item in pool.items():
-        if name.lower() in cmd and (best is None or len(name) > len(best.name)):
-            best = item
-    return best
-
-
 def remember_outcome(char, command: str, step: int) -> None:
     """Record ``char``'s own successful action as a first-person memory.
 
@@ -1515,9 +1501,11 @@ def remember_outcome(char, command: str, step: int) -> None:
         text = render("reflection", verb=verb, item=rest.strip())
         importance = 3.0
     elif verb == "read":
-        # The loop's payoff: the content itself enters memory. Quote the
-        # read_text of the thing actually read (pocket or room).
-        thing = _named_thing(char, command)
+        # The loop's payoff: the content itself enters memory. parse_command
+        # stamped the action it just ran on char.last_action, and Read already
+        # matched the exact item (aliases, containers, worn -- the parser's
+        # full scope rules); reuse that instead of re-deriving the match here.
+        thing = getattr(getattr(char, "last_action", None), "item", None)
         content = thing.get_property("read_text") if thing else ""
         text = render(
             "reflection",

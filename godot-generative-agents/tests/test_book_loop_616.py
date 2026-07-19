@@ -392,3 +392,47 @@ def test_contention_message_is_not_preempted_by_the_other_book():
         == f"The star atlas is already checked out by {char_a.name}."
     )
     assert "campus history book" in game.locations["Van Pelt — Book Stacks"].items
+
+
+def test_contention_beats_a_shorter_shelf_title():
+    """#672 review: a still-shelved book whose name sits inside the requested
+    title ("atlas" vs the borrowed "star atlas") must not win the match --
+    the exact held title resolves, and the loser hears who has it."""
+    game, chars = _tiny_world(names=("Testa", "Rival"))
+    stacks = game.locations["Stacks"]
+    stacks.add_item(_shelf())
+    stacks.add_item(_book("atlas"))
+    stacks.add_item(_book("star atlas"))
+    _move(game, chars["Testa"], "Stacks")
+    _move(game, chars["Rival"], "Stacks")
+
+    assert game.parser.parse_command("check_out_book star atlas", actor=chars["Testa"])
+    assert not game.parser.parse_command(
+        "check_out_book star atlas", actor=chars["Rival"]
+    )
+    assert (
+        game.parser.last_fail_message
+        == "The star atlas is already checked out by Testa."
+    )
+    assert "atlas" in stacks.items  # the cousin never left the shelf
+
+
+def test_contention_beats_a_nonbook_with_a_nested_name():
+    """#672 review: a non-book in scope ("atlas", decorative) must not shadow
+    the contention message for the borrowed "star atlas"."""
+    game, chars = _tiny_world(names=("Testa", "Rival"))
+    stacks = game.locations["Stacks"]
+    stacks.add_item(_shelf())
+    stacks.add_item(_book("star atlas"))
+    stacks.add_item(Item("atlas", "a decorative atlas", "Not for circulation."))
+    _move(game, chars["Testa"], "Stacks")
+    _move(game, chars["Rival"], "Stacks")
+
+    assert game.parser.parse_command("check_out_book star atlas", actor=chars["Testa"])
+    assert not game.parser.parse_command(
+        "check_out_book star atlas", actor=chars["Rival"]
+    )
+    assert (
+        game.parser.last_fail_message
+        == "The star atlas is already checked out by Testa."
+    )
