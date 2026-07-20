@@ -168,7 +168,7 @@ nondeterministic) when you haven't run the sim or want generation in isolation.
   side by side — the believability check for whether semantic recall surfaces
   better memories. Offline and needs no `setup.sh` assets (`build_world` only).
 - **A whole different world — the real UPenn campus:** the map is just the
-  `the_ville` matrix format, so any world in that shape drops in. `tools/geo`
+  `the_ville` matrix format, so any world in that shape drops in. `godot-generative-agents/tools/geo`
   generates one from OpenStreetMap (`osm_to_ville.py` → `the_upenn`), and
   `backend/world_data_upenn.yaml` is a small Penn cast (College Hall, Van Pelt,
   Meyerson, …). Run it headless — agents pathfind around the real building

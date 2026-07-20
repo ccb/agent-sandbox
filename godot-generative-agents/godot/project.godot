@@ -1,0 +1,54 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Godot Generative Agents"
+config/description="A tiny Godot 4 sandbox: render the real UPenn campus (OSM→Tiled, Kenney CC0 art) and play back a generative-agents simulation on it."
+run/main_scene="res://scenes/main_menu.tscn"
+config/features=PackedStringArray("4.6")
+config/icon="res://icon.svg"
+
+[autoload]
+
+; The landing page (scenes/main_menu.tscn) records the user's choice — replay,
+; local file, or live backend — in this singleton, which persists across the
+; scene swap into the viewer (scenes/viewer.tscn) where it's read back.
+LaunchConfig="*res://scripts/launch_config.gd"
+
+[display]
+
+; Design resolution. The camera in each scene is tuned to contain-fit the block
+; into this 1920x1080 frame; the stretch settings below then scale that whole
+; frame up to fill the actual screen, so the composition is identical at any size.
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+
+; Open maximized — a normal window (keeps the title bar and is resizable), grown
+; to fill the work area, rather than borderless-fullscreen. (Cmd+Q / Cmd+W to
+; quit.) The stretch settings below scale the 1920x1080 canvas to whatever size
+; the window ends up, so the composition is identical maximized or resized.
+window/size/mode=2
+
+; Scale the 1920x1080 canvas to the screen as one unit (keep = uniform scale, so
+; the block never distorts; any leftover from a non-16:9 display is letterboxed).
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+; Pixel-art sprites must not be smoothed when scaled up — use Nearest filtering.
+textures/canvas_textures/default_texture_filter=0
+
+; Snap 2D drawing to whole pixels so adjacent tilemap cells share an exact pixel
+; boundary — kills the thin seams/gaps that otherwise show between tiles when the
+; camera is at a fractional zoom.
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true

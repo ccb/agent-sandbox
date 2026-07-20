@@ -1,0 +1,556 @@
+{
+  "chain": "cognition",
+  "label": "Cognition",
+  "description": "A persona's day with a live LLM: generate a plan (day -> hourly -> minute), seed beliefs + plan into memory, then each step perceive, retrieve, decide, maybe converse, remember, and periodically reflect. Click a node to read its prompt. With the default mock brain the blue prompts aren't sent (the mock decides from location alone), but the green memory text is still written.",
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "day_start",
+          "label": "Day start (t=0)",
+          "kind": "start",
+          "template": null,
+          "description": "Simulation bootstrap (run_simulation.simulate / attach_agents). Beliefs and a day plan are prepared before the step loop begins.",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "seed_knowledge",
+          "label": "Seed spatial knowledge",
+          "kind": "narrate",
+          "template": "spatial_knowledge",
+          "description": "seed.seed_spatial_knowledge() -- each place a persona knows up front becomes a Belief. Memory text (no model call), written before planning so a generative planner can reason over it.",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "plan_day",
+          "label": "Plan: day outline",
+          "kind": "decision",
+          "template": "plan_system",
+          "description": "planner.LLMPlanner._day_outline() -- real model call (#83), only with a live client. Sketches the day as a few broad blocks. Shares the plan_system message; the day's persona + memory ride in the user message (assembled in code).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "plan_hourly",
+          "label": "Plan: hourly",
+          "kind": "decision",
+          "template": "plan_system",
+          "description": "planner.LLMPlanner._hourly() -- expands the day outline into one line per in-game hour (bounded to the run's clock window).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "plan_minute",
+          "label": "Plan: minute stops",
+          "kind": "decision",
+          "template": "plan_system",
+          "description": "planner.LLMPlanner._minute() -- turns the hourly plan into concrete {place, activity} stops, validated against known places. revise() re-runs this level on a trigger.",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "seed_plan",
+          "label": "Seed day plan",
+          "kind": "narrate",
+          "template": "plan_memory",
+          "description": "cognition.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "perceive",
+          "label": "Perceive",
+          "kind": "gate",
+          "template": null,
+          "description": "memory.ingest_events() -- co-located world events become private observations. No model call (the ReAct \"Observe\" step).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "retrieve",
+          "label": "Retrieve memories",
+          "kind": "gate",
+          "template": null,
+          "description": "memory.retrieve() -- scores the memory stream by recency / importance / relevance and returns the top-k. No model call.",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "decide",
+          "label": "Decide (ReAct brain)",
+          "kind": "decision",
+          "template": "npc_decision",
+          "description": "LLMAgent.decide() -- the real decision brain (#168 Phase A): with a live client it chooses travel/perform via the engine's npc_decision prompt. The default mock ignores this prompt and decides from the current location.",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "dialogue",
+          "label": "Converse",
+          "kind": "decision",
+          "template": "npc_dialogue",
+          "description": "conversation.converse() / LLMAgent (#86) -- when two residents are co-located, each speaks a line in turn via the engine's npc_dialogue prompt. Real model call (live client only).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "remember",
+          "label": "Remember (reflection)",
+          "kind": "narrate",
+          "template": "reflection",
+          "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "reflect",
+          "label": "Reflect (synthesis)",
+          "kind": "decision",
+          "template": "reflect_system",
+          "description": "reflection.reflect() / LLMReflector (#84) -- when accumulated importance crosses a threshold, synthesize higher-level insights from recent memories. Real model call (live client only); the numbered memory window rides in the user message.",
+          "fired": false
+        }
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "e0",
+          "source": "day_start",
+          "target": "seed_knowledge",
+          "label": "seed beliefs",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e1",
+          "source": "seed_knowledge",
+          "target": "plan_day",
+          "label": "generate the day",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e2",
+          "source": "plan_day",
+          "target": "plan_hourly",
+          "label": "decompose",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e3",
+          "source": "plan_hourly",
+          "target": "plan_minute",
+          "label": "decompose",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e4",
+          "source": "plan_minute",
+          "target": "seed_plan",
+          "label": "seed plan into memory",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e5",
+          "source": "seed_plan",
+          "target": "perceive",
+          "label": "begin step loop",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e6",
+          "source": "perceive",
+          "target": "retrieve",
+          "label": "observe",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e7",
+          "source": "retrieve",
+          "target": "decide",
+          "label": "top-k memories",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e8",
+          "source": "decide",
+          "target": "dialogue",
+          "label": "if co-located",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e9",
+          "source": "decide",
+          "target": "remember",
+          "label": "act",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e10",
+          "source": "dialogue",
+          "target": "remember",
+          "label": "remember the chat",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e11",
+          "source": "remember",
+          "target": "reflect",
+          "label": "importance crossed threshold",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e12",
+          "source": "reflect",
+          "target": "perceive",
+          "label": "next step",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e13",
+          "source": "remember",
+          "target": "perceive",
+          "label": "next step",
+          "condition": null,
+          "fired": false
+        }
+      },
+      {
+        "data": {
+          "id": "e14",
+          "source": "remember",
+          "target": "plan_minute",
+          "label": "revise (behind schedule / action failed)",
+          "condition": "replan",
+          "fired": false
+        }
+      }
+    ]
+  },
+  "prompts": {
+    "day_start": {
+      "id": "day_start",
+      "label": "Day start (t=0)",
+      "kind": "start",
+      "template": null,
+      "description": "Simulation bootstrap (run_simulation.simulate / attach_agents). Beliefs and a day plan are prepared before the step loop begins.",
+      "note": "Control point -- no prompt (no LLM call here)."
+    },
+    "seed_knowledge": {
+      "id": "seed_knowledge",
+      "label": "Seed spatial knowledge",
+      "kind": "narrate",
+      "template": "spatial_knowledge",
+      "description": "seed.seed_spatial_knowledge() -- each place a persona knows up front becomes a Belief. Memory text (no model call), written before planning so a generative planner can reason over it.",
+      "frontmatter": {
+        "name": "spatial_knowledge",
+        "description": "One place a persona knows up front, rendered as a Belief in its Knowledge (backend/seed.py, seed_spatial_knowledge) and shown in the observation's \"What you know:\" section. Names the place and, when it has known areas, lists them; objects within an area are intentionally left out to keep the section readable.",
+        "model_api": "",
+        "inputs": {
+          "place": {
+            "type": "string",
+            "description": "The place name, e.g. \"Hobbs Cafe\"."
+          },
+          "areas": {
+            "type": "string",
+            "description": "Comma-joined area names within the place, e.g. \"hallway, library\". Empty when the place has no known areas -- then only the place is named."
+          }
+        },
+        "sample": {
+          "place": "Oak Hill College",
+          "areas": "hallway, library"
+        }
+      },
+      "raw_source": "{%- if areas -%}\nYou know {{ place }} \u2014 its {{ areas }}.\n{%- else -%}\nYou know {{ place }}.\n{%- endif -%}\n",
+      "rendered": "You know Oak Hill College \u2014 its hallway, library."
+    },
+    "plan_day": {
+      "id": "plan_day",
+      "label": "Plan: day outline",
+      "kind": "decision",
+      "template": "plan_system",
+      "description": "planner.LLMPlanner._day_outline() -- real model call (#83), only with a live client. Sketches the day as a few broad blocks. Shares the plan_system message; the day's persona + memory ride in the user message (assembled in code).",
+      "frontmatter": {
+        "name": "plan_system",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "model_api": "",
+        "inputs": {},
+        "sample": {}
+      },
+      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+    },
+    "plan_hourly": {
+      "id": "plan_hourly",
+      "label": "Plan: hourly",
+      "kind": "decision",
+      "template": "plan_system",
+      "description": "planner.LLMPlanner._hourly() -- expands the day outline into one line per in-game hour (bounded to the run's clock window).",
+      "frontmatter": {
+        "name": "plan_system",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "model_api": "",
+        "inputs": {},
+        "sample": {}
+      },
+      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+    },
+    "plan_minute": {
+      "id": "plan_minute",
+      "label": "Plan: minute stops",
+      "kind": "decision",
+      "template": "plan_system",
+      "description": "planner.LLMPlanner._minute() -- turns the hourly plan into concrete {place, activity} stops, validated against known places. revise() re-runs this level on a trigger.",
+      "frontmatter": {
+        "name": "plan_system",
+        "description": "System message for the LLM daily planner (backend/planner.py, LLMPlanner, issue #83). Shared across the three-level decomposition -- day outline -> hourly -> minute stops -- and the revise pass. Unlike the other gen-agents templates (which hold memory content), this IS a real model prompt: it tells the model to plan in character for a Smallville resident. The per-level user message (persona text, memory block, hour window, prior level) is assembled in code, like other observation scaffolding (issue #145).",
+        "model_api": "",
+        "inputs": {},
+        "sample": {}
+      },
+      "raw_source": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember.\n",
+      "rendered": "You are planning one day for a resident of the town of Smallville. Plan in character, grounded in who they are and what they remember."
+    },
+    "seed_plan": {
+      "id": "seed_plan",
+      "label": "Seed day plan",
+      "kind": "narrate",
+      "template": "plan_memory",
+      "description": "cognition.attach_agents() -- the day's PLAN memory (destination + whole-day itinerary), seeded at t=0. Memory text (no model call).",
+      "frontmatter": {
+        "name": "plan_memory",
+        "description": "The day's PLAN memory seeded onto each Smallville persona at t=0 (backend/smallville_agents.py, attach_agents). It is the agent's own private intention -- \"go to <destination> and <activity>\", plus the day's full itinerary -- distinct from its persona, so retrieval has the agent's whole plan to surface from turn 0 and the PLAN memory kind is exercised. The deterministic mock brain never reads it (it decides from location alone); real retrieval would surface it.",
+        "model_api": "",
+        "inputs": {
+          "destination": {
+            "type": "string",
+            "description": "The first place the persona plans to go, e.g. \"Hobbs Cafe\"."
+          },
+          "activity": {
+            "type": "string",
+            "description": "What the persona plans to do there, e.g. \"tending the cafe counter\"."
+          },
+          "itinerary": {
+            "type": "string",
+            "description": "The whole day's stops, pre-joined as \"<activity> at <place>, then ...\" (see attach_agents). Optional; the \"Today's stops\" sentence is dropped when it's empty."
+          }
+        },
+        "sample": {
+          "destination": "Hobbs Cafe",
+          "activity": "tending the cafe counter",
+          "itinerary": "tending the cafe counter at Hobbs Cafe, then reading at the library"
+        }
+      },
+      "raw_source": "Plan: go to {{ destination }} and {{ activity }}.{% if itinerary %} Today's stops: {{ itinerary }}.{% endif %}\n",
+      "rendered": "Plan: go to Hobbs Cafe and tending the cafe counter. Today's stops: tending the cafe counter at Hobbs Cafe, then reading at the library."
+    },
+    "perceive": {
+      "id": "perceive",
+      "label": "Perceive",
+      "kind": "gate",
+      "template": null,
+      "description": "memory.ingest_events() -- co-located world events become private observations. No model call (the ReAct \"Observe\" step).",
+      "note": "Control point -- no prompt (no LLM call here)."
+    },
+    "retrieve": {
+      "id": "retrieve",
+      "label": "Retrieve memories",
+      "kind": "gate",
+      "template": null,
+      "description": "memory.retrieve() -- scores the memory stream by recency / importance / relevance and returns the top-k. No model call.",
+      "note": "Control point -- no prompt (no LLM call here)."
+    },
+    "decide": {
+      "id": "decide",
+      "label": "Decide (ReAct brain)",
+      "kind": "decision",
+      "template": "npc_decision",
+      "description": "LLMAgent.decide() -- the real decision brain (#168 Phase A): with a live client it chooses travel/perform via the engine's npc_decision prompt. The default mock ignores this prompt and decides from the current location.",
+      "frontmatter": {
+        "name": "npc_decision",
+        "description": "System message for an LLM-driven NPC's ReAct decision (text_adventure_games/npc.py, LLMAgent). Renders the persona and goals, and -- on the free-text path -- the labeled Reasoning/Action/Duration instruction. The structured tool-calling path renders the same persona/goals block but omits the instruction, because there the tool schema is the output contract. The character's name is deliberately left out: identity rides on the first-person persona, and the observation already names the scene and everyone in it, so the model speaks as \"I\" without being told its own name.",
+        "model_api": "",
+        "inputs": {
+          "persona": {
+            "type": "string",
+            "description": "First-person persona string. The Persona line is dropped when empty."
+          },
+          "goals_block": {
+            "type": "string",
+            "description": "Pre-formatted goals grouped by tier (see LLMAgent._format_goals). The Goals section is dropped when empty."
+          },
+          "include_instruction": {
+            "type": "bool",
+            "description": "True on the free-text path (append the ReAct instruction); False on the structured tool-calling path (omit it)."
+          },
+          "reasoning_label": {
+            "type": "string",
+            "description": "The reasoning line label, e.g. \"Reasoning:\" (from ReActLabel)."
+          },
+          "action_label": {
+            "type": "string",
+            "description": "The action line label, e.g. \"Action:\" (from ReActLabel)."
+          },
+          "duration_label": {
+            "type": "string",
+            "description": "The duration line label, e.g. \"Duration:\" (from ReActLabel)."
+          }
+        },
+        "sample": {
+          "persona": "I am the troll. I guard the drawbridge.",
+          "goals_block": "Short-term:\n  - keep the player off the bridge",
+          "include_instruction": true,
+          "reasoning_label": "Reasoning:",
+          "action_label": "Action:",
+          "duration_label": "Duration:"
+        }
+      },
+      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\n{%- if include_instruction %}\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\n{{ reasoning_label }} <one short sentence explaining your choice>\n{{ action_label }} <the command, e.g. 'attack player', 'go north', 'take sword'>\n{{ duration_label }} <estimated in-game minutes this action takes, e.g. 5>\n{%- endif %}\n",
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nGoals:\nShort-term:\n  - work on the studio model in Meyerson Hall\nBased on your persona, goals, and the current situation, choose a single game command to execute. Reply with exactly three lines:\nReasoning: <one short sentence explaining your choice>\nAction: <the command, e.g. 'attack player', 'go north', 'take sword'>\nDuration: <estimated in-game minutes this action takes, e.g. 5>"
+    },
+    "dialogue": {
+      "id": "dialogue",
+      "label": "Converse",
+      "kind": "decision",
+      "template": "npc_dialogue",
+      "description": "conversation.converse() / LLMAgent (#86) -- when two residents are co-located, each speaks a line in turn via the engine's npc_dialogue prompt. Real model call (live client only).",
+      "frontmatter": {
+        "name": "npc_dialogue",
+        "description": "System message for an LLM-driven NPC speaking a line in a conversation (text_adventure_games/npc.py, LLMAgent._dialogue_system_message, issue #86). Renders the same persona/goals block as npc_decision, then the one-line dialogue instruction (the conversation asks for one utterance at a time; the agent bows out with a brief goodbye when the talk has run its course). The character's name is deliberately left out: identity rides on the first-person persona, and the dialogue observation already names the partner.",
+        "model_api": "",
+        "inputs": {
+          "persona": {
+            "type": "string",
+            "description": "First-person persona string. The Persona line is dropped when empty."
+          },
+          "goals_block": {
+            "type": "string",
+            "description": "Pre-formatted goals grouped by tier (see LLMAgent._format_goals). The Goals section is dropped when empty."
+          }
+        },
+        "sample": {
+          "persona": "I am the troll. I guard the drawbridge.",
+          "goals_block": "Short-term:\n  - keep the player off the bridge"
+        }
+      },
+      "raw_source": "You are an NPC in a text adventure game.\n{%- if persona %}\nPersona: {{ persona }}\n{%- endif %}\n{%- if goals_block %}\nGoals:\n{{ goals_block }}\n{%- endif %}\nYou are in a conversation. Reply with the single line you say next, in character. Keep it to a sentence or two. If the conversation has reached a natural end, say a brief goodbye.\n",
+      "rendered": "You are an NPC in a text adventure game.\nPersona: I am Diego Torres, a graduate student in architecture at Penn. I spend long hours in the Meyerson Hall studio.\nYou are in a conversation. Reply with the single line you say next, in character. Keep it to a sentence or two. If the conversation has reached a natural end, say a brief goodbye."
+    },
+    "remember": {
+      "id": "remember",
+      "label": "Remember (reflection)",
+      "kind": "narrate",
+      "template": "reflection",
+      "description": "cognition.remember_outcome() -- the persona's own action, recorded as a first-person observation memory. Memory text (no model call).",
+      "frontmatter": {
+        "name": "reflection",
+        "description": "A persona's own successful action, recorded as a first-person observation memory (backend/cognition.py, remember_outcome). The command verb selects the phrasing: arriving somewhere, doing an activity, drinking (with a sick variant for contaminated water, #300), or a quoted fallback for any other command. The memory's importance is chosen in Python (it is data, not text), so only the wording lives here.",
+        "model_api": "",
+        "inputs": {
+          "verb": {
+            "type": "string",
+            "description": "The command verb -- \"travel\", \"perform\", \"drink\", or anything else."
+          },
+          "location": {
+            "type": "string",
+            "description": "The place arrived at (used when verb == \"travel\")."
+          },
+          "activity": {
+            "type": "string",
+            "description": "What the persona is doing (used when verb == \"perform\")."
+          },
+          "item": {
+            "type": "string",
+            "description": "What was drunk (used when verb == \"drink\")."
+          },
+          "sick": {
+            "type": "boolean",
+            "description": "Whether this drink just sickened the persona (verb == \"drink\")."
+          },
+          "command": {
+            "type": "string",
+            "description": "The raw command, quoted verbatim in the fallback (any other verb)."
+          }
+        },
+        "sample": {
+          "verb": "drink",
+          "location": "",
+          "activity": "",
+          "item": "cup of murky water",
+          "sick": true,
+          "command": ""
+        }
+      },
+      "raw_source": "{%- if verb == \"travel\" -%}\nI traveled to {{ location }}.\n{%- elif verb == \"perform\" -%}\nI am {{ activity }}.\n{%- elif verb == \"drink\" and sick -%}\nI drank the {{ item }} and now I feel terribly sick.\n{%- elif verb == \"drink\" -%}\nI drank the {{ item }}.\n{%- else -%}\nI did \"{{ command }}\".\n{%- endif -%}\n",
+      "rendered": "I drank the cup of murky water and now I feel terribly sick."
+    },
+    "reflect": {
+      "id": "reflect",
+      "label": "Reflect (synthesis)",
+      "kind": "decision",
+      "template": "reflect_system",
+      "description": "reflection.reflect() / LLMReflector (#84) -- when accumulated importance crosses a threshold, synthesize higher-level insights from recent memories. Real model call (live client only); the numbered memory window rides in the user message.",
+      "frontmatter": {
+        "name": "reflect_system",
+        "description": "System message for LLM-driven periodic reflection (text_adventure_games/ reflection.py, LLMReflector). Shared by both reflection steps -- asking for the salient high-level questions a window of memories raises, and inferring one grounded insight per question. The per-call user message (the numbered memory window + the step instruction) is assembled in code, like other observation scaffolding (issue #145).",
+        "model_api": "",
+        "inputs": {},
+        "sample": {}
+      },
+      "raw_source": "You are reflecting on your own recent experiences to form higher-level insights about yourself, the people around you, and your situation. Ground every insight only in the memories you are given.\n",
+      "rendered": "You are reflecting on your own recent experiences to form higher-level insights about yourself, the people around you, and your situation. Ground every insight only in the memories you are given."
+    }
+  }
+}

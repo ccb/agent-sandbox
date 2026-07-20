@@ -55,11 +55,66 @@ jobs:
       # (moved in #51), so pytest collects it — no separate run step needed.
       - name: pytest suite
         run: uv run --no-sync pytest tests/ -q
-      # The Generative Agents (Smallville) port keeps its own offline suite under
-      # generative-agents/tests/. It's a separate pytest root (not collected by the
-      # tests/ run above) so it needs its own step; it imports the sim as the
-      # installed top-level `backend` package (no path hack). A synthetic maze
-      # fixture stands in for the 38MB upstream assets, so this needs no ./setup.sh
-      # and no external clone — same offline contract as the engine suite above.
-      - name: pytest generative-agents suite
-        run: uv run --no-sync pytest generative-agents/tests/ -q
+      # The godot-generative-agents backend keeps its own offline suite under
+      # godot-generative-agents/tests/ (it sits beside the `backend` package it
+      # exercises, moved out of generative-agents/tests/). It's a separate pytest
+      # root (not collected by the tests/ run above) so it needs its own step; it
+      # imports the sim as the installed top-level `backend` package and the Penn
+      # `serve_penn`/`penn_world` scripts off backend/penn/. Fully offline (mock
+      # brain + the tracked the_upenn matrix) — no ./setup.sh and no external clone,
+      # same offline contract as the engine suite above.
+      - name: pytest godot-generative-agents suite
+        run: uv run --no-sync pytest godot-generative-agents/tests/ -q
+
+  geo:
+    name: geo (tmj ⇄ matrix)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # The godot-generative-agents/tools/geo suite validates the authored UPenn tmj against the
+      # generative-agents matrix. It's self-contained — stdlib + sibling geo
+      # modules, no engine/backend imports — and reads the tracked tmj + matrix,
+      # so it runs offline on the pinned interpreter; no need for the py matrix
+      # above (the tooling is Python-version-agnostic). `dev` is only for pytest.
+      - run: uv sync --extra dev --locked
+      - name: pytest tools/geo suite
+        run: uv run --no-sync pytest godot-generative-agents/tools/geo/ -q
+      # The drift gate (#390): validate_tmj compares the authored map against the
+      # matrix the sim walks and exits non-zero on any error not already in
+      # godot-generative-agents/tools/geo/validate_tmj_baseline.json — so a tmj⇄matrix desync fails CI
+      # with a readable report instead of silently landing (the exact class of
+      # breakage #413 had to clean up after the #399/#400 restructure). Keep the
+      # baseline empty (or shrinking) as drifts are resolved.
+      - name: validate_tmj drift gate
+        run: uv run --no-sync python godot-generative-agents/tools/geo/validate_tmj.py
+
+  web:
+    name: web (lint + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The web companion is TypeScript — nothing above type-checks it, so this
+      # job is its only automated gate (#520 review): Biome (format check + lint),
+      # the Vitest suite, then a strict `tsc -b` + Vite build, all over the
+      # committed lockfile. pnpm's version comes from the `packageManager` pin in
+      # web/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: godot-generative-agents/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: godot-generative-agents/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: godot-generative-agents/web
+      # `biome check` gates formatting + lint (lint warnings don't fail; errors do).
+      - run: pnpm lint
+        working-directory: godot-generative-agents/web
+      - run: pnpm test
+        working-directory: godot-generative-agents/web
+      - run: pnpm build
+        working-directory: godot-generative-agents/web

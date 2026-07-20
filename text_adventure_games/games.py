@@ -1148,10 +1148,9 @@ class Game:
         # game that never sickens a character keeps a byte-identical observation;
         # the line simply disappears on recovery. Wording is authorable via
         # sick_self_description.
-        # NOTE (forward-sync to godot-ga-main): the Penn port carries its own
-        # sickness self-line in cognition.observe_and_decide (#594). When this
-        # engine line syncs forward, drop that Penn append (or point it at
-        # sick_self_description) so a sick Penn agent isn't told twice.
+        # The Penn port words this line via sick_self_description (set where
+        # its Drink sickens the character); its old cognition-side append
+        # (#594) was dropped in favor of this one when the branches merged.
         if character.get_property("is_sick"):
             lines.append(
                 character.get_property("sick_self_description") or "You feel ill."

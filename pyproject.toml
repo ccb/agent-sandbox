@@ -77,8 +77,10 @@ codegen = ["pymupdf>=1.27"]
 # The headless HTTP API (issue #179) lives in `backend.api`: a FastAPI app any
 # out-of-process frontend (Godot, Phaser, the web companion) polls for the typed
 # world-state snapshot + change feed. Opt-in so the engine core stays lean; install
-# with `uv sync --extra server`. pydantic rides along with fastapi.
-server = ["fastapi", "uvicorn"]
+# with `uv sync --extra server`. pydantic rides along with fastapi. websockets
+# lets uvicorn serve the live feed's `WS /ws` (#262) -- FastAPI's TestClient
+# speaks WS without it, so only *serving* over a real socket needs it.
+server = ["fastapi", "uvicorn", "websockets"]
 # Local documentation site under mkdocs/. Build/serve with
 # `cd mkdocs && mkdocs serve`; the rendered site is local-only (not
 # published anywhere — see mkdocs/docs/index.md).
@@ -96,11 +98,15 @@ docs = [
 [tool.setuptools.dynamic]
 version = { attr = "text_adventure_games.__version__" }
 
-# Equivalent of the old find_packages(): ship text_adventure_games and the shared
-# simulation backend (`backend`, extracted from generative-agents/backend in #167 and
-# renamed in #179 so it reads as the project's one canonical backend behind every
-# frontend), but not notebooks/, tests/, or docs/ (they aren't importable packages).
+# Equivalent of the old find_packages(): ship text_adventure_games (repo root) and
+# the simulation backend (`backend`), but not notebooks/, tests/, or docs/ (they
+# aren't importable packages). The `backend` package was extracted to the repo root
+# in #167/#179, then moved under godot-generative-agents/ in #399 when it was folded
+# into that project alongside its web + godot front ends. Its import name stays
+# `backend`, so `from backend...` / `python -m backend.api` are unchanged — only the
+# on-disk location moved, which is why `where` now scans both roots.
 [tool.setuptools.packages.find]
+where = [".", "godot-generative-agents"]
 include = ["text_adventure_games*", "backend*"]
 
 # The prompt templates (issue #145) are data files, not Python, so list them
