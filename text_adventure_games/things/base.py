@@ -99,7 +99,7 @@ class Thing:
         thing_data = {
             "name": self.name,
             "description": self.description,
-            "commands": list(self.commands),
+            "commands": sorted(self.commands),
             "properties": self.properties,
             "aliases": sorted(self.aliases),
         }

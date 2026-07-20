@@ -184,6 +184,21 @@ def test_crafting_verb_routes_to_craft_when_recipes_exist():
     assert game.parser.determine_intent("make bow") == ActionName.CRAFT
 
 
+def test_boil_is_a_craft_verb_635():
+    # #635: `boil` joins the craft verbs so a natural "boil <recipe>" phrasing
+    # reaches CRAFT -- the Penn boil arc's corrective verb -- instead of routing
+    # nowhere. Inert without recipes, exactly like every other craft verb.
+    game, player, cap = _game()  # no recipes
+    assert game.parser.determine_intent("boil bow") != ActionName.CRAFT
+    game, player, cap = _game(
+        recipes=[_bow_recipe()],
+        inv=[things.Item("string", "a string"), things.Item("stick", "a stick")],
+    )
+    assert game.parser.determine_intent("boil bow") == ActionName.CRAFT
+    game.do_command("boil bow")
+    assert "bow" in player.inventory
+
+
 def test_recipe_is_repeatable_with_fresh_ingredients():
     game, player, cap = _game(
         recipes=[_bow_recipe()],

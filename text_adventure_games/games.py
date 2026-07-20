@@ -1141,6 +1141,22 @@ class Game:
                 gauge += " (ENCUMBERED: you clatter when you move, and cannot climb)"
             lines.append(gauge)
 
+        # Own health state (issue #634): a set is_sick is a stimulus the
+        # deciding agent must actually perceive -- otherwise there is "no state
+        # change to perceive" (rubric #446 axes 3-4) and the flagship boil-arc
+        # consequence never reaches the prompt. Emitted only while is_sick, so a
+        # game that never sickens a character keeps a byte-identical observation;
+        # the line simply disappears on recovery. Wording is authorable via
+        # sick_self_description.
+        # NOTE (forward-sync to godot-ga-main): the Penn port carries its own
+        # sickness self-line in cognition.observe_and_decide (#594). When this
+        # engine line syncs forward, drop that Penn append (or point it at
+        # sick_self_description) so a sick Penn agent isn't told twice.
+        if character.get_property("is_sick"):
+            lines.append(
+                character.get_property("sick_self_description") or "You feel ill."
+            )
+
         # Available actions
         action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")
