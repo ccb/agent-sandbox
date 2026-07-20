@@ -427,10 +427,10 @@
     <div class="screen">
       <svg id="youth-c" viewBox="0 0 640 360" aria-label="Light the glowstone and the swarm answers"></svg>
     </div>
-    <p class="spec">LIGHT GLOWSTONE types on, the cone rises, and the roost pours --
-       three packed rows of wings peeling off and spiralling down onto the light while
-       a REGRET meter fills. DOUSE GLOWSTONE. QUICKLY. The swarm climbs home and the
-       vault settles. Grudgingly.
+    <p class="spec">The lit half of the lesson: LIGHT GLOWSTONE types on, the cone
+       rises, and the roost pours -- three packed rows of wings peeling off and
+       spiralling down onto the light while a REGRET meter fills. It ends where it
+       hurts: the whole vault swarming the stone. The doused half is 53.
        <span class="attach">Attaches: the bats' attack (the maul, and the thrown-light
        mobbing). 05-C keeps EXAMINE CEILING.</span></p>
   </section>
@@ -485,6 +485,19 @@
        in slow rotation.
        <span class="attach">Attaches: arrival and EXAMINE TANK (the wreckage answers
        to the old name), once the wall is down.</span></p>
+  </section>
+
+  <section>
+    <div class="slate"><h2>53 &mdash; THE LESSON, LEARNED</h2><span class="kind">STORY BEAT / HALL OF YOUTH</span></div>
+    <div class="screen">
+      <svg id="youth-d" viewBox="0 0 640 360" aria-label="Douse the light and the swarm climbs home"></svg>
+    </div>
+    <p class="spec">48's other half: it opens at the worst moment -- the whole swarm
+       orbiting the stone -- then DOUSE GLOWSTONE. QUICKLY. The light dies, the wings
+       climb home in ragged waves, the REGRET meter drains cell by cell, and the vault
+       settles. Grudgingly.
+       <span class="attach">Attaches: DOUSE in the Hall of Youth, while the colony
+       still roosts there -- forced every time; contrition is always current.</span></p>
   </section>
 
   <section>
@@ -3996,7 +4009,7 @@
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    cls.textContent = "HALL OF YOUTH / THE VAULT ANSWERS";
     const GLASS = "#cfefff";
     const ROOST = [];
     for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
@@ -4018,39 +4031,27 @@
     const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
       { x: 516 + i * 16, y: 340, width: 12, height: 11, fill: GLASS,
         "fill-opacity": .08 }));
-    const settle = label(svg, 320, 200, 9, PH_DIM);
-    settle.setAttribute("text-anchor", "middle");
     const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
-      const T = t % 186;
+      const T = t % 132;
       doWipe(T);
       typeOn(hdr, "THE LESSON", T, 4, 1.4);
-      const lit = T >= 10 && T < 104;
-      if (T < 104) typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
-      else typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 104, 2.4);
+      const lit = T >= 10;
+      typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
       cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
       stone.setAttribute("opacity", lit ? 1 : .2);
       let closest = 1e9;
       bats.forEach(b => {
-        const t0 = 22 + (b.i % 17) * 4;
+        const t0 = 18 + (b.i % 17) * 3;
         let x = b.rx, y = b.ry, spread = 5;
-        if (T >= t0 && T < 104) {                              // the descent
+        if (T >= t0) {                                         // the descent
           const k = Math.min(1, (T - t0) / 30);
           const ang = T * .22 + b.i * 1.7;
           const rad = 150 - k * 105 + Math.sin(T * .3 + b.i) * 9;
           x = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k;
           y = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k;
           spread = 7;
-        } else if (T >= 104) {                                 // the retreat
-          const kk = Math.min(1, (T - 104) / 24);
-          const k1 = Math.min(1, Math.max(0, (104 - t0) / 30));
-          const ang = 104 * .22 + b.i * 1.7;
-          const rad = 150 - k1 * 105 + Math.sin(104 * .3 + b.i) * 9;
-          const ax = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k1;
-          const ay = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k1;
-          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
-          spread = 7 - kk * 2;
         }
         const fl = Math.sin(t * 1.1 + b.i) * 3;
         b.q.setAttribute("points",
@@ -4058,12 +4059,10 @@
         const d2 = Math.hypot(x - 180, y - 284);
         if (d2 < closest) closest = d2;
       });
-      const on = T < 10 ? 0 : lit
-        ? Math.min(6, Math.max(0, Math.round((190 - closest) / 28)))
-        : Math.max(0, 6 - Math.floor((T - 104) / 5));
+      const on = T < 10 ? 0
+        : Math.min(6, Math.max(0, Math.round((190 - closest) / 28)));
       cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
-      settle.textContent = T >= 140 && T < 184 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
-      typeOn(foot, "WHAT ROOSTS HERE HATES A LAMP WORSE THAN A SHOUT.", T, 112, 2);
+      typeOn(foot, "WHAT ROOSTS HERE HATES A LAMP WORSE THAN A SHOUT.", T, 64, 2);
     });
   }
 
@@ -4423,6 +4422,73 @@
       pack.forEach(p => p.eye.setAttribute("opacity",          // the lenses, still open
         (Math.floor(t / 4) + p.i) % 9 ? .9 : .15));
       typeOn(foot, "THE KENNEL, DECANTED.", T, 72, 1.8);
+    });
+  }
+
+  /* ---------------- 53: the lesson, learned ---------------- */
+  {
+    const svg = document.getElementById("youth-d");
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    const GLASS = "#cfefff";
+    const ROOST = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
+      ROOST.push([44 + c * 44 + (r % 2) * 22, 52 + r * 15]);
+    el(svg, "circle", { cx: 148, cy: 296, r: 9, fill: PH_DIM });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 3,
+      d: "M 148 305 L 148 336 M 148 314 L 176 288" });
+    const cone = el(svg, "polygon", { fill: PH, "fill-opacity": 0,
+      points: "180,284 60,80 430,80" });
+    const stone = el(svg, "circle", { cx: 180, cy: 284, r: 5, fill: PH_BRIGHT });
+    const bats = ROOST.map(([rx, ry], i) => {
+      const q = el(svg, "polyline", { fill: "none", stroke: GLASS,
+        "stroke-width": 1.4, opacity: .55 });
+      return { q, rx, ry, i };
+    });
+    const cmd = label(svg, 24, 330, 10, GLASS);
+    label(svg, 452, 350, 10, PH_DIM).textContent = "REGRET";
+    const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
+      { x: 516 + i * 16, y: 340, width: 12, height: 11, fill: GLASS,
+        "fill-opacity": .08 }));
+    const settle = label(svg, 320, 200, 9, PH_DIM);
+    settle.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE LESSON, LEARNED", T, 4, 1.6);
+      const lit = T < 16;
+      typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 4, 2.4);
+      cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
+      stone.setAttribute("opacity", lit ? 1 : .2);
+      bats.forEach(b => {
+        let x, y, spread = 7;
+        if (lit) {                                             // the swarm, in office
+          const ang = T * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(T * .3 + b.i) * 9;
+          x = 180 + Math.cos(ang) * rad;
+          y = 270 + Math.sin(ang) * rad * .55;
+        } else {                                               // the retreat
+          const kk = Math.min(1, Math.max(0, (T - 16 - (b.i % 11)) / 26));
+          const ang = 16 * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(16 * .3 + b.i) * 9;
+          const ax = 180 + Math.cos(ang) * rad;
+          const ay = 270 + Math.sin(ang) * rad * .55;
+          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
+          spread = 7 - kk * 2;
+        }
+        const fl = Math.sin(t * 1.1 + b.i) * 3;
+        b.q.setAttribute("points",
+          `${x - spread},${y + fl * .4} ${x},${y - 3 - fl} ${x + spread},${y + fl * .4}`);
+      });
+      const on = lit ? 6 : Math.max(0, 6 - Math.floor((T - 16) / 5));
+      cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
+      settle.textContent = T >= 58 && T < 146 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
+      typeOn(foot, "NO LIGHT, NO FURTHER OPINIONS.", T, 88, 2);
     });
   }
 

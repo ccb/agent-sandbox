@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "flood": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tank": ["svg", 640, 360], "tank-f": ["svg", 640, 360], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "youth-d": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -3065,7 +3065,7 @@
     el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
     const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
     const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
-    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    cls.textContent = "HALL OF YOUTH / THE VAULT ANSWERS";
     const GLASS = "#cfefff";
     const ROOST = [];
     for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
@@ -3087,39 +3087,27 @@
     const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
       { x: 516 + i * 16, y: 340, width: 12, height: 11, fill: GLASS,
         "fill-opacity": .08 }));
-    const settle = label(svg, 320, 200, 9, PH_DIM);
-    settle.setAttribute("text-anchor", "middle");
     const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
-      const T = t % 186;
+      const T = t % 132;
       doWipe(T);
       typeOn(hdr, "THE LESSON", T, 4, 1.4);
-      const lit = T >= 10 && T < 104;
-      if (T < 104) typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
-      else typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 104, 2.4);
+      const lit = T >= 10;
+      typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
       cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
       stone.setAttribute("opacity", lit ? 1 : .2);
       let closest = 1e9;
       bats.forEach(b => {
-        const t0 = 22 + (b.i % 17) * 4;
+        const t0 = 18 + (b.i % 17) * 3;
         let x = b.rx, y = b.ry, spread = 5;
-        if (T >= t0 && T < 104) {                              // the descent
+        if (T >= t0) {                                         // the descent
           const k = Math.min(1, (T - t0) / 30);
           const ang = T * .22 + b.i * 1.7;
           const rad = 150 - k * 105 + Math.sin(T * .3 + b.i) * 9;
           x = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k;
           y = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k;
           spread = 7;
-        } else if (T >= 104) {                                 // the retreat
-          const kk = Math.min(1, (T - 104) / 24);
-          const k1 = Math.min(1, Math.max(0, (104 - t0) / 30));
-          const ang = 104 * .22 + b.i * 1.7;
-          const rad = 150 - k1 * 105 + Math.sin(104 * .3 + b.i) * 9;
-          const ax = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k1;
-          const ay = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k1;
-          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
-          spread = 7 - kk * 2;
         }
         const fl = Math.sin(t * 1.1 + b.i) * 3;
         b.q.setAttribute("points",
@@ -3127,12 +3115,10 @@
         const d2 = Math.hypot(x - 180, y - 284);
         if (d2 < closest) closest = d2;
       });
-      const on = T < 10 ? 0 : lit
-        ? Math.min(6, Math.max(0, Math.round((190 - closest) / 28)))
-        : Math.max(0, 6 - Math.floor((T - 104) / 5));
+      const on = T < 10 ? 0
+        : Math.min(6, Math.max(0, Math.round((190 - closest) / 28)));
       cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
-      settle.textContent = T >= 140 && T < 184 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
-      typeOn(foot, "WHAT ROOSTS HERE HATES A LAMP WORSE THAN A SHOUT.", T, 112, 2);
+      typeOn(foot, "WHAT ROOSTS HERE HATES A LAMP WORSE THAN A SHOUT.", T, 64, 2);
     });
   });
 
@@ -3488,6 +3474,72 @@
       pack.forEach(p => p.eye.setAttribute("opacity",          // the lenses, still open
         (Math.floor(t / 4) + p.i) % 9 ? .9 : .15));
       typeOn(foot, "THE KENNEL, DECANTED.", T, 72, 1.8);
+    });
+  });
+
+  /* ---------------- 53: the lesson, learned ---------------- */
+  FIG._define("youth-d", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    const GLASS = "#cfefff";
+    const ROOST = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
+      ROOST.push([44 + c * 44 + (r % 2) * 22, 52 + r * 15]);
+    el(svg, "circle", { cx: 148, cy: 296, r: 9, fill: PH_DIM });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 3,
+      d: "M 148 305 L 148 336 M 148 314 L 176 288" });
+    const cone = el(svg, "polygon", { fill: PH, "fill-opacity": 0,
+      points: "180,284 60,80 430,80" });
+    const stone = el(svg, "circle", { cx: 180, cy: 284, r: 5, fill: PH_BRIGHT });
+    const bats = ROOST.map(([rx, ry], i) => {
+      const q = el(svg, "polyline", { fill: "none", stroke: GLASS,
+        "stroke-width": 1.4, opacity: .55 });
+      return { q, rx, ry, i };
+    });
+    const cmd = label(svg, 24, 330, 10, GLASS);
+    label(svg, 452, 350, 10, PH_DIM).textContent = "REGRET";
+    const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
+      { x: 516 + i * 16, y: 340, width: 12, height: 11, fill: GLASS,
+        "fill-opacity": .08 }));
+    const settle = label(svg, 320, 200, 9, PH_DIM);
+    settle.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 150;
+      doWipe(T);
+      typeOn(hdr, "THE LESSON, LEARNED", T, 4, 1.6);
+      const lit = T < 16;
+      typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 4, 2.4);
+      cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
+      stone.setAttribute("opacity", lit ? 1 : .2);
+      bats.forEach(b => {
+        let x, y, spread = 7;
+        if (lit) {                                             // the swarm, in office
+          const ang = T * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(T * .3 + b.i) * 9;
+          x = 180 + Math.cos(ang) * rad;
+          y = 270 + Math.sin(ang) * rad * .55;
+        } else {                                               // the retreat
+          const kk = Math.min(1, Math.max(0, (T - 16 - (b.i % 11)) / 26));
+          const ang = 16 * .22 + b.i * 1.7;
+          const rad = 45 + Math.sin(16 * .3 + b.i) * 9;
+          const ax = 180 + Math.cos(ang) * rad;
+          const ay = 270 + Math.sin(ang) * rad * .55;
+          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
+          spread = 7 - kk * 2;
+        }
+        const fl = Math.sin(t * 1.1 + b.i) * 3;
+        b.q.setAttribute("points",
+          `${x - spread},${y + fl * .4} ${x},${y - 3 - fl} ${x + spread},${y + fl * .4}`);
+      });
+      const on = lit ? 6 : Math.max(0, 6 - Math.floor((T - 16) / 5));
+      cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
+      settle.textContent = T >= 58 && T < 146 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
+      typeOn(foot, "NO LIGHT, NO FURTHER OPINIONS.", T, 88, 2);
     });
   });
 

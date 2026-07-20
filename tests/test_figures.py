@@ -159,7 +159,7 @@ def test_every_wired_key_exists_in_the_registry():
                 _walk(it)
     # event-cued keys (not discoverable by walking) + client-cued ones
     wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph",
-              "youth-b", "youth-c",  # the lit hall and the lesson are event-cued
+              "youth-b", "youth-c", "youth-d",  # lit hall, lesson, reprieve
               "flood", "tank-f"}  # the burst-tank trigger owns these two
     missing = wired - registry
     assert not missing, f"wired keys with no card: {sorted(missing)}"
@@ -273,6 +273,11 @@ def test_the_hall_of_youth_deals_by_light_and_the_bats_teach_the_lesson():
             break
         g.do_command("listen")
     assert "youth-c" in cap.texts(Channel.FIGURE)
+    g.do_command("douse glowstone")  # the other half: the reprieve (53)
+    assert "youth-d" in cap.texts(Channel.FIGURE)
+    g.do_command("light glowstone")
+    g.do_command("douse glowstone")  # contrition is always current
+    assert cap.texts(Channel.FIGURE).count("youth-d") == 2
 
 
 def test_the_tank_is_the_room_and_the_flood_plays_once():

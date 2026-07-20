@@ -4000,6 +4000,27 @@ def build_game(seed=None):
 
     game.add_trigger("tank_bursts", _tank_gone, _tank_bursts)
 
+    # --- The lesson, learned (CCB): DOUSE in the Youth plays 53 --------------
+    # The attack half (48) belongs to the bats; this half belongs to the
+    # player. Forced every time -- contrition is always current -- but only
+    # while the colony still roosts overhead to be appeased.
+    def _doused_in_youth(g):
+        return (
+            g.player.location is youth
+            and not youth.get_property("bats_flown")
+            and any(
+                e.actor == g.player.name and e.action == "douse"
+                for e in g.events[g._round_event_start :]
+            )
+        )
+
+    def _the_reprieve(g):
+        g.show_figure("youth-d", force=True)
+
+    game.add_trigger(
+        "youth_douse_card", _doused_in_youth, _the_reprieve, repeatable=True
+    )
+
     def _wheel_turning(g):
         loc = next(
             (r for r in _outdoors if (r.get_property("_bat_wheel") or 0) > 0),
