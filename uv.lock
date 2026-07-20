@@ -3118,6 +3118,7 @@ embeddings-st = [
 ]
 llm = [
     { name = "anthropic" },
+    { name = "jsonschema" },
     { name = "openai" },
     { name = "tiktoken" },
 ]
@@ -3142,6 +3143,7 @@ requires-dist = [
     { name = "graphviz" },
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "jsonschema", marker = "extra == 'llm'", specifier = ">=4.0" },
     { name = "jupyter" },
     { name = "mkdocs", marker = "extra == 'docs'" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'" },

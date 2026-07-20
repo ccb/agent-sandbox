@@ -201,7 +201,9 @@ def test_build_choose_action_tool_with_names_has_enum():
     assert tool["name"] == "choose_action"
     props = tool["parameters"]["properties"]
     assert props["action"]["enum"] == ["go", "attack", "get"]
-    assert tool["parameters"]["required"] == ["action"]
+    # Full required + additionalProperties:false so the tool is OpenAI-strict (#357).
+    assert tool["parameters"]["required"] == ["reasoning", "action", "arguments"]
+    assert tool["parameters"]["additionalProperties"] is False
     assert "reasoning" in props and "arguments" in props
 
 
@@ -813,7 +815,9 @@ def test_call_tools_records_one_usage_openai():
                     tool_calls=[
                         SimpleNamespace(
                             id="c1",
-                            function=SimpleNamespace(name="t", arguments='{"a": 1}'),
+                            function=SimpleNamespace(
+                                name="t", arguments='{"action": "go"}'
+                            ),
                         )
                     ],
                 )
@@ -831,7 +835,9 @@ def test_call_tools_records_one_usage_openai():
 
 def test_call_tools_records_one_usage_anthropic():
     response = SimpleNamespace(
-        content=[SimpleNamespace(type="tool_use", id="u", name="t", input={"a": 1})],
+        content=[
+            SimpleNamespace(type="tool_use", id="u", name="t", input={"action": "go"})
+        ],
         usage=SimpleNamespace(
             input_tokens=90, output_tokens=4, cache_read_input_tokens=50
         ),
@@ -903,7 +909,8 @@ def test_mock_call_tools_defaults_to_none():
 def test_mock_call_tools_callable():
     def responder(messages, tools, tool_choice, max_tokens, temperature):
         return ToolCallResult(
-            text=None, tool_calls=[{"id": "1", "name": "t", "arguments": {}}]
+            text=None,
+            tool_calls=[{"id": "1", "name": "t", "arguments": {"action": "go"}}],
         )
 
     assert (
@@ -918,7 +925,9 @@ def test_mock_call_tools_queue_separate_from_tool_responses():
     # call_tool draws from tool_responses; call_tools from tool_calls_responses.
     client = MockLlmClient(
         tool_responses=[{"index": 0}],
-        tool_calls_responses=[{"tool_calls": [{"name": "a", "arguments": {}}]}],
+        tool_calls_responses=[
+            {"tool_calls": [{"name": "a", "arguments": {"action": "go"}}]}
+        ],
     )
     assert client.call_tool([], SELECT_OPTION_TOOL) == {"index": 0}
     assert client.call_tools([], [CHOOSE]).tool_calls[0]["name"] == "a"
@@ -1242,6 +1251,135 @@ def test_run_tool_loop_stops_when_no_tool_call():
     assert called == []  # execute never ran
     assert result.text == "just chatting"
     assert len(messages) == 1  # no turns appended
+
+
+# --- #357: tool-argument validation + one bounded repair round ------------
+
+from text_adventure_games.llm_client import (  # noqa: E402
+    _is_strict_compatible,
+    validate_tool_arguments,
+)
+from text_adventure_games.npc import build_speak_tool  # noqa: E402
+from text_adventure_games.reflection import (  # noqa: E402
+    INSIGHT_TOOL,
+    SALIENT_QUESTIONS_TOOL,
+)
+
+
+def test_validate_tool_arguments_flags_type_required_enum():
+    schema = {
+        "type": "object",
+        "properties": {
+            "n": {"type": "integer"},
+            "kind": {"type": "string", "enum": ["a", "b"]},
+        },
+        "required": ["n", "kind"],
+        "additionalProperties": False,
+    }
+    assert validate_tool_arguments({"n": 1, "kind": "a"}, schema) == []
+    assert validate_tool_arguments({"kind": "a"}, schema)  # missing n
+    assert validate_tool_arguments({"n": "x", "kind": "a"}, schema)  # wrong type
+    assert validate_tool_arguments({"n": 1, "kind": "z"}, schema)  # bad enum
+    assert validate_tool_arguments({"n": 1, "kind": "a", "x": 9}, schema)  # extra
+
+
+def test_validate_tool_arguments_builtin_fallback(monkeypatch):
+    # Force the no-jsonschema path: the built-in check still catches type /
+    # required / enum, recursing into array items, and rejects bool-as-integer.
+    import text_adventure_games.llm_client as m
+
+    monkeypatch.setattr(m, "_jsonschema", None)
+    schema = {
+        "type": "object",
+        "properties": {
+            "items": {"type": "array", "items": {"type": "integer"}},
+            "kind": {"type": "string", "enum": ["a"]},
+        },
+        "required": ["kind"],
+    }
+    assert m.validate_tool_arguments({"kind": "a", "items": [1, 2]}, schema) == []
+    assert m.validate_tool_arguments({}, schema)  # missing required kind
+    assert m.validate_tool_arguments({"kind": "a", "items": ["x"]}, schema)  # bad item
+    assert m.validate_tool_arguments({"kind": "nope"}, schema)  # bad enum
+    assert m.validate_tool_arguments(
+        {"kind": "a", "items": [True]}, schema
+    )  # bool!=int
+
+
+def _opt(index):
+    return {
+        "tool_calls": [
+            {"id": "i", "name": "select_option", "arguments": {"index": index}}
+        ]
+    }
+
+
+def test_repair_round_trip_invalid_then_valid():
+    # Acceptance: an invalid reply then a valid one -> exactly one repair
+    # round-trip and a schema-valid final result, counted on the ledger.
+    client = MockLlmClient(tool_calls_responses=[_opt("nope"), _opt(3)])
+    result = client.call_tools([{"role": "user", "content": "x"}], [SELECT_OPTION_TOOL])
+    assert result.tool_calls[0]["arguments"] == {"index": 3}
+    assert len(client.tool_calls_log) == 2  # one repair round-trip
+    s = client.ledger.summary()
+    assert (s["validation_failures"], s["repairs"], s["repair_successes"]) == (1, 1, 1)
+
+
+def test_repair_disabled_returns_none_and_counts_failure():
+    client = MockLlmClient(tool_calls_responses=[_opt("nope")], schema_repair=False)
+    result = client.call_tools([{"role": "user", "content": "x"}], [SELECT_OPTION_TOOL])
+    assert result is None  # honest, counted failure
+    assert len(client.tool_calls_log) == 1  # no repair round
+    s = client.ledger.summary()
+    assert (s["validation_failures"], s["repairs"], s["repair_successes"]) == (1, 0, 0)
+
+
+def test_repair_still_invalid_returns_none():
+    # Both rounds invalid -> None, the failure and the failed repair both counted.
+    client = MockLlmClient(tool_calls_responses=[_opt("x"), _opt("y")])
+    result = client.call_tools([{"role": "user", "content": "x"}], [SELECT_OPTION_TOOL])
+    assert result is None
+    s = client.ledger.summary()
+    assert (s["validation_failures"], s["repairs"], s["repair_successes"]) == (1, 1, 0)
+
+
+def test_valid_first_try_needs_no_repair():
+    client = MockLlmClient(tool_calls_responses=[_opt(0)])
+    result = client.call_tools([{"role": "user", "content": "x"}], [SELECT_OPTION_TOOL])
+    assert result.tool_calls[0]["arguments"] == {"index": 0}
+    assert len(client.tool_calls_log) == 1
+    s = client.ledger.summary()
+    assert (s["validation_failures"], s["repairs"]) == (0, 0)
+
+
+def test_openai_tool_sets_strict_only_when_compatible():
+    # A strict-compatible schema -> strict:true on the wire; a loose one -> none.
+    assert _to_openai_tool(SELECT_OPTION_TOOL)["function"]["strict"] is True
+    loose = {
+        "name": "t",
+        "parameters": {"type": "object", "properties": {"a": {"type": "string"}}},
+    }
+    assert "strict" not in _to_openai_tool(loose)["function"]
+
+
+def test_first_party_schemas_pass_strict_lint():
+    # The schemas we enforce strictly must pass the strict-mode lint
+    # (additionalProperties:false + full required, recursively) and carry
+    # strict:true on the OpenAI wire.
+    strict_tools = [
+        SELECT_OPTION_TOOL,
+        build_speak_tool(),
+        build_choose_action_tool(["go", "look"]),
+        build_choose_action_tool([]),  # no enum, still strict
+        SALIENT_QUESTIONS_TOOL,
+    ]
+    for tool in strict_tools:
+        assert _is_strict_compatible(tool["parameters"]), tool["name"]
+        assert _to_openai_tool(tool)["function"]["strict"] is True
+    # record_insight has a genuinely optional field (evidence) -> best-effort,
+    # so it is intentionally NOT strict (no false strict:true on the wire).
+    assert not _is_strict_compatible(INSIGHT_TOOL["parameters"])
+    assert "strict" not in _to_openai_tool(INSIGHT_TOOL)["function"]
 
 
 # --- #356: per-action tool schemas from the action registry ---------------

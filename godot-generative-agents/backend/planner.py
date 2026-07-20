@@ -92,10 +92,12 @@ DAY_OUTLINE_TOOL = {
                         "summary": {"type": "string"},
                     },
                     "required": ["label", "summary"],
+                    "additionalProperties": False,
                 },
             }
         },
         "required": ["blocks"],
+        "additionalProperties": False,
     },
 }
 
@@ -118,10 +120,12 @@ HOURLY_TOOL = {
                         "summary": {"type": "string"},
                     },
                     "required": ["start_hour", "summary"],
+                    "additionalProperties": False,
                 },
             }
         },
         "required": ["hours"],
+        "additionalProperties": False,
     },
 }
 
@@ -146,11 +150,18 @@ MINUTE_TOOL = {
                         "emoji": {"type": "string"},
                         "steps": {"type": "integer"},
                     },
+                    # emoji/steps stay genuinely optional (a missing steps means
+                    # "stay put"), so this tool is best-effort, not OpenAI strict
+                    # (#357) -- forcing every field required would change that
+                    # meaning. additionalProperties:false still tightens
+                    # validation; the arguments are type-checked either way.
                     "required": ["place", "activity"],
+                    "additionalProperties": False,
                 },
             }
         },
         "required": ["stops"],
+        "additionalProperties": False,
     },
 }
 
@@ -236,10 +247,15 @@ class LLMPlanner:
         )
         result = self._call(user, DAY_OUTLINE_TOOL)
         blocks = []
-        for b in self._records(result, "blocks"):
+        # Arguments are schema-validated in the client (#357): each block is an
+        # object with string label/summary. A missing key or invalid reply yields
+        # {} here (call_tool returned None), so the loop just produces no blocks
+        # and generation degrades to the static fallback. The truthiness guard
+        # only skips an empty-string label/summary.
+        for b in result.get("blocks") or []:
             label, summary = b.get("label"), b.get("summary")
             if label and summary:
-                blocks.append(DayBlock(label=str(label), summary=str(summary)))
+                blocks.append(DayBlock(label=label, summary=summary))
         return blocks
 
     def _hourly(self, persona_text: str, day: list[DayBlock]) -> list[HourBlock]:
@@ -255,11 +271,13 @@ class LLMPlanner:
         )
         result = self._call(user, HOURLY_TOOL)
         hours = []
-        for h in self._records(result, "hours"):
-            hour = self._coerce_int(h.get("start_hour"))
-            summary = h.get("summary")
+        # Validated upstream (#357): start_hour is an int, summary a string.
+        # `is not None` (not truthiness) so a legitimate hour 0 and an empty
+        # summary are both kept (an empty summary renders harmlessly).
+        for h in result.get("hours") or []:
+            hour, summary = h.get("start_hour"), h.get("summary")
             if hour is not None and summary is not None:
-                hours.append(HourBlock(start_hour=hour, summary=str(summary)))
+                hours.append(HourBlock(start_hour=hour, summary=summary))
         return hours
 
     def _minute(self, persona_text: str, hours: list[HourBlock]) -> list[Stop]:
@@ -275,58 +293,32 @@ class LLMPlanner:
     def _minute_from_user(self, user: str) -> list[Stop]:
         result = self._call(user, MINUTE_TOOL)
         stops = []
-        for s in self._records(result, "stops"):
+        # Validated upstream (#357): place/activity are strings, emoji is a
+        # string-or-null, steps an int-or-null. The one remaining check is the
+        # *semantic* one -- a non-positive or null step count means "stay put"
+        # -- which the schema can't express (OpenAI strict mode drops `minimum`).
+        for s in result.get("stops") or []:
             place, activity = s.get("place"), s.get("activity")
-            if place and activity:
-                stops.append(
-                    Stop(
-                        place=str(place),
-                        activity=str(activity),
-                        emoji=(
-                            s.get("emoji") if isinstance(s.get("emoji"), str) else None
-                        ),
-                        steps=self._coerce_steps(s.get("steps")),
-                    )
+            if not (place and activity):
+                continue
+            steps = s.get("steps")
+            if not (
+                isinstance(steps, int) and not isinstance(steps, bool) and steps > 0
+            ):
+                steps = None
+            stops.append(
+                Stop(
+                    place=place,
+                    activity=activity,
+                    emoji=s.get("emoji"),
+                    steps=steps,
                 )
+            )
         if self.known_places:
             stops, _dropped = validate_stops(stops, self.known_places)
         return stops
 
-    # -- defensive parsing + small seam helpers -------------------------------
-
-    @staticmethod
-    def _records(result, key: str) -> list[dict]:
-        """The dict items under ``result[key]``, dropping anything malformed.
-
-        A live model can ignore the tool schema -- returning a bare value, a list
-        of *strings* instead of objects, or omitting the key entirely. We tolerate
-        all of that (the level just gets fewer, or zero, items) rather than raise,
-        which is what lets generation degrade to the static fallback instead of
-        crashing the run.
-        """
-        items = result.get(key) if isinstance(result, dict) else None
-        if not isinstance(items, list):
-            return []
-        return [item for item in items if isinstance(item, dict)]
-
-    @staticmethod
-    def _coerce_int(value) -> int | None:
-        """An int from an int or a plain numeric string, else ``None`` (bools
-        are not ints here). Guards against a model emitting ``"8"`` or ``"8am"``."""
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, str) and value.strip().lstrip("+-").isdigit():
-            return int(value.strip())
-        return None
-
-    @staticmethod
-    def _coerce_steps(value) -> int | None:
-        """A positive step count (int or numeric string), else ``None`` (= stay
-        put). Keeps a stray string/zero from reaching the step loop's arithmetic."""
-        n = LLMPlanner._coerce_int(value)
-        return n if n is not None and n > 0 else None
+    # -- small seam helpers ---------------------------------------------------
 
     def _call(self, user: str, tool: dict) -> dict:
         messages = [
