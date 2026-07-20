@@ -3,6 +3,7 @@ from .things.characters import DEFAULT_VISION_R
 from .clock import GameClock
 from .config import GameConfig
 from . import parsing, actions, blocks, perception
+from .actions.base import offered_action_names
 from .enums import EventKind, Property
 from .events import GameEvent
 from .triggers import Trigger, at_turn
@@ -1066,10 +1067,18 @@ class Game:
                 inventory_description += "\n"
             self.ok(inventory_description)
 
-    def describe_for(self, character: Character) -> str:
+    def describe_for(
+        self, character: Character, *, agent_action_menu: bool = True
+    ) -> str:
         """
         Describe the game world from a specific character's perspective.
         Used by NPC behaviors and the ReAct loop to observe their environment.
+
+        For an agent-driven character the "Available actions:" line lists exactly
+        the verbs offered as tools this tick (#697); pass
+        ``agent_action_menu=False`` to force the full registered list instead --
+        used where the observation feeds memory retrieval, so changing the menu
+        can't shift which memories surface (the backend's byte-identical bake).
         """
         loc = character.location
         scene = self.perceive(character)
@@ -1156,8 +1165,19 @@ class Game:
                 character.get_property("sick_self_description") or "You feel ill."
             )
 
-        # Available actions
-        action_names = sorted(self.parser.actions.keys())
+        # Available actions. For an agent-driven character this is EXACTLY the
+        # verbs it is offered as tools this tick (#697) -- same source as the
+        # tool menu (npc.tools_for reads the same offered_action_names), so the
+        # observation can't advertise verbs the agent can't call (nor bury the
+        # ones it can, like propose, among 40+ it can't). A non-agent character
+        # (the player, a scripted NPC) keeps the full registered list.
+        agent = getattr(character, "agent", None)
+        if agent is not None and agent_action_menu:
+            action_names = offered_action_names(
+                self.parser, character, getattr(agent, "action_names", None)
+            )
+        else:
+            action_names = sorted(self.parser.actions.keys())
         lines.append(f"Available actions: {', '.join(action_names)}")
 
         # What the character believes about the world (issue #45). This is the
