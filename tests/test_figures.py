@@ -307,6 +307,8 @@ def test_the_tank_is_the_room_and_the_flood_plays_once():
     assert "tank-f" in cap.texts(Channel.FIGURE)
     g.do_command("examine tank")  # the wreckage answers to the old name
     assert cap.texts(Channel.FIGURE).count("tank-f") >= 2
+    g.do_command("examine hound")  # the spilled specimen keeps its litho (10)
+    assert "hound" in cap.texts(Channel.FIGURE)
 
 
 def test_reading_the_ledger_deals_the_manifest():
