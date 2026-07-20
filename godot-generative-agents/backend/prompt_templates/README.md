@@ -47,7 +47,7 @@ rename, remove, or re-wire a template.**
 | Template | Rendered by | Used for |
 | --- | --- | --- |
 | `plan_memory.prompty` | `cognition.py` — `attach_agents()` | The day's PLAN memory seeded onto each persona at t=0: `Plan: go to <destination> and <activity>.`, plus `Today's stops: <itinerary>.` when the whole-day itinerary is given (#83). |
-| `reflection.prompty` | `cognition.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I drank the <item>.` (with sick / recovered variants for drinking contaminated vs. boiled water, #300) / `I boiled the water to make it safe to drink.` / `I waited; nothing needed doing.` (settled wait, #614) / `I went to talk to <person> about <topic>.` / `I went to talk to <person>.` (agent-initiated talk_to, #614) / `I studied <topic> for <N> minutes.` (#615) / `I ate the <item>.` (#615; deliberately hunger-neutral — the engine's `eat` clears `IS_HUNGRY` whether or not the persona was hungry, so a "no longer hungry" claim could be a false memory) / `I did "<command>".` |
+| `reflection.prompty` | `cognition.py` — `remember_outcome()` | A persona's own action, as a first-person observation memory: `I traveled to <place>.` / `I am <activity>.` / `I drank the <item>.` (with sick / recovered variants for drinking contaminated vs. boiled water, #300) / `I boiled the water to make it safe to drink.` / `I waited; nothing needed doing.` (settled wait, #614) / `I went to talk to <person> about <topic>.` / `I went to talk to <person>.` (agent-initiated talk_to, #614) / `I studied <topic> for <N> minutes.` (#615) / `I ate the <item>.` (#615; deliberately hunger-neutral — the engine's `eat` clears `IS_HUNGRY` whether or not the persona was hungry, so a "no longer hungry" claim could be a false memory) / `I checked out <book> from the library.` (#616) / `I read <book>. It said: "<content>"` (#616) / `I did "<command>".` |
 | `spatial_knowledge.prompty` | `seed.py` — `seed_spatial_knowledge()` | One place a persona knows up front (a Belief): `You know <place> — its <areas>.` / `You know <place>.` |
 | `plan_system.prompty` | `planner.py` — `LLMPlanner._call()` (day / hourly / minute / revise) | **Real model prompt.** System message for the optional LLM daily planner (#83): plan one day in character. The per-level user message is assembled in code. |
 | `decide_context.prompty` | `cognition.py` — `decide_context_block()`, folded into `observe_and_decide`'s observation when the step loop threads a `SimClock` (#580) | **Real model prompt context.** The always-on decide slice: `Right now it is <time>.` + the plan's current stop (with planned minutes) + minutes elapsed on it. Appended after the environment text, so the deterministic mock never reads it. |
@@ -66,7 +66,8 @@ and double quotes in this text (`Isabella Rodriguez's apartment`, `— its`,
 `tests/test_prompt_templates.py` only pins the shared *engine's* templates
 (`text_adventure_games/prompt_templates/`); the exact rendered output of these
 Smallville/Penn templates is pinned by the memory tests in
-`godot-generative-agents/tests/test_boil_water.py` (`remember_outcome`'s
+`godot-generative-agents/tests/test_boil_water.py` and
+`godot-generative-agents/tests/test_book_loop_616.py` (`remember_outcome`'s
 `reflection` renders), which guard this escaping behavior for this package.
 `decide_context`'s exact output is pinned by `godot-generative-agents/tests/test_decide_context.py`;
 `nearby_affordances`'s by `godot-generative-agents/tests/test_affordance_wiring_613.py`;

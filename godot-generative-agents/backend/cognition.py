@@ -1495,6 +1495,25 @@ def remember_outcome(char, command: str, step: int) -> None:
         # Satiety is the memory (#615); hunger as an accumulating drive is #594.
         text = render("reflection", verb=verb, item=rest.strip())
         importance = 2.0
+    elif verb == "check_out_book":
+        # The #616 book loop's first half: taking custody unlocks read, so it
+        # outranks a plain get (2.0).
+        text = render("reflection", verb=verb, item=rest.strip())
+        importance = 3.0
+    elif verb == "read":
+        # The loop's payoff: the content itself enters memory. parse_command
+        # stamped the action it just ran on char.last_action, and Read already
+        # matched the exact item (aliases, containers, worn -- the parser's
+        # full scope rules); reuse that instead of re-deriving the match here.
+        thing = getattr(getattr(char, "last_action", None), "item", None)
+        content = thing.get_property("read_text") if thing else ""
+        text = render(
+            "reflection",
+            verb=verb,
+            item=thing.name if thing else rest.strip(),
+            content=content or "",
+        )
+        importance = 3.0
     elif verb in ("get", "activate", "deactivate"):
         # World-mutating one-shot verbs (#300): worth a normal-importance
         # memory, unlike the 1.0 catch-all below.
