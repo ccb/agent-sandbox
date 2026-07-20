@@ -739,8 +739,11 @@ async function main() {
     };
     tick();
   });
-  await typeInto(hasAuto ? "an unfinished expedition is on file"
-    : "[ tap or press any key to begin ]");
+  // Touch devices tap; everything else has a keyboard. Keep the line
+  // shorter than the title so it never overruns the width on a phone (CCB).
+  const isTouch = window.matchMedia("(pointer: coarse)").matches;
+  await typeInto(hasAuto ? "You have a saved game"
+    : (isTouch ? "[ tap to begin ]" : "[ press any key to begin ]"));
   const resume = await new Promise((begin) => {
     if (!hasAuto) {
       const go = () => {
@@ -755,7 +758,7 @@ async function main() {
     const menu = document.createElement("div");
     menu.id = "bootmenu";
     for (const [label, value] of [
-      ["[ CONTINUE THE EXPEDITION ]", true],
+      ["[ LOAD SAVED GAME ]", true],
       ["[ BEGIN ANEW ]", false],
     ]) {
       const b = document.createElement("div");

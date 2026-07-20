@@ -103,6 +103,9 @@ body, input {
   overflow-x: auto;
   padding: 0.15rem 0.25rem;
   scrollbar-width: none;
+  /* Drag the row to scroll through verbs -- don't let iOS Safari read the
+     horizontal drag as a text selection (CCB). */
+  touch-action: pan-x;
 }
 .chip-row::-webkit-scrollbar { display: none; }
 .chip {
@@ -112,6 +115,8 @@ body, input {
   padding: 0.1rem 0.55rem;
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   text-transform: uppercase;
   font-size: 13px;
 }
