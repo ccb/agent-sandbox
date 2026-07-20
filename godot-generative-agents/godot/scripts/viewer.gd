@@ -147,6 +147,7 @@ const TRAIL_DIM_ALPHA := 0.18
 # Marker collection for the timeline strip (issue #249) — also the single home
 # of the act-address building parser (_building_of delegates to it).
 const ReplayMarkers := preload("res://scripts/replay_markers.gd")
+const ActionTally := preload("res://scripts/action_tally.gd")
 const GifEncoder := preload("res://scripts/gif_encoder.gd")
 const ClipExport := preload("res://scripts/clip_export.gd")
 const LiveClipSpan := preload("res://scripts/live_clip_span.gd")
@@ -211,6 +212,17 @@ var _relationships: Array = []
 # Step the day-plans pop-up last drew (same push-on-change contract as the
 # heatmap/social graph, issue #251).
 var _last_plan_step := -1
+
+# Most-taken-actions HUD (issue #700): the baked `events` array, the panel node,
+# and the last step its tally was computed for -- so _process only re-tallies on
+# an integer-step change, the same push-on-step-change contract as the heatmap /
+# social-graph / day-plan pop-ups above. ACTIONS_TOP_N caps the ranked rows.
+# Replay-only for v1: the panel is hidden in live mode (see _setup + _process),
+# where the run monitor owns the top-right corner.
+const ACTIONS_TOP_N := 6
+var _action_events: Array = []
+var _actions_hud: PanelContainer
+var _last_actions_step := -1
 
 # In-world dialogue: when two agents converse, the shared transcript is played back
 # above their heads one line at a time -- only the current speaker shows a bubble --
@@ -409,6 +421,16 @@ func _ready() -> void:
 	# The top-right run monitor and its data source (simulated or live).
 	_setup_hud()
 
+	# The top-right most-taken-actions panel (issue #700). Created in code (like
+	# the thinking badge) so it needs no .tscn wiring, and given the sidebar's
+	# theme so it renders on the same Cute Fantasy parchment. Shown only in
+	# baked-replay mode -- in live mode the run monitor owns this corner, so hide
+	# it there (its data path is baked-events-only for v1 anyway).
+	_actions_hud = preload("res://scripts/actions_hud.gd").new()
+	_actions_hud.theme = _panel.theme
+	$UI.add_child(_actions_hud)
+	_actions_hud.visible = _resolve_backend_url() == ""
+
 	# A clock-driven tint over the 2D world (the screen-space UI layer is unaffected),
 	# so the campus warms/dims with the in-game time of day.
 	_sky = CanvasModulate.new()
@@ -602,6 +624,14 @@ func _load_replay_from_text(text: String) -> void:
 	_panel.set_timeline_markers(
 		ReplayMarkers.collect(_frames, _names, _memory_streams, data.get("events", []), _wishes),
 		maxi(_frames.size() - 1, 0))
+
+	# The most-taken-actions panel's data (issue #700): the SAME baked events the
+	# marker strip reads above. Seed the panel at the start step so it isn't blank
+	# before the first _process tick; _process re-tallies as the playhead moves.
+	# A pre-#476 replay with no `events` key degrades to [] -> "no actions yet".
+	_action_events = data.get("events", [])
+	_last_actions_step = preview_step
+	_actions_hud.set_rows(ActionTally.tally(_action_events, preview_step, ACTIONS_TOP_N))
 
 	# Fill the sidebar's Focus dropdown with every building the cast visits over the whole
 	# replay (a one-time scan of all frames), sorted, so the option list is stable as the
@@ -2099,6 +2129,14 @@ func _process(delta: float) -> void:
 	if _day_plans.visible and i != _last_plan_step:
 		_last_plan_step = i
 		_day_plans.show_up_to(i)
+
+	# Keep the most-taken-actions panel current (issue #700): re-tally up to the
+	# new step whenever the playhead crosses into it, so counts grow as actions
+	# accrue and DROP when you scrub backward. Gated on .visible, which also skips
+	# the work in live mode (the panel is hidden there).
+	if _actions_hud.visible and i != _last_actions_step:
+		_last_actions_step = i
+		_actions_hud.set_rows(ActionTally.tally(_action_events, i, ACTIONS_TOP_N))
 
 	# Fan out co-located agents so stacked sprites stay visible (#560). Group by
 	# each agent's tile THIS step; the per-agent offset below is VIEW-ONLY -- it
