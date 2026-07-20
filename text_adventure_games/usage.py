@@ -141,7 +141,7 @@ class CallRecord:
     cost_usd: float
     turn: int | None = None
     actor: str | None = None  # which NPC, when known
-    call_site: str | None = None  # which cognition call: decide|converse|plan|reflect
+    role: str | None = None  # call-site kind: decide/plan/reflect/... (#368)
     attempt: int | None = None  # retry index (replay seam)
     prompt_sha256: str | None = None  # hash of the messages (replay seam)
     latency_ms: float | None = None
@@ -153,7 +153,7 @@ class CallRecord:
             "kind": "call",
             "turn": self.turn,
             "actor": self.actor,
-            "call_site": self.call_site,
+            "role": self.role,
             "attempt": self.attempt,
             "prompt_sha256": self.prompt_sha256,
             "provider": u.provider,
@@ -238,16 +238,12 @@ class UsageLedger:
             totals[key] = totals.get(key, 0.0) + r.cost_usd
         return totals
 
-    def totals_by_call_site(self) -> dict[str, float]:
-        """Total cost per cognition call-site (``decide`` / ``converse`` /
-        ``plan`` / ``reflect`` / ...) so a run can see where the spend actually
-        goes -- the signal for model tiering (#368: run a cheap model for the
-        high-volume call-site, a strong one for the rare-but-important one).
-        Calls with no ``call_site`` set land under ``"(unattributed)"``, exactly
-        like :meth:`totals_by_actor`."""
+    def totals_by_role(self) -> dict[str, float]:
+        """Total cost per call site (decide/plan/reflect/...; issue #368).
+        Calls recorded without a role land under ``"(unattributed)"``."""
         totals: dict[str, float] = {}
         for r in self.records:
-            key = r.call_site or "(unattributed)"
+            key = r.role or "(unattributed)"
             totals[key] = totals.get(key, 0.0) + r.cost_usd
         return totals
 
@@ -273,9 +269,8 @@ class UsageLedger:
             "by_actor": {
                 actor: round(cost, 6) for actor, cost in self.totals_by_actor().items()
             },
-            "by_call_site": {
-                site: round(cost, 6)
-                for site, cost in self.totals_by_call_site().items()
+            "by_role": {
+                role: round(cost, 6) for role, cost in self.totals_by_role().items()
             },
             **self.token_totals(),
         }
@@ -360,8 +355,7 @@ def record_call(
 ) -> CallRecord | None:
     """Build a normalized :class:`Usage` from a provider's raw usage object,
     price it, attach attribution from *context* (``actor`` / ``turn`` /
-    ``call_site`` / ``attempt``), append a :class:`CallRecord` to *ledger*, and
-    return it.
+    ``attempt``), append a :class:`CallRecord` to *ledger*, and return it.
 
     This is the single place the four adapter methods (OpenAI/Anthropic x
     chat/call_tool) share, so the record-building logic isn't copied four times.
@@ -386,7 +380,7 @@ def record_call(
             cost_usd=price(model, usage),
             turn=context.get("turn"),
             actor=context.get("actor"),
-            call_site=context.get("call_site"),
+            role=context.get("role"),
             attempt=context.get("attempt"),
             prompt_sha256=(prompt_sha256(messages) if messages is not None else None),
             latency_ms=latency_ms,
