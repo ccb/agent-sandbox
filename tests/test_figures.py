@@ -158,7 +158,8 @@ def test_every_wired_key_exists_in_the_registry():
             for it in c.inventory.values():
                 _walk(it)
     # event-cued keys (not discoverable by walking) + client-cued ones
-    wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph"}
+    wired |= {"seal", "autarch", "autarch-e", "bats", "bats-c", "road", "epitaph",
+              "youth-b", "youth-c"}  # the lit hall and the lesson are event-cued
     missing = wired - registry
     assert not missing, f"wired keys with no card: {sorted(missing)}"
 
@@ -237,6 +238,51 @@ def test_arriving_in_the_hall_of_warriors_cues_the_cylinders_when_lit():
     g.do_command("light glowstone")
     g.do_command("go east")  # lit: the intact deck, above the text
     assert "cylinders-b" in cap.texts(Channel.FIGURE)
+
+
+def test_the_hall_of_youth_deals_by_light_and_the_bats_teach_the_lesson():
+    """The youth's two faces (CCB): a dark arrival deals the touch-trace
+    (46) -- this room, uniquely, has a card for the dark -- a lit look the
+    adoration (47), EXAMINE STATUES follows the same choice, the ceiling
+    keeps its close-up (05-C), and the bats' first attack plays THE
+    LESSON (48)."""
+    g, cap = _game()
+    g.do_command("search merchant")
+    g.do_command("take glowstone")
+    youth = g.locations["Hall of Youth"]
+    neighbor, direction = next(
+        (loc, d)
+        for loc in g.locations.values()
+        for d, dest in loc.connections.items()
+        if dest is youth
+    )
+    word = str(getattr(direction, "value", direction))
+    g.relocate(g.player, neighbor)
+    g.do_command(f"go {word}")  # pitch dark -- and the card deals anyway
+    assert "youth-a" in cap.texts(Channel.FIGURE)
+    g.do_command("examine statues")  # the hands' version, re-earned
+    assert cap.texts(Channel.FIGURE).count("youth-a") >= 2
+    g.do_command("light glowstone")
+    g.do_command("examine statues")  # the sculptor's version
+    assert "youth-b" in cap.texts(Channel.FIGURE)
+    g.do_command("examine ceiling")  # the residents keep their close-up
+    assert "bats-c" in cap.texts(Channel.FIGURE)
+    for _ in range(3):  # the light stays up; the vault runs out of patience
+        if "youth-c" in cap.texts(Channel.FIGURE):
+            break
+        g.do_command("listen")
+    assert "youth-c" in cap.texts(Channel.FIGURE)
+
+
+def test_reading_the_ledger_deals_the_manifest():
+    """READ deals a document's card (engine rule, like WEAR for wearables),
+    forced -- paperwork earns its card every time it is consulted."""
+    g, cap = _game()
+    g.relocate(g.player, g.locations["The Wagon's Hold"])
+    g.do_command("read ledger")
+    assert "manifest" in cap.texts(Channel.FIGURE)
+    g.do_command("read ledger")
+    assert cap.texts(Channel.FIGURE).count("manifest") == 2
 
 
 def test_the_spawns_warning_draws_its_card_first():

@@ -66,6 +66,14 @@ class Read(base.Action):
             or self.item.description
         )
         self.parser.ok(text)
+        # A readable thing may carry a ``figure``: reading it deals the card,
+        # forced -- poring over a document is as deliberate as examining it.
+        # Player reads only: an NPC reading doesn't draw on the player's screen.
+        if self.character is self.game.player:
+            fig = self.item.get_property("figure")
+            self.game.show_figure(
+                fig(self.game) if callable(fig) else fig, force=True
+            )
 
 
 # Verb phrases SEARCH strips to find an optional target ("search the desk" ->

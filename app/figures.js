@@ -10,7 +10,7 @@
    and disconnected nodes drop off the clock automatically. */
 (() => {
   "use strict";
-  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
+  const META = {"autarch": ["svg", 640, 420], "autarch-c": ["svg", 640, 420], "autarch-e": ["svg", 640, 420], "bats": ["canvas", 640, 300], "bats-c": ["svg", 640, 360], "blade": ["canvas", 640, 360], "boots": ["svg", 640, 360], "canopic-c": ["svg", 640, 400], "centipede": ["svg", 640, 360], "chimney-f": ["svg", 640, 360], "chimney-g": ["svg", 640, 360], "chimney-h": ["svg", 640, 360], "core": ["svg", 640, 360], "critch": ["svg", 640, 360], "cyl-a": ["svg", 640, 400], "cyl-c": ["svg", 640, 400], "cyl-o": ["svg", 640, 400], "cyl-v": ["svg", 640, 400], "cylinders": ["svg", 640, 400], "cylinders-b": ["svg", 640, 400], "dagger": ["svg", 640, 360], "epitaph": ["svg", 640, 400], "ext1c": ["svg", 640, 400], "ext1e": ["svg", 640, 400], "flask": ["svg", 640, 360], "fungus": ["svg", 640, 360], "glowstone": ["canvas", 640, 300], "glowstone-b": ["canvas", 640, 300], "glowstone-c": ["canvas", 640, 300], "guts-a": ["svg", 640, 360], "guts-b": ["svg", 640, 360], "guts-c": ["svg", 640, 360], "hound": ["svg", 640, 360], "jackal": ["svg", 640, 360], "jar-baboon": ["svg", 640, 300], "jar-falcon": ["svg", 640, 300], "jar-human": ["svg", 640, 300], "jar-jackal": ["svg", 640, 300], "jar-mantis": ["svg", 640, 300], "manifest": ["svg", 640, 360], "mem-bath": ["svg", 640, 360], "mem-embalm": ["svg", 640, 360], "mem-kestrel": ["svg", 640, 360], "mem-mother": ["svg", 640, 360], "mem-raising": ["svg", 640, 360], "mystic-b": ["svg", 640, 400], "mystic-c": ["svg", 640, 400], "mystic-f": ["svg", 640, 400], "resp": ["svg", 640, 360], "road": ["svg", 640, 400], "seal": ["svg", 640, 400], "seal-b": ["svg", 640, 400], "shard": ["svg", 640, 360], "silas": ["svg", 640, 400], "spawn-a": ["svg", 640, 360], "spawn-b": ["svg", 640, 360], "spawn-c": ["svg", 640, 360], "sphere-b": ["svg", 640, 420], "sphere-d": ["svg", 640, 420], "sphere-e": ["svg", 640, 420], "sphere-f": ["svg", 640, 420], "tesseract": ["canvas", 640, 360], "ulfire": ["svg", 640, 360], "youth-a": ["svg", 640, 360], "youth-b": ["svg", 640, 360], "youth-c": ["svg", 640, 360], "zoxen": ["svg", 640, 360], "zoxen-b": ["svg", 640, 360]};
   const FIG = {
     _defs: {}, _uid: 0, _ticks: [], _timer: null, _target: null,
     MAX_LIVE: 3,
@@ -2910,6 +2910,297 @@
       tags.forEach((n, i) => { n.textContent =
         (step > i || (step === i && f >= .6)) && T >= 24 ? ORGANS[i] : ""; });
       typeOn(F.foot, "HIS FATHER'S INNARDS FORETOLD HIS FATE.", T, 162, 1.9);
+    });
+  });
+
+  /* ---------------- 46: the statues, by touch ---------------- */
+  FIG._define("youth-a", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / PITCH DARK / TOUCH";
+    const GLASS = "#cfefff";
+    // the ceiling, heard not seen
+    const seethe = Array.from({ length: 30 }, (_, i) => el(svg, "polyline",
+      { fill: "none", stroke: PH_DIM, "stroke-width": 1, opacity: .12,
+        points: `${14 + i * 21},52 ${20 + i * 21},46 ${26 + i * 21},52` }));
+    const ell2 = (cx2, cy2, rx2, ry2, n) => Array.from({ length: n + 1 }, (_, i) => {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / n;
+      return [cx2 + Math.cos(a) * rx2, cy2 + Math.sin(a) * ry2];
+    });
+    const STAT = [
+      { paths: [ell2(150, 262, 46, 28, 22),
+          [[116, 250], [150, 240], [184, 250]],
+          [[112, 264], [150, 254], [188, 264]],
+          [[120, 278], [150, 270], [180, 278]],
+          ell2(150, 226, 13, 12, 12)],
+        lx: 150, s: "AN INFANT." },
+      { paths: [[[296, 306], [298, 240], [290, 232], [292, 212], [302, 200],
+          [318, 196], [334, 200], [344, 212], [346, 232], [338, 240], [340, 306]],
+          [[298, 252], [284, 268], [286, 276]],
+          [[338, 252], [352, 268], [350, 276]]],
+        lx: 318, s: "A BOY." },
+      { paths: [[[452, 306], [456, 214], [446, 204], [448, 186], [460, 174],
+          [478, 170], [494, 176], [502, 190], [500, 206], [490, 214], [494, 306]],
+          [[456, 226], [438, 202], [428, 172], [434, 166]],
+          [[494, 228], [510, 244], [512, 260]]],
+        lx: 476, s: "LARGER THAN LIFE." },
+    ];
+    const strokes = [];
+    STAT.forEach((st, si) => st.paths.forEach(pts =>
+      strokes.push({ si, pts, q: el(svg, "polyline",
+        { fill: "none", stroke: PH, "stroke-width": 1.6, opacity: .85 }) })));
+    const total = strokes.reduce((a, s2) => a + s2.pts.length, 0);
+    const hand = el(svg, "g", { opacity: 0 });
+    el(hand, "circle", { r: 4, fill: "none", stroke: GLASS, "stroke-width": 1.4 });
+    [[-3, -6], [1, -7], [4, -5]].forEach(([dx, dy]) =>
+      el(hand, "line", { x1: 0, y1: 0, x2: dx * 1.8, y2: dy * 1.8, stroke: GLASS,
+        "stroke-width": 1.2 }));
+    const names = STAT.map(st => { const n = label(svg, st.lx, 328, 10, FUNGUS);
+      n.setAttribute("text-anchor", "middle"); return n; });
+    const plinth = STAT.map(st => el(svg, "line", { x1: st.lx - 52, y1: 308,
+      x2: st.lx + 52, y2: 308, stroke: PH_DIM, opacity: 0 }));
+    const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 190;
+      doWipe(T);
+      typeOn(hdr, "> FEEL STATUES", T, 4, 1.6);
+      seethe.forEach((q, i) => q.setAttribute("opacity",
+        .06 + ((t + i * 3) % 11 < 2 ? .1 : 0)));
+      const reach = Math.max(0, (T - 14) * (total / 130));
+      let acc = 0, hx = null, hy = null;
+      strokes.forEach(s2 => {
+        const kk = Math.max(0, Math.min(s2.pts.length, reach - acc));
+        s2.q.setAttribute("points",
+          s2.pts.slice(0, Math.ceil(kk)).map(p => p.join(",")).join(" "));
+        if (kk > 0 && kk < s2.pts.length) {
+          const p = s2.pts[Math.floor(kk)]; hx = p[0]; hy = p[1];
+        }
+        acc += s2.pts.length;
+      });
+      hand.setAttribute("opacity", hx !== null ? .9 : 0);
+      if (hx !== null) hand.setAttribute("transform",
+        `translate(${hx + 10} ${hy + 12}) rotate(-24)`);
+      let upto = 0;
+      STAT.forEach((st, si) => {
+        upto += st.paths.reduce((a, p) => a + p.length, 0);
+        const done = reach >= upto;
+        names[si].textContent = done ? st.s : "";
+        plinth[si].setAttribute("opacity", done ? .6 : 0);
+      });
+      typeOn(foot, "COLD, SMOOTH STONE. YOU CANNOT SEE A THING.", T, 152, 1.9);
+    });
+  });
+
+  /* ---------------- 47: the adoration ---------------- */
+  FIG._define("youth-b", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / LIT, FOR NOW";
+    const GLASS = "#cfefff";
+    const I1 = "#1b4055", I2 = "#25567a", I3 = "#33739c", I4 = "#4a97c6";
+    el(svg, "line", { x1: 0, y1: 312, x2: 640, y2: 312, stroke: PH_DIM });
+    const cone = el(svg, "polygon", { fill: PH, "fill-opacity": .07,
+      points: "320,330 80,64 560,64" });
+    const scene = el(svg, "g", {});
+    [[150, 44], [320, 34], [478, 40]].forEach(([x, h]) => el(scene, "rect",
+      { x: x - 44, y: 312 - h, width: 88, height: h, fill: I1, stroke: PH_DIM }));
+    // the infant, swaddled
+    el(scene, "ellipse", { cx: 150, cy: 246, rx: 40, ry: 24, fill: I3 });
+    el(scene, "circle", { cx: 150, cy: 216, r: 12, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 114 240 Q 150 228 186 240 M 118 252 Q 150 242 184 252" });
+    // the child, palm raised
+    el(scene, "path", { fill: I2, d: "M 296 278 L 298 216 Q 298 202 312 198 " +
+      "L 328 198 Q 342 202 342 216 L 344 278 Z" });
+    el(scene, "circle", { cx: 320, cy: 184, r: 13, fill: I2 });
+    el(scene, "path", { fill: I2, d: "M 342 224 L 362 204 L 368 210 L 350 232 Z" });
+    el(scene, "circle", { cx: 366, cy: 205, r: 5, fill: I4 });  // the palm, adored
+    // the youth
+    el(scene, "path", { fill: I3, d: "M 436 272 L 440 196 Q 440 180 456 176 " +
+      "L 474 176 Q 490 180 490 196 L 494 272 Z" });
+    el(scene, "circle", { cx: 465, cy: 162, r: 14, fill: I3 });
+    el(scene, "path", { fill: "none", stroke: GLASS, "stroke-width": 1.3,
+      opacity: .9, d: "M 472 150 Q 480 158 476 170" });         // the profile line
+    const stone = el(svg, "circle", { cx: 320, cy: 330, r: 5, fill: PH_BRIGHT });
+    const bats = Array.from({ length: 5 }, (_, i) => {
+      const g = el(svg, "g", { opacity: 0 });
+      el(g, "path", { fill: "#01070c", stroke: PH_DIM, "stroke-width": 1, d:
+        "M -16 0 Q -8 -8 0 0 Q 8 -8 16 0 Q 8 4 0 2 Q -8 4 -16 0 Z" });
+      return { g, ph: i * 37 };
+    });
+    const plq = [["THE INFANT", 150], ["THE CHILD", 320], ["THE YOUTH", 478]]
+      .map(([s2, x], i) => { const n = label(svg, x, 304, 8, PH_DIM);
+        n.setAttribute("text-anchor", "middle"); return { n, s2, t0: 22 + i * 16 }; });
+    const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 160;
+      doWipe(T);
+      typeOn(hdr, "THE ADORATION", T, 4, 1.4);
+      let dim = 0;
+      bats.forEach((b, i) => {
+        const x = (t * (3.2 + (i % 3) * .8) + b.ph * 9) % 900 - 130;
+        const y = 70 + (i % 3) * 26 + Math.sin((t + b.ph) * .2) * 8;
+        b.g.setAttribute("opacity", x > -40 && x < 680 ? .95 : 0);
+        const flap = Math.sin(t * .9 + i) * .5 + 1.1;
+        b.g.setAttribute("transform", `translate(${x} ${y}) scale(1.3 ${flap})`);
+        if (x > 240 && x < 400) dim = Math.max(dim, .5);
+      });
+      cone.setAttribute("fill-opacity", (.06 + Math.sin(t * .7) * .012) * (1 - dim));
+      scene.setAttribute("opacity", 1 - dim * .5);
+      stone.setAttribute("opacity", .7 + Math.sin(t * .8) * .3);
+      plq.forEach(p2 => typeOn(p2.n, p2.s2, T, p2.t0, 2));
+      typeOn(foot, "SWADDLED AND ADORED. THE VAULT ANSWERS THE GLOW.", T, 96, 1.9);
+    });
+  });
+
+  /* ---------------- 48: the lesson ---------------- */
+  FIG._define("youth-c", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "HALL OF YOUTH / TUTORIAL: DOUSE";
+    const GLASS = "#cfefff";
+    const ROOST = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 13; c++)
+      ROOST.push([44 + c * 44 + (r % 2) * 22, 52 + r * 15]);
+    // you, and the stone held up
+    el(svg, "circle", { cx: 148, cy: 296, r: 9, fill: PH_DIM });
+    el(svg, "path", { fill: "none", stroke: PH_DIM, "stroke-width": 3,
+      d: "M 148 305 L 148 336 M 148 314 L 176 288" });
+    const cone = el(svg, "polygon", { fill: PH, "fill-opacity": 0,
+      points: "180,284 60,80 430,80" });
+    const stone = el(svg, "circle", { cx: 180, cy: 284, r: 5, fill: PH_BRIGHT });
+    const bats = ROOST.map(([rx, ry], i) => {
+      const q = el(svg, "polyline", { fill: "none", stroke: GLASS,
+        "stroke-width": 1.4, opacity: .55 });
+      return { q, rx, ry, i };
+    });
+    const cmd = label(svg, 24, 330, 10, GLASS);
+    label(svg, 452, 350, 10, PH_DIM).textContent = "REGRET";
+    const cells = Array.from({ length: 6 }, (_, i) => el(svg, "rect",
+      { x: 516 + i * 16, y: 340, width: 12, height: 11, fill: GLASS,
+        "fill-opacity": .08 }));
+    const settle = label(svg, 320, 200, 9, PH_DIM);
+    settle.setAttribute("text-anchor", "middle");
+    const foot = label(svg, 624, 316, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 186;
+      doWipe(T);
+      typeOn(hdr, "THE LESSON", T, 4, 1.4);
+      const lit = T >= 10 && T < 104;
+      if (T < 104) typeOn(cmd, "> LIGHT GLOWSTONE", T, 8, 2.4);
+      else typeOn(cmd, "> DOUSE GLOWSTONE. QUICKLY.", T, 104, 2.4);
+      cone.setAttribute("fill-opacity", lit ? .06 + Math.sin(t * .8) * .015 : 0);
+      stone.setAttribute("opacity", lit ? 1 : .2);
+      let closest = 1e9;
+      bats.forEach(b => {
+        const t0 = 22 + (b.i % 17) * 4;
+        let x = b.rx, y = b.ry, spread = 5;
+        if (T >= t0 && T < 104) {                              // the descent
+          const k = Math.min(1, (T - t0) / 30);
+          const ang = T * .22 + b.i * 1.7;
+          const rad = 150 - k * 105 + Math.sin(T * .3 + b.i) * 9;
+          x = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k;
+          y = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k;
+          spread = 7;
+        } else if (T >= 104) {                                 // the retreat
+          const kk = Math.min(1, (T - 104) / 24);
+          const k1 = Math.min(1, Math.max(0, (104 - t0) / 30));
+          const ang = 104 * .22 + b.i * 1.7;
+          const rad = 150 - k1 * 105 + Math.sin(104 * .3 + b.i) * 9;
+          const ax = b.rx + (180 + Math.cos(ang) * rad - b.rx) * k1;
+          const ay = b.ry + (270 + Math.sin(ang) * rad * .55 - b.ry) * k1;
+          x = ax + (b.rx - ax) * kk; y = ay + (b.ry - ay) * kk;
+          spread = 7 - kk * 2;
+        }
+        const fl = Math.sin(t * 1.1 + b.i) * 3;
+        b.q.setAttribute("points",
+          `${x - spread},${y + fl * .4} ${x},${y - 3 - fl} ${x + spread},${y + fl * .4}`);
+        const d2 = Math.hypot(x - 180, y - 284);
+        if (d2 < closest) closest = d2;
+      });
+      const on = T < 10 ? 0 : lit
+        ? Math.min(6, Math.max(0, Math.round((190 - closest) / 28)))
+        : Math.max(0, 6 - Math.floor((T - 104) / 5));
+      cells.forEach((r2, i) => r2.setAttribute("fill-opacity", i < on ? .8 : .08));
+      settle.textContent = T >= 140 && T < 184 ? "THE VAULT SETTLES. GRUDGINGLY." : "";
+      typeOn(foot, "WHAT ROOSTS HERE HATES A LAMP WORSE THAN A SHOUT.", T, 112, 2);
+    });
+  });
+
+  /* ---------------- 49: the manifest ---------------- */
+  FIG._define("manifest", "svg", function (svg) {
+    el(svg, "rect", { x: 0, y: 0, width: 640, height: 360, fill: BG });
+    el(svg, "line", { x1: 16, y1: 34, x2: 624, y2: 34, stroke: PH_DIM });
+    const hdr = label(svg, 16, 24, 13, PH_BRIGHT);
+    const cls = label(svg, 624, 24, 10, PH_DIM); cls.setAttribute("text-anchor", "end");
+    cls.textContent = "THE WAGON'S HOLD / PAPERWORK";
+    const GLASS = "#cfefff";
+    // the page
+    el(svg, "rect", { x: 88, y: 52, width: 464, height: 274, fill: GLASS,
+      "fill-opacity": .05, stroke: PH_DIM });
+    for (let y = 108; y <= 300; y += 24)
+      el(svg, "line", { x1: 104, y1: y, x2: 536, y2: y, stroke: PH_DIM, opacity: .25 });
+    const title = label(svg, 320, 78, 10, PH); title.setAttribute("text-anchor", "middle");
+    const sub = label(svg, 320, 94, 8, PH_DIM); sub.setAttribute("text-anchor", "middle");
+    // saffron: a bound bale
+    el(svg, "ellipse", { cx: 122, cy: 126, rx: 12, ry: 8, fill: "none",
+      stroke: FUNGUS, "stroke-width": 1.5 });
+    [-5, 0, 5].forEach(dx => el(svg, "line", { x1: 122 + dx, y1: 119,
+      x2: 122 + dx, y2: 133, stroke: FUNGUS, opacity: .7 }));
+    // dates: a cluster
+    [[116, 176], [124, 172], [130, 178]].forEach(([x, y]) =>
+      el(svg, "ellipse", { cx: x, cy: y, rx: 4.5, ry: 6, fill: "#b36b2a" }));
+    // silk: a loose coil
+    el(svg, "path", { d: "M 110 228 q 8 -12 16 0 q 8 12 16 0 q 6 -9 12 -2",
+      fill: "none", stroke: GLASS, "stroke-width": 1.5, opacity: .8 });
+    const rows = [
+      ["SAFFRON, ONE BALE", "A SEASON'S WATER", 2, 130],
+      ["DATES, ONE CRATE", "A MONTH OF MEALS", 2, 178],
+      ["SPIDER-SILK, ONE BOLT", "LIGHT, AND KNOWS IT", 1, 226],
+    ].map(([name, worth, slots, y], i) => {
+      const n = label(svg, 148, y, 10, PH);
+      const w = label(svg, 536, y, 9, PH_DIM); w.setAttribute("text-anchor", "end");
+      el(svg, "line", { x1: 148, y1: y + 4, x2: 536, y2: y + 4, stroke: PH_DIM,
+        "stroke-dasharray": "2 5", opacity: .5 });
+      const boxes = Array.from({ length: 3 }, (_, b) => el(svg, "rect",
+        { x: 148 + b * 13, y: y + 10, width: 9, height: 9, fill: PH,
+          "fill-opacity": .06, stroke: PH_DIM }));
+      return { n, w, name, worth, slots, boxes, t0: 30 + i * 26 };
+    });
+    label(svg, 148, 264, 8, PH_DIM).textContent =
+      "SLOTS SHOWN ACTUAL SIZE. THE BALE KNOWS ITS WEIGHT.";
+    // the stamp
+    const stamp = el(svg, "g", { transform: "rotate(-11 320 296)", opacity: 0 });
+    el(stamp, "rect", { x: 208, y: 278, width: 224, height: 30, fill: "none",
+      stroke: "#ff5a5a", "stroke-width": 2 });
+    const stx = label(stamp, 320, 298, 11, "#ff5a5a");
+    stx.setAttribute("text-anchor", "middle");
+    stx.textContent = "CONSIGNEE: THE SAND";
+    const foot = label(svg, 624, 350, 10, FUNGUS); foot.setAttribute("text-anchor", "end");
+    const doWipe = wipe(svg, 640, 360, 2, 10);
+    clock(t => {
+      const T = t % 170;
+      doWipe(T);
+      typeOn(hdr, "THE MANIFEST", T, 4, 1.4);
+      typeOn(title, "MANIFEST -- FOR THE SOUKS OF GNOMON", T, 8, 2);
+      typeOn(sub, "NINTH DAY. TOMORROW, GNOMON.", T, 22, 2);
+      rows.forEach(r => {
+        typeOn(r.n, r.name, T, r.t0, 2);
+        typeOn(r.w, r.worth, T, r.t0 + 10, 2);
+        r.boxes.forEach((b, i2) => b.setAttribute("fill-opacity",
+          T > r.t0 + 14 + i2 * 3 && i2 < r.slots ? .7 : .06));
+      });
+      stamp.setAttribute("opacity", T > 118 ? (T < 122 ? (T % 2 ? 1 : .3) : .9) : 0);
+      typeOn(foot, "THE CACKLEMAW DO NOT TRADE.", T, 132, 1.8);
     });
   });
 

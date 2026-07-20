@@ -2269,6 +2269,8 @@ def build_game(seed=None):
         "entry is the last.",
     )
     ledger.set_property("gettable", True)  # take it along; it reads anywhere
+    ledger.set_property("figure", "manifest")  # the stamped page (49): READ
+    # and EXAMINE both deal it -- paperwork earns its card by being consulted
     ledger.add_command_hint("read ledger")
 
     # (CCB: no separate pack -- everything the merchant carried is ON the
@@ -2554,6 +2556,17 @@ def build_game(seed=None):
         "Your hands find cold, smooth stone -- a swaddled infant, then a "
         "standing boy, larger than life. The boy-Autarch, unmistakably.",
     )
+
+    # The hall's two faces (CCB): in the dark the statues are what your hands
+    # make of them (46, the touch-trace); raise a light and they are what the
+    # sculptor made of them (47, the adoration). The same choice greets
+    # arrival and LOOK -- this room, uniquely, deals a card in the dark.
+    def _youth_card(g):
+        lit = perception.sight_for(g.player, youth)[0] >= perception.Sight.CLEAR
+        return "youth-b" if lit else "youth-a"
+
+    statues.set_property("figure", _youth_card)
+    youth.set_property("figure", _youth_card)
     ceiling = _scenery(
         youth,
         "ceiling",
@@ -3818,7 +3831,7 @@ def build_game(seed=None):
                 "closes over the light. THE END.",
             )
         else:
-            g.show_figure("bats-c")  # the residents, eyes opening
+            g.show_figure("youth-c")  # the lesson, taught the hard way
             g.parser.ok(
                 "The bats drop in a wheeling rake of claws -- your scalp and "
                 "hands pay for the light. (You are mauled; douse it, or feed "
@@ -4232,7 +4245,7 @@ def build_game(seed=None):
             youth.set_property("_mob", 0)
             return
         if g.player.location in (youth, exterior, memory, hounds):
-            g.show_figure("bats-c")  # the card plays first, then the swarm
+            g.show_figure("youth-c")  # the lesson plays first, then the swarm
             g.parser.ok(
                 "In the Hall of Youth, the swarm pours down onto the light where "
                 "it lies, a screaming wheel around a still point."

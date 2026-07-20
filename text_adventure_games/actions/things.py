@@ -479,6 +479,17 @@ class Examine(base.Action):
         )
         self.parser.ok("It's too dark to make anything out." + hint)
 
+    def _dark_figure(self, target) -> None:
+        """A dark examine deals only CALLABLE figures: the callable owns
+        light-awareness (it can return a dark-appropriate card, or None),
+        while a plain string figure -- always the lit litho -- stays
+        suppressed so darkness never leaks what the eyes haven't earned."""
+        if self.character is not self.game.player:
+            return
+        fig = target.get_property("figure")
+        if callable(fig):
+            self.game.show_figure(fig(self.game), force=True)
+
     def apply_effects(self):
         """The player wants to examine an item or a character."""
         # Perception gate: in pitch dark (or blind) you can't *see* to examine --
@@ -491,6 +502,7 @@ class Examine(base.Action):
             sight, _ = perception.sight_for(self.character, self.character.location)
             if sight == perception.Sight.NONE:
                 self._too_dark(target)
+                self._dark_figure(target)
                 return
 
         if self.matched_item:

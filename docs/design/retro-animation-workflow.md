@@ -192,6 +192,7 @@ Then wire the trigger in the adventure file. The semantics matter:
 | Examine | `item.set_property("figure", KEY)` | forces every time |
 | Take | same item property | once (examine can re-earn) |
 | Wear | same item property (wearables) | forces every time (CCB: donning is as deliberate as examining) |
+| Read | same item property (documents) | forces every time (CCB: poring over paperwork is as deliberate as examining) |
 | Story beat | `g.show_figure(KEY)` in a trigger/action | once |
 | Story beat, must always play | `g.show_figure(KEY, force=True)` | never muted |
 
