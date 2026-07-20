@@ -1804,6 +1804,9 @@ class TossCentipede(actions.Action):
             "the red light -- and comes apart on the stones below with a "
             "sound like a dropped chandelier."
         )
+        # This fall IS the forging (CCB): play THE CRYSTAL SHARD here, not
+        # only later when the surviving splinter is taken or examined.
+        self.game.show_figure("shard", force=True)
         centipede.set_property("is_dead", True)
         if centipede.location is not None:
             centipede.location.remove_character(centipede)

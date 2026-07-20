@@ -203,6 +203,25 @@ def test_unstatted_creatures_still_drop_in_one():
     assert game.characters["glass centipede"].get_property("is_unconscious")
 
 
+def test_kicking_the_centipede_off_the_summit_plays_the_forging():
+    """CCB: the fall over the edge IS the forging, so KICK deals THE CRYSTAL
+    SHARD (key ``shard``) right then -- not only later when the surviving
+    splinter is taken or examined."""
+    game = _game()
+    summit = game.locations["The Summit"]
+    cent = game.characters["glass centipede"]
+    if cent.location is not None:
+        cent.location.remove_character(cent)
+    summit.add_character(cent)
+    cent.set_property("is_unconscious", True)  # a bare kick suffices
+    game.relocate(game.player, summit)
+    cap = _texts(game)
+    game.do_command("kick glass centipede")
+    assert cap.texts(Channel.FIGURE) == ["shard"]
+    assert cent.get_property("is_dead")
+    assert "crystal shard" in game.locations["Tomb Exterior"].items
+
+
 def test_the_teamster_tells_the_story_and_decamps():
     """CCB's pick: the teamster is CRITCH, the golden new-hyena, every
     expedition -- and once she has said her piece she decamps south along
