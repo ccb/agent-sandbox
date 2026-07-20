@@ -210,6 +210,22 @@ def importance_score(record: MemoryRecord) -> float:
     return max(0.0, min(record.importance, 10.0)) / 10.0
 
 
+def _declared_importance(payload) -> float:
+    """The importance a stimulus declares for itself (1-10, the poignancy
+    scale), or the mundane 1.0 default. World-level and injected events
+    (``POST /world/event``, the boil arc's ``boiled`` event) set this so they
+    aren't perceived as maximally forgettable regardless of significance (#631).
+    A missing or malformed value falls back to 1.0, so existing events with no
+    declared importance are unchanged."""
+    raw = payload.get("importance")
+    if raw is None:
+        return 1.0
+    try:
+        return max(1.0, min(float(raw), 10.0))
+    except (TypeError, ValueError):
+        return 1.0
+
+
 def relevance_score(query: str, text: str) -> float:
     """Keyword overlap between *query* and *text* as a 0-1 fraction.
 
@@ -453,8 +469,12 @@ class AgentMemory:
         if actor == self.owner:  # own action -> recorded as an outcome instead
             return None
         payload = event.payload or {}
+        # World-level and injected stimuli may declare their own importance
+        # (1-10); default to the mundane 1.0 so existing events are unchanged.
+        # The HEARD case below stays fainter (half-weight). (#631)
+        importance = _declared_importance(payload)
         if self.owner and self.owner in (str(v) for v in payload.values()):
-            return (self._event_to_sentence(event), 1.0)
+            return (self._event_to_sentence(event), importance)
 
         sight_names = {getattr(loc, "name", loc) for loc in sight_rooms}
         origin = payload.get("location")
@@ -469,7 +489,7 @@ class AgentMemory:
             other = game.characters.get(actor)
             seen = other is not None and getattr(other, "location", None) in sight_rooms
         if seen:
-            return (self._render_seen(event, character, origin, dest), 1.0)
+            return (self._render_seen(event, character, origin, dest), importance)
 
         # HEARD: a loud event from beyond sight -- muffled, directional, fainter.
         radius = int(payload.get("heard_radius") or 0)
@@ -477,7 +497,7 @@ class AgentMemory:
             here = getattr(getattr(character, "location", None), "name", None)
             heard = game.audible_rooms(origin, radius)
             if here in heard:
-                return (self._render_heard(event, heard[here]), 0.5)
+                return (self._render_heard(event, heard[here]), importance * 0.5)
         return None
 
     def _render_seen(self, event, character, origin, dest) -> str:
@@ -574,6 +594,7 @@ class AgentMemory:
         alpha_recency: float = ALPHA_RECENCY,
         alpha_importance: float = ALPHA_IMPORTANCE,
         alpha_relevance: float = ALPHA_RELEVANCE,
+        landmark_importance: float | None = None,
         touch: bool = True,
     ) -> list[MemoryRecord]:
         """Return the most useful memories for *query* at *turn*.
@@ -599,12 +620,30 @@ class AgentMemory:
         ``last_accessed_turn`` -- for inspecting or comparing what would surface
         without disturbing recency (e.g. scoring the same stream under two
         relevance modes). The default ``touch=True`` is the decision-time path.
+
+        ``landmark_importance`` (issue #633): recency decays as
+        ``decay**(turn - last_accessed)``, which collapses toward 0 for any old
+        memory -- so a deliberately-seeded high-importance memory (an aversion, a
+        vow) is mathematically buried once enough fresh memories accrue, no
+        matter its importance, because a fresh memory's recency of 1.0 outweighs
+        importance alone. Set this threshold and any record whose importance is
+        ``>=`` it is treated as a *landmark*: exempt from recency decay (its
+        recency term is pinned to 1.0), so it stays eligible to surface however
+        long ago it formed. ``None`` (the default) changes nothing -- scoring is
+        byte-identical to before, so existing games and replays are unaffected.
         """
         relevance = self._relevance_by_id(query)
         scored = []
         for record in self.records:
+            recency = recency_score(record, turn, decay)
+            if (
+                landmark_importance is not None
+                and record.importance >= landmark_importance
+            ):
+                # A landmark memory never decays out of contention (#633).
+                recency = 1.0
             score = (
-                alpha_recency * recency_score(record, turn, decay)
+                alpha_recency * recency
                 + alpha_importance * importance_score(record)
                 + alpha_relevance * relevance[record.id]
             )

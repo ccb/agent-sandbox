@@ -15,6 +15,7 @@ from text_adventure_games import games
 from .things import Character, Item, Location
 from . import actions, blocks
 from .enums import ActionName, Direction, Role
+from .wishes import ActionWish, TRIGGER_PARSE_GAP
 from .reporting import Channel, Message, default_renderer, wrap_text
 
 # Maps the one-letter direction shortcuts ("n", "s", "e", "w") onto canonical
@@ -158,8 +159,20 @@ class Parser:
         """
         return wrap_text(text, width)
 
-    def add_command_to_history(self, command: str):
-        message = {"role": Role.USER, "content": command}
+    def add_command_to_history(self, command: str, actor=None):
+        """Record *command*, attributed to the character who issued it and the
+        location they stood in when they did (issue #629). Renderers of the
+        shared history use these to label and scope what other characters
+        perceive; with no *actor* (trigger-fired or scripted commands) both
+        fields stay None and the entry renders and filters as before. Consumers
+        that forward history to a chat-completion API must strip entries down
+        to role/content first (see LlmParser._narrate)."""
+        message = {
+            "role": Role.USER,
+            "content": command,
+            "actor": getattr(actor, "name", None),
+            "location": getattr(getattr(actor, "location", None), "name", None),
+        }
         self.command_history.append(message)
         # CCB - todo - manage command_history size
 
@@ -203,6 +216,16 @@ class Parser:
         if "," in command:
             # Let the player type in a comma separted sequence of commands
             return ActionName.SEQUENCE
+
+        if command == "propose" or command.startswith("propose "):
+            # The wish channel (#620): propose takes its payload as free text
+            # ("propose talk to the mayor because ...") that may contain any
+            # verb keyword, multi-word alias, or direction. Its exact-prefix
+            # guard can't over-trigger, so it wins first -- before even the
+            # specific-first substring match below, whose naive `alias in
+            # command` test would otherwise let a payload naming "talk to",
+            # "chat with", etc. hijack the whole command and drop the wish.
+            return ActionName.PROPOSE
 
         # Specific-first: if a registered action's MULTI-WORD name or alias
         # appears in the command, it wins over the generic verb keywords below.
@@ -296,7 +319,7 @@ class Parser:
             if self.get_direction(rest, character.location):
                 return ActionName.DESCRIBE
             return ActionName.EXAMINE
-        elif "examine " in command or command.startswith("x "):
+        elif re.search(r"\bexamine\b", command) or command.startswith("x "):
             return ActionName.EXAMINE
         elif command.startswith("take off") or command.startswith("remove "):
             # Must precede the "take "/get branch -- "take " is a substring of
@@ -304,24 +327,30 @@ class Parser:
             return ActionName.TAKE_OFF
         elif command.startswith("stow ") or command.startswith("unequip "):
             return ActionName.UNWIELD
-        elif "take " in command or "get " in command:
+        elif (initial := self._match_initial_verb(command)) is not None:
+            # Command-initial verb (#536): the first word IS a registered
+            # verb, so the generic keyword branches below may not hijack its
+            # free-text argument ("perform refining the model late into the
+            # day" must not EAT). Prefix special cases ("get off", "take
+            # off", directions, say/taste/hint, ...) all ran above.
+            return initial
+        elif re.search(r"\b(take|get)\b", command):
+            # The keyword branches from here down match on WORD BOUNDARIES
+            # (#536): "target" must not GET, "great hall" must not EAT,
+            # "forgive" must not GIVE -- the same fix the longest-match
+            # fallback already carries ("dragon" -> GO).
             return ActionName.GET
-        elif "light" in command:
+        elif re.search(r"\blight(s|ed|ing)?\b", command):
             return ActionName.LIGHT
-        elif "drop " in command:
+        elif re.search(r"\bdrop\b", command):
             return ActionName.DROP
         elif command.startswith("break") or command.startswith("smash"):
             return ActionName.BREAK
-        elif (
-            "eat " in command
-            or "eats " in command
-            or "ate " in command
-            or "eating " in command
-        ):
+        elif re.search(r"\b(eat|eats|ate|eating)\b", command):
             return ActionName.EAT
-        elif "drink" in command:
+        elif re.search(r"\bdrink(s|ing)?\b", command):
             return ActionName.DRINK
-        elif "give" in command or command.startswith("hand "):
+        elif re.search(r"\bgive\b", command) or command.startswith("hand "):
             # A custom give-action ("give gem to wizard") whose item AND
             # recipient both appear -- in ANY word order -- wins over the
             # built-in Give, so "give wizard the gem" / "hand wizard the gem"
@@ -329,15 +358,15 @@ class Parser:
             # which the bare-"give" keyword check used to miss. Falls back to the
             # built-in Give when no custom give-action matches.
             return self._match_give_action(command) or ActionName.GIVE
-        elif "attack" in command or "hit " in command or "hits " in command:
+        elif re.search(r"\battack\w*\b|\bhits?\b", command):
             return ActionName.ATTACK
-        elif "inventory" in command or command == "i":
+        elif re.search(r"\binventory\b", command) or command == "i":
             return ActionName.INVENTORY
         elif command == "wait" or command == "z":
             return ActionName.WAIT
         elif command in ("help", "h", "commands", "?") or command.startswith("help"):
             return ActionName.HELP
-        elif "quit" in command:
+        elif re.search(r"\bquit\b", command):
             return ActionName.QUIT
         else:
             # Longest registered action name -- OR single-word alias -- that
@@ -377,6 +406,29 @@ class Parser:
                     if best is None or len(phrase) > len(best):
                         best, best_name = phrase, action.action_name()
         return best_name
+
+    def _match_initial_verb(self, command):
+        """The registered action whose single-word ACTION_NAME or alias IS
+        the command's first word, or None.
+
+        An imperative's verb is its first word: when that word is a
+        registered verb, the command routes there no matter what the rest of
+        the text contains (#536) -- the say/taste/hint branches are
+        hand-rolled instances of the same rule. "give"/"hand" are excluded:
+        the give branch must keep running _match_give_action's
+        item+recipient resolution (#171). First registration wins a
+        shared-alias tie, like the longest-match fallback.
+        """
+        first = command.split(" ", 1)[0]
+        if first in ("give", "hand"):
+            return None
+        for _, action in self.actions.items():
+            phrases = [action.action_name()] + list(
+                getattr(action, "ACTION_ALIASES", []) or []
+            )
+            if first in phrases:
+                return action.action_name()
+        return None
 
     def _match_give_action(self, command):
         """A registered custom give-action whose item AND recipient both appear
@@ -475,6 +527,46 @@ class Parser:
     def agent_reflection(self, actor: str, text: str):
         self._emit(Channel.AGENT_REFLECTION, text, actor=actor)
 
+    def agent_wish(self, actor: str, text: str, wish: dict | None = None):
+        """An actor's recorded wish for a missing action (#620). *wish* is the
+        structured record (``ActionWish.to_primitive()``), carried in ``meta``
+        for surfaces that want more than the one-line trace."""
+        self._emit(
+            Channel.AGENT_WISH,
+            text,
+            actor=actor,
+            meta={"wish": wish} if wish else None,
+        )
+
+    def _log_parse_gap(self, command: str, actor=None):
+        """Record a ``trigger="parse_gap"`` ActionWish (#621): *command*
+        matched no verb. The situation snapshot mirrors the propose verb's
+        (actions/wish.py) so wishes.jsonl consumers see one shape."""
+        char = actor if actor is not None else getattr(self.game, "player", None)
+        location = getattr(char, "location", None)
+        scope = []
+        if char is not None:
+            scope = sorted(self.get_items_in_scope(char).keys())
+            if location is not None:
+                scope += sorted(n for n in location.characters if n != char.name)
+        goals = [
+            g.description
+            for g in getattr(char, "goals", []) or []
+            if not getattr(g, "done", False)
+        ]
+        self.game.log_wish(
+            ActionWish(
+                actor=char.name if char is not None else None,
+                turn=self.game.turn,
+                location=location.name if location is not None else None,
+                desired=command,
+                trigger=TRIGGER_PARSE_GAP,
+                goals=goals,
+                scope=scope,
+                raw_command=command,
+            )
+        )
+
     def npc_log(self, message: str):
         """Legacy agent-trace shim (a single pre-formatted line). Prefer the
         typed ``agent_*`` methods above; kept so older callers keep working."""
@@ -491,7 +583,7 @@ class Parser:
 
     def parse_command(self, command: str, actor=None) -> bool:
         # add this command to the history
-        self.add_command_to_history(command)
+        self.add_command_to_history(command, actor=actor)
         action = self.parse_action(command, actor=actor)
         if not action:
             # The command didn't name an action. If the game has posed a
@@ -503,6 +595,11 @@ class Parser:
                 # (and so a non-matching answer can't loop back in here).
                 self.game.clear_prompt()
                 return self.parse_command(forwarded, actor=actor)
+            # Parse-gap capture (#621): the command matched no verb at all.
+            # Record what was attempted (the automatic half of the wish
+            # channel, epic #619) before the generic fail. Unconditional for
+            # every actor: player typos are cheap noise the report filters.
+            self._log_parse_gap(command, actor)
             self.fail("I'm not sure what you want to do.")
             return False
         # Resolve the acting character and where they stand *before* the action
@@ -905,7 +1002,15 @@ class LlmParser(Parser):
             "best matches the player's command by meaning."
         )
         try:
-            choice = self._pick_one(instructions, options, command, allow_none=False)
+            choice = self._pick_one(
+                instructions,
+                options,
+                command,
+                # Agent-driven actors (#621) may decline: a missing verb then
+                # falls through to the deterministic parser and fails cleanly
+                # (captured as a parse-gap wish) instead of force-mapping.
+                allow_none=getattr(actor, "agent", None) is not None,
+            )
         except Exception:
             choice = None
         return (

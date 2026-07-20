@@ -153,6 +153,15 @@ class Game:
         # learn_recipe(); recipes with the default known=True ignore this set.
         self.learned_recipes = set()
 
+        # Action wishes (#620): structured "an actor wanted an action the game
+        # doesn't have" records (see wishes.py) — the demand side of the
+        # self-coding loop (#299). Runtime-only, like recipes.
+        self.wishes = []
+        # Optional streaming sink, called with each ActionWish as it is logged
+        # (the UsageLedger._on_record pattern): how an out-of-process consumer
+        # taps the wish stream without a parallel data path.
+        self.on_wish = None
+
         # Posed prompt (issue #110): a question the game is currently asking the
         # player (e.g. "wits or steel?"). Consulted by the parser as a fallback
         # for an otherwise-unrecognized command. Transient conversational state,
@@ -371,6 +380,16 @@ class Game:
     def log_event(self, actor, action, summary="", payload=None):
         """Append a GameEvent to the event log (issue #6)."""
         self.events.append(GameEvent(self.turn, actor, action, summary, payload))
+
+    def log_wish(self, wish):
+        """Record an :class:`~text_adventure_games.wishes.ActionWish` (#620):
+        append to ``wishes``, emit the one-line agent trace (with the full
+        record in ``meta``), and fire the optional ``on_wish`` callback."""
+        self.wishes.append(wish)
+        text = wish.desired + (f" — because {wish.reason}" if wish.reason else "")
+        self.parser.agent_wish(wish.actor, text, wish=wish.to_primitive())
+        if self.on_wish is not None:
+            self.on_wish(wish)
 
     def emit_sound(self, location, radius, description):
         """Emit an ambient noise at *location* -- a sound that no actor's command
@@ -703,7 +722,10 @@ class Game:
                     trigger.fired = True
                     fired_this_round.add(trigger)
                     self.log_event(
-                        EventKind.TRIGGER, trigger.name, f"{trigger.name} fired"
+                        None,
+                        EventKind.TRIGGER,
+                        f"{trigger.name} fired",
+                        payload={"trigger": trigger.name},
                     )
                     newly_fired = True
             if not newly_fired:
@@ -1118,6 +1140,22 @@ class Game:
             if character.is_encumbered():
                 gauge += " (ENCUMBERED: you clatter when you move, and cannot climb)"
             lines.append(gauge)
+
+        # Own health state (issue #634): a set is_sick is a stimulus the
+        # deciding agent must actually perceive -- otherwise there is "no state
+        # change to perceive" (rubric #446 axes 3-4) and the flagship boil-arc
+        # consequence never reaches the prompt. Emitted only while is_sick, so a
+        # game that never sickens a character keeps a byte-identical observation;
+        # the line simply disappears on recovery. Wording is authorable via
+        # sick_self_description.
+        # NOTE (forward-sync to godot-ga-main): the Penn port carries its own
+        # sickness self-line in cognition.observe_and_decide (#594). When this
+        # engine line syncs forward, drop that Penn append (or point it at
+        # sick_self_description) so a sick Penn agent isn't told twice.
+        if character.get_property("is_sick"):
+            lines.append(
+                character.get_property("sick_self_description") or "You feel ill."
+            )
 
         # Available actions
         action_names = sorted(self.parser.actions.keys())

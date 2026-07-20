@@ -3,6 +3,15 @@ name: match_intent
 description: >
   Parser system instructions for matching a user's input to the closest known
   action (LlmParser.determine_intent's LLM fallback). The numbered list of
-  command descriptions is appended by LlmParser._pick_option.
+  command descriptions is appended by LlmParser._pick_option. For agent-driven
+  actors (#621) allow_none adds the licensing sentence for the "none of these
+  commands fit the input" decline option the parser appends to that list.
+inputs:
+  allow_none:
+    type: bool
+    description: >
+      True when the option list carries the decline option (agent-driven
+      actors); adds the sentence licensing the model to pick it. Defaults
+      falsy: the human-player rendering is byte-identical to the pre-#621 one.
 ---
-You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches. The commands are:
+You are the parser for a text adventure game. For a user input, say which of the commands it most closely matches.{% if allow_none %} If none of them fit what the input asks for, choose the option that says none of these commands fit the input.{% endif %} The commands are:

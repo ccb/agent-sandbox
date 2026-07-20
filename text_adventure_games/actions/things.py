@@ -947,6 +947,7 @@ CRAFT_VERBS = (
     "make",
     "cook",
     "brew",
+    "boil",
     "forge",
     "mix",
     "combine",
