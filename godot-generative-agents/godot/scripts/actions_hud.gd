@@ -20,7 +20,7 @@ const MUTED_COLOR := Color(0.42, 0.32, 0.24)
 var _rows_box: VBoxContainer
 
 
-func _ready() -> void:
+func _init() -> void:
 	# Pin to the top-right corner, growing downward as rows appear -- the same
 	# anchor recipe as live_hud.gd. Anchors at (1, 0) make the offsets
 	# corner-relative; the left/right pair fixes the width; the zero-height
@@ -67,8 +67,6 @@ func set_rows(rows: Array) -> void:
 	## each call -- the row set is tiny (top-N) and this only fires on a step
 	## change, so a clean rebuild is simpler than diffing. free() is immediate, so
 	## the old rows are gone before the new ones are added (no one-frame doubling).
-	if _rows_box == null:
-		_ready()
 	for child in _rows_box.get_children():
 		child.free()
 	if rows.is_empty():

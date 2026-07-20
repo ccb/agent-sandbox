@@ -88,9 +88,8 @@ func _initialize() -> void:
 	_check(jr.size() == 1 and jr[0]["action"] == "eat" and jr[0]["count"] == 1,
 		"malformed records skipped; only the well-formed one counts")
 
-	# --- actions_hud.gd panel rendering (added to the tree so _ready builds it) ---
+	# --- actions_hud.gd panel rendering (_init builds it, off-tree is fine) ---
 	var hud := ActionsHud.new()
-	get_root().add_child(hud)
 	hud.set_rows([{"action": "go", "count": 3}, {"action": "travel", "count": 2}])
 	_check(hud._rows_box.get_child_count() == 2, "set_rows renders one row per entry")
 	# Re-render with a different set: old rows are replaced, not appended (no doubling).
