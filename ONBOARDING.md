@@ -157,15 +157,14 @@ and do a beginner tutorial or two. Try vibe-coding a tiny thing (a dice roller, 
 sprite that moves) with Claude Code to see how well it knows GDScript. We'll
 eventually render the simulation in Godot, so getting comfortable now pays off.
 
-**Where your Godot/map work lands — the `godot-ga-main` branch.** The Godot frontend —
-`godot-generative-agents/`, which now houses the map-generation tooling under
-`godot-generative-agents/tools/geo/` — lives on its own long-lived branch,
-`godot-ga-main`, instead of `main`. If a change touches
-*only* that folder, branch off `godot-ga-main` and open your PR against it —
-it's reviewed by the Godot/geo owners (@aking526 + @0frankie), so you're not blocked
-on the full engine review. The moment you touch the shared engine
-(`text_adventure_games/`, `backend/`) or anything else outside those folders, that
-part goes through `main` the normal way.
+**Where your Godot/map work lands.** The Godot frontend —
+`godot-generative-agents/`, which houses the backend, the viewer, and the
+map-generation tooling under `godot-generative-agents/tools/geo/` — lives on
+`main` like everything else (its old dedicated branch, `godot-ga-main`, was
+retired in July 2026). Changes under that folder are reviewed by the Godot/geo
+owners (@aking526 + @0frankie), so you're not blocked on the full engine review;
+anything touching the shared engine (`text_adventure_games/`) gets the normal
+`main` review.
 
 ## Done with week one?
 
