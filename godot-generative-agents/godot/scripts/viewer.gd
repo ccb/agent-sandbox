@@ -984,6 +984,16 @@ func _on_live_status(record: Dictionary) -> void:
 		"stopped":
 			_set_backend_run_state("stopped")
 			_panel.set_live_status("backend stopped")
+		"error":
+			# The loop crashed and paused itself (live.py); land on "paused" so
+			# the Resume button re-offers a retry and the #372 stall detector
+			# (gated on run_state == "running") never overwrites this line with
+			# "thinking…" (#685 -- a dead run used to render as a slow model).
+			_set_backend_run_state("paused")
+			var err_text := String(record.get("error", ""))
+			if err_text.length() > 80:
+				err_text = err_text.substr(0, 79) + "…"
+			_panel.set_live_status("backend error — " + err_text)
 
 
 func _reset_for_new_run() -> void:
