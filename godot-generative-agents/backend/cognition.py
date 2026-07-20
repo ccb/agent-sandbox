@@ -1478,6 +1478,23 @@ def remember_outcome(char, command: str, step: int) -> None:
         # still-sick agent whose drink changed nothing). Normal importance.
         text = render("reflection", verb=verb, item=rest.strip())
         importance = 2.0
+    elif verb == "study":
+        # The one-shot delta Study.apply_effects just recorded (#615) -- the
+        # brain's #581 duration pick or the action's default. Consume it (the
+        # just_sickened pattern) so it can't leak into a later outcome.
+        minutes = char.get_property("just_studied_minutes")
+        char.set_property("just_studied_minutes", False)
+        text = render(
+            "reflection",
+            verb=verb,
+            topic=rest.strip(),
+            minutes=int(minutes) if minutes else 0,
+        )
+        importance = 2.0
+    elif verb == "eat":
+        # Satiety is the memory (#615); hunger as an accumulating drive is #594.
+        text = render("reflection", verb=verb, item=rest.strip())
+        importance = 2.0
     elif verb in ("get", "activate", "deactivate"):
         # World-mutating one-shot verbs (#300): worth a normal-importance
         # memory, unlike the 1.0 catch-all below.

@@ -6,19 +6,17 @@ description: >
   selects the phrasing: arriving somewhere, doing an activity, drinking
   (with a sick variant for contaminated water, #300), idling (if chosen
   as a settled-wait #614), agent-initiated talk_to (with an optional topic,
-  #614), or a quoted fallback for any other command.
+  #614), studying or eating (#615), or a quoted fallback for any other
+  command.
   The memory's importance is chosen in Python (it is data, not text), so
   only the wording lives here.
 inputs:
   verb:
     type: string
-    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", or anything else.
+    description: The command verb -- "travel", "perform", "drink", "boil", "wait", "talk_to", "study", "eat", or anything else.
   person:
     type: string
     description: Who was talked to (used when verb == "talk_to").
-  topic:
-    type: string
-    description: What was brought up, if any (used when verb == "talk_to").
   location:
     type: string
     description: The place arrived at (used when verb == "travel").
@@ -27,13 +25,19 @@ inputs:
     description: What the persona is doing (used when verb == "perform").
   item:
     type: string
-    description: What was drunk (used when verb == "drink").
+    description: What was drunk (verb == "drink") or eaten (verb == "eat").
   sick:
     type: boolean
     description: Whether this drink just sickened the persona (verb == "drink").
   recovered:
     type: boolean
     description: Whether this drink just cured the persona's sickness (verb == "drink", #300).
+  topic:
+    type: string
+    description: What was brought up (verb == "talk_to") or studied (verb == "study"); may be empty.
+  minutes:
+    type: integer
+    description: How many in-game minutes the study took (verb == "study", #615).
   command:
     type: string
     description: The raw command, quoted verbatim in the fallback (any other verb).
@@ -64,6 +68,12 @@ I waited; nothing needed doing.
 I went to talk to {{ person }} about {{ topic }}.
 {%- elif verb == "talk_to" -%}
 I went to talk to {{ person }}.
+{%- elif verb == "study" and topic -%}
+I studied {{ topic }} for {{ minutes }} minutes.
+{%- elif verb == "study" -%}
+I studied for {{ minutes }} minutes.
+{%- elif verb == "eat" -%}
+I ate the {{ item }}.
 {%- else -%}
 I did "{{ command }}".
 {%- endif -%}
