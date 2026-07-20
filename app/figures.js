@@ -1288,7 +1288,8 @@
     const cells = Array.from({ length: 10 }, (_, i) =>
       el(svg, "rect", { x: 128 + i * 18, y: 324, width: 14, height: 12,
         fill: PH, "fill-opacity": .8 }));
-    const verdict = label(svg, 330, 334, 10, FUNGUS);
+    const verdict = label(svg, 330, 328, 10, FUNGUS);
+    const verdict2 = label(svg, 330, 342, 10, FUNGUS);
     const doWipe = wipe(svg, 640, 360, 2, 10);
     clock(t => {
       const T = t % 160;
@@ -1306,7 +1307,8 @@
       } else { call.textContent = ""; callLead.setAttribute("points", ""); }
       cells.forEach((r, i) => r.setAttribute("fill-opacity",
         i < 10 ? .8 : .08));                                 // four thousand years, holding
-      typeOn(verdict, "FOUR THOUSAND YEARS, HOLDING. DO NOT LIGHT THE GEL.", T, 90, 1.6);
+      typeOn(verdict, "FOUR THOUSAND YEARS, HOLDING.", T, 90, 1.6);
+      typeOn(verdict2, "DO NOT LIGHT THE GEL.", T, 110, 1.6);
     });
   });
 
