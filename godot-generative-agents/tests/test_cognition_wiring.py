@@ -274,7 +274,13 @@ def test_furniture_hint_survives_the_planner_schedule_commit():
 def test_decide_observation_surfaces_thirst_and_sickness():
     game, ada = _world()  # existing single-persona helper (mock brain)
     ada.set_property("is_thirsty", True)
+    # The Penn Drink sets the wording alongside is_sick (actions.py); the
+    # engine's describe_for (#634) emits it as the sick self-line.
     ada.set_property("is_sick", True)
+    ada.set_property(
+        "sick_self_description",
+        "You feel violently ill -- your stomach is cramping.",
+    )
     observe_and_decide(game, ada, 0)
     obs = ada.agent.last_observation  # see note
     assert "You are thirsty." in obs
@@ -289,8 +295,9 @@ def test_thirst_sickness_lines_do_not_shift_retrieval():
     ada2.set_property("is_thirsty", True)
     ada2.set_property("is_sick", True)
     observe_and_decide(game2, ada2, 0)
-    # Same seeded memories surface regardless of the appended state lines,
-    # because they append AFTER retrieve ran on the plain base.
+    # Same seeded memories surface regardless of the state lines: thirst
+    # appends AFTER retrieve ran, and the engine sick line doesn't outweigh
+    # the seeded memories in this world.
     assert [r.text for r in ada2.agent.last_retrieved] == [r.text for r in healthy]
 
 

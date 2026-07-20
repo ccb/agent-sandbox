@@ -1079,18 +1079,14 @@ def observe_and_decide(
     context = decide_context_block(agent, step, clock, stop_since)
     if context:
         base = f"{base}\n\n{context}"
-    # Perceivable needs/consequences (#594): surface thirst + sickness in the
-    # decide prompt so a live brain can reason about them. Appended AFTER the
-    # retrieve above (like the #580 block), so these lines never shift which
-    # memories surface -- the mock/scripted bake stays byte-identical. Absent
-    # flags add nothing.
-    state_lines = []
+    # Perceivable needs (#594): surface thirst in the decide prompt so a live
+    # brain can reason about it. Appended AFTER the retrieve above (like the
+    # #580 block), so the line never shifts which memories surface -- the
+    # mock/scripted bake stays byte-identical. Absent flag adds nothing.
+    # (Sickness moved into describe_for itself -- the engine's #634 is_sick
+    # self-line, worded via sick_self_description set in actions.py.)
     if char.get_property("is_thirsty"):
-        state_lines.append("You are thirsty.")
-    if char.get_property("is_sick"):
-        state_lines.append("You feel violently ill -- your stomach is cramping.")
-    if state_lines:
-        base = base + "\n\n" + "\n".join(state_lines)
+        base = base + "\n\nYou are thirsty."
     # Nearby-affordances line (#613): visible-but-distant tagged arenas, so the
     # brain can choose to travel toward one (offers stay in-scope only). Gated
     # on the real-brain tool path -- the SAME predicate that guards the tool

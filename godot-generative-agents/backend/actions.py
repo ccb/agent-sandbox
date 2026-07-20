@@ -219,6 +219,13 @@ class DrinkPenn(consume.Drink):
                 (self.character.get_property("drank_unboiled") or 0) + 1,
             )
             self.character.set_property("is_sick", True)
+            # Wording for the engine's is_sick self-line (#634): describe_for
+            # emits this while sick, replacing the Penn-local append cognition
+            # used to add (#594) -- one line, Penn's vivid phrasing.
+            self.character.set_property(
+                "sick_self_description",
+                "You feel violently ill -- your stomach is cramping.",
+            )
             # One-shot marker: this drink is what just sickened the character,
             # as opposed to an already-sick character drinking something clean.
             # Consumed (and cleared) by cognition.remember_outcome so
