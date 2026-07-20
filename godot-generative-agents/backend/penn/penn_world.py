@@ -30,7 +30,16 @@ import yaml
 # Reuse the tested agent engine (not a fork). It's the installed top-level
 # `backend` package now, so a plain import works -- no sys.path juggling.
 from backend import path_finder
-from backend.actions import Activate, Deactivate, DrinkPenn
+from backend.actions import (
+    Activate,
+    CheckOutBook,
+    Deactivate,
+    DrinkPenn,
+    ReadPenn,
+    Study,
+    TalkTo,
+    WaitPenn,
+)
 from backend.build_world import build_world, load_world_data
 from backend.world_map import WorldMap
 from text_adventure_games.actions.things import Craft
@@ -53,13 +62,43 @@ UPENN_DIR = os.path.join(_SIM_DIR, "the_upenn")
 # the engine crafting action that drives the boil-water Recipe (see _boil_recipe) --
 # boiling is now a declarative transform, not a bespoke action. Upstreaming these
 # into the engine library is #464.
-PENN_EXTRA_ACTIONS = [Activate, Deactivate, DrinkPenn, Craft]
+PENN_EXTRA_ACTIONS = [
+    Activate,
+    Deactivate,
+    DrinkPenn,
+    Craft,
+    WaitPenn,
+    TalkTo,
+    Study,
+    CheckOutBook,
+    ReadPenn,
+]
 
 # The verb set a Penn brain may choose from (spec §3) -- the engine verbs the
 # boil-water scenario wires in, on top of the base travel/perform. `make` is the
-# crafting verb the brain uses to boil ("make boiled water"); handed to
+# crafting verb the brain uses to boil ("make boiled water"); `wait` is the
+# universal honest-idle verb (#614) -- WaitPenn's pacing slots make a chosen
+# wait settle, so offering it is no longer a recurring-token-spend trap.
+# `talk_to` is the #614 agent-initiated conversation verb; its tool is curated
+# per-decide in `cognition.action_tools_for`. `eat` (engine) and `study`
+# (Penn-local, #615) are affordance-curated -- offered only where an EDIBLE
+# meal / a `studyable` arena is in scope (#612). `check_out_book`
+# (Penn-local) and `read` (engine) are the #616 Van Pelt book loop,
+# curated to the shelf's arena / the borrower's pocket. Handed to
 # attach_agents(extra_action_names=...) by every Penn entry point.
-PENN_ACTION_VERBS = ["get", "drink", "activate", "deactivate", "make"]
+PENN_ACTION_VERBS = [
+    "get",
+    "drink",
+    "activate",
+    "deactivate",
+    "make",
+    "wait",
+    "talk_to",
+    "eat",
+    "study",
+    "check_out_book",
+    "read",
+]
 
 SEC_PER_STEP = 10  # in-game seconds per step, for a wall-clock label
 SIM_START = "2023-02-13 08:00:00"  # matches backend.sim_config default
@@ -443,6 +482,115 @@ def _furnish_boil_water(game) -> None:
     hall.add_item(make_murky_pot())
 
 
+def make_meal(name: str, description: str, examine: str) -> Item:
+    """A Houston Hall meal (#615): EDIBLE and gettable (the Item default), so
+    the natural loop is get -> eat -- the same possession gate as the drink
+    pattern. Discrete items ARE the portions: the engine's Eat consumes the
+    whole item (it has no Drink-style portions), so one meal = one portion."""
+    meal = Item(name, description, examine)
+    meal.set_property(Property.EDIBLE, True)
+    return meal
+
+
+def _furnish_meals(game) -> None:
+    """Stock Houston Hall with EDIBLE meals (#615). An EDIBLE thing in scope is
+    exactly what makes the engine's `eat` (declared `(Property.EDIBLE,)` in
+    #612) offered -- so agents can eat here and only here. Meals live in the
+    building-level "Houston Hall" location, next to the boil props, for the
+    same reason those do (see the world-YAML comment): schedule stops that act
+    on them must target "Houston Hall" itself. Gated on the authored `dining`
+    arena tag (#613): a world that doesn't tag the hall -- the isolated boil
+    scenario (#299/#301), whose one resident lives in Houston Hall and must
+    keep a decision surface of only the drink/boil arc -- gets no meals, so
+    `eat` is never offered there."""
+    hall = game.locations.get("Houston Hall")
+    if hall is None or not hall.get_property("dining"):
+        return
+    for name, description, examine in (
+        (
+            "sandwich",
+            "a wrapped sandwich",
+            "A turkey club off the Houston Hall food-court counter.",
+        ),
+        (
+            "bowl of soup",
+            "a bowl of lentil soup",
+            "Steaming lentil soup from the Houston Hall food court.",
+        ),
+        (
+            "apple",
+            "a red apple",
+            "A crisp apple from the fruit basket by the register.",
+        ),
+    ):
+        hall.add_item(make_meal(name, description, examine))
+
+
+def make_library_shelf() -> Item:
+    """The Van Pelt circulating shelf (#616). ``book_shelf`` is the affordance
+    CheckOutBook declares, so the verb is offered exactly where the shelf
+    stands -- the Book Stacks arena -- and nowhere else."""
+    shelf = Item(
+        "book shelf",
+        "a tall shelf of circulating books",
+        "Open shelving, rows of spines with call numbers taped to them.",
+    )
+    shelf.set_property(Property.GETTABLE, False)
+    shelf.set_property("book_shelf", True)
+    return shelf
+
+
+def make_campus_history_book() -> Item:
+    """A checkout-able Van Pelt book (#616): ``library_book`` is what the
+    CheckOutBook gate accepts, READABLE makes the engine's Read offerable,
+    and READ_TEXT is the content the read memory quotes. Not GETTABLE, so
+    checkout is the only way into a pocket."""
+    book = Item(
+        "campus history book",
+        "a clothbound campus history",
+        "A clothbound history of the university, corners soft with use.",
+    )
+    book.set_property(Property.GETTABLE, False)
+    book.set_property("library_book", True)
+    book.set_property(Property.READABLE, True)
+    book.set_property(
+        Property.READ_TEXT,
+        "College Hall opened in 1873; its green serpentine stone is so soft "
+        "the university repairs it block by block.",
+    )
+    return book
+
+
+def make_star_atlas() -> Item:
+    """The second Van Pelt book (#616), so two borrowers can each hold one --
+    and the contention gate has a real 'that one is taken' case to explain."""
+    book = Item(
+        "star atlas",
+        "a fold-out star atlas",
+        "A tall atlas of the northern sky, plates worn at the folds.",
+    )
+    book.set_property(Property.GETTABLE, False)
+    book.set_property("library_book", True)
+    book.set_property(Property.READABLE, True)
+    book.set_property(
+        Property.READ_TEXT,
+        "A chart of the winter sky; someone has circled Cassiopeia in pencil.",
+    )
+    return book
+
+
+def _furnish_van_pelt(game) -> None:
+    """Stock the Van Pelt Book Stacks with the #616 book-loop props: the
+    circulating shelf (the check_out_book affordance anchor) plus two
+    checkout-able, readable books. Same pattern as _furnish_boil_water."""
+    stacks = game.locations.get("Van Pelt — Book Stacks")
+    if stacks is None:
+        return
+    stacks.add_item(make_library_shelf())
+    stacks.add_item(make_campus_history_book())
+    stacks.add_item(make_star_atlas())
+
+
 def build_penn_world(
     world_data=WORLD_DATA, upenn_dir=UPENN_DIR, *, withhold_boil: bool = False
 ) -> PennWorld:
@@ -487,6 +635,8 @@ def build_penn_world(
             wm, personas, locations, extra_actions=PENN_EXTRA_ACTIONS
         )
         _furnish_boil_water(game)
+        _furnish_meals(game)
+        _furnish_van_pelt(game)
         if not withhold_boil:
             game.add_recipe(_boil_recipe())  # boiling = Craft over this Recipe (#300)
         return _gate_conversations_by_perception((game, characters))

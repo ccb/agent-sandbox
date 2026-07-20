@@ -160,6 +160,17 @@ def _settle_after_dead_talk(st: dict, step_idx: int, cog: "CognitionConfig") -> 
     st["perform_until"] = step_idx + cog.dead_talk_settle_steps
 
 
+def _settles_in_place(game, command: str) -> bool:
+    """Did this command's verb opt into the #581 pacing slots? Those verbs
+    (perform, study, and any future #446 verb whose ``ARGUMENTS_SCHEMA``
+    advertises ``duration_minutes``) settle even when the brain gave no
+    explicit duration -- read off the registered action's schema, the same
+    signal cognition.py derives its ``pacing_tools`` set from, so a new
+    duration verb never needs a hand-edit here."""
+    action = game.parser.actions.get(command.split(" ", 1)[0])
+    return "duration_minutes" in (getattr(action, "ARGUMENTS_SCHEMA", None) or {})
+
+
 def step(
     game,
     chars: dict,
@@ -436,6 +447,26 @@ def step(
             if command:
                 peeked = game.parser.peek_action(command, actor=char)
                 is_talk = peeked is not None and peeked.ACTION_NAME == ActionName.TALK
+            # #581 pacing args are minutes -> steps; with no clock they can't
+            # be honored (_model_duration_steps below returns None), so drop
+            # the stash BEFORE the command runs. This keeps the settled-wait
+            # consumers (WaitPenn's activity stamp, remember_outcome's
+            # honest-idle memory) aligned with the settle trigger: a clockless
+            # wait is a plain one-tick idle, not a settled one. No-op for the
+            # mock brain, which never stashes -- the bake is untouched.
+            if clock is None and char.agent is not None:
+                char.agent.last_duration_minutes = None
+            else:
+                # #581/#615: clamp the brain's duration pick once, here at the
+                # source, so every consumer of the stash -- Study's ledger in
+                # apply_effects and _model_duration_steps below -- reads the same
+                # value the settle actually uses (bounds are this run's config).
+                minutes = getattr(char.agent, "last_duration_minutes", None)
+                if minutes is not None:
+                    char.agent.last_duration_minutes = max(
+                        cog.duration_min_minutes,
+                        min(cog.duration_max_minutes, minutes),
+                    )
             if command and game.parser.parse_command(command, actor=char):
                 remember_outcome(char, command, step_idx)
                 # LLM-scored poignancy (issue #583): override this tick's new
@@ -473,13 +504,23 @@ def step(
                     )
                     st["pron"] = WALK_EMOJI
                     st["desc"] = f"walking to {dest.name} @ {address}"
-                elif command.startswith("perform") or model_duration_steps is not None:
-                    # Settle into an in-place activity. The trigger is "perform,
-                    # OR any action that carried a model duration" -- so a future
-                    # duration-bearing verb (#446 study/eat) settles here too,
-                    # while the #300 instantaneous verbs (get/drink/activate),
-                    # which carry no duration and aren't "perform", keep falling
-                    # through as one-tick actions (byte-identical).
+                elif (
+                    command.startswith("perform")
+                    or (clock is not None and _settles_in_place(game, command))
+                    or model_duration_steps is not None
+                ):
+                    # Settle into an in-place activity. The trigger is "perform
+                    # (the legacy always-settles verb the clockless mock bake
+                    # relies on), OR a pacing-slot verb (study #615, wait #614)
+                    # WITH a clock to pace against, OR any action that carried a
+                    # model duration" -- a duration-less study must still settle
+                    # (with a clock), or the agent re-decides (and re-accumulates
+                    # studied_minutes) every tick. The clock gate keeps a
+                    # clockless wait a plain one-tick idle (#614): with no clock,
+                    # pacing can't be honored, so wait/study fall through like
+                    # the #300 instantaneous verbs (get/drink/activate), which
+                    # advertise no duration slot and never settle. Byte-identical:
+                    # the mock only ever emits perform, whose settle is unchanged.
                     st["performing"] = True
                     schedule = char.agent.schedule
                     # Place-match is the pacing-relevant signal: standing at the
